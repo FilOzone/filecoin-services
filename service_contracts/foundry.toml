@@ -1,0 +1,21 @@
+[profile.default]
+src = 'src'
+test = 'test'
+script = 'script'
+out = 'out'
+libs = ['lib']
+cache_path = 'cache'
+solc = "0.8.23"
+
+# For dependencies
+remappings = [
+    '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
+    '@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/',
+    'forge-std/=lib/forge-std/src/',
+    '@fws-payments/=lib/fws-payments/src/',
+    '@pdp/=lib/pdp/src/',
+    '@pythnetwork/pyth-sdk-solidity/=lib/pdp/node_modules/@pythnetwork/pyth-sdk-solidity/',
+]
+
+optimizer_runs = 1000000000
+via_ir = true
