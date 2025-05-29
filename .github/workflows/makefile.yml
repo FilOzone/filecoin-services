@@ -21,8 +21,7 @@ jobs:
       - name: Install Dependencies
         run: |
           cd service_contracts
-          forge install
-          npm install
+          make install
 
       - name: Run build
         run: |
