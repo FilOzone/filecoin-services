@@ -794,7 +794,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     
     /**
      * @notice Recover the signer address from a signature
-     * @param ethSignedMessageHash The Ethereum signed message hash
+     * @param messageHash The signed message hash
      * @param signature The signature bytes (v, r, s)
      * @return The address that signed the message
      */
