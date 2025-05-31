@@ -187,7 +187,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     function makeSignaturePass(address signer) public {
         vm.mockCall(
             address(0x01), // ecrecover precompile address
-            bytes(hex""),
+            bytes(hex""),  // wildcard matching of all inputs requires precisely no bytes
             abi.encode(signer)
         );
     }
@@ -330,102 +330,125 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     }
 }
 
-// contract SimplePDPServiceWithPaymentsSignatureTest is Test {
-//      // Contracts
-//     SimplePDPServiceWithPayments public pdpServiceWithPayments;
-//     MockPDPVerifier public mockPDPVerifier;
-//     Payments public payments;
-//     MockERC20 public mockUSDFC;
+contract SignatureCheckingService is SimplePDPServiceWithPayments {
+    constructor() {
+    }
+    function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) { 
+        return recoverSigner(messageHash, signature);
+    }
+}
 
-//     // Test accounts
-//     address public payer;
-//     uint256 public payerPrivateKey;
-//     address public creator;
-//     address public operator;
+contract SimplePDPServiceWithPaymentsSignatureTest is Test {
+    // Contracts
+    SignatureCheckingService public pdpService;
+    MockPDPVerifier public mockPDPVerifier;
+    Payments public payments;
+    MockERC20 public mockUSDFC;
+
+    // Test accounts with known private keys
+    address public payer;
+    uint256 public payerPrivateKey;
+    address public creator;
+    address public wrongSigner;
+    uint256 public wrongSignerPrivateKey;
     
-//     function setUp() public {
-//         // Set up test accounts
-//         payerPrivateKey = 0x1234567890123456789012345678901234567890123456789012345678901234;
-//         payer = vm.addr(payerPrivateKey);
-//         creator = address(0x2);
-//         operator = address(0x3);
-//         pdpVerifierAddress = address(this);
+    function setUp() public {
+        // Set up test accounts with known private keys
+        payerPrivateKey = 0x1234567890123456789012345678901234567890123456789012345678901234;
+        payer = vm.addr(payerPrivateKey);
         
-//         // Deploy mock contracts
-//         usdfc = new MockUSDFC();
-//         payments = new MockPayments();
+        wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
+        wrongSigner = vm.addr(wrongSignerPrivateKey);
         
-//         // Deploy and initialize the service
-//         SimplePDPServiceWithPayments serviceImpl = new SimplePDPServiceWithPayments();
-//         bytes memory initData = abi.encodeWithSelector(
-//             SimplePDPServiceWithPayments.initialize.selector,
-//             pdpVerifierAddress,
-//             address(payments),
-//             address(usdfc),
-//             500 // 5% commission
-//         );
+        creator = address(0xf2);
         
-//         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
-//         pdpService = SimplePDPServiceWithPayments(address(serviceProxy));
+        // Deploy mock contracts
+        mockUSDFC = new MockERC20();
+        mockPDPVerifier = new MockPDPVerifier();
         
-//         // Fund the payer
-//         usdfc.transfer(payer, 1000 * 10**6); // 1000 USDFC
-//     }
+        // Deploy actual Payments contract
+        Payments paymentsImpl = new Payments();
+        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
+        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
+        payments = Payments(address(paymentsProxy));
+        
+        // Deploy and initialize the service
+        SignatureCheckingService serviceImpl = new SignatureCheckingService();
+        bytes memory initData = abi.encodeWithSelector(
+            SimplePDPServiceWithPayments.initialize.selector,
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            500 // 5% commission
+        );
+        
+        MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
+        pdpService = SignatureCheckingService(address(serviceProxy));
+        
+        // Fund the payer
+        mockUSDFC.transfer(payer, 1000 * 10**6); // 1000 USDFC
+    }    
+
+    // Test the recoverSigner function indirectly through signature verification
+    function testRecoverSignerWithValidSignature() public view {
+        // Create the message hash that should be signed
+        bytes32 messageHash = keccak256(abi.encode(42));
+        
+        // Sign the message hash with the payer's private key
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerPrivateKey, messageHash);
+        bytes memory validSignature = abi.encodePacked(r, s, v);
+        
+        // Test that the signature verifies correctly
+        address recoveredSigner = pdpService.doRecoverSigner(messageHash, validSignature);
+        assertEq(recoveredSigner, payer, "Should recover the correct signer address");
+    }
+
+    function testRecoverSignerWithWrongSigner() public view {
+        // Create the message hash
+        bytes32 messageHash = keccak256(abi.encode(42));
+        
+        // Sign with wrong signer's private key
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongSignerPrivateKey, messageHash);
+        bytes memory wrongSignature = abi.encodePacked(r, s, v);
+        
+        // Test that the signature recovers the wrong signer (not the expected payer)
+        address recoveredSigner = pdpService.doRecoverSigner(messageHash, wrongSignature);
+        assertEq(recoveredSigner, wrongSigner, "Should recover the wrong signer address");
+        assertTrue(recoveredSigner != payer, "Should not recover the expected payer address");
+    }
     
-//     // Test the recoverSigner function with known signature
-//     function testRecoverSignerBasic() public {
-//         bytes32 messageHash = keccak256("Hello World");
+    function testRecoverSignerInvalidLength() public {
+        bytes32 messageHash = keccak256(abi.encode(42));
+        bytes memory invalidSignature = abi.encodePacked(bytes32(0), bytes16(0)); // Wrong length (48 bytes instead of 65)
         
-//         // Sign the message hash with the payer's private key
-//         (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerPrivateKey, messageHash);
-//         bytes memory signature = abi.encodePacked(r, s, v);
+        vm.expectRevert("Invalid signature length");
+        pdpService.doRecoverSigner(messageHash, invalidSignature);
+    }
+
+    function testRecoverSignerInvalidVValue() public {
+        bytes32 messageHash = keccak256(abi.encode(42));
         
-//         // Test the internal recoverSigner function by calling a verification function
-//         uint256 clientDataSetId = 0;
-//         bytes32 expectedHash = keccak256(
-//             abi.encodePacked(
-//                 address(pdpService),
-//                 uint8(0), // Operation.CreateProofSet
-//                 clientDataSetId
-//             )
-//         );
+        // Create signature with invalid v value
+        bytes32 r = bytes32(uint256(1));
+        bytes32 s = bytes32(uint256(2));
+        uint8 v = 25; // Invalid v value (should be 27 or 28)
+        bytes memory invalidSignature = abi.encodePacked(r, s, v);
         
-//         (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(payerPrivateKey, expectedHash);
-//         bytes memory validSignature = abi.encodePacked(r2, s2, v2);
+        vm.expectRevert("Unsupported signature 'v' value, we don't handle rare wrapped case");
+        pdpService.doRecoverSigner(messageHash, invalidSignature);
+    }
+
+    function testRecoverSignerWithZeroSignature() public view {
+        bytes32 messageHash = keccak256(abi.encode(42));
         
-//         bool result = pdpService.verifyCreateProofSetSignature(payer, clientDataSetId, validSignature);
-//         assertTrue(result, "Should verify valid signature");
-//     }
-    
-//     // Test signature with invalid length
-//     function testRecoverSignerInvalidLength() public {
-//         uint256 clientDataSetId = 0;
-//         bytes memory invalidSignature = abi.encodePacked(bytes32(0), bytes16(0)); // Wrong length
+        // Create signature with all zeros
+        bytes32 r = bytes32(0);
+        bytes32 s = bytes32(0);
+        uint8 v = 27;
+        bytes memory zeroSignature = abi.encodePacked(r, s, v);
         
-//         vm.expectRevert("Invalid signature length");
-//         pdpService.verifyCreateProofSetSignature(payer, clientDataSetId, invalidSignature);
-//     }
-    
-//     // Test signature with invalid v value
-//     function testRecoverSignerInvalidV() public {
-//         uint256 clientDataSetId = 0;
-//         bytes32 messageHash = keccak256(
-//             abi.encodePacked(
-//                 address(pdpService),
-//                 uint8(0), // Operation.CreateProofSet
-//                 clientDataSetId
-//             )
-//         );
-        
-//         // Create signature with invalid v value
-//         bytes32 r = bytes32(uint256(1));
-//         bytes32 s = bytes32(uint256(2));
-//         uint8 v = 25; // Invalid v value
-//         bytes memory invalidSignature = abi.encodePacked(r, s, v);
-        
-//         vm.expectRevert("Invalid signature 'v' value, we don't support the rare wrap around case");
-//         pdpService.verifyCreateProofSetSignature(payer, clientDataSetId, invalidSignature);
-//     }
-// }
-    
-    
+        // This should not revert but should return address(0) (ecrecover returns address(0) for invalid signatures)
+        address recoveredSigner = pdpService.doRecoverSigner(messageHash, zeroSignature);
+        assertEq(recoveredSigner, address(0), "Should return zero address for invalid signature");
+    }
+}
