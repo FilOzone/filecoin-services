@@ -118,6 +118,13 @@ contract MockPDPVerifier {
 }
 
 contract SimplePDPServiceWithPaymentsTest is Test {
+    // Testing Constants
+    bytes constant FAKE_SIGNATURE = abi.encodePacked(
+        bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // r
+        bytes32(0x9999997890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // s
+        uint8(27) // v
+    );
+
     // Contracts
     SimplePDPServiceWithPayments public pdpServiceWithPayments;
     MockPDPVerifier public mockPDPVerifier;
@@ -142,8 +149,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     function setUp() public {
         // Setup test accounts
         deployer = address(this);
-        client = address(0x1);
-        storageProvider = address(0x2);
+        client = address(0xf1);
+        storageProvider = address(0xf2);
 
         // Fund test accounts
         vm.deal(deployer, 100 ether);
@@ -175,6 +182,14 @@ contract SimplePDPServiceWithPaymentsTest is Test {
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
         pdpServiceWithPayments = SimplePDPServiceWithPayments(address(pdpServiceProxy));
+    }
+
+    function makeSignaturePass(address signer) public {
+        vm.mockCall(
+            address(0x01), // ecrecover precompile address
+            bytes(hex""),
+            abi.encode(signer)
+        );
     }
 
     function testInitialState() public view {
@@ -212,7 +227,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     function testCreateProofSetCreatesRailAndChargesFee() public {
         // Prepare ExtraData
         SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client});
+            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE});
 
         // Encode the extra data
         extraData = abi.encode(createData);
@@ -244,6 +259,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         emit SimplePDPServiceWithPayments.ProofSetRailCreated(1, 1, client, storageProvider);
 
         // Create a proof set as the storage provider
+        makeSignaturePass(client);
         vm.startPrank(storageProvider);
         uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
