@@ -64,6 +64,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         uint256 commissionBps; // Commission rate for this proof set
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
+        uint256 clientDataSetId; // ClientDataSetID
         mapping(uint256 => string) rootIdToMetadata; // Mapping from root ID to its metadata
     }
 
@@ -221,6 +222,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
             verifyCreateProofSetSignature(
                 createData.payer,
                 clientDataSetId,
+                creator,
                 createData.signature
             ),
             "Invalid signature for proof set creation"
@@ -231,6 +233,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         info.payee = creator; // Using creator as the payee
         info.metadata = createData.metadata;
         info.commissionBps = operatorCommissionBps; // Use the contract's default commission rate
+        info.clientDataSetId = clientDataSetId;
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
@@ -274,17 +277,17 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      * @notice Handles proof set deletion and terminates the payment rail
      * @dev Called by the PDPVerifier contract when a proof set is deleted
      * @param proofSetId The ID of the proof set being deleted
-     * @param deletedLeafCount The number of leaves deleted
      * @param extraData Signature for authentication
      */
     function proofSetDeleted(
         uint256 proofSetId,
-        uint256 deletedLeafCount,
+        uint256,// deletedLeafCount, 
         bytes calldata extraData
     ) external onlyPDPVerifier {
         // Verify the proof set exists in our mapping
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
-            proofSetInfo[proofSetId].railId != 0,
+            info.railId != 0,
             "Proof set not registered with payment system"
         );
         bytes memory signature = abi.decode(extraData, (bytes));
@@ -296,7 +299,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         require(
             verifyDeleteProofSetSignature(
                 payer,
-                proofSetId,
+                info.clientDataSetId,
                 signature
             ),
             "Not authorized to delete proof set"
@@ -319,10 +322,11 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         bytes calldata extraData
     ) external onlyPDPVerifier {
         // Verify the proof set exists in our mapping
-        require(proofSetInfo[proofSetId].railId != 0, "Proof set not registered with payment system");
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
+        require(info.railId != 0, "Proof set not registered with payment system");
         
         // Get the payer address for this proof set
-        address payer = proofSetInfo[proofSetId].payer;
+        address payer = info.payer;
         require(extraData.length > 0, "Extra data required for adding roots");
         // Decode the extra data
         (bytes memory signature, string memory metadata) =  abi.decode(extraData, (bytes, string));
@@ -331,7 +335,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         require(
             verifyAddRootsSignature(
                 payer,
-                proofSetId,
+                info.clientDataSetId,
                 rootData,
                 firstAdded,
                 signature
@@ -340,7 +344,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         );
 
         // Store metadata for each new root
-        ProofSetInfo storage info = proofSetInfo[proofSetId];
         for (uint256 i = 0; i < rootData.length; i++) {
             uint256 rootId = firstAdded + i;
             info.rootIdToMetadata[rootId] = metadata;
@@ -352,14 +355,15 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         external
         onlyPDPVerifier
     {
-        // Verify the proof set exists in our mapping
+        // Verify the proof set exists in our mapping   
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
-            proofSetInfo[proofSetId].railId != 0,
+            info.railId != 0,
             "Proof set not registered with payment system"
         );
         
         // Get the payer address for this proof set
-        address payer = proofSetInfo[proofSetId].payer;
+        address payer = info.payer;
         
         // Decode the signature from extraData
         require(extraData.length > 0, "Extra data required for scheduling removals");
@@ -369,7 +373,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         require(
             verifyScheduleRemovalsSignature(
                 payer,
-                proofSetId,
+                info.clientDataSetId,
                 rootIds,
                 signature
             ),
@@ -681,6 +685,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     function verifyCreateProofSetSignature(
         address payer,
         uint256 clientDataSetId,
+        address payee,
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
@@ -688,7 +693,8 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
             abi.encode(
                 address(this),                          // ServiceContractAddr
                 uint8(Operation.CreateProofSet),        // OpEnum
-                clientDataSetId                         // ClientDataSetID
+                clientDataSetId,                         // ClientDataSetID
+                payee
             )
         );
         
@@ -702,14 +708,14 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     /**
      * @notice Verifies a signature for the AddRoots operation
      * @param payer The address of the payer who should have signed the message
-     * @param proofSetId The ID of the proof set
+     * @param clientDataSetId The ID of the proof set
      * @param rootDataArray Array of RootSignatureData structures
      * @param signature The signature bytes (v, r, s)
      * @return True if the signature is valid, false otherwise
      */
     function verifyAddRootsSignature(
         address payer,
-        uint256 proofSetId,
+        uint256 clientDataSetId,
         PDPVerifier.RootData[] memory rootDataArray,
         uint256 firstAdded,
         bytes memory signature
@@ -718,7 +724,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         bytes memory message = abi.encode(
             address(this),                      // ServiceContractAddr
             uint8(Operation.AddRoots),          // OpEnum
-            proofSetId,                         // ProofSetID
+            clientDataSetId,                    // ClientDataSetID
             firstAdded,                         // FirstAdded
             rootDataArray                       // Array of rootData
         );
@@ -736,14 +742,14 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     /**
      * @notice Verifies a signature for the ScheduleRemovals operation
      * @param payer The address of the payer who should have signed the message
-     * @param proofSetId The ID of the proof set
+     * @param clientDataSetId The ID of the proof set
      * @param rootIds Array of root IDs to be removed
      * @param signature The signature bytes (v, r, s)
      * @return True if the signature is valid, false otherwise
      */
     function verifyScheduleRemovalsSignature(
         address payer,
-        uint256 proofSetId,
+        uint256 clientDataSetId,
         uint256[] memory rootIds,
         bytes memory signature
     ) internal view returns (bool) {
@@ -752,7 +758,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
             abi.encode(
                 address(this),                          // ServiceContractAddr
                 uint8(Operation.ScheduleRemovals),      // OpEnum
-                proofSetId,                             // ProofSetID
+                clientDataSetId,                        // ClientDataSetID
                 rootIds                                 // Array of rootIds
             )
         );
@@ -767,13 +773,13 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     /**
      * @notice Verifies a signature for the DeleteProofSet operation
      * @param payer The address of the payer who should have signed the message
-     * @param proofSetId The ID of the proof set
+     * @param clientDataSetId The ID of the proof set
      * @param signature The signature bytes (v, r, s)
      * @return True if the signature is valid, false otherwise
      */
     function verifyDeleteProofSetSignature(
         address payer,
-        uint256 proofSetId,
+        uint256 clientDataSetId,
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
@@ -781,7 +787,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
             abi.encode(
                 address(this),                          // ServiceContractAddr
                 uint8(Operation.DeleteProofSet),        // OpEnum
-                proofSetId                              // ProofSetID
+                clientDataSetId                        // ClientDataSetID
             )
         );
         
