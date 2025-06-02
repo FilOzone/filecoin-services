@@ -94,6 +94,39 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     // Track when proving was first activated for each proof set
     mapping(uint256 => uint256) public provingActivationEpoch;
 
+    // ========== Storage Provider Registry State ==========
+    
+    uint256 public nextServiceProviderId = 1;
+        
+    struct ApprovedProviderInfo {
+        address owner;
+        string pdpUrl;
+        string pieceRetrievalUrl;
+        uint256 registeredAt; 
+        uint256 approvedAt;   
+    }
+    
+    struct PendingProviderInfo {
+        string pdpUrl;
+        string pieceRetrievalUrl;
+        uint256 registeredAt; 
+        bool exists;
+    }
+    
+    mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
+    
+    mapping(address => bool) public approvedProvidersMap;
+    
+    mapping(address => PendingProviderInfo) public pendingProviders;
+    
+    mapping(address => uint256) public providerToId;
+    
+    // Events for SP registry
+    event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
+    event ProviderApproved(address indexed provider, uint256 indexed providerId);
+    event ProviderRejected(address indexed provider);
+    event ProviderRemoved(address indexed provider, uint256 indexed providerId);
+
     // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
@@ -129,6 +162,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
         // Initialize the fee constants based on the actual token decimals
         PROOFSET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
+        nextServiceProviderId = 1;
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -214,6 +248,9 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         require(createData.payer != address(0), "Payer address cannot be zero");
         require(creator != address(0), "Creator address cannot be zero");
         
+        // Check if the storage provider is whitelisted
+        require(approvedProvidersMap[creator], "Storage provider not approved");
+        
         // Generate a new client dataset ID
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
         
@@ -281,9 +318,9 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      */
     function proofSetDeleted(
         uint256 proofSetId,
-        uint256,// deletedLeafCount, 
+        uint256,// deletedLeafCount, - not used 
         bytes calldata extraData
-    ) external onlyPDPVerifier {
+    ) external view onlyPDPVerifier {
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
@@ -353,6 +390,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
     function rootsScheduledRemove(uint256 proofSetId, uint256[] memory rootIds, bytes calldata extraData)
         external
+        view
         onlyPDPVerifier
     {
         // Verify the proof set exists in our mapping   
@@ -830,6 +868,152 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
+    }    
+    
+    /**
+     * @notice Register as a service provider
+     * @dev SPs call this to register their URLs before approval
+     * @param pdpUrl The URL for PDP services
+     * @param pieceRetrievalUrl The URL for piece retrieval services
+     */
+    function registerServiceProvider(string calldata pdpUrl, string calldata pieceRetrievalUrl) external {
+        require(!approvedProvidersMap[msg.sender], "Provider already approved");
+        
+        // Check if registration is already pending
+        require(!pendingProviders[msg.sender].exists, "Registration already pending");
+        
+        // Store pending registration
+        pendingProviders[msg.sender] = PendingProviderInfo({
+            pdpUrl: pdpUrl,
+            pieceRetrievalUrl: pieceRetrievalUrl,
+            registeredAt: block.number,
+            exists: true
+        });
+        
+        emit ProviderRegistered(msg.sender, pdpUrl, pieceRetrievalUrl);
+    }
+    
+    /**
+     * @notice Approve a pending service provider
+     * @dev Only owner can approve providers
+     * @param provider The address of the provider to approve
+     */
+    function approveServiceProvider(address provider) external onlyOwner {
+        // Check if registration exists
+        require(pendingProviders[provider].exists, "No pending registration found");
+        
+        // Check if not already approved
+        require(!approvedProvidersMap[provider], "Provider already approved");
+        
+        // Get pending registration data
+        PendingProviderInfo memory pending = pendingProviders[provider];
+        
+        // Assign ID and store provider info
+        uint256 providerId = nextServiceProviderId++;
+        approvedProviders[providerId] = ApprovedProviderInfo({
+            owner: provider,
+            pdpUrl: pending.pdpUrl,
+            pieceRetrievalUrl: pending.pieceRetrievalUrl,
+            registeredAt: pending.registeredAt,
+            approvedAt: block.number
+        });
+        
+        approvedProvidersMap[provider] = true;
+        providerToId[provider] = providerId;
+        
+        // Clear pending registration
+        delete pendingProviders[provider];
+        
+        emit ProviderApproved(provider, providerId);
+    }
+    
+    /**
+     * @notice Reject a pending service provider
+     * @dev Only owner can reject providers
+     * @param provider The address of the provider to reject
+     */
+    function rejectServiceProvider(address provider) external onlyOwner {
+        // Check if registration exists
+        require(pendingProviders[provider].exists, "No pending registration found");
+        require(!approvedProvidersMap[provider], "Provider already approved");
+        
+        // Update mappings
+        approvedProvidersMap[provider] = false;
+        providerToId[provider] = 0;
+        
+        // Clear pending registration
+        delete pendingProviders[provider];
+        
+        emit ProviderRejected(provider);
+    }
+
+    /**
+     * @notice Remove an already approved service provider by ID
+     * @dev Only owner can remove providers. This revokes their approved status.
+     * @param providerId The ID of the provider to remove
+     */
+    function removeServiceProvider(uint256 providerId) external onlyOwner {
+        // Validate provider ID
+        require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
+        
+        // Get provider info
+        ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
+        address providerAddress = providerInfo.owner;
+        require(providerAddress != address(0), "Provider not found");
+        
+        // Check if provider is currently approved
+        require(approvedProvidersMap[providerAddress], "Provider not approved");
+        
+        // Remove from approved mapping
+        approvedProvidersMap[providerAddress] = false;
+        
+        // Remove the provider ID mapping
+        delete providerToId[providerAddress];
+        
+        // Delete the provider info
+        delete approvedProviders[providerId];
+        
+        emit ProviderRemoved(providerAddress, providerId);
+    }
+    
+    /**
+     * @notice Get service provider information by ID
+     * @dev Only returns info for approved providers
+     * @param providerId The ID of the service provider
+     * @return The service provider information
+     */
+    function getApprovedProvider(uint256 providerId) external view returns (ApprovedProviderInfo memory) {
+        require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
+        ApprovedProviderInfo memory provider = approvedProviders[providerId];
+        require(provider.owner != address(0), "Provider not found");
+        return provider;
+    }
+    
+    /**
+     * @notice Check if a provider is approved
+     * @param provider The address to check
+     * @return True if approved, false otherwise
+     */
+    function isProviderApproved(address provider) external view returns (bool) {
+        return approvedProvidersMap[provider];
+    }
+    
+    /**
+     * @notice Get pending registration information
+     * @param provider The address of the provider
+     * @return The pending registration info
+     */
+    function getPendingProvider(address provider) external view returns (PendingProviderInfo memory) {
+        return pendingProviders[provider];
+    }
+    
+    /**
+     * @notice Get the provider ID for a given address
+     * @param provider The address of the provider
+     * @return The provider ID (0 if not approved)
+     */
+    function getProviderIdByAddress(address provider) external view returns (uint256) {
+        return providerToId[provider];
     }
 
     /**
@@ -841,7 +1025,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      * @param toEpoch Ending epoch (inclusive)
      * @return result The arbitration result with modified amount and settlement information
      */
-    function arbitratePayment(uint256 railId, uint256 proposedAmount, uint256 fromEpoch, uint256 toEpoch, uint256 rate)
+    function arbitratePayment(uint256 railId, uint256 proposedAmount, uint256 fromEpoch, uint256 toEpoch, uint256 /* rate */)
         external
         override
         returns (ArbitrationResult memory result)

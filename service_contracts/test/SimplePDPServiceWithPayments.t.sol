@@ -9,6 +9,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -135,27 +136,52 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     address public deployer;
     address public client;
     address public storageProvider;
+    
+    // Additional test accounts for registry tests
+    address public sp1;
+    address public sp2;
+    address public sp3;
 
     // Test parameters
     uint256 public initialOperatorCommissionBps = 500; // 5%
     uint256 public proofSetId;
     bytes public extraData;
+    
+    // Test URLs for registry
+    string public validPdpUrl = "https://sp1.example.com/pdp";
+    string public validRetrievalUrl = "https://sp1.example.com/retrieve";
+    string public validPdpUrl2 = "http://sp2.example.com:8080/pdp";
+    string public validRetrievalUrl2 = "http://sp2.example.com:8080/retrieve";
 
     // Events from Payments contract to verify
     event RailCreated(
         uint256 railId, address token, address from, address to, address arbiter, uint256 commissionRateBps
     );
+    
+    // Registry events to verify
+    event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
+    event ProviderApproved(address indexed provider, uint256 indexed providerId);
+    event ProviderRejected(address indexed provider);
+    event ProviderRemoved(address indexed provider, uint256 indexed providerId);
 
     function setUp() public {
         // Setup test accounts
         deployer = address(this);
         client = address(0xf1);
         storageProvider = address(0xf2);
+        
+        // Additional accounts for registry tests
+        sp1 = address(0xf3);
+        sp2 = address(0xf4);
+        sp3 = address(0xf5);
 
         // Fund test accounts
         vm.deal(deployer, 100 ether);
         vm.deal(client, 100 ether);
         vm.deal(storageProvider, 100 ether);
+        vm.deal(sp1, 100 ether);
+        vm.deal(sp2, 100 ether);
+        vm.deal(sp3, 100 ether);
 
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -225,6 +251,11 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     }
 
     function testCreateProofSetCreatesRailAndChargesFee() public {
+        // First approve the storage provider
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        
         // Prepare ExtraData
         SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
             SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE});
@@ -328,6 +359,509 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window should be 60 epochs");
         assertEq(pdpServiceWithPayments.getChallengesPerProof(), 5, "Challenges per proof should be 5");
     }
+    
+    // ===== Storage Provider Registry Tests =====
+
+    function testRegisterServiceProvider() public {
+        vm.startPrank(sp1);
+        
+        vm.expectEmit(true, false, false, true);
+        emit ProviderRegistered(sp1, validPdpUrl, validRetrievalUrl);
+        
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        vm.stopPrank();
+        
+        // Verify pending registration
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertTrue(pending.exists, "Pending registration should exist");
+        assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
+        assertEq(pending.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
+        assertEq(pending.registeredAt, block.number, "Registration epoch should match");
+    }
+
+    function testCannotRegisterTwiceWhilePending() public {
+        vm.startPrank(sp1);
+        
+        // First registration
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        // Try to register again
+        vm.expectRevert("Registration already pending");
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        vm.stopPrank();
+    }
+
+    function testCannotRegisterIfAlreadyApproved() public {
+        // Register and approve SP1
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Try to register again
+        vm.prank(sp1);
+        vm.expectRevert("Provider already approved");
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+    }
+
+    function testApproveServiceProvider() public {
+        // SP registers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        // Get the registration block from pending info
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pendingInfo = pdpServiceWithPayments.getPendingProvider(sp1);
+        uint256 registrationBlock = pendingInfo.registeredAt;
+        
+        vm.roll(block.number + 10); // Advance blocks
+        uint256 approvalBlock = block.number;
+        
+        // Owner approves
+        vm.expectEmit(true, true, false, false);
+        emit ProviderApproved(sp1, 1);
+        
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Verify approval
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP should be approved");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
+        
+        // Verify SP info
+        SimplePDPServiceWithPayments.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
+        assertEq(info.owner, sp1, "Owner should match");
+        assertEq(info.pdpUrl, validPdpUrl, "PDP URL should match");
+        assertEq(info.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
+        assertEq(info.registeredAt, registrationBlock, "Registration epoch should match");
+        assertEq(info.approvedAt, approvalBlock, "Approval epoch should match");
+        
+        // Verify pending registration cleared
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertFalse(pending.exists, "Pending registration should be cleared");
+    }
+
+    function testApproveMultipleProviders() public {
+        // Multiple SPs register
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        // Approve both
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+        
+        // Verify IDs assigned sequentially
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP1 should have ID 1");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), 2, "SP2 should have ID 2");
+        assertEq(pdpServiceWithPayments.nextServiceProviderId(), 3, "Next ID should be 3");
+    }
+
+    function testOnlyOwnerCanApprove() public {
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        vm.prank(sp2);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+    }
+
+    function testCannotApproveNonExistentRegistration() public {
+        vm.expectRevert("No pending registration found");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+    }
+
+    function testCannotApproveAlreadyApprovedProvider() public {
+        // Register and approve
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Try to approve again (would need to re-register first, but we test the check)
+        vm.expectRevert("No pending registration found");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+    }
+
+    function testRejectServiceProvider() public {
+        // SP registers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        // Owner rejects
+        vm.expectEmit(true, false, false, false);
+        emit ProviderRejected(sp1);
+        
+        pdpServiceWithPayments.rejectServiceProvider(sp1);
+        
+        // Verify not approved
+        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
+        
+        // Verify pending registration cleared
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertFalse(pending.exists, "Pending registration should be cleared");
+    }
+
+    function testCanReregisterAfterRejection() public {
+        // Register and reject
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.rejectServiceProvider(sp1);
+        
+        // Register again with different URLs
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        // Verify new registration
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertTrue(pending.exists, "New pending registration should exist");
+        assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
+    }
+
+    function testOnlyOwnerCanReject() public {
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        vm.prank(sp2);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
+        pdpServiceWithPayments.rejectServiceProvider(sp1);
+    }
+
+    function testCannotRejectNonExistentRegistration() public {
+        vm.expectRevert("No pending registration found");
+        pdpServiceWithPayments.rejectServiceProvider(sp1);
+    }
+    
+    // ===== Removal Tests =====
+    
+    function testRemoveServiceProvider() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Verify SP is approved
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP should be approved");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
+        
+        // Owner removes the provider
+        vm.expectEmit(true, true, false, false);
+        emit ProviderRemoved(sp1, 1);
+        
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        // Verify SP is no longer approved
+        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
+    }
+    
+    function testOnlyOwnerCanRemove() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Try to remove as non-owner
+        vm.prank(sp2);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
+        pdpServiceWithPayments.removeServiceProvider(1);
+    }
+    
+    function testRemovedProviderCannotCreateProofSet() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Remove the provider
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        // Prepare extra data
+        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
+            SimplePDPServiceWithPayments.ProofSetCreateData({
+                metadata: "Test Proof Set",
+                payer: client,
+                signature: FAKE_SIGNATURE
+            });
+        
+        bytes memory encodedData = abi.encode(createData);
+        
+        // Setup client payment approval
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6,
+            1000e6,
+            365 days
+        );
+        mockUSDFC.approve(address(payments), 10e6);
+        payments.deposit(address(mockUSDFC), client, 10e6);
+        vm.stopPrank();
+        
+        // Try to create proof set as removed SP
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        vm.expectRevert();
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+    }
+    
+    function testCanReregisterAfterRemoval() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Remove the provider
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        // Should be able to register again
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        // Verify new registration
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertTrue(pending.exists, "New pending registration should exist");
+        assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
+    }
+
+    function testNonWhitelistedProviderCannotCreateProofSet() public {
+        // Prepare extra data
+        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
+            SimplePDPServiceWithPayments.ProofSetCreateData({
+                metadata: "Test Proof Set",
+                payer: client,
+                signature: FAKE_SIGNATURE
+            });
+        
+        bytes memory encodedData = abi.encode(createData);
+        
+        // Setup client payment approval
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6,
+            1000e6,
+            365 days
+        );
+        mockUSDFC.approve(address(payments), 10e6);
+        payments.deposit(address(mockUSDFC), client, 10e6);
+        vm.stopPrank();
+        
+        // Try to create proof set as non-approved SP
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        vm.expectRevert();
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+    }
+
+    function testWhitelistedProviderCanCreateProofSet() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Prepare extra data
+        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
+            SimplePDPServiceWithPayments.ProofSetCreateData({
+                metadata: "Test Proof Set",
+                payer: client,
+                signature: FAKE_SIGNATURE
+            });
+        
+        bytes memory encodedData = abi.encode(createData);
+        
+        // Setup client payment approval
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6,
+            1000e6,
+            365 days
+        );
+        mockUSDFC.approve(address(payments), 10e6);
+        payments.deposit(address(mockUSDFC), client, 10e6);
+        vm.stopPrank();
+        
+        // Create proof set as approved SP
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+        
+        // Verify proof set was created
+        assertTrue(newProofSetId > 0, "Proof set should be created");
+    }
+
+    function testGetApprovedProvider() public {
+        // Register and approve
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Get provider info
+        SimplePDPServiceWithPayments.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
+        assertEq(info.owner, sp1, "Owner should match");
+        assertEq(info.pdpUrl, validPdpUrl, "PDP URL should match");
+    }
+
+    function testGetApprovedProviderInvalidId() public {
+        vm.expectRevert("Invalid provider ID");
+        pdpServiceWithPayments.getApprovedProvider(0);
+        
+        vm.expectRevert("Invalid provider ID");
+        pdpServiceWithPayments.getApprovedProvider(1); // No providers approved yet
+        
+        // Approve one provider
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        vm.expectRevert("Invalid provider ID");
+        pdpServiceWithPayments.getApprovedProvider(2); // Only ID 1 exists
+    }
+
+    function testIsProviderApproved() public {
+        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "Should not be approved initially");
+        
+        // Register and approve
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "Should be approved after approval");
+    }
+
+    function testGetPendingProvider() public {
+        // No pending registration
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertFalse(pending.exists, "Should have no pending registration");
+        
+        // Register
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        // Check pending
+        pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertTrue(pending.exists, "Should have pending registration");
+        assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
+    }
+
+    function testGetProviderIdByAddress() public {
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "Should have no ID initially");
+        
+        // Register and approve
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "Should have ID 1 after approval");
+    }
+
+    // Additional comprehensive tests for removeServiceProvider
+    
+    function testRemoveServiceProviderAfterReregistration() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Remove the provider
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        // SP re-registers with different URLs
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        // Approve again
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 2, "SP should have new ID 2");
+        
+        // Remove again
+        pdpServiceWithPayments.removeServiceProvider(2);
+        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+    }
+    
+    function testRemoveMultipleProviders() public {
+        // Register and approve multiple SPs
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        vm.prank(sp3);
+        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        
+        // Approve all
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+        pdpServiceWithPayments.approveServiceProvider(sp3);
+        
+        // Remove sp2
+        pdpServiceWithPayments.removeServiceProvider(2);
+        
+        // Verify sp1 and sp3 are still approved
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP1 should still be approved");
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp3), "SP3 should still be approved");
+        assertFalse(pdpServiceWithPayments.isProviderApproved(sp2), "SP2 should not be approved");
+        
+        // Verify IDs
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP1 should still have ID 1");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), 0, "SP2 should have no ID");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp3), 3, "SP3 should still have ID 3");
+    }
+    
+    function testRemoveProviderWithPendingRegistration() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Remove the provider
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        // SP tries to register again while removed
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        
+        // Verify SP has pending registration but is not approved
+        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        assertTrue(pending.exists, "Should have pending registration");
+        assertEq(pending.pdpUrl, validPdpUrl2, "Pending URL should match new registration");
+    }
+    
+    function testRemoveProviderInvalidId() public {
+        // Try to remove with ID 0
+        vm.expectRevert("Invalid provider ID");
+        pdpServiceWithPayments.removeServiceProvider(0);
+        
+        // Try to remove with non-existent ID
+        vm.expectRevert("Invalid provider ID");
+        pdpServiceWithPayments.removeServiceProvider(999);
+    }
+    
+    function testCannotRemoveAlreadyRemovedProvider() public {
+        // Register and approve SP
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        // Remove the provider
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        // Try to remove again
+        vm.expectRevert("Provider not found");
+        pdpServiceWithPayments.removeServiceProvider(1);
+    }
+
 }
 
 contract SignatureCheckingService is SimplePDPServiceWithPayments {
