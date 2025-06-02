@@ -374,7 +374,6 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Verify pending registration
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertTrue(pending.exists, "Pending registration should exist");
         assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
         assertEq(pending.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
         assertEq(pending.registeredAt, block.number, "Registration epoch should match");
@@ -438,7 +437,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Verify pending registration cleared
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertFalse(pending.exists, "Pending registration should be cleared");
+        assertEq(pending.registeredAt, 0, "Pending registration should be cleared");
     }
 
     function testApproveMultipleProviders() public {
@@ -480,7 +479,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Try to approve again (would need to re-register first, but we test the check)
-        vm.expectRevert("No pending registration found");
+        vm.expectRevert("Provider already approved");
         pdpServiceWithPayments.approveServiceProvider(sp1);
     }
 
@@ -501,7 +500,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Verify pending registration cleared
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertFalse(pending.exists, "Pending registration should be cleared");
+        assertEq(pending.registeredAt, 0, "Pending registration should be cleared");
     }
 
     function testCanReregisterAfterRejection() public {
@@ -516,7 +515,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Verify new registration
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertTrue(pending.exists, "New pending registration should exist");
+        assertTrue(pending.registeredAt > 0, "New pending registration should exist");
         assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
     }
 
@@ -624,7 +623,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Verify new registration
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertTrue(pending.exists, "New pending registration should exist");
+        assertTrue(pending.registeredAt > 0, "New pending registration should exist");
         assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
     }
 
@@ -741,7 +740,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     function testGetPendingProvider() public {
         // No pending registration
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertFalse(pending.exists, "Should have no pending registration");
+        assertEq(pending.registeredAt, 0, "Should have no pending registration");
         
         // Register
         vm.prank(sp1);
@@ -749,7 +748,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Check pending
         pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertTrue(pending.exists, "Should have pending registration");
+        assertTrue(pending.registeredAt > 0, "Should have pending registration");
         assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
     }
 
@@ -834,7 +833,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         // Verify SP has pending registration but is not approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
         SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertTrue(pending.exists, "Should have pending registration");
+        assertTrue(pending.registeredAt > 0, "Should have pending registration");
         assertEq(pending.pdpUrl, validPdpUrl2, "Pending URL should match new registration");
     }
     

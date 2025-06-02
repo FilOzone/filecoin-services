@@ -110,7 +110,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         string pdpUrl;
         string pieceRetrievalUrl;
         uint256 registeredAt; 
-        bool exists;
     }
     
     mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
@@ -320,7 +319,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         uint256 proofSetId,
         uint256,// deletedLeafCount, - not used 
         bytes calldata extraData
-    ) external view onlyPDPVerifier {
+    ) external onlyPDPVerifier {
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
@@ -390,7 +389,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
     function rootsScheduledRemove(uint256 proofSetId, uint256[] memory rootIds, bytes calldata extraData)
         external
-        view
         onlyPDPVerifier
     {
         // Verify the proof set exists in our mapping   
@@ -880,14 +878,13 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         require(!approvedProvidersMap[msg.sender], "Provider already approved");
         
         // Check if registration is already pending
-        require(!pendingProviders[msg.sender].exists, "Registration already pending");
+        require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
         
         // Store pending registration
         pendingProviders[msg.sender] = PendingProviderInfo({
             pdpUrl: pdpUrl,
             pieceRetrievalUrl: pieceRetrievalUrl,
-            registeredAt: block.number,
-            exists: true
+            registeredAt: block.number
         });
         
         emit ProviderRegistered(msg.sender, pdpUrl, pieceRetrievalUrl);
@@ -899,11 +896,10 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      * @param provider The address of the provider to approve
      */
     function approveServiceProvider(address provider) external onlyOwner {
-        // Check if registration exists
-        require(pendingProviders[provider].exists, "No pending registration found");
-        
         // Check if not already approved
         require(!approvedProvidersMap[provider], "Provider already approved");
+        // Check if registration exists
+        require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
         
         // Get pending registration data
         PendingProviderInfo memory pending = pendingProviders[provider];
@@ -934,7 +930,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      */
     function rejectServiceProvider(address provider) external onlyOwner {
         // Check if registration exists
-        require(pendingProviders[provider].exists, "No pending registration found");
+        require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
         require(!approvedProvidersMap[provider], "Provider already approved");
         
         // Update mappings
