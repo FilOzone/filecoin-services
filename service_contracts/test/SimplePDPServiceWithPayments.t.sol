@@ -861,6 +861,45 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
     }
 
+        
+    function testGetAllApprovedProvidersAfterRemoval() public {
+        // Register and approve three providers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+        
+        vm.prank(sp3);
+        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp3);
+        
+        // Verify all three are approved
+        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 3, "Should have three approved providers");
+        
+        // Remove the middle provider (sp2 with ID 2)
+        pdpServiceWithPayments.removeServiceProvider(2);
+        
+        // Get all approved providers again
+        providers = pdpServiceWithPayments.getAllApprovedProviders();
+        
+        // Should still have 3 elements, but the removed one should have zero address
+        assertEq(providers.length, 3, "Array length should still be 3 (includes removed slots)");
+        assertEq(providers[0].owner, sp1, "First provider should still be sp1");
+        assertEq(providers[1].owner, address(0), "Second provider should be zero address (removed)");
+        assertEq(providers[2].owner, sp3, "Third provider should still be sp3");
+        
+        // Verify that the removed provider's other fields are also cleared
+        assertEq(providers[1].pdpUrl, "", "Removed provider PDP URL should be empty");
+        assertEq(providers[1].pieceRetrievalUrl, "", "Removed provider retrieval URL should be empty");
+        assertEq(providers[1].registeredAt, 0, "Removed provider registration block should be 0");
+        assertEq(providers[1].approvedAt, 0, "Removed provider approval block should be 0");
+    }
+
+
 }
 
 contract SignatureCheckingService is SimplePDPServiceWithPayments {
