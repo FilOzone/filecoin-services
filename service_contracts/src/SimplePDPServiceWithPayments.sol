@@ -66,12 +66,14 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
         mapping(uint256 => string) rootIdToMetadata; // Mapping from root ID to its metadata
+        bool withCDN; // Whether the proof set is using CDN
     }
 
     // Decode structure for proof set creation extra data
     struct ProofSetCreateData {
         string metadata;
         address payer;
+        bool withCDN;
         bytes signature; // Authentication signature
     }
 
@@ -270,6 +272,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         info.metadata = createData.metadata;
         info.commissionBps = operatorCommissionBps; // Use the contract's default commission rate
         info.clientDataSetId = clientDataSetId;
+        info.withCDN = createData.withCDN;
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
@@ -699,6 +702,10 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      */
     function getProofSetMetadata(uint256 proofSetId) external view returns (string memory) {
         return proofSetInfo[proofSetId].metadata;
+    }
+
+    function getProofSetWithCDN(uint256 proofSetId) external view returns (bool) {
+        return proofSetInfo[proofSetId].withCDN;
     }
 
     /**
