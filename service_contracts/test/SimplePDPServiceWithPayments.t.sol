@@ -287,7 +287,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
 
         // Expect RailCreated event when creating the proof set
         vm.expectEmit(true, true, true, true);
-        emit SimplePDPServiceWithPayments.ProofSetRailCreated(1, 1, client, storageProvider);
+        emit SimplePDPServiceWithPayments.ProofSetRailCreated(1, 1, client, storageProvider, true);
 
         // Create a proof set as the storage provider
         makeSignaturePass(client);

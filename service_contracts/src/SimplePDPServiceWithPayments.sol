@@ -25,7 +25,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     }
 
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
-    event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee);
+    event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
 
@@ -309,7 +309,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         );
 
         // Emit event for tracking
-        emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator);
+        emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
     }
 
     /**
