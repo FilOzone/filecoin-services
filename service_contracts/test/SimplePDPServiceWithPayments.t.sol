@@ -344,6 +344,52 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         assertTrue(spFundsAfter > spFundsBefore, "Storage provider funds should increase");
     }
 
+    function testCreateProofSetNoCDN() public {
+        // First approve the storage provider
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        
+        // Prepare ExtraData
+        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
+            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+
+        // Encode the extra data
+        extraData = abi.encode(createData);
+
+        // Client needs to approve the PDP Service to create a payment rail
+        vm.startPrank(client);
+        // Set operator approval for the PDP service in the Payments contract
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true, // approved
+            1000e6, // rate allowance (1000 USDFC)
+            1000e6, // lockup allowance (1000 USDFC)
+            365 days // max lockup period
+        );
+
+        // Client deposits funds to the Payments contract for the one-time fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.PROOFSET_CREATION_FEE(); // 10x the required fee
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(address(mockUSDFC), client, depositAmount);
+        vm.stopPrank();
+
+        // Expect RailCreated event when creating the proof set
+        vm.expectEmit(true, true, true, true);
+        emit SimplePDPServiceWithPayments.ProofSetRailCreated(1, 1, client, storageProvider, false);
+
+        // Create a proof set as the storage provider
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), extraData);
+        vm.stopPrank();
+
+        // Verify withCDN was stored correctly
+        bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
+        assertFalse(withCDN, "withCDN should be false");
+    }
+
     // Helper function to get account info from the Payments contract
     function getAccountInfo(address token, address owner)
         internal
