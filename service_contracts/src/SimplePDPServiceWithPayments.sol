@@ -261,6 +261,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
                 createData.payer,
                 clientDataSetId,
                 creator,
+                createData.withCDN,
                 createData.signature
             ),
             "Invalid signature for proof set creation"
@@ -734,6 +735,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         address payer,
         uint256 clientDataSetId,
         address payee,
+        bool withCDN,
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
@@ -742,6 +744,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
                 address(this),                          // ServiceContractAddr
                 uint8(Operation.CreateProofSet),        // OpEnum
                 clientDataSetId,                         // ClientDataSetID
+                withCDN,                                // WithCDN
                 payee
             )
         );
