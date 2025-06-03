@@ -66,12 +66,14 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
         mapping(uint256 => string) rootIdToMetadata; // Mapping from root ID to its metadata
+        bool withCDN; // Whether the proof set is using CDN
     }
 
     // Decode structure for proof set creation extra data
     struct ProofSetCreateData {
         string metadata;
         address payer;
+        bool withCDN;
         bytes signature; // Authentication signature
     }
 
@@ -259,6 +261,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
                 createData.payer,
                 clientDataSetId,
                 creator,
+                createData.withCDN,
                 createData.signature
             ),
             "Invalid signature for proof set creation"
@@ -270,6 +273,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         info.metadata = createData.metadata;
         info.commissionBps = operatorCommissionBps; // Use the contract's default commission rate
         info.clientDataSetId = clientDataSetId;
+        info.withCDN = createData.withCDN;
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
@@ -702,6 +706,15 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     }
 
     /**
+     * @notice Get CDN enabled for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return CDN enabled
+     */
+    function getProofSetWithCDN(uint256 proofSetId) external view returns (bool) {
+        return proofSetInfo[proofSetId].withCDN;
+    }
+
+    /**
      * @notice Get the metadata for a specific root
      * @param proofSetId The ID of the proof set
      * @param rootId The ID of the root
@@ -722,6 +735,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         address payer,
         uint256 clientDataSetId,
         address payee,
+        bool withCDN,
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
@@ -730,6 +744,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
                 address(this),                          // ServiceContractAddr
                 uint8(Operation.CreateProofSet),        // OpEnum
                 clientDataSetId,                         // ClientDataSetID
+                withCDN,                                // WithCDN
                 payee
             )
         );

@@ -258,7 +258,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Prepare ExtraData
         SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE});
+            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
 
         // Encode the extra data
         extraData = abi.encode(createData);
@@ -309,6 +309,10 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         // Verify metadata was stored correctly
         string memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId);
         assertEq(metadata, "Test Proof Set", "Metadata should be stored correctly");
+
+        // Verify withCDN was stored correctly
+        bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
+        assertTrue(withCDN, "withCDN should be true");
 
         // Verify the rail in the actual Payments contract
         Payments.RailView memory rail = payments.getRail(railId);
@@ -582,7 +586,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
             SimplePDPServiceWithPayments.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
-                signature: FAKE_SIGNATURE
+                signature: FAKE_SIGNATURE,
+                withCDN: false
             });
         
         bytes memory encodedData = abi.encode(createData);
@@ -633,7 +638,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
             SimplePDPServiceWithPayments.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
-                signature: FAKE_SIGNATURE
+                signature: FAKE_SIGNATURE,
+                withCDN: false
             });
         
         bytes memory encodedData = abi.encode(createData);
@@ -670,7 +676,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
             SimplePDPServiceWithPayments.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
-                signature: FAKE_SIGNATURE
+                signature: FAKE_SIGNATURE,
+                withCDN: false
             });
         
         bytes memory encodedData = abi.encode(createData);
