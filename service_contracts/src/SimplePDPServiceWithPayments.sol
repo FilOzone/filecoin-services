@@ -37,6 +37,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     uint256 public constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
     uint256 public constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
     uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
+    uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
 
     // Dynamic fee values based on token decimals
@@ -661,7 +662,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
     /**
      * @notice Calculate the per-epoch rate based on total storage size
-     * @dev Rate is 2 USDFC per GiB per month. Free if totalBytes < 1 MiB.
+     * @dev Rate is 2 USDFC per TiB per month. Free if totalBytes < 1 MiB.
      * @param totalBytes Total size of the stored data in bytes
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
@@ -672,7 +673,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         }
 
         uint256 numerator = totalBytes * 2 * (10 ** uint256(tokenDecimals));
-        uint256 denominator = GIB_IN_BYTES * EPOCHS_PER_MONTH;
+        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
 
         // Ensure denominator is not zero (shouldn't happen with constants)
         require(denominator > 0, "Denominator cannot be zero");
@@ -756,6 +757,23 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      */
     function getRootMetadata(uint256 proofSetId, uint256 rootId) external view returns (string memory) {
         return proofSetInfo[proofSetId].rootIdToMetadata[rootId];
+    }
+
+    /**
+     * @notice Get the service pricing information
+     * @return pricePerTiBPerMonth The price in USDFC (2 USDFC per TiB per month)
+     * @return tokenAddress The address of the USDFC token used for payments
+     * @return epochsPerMonth The number of epochs in a month (86400)
+     */
+    function getServicePrice() external view returns (
+        uint256 pricePerTiBPerMonth,
+        address tokenAddress,
+        uint256 epochsPerMonth
+    ) {
+        // Return 2 USDFC per TiB per month with 18 decimals
+        pricePerTiBPerMonth = 2 * (10 ** uint256(tokenDecimals));
+        tokenAddress = usdFcTokenAddress;
+        epochsPerMonth = EPOCHS_PER_MONTH;
     }
 
     /**
