@@ -704,6 +704,11 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         return proofSetInfo[proofSetId].metadata;
     }
 
+    /**
+     * @notice Get CDN enabled for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return CDN enabled
+     */
     function getProofSetWithCDN(uint256 proofSetId) external view returns (bool) {
         return proofSetInfo[proofSetId].withCDN;
     }
