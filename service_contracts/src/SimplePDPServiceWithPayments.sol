@@ -56,6 +56,8 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
+    // Mapping from proof set ID to root ID to metadata
+    mapping(uint256 => mapping(uint256 => string)) public proofSetRootMetadata;
 
     // Storage for proof set payment information
     struct ProofSetInfo {
@@ -66,7 +68,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
-        mapping(uint256 => string) rootIdToMetadata; // Mapping from root ID to its metadata
         bool withCDN; // Whether the proof set is using CDN
     }
 
@@ -82,6 +83,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     mapping(uint256 => uint256) public provingDeadlines;
     mapping(uint256 => bool) public provenThisPeriod;
     mapping(uint256 => ProofSetInfo) public proofSetInfo;
+    mapping(address => uint256[]) public clientProofSets;
 
     // Mapping from rail ID to proof set ID for arbitration
     mapping(uint256 => uint256) public railToProofSet;
@@ -96,11 +98,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
     // Track when proving was first activated for each proof set
     mapping(uint256 => uint256) public provingActivationEpoch;
-
-    // Client-Provider relationship tracking
-    mapping(address => address[]) private clientProviders;
-    mapping(address => mapping(address => bool)) private clientProviderExists;
-    mapping(address => mapping(address => uint256[])) private clientProviderProofSets;
 
     // ========== Storage Provider Registry State ==========
     
@@ -292,8 +289,9 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         // Check if the storage provider is whitelisted
         require(approvedProvidersMap[creator], "Storage provider not approved");
         
-        // Generate a new client dataset ID
+        // Update client state 
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
+        clientProofSets[createData.payer].push(proofSetId);
         
         // Verify the client's signature
         require(
@@ -315,14 +313,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
 
-        // Track client-provider relationship
-        if (!clientProviderExists[createData.payer][creator]) {
-            clientProviderExists[createData.payer][creator] = true;
-            clientProviders[createData.payer].push(creator);
-        }
-
-        // Track proofset for this client-provider pair
-        clientProviderProofSets[createData.payer][creator].push(proofSetId);
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
@@ -435,7 +425,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         // Store metadata for each new root
         for (uint256 i = 0; i < rootData.length; i++) {
             uint256 rootId = firstAdded + i;
-            info.rootIdToMetadata[rootId] = metadata;
+            proofSetRootMetadata[proofSetId][rootId] = metadata;
             emit RootMetadataAdded(proofSetId, rootId, metadata);
         }
     }
@@ -770,7 +760,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      * @return The metadata string for the root
      */
     function getRootMetadata(uint256 proofSetId, uint256 rootId) external view returns (string memory) {
-        return proofSetInfo[proofSetId].rootIdToMetadata[rootId];
+        return proofSetRootMetadata[proofSetId][rootId];
     }
 
     /**
@@ -1093,28 +1083,32 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         return providerToId[provider];
     }
 
-    /**
-     * @notice Get list of providers a client has previously dealt with
-     * @param client The client address
-     * @return Array of provider addresses that have created proof sets for this client
-     */
-    function getClientProviders(address client) public view returns (address[] memory) {
-        return clientProviders[client];
-    }
-
-    /**
-     * @notice Get list of proof sets for a client with a specific provider
-     * @param client The client address
-     * @param provider The provider address
-     * @return Array of proof set IDs created by this provider for this client
-     */
-    function getClientProviderProofSets(address client, address provider) public view returns (uint256[] memory) {
-        return clientProviderProofSets[client][provider];
+    function getClientProofSets(address client) public view returns (ProofSetInfo[] memory) {
+        uint256[] memory proofSetIds = clientProofSets[client];
+   
+        ProofSetInfo[] memory proofSets = new ProofSetInfo[](proofSetIds.length);
+        for (uint256 i = 0; i < proofSetIds.length; i++) {
+            uint256 proofSetId = proofSetIds[i];
+            ProofSetInfo storage storageInfo = proofSetInfo[proofSetId];
+            // Create a memory copy of the struct (excluding any mappings)
+            proofSets[i] = ProofSetInfo({
+                railId: storageInfo.railId,
+                payer: storageInfo.payer,
+                payee: storageInfo.payee,
+                commissionBps: storageInfo.commissionBps,
+                metadata: storageInfo.metadata,
+                rootMetadata: storageInfo.rootMetadata,
+                clientDataSetId: storageInfo.clientDataSetId,
+                withCDN: storageInfo.withCDN
+            });
+        }
+        return proofSets;
     }
 
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
      * @dev Implements the IArbiter interface function
+
      * @param railId ID of the payment rail
      * @param proposedAmount The originally proposed payment amount
      * @param fromEpoch Starting epoch (exclusive)
