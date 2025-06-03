@@ -56,6 +56,8 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
+    // Mapping from proof set ID to root ID to metadata
+    mapping(uint256 => mapping(uint256 => string)) public proofSetRootMetadata;
 
     // Storage for proof set payment information
     struct ProofSetInfo {
@@ -66,7 +68,6 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
-        mapping(uint256 => string) rootIdToMetadata; // Mapping from root ID to its metadata
         bool withCDN; // Whether the proof set is using CDN
     }
 
@@ -82,6 +83,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     mapping(uint256 => uint256) public provingDeadlines;
     mapping(uint256 => bool) public provenThisPeriod;
     mapping(uint256 => ProofSetInfo) public proofSetInfo;
+    mapping(address => uint256[]) public clientProofSets;
 
     // Mapping from rail ID to proof set ID for arbitration
     mapping(uint256 => uint256) public railToProofSet;
@@ -287,8 +289,9 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         // Check if the storage provider is whitelisted
         require(approvedProvidersMap[creator], "Storage provider not approved");
         
-        // Generate a new client dataset ID
+        // Update client state 
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
+        clientProofSets[createData.payer].push(proofSetId);
         
         // Verify the client's signature
         require(
@@ -309,6 +312,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         info.commissionBps = operatorCommissionBps; // Use the contract's default commission rate
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
+
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
@@ -421,7 +425,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         // Store metadata for each new root
         for (uint256 i = 0; i < rootData.length; i++) {
             uint256 rootId = firstAdded + i;
-            info.rootIdToMetadata[rootId] = metadata;
+            proofSetRootMetadata[proofSetId][rootId] = metadata;
             emit RootMetadataAdded(proofSetId, rootId, metadata);
         }
     }
@@ -756,7 +760,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      * @return The metadata string for the root
      */
     function getRootMetadata(uint256 proofSetId, uint256 rootId) external view returns (string memory) {
-        return proofSetInfo[proofSetId].rootIdToMetadata[rootId];
+        return proofSetRootMetadata[proofSetId][rootId];
     }
 
     /**
@@ -1079,9 +1083,32 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         return providerToId[provider];
     }
 
+    function getClientProofSets(address client) public view returns (ProofSetInfo[] memory) {
+        uint256[] memory proofSetIds = clientProofSets[client];
+   
+        ProofSetInfo[] memory proofSets = new ProofSetInfo[](proofSetIds.length);
+        for (uint256 i = 0; i < proofSetIds.length; i++) {
+            uint256 proofSetId = proofSetIds[i];
+            ProofSetInfo storage storageInfo = proofSetInfo[proofSetId];
+            // Create a memory copy of the struct (excluding any mappings)
+            proofSets[i] = ProofSetInfo({
+                railId: storageInfo.railId,
+                payer: storageInfo.payer,
+                payee: storageInfo.payee,
+                commissionBps: storageInfo.commissionBps,
+                metadata: storageInfo.metadata,
+                rootMetadata: storageInfo.rootMetadata,
+                clientDataSetId: storageInfo.clientDataSetId,
+                withCDN: storageInfo.withCDN
+            });
+        }
+        return proofSets;
+    }
+
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
      * @dev Implements the IArbiter interface function
+
      * @param railId ID of the payment rail
      * @param proposedAmount The originally proposed payment amount
      * @param fromEpoch Starting epoch (exclusive)

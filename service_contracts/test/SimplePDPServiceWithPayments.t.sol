@@ -914,7 +914,6 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
     }
 
-        
     function testGetAllApprovedProvidersAfterRemoval() public {
         // Register and approve three providers
         vm.prank(sp1);
@@ -1020,6 +1019,97 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     }
 
 
+    // ===== Client-Proofset Tracking Tests =====
+    function createProofSetForClient(address provider, address clientAddress, string memory metadata) internal returns (uint256) {
+        // Register and approve provider if not already approved
+        if (!pdpServiceWithPayments.isProviderApproved(provider)) {
+            vm.prank(provider);
+            pdpServiceWithPayments.registerServiceProvider("https://provider.example.com/pdp", "https://provider.example.com/retrieve");
+            pdpServiceWithPayments.approveServiceProvider(provider);
+        }
+
+        // Prepare extra data
+        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
+            SimplePDPServiceWithPayments.ProofSetCreateData({
+                metadata: metadata,
+                payer: clientAddress,
+                withCDN: false,
+                signature: FAKE_SIGNATURE
+            });
+
+        bytes memory encodedData = abi.encode(createData);
+
+        // Setup client payment approval if not already done
+        vm.startPrank(clientAddress);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6,
+            1000e6,
+            365 days
+        );
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), clientAddress, 100e6);
+        vm.stopPrank();
+
+        // Create proof set as approved provider
+        makeSignaturePass(clientAddress);
+        vm.prank(provider);
+        return mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+    }
+
+    function testGetClientProofSets_EmptyClient() public view {
+        // Test with a client that has no proof sets
+        SimplePDPServiceWithPayments.ProofSetInfo[] memory proofSets = 
+            pdpServiceWithPayments.getClientProofSets(client);
+        
+        assertEq(proofSets.length, 0, "Should return empty array for client with no proof sets");
+    }
+    
+    function testGetClientProofSets_SingleProofSet() public {
+        // Create a single proof set for the client
+        string memory metadata = "Test metadata";
+        
+        createProofSetForClient(sp1, client, metadata);
+        
+        // Get proof sets
+        SimplePDPServiceWithPayments.ProofSetInfo[] memory proofSets = 
+            pdpServiceWithPayments.getClientProofSets(client);
+        
+        // Verify results
+        assertEq(proofSets.length, 1, "Should return one proof set");
+        assertEq(proofSets[0].payer, client, "Payer should match");
+        assertEq(proofSets[0].payee, sp1, "Payee should match");
+        assertEq(proofSets[0].metadata, metadata, "Metadata should match");
+        assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
+        assertGt(proofSets[0].railId, 0, "Rail ID should be set");
+    }
+    
+    function testGetClientProofSets_MultipleProofSets() public {
+        // Create multiple proof sets for the client
+        createProofSetForClient(sp1, client, "Metadata 1");
+        createProofSetForClient(sp2, client, "Metadata 2");
+        
+        // Get proof sets
+        SimplePDPServiceWithPayments.ProofSetInfo[] memory proofSets = 
+            pdpServiceWithPayments.getClientProofSets(client);
+        
+        // Verify results
+        assertEq(proofSets.length, 2, "Should return two proof sets");
+        
+        // Check first proof set
+        assertEq(proofSets[0].payer, client, "First proof set payer should match");
+        assertEq(proofSets[0].payee, sp1, "First proof set payee should match");
+        assertEq(proofSets[0].metadata, "Metadata 1", "First proof set metadata should match");
+        assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
+        
+        // Check second proof set
+        assertEq(proofSets[1].payer, client, "Second proof set payer should match");
+        assertEq(proofSets[1].payee, sp2, "Second proof set payee should match");
+        assertEq(proofSets[1].metadata, "Metadata 2", "Second proof set metadata should match");
+        assertEq(proofSets[1].clientDataSetId, 1, "Second dataset ID should be 1");
+    }
 }
 
 contract SignatureCheckingService is SimplePDPServiceWithPayments {
