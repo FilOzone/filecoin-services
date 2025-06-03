@@ -868,6 +868,112 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
     }
 
+        
+    function testGetAllApprovedProvidersAfterRemoval() public {
+        // Register and approve three providers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+        
+        vm.prank(sp3);
+        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp3);
+        
+        // Verify all three are approved
+        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 3, "Should have three approved providers");
+        assertEq(providers[0].owner, sp1, "First provider should be sp1");
+        assertEq(providers[1].owner, sp2, "Second provider should be sp2");
+        assertEq(providers[2].owner, sp3, "Third provider should be sp3");
+        
+        // Remove the middle provider (sp2 with ID 2)
+        pdpServiceWithPayments.removeServiceProvider(2);
+        
+        // Get all approved providers again - should only return active providers
+        providers = pdpServiceWithPayments.getAllApprovedProviders();
+        
+        // Should only have 2 elements now (removed provider filtered out)
+        assertEq(providers.length, 2, "Array should only contain active providers");
+        assertEq(providers[0].owner, sp1, "First provider should still be sp1");
+        assertEq(providers[1].owner, sp3, "Second provider should be sp3 (sp2 filtered out)");
+        
+        // Verify the URLs are correct for remaining providers
+        assertEq(providers[0].pdpUrl, validPdpUrl, "SP1 PDP URL should be correct");
+        assertEq(providers[1].pdpUrl, "https://sp3.example.com/pdp", "SP3 PDP URL should be correct");
+        
+        // Edge case 1: Remove all providers
+        pdpServiceWithPayments.removeServiceProvider(1);
+        pdpServiceWithPayments.removeServiceProvider(3);
+        
+        providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 0, "Should return empty array when all providers removed");
+    }
+    
+    function testGetAllApprovedProvidersNoProviders() public {
+        // Edge case: No providers have been registered/approved
+        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 0, "Should return empty array when no providers registered");
+    }
+    
+    function testGetAllApprovedProvidersSingleProvider() public {
+        // Edge case: Only one approved provider
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        
+        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 1, "Should have one approved provider");
+        assertEq(providers[0].owner, sp1, "Provider should be sp1");
+        assertEq(providers[0].pdpUrl, validPdpUrl, "PDP URL should match");
+        
+        // Remove the single provider
+        pdpServiceWithPayments.removeServiceProvider(1);
+        
+        providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 0, "Should return empty array after removing single provider");
+    }
+    
+    function testGetAllApprovedProvidersManyRemoved() public {
+        // Edge case: Many providers removed, only few remain
+        // Register and approve 5 providers
+        address[5] memory sps = [sp1, sp2, sp3, address(0xf6), address(0xf7)];
+        string[5] memory pdpUrls = [
+            "https://sp1.example.com/pdp",
+            "https://sp2.example.com/pdp", 
+            "https://sp3.example.com/pdp",
+            "https://sp4.example.com/pdp",
+            "https://sp5.example.com/pdp"
+        ];
+        
+        for (uint i = 0; i < 5; i++) {
+            vm.prank(sps[i]);
+            pdpServiceWithPayments.registerServiceProvider(pdpUrls[i], "https://example.com/retrieve");
+            pdpServiceWithPayments.approveServiceProvider(sps[i]);
+        }
+        
+        // Verify all 5 are approved
+        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 5, "Should have five approved providers");
+        
+        // Remove providers 1, 3, and 4 (keeping 2 and 5)
+        pdpServiceWithPayments.removeServiceProvider(1);
+        pdpServiceWithPayments.removeServiceProvider(3);  
+        pdpServiceWithPayments.removeServiceProvider(4);
+        
+        // Should only return providers 2 and 5
+        providers = pdpServiceWithPayments.getAllApprovedProviders();
+        assertEq(providers.length, 2, "Should only have two active providers");
+        assertEq(providers[0].owner, sp2, "First active provider should be sp2");
+        assertEq(providers[1].owner, address(0xf7), "Second active provider should be sp5");
+        assertEq(providers[0].pdpUrl, pdpUrls[1], "SP2 URL should match");
+        assertEq(providers[1].pdpUrl, pdpUrls[4], "SP5 URL should match");
+    }
+
+
 }
 
 contract SignatureCheckingService is SimplePDPServiceWithPayments {

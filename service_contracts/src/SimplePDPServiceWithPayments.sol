@@ -231,7 +231,41 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     function getChallengesPerProof() public pure returns (uint64) {
         return 5;
     }
-
+    
+    // Getters
+    function getAllApprovedProviders() external view returns (ApprovedProviderInfo[] memory) {
+        // Handle edge case: no providers have been registered
+        if (nextServiceProviderId == 1) {
+            return new ApprovedProviderInfo[](0);
+        }
+        
+        // First pass: Count non-empty providers (those with non-zero owner address)
+        uint256 activeCount = 0;
+        for (uint256 i = 1; i < nextServiceProviderId; i++) {
+            if (approvedProviders[i].owner != address(0)) {
+                activeCount++;
+            }
+        }
+        
+        // Handle edge case: all providers have been removed
+        if (activeCount == 0) {
+            return new ApprovedProviderInfo[](0);
+        }
+        
+        // Create correctly-sized array
+        ApprovedProviderInfo[] memory providers = new ApprovedProviderInfo[](activeCount);
+        
+        // Second pass: Fill array with only active providers
+        uint256 currentIndex = 0;
+        for (uint256 i = 1; i < nextServiceProviderId; i++) {
+            if (approvedProviders[i].owner != address(0)) {
+                providers[currentIndex] = approvedProviders[i];
+                currentIndex++;
+            }
+        }
+        
+        return providers;
+    }
     // Listener interface methods
     /**
      * @notice Handles proof set creation by creating a payment rail
