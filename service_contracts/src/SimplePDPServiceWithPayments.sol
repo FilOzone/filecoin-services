@@ -97,6 +97,11 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     // Track when proving was first activated for each proof set
     mapping(uint256 => uint256) public provingActivationEpoch;
 
+    // Client-Provider relationship tracking
+    mapping(address => address[]) private clientProviders;
+    mapping(address => mapping(address => bool)) private clientProviderExists;
+    mapping(address => mapping(address => uint256[])) private clientProviderProofSets;
+
     // ========== Storage Provider Registry State ==========
     
     uint256 public nextServiceProviderId = 1;
@@ -309,6 +314,15 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         info.commissionBps = operatorCommissionBps; // Use the contract's default commission rate
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
+
+        // Track client-provider relationship
+        if (!clientProviderExists[createData.payer][creator]) {
+            clientProviderExists[createData.payer][creator] = true;
+            clientProviders[createData.payer].push(creator);
+        }
+
+        // Track proofset for this client-provider pair
+        clientProviderProofSets[createData.payer][creator].push(proofSetId);
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
@@ -1077,6 +1091,25 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
      */
     function getProviderIdByAddress(address provider) external view returns (uint256) {
         return providerToId[provider];
+    }
+
+    /**
+     * @notice Get list of providers a client has previously dealt with
+     * @param client The client address
+     * @return Array of provider addresses that have created proof sets for this client
+     */
+    function getClientProviders(address client) public view returns (address[] memory) {
+        return clientProviders[client];
+    }
+
+    /**
+     * @notice Get list of proof sets for a client with a specific provider
+     * @param client The client address
+     * @param provider The provider address
+     * @return Array of proof set IDs created by this provider for this client
+     */
+    function getClientProviderProofSets(address client, address provider) public view returns (uint256[] memory) {
+        return clientProviderProofSets[client][provider];
     }
 
     /**
