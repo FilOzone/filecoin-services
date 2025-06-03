@@ -17,11 +17,6 @@ if [ -z "$KEYSTORE" ]; then
   exit 1
 fi
 
-if [ -z "$CHALLENGE_FINALITY" ]; then
-  echo "Error: CHALLENGE_FINALITY is not set"
-  exit 1
-fi
-
 if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
   echo "Error: PAYMENTS_CONTRACT_ADDRESS is not set"
   exit 1
