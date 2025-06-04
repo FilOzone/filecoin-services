@@ -139,7 +139,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     );
 
     bytes32 private constant ADD_ROOTS_TYPEHASH = keccak256(
-        "AddRoots(uint256 clientDataSetId,uint256 firstAdded,RootData[] rootData)RootData(Cid root,uint256 rawSize)Cid(bytes data)"
+        "AddRoots(uint256 clientDataSetId,uint256 firstAdded,RootData[] rootData)Cid(bytes data)RootData(Cid root,uint256 rawSize)"
     );
     
     bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH = keccak256(
@@ -869,9 +869,9 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
 
         bytes32 structHash = keccak256(abi.encode(
             ADD_ROOTS_TYPEHASH,
-            clientDataSetId,                    
-            firstAdded,                        
-            keccak256(abi.encode(rootDataHashes))                       
+            clientDataSetId,
+            firstAdded,
+            keccak256(abi.encodePacked(rootDataHashes))
         ));
 
         // Create the message hash
@@ -904,7 +904,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
             abi.encode(
                 SCHEDULE_REMOVALS_TYPEHASH,
                 clientDataSetId,                        
-                keccak256(abi.encode(rootIds))                           
+                keccak256(abi.encodePacked(rootIds))                           
             )
         );
         

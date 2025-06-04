@@ -1,0 +1,25 @@
+{
+  "signer": "0x2e988A386a799F506693793c6A5AF6B54dfAaBfB",
+  "createProofSet": {
+    "signature": "0x359024e8f3957f49da9ac21cef46bee1d24bdd159b0ea0f454971b791a3e06a65a511950da6e65b664dddad98326cef975c6b2144a372bc1fde39ec108db64b61c",
+    "clientDataSetId": 12345,
+    "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "withCDN": true
+  },
+  "addRoots": {
+    "signature": "0xbc94f2d4a61d33025e6794405b6022bc091b7a6011aa5b5c1c9af70611091b641fb33c144bea0666fd28980999cc7e8749f29c25cef10ed075c69f3034df43bc1c",
+    "clientDataSetId": 12345,
+    "firstAdded": 1,
+    "rootDigests": ["0xfc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833", "0xa9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"],
+    "rootSizes": [1024, 2048]
+  },
+  "scheduleRemovals": {
+    "signature": "0x637540b0c46cced57f3125cc8aa73cf14f1057046183497960552948416d016a6c6addded575081b35c8384dbcc8d926b350aa15892821a4537ed0519a3ee10a1c",
+    "clientDataSetId": 12345,
+    "rootIds": [1, 3, 5]
+  },
+  "deleteProofSet": {
+    "signature": "0x4b5f391dc87a1f1eab3d201e0caabda9739aef81dcac770bff5d1e79687aeacd53863438f6ee0377c49bda974dfa51b1a7ad6df08e26497cbe8f1dedabe952c51b",
+    "clientDataSetId": 12345
+  }
+}

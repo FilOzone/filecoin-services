@@ -19,3 +19,6 @@ remappings = [
 
 optimizer_runs = 1000000000
 via_ir = true
+
+# Allow reading test data files
+fs_permissions = [{ access = "read", path = "./test" }]
