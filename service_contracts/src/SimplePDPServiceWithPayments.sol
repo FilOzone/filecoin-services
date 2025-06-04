@@ -143,7 +143,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     );
     
     bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH = keccak256(
-        "ScheduleRemovals(uint256 clientDataSetId,bytes32 rootIdsHash)"
+        "ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)"
     );
     
     bytes32 private constant DELETE_PROOFSET_TYPEHASH = keccak256(

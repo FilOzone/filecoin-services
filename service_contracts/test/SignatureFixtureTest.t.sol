@@ -43,7 +43,7 @@ contract TestableSimplePDPServiceEIP712 is EIP712 {
     );
 
     bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH = keccak256(
-        "ScheduleRemovals(uint256 clientDataSetId,bytes32 rootIdsHash)"
+        "ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)"
     );
 
     bytes32 private constant DELETE_PROOFSET_TYPEHASH = keccak256(
@@ -374,7 +374,7 @@ contract SignatureFixtureTest is Test {
         console.log("");
         console.log("  ScheduleRemovals: [");
         console.log('    { name: "clientDataSetId", type: "uint256" },');
-        console.log('    { name: "rootIdsHash", type: "bytes32" }');
+        console.log('    { name: "rootIds", type: "uint256[]" }');
         console.log("  ]");
         console.log("");
         console.log("  DeleteProofSet: [");
