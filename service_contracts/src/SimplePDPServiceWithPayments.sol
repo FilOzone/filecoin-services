@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 
 /// @title SimplePDPServiceWithPayments
@@ -15,14 +16,7 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 /// using the Payments contract. It creates payment rails for storage providers
 /// and adjusts payment rates based on storage size. Also implements arbitration
 /// to reduce payments for faulted epochs.
-contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable {
-    // Authentication operations enum
-    enum Operation {
-        CreateProofSet,
-        AddRoots,
-        ScheduleRemovals,
-        DeleteProofSet
-    }
+contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
@@ -131,6 +125,31 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     event ProviderRejected(address indexed provider);
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
 
+    // EIP-712 Type hashes
+    bytes32 private constant CREATE_PROOFSET_TYPEHASH = keccak256(
+        "CreateProofSet(uint256 clientDataSetId,bool withCDN,address payee)"
+    );
+    
+    bytes32 private constant CID_TYPEHASH = keccak256(
+        "Cid(bytes data)"
+    );
+
+    bytes32 private constant ROOTDATA_TYPEHASH = keccak256(
+        "RootData(Cid root,uint256 rawSize)Cid(bytes data)"
+    );
+
+    bytes32 private constant ADD_ROOTS_TYPEHASH = keccak256(
+        "AddRoots(uint256 clientDataSetId,uint256 firstAdded,RootData[] rootData)RootData(Cid root,uint256 rawSize)Cid(bytes data)"
+    );
+    
+    bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH = keccak256(
+        "ScheduleRemovals(uint256 clientDataSetId,bytes32 rootIdsHash)"
+    );
+    
+    bytes32 private constant DELETE_PROOFSET_TYPEHASH = keccak256(
+        "DeleteProofSet(uint256 clientDataSetId)"
+    );
+
     // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
@@ -150,6 +169,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     ) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
+        __EIP712_init("SimplePDPServiceWithPayments", "1");
 
         require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
@@ -795,18 +815,18 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
-        bytes32 messageHash = keccak256(
+        bytes32 structHash = keccak256(
             abi.encode(
-                address(this),                          // ServiceContractAddr
-                uint8(Operation.CreateProofSet),        // OpEnum
-                clientDataSetId,                         // ClientDataSetID
-                withCDN,                                // WithCDN
+                CREATE_PROOFSET_TYPEHASH,
+                clientDataSetId,                       
+                withCDN,                                
                 payee
             )
         );
+        bytes32 digest = _hashTypedDataV4(structHash);
         
         // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(messageHash, signature);
+        address recoveredSigner = recoverSigner(digest, signature);
         
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
@@ -827,20 +847,38 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         uint256 firstAdded,
         bytes memory signature
     ) internal view returns (bool) {
-        // Create a dynamic bytes array to build our message
-        bytes memory message = abi.encode(
-            address(this),                      // ServiceContractAddr
-            uint8(Operation.AddRoots),          // OpEnum
-            clientDataSetId,                    // ClientDataSetID
-            firstAdded,                         // FirstAdded
-            rootDataArray                       // Array of rootData
-        );
+        // Hash each RootData struct
+        bytes32[] memory rootDataHashes = new bytes32[](rootDataArray.length);
+        for (uint256 i = 0; i < rootDataArray.length; i++) {
+            // Hash the Cid struct
+            bytes32 cidHash = keccak256(
+                abi.encode(
+                    CID_TYPEHASH,
+                    keccak256(rootDataArray[i].root.data)
+                )
+            );
+            // Hash the RootData struct
+            rootDataHashes[i] = keccak256(
+                abi.encode(
+                    ROOTDATA_TYPEHASH,
+                    cidHash,
+                    rootDataArray[i].rawSize
+                )
+            );
+        }
+
+        bytes32 structHash = keccak256(abi.encode(
+            ADD_ROOTS_TYPEHASH,
+            clientDataSetId,                    
+            firstAdded,                        
+            keccak256(abi.encode(rootDataHashes))                       
+        ));
 
         // Create the message hash
-        bytes32 messageHash = keccak256(message);
+        bytes32 digest = _hashTypedDataV4(structHash);
         
         // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(messageHash, signature);
+        address recoveredSigner = recoverSigner(digest, signature);
         
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
@@ -860,18 +898,20 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         uint256[] memory rootIds,
         bytes memory signature
     ) internal view returns (bool) {
+
         // Prepare the message hash that was signed
-        bytes32 messageHash = keccak256(
+        bytes32 structHash = keccak256(
             abi.encode(
-                address(this),                          // ServiceContractAddr
-                uint8(Operation.ScheduleRemovals),      // OpEnum
-                clientDataSetId,                        // ClientDataSetID
-                rootIds                                 // Array of rootIds
+                SCHEDULE_REMOVALS_TYPEHASH,
+                clientDataSetId,                        
+                keccak256(abi.encode(rootIds))                           
             )
         );
         
+        bytes32 digest = _hashTypedDataV4(structHash);
+
         // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(messageHash, signature);
+        address recoveredSigner = recoverSigner(digest, signature);
         
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
@@ -890,16 +930,16 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
-        bytes32 messageHash = keccak256(
+        bytes32 structHash = keccak256(
             abi.encode(
-                address(this),                          // ServiceContractAddr
-                uint8(Operation.DeleteProofSet),        // OpEnum
-                clientDataSetId                        // ClientDataSetID
+                DELETE_PROOFSET_TYPEHASH,
+                clientDataSetId                        
             )
         );
+        bytes32 digest = _hashTypedDataV4(structHash);
         
         // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(messageHash, signature);
+        address recoveredSigner = recoverSigner(digest, signature);
         
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
