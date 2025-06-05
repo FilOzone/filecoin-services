@@ -257,11 +257,11 @@ contract SignatureFixtureTest is Test {
         console.log('      "digest": "%s",', vm.toString(addRootsDigest));
         console.log('      "clientDataSetId": %d,', CLIENT_DATASET_ID);
         console.log('      "firstAdded": %d,', FIRST_ADDED);
-        console.log('      "rootDigests": [');
-        console.log('        "0xfc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
-        console.log('        "0xa9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
+        console.log('      "rootCidBytes": [');
+        console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
+        console.log('        "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
         console.log('      ],');
-        console.log('      "rootSizes": [1024, 2048]');
+        console.log('      "rootSizes": [2032, 4064]');
         console.log('    },');
         console.log('    "scheduleRemovals": {');
         console.log('      "signature": "%s",', vm.toString(scheduleRemovalsSig));
@@ -419,19 +419,21 @@ contract SignatureFixtureTest is Test {
     function createTestRootData() internal pure returns (PDPVerifier.RootData[] memory) {
         PDPVerifier.RootData[] memory rootDataArray = new PDPVerifier.RootData[](2);
 
-        // Create Cid with just the 32-byte digest as data
+        // Create Cid with full CID bytes (not just digest)
+        // CID baga6ea4seaqpy7usqklokfx2vxuynmupslkeutzexe2uqurdg5vhtebhxqmpqmy
         rootDataArray[0] = PDPVerifier.RootData({
             root: Cids.Cid({
-                data: abi.encodePacked(hex"fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
+                data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
             }),
-            rawSize: 1024
+            rawSize: 2032 // Zero-padded size of 1024
         });
 
+        // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
         rootDataArray[1] = PDPVerifier.RootData({
             root: Cids.Cid({
-                data: abi.encodePacked(hex"a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
+                data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
             }),
-            rawSize: 2048
+            rawSize: 4064 // Zero-padded size of 2048
         });
 
         return rootDataArray;
@@ -463,17 +465,17 @@ contract SignatureFixtureTest is Test {
         uint256 firstAdded = vm.parseJsonUint(json, ".addRoots.firstAdded");
 
         // Parse root data arrays
-        bytes32[] memory digests = vm.parseJsonBytes32Array(json, ".addRoots.rootDigests");
+        bytes[] memory rootCidBytes = vm.parseJsonBytesArray(json, ".addRoots.rootCidBytes");
         uint256[] memory sizes = vm.parseJsonUintArray(json, ".addRoots.rootSizes");
 
-        require(digests.length == sizes.length, "Digest and size arrays must be same length");
+        require(rootCidBytes.length == sizes.length, "CID bytes and size arrays must be same length");
 
         // Create RootData array
-        PDPVerifier.RootData[] memory rootData = new PDPVerifier.RootData[](digests.length);
-        for (uint256 i = 0; i < digests.length; i++) {
+        PDPVerifier.RootData[] memory rootData = new PDPVerifier.RootData[](rootCidBytes.length);
+        for (uint256 i = 0; i < rootCidBytes.length; i++) {
             rootData[i] = PDPVerifier.RootData({
                 root: Cids.Cid({
-                    data: abi.encodePacked(digests[i])
+                    data: rootCidBytes[i]
                 }),
                 rawSize: sizes[i]
             });
