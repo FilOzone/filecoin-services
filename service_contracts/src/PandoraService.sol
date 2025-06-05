@@ -389,7 +389,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             info.railId != 0,
             "Proof set not registered with payment system"
         );
-        bytes memory signature = abi.decode(extraData, (bytes));
+        (bytes memory signature) = abi.decode(extraData, (bytes));
         
         // Get the payer address for this proof set
         address payer = proofSetInfo[proofSetId].payer;
@@ -721,7 +721,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return decoded The decoded ProofSetCreateData struct
      */
     function decodeProofSetCreateData(bytes calldata extraData) internal pure returns (ProofSetCreateData memory) {
-        return abi.decode(extraData, (ProofSetCreateData));
+         (string memory metadata, address payer, bool withCDN, bytes memory signature) = 
+        abi.decode(extraData, (string, address, bool, bytes));
+
+        return ProofSetCreateData({
+            metadata: metadata,
+            payer: payer,
+            withCDN: withCDN,
+            signature: signature
+        });
     }
 
     /**

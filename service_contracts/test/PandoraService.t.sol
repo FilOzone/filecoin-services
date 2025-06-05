@@ -261,7 +261,7 @@ contract PandoraServiceTest is Test {
             PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
 
         // Encode the extra data
-        extraData = abi.encode(createData);
+        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -355,7 +355,7 @@ contract PandoraServiceTest is Test {
             PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
 
         // Encode the extra data
-        extraData = abi.encode(createData);
+        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -636,7 +636,7 @@ contract PandoraServiceTest is Test {
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData);
+        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -688,7 +688,7 @@ contract PandoraServiceTest is Test {
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData);
+        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -726,7 +726,7 @@ contract PandoraServiceTest is Test {
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData);
+        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -1037,7 +1037,7 @@ contract PandoraServiceTest is Test {
                 signature: FAKE_SIGNATURE
             });
 
-        bytes memory encodedData = abi.encode(createData);
+        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
