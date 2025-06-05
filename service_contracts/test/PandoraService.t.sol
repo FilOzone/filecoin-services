@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
-import {SimplePDPServiceWithPayments} from "../src/SimplePDPServiceWithPayments.sol";
+import {PandoraService} from "../src/PandoraService.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {Payments, IArbiter} from "@fws-payments/Payments.sol";
@@ -118,7 +118,7 @@ contract MockPDPVerifier {
     }
 }
 
-contract SimplePDPServiceWithPaymentsTest is Test {
+contract PandoraServiceTest is Test {
     // Testing Constants
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // r
@@ -127,7 +127,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     );
 
     // Contracts
-    SimplePDPServiceWithPayments public pdpServiceWithPayments;
+    PandoraService public pdpServiceWithPayments;
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
@@ -196,10 +196,10 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         // Transfer tokens to client for payment
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
-        // Deploy SimplePDPServiceWithPayments with proxy
-        SimplePDPServiceWithPayments pdpServiceImpl = new SimplePDPServiceWithPayments();
+        // Deploy PandoraService with proxy
+        PandoraService pdpServiceImpl = new PandoraService();
         bytes memory initializeData = abi.encodeWithSelector(
-            SimplePDPServiceWithPayments.initialize.selector,
+            PandoraService.initialize.selector,
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
@@ -207,7 +207,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
-        pdpServiceWithPayments = SimplePDPServiceWithPayments(address(pdpServiceProxy));
+        pdpServiceWithPayments = PandoraService(address(pdpServiceProxy));
     }
 
     function makeSignaturePass(address signer) public {
@@ -230,7 +230,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
             "Payments contract address should be set correctly"
         );
         assertEq(
-            pdpServiceWithPayments.usdFcTokenAddress(),
+            pdpServiceWithPayments.usdfcTokenAddress(),
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
@@ -257,8 +257,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
-        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
+        PandoraService.ProofSetCreateData memory createData =
+            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
 
         // Encode the extra data
         extraData = abi.encode(createData);
@@ -287,7 +287,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
 
         // Expect RailCreated event when creating the proof set
         vm.expectEmit(true, true, true, true);
-        emit SimplePDPServiceWithPayments.ProofSetRailCreated(1, 1, client, storageProvider, true);
+        emit PandoraService.ProofSetRailCreated(1, 1, client, storageProvider, true);
 
         // Create a proof set as the storage provider
         makeSignaturePass(client);
@@ -351,8 +351,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
-        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+        PandoraService.ProofSetCreateData memory createData =
+            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
 
         // Encode the extra data
         extraData = abi.encode(createData);
@@ -377,7 +377,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
 
         // Expect RailCreated event when creating the proof set
         vm.expectEmit(true, true, true, true);
-        emit SimplePDPServiceWithPayments.ProofSetRailCreated(1, 1, client, storageProvider, false);
+        emit PandoraService.ProofSetRailCreated(1, 1, client, storageProvider, false);
 
         // Create a proof set as the storage provider
         makeSignaturePass(client);
@@ -423,7 +423,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         vm.stopPrank();
         
         // Verify pending registration
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
         assertEq(pending.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
         assertEq(pending.registeredAt, block.number, "Registration epoch should match");
@@ -461,7 +461,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         
         // Get the registration block from pending info
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pendingInfo = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pendingInfo = pdpServiceWithPayments.getPendingProvider(sp1);
         uint256 registrationBlock = pendingInfo.registeredAt;
         
         vm.roll(block.number + 10); // Advance blocks
@@ -478,7 +478,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
         
         // Verify SP info
-        SimplePDPServiceWithPayments.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
+        PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
         assertEq(info.pdpUrl, validPdpUrl, "PDP URL should match");
         assertEq(info.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
@@ -486,7 +486,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         assertEq(info.approvedAt, approvalBlock, "Approval epoch should match");
         
         // Verify pending registration cleared
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.registeredAt, 0, "Pending registration should be cleared");
     }
 
@@ -549,7 +549,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
         
         // Verify pending registration cleared
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.registeredAt, 0, "Pending registration should be cleared");
     }
 
@@ -564,7 +564,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
         
         // Verify new registration
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
         assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
     }
@@ -628,8 +628,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
         
         // Prepare extra data
-        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData =
+            PandoraService.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
@@ -673,15 +673,15 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
         
         // Verify new registration
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
         assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
     }
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
         // Prepare extra data
-        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData =
+            PandoraService.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
@@ -718,8 +718,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Prepare extra data
-        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData =
+            PandoraService.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
@@ -758,7 +758,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Get provider info
-        SimplePDPServiceWithPayments.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
+        PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
         assertEq(info.pdpUrl, validPdpUrl, "PDP URL should match");
     }
@@ -792,7 +792,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
 
     function testGetPendingProvider() public {
         // No pending registration
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.registeredAt, 0, "Should have no pending registration");
         
         // Register
@@ -885,7 +885,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         
         // Verify SP has pending registration but is not approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
-        SimplePDPServiceWithPayments.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
+        PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
         assertEq(pending.pdpUrl, validPdpUrl2, "Pending URL should match new registration");
     }
@@ -929,7 +929,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp3);
         
         // Verify all three are approved
-        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 3, "Should have three approved providers");
         assertEq(providers[0].owner, sp1, "First provider should be sp1");
         assertEq(providers[1].owner, sp2, "Second provider should be sp2");
@@ -960,7 +960,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     
     function testGetAllApprovedProvidersNoProviders() public {
         // Edge case: No providers have been registered/approved
-        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 0, "Should return empty array when no providers registered");
     }
     
@@ -970,7 +970,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
-        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 1, "Should have one approved provider");
         assertEq(providers[0].owner, sp1, "Provider should be sp1");
         assertEq(providers[0].pdpUrl, validPdpUrl, "PDP URL should match");
@@ -1001,7 +1001,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         }
         
         // Verify all 5 are approved
-        SimplePDPServiceWithPayments.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
+        PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 5, "Should have five approved providers");
         
         // Remove providers 1, 3, and 4 (keeping 2 and 5)
@@ -1029,8 +1029,8 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         }
 
         // Prepare extra data
-        SimplePDPServiceWithPayments.ProofSetCreateData memory createData =
-            SimplePDPServiceWithPayments.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData =
+            PandoraService.ProofSetCreateData({
                 metadata: metadata,
                 payer: clientAddress,
                 withCDN: false,
@@ -1061,7 +1061,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
 
     function testGetClientProofSets_EmptyClient() public view {
         // Test with a client that has no proof sets
-        SimplePDPServiceWithPayments.ProofSetInfo[] memory proofSets = 
+        PandoraService.ProofSetInfo[] memory proofSets = 
             pdpServiceWithPayments.getClientProofSets(client);
         
         assertEq(proofSets.length, 0, "Should return empty array for client with no proof sets");
@@ -1074,7 +1074,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         createProofSetForClient(sp1, client, metadata);
         
         // Get proof sets
-        SimplePDPServiceWithPayments.ProofSetInfo[] memory proofSets = 
+        PandoraService.ProofSetInfo[] memory proofSets = 
             pdpServiceWithPayments.getClientProofSets(client);
         
         // Verify results
@@ -1092,7 +1092,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
         createProofSetForClient(sp2, client, "Metadata 2");
         
         // Get proof sets
-        SimplePDPServiceWithPayments.ProofSetInfo[] memory proofSets = 
+        PandoraService.ProofSetInfo[] memory proofSets = 
             pdpServiceWithPayments.getClientProofSets(client);
         
         // Verify results
@@ -1112,7 +1112,7 @@ contract SimplePDPServiceWithPaymentsTest is Test {
     }
 }
 
-contract SignatureCheckingService is SimplePDPServiceWithPayments {
+contract SignatureCheckingService is PandoraService {
     constructor() {
     }
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) { 
@@ -1120,7 +1120,7 @@ contract SignatureCheckingService is SimplePDPServiceWithPayments {
     }
 }
 
-contract SimplePDPServiceWithPaymentsSignatureTest is Test {
+contract PandoraServiceSignatureTest is Test {
     // Contracts
     SignatureCheckingService public pdpService;
     MockPDPVerifier public mockPDPVerifier;
@@ -1157,7 +1157,7 @@ contract SimplePDPServiceWithPaymentsSignatureTest is Test {
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService();
         bytes memory initData = abi.encodeWithSelector(
-            SimplePDPServiceWithPayments.initialize.selector,
+            PandoraService.initialize.selector,
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),

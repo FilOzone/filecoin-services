@@ -10,13 +10,13 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 
-/// @title SimplePDPServiceWithPayments
+/// @title PandoraService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
 /// using the Payments contract. It creates payment rails for storage providers
 /// and adjusts payment rates based on storage size. Also implements arbitration
 /// to reduce payments for faulted epochs.
-contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
+contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
@@ -43,7 +43,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     // External contract addresses
     address public pdpVerifierAddress;
     address public paymentsContractAddress;
-    address public usdFcTokenAddress;
+    address public usdfcTokenAddress;
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
@@ -164,25 +164,25 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     function initialize(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
-        address _usdFcTokenAddress,
+        address _usdfcTokenAddress,
         uint256 _initialOperatorCommissionBps
     ) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
-        __EIP712_init("SimplePDPServiceWithPayments", "1");
+        __EIP712_init("PandoraService", "1");
 
         require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
-        require(_usdFcTokenAddress != address(0), "USDFC token address cannot be zero");
+        require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
         require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
 
         pdpVerifierAddress = _pdpVerifierAddress;
         paymentsContractAddress = _paymentsContractAddress;
-        usdFcTokenAddress = _usdFcTokenAddress;
+        usdfcTokenAddress = _usdfcTokenAddress;
         operatorCommissionBps = _initialOperatorCommissionBps;
 
         // Read token decimals from the USDFC token contract
-        tokenDecimals = IERC20Metadata(_usdFcTokenAddress).decimals();
+        tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
         PROOFSET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
@@ -339,7 +339,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
         // Create the payment rail using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
         uint256 railId = payments.createRail(
-            usdFcTokenAddress, // token address
+            usdfcTokenAddress, // token address
             createData.payer, // from (payer)
             creator, // to (creator)
             address(this), // this contract acts as the arbiter
@@ -796,7 +796,7 @@ contract SimplePDPServiceWithPayments is PDPListener, IArbiter, Initializable, U
     ) {
         // Return 2 USDFC per TiB per month with 18 decimals
         pricePerTiBPerMonth = 2 * (10 ** uint256(tokenDecimals));
-        tokenAddress = usdFcTokenAddress;
+        tokenAddress = usdfcTokenAddress;
         epochsPerMonth = EPOCHS_PER_MONTH;
     }
 

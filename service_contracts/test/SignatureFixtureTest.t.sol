@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {SimplePDPServiceWithPayments} from "../src/SimplePDPServiceWithPayments.sol";
+import {PandoraService} from "../src/PandoraService.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /**
  * @title EIP-712 Signature Fixture Test
- * @dev Generate and test EIP-712 signatures for SimplePDPServiceWithPayments compatibility
+ * @dev Generate and test EIP-712 signatures for PandoraService compatibility
  *
  * This contract serves two purposes:
  * 1. Generate reference EIP-712 signatures from Solidity (for testing external applications)
@@ -22,8 +22,8 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
  */
 
 // Simple standalone contract just for EIP-712 testing
-contract TestableSimplePDPServiceEIP712 is EIP712 {
-    constructor() EIP712("SimplePDPServiceWithPayments", "1") {}
+contract TestablePandoraServiceEIP712 is EIP712 {
+    constructor() EIP712("PandoraService", "1") {}
 
     // Re-declare the type hashes from parent contract (they're private)
     bytes32 private constant CREATE_PROOFSET_TYPEHASH = keccak256(
@@ -187,7 +187,7 @@ contract TestableSimplePDPServiceEIP712 is EIP712 {
 }
 
 contract SignatureFixtureTest is Test {
-    TestableSimplePDPServiceEIP712 public testContract;
+    TestablePandoraServiceEIP712 public testContract;
 
     // Test private key (well-known test key, never use in production)
     uint256 constant TEST_PRIVATE_KEY = 0x1234567890123456789012345678901234567890123456789012345678901234;
@@ -201,7 +201,7 @@ contract SignatureFixtureTest is Test {
 
     function setUp() public {
         // Deploy the contract with proper EIP712 domain initialization
-        testContract = new TestableSimplePDPServiceEIP712();
+        testContract = new TestablePandoraServiceEIP712();
     }
 
     /**
@@ -345,7 +345,7 @@ contract SignatureFixtureTest is Test {
         console.log("=== EIP-712 TYPE STRUCTURES ===");
         console.log("");
         console.log("Domain:");
-        console.log('  name: "SimplePDPServiceWithPayments"');
+        console.log('  name: "PandoraService"');
         console.log('  version: "1"');
         console.log('  chainId: %d', block.chainid);
         console.log('  verifyingContract: %s', address(testContract));
