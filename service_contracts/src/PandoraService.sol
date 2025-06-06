@@ -51,6 +51,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
+    
+    // Commission rates for different service types
+    uint256 public basicServiceCommissionBps;    // 5% for basic service (no CDN add-on)
+    uint256 public cdnServiceCommissionBps;      // 40% for CDN service
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -62,11 +66,11 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 railId; // ID of the payment rail
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
-        uint256 commissionBps; // Commission rate for this proof set
+        uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
-        bool withCDN; // Whether the proof set is using CDN
+        bool withCDN; // Whether the proof set is registered for CDN add-on
     }
 
     // Decode structure for proof set creation extra data
@@ -79,8 +83,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN;  // Price without CDN (2 USDFC per TiB per month)
-        uint256 pricePerTiBPerMonthWithCDN; // Price with CDN (3 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN;  // Price without CDN add-on (2 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
         address tokenAddress;               // Address of the USDFC token
         uint256 epochsPerMonth;             // Number of epochs in a month
     }
@@ -98,6 +102,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event PaymentArbitrated(
         uint256 railId, uint256 proofSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
     );
+    
 
     // Track which proving periods have valid proofs (proofSetId => periodId => isProven)
     mapping(uint256 => mapping(uint256 => bool)) public provenPeriods;
@@ -192,6 +197,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         paymentsContractAddress = _paymentsContractAddress;
         usdfcTokenAddress = _usdfcTokenAddress;
         operatorCommissionBps = _initialOperatorCommissionBps;
+        
+        // Set commission rates: 5% for basic, 40% for service w/ CDN add-on
+        basicServiceCommissionBps = 500;  // 5%
+        cdnServiceCommissionBps = 4000;   // 40%
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -204,14 +213,18 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /**
-     * @notice Updates the default operator commission rate for new proof sets
+     * @notice Updates the service commission rates
      * @dev Only callable by the contract owner
-     * @param newCommissionBps New commission rate in basis points (100 = 1%)
+     * @param newBasicCommissionBps New commission rate for basic service (no CDN) in basis points
+     * @param newCdnCommissionBps New commission rate for CDN service in basis points
      */
-    function updateOperatorCommission(uint256 newCommissionBps) external onlyOwner {
-        require(newCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
-        operatorCommissionBps = newCommissionBps;
+    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCdnCommissionBps) external onlyOwner {
+        require(newBasicCommissionBps <= COMMISSION_MAX_BPS, "Basic commission exceeds maximum");
+        require(newCdnCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
+        basicServiceCommissionBps = newBasicCommissionBps;
+        cdnServiceCommissionBps = newCdnCommissionBps;
     }
+    
 
     // SLA specification functions setting values for PDP service providers
     // Max number of epochs between two consecutive proofs
@@ -341,7 +354,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
         info.metadata = createData.metadata;
-        info.commissionBps = operatorCommissionBps; // Use the contract's default commission rate
+        info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
 
@@ -353,9 +366,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 railId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // to (creator)
+            creator, // proofset creator, SPs in  most cases
             address(this), // this contract acts as the arbiter
-            operatorCommissionBps // commission rate
+            info.commissionBps // commission rate based on CDN usage
         );
 
         // Store the rail ID
@@ -373,7 +386,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         );
 
         // Charge the one-time proof set creation fee
-        // This is a payment from payer to creator of a fixed amount
+        // This is a payment from payer to proofset creator of a fixed amount
         payments.modifyRailPayment(
             railId,
             0, // Initial rate is 0, will be updated when roots are added
@@ -815,6 +828,31 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             epochsPerMonth: EPOCHS_PER_MONTH
         });
     }
+    
+    /**
+     * @notice Get the effective rates after commission for both service types
+     * @return basicServiceFee Service fee for basic service (per TiB per month)
+     * @return spPaymentBasic SP payment for basic service (per TiB per month)
+     * @return cdnServiceFee Service fee with CDN service (per TiB per month)
+     * @return spPaymentWithCDN SP payment with CDN service (per TiB per month)
+     */
+    function getEffectiveRates() external view returns (
+        uint256 basicServiceFee,
+        uint256 spPaymentBasic, 
+        uint256 cdnServiceFee,
+        uint256 spPaymentWithCDN
+    ) {
+        uint256 basicTotal = PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals));
+        uint256 cdnTotal = PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals));
+        
+        // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
+        basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
+        spPaymentBasic = basicTotal - basicServiceFee;
+        
+        // CDN service (40% commission = 1.2 USDFC service, 1.8 USDFC to SP)
+        cdnServiceFee = (cdnTotal * cdnServiceCommissionBps) / COMMISSION_MAX_BPS;
+        spPaymentWithCDN = cdnTotal - cdnServiceFee;
+    }
 
     /**
      * @notice Verifies a signature for the CreateProofSet operation
@@ -993,7 +1031,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
-    }    
+    }
     
     /**
      * @notice Register as a service provider

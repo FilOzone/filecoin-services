@@ -239,6 +239,16 @@ contract PandoraServiceTest is Test {
             initialOperatorCommissionBps,
             "Operator commission should be set correctly"
         );
+        assertEq(
+            pdpServiceWithPayments.basicServiceCommissionBps(),
+            500, // 5%
+            "Basic service commission should be set correctly"
+        );
+        assertEq(
+            pdpServiceWithPayments.cdnServiceCommissionBps(),
+            4000, // 40%
+            "CDN service commission should be set correctly"
+        );
         assertEq(pdpServiceWithPayments.tokenDecimals(), mockUSDFC.decimals(), "Token decimals should be correct");
 
         // Check fee constants are correctly calculated based on token decimals
@@ -322,7 +332,7 @@ contract PandoraServiceTest is Test {
         assertEq(rail.to, storageProvider, "To address should be storage provider");
         assertEq(rail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(rail.arbiter, address(pdpServiceWithPayments), "Arbiter should be the PDP service");
-        assertEq(rail.commissionRateBps, initialOperatorCommissionBps, "Commission rate should match the initial rate");
+        assertEq(rail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
 
         // Verify lockupFixed is 0 since the one-time payment was made
         assertEq(rail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
@@ -388,6 +398,11 @@ contract PandoraServiceTest is Test {
         // Verify withCDN was stored correctly
         bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
         assertFalse(withCDN, "withCDN should be false");
+        
+        // Verify the commission rate was set correctly for basic service (no CDN)
+        uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
+        Payments.RailView memory rail = payments.getRail(railId);
+        assertEq(rail.commissionRateBps, 500, "Commission rate should be 5% for basic service (no CDN)");
     }
 
     // Helper function to get account info from the Payments contract
