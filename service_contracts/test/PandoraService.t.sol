@@ -320,6 +320,13 @@ contract PandoraServiceTest is Test {
         string memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId);
         assertEq(metadata, "Test Proof Set", "Metadata should be stored correctly");
 
+        // Verify proof set info
+        PandoraService.ProofSetInfo memory proofSetInfo = pdpServiceWithPayments.getProofSet(newProofSetId);
+        assertEq(proofSetInfo.railId, railId, "Rail ID should match");
+        assertEq(proofSetInfo.payer, client, "Payer should match");
+        assertEq(proofSetInfo.payee, storageProvider, "Payee should match");
+        assertEq(proofSetInfo.withCDN, true, "withCDN should be true");
+
         // Verify withCDN was stored correctly
         bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
         assertTrue(withCDN, "withCDN should be true");

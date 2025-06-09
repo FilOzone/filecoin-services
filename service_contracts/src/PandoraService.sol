@@ -769,6 +769,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     // --- Public getter functions ---
 
     /**
+     * @notice Get proof set information by ID
+     * @param proofSetId The ID of the proof set
+     * @return The proof set information struct
+     */
+    function getProofSet(uint256 proofSetId) external view returns (ProofSetInfo memory) {
+        return proofSetInfo[proofSetId];
+    }
+
+    /**
      * @notice Get the payment rail ID for a proof set
      * @param proofSetId The ID of the proof set
      * @return The payment rail ID, or 0 if not found
