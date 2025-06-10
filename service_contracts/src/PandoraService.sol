@@ -136,6 +136,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     
     mapping(address => uint256) public providerToId;
     
+    // Proving period constants - set during initialization (added at end for upgrade compatibility)
+    uint64 public maxProvingPeriod;
+    uint256 public challengeWindowSize;
+    
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
@@ -182,7 +186,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        uint256 _initialOperatorCommissionBps
+        uint256 _initialOperatorCommissionBps,
+        uint64 _maxProvingPeriod,
+        uint256 _challengeWindowSize
     ) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -192,11 +198,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
         require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
+        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
+        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
 
         pdpVerifierAddress = _pdpVerifierAddress;
         paymentsContractAddress = _paymentsContractAddress;
         usdfcTokenAddress = _usdfcTokenAddress;
         operatorCommissionBps = _initialOperatorCommissionBps;
+        maxProvingPeriod = _maxProvingPeriod;
+        challengeWindowSize = _challengeWindowSize;
         
         // Set commission rates: 5% for basic, 40% for service w/ CDN add-on
         basicServiceCommissionBps = 500;  // 5%
@@ -211,6 +221,23 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+
+    /**
+     * @notice Initializes the new proving period parameters for contract upgrade
+     * @dev This function should be called after upgrading to set the new proving period constants
+     * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
+     * @param _challengeWindowSize Number of epochs for the challenge window
+     */
+    function initializeV2(
+        uint64 _maxProvingPeriod,
+        uint256 _challengeWindowSize
+    ) public reinitializer(2) {
+        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
+        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
+        
+        maxProvingPeriod = _maxProvingPeriod;
+        challengeWindowSize = _challengeWindowSize;
+    }
 
     /**
      * @notice Updates the service commission rates
@@ -228,14 +255,14 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // SLA specification functions setting values for PDP service providers
     // Max number of epochs between two consecutive proofs
-    function getMaxProvingPeriod() public pure returns (uint64) {
-        return 2880;
+    function getMaxProvingPeriod() public view returns (uint64) {
+        return maxProvingPeriod;
     }
 
     // Number of epochs at the end of a proving period during which a
     // proof of possession can be submitted
-    function challengeWindow() public pure returns (uint256) {
-        return 60;
+    function challengeWindow() public view returns (uint256) {
+        return challengeWindowSize;
     }
 
     // Initial value for challenge window start

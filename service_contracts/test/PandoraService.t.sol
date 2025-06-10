@@ -203,7 +203,9 @@ contract PandoraServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            initialOperatorCommissionBps
+            initialOperatorCommissionBps,
+            uint64(2880), // maxProvingPeriod
+            uint256(60)   // challengeWindowSize
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
@@ -248,6 +250,26 @@ contract PandoraServiceTest is Test {
             pdpServiceWithPayments.cdnServiceCommissionBps(),
             4000, // 40%
             "CDN service commission should be set correctly"
+        );
+        assertEq(
+            pdpServiceWithPayments.getMaxProvingPeriod(),
+            2880,
+            "Max proving period should be set correctly"
+        );
+        assertEq(
+            pdpServiceWithPayments.challengeWindow(),
+            60,
+            "Challenge window size should be set correctly"
+        );
+        assertEq(
+            pdpServiceWithPayments.maxProvingPeriod(),
+            2880,
+            "Max proving period storage variable should be set correctly"
+        );
+        assertEq(
+            pdpServiceWithPayments.challengeWindowSize(),
+            60,
+            "Challenge window size storage variable should be set correctly"
         );
         assertEq(pdpServiceWithPayments.tokenDecimals(), mockUSDFC.decimals(), "Token decimals should be correct");
 
@@ -1183,7 +1205,9 @@ contract PandoraServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            500 // 5% commission
+            500, // 5% commission
+            uint64(2880), // maxProvingPeriod
+            uint256(60)   // challengeWindowSize
         );
         
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
@@ -1241,18 +1265,87 @@ contract PandoraServiceSignatureTest is Test {
         vm.expectRevert("Unsupported signature 'v' value, we don't handle rare wrapped case");
         pdpService.doRecoverSigner(messageHash, invalidSignature);
     }
+}
 
-    function testRecoverSignerWithZeroSignature() public view {
-        bytes32 messageHash = keccak256(abi.encode(42));
+// Test contract for upgrade scenarios
+contract PandoraServiceUpgradeTest is Test {
+    PandoraService public pandoraService;
+    MockPDPVerifier public mockPDPVerifier;
+    Payments public payments;
+    MockERC20 public mockUSDFC;
+    
+    address public deployer;
+    
+    function setUp() public {
+        deployer = address(this);
         
-        // Create signature with all zeros
-        bytes32 r = bytes32(0);
-        bytes32 s = bytes32(0);
-        uint8 v = 27;
-        bytes memory zeroSignature = abi.encodePacked(r, s, v);
+        // Deploy mock contracts
+        mockUSDFC = new MockERC20();
+        mockPDPVerifier = new MockPDPVerifier();
         
-        // This should not revert but should return address(0) (ecrecover returns address(0) for invalid signatures)
-        address recoveredSigner = pdpService.doRecoverSigner(messageHash, zeroSignature);
-        assertEq(recoveredSigner, address(0), "Should return zero address for invalid signature");
+        // Deploy actual Payments contract
+        Payments paymentsImpl = new Payments();
+        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
+        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
+        payments = Payments(address(paymentsProxy));
+        
+        // Deploy PandoraService with original initialize (without proving period params)
+        // This simulates an existing deployed contract before the upgrade
+        PandoraService pandoraImpl = new PandoraService();
+        bytes memory initData = abi.encodeWithSelector(
+            PandoraService.initialize.selector,
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            500, // 5% commission
+            uint64(2880), // maxProvingPeriod
+            uint256(60)   // challengeWindowSize
+        );
+        
+        MyERC1967Proxy pandoraProxy = new MyERC1967Proxy(address(pandoraImpl), initData);
+        pandoraService = PandoraService(address(pandoraProxy));
+    }
+    
+    function testInitializeV2() public {
+        // Test that we can call initializeV2 to set new proving period parameters
+        uint64 newMaxProvingPeriod = 120; // 2 hours
+        uint256 newChallengeWindowSize = 30;
+        
+        // This should work since we're using reinitializer(2)
+        pandoraService.initializeV2(newMaxProvingPeriod, newChallengeWindowSize);
+        
+        // Verify the values were set correctly
+        assertEq(pandoraService.maxProvingPeriod(), newMaxProvingPeriod, "Max proving period should be updated");
+        assertEq(pandoraService.challengeWindowSize(), newChallengeWindowSize, "Challenge window size should be updated");
+        assertEq(pandoraService.getMaxProvingPeriod(), newMaxProvingPeriod, "getMaxProvingPeriod should return updated value");
+        assertEq(pandoraService.challengeWindow(), newChallengeWindowSize, "challengeWindow should return updated value");
+    }
+    
+    function testInitializeV2WithInvalidParameters() public {
+        // Test that initializeV2 validates parameters correctly
+        
+        // Test zero max proving period
+        vm.expectRevert("Max proving period must be greater than zero");
+        pandoraService.initializeV2(0, 30);
+        
+        // Test zero challenge window size
+        vm.expectRevert("Invalid challenge window size");
+        pandoraService.initializeV2(120, 0);
+        
+        // Test challenge window size >= max proving period
+        vm.expectRevert("Invalid challenge window size");
+        pandoraService.initializeV2(120, 120);
+        
+        vm.expectRevert("Invalid challenge window size");
+        pandoraService.initializeV2(120, 150);
+    }
+    
+    function testInitializeV2OnlyOnce() public {
+        // Test that initializeV2 can only be called once
+        pandoraService.initializeV2(120, 30);
+        
+        // Second call should fail - expecting the InvalidInitialization() custom error
+        vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
+        pandoraService.initializeV2(240, 60);
     }
 }

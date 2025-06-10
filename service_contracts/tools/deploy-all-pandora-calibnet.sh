@@ -27,6 +27,10 @@ PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # Placeho
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 OPERATOR_COMMISSION_BPS="100"                                         # 1% commission in basis points
 
+# Proving period configuration - use defaults if not set
+MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
+CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}"                # Default 15 epochs
+
 ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
 echo "Deploying contracts from address $ADDR"
  
@@ -86,8 +90,8 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 6: Deploy PandoraService proxy
 echo "Deploying PandoraService proxy..."
-# Initialize with PDPVerifier address, payments contract address, USDFC token address, and commission rate
-INIT_DATA=$(cast calldata "initialize(address,address,address,uint256)" $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $OPERATOR_COMMISSION_BPS)
+# Initialize with PDPVerifier address, payments contract address, USDFC token address, commission rate, max proving period, and challenge window size
+INIT_DATA=$(cast calldata "initialize(address,address,address,uint256,uint64,uint256)" $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $OPERATOR_COMMISSION_BPS $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE)
 PANDORA_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$PANDORA_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract PandoraService proxy address"
@@ -108,3 +112,5 @@ echo "=========================="
 echo ""
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "Operator commission rate: $OPERATOR_COMMISSION_BPS basis points (${OPERATOR_COMMISSION_BPS})"
+echo "Max proving period: $MAX_PROVING_PERIOD epochs"
+echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
