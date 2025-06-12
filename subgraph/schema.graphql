@@ -1,0 +1,136 @@
+type ProofSet @entity(immutable: false) {
+  id: Bytes! # setId
+  setId: BigInt! # uint256
+  listener: Bytes! # address
+  clientAddr: Bytes! # address
+  withCDN: Boolean!
+  owner: Provider! # address of the provider
+  leafCount: BigInt! # uint256
+  challengeRange: BigInt! # uint256
+  isActive: Boolean!
+  lastProvenEpoch: BigInt! # uint256
+  nextChallengeEpoch: BigInt! # uint256
+  totalRoots: BigInt! # uint256
+  nextRootId: BigInt! # uint256
+  totalDataSize: BigInt! # uint256
+  totalProofs: BigInt! # uint256
+  totalProvedRoots: BigInt! # uint256
+  totalFaultedPeriods: BigInt! # uint256
+  totalFaultedRoots: BigInt! # uint256
+  metadata: String!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  blockNumber: BigInt!
+
+  # Derived relationships
+  roots: [Root!]! @derivedFrom(field: "proofSet")
+  faultRecords: [FaultRecord!]! @derivedFrom(field: "proofSet")
+  rail: Rail @derivedFrom(field: "proofSet")
+}
+
+type Rail @entity(immutable: false) {
+  id: Bytes!
+  railId: BigInt!
+  token: Bytes!
+  from: Bytes!
+  to: Bytes!
+  operator: Bytes!
+  arbiter: Bytes!
+  paymentRate: BigInt!
+  lockupPeriod: BigInt!
+  lockupFixed: BigInt!
+  settledUpto: BigInt!
+  endEpoch: BigInt!
+  queueLength: BigInt!
+  rateChangeQueue: [RateChangeQueue!]! @derivedFrom(field: "rail")
+
+  # Derived relationship
+  proofSet: ProofSet!
+}
+
+type RateChangeQueue @entity(immutable: false) {
+  id: Bytes!
+  untilEpoch: BigInt!
+  rate: BigInt!
+  rail: Rail!
+}
+
+enum ProviderStatus {
+  Created
+  Registered
+  Approved
+  Rejected
+  Removed
+}
+
+type Provider @entity(immutable: false) {
+  id: Bytes! # address
+  address: Bytes!
+  providerId: BigInt
+  pdpUrl: String
+  pieceRetrievalUrl: String
+  registeredAt: BigInt
+  approvedAt: BigInt
+  status: ProviderStatus!
+  totalFaultedPeriods: BigInt!
+  totalFaultedRoots: BigInt!
+  totalProofSets: BigInt!
+  totalRoots: BigInt!
+  totalDataSize: BigInt!
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  blockNumber: BigInt!
+
+  # Derived relationship
+  proofSets: [ProofSet!]! @derivedFrom(field: "owner")
+}
+
+type Root @entity(immutable: false) {
+  id: Bytes! # Unique ID for Root (e.g., setId-rootId)
+  setId: BigInt! # uint256 (Keep for filtering/direct access)
+  rootId: BigInt! # uint256
+  rawSize: BigInt! # uint256
+  leafCount: BigInt! # uint256
+  cid: Bytes!
+  removed: Boolean!
+  totalProofsSubmitted: BigInt! # uint256
+  totalPeriodsFaulted: BigInt! # uint256
+  lastProvenEpoch: BigInt! # uint256
+  lastProvenAt: BigInt! # uint256
+  lastFaultedEpoch: BigInt! # uint256
+  lastFaultedAt: BigInt! # uint256
+  createdAt: BigInt!
+  updatedAt: BigInt!
+  blockNumber: BigInt!
+  metadata: String!
+
+  # Relationship
+  proofSet: ProofSet! # Link to ProofSet (stores ProofSet ID)
+  # Derived relationships
+  faultRecords: [FaultRecord!]! @derivedFrom(field: "roots") # For many-to-many derived
+}
+
+type SumTreeCount @entity(immutable: false) {
+  id: Bytes! # setId-rootId
+  setId: BigInt! # uint256 (Keep for filtering/direct access)
+  rootId: BigInt! # uint256
+  count: BigInt! # uint256
+  lastCount: BigInt! # uint256
+  lastDecEpoch: BigInt!
+}
+
+type FaultRecord @entity(immutable: true) {
+  id: Bytes! # Unique ID (e.g., txHash-logIndex)
+  proofSetId: BigInt! # uint256 (Keep for filtering)
+  rootIds: [BigInt!]! # uint256[] (Keep for direct access)
+  currentChallengeEpoch: BigInt! # uint256
+  nextChallengeEpoch: BigInt! # uint256
+  periodsFaulted: BigInt! # uint256
+  deadline: BigInt! # uint256
+  createdAt: BigInt!
+  blockNumber: BigInt!
+
+  # Relationships
+  proofSet: ProofSet! # Link to ProofSet (stores ProofSet ID)
+  roots: [Root!]! # Link to Roots (stores array of Root IDs)
+}
