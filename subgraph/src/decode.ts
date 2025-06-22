@@ -89,6 +89,18 @@ export class BytesStringResult {
   }
 }
 
+export class AddServiceProviderFunctionParams {
+  provider: Address;
+  pdpUrl: string;
+  pieceRetrievalUrl: string;
+
+  constructor(provider: Address, pdpUrl: string, pieceRetrievalUrl: string) {
+    this.provider = provider;
+    this.pdpUrl = pdpUrl;
+    this.pieceRetrievalUrl = pieceRetrievalUrl;
+  }
+}
+
 /**
  * Generic ABI decoder that can handle various type combinations
  * @param data - The ABI-encoded bytes
@@ -166,6 +178,22 @@ export function decodeBytesString(data: Bytes): BytesStringResult {
   const results = decodeAbi(data, types);
 
   return new BytesStringResult(results[0].bytesValue, results[1].stringValue);
+}
+
+/**
+ * Convenience function for decoding addServiceProvider function parameters
+ */
+export function decodeAddServiceProviderFunction(
+  data: Bytes
+): AddServiceProviderFunctionParams {
+  const types: AbiType[] = [AbiType.ADDRESS, AbiType.STRING, AbiType.STRING];
+  const results = decodeAbi(data, types);
+
+  return new AddServiceProviderFunctionParams(
+    results[0].addressValue,
+    results[1].stringValue,
+    results[2].stringValue
+  );
 }
 
 /**
@@ -259,7 +287,7 @@ function decodeDynamicString(data: Bytes, offset: i32): string {
   }
 
   const stringBytes = data.subarray(dataStart, dataStart + length);
-  return stringBytes.toString();
+  return Bytes.fromUint8Array(stringBytes).toString();
 }
 
 /**
