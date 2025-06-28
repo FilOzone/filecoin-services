@@ -18,6 +18,7 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 /// to reduce payments for faulted epochs.
 contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
+    event ProofSetOwnershipChanged(uint256 indexed proofSetId, address indexed oldOwner, address indexed newOwner);
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
@@ -643,6 +644,66 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Update the payment rate based on current proof set size
         updateRailPaymentRate(proofSetId, leafCount);
+    }
+
+    /**
+     * @notice Handles proof set ownership changes by updating internal state and payment rails
+     * @dev Called by the PDPVerifier contract when proof set ownership is transferred
+     * @param proofSetId The ID of the proof set whose ownership is changing
+     * @param oldOwner The previous owner address
+     * @param newOwner The new owner address
+     * @param extraData Additional data 
+     */
+    function ownerChanged(
+        uint256 proofSetId,
+        address oldOwner,
+        address newOwner,
+        bytes calldata extraData
+    ) external override onlyPDPVerifier {
+        // Verify the proof set exists and validate the old owner
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
+        require(info.railId != 0, "Proof set not registered with payment system");
+        require(info.payee == oldOwner, "Old owner mismatch");
+        require(newOwner != address(0), "New owner cannot be zero address");
+
+        // Extra safety, Don't allow to overwrite another provider's registry accidentally
+        require(
+            providerToId[newOwner] == 0 && !approvedProvidersMap[newOwner],
+            "New owner is already a registered provider"
+        );
+
+        // Update the proof set payee (storage provider)
+        info.payee = newOwner;
+
+        // Update provider registry mappings if the old owner was a registered provider
+        uint256 oldProviderId = providerToId[oldOwner];
+        if (oldProviderId != 0 && approvedProvidersMap[oldOwner]) {
+            // Update the provider registry to reflect the new owner
+            approvedProviders[oldProviderId].owner = newOwner;
+
+            // Update the provider ID mapping
+            providerToId[newOwner] = oldProviderId;
+            delete providerToId[oldOwner];
+
+            // Update the approved providers map
+            approvedProvidersMap[newOwner] = true;
+            approvedProvidersMap[oldOwner] = false;
+        }
+
+        // Update the payment rail to reflect the new payee
+        // Note: The Payments contract doesn't support updating rail payees after creation.
+        // This means that while the internal state is updated, the payment rail will continue
+        // to pay to the old owner. This is a limitation of the current Payments contract design.
+        // In the upcoming steps, this would require either:
+        // 1. Adding an updateRailPayee function to the Payments contract, or
+        // 2. Creating a new rail and terminating the old one
+        // For now, we update the internal state to maintain consistency with the PDPVerifier.
+        // Payments(paymentsContractAddress).updateRailPayee(info.railId, newOwner); // Not supported yet
+
+        // Emit a special event for off-chain tracking if Payment contract does not support update.
+        // emit PaymentRailPayeeUpdateNeeded(info.railId, oldOwner, newOwner);
+
+        emit ProofSetOwnershipChanged(proofSetId, oldOwner, newOwner);
     }
 
     function updateRailPaymentRate(uint256 proofSetId, uint256 leafCount) internal {
