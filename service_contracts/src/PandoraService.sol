@@ -19,7 +19,7 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
-    event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
+    event ProofSetRailsCreated(uint256 indexed proofSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId, address payer, address payee);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
 
@@ -48,6 +48,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     address public pdpVerifierAddress;
     address public paymentsContractAddress;
     address public usdfcTokenAddress;
+    address public filCdnAddress;
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
@@ -63,14 +64,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Storage for proof set payment information
     struct ProofSetInfo {
-        uint256 railId; // ID of the payment rail
+        uint256 pdpRailId; // ID of the pdp payment rail
+        uint256 cacheMissRailId; // ID of the cache miss payment rail (for CDN add-on)
+        uint256 cdnRailId; // ID of the CDN payment rail (for CDN add-on)
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
-        bool withCDN; // Whether the proof set is registered for CDN add-on
     }
 
     // Decode structure for proof set creation extra data
@@ -186,6 +188,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
+        address _filCdnAddress,
         uint256 _initialOperatorCommissionBps,
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize
@@ -207,6 +210,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         operatorCommissionBps = _initialOperatorCommissionBps;
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
+        filCdnAddress = _filCdnAddress;
         
         // Set commission rates: 5% for basic, 40% for service w/ CDN add-on
         basicServiceCommissionBps = 500;  // 5%
@@ -383,14 +387,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         info.metadata = createData.metadata;
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
-        info.withCDN = createData.withCDN;
 
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
         // Create the payment rail using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = payments.createRail(
+        uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
             creator, // proofset creator, SPs in  most cases
@@ -399,15 +402,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         );
 
         // Store the rail ID
-        info.railId = railId;
+        info.pdpRailId = pdpRailId;
 
         // Store reverse mapping from rail ID to proof set ID for arbitration
-        railToProofSet[railId] = proofSetId;
+        railToProofSet[pdpRailId] = proofSetId;
 
         // First, set a lockupFixed value that's at least equal to the one-time payment
         // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
         payments.modifyRailLockup(
-            railId,
+            pdpRailId,
             DEFAULT_LOCKUP_PERIOD,
             PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
@@ -415,13 +418,74 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Charge the one-time proof set creation fee
         // This is a payment from payer to proofset creator of a fixed amount
         payments.modifyRailPayment(
-            railId,
+            pdpRailId,
             0, // Initial rate is 0, will be updated when roots are added
             PROOFSET_CREATION_FEE // One-time payment amount
         );
 
+        uint256 cacheMissRailId = 0;
+        uint256 cdnRailId = 0;
+
+        if (createData.withCDN == true) {
+            cacheMissRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                creator, // proofset creator, SPs in most cases
+                address(this), // this contract acts as the arbiter
+                cdnServiceCommissionBps // TODO
+            );
+            info.cacheMissRailId = cacheMissRailId;
+            railToProofSet[cacheMissRailId] = proofSetId; // TODO
+
+            // TODO
+            // First, set a lockupFixed value that's at least equal to the one-time payment
+            // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
+            payments.modifyRailLockup(
+                cacheMissRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+            );
+
+            // TODO
+            // Charge the one-time proof set creation fee
+            // This is a payment from payer to proofset creator of a fixed amount
+            payments.modifyRailPayment(
+                cacheMissRailId,
+                0, // Initial rate is 0, will be updated when roots are added
+                PROOFSET_CREATION_FEE // One-time payment amount
+            );
+
+            cdnRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                filCdnAddress, // TODO
+                address(this), // this contract acts as the arbiter
+                cdnServiceCommissionBps // TODO
+            );
+            info.cdnRailId = cdnRailId;
+            railToProofSet[cdnRailId] = proofSetId; // TODO
+
+            // TODO
+            // First, set a lockupFixed value that's at least equal to the one-time payment
+            // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
+            payments.modifyRailLockup(
+                cdnRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+            );
+
+            // TODO
+            // Charge the one-time proof set creation fee
+            // This is a payment from payer to proofset creator of a fixed amount
+            payments.modifyRailPayment(
+                cdnRailId,
+                0, // Initial rate is 0, will be updated when roots are added
+                PROOFSET_CREATION_FEE // One-time payment amount
+            );
+        }
+
         // Emit event for tracking
-        emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
+        emit ProofSetRailsCreated(proofSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator);
     }
 
     /**
@@ -438,7 +502,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
-            info.railId != 0,
+            info.pdpRailId != 0,
             "Proof set not registered with payment system"
         );
         (bytes memory signature) = abi.decode(extraData, (bytes));
@@ -474,7 +538,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     ) external onlyPDPVerifier {
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
-        require(info.railId != 0, "Proof set not registered with payment system");
+        require(info.pdpRailId != 0, "Proof set not registered with payment system");
         
         // Get the payer address for this proof set
         address payer = info.payer;
@@ -509,7 +573,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Verify the proof set exists in our mapping   
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
-            info.railId != 0,
+            info.pdpRailId != 0,
             "Proof set not registered with payment system"
         );
         
@@ -647,18 +711,18 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     function updateRailPaymentRate(uint256 proofSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this proof set
-        require(proofSetInfo[proofSetId].railId != 0, "No payment rail configured");
+        require(proofSetInfo[proofSetId].pdpRailId != 0, "No payment rail configured");
 
         uint256 newRatePerEpoch = 0; // Default to 0 for empty proof sets
 
         uint256 totalBytes = getProofSetSizeInBytes(leafCount);
         // Get the withCDN flag from the proof set info
-        bool withCDN = proofSetInfo[proofSetId].withCDN;
+        bool withCDN = proofSetInfo[proofSetId].cdnRailId != 0;
         newRatePerEpoch = calculateStorageRatePerEpoch(totalBytes, withCDN);
 
         // Update the rail payment rate
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = proofSetInfo[proofSetId].railId;
+        uint256 railId = proofSetInfo[proofSetId].pdpRailId;
 
         // Call modifyRailPayment with the new rate and no one-time payment
         payments.modifyRailPayment(
@@ -809,8 +873,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param proofSetId The ID of the proof set
      * @return The payment rail ID, or 0 if not found
      */
-    function getProofSetRailId(uint256 proofSetId) external view returns (uint256) {
-        return proofSetInfo[proofSetId].railId;
+    function getProofSetPdpRailId(uint256 proofSetId) external view returns (uint256) {
+        return proofSetInfo[proofSetId].pdpRailId;
     }
 
     /**
@@ -839,7 +903,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return CDN enabled
      */
     function getProofSetWithCDN(uint256 proofSetId) external view returns (bool) {
-        return proofSetInfo[proofSetId].withCDN;
+        return proofSetInfo[proofSetId].cdnRailId != 0;
     }
 
     /**
@@ -1254,14 +1318,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             ProofSetInfo storage storageInfo = proofSetInfo[proofSetId];
             // Create a memory copy of the struct (excluding any mappings)
             proofSets[i] = ProofSetInfo({
-                railId: storageInfo.railId,
+                pdpRailId: storageInfo.pdpRailId,
+                cacheMissRailId: storageInfo.cacheMissRailId,
+                cdnRailId: storageInfo.cdnRailId,
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,
                 metadata: storageInfo.metadata,
                 rootMetadata: storageInfo.rootMetadata,
-                clientDataSetId: storageInfo.clientDataSetId,
-                withCDN: storageInfo.withCDN
+                clientDataSetId: storageInfo.clientDataSetId
             });
         }
         return proofSets;
