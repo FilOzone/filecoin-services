@@ -431,7 +431,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
                 creator, // proofset creator, SPs in most cases
-                address(this), // this contract acts as the arbiter
+                address(0), // no arbiter for now
                 cdnServiceCommissionBps // TODO
             );
             info.cacheMissRailId = cacheMissRailId;
@@ -458,8 +458,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                filCdnAddress, // TODO
-                address(this), // this contract acts as the arbiter
+                filCdnAddress,
+                address(0), // no arbiter for now
                 cdnServiceCommissionBps // TODO
             );
             info.cdnRailId = cdnRailId;
