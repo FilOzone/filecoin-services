@@ -432,7 +432,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 createData.payer, // from (payer)
                 creator, // proofset creator, SPs in most cases
                 address(0), // no arbiter for now
-                cdnServiceCommissionBps // TODO
+                0 // no service commission
             );
             info.cacheMissRailId = cacheMissRailId;
             railToProofSet[cacheMissRailId] = proofSetId; // TODO
@@ -460,7 +460,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 createData.payer, // from (payer)
                 filCdnAddress,
                 address(0), // no arbiter for now
-                cdnServiceCommissionBps // TODO
+                0 // no service commission
             );
             info.cdnRailId = cdnRailId;
             railToProofSet[cdnRailId] = proofSetId; // TODO
