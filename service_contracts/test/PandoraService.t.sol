@@ -319,7 +319,7 @@ contract PandoraServiceTest is Test {
 
         // Expect RailCreated event when creating the proof set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.ProofSetRailCreated(1, 1, client, storageProvider, true);
+        emit PandoraService.ProofSetRailsCreated(1, 1, 1, 1, client, storageProvider);
 
         // Create a proof set as the storage provider
         makeSignaturePass(client);
@@ -328,10 +328,10 @@ contract PandoraServiceTest is Test {
         vm.stopPrank();
 
         // Get the rail ID from the PDP service
-        uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
+        uint256 pdpRailId = pdpServiceWithPayments.getProofSetPdpRailId(newProofSetId);
 
         // Verify a valid rail ID was created
-        assertTrue(railId > 0, "Rail ID should be non-zero");
+        assertTrue(pdpRailId > 0, "PDP Rail ID should be non-zero");
 
         // Verify proof set info was stored correctly
         (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(newProofSetId);
@@ -344,30 +344,30 @@ contract PandoraServiceTest is Test {
 
         // Verify proof set info
         PandoraService.ProofSetInfo memory proofSetInfo = pdpServiceWithPayments.getProofSet(newProofSetId);
-        assertEq(proofSetInfo.railId, railId, "Rail ID should match");
+        assertEq(proofSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");
+        assertNotEq(proofSetInfo.cdnRailId, 0, "CDN rail ID should be set");
         assertEq(proofSetInfo.payer, client, "Payer should match");
         assertEq(proofSetInfo.payee, storageProvider, "Payee should match");
-        assertEq(proofSetInfo.withCDN, true, "withCDN should be true");
 
         // Verify withCDN was stored correctly
         bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
         assertTrue(withCDN, "withCDN should be true");
 
         // Verify the rail in the actual Payments contract
-        Payments.RailView memory rail = payments.getRail(railId);
+        Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
 
-        assertEq(rail.token, address(mockUSDFC), "Token should be USDFC");
-        assertEq(rail.from, client, "From address should be client");
-        assertEq(rail.to, storageProvider, "To address should be storage provider");
-        assertEq(rail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(rail.arbiter, address(pdpServiceWithPayments), "Arbiter should be the PDP service");
-        assertEq(rail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
+        assertEq(pdpRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(pdpRail.from, client, "From address should be client");
+        assertEq(pdpRail.to, storageProvider, "To address should be storage provider");
+        assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
+        assertEq(pdpRail.arbiter, address(pdpServiceWithPayments), "Arbiter should be the PDP service");
+        assertEq(pdpRail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
 
         // Verify lockupFixed is 0 since the one-time payment was made
-        assertEq(rail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(pdpRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
 
         // Verify initial payment rate is 0 (will be updated when roots are added)
-        assertEq(rail.paymentRate, 0, "Initial payment rate should be 0");
+        assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
         // Get account balances after creating proof set
         (uint256 clientFundsAfter,) = getAccountInfo(address(mockUSDFC), client);
@@ -416,7 +416,7 @@ contract PandoraServiceTest is Test {
 
         // Expect RailCreated event when creating the proof set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.ProofSetRailCreated(1, 1, client, storageProvider, false);
+        emit PandoraService.ProofSetRailsCreated(1, 1, 0, 0, client, storageProvider);
 
         // Create a proof set as the storage provider
         makeSignaturePass(client);
@@ -429,9 +429,9 @@ contract PandoraServiceTest is Test {
         assertFalse(withCDN, "withCDN should be false");
         
         // Verify the commission rate was set correctly for basic service (no CDN)
-        uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
-        Payments.RailView memory rail = payments.getRail(railId);
-        assertEq(rail.commissionRateBps, 500, "Commission rate should be 5% for basic service (no CDN)");
+        uint256 pdpRailId = pdpServiceWithPayments.getProofSetPdpRailId(newProofSetId);
+        Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
+        assertEq(pdpRail.commissionRateBps, 500, "Commission rate should be 5% for basic service (no CDN)");
     }
 
     // Helper function to get account info from the Payments contract
@@ -1127,7 +1127,7 @@ contract PandoraServiceTest is Test {
         assertEq(proofSets[0].payee, sp1, "Payee should match");
         assertEq(proofSets[0].metadata, metadata, "Metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
-        assertGt(proofSets[0].railId, 0, "Rail ID should be set");
+        assertGt(proofSets[0].pdpRailId, 0, "Rail ID should be set");
     }
     
     function testGetClientProofSets_MultipleProofSets() public {
