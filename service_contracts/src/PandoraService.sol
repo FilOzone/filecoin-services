@@ -10,6 +10,25 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 
+interface IPayments {
+    function getAccountInfoIfSettled(address token, address owner) external view returns (
+        uint256 funds,
+        uint256 lockupCurrent,
+        uint256 lockupRate,
+        uint256 lockupLastSettledAt,
+        uint256 fundedUntilEpoch
+    );
+    function settleRail(uint256 railId, uint256 untilEpoch) external returns (
+        uint256 totalSettledAmount,
+        uint256 totalNetPayeeAmount,
+        uint256 totalPaymentFee,
+        uint256 totalOperatorCommission,
+        uint256 finalSettledEpoch,
+        string memory note
+    );
+    function terminateRail(uint256 railId, uint256 endEpoch) external;
+}
+
 /// @title PandoraService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -22,6 +41,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
+    event GracePeriodStarted(uint256 indexed proofSetId, uint256 expiresAt);
 
     // Constants
     uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
@@ -446,16 +466,47 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Get the payer address for this proof set
         address payer = proofSetInfo[proofSetId].payer;
         
-        // Verify the client's signature
+        // Check if deletion is authorized
+        bool clientAuthorized = verifyDeleteProofSetSignature(
+            payer,
+            info.clientDataSetId,
+            signature
+        );
+        
+        // Check if grace period has expired
+        bool gracePeriodExpired = false;
+        if (!clientAuthorized && info.railId != 0) {
+            // Get the payments contract
+            IPayments payments = IPayments(paymentsContractAddress);
+            
+            // Get account info to check funded status
+            (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt, uint256 fundedUntilEpoch) = 
+                payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
+            
+            // Check if grace period has expired
+            if (fundedUntilEpoch < block.number && fundedUntilEpoch > 0) {
+                uint256 gracePeriodExpiresAt = fundedUntilEpoch + DEFAULT_LOCKUP_PERIOD;
+                gracePeriodExpired = block.number >= gracePeriodExpiresAt;
+            }
+        }
+        
         require(
-            verifyDeleteProofSetSignature(
-                payer,
-                info.clientDataSetId,
-                signature
-            ),
+            clientAuthorized || gracePeriodExpired,
             "Not authorized to delete proof set"
         );
-        // TODO Proofset deletion logic         
+        
+        // If deleted due to grace period expiration, disburse remaining funds to SP
+        if (gracePeriodExpired && !clientAuthorized) {
+            // Settle the rail up to current epoch to ensure SP gets paid for all work done
+            payments.settleRail(info.railId, block.number);
+            
+            // Terminate the rail to stop future payments
+            payments.terminateRail(info.railId, block.number);
+        }
+        
+        // Clean up the proof set info
+        delete proofSetInfo[proofSetId];
+        delete railToProofSet[info.railId];         
     }
 
     /**
@@ -643,6 +694,29 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Update the payment rate based on current proof set size
         updateRailPaymentRate(proofSetId, leafCount);
+        
+        // Check if we're in grace period
+        checkAndEmitGracePeriod(proofSetId);
+    }
+
+    function checkAndEmitGracePeriod(uint256 proofSetId) internal {
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
+        if (info.railId == 0) return; // No payment rail configured
+        
+        // Get the payments contract
+        IPayments payments = IPayments(paymentsContractAddress);
+        
+        // Get account info - assuming getAccountInfoIfSettled returns a struct with fundedUntilEpoch
+        // This is a view function that settles the account lockup and returns the current state
+        (uint256 funds, uint256 lockupCurrent, uint256 lockupRate, uint256 lockupLastSettledAt, uint256 fundedUntilEpoch) = 
+            payments.getAccountInfoIfSettled(usdfcTokenAddress, info.payer);
+        
+        // Check if funded until epoch is in the past (grace period started)
+        if (fundedUntilEpoch < block.number && fundedUntilEpoch > 0) {
+            // Calculate when grace period expires
+            uint256 gracePeriodExpiresAt = fundedUntilEpoch + DEFAULT_LOCKUP_PERIOD;
+            emit GracePeriodStarted(proofSetId, gracePeriodExpiresAt);
+        }
     }
 
     function updateRailPaymentRate(uint256 proofSetId, uint256 leafCount) internal {
