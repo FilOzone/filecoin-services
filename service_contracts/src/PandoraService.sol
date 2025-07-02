@@ -19,7 +19,7 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
-    event ProofSetRailsCreated(uint256 indexed proofSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId, address payer, address payee);
+    event ProofSetRailsCreated(uint256 indexed proofSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
 
@@ -485,7 +485,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         }
 
         // Emit event for tracking
-        emit ProofSetRailsCreated(proofSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator);
+        emit ProofSetRailsCreated(proofSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN);
     }
 
     /**
