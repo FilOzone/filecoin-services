@@ -136,6 +136,7 @@ contract PandoraServiceTest is Test {
     address public deployer;
     address public client;
     address public storageProvider;
+    address public filCDN;
     
     // Additional test accounts for registry tests
     address public sp1;
@@ -169,6 +170,7 @@ contract PandoraServiceTest is Test {
         deployer = address(this);
         client = address(0xf1);
         storageProvider = address(0xf2);
+        filCDN = address(0xf3);
         
         // Additional accounts for registry tests
         sp1 = address(0xf3);
@@ -203,6 +205,7 @@ contract PandoraServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
+            filCDN,
             initialOperatorCommissionBps,
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
@@ -1177,6 +1180,8 @@ contract PandoraServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
+    uint256 public filCDNPrivateKey;
+    address public filCDN;
     
     function setUp() public {
         // Set up test accounts with known private keys
@@ -1185,6 +1190,9 @@ contract PandoraServiceSignatureTest is Test {
         
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
+
+        filCDNPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
+        filCDN = vm.addr(filCDNPrivateKey);
         
         creator = address(0xf2);
         
@@ -1205,6 +1213,7 @@ contract PandoraServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
+            filCDN,
             500, // 5% commission
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
@@ -1275,9 +1284,11 @@ contract PandoraServiceUpgradeTest is Test {
     MockERC20 public mockUSDFC;
     
     address public deployer;
+    address public filCDN;
     
     function setUp() public {
         deployer = address(this);
+        filCDN = address(0xf2);
         
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -1297,6 +1308,7 @@ contract PandoraServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
+            filCDN,
             500, // 5% commission
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
