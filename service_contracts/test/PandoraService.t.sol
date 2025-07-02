@@ -351,6 +351,7 @@ contract PandoraServiceTest is Test {
         assertNotEq(proofSetInfo.cdnRailId, 0, "CDN rail ID should be set");
         assertEq(proofSetInfo.payer, client, "Payer should match");
         assertEq(proofSetInfo.payee, storageProvider, "Payee should match");
+        assertEq(proofSetInfo.withCDN, true, "withCDN should be true");
 
         // Verify withCDN was stored correctly
         bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);

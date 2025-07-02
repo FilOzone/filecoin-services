@@ -73,6 +73,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
+        bool withCDN; // Whether the proof set is registered for CDN add-on
     }
 
     // Decode structure for proof set creation extra data
@@ -387,6 +388,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         info.metadata = createData.metadata;
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
+        info.withCDN = createData.withCDN;
 
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
@@ -717,7 +719,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         uint256 totalBytes = getProofSetSizeInBytes(leafCount);
         // Get the withCDN flag from the proof set info
-        bool withCDN = proofSetInfo[proofSetId].cdnRailId != 0;
+        bool withCDN = proofSetInfo[proofSetId].withCDN;
         newRatePerEpoch = calculateStorageRatePerEpoch(totalBytes, withCDN);
 
         // Update the rail payment rate
@@ -903,7 +905,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return CDN enabled
      */
     function getProofSetWithCDN(uint256 proofSetId) external view returns (bool) {
-        return proofSetInfo[proofSetId].cdnRailId != 0;
+        return proofSetInfo[proofSetId].withCDN;
     }
 
     /**
@@ -1326,7 +1328,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 commissionBps: storageInfo.commissionBps,
                 metadata: storageInfo.metadata,
                 rootMetadata: storageInfo.rootMetadata,
-                clientDataSetId: storageInfo.clientDataSetId
+                clientDataSetId: storageInfo.clientDataSetId,
+                withCDN: storageInfo.withCDN
             });
         }
         return proofSets;
