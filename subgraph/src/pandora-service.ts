@@ -27,6 +27,8 @@ import { SumTree } from "./sumTree";
 import {
   decodeStringAddressBoolBytes,
   decodeAddServiceProviderFunction,
+  hasAddServiceProviderFunction,
+  extractAddServiceProviderCalldatas,
 } from "./decode";
 
 // --- Helper Functions
@@ -470,51 +472,111 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
 
 /**
  * Handler for ProviderApproved event
- * Adds providerId with approvedAt = block.number and status = "Approved"
+ * Follows the intended flow:
+ * 1. Check if event is emitted in addServiceProvider function
+ * 2. If yes, extract all addServiceProvider calldatas and find matching provider
+ * 3. If no match found in calldatas, log warning
+ * 4. If not addServiceProvider function, find existing provider and update status
+ * 5. If no existing provider found, log warning
  */
 export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerAddress = event.params.provider;
   const providerId = event.params.providerId;
-
   const txInputHex = event.transaction.input.toHex();
 
-  const addServiceProviderInput = isAddServiceProviderFunction(txInputHex);
-  if (addServiceProviderInput !== "0x") {
-    const provider = new Provider(providerAddress);
+  // Check if this event was emitted during addServiceProvider function call
+  if (hasAddServiceProviderFunction(txInputHex)) {
+    // Extract all addServiceProvider calldatas
+    const addServiceProviderCalldatas =
+      extractAddServiceProviderCalldatas(txInputHex);
 
-    const decodedData = decodeAddServiceProviderFunction(
-      Bytes.fromHexString(addServiceProviderInput.slice(10))
-    );
+    if (addServiceProviderCalldatas.length === 0) {
+      log.warning(
+        "No valid addServiceProvider calldatas found in transaction input for provider: {}",
+        [providerAddress.toHexString()]
+      );
+      return;
+    }
 
-    provider.address = providerAddress;
+    let matchingProviderFound = false;
+
+    // Process each addServiceProvider calldata
+    for (let i = 0; i < addServiceProviderCalldatas.length; i++) {
+      const calldata = addServiceProviderCalldatas[i];
+
+      // Remove function selector (first 4 bytes after 0x)
+      if (calldata.length <= 10) {
+        continue;
+      }
+
+      const functionParams = calldata.slice(10); // Remove '0x' + 8 chars (4 bytes)
+      const decodedData = decodeAddServiceProviderFunction(
+        Bytes.fromHexString(functionParams)
+      );
+
+      if (decodedData === null) {
+        log.warning(
+          "Failed to decode addServiceProvider calldata at index {} for provider: {}",
+          [i.toString(), providerAddress.toHexString()]
+        );
+        continue;
+      }
+
+      // Check if this calldata matches our provider address
+      if (decodedData.provider.equals(providerAddress)) {
+        matchingProviderFound = true;
+
+        let provider = Provider.load(providerAddress);
+        if (provider === null) {
+          provider = new Provider(providerAddress);
+          provider.address = providerAddress;
+          provider.totalFaultedPeriods = BigInt.fromI32(0);
+          provider.totalFaultedRoots = BigInt.fromI32(0);
+          provider.totalProofSets = BigInt.fromI32(0);
+          provider.totalRoots = BigInt.fromI32(0);
+          provider.totalDataSize = BigInt.fromI32(0);
+          provider.createdAt = event.block.timestamp;
+        }
+
+        provider.providerId = providerId;
+        provider.pdpUrl = decodedData.pdpUrl;
+        provider.pieceRetrievalUrl = decodedData.pieceRetrievalUrl;
+        provider.approvedAt = event.block.number;
+        provider.status = "Approved";
+        provider.updatedAt = event.block.timestamp;
+        provider.blockNumber = event.block.number;
+
+        provider.save();
+
+        break;
+      }
+    }
+
+    if (!matchingProviderFound) {
+      log.warning(
+        "ProviderApproved event emitted in addServiceProvider function but no matching provider calldata found for provider: {}",
+        [providerAddress.toHexString()]
+      );
+    }
+  } else {
+    const provider = Provider.load(providerAddress);
+
+    if (provider === null) {
+      log.warning(
+        "ProviderApproved: existing provider not found for address: {}",
+        [providerAddress.toHexString()]
+      );
+      return;
+    }
+
     provider.providerId = providerId;
-    provider.pdpUrl = decodedData.pdpUrl;
-    provider.pieceRetrievalUrl = decodedData.pieceRetrievalUrl;
     provider.approvedAt = event.block.number;
     provider.status = "Approved";
-    provider.totalFaultedPeriods = BigInt.fromI32(0);
-    provider.totalFaultedRoots = BigInt.fromI32(0);
-    provider.totalProofSets = BigInt.fromI32(0);
-    provider.totalRoots = BigInt.fromI32(0);
-    provider.totalDataSize = BigInt.fromI32(0);
-    provider.createdAt = event.block.timestamp;
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
 
     provider.save();
-    return;
   }
-
-  const provider = Provider.load(providerAddress);
-  if (!provider) return;
-
-  provider.providerId = providerId;
-  provider.approvedAt = event.block.number;
-  provider.status = "Approved";
-  provider.updatedAt = event.block.timestamp;
-  provider.blockNumber = event.block.number;
-
-  provider.save();
 }
 
 /**
@@ -549,18 +611,4 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   provider.blockNumber = event.block.number;
 
   provider.save();
-}
-
-// Helper function to decode function selector
-function isAddServiceProviderFunction(funcSelector: string): string {
-  const addServiceProviderFunctionSelector = "5f6840ec";
-  const selectorPosition = funcSelector.indexOf(
-    addServiceProviderFunctionSelector
-  );
-
-  if (selectorPosition === -1) {
-    return "0x";
-  }
-
-  return "0x" + funcSelector.slice(selectorPosition);
 }

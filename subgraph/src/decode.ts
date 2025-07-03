@@ -316,3 +316,77 @@ function decodeDynamicBytes(data: Bytes, offset: i32): Bytes {
   const bytesData = data.subarray(dataStart, dataStart + length);
   return Bytes.fromUint8Array(bytesData);
 }
+
+/**
+ * Extracts all occurrences of addServiceProvider function call data from the
+ * provided transaction input selector string. The function identifies
+ * calldatas based on the specified function selector and ensures data integrity
+ * by excluding entries that only contain the selector without additional data.
+ *
+ * @param funcSelector - The transaction input selector string, potentially
+ * including multiple function call data.
+ * @returns An array of strings, each representing a piece of calldata that
+ * includes the addServiceProvider function call.
+ */
+export function extractAddServiceProviderCalldatas(
+  funcSelector: string
+): string[] {
+  const addServiceProviderFunctionSelector = "5f6840ec";
+  const calldatas: string[] = [];
+
+  if (funcSelector.length < 10) {
+    // Minimum length for function selector (0x + 4 bytes)
+    return calldatas;
+  }
+
+  // Remove '0x' prefix if present
+  let cleanSelector = funcSelector;
+  if (cleanSelector.startsWith("0x")) {
+    cleanSelector = cleanSelector.slice(2);
+  }
+
+  let searchPosition = 0;
+
+  while (searchPosition < cleanSelector.length) {
+    const selectorPosition = cleanSelector.indexOf(
+      addServiceProviderFunctionSelector,
+      searchPosition
+    );
+
+    if (selectorPosition === -1) {
+      break;
+    }
+
+    // Find the next function selector occurrence
+    const nextSelectorPosition = cleanSelector.indexOf(
+      addServiceProviderFunctionSelector,
+      selectorPosition + addServiceProviderFunctionSelector.length
+    );
+
+    let calldataEnd: i32;
+    if (nextSelectorPosition === -1) {
+      // This is the last occurrence, take everything until the end
+      calldataEnd = cleanSelector.length;
+    } else {
+      // Take everything until the next function selector
+      calldataEnd = nextSelectorPosition;
+    }
+
+    const calldata = cleanSelector.slice(selectorPosition, calldataEnd);
+    if (calldata.length > 8) {
+      // Ensure we have more than just the function selector
+      calldatas.push("0x" + calldata);
+    }
+
+    searchPosition =
+      selectorPosition + addServiceProviderFunctionSelector.length;
+  }
+
+  return calldatas;
+}
+
+// Helper function to check if transaction contains addServiceProvider function calls
+export function hasAddServiceProviderFunction(txInput: string): boolean {
+  const addServiceProviderFunctionSelector = "5f6840ec";
+  return txInput.indexOf(addServiceProviderFunctionSelector) !== -1;
+}
