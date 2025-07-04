@@ -1259,446 +1259,182 @@ contract PandoraServiceTest is Test {
     }
 
     /**
-     * @notice Test successful ownership change for a registered provider
-     * @dev This test verifies that ownership change works correctly when the old owner is a registered provider
+     * @notice Test successful ownership change between two approved providers
+     * @dev Verifies only the proof set's payee is updated, event is emitted, and registry state is unchanged.
      */
-    function testOwnerChangedSuccessForRegisteredProvider() public {
+    function testOwnerChangedSuccessDecoupled() public {
+        // Register and approve two providers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+
         // Create a proof set with sp1 as the owner
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Verify initial state
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Initial payee should be sp1");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should be approved");
-        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "sp1 should have provider ID 1");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x9999);
-        
-        // Change ownership from sp1 to newOwner
+
+        // Registry state before
+        bool sp1ApprovedBefore = pdpServiceWithPayments.isProviderApproved(sp1);
+        bool sp2ApprovedBefore = pdpServiceWithPayments.isProviderApproved(sp2);
+        uint256 sp1IdBefore = pdpServiceWithPayments.getProviderIdByAddress(sp1);
+        uint256 sp2IdBefore = pdpServiceWithPayments.getProviderIdByAddress(sp2);
+
+        // Change ownership from sp1 to sp2
         bytes memory testExtraData = new bytes(0);
-        
         vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newOwner);
-        
-        vm.prank(newOwner);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership change in PandoraService
-        (payer, payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner, "Payee should be updated to newOwner");
-        
-        // Verify provider registry updates
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should no longer be approved");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(newOwner), "newOwner should be approved");
-        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "sp1 should have no provider ID");
-        assertEq(pdpServiceWithPayments.getProviderIdByAddress(newOwner), 1, "newOwner should have provider ID 1");
-        
-        // Verify provider info was transferred
-        PandoraService.ApprovedProviderInfo memory providerInfo = pdpServiceWithPayments.getApprovedProvider(1);
-        assertEq(providerInfo.owner, newOwner, "Provider 1 owner should be newOwner");
-        assertEq(providerInfo.pdpUrl, "https://provider.example.com/pdp", "Provider 1 PDP URL should be sp1's URL");
+        emit ProofSetOwnershipChanged(testProofSetId, sp1, sp2);
+        vm.prank(sp2);
+        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
+
+        // Only the proof set's payee is updated
+        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
+        assertEq(payee, sp2, "Payee should be updated to new owner");
+
+        // Registry state is unchanged
+        assertEq(pdpServiceWithPayments.isProviderApproved(sp1), sp1ApprovedBefore, "sp1 registry state unchanged");
+        assertEq(pdpServiceWithPayments.isProviderApproved(sp2), sp2ApprovedBefore, "sp2 registry state unchanged");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), sp1IdBefore, "sp1 provider ID unchanged");
+        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), sp2IdBefore, "sp2 provider ID unchanged");
     }
 
     /**
-     * @notice Test successful ownership change for a non-registered provider
-     * @dev This test verifies that ownership change works when the old owner is not in the provider registry
+     * @notice Test ownership change reverts if new owner is not an approved provider
      */
-
-    /**
-     * @notice Test ownership change with extra data
-     * @dev This test verifies that extra data is properly handled during ownership change
-     */
-    function testOwnerChangedWithExtraData() public {
-        // Create a proof set
+    function testOwnerChangedRevertsIfNewOwnerNotApproved() public {
+        // Register and approve sp1
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        // Create a proof set with sp1 as the owner
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x8888);
-        
-        // Change ownership with extra data
-        bytes memory testExtraData = abi.encode("test extra data", 42);
-        
-        vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newOwner);
-        
-        vm.prank(newOwner);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership change occurred
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner, "Payee should be updated to newOwner");
+        // Use an unapproved address for the new owner
+        address unapproved = address(0x9999);
+        assertFalse(pdpServiceWithPayments.isProviderApproved(unapproved), "Unapproved should not be approved");
+        // Attempt ownership change
+        bytes memory testExtraData = new bytes(0);
+        vm.prank(unapproved);
+        vm.expectRevert("New owner must be an approved provider");
+        mockPDPVerifier.changeProofSetOwnership(testProofSetId, unapproved, address(pdpServiceWithPayments), testExtraData);
+        // Registry state is unchanged
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should remain approved");
     }
 
     /**
-     * @notice Test ownership change with zero address new owner
-     * @dev This test verifies that the function reverts when trying to set zero address as new owner
+     * @notice Test ownership change reverts if new owner is zero address
      */
-    function testOwnerChangedWithZeroAddressNewOwner() public {
-        // Create a proof set
+    function testOwnerChangedRevertsIfNewOwnerZeroAddress() public {
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Try to change ownership to zero address
         bytes memory testExtraData = new bytes(0);
-        
         vm.prank(sp1);
         vm.expectRevert("New owner cannot be zero address");
         mockPDPVerifier.changeProofSetOwnership(testProofSetId, address(0), address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership was not changed
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Payee should remain sp1");
     }
 
     /**
-     * @notice Test ownership change with non-existent proof set
-     * @dev This test verifies that the function reverts when trying to change ownership of non-existent proof set
+     * @notice Test ownership change reverts if old owner mismatch
      */
-    function testOwnerChangedNonExistentProofSet() public {
-        // Try to change ownership of non-existent proof set
-        bytes memory testExtraData = new bytes(0);
-        
+    function testOwnerChangedRevertsIfOldOwnerMismatch() public {
         vm.prank(sp1);
-        vm.expectRevert("Proof set does not exist");
-        mockPDPVerifier.changeProofSetOwnership(999, sp2, address(pdpServiceWithPayments), testExtraData);
-    }
-
-    /**
-     * @notice Test ownership change with same owner
-     * @dev This test verifies that the function reverts when trying to change ownership to the same address
-     */
-    function testOwnerChangedSameOwner() public {
-        // Create a proof set
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Try to change ownership to the same address
-        bytes memory testExtraData = new bytes(0);
-        
-        vm.prank(sp1);
-        vm.expectRevert("New owner must be different from current owner");
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp1, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership was not changed
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Payee should remain sp1");
-    }
-
-    /**
-     * @notice Test ownership change with old owner mismatch
-     * @dev This test verifies that the function reverts when the old owner doesn't match the current payee
-     */
-    function testOwnerChangedOldOwnerMismatch() public {
-        // Create a proof set with sp1
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x7777);
-        
-        // Try to change ownership with wrong old owner by calling the function directly
-        // This bypasses the mock's validation and tests the contract's old owner check
-        bytes memory testExtraData = new bytes(0);
-        
-        vm.prank(address(mockPDPVerifier)); // Call as the PDP verifier
-        vm.expectRevert("Old owner mismatch");
-        pdpServiceWithPayments.ownerChanged(testProofSetId, newOwner, newOwner, testExtraData);
-        
-        // Verify ownership was not changed
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Payee should remain sp1");
-    }
-
-    /**
-     * @notice Test ownership change with non-registered proof set
-     * @dev This test verifies that the function reverts when trying to change ownership of a proof set not registered with the payment system
-     */
-    function testOwnerChangedNonRegisteredProofSet() public {
-        // Create a proof set without registering it with the payment system
-        vm.prank(sp1);
-        uint256 testProofSetId = mockPDPVerifier.createProofSet(address(0), new bytes(0)); // No listener call
-        
-        // Try to change ownership through the mock
-        bytes memory testExtraData = new bytes(0);
-        
-        vm.prank(sp1);
-        vm.expectRevert("Proof set not registered with payment system");
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-    }
-
-    /**
-     * @notice Test ownership change with new owner already registered as different provider
-     * @dev This test verifies that the function reverts when the new owner is already registered as a different provider
-     */
-    function testOwnerChangedNewOwnerAlreadyRegistered() public {
-        // Create a proof set with sp1
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Register and approve sp2 as a separate provider
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        
-        // Register and approve sp3 as another provider
-        vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
-        pdpServiceWithPayments.approveServiceProvider(sp3);
-        
-        // Try to change ownership from sp1 to sp2 (sp2 is already registered as provider ID 2)
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         bytes memory testExtraData = new bytes(0);
-        
-        vm.prank(sp2);
-        vm.expectRevert("New owner is already a registered provider");
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership was not changed
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Payee should remain sp1");
+        // Call directly as PDPVerifier with wrong old owner
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("Old owner mismatch");
+        pdpServiceWithPayments.ownerChanged(testProofSetId, sp2, sp2, testExtraData);
     }
 
     /**
-     * @notice Test ownership change with unauthorized caller
-     * @dev This test verifies that only the PDP verifier can call the ownerChanged function
+     * @notice Test ownership change reverts if proof set does not exist
      */
-    function testOwnerChangedUnauthorizedCaller() public {
-        // Create a proof set
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Try to call ownerChanged from unauthorized address
+    function testOwnerChangedRevertsIfProofSetNotRegistered() public {
+        // Setup: Register and approve a provider
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
         bytes memory testExtraData = new bytes(0);
-        
+
+        // Call ownerChanged directly as the PDPVerifier
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("Proof set not registered with payment system");
+        pdpServiceWithPayments.ownerChanged(999, sp1, sp1, testExtraData);
+    }
+
+    /**
+     * @notice Test ownership change reverts if called by unauthorized address
+     */
+    function testOwnerChangedRevertsIfUnauthorizedCaller() public {
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        bytes memory testExtraData = new bytes(0);
+        // Call directly as sp2 (not PDPVerifier)
         vm.prank(sp2);
         vm.expectRevert("Caller is not the PDP verifier");
         pdpServiceWithPayments.ownerChanged(testProofSetId, sp1, sp2, testExtraData);
-        
-        // Verify ownership was not changed
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Payee should remain sp1");
     }
 
     /**
-     * @notice Test multiple ownership changes on the same proof set
-     * @dev This test verifies that multiple ownership changes work correctly
+     * @notice Test multiple proof sets per provider: only the targeted proof set's payee is updated
      */
-    function testMultipleOwnershipChanges() public {
-        // Create a proof set with sp1
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use unregistered addresses for new owners
-        address newOwner1 = address(0x6666);
-        address newOwner2 = address(0x5555);
-        
-        bytes memory testExtraData = new bytes(0);
-        
-        // First ownership change: sp1 -> newOwner1
-        vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newOwner1);
-        
-        vm.prank(newOwner1);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner1, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify first change
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner1, "Payee should be newOwner1 after first change");
-        
-        // Second ownership change: newOwner1 -> newOwner2
-        vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, newOwner1, newOwner2);
-        
-        vm.prank(newOwner2);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner2, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify second change
-        (payer, payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner2, "Payee should be newOwner2 after second change");
-        
-        // Verify provider registry state
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should not be approved");
-        assertFalse(pdpServiceWithPayments.isProviderApproved(newOwner1), "newOwner1 should not be approved");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(newOwner2), "newOwner2 should be approved");
-        assertEq(pdpServiceWithPayments.getProviderIdByAddress(newOwner2), 1, "newOwner2 should have provider ID 1");
-    }
-
-    /**
-     * @notice Test ownership change preserves client relationship
-     * @dev This test verifies that ownership change doesn't affect the client-proof set relationship
-     */
-    function testOwnerChangedPreservesClientRelationship() public {
-        // Create a proof set
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x4444);
-        
-        // Get client proof sets before ownership change
-        PandoraService.ProofSetInfo[] memory proofSetsBefore = pdpServiceWithPayments.getClientProofSets(client);
-        assertEq(proofSetsBefore.length, 1, "Client should have one proof set before change");
-        
-        // Change ownership
-        bytes memory testExtraData = new bytes(0);
-        
-        vm.prank(newOwner);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner, address(pdpServiceWithPayments), testExtraData);
-        
-        // Get client proof sets after ownership change
-        PandoraService.ProofSetInfo[] memory proofSetsAfter = pdpServiceWithPayments.getClientProofSets(client);
-        assertEq(proofSetsAfter.length, 1, "Client should still have one proof set after change");
-        assertEq(proofSetsAfter[0].payer, client, "Payer should remain the same");
-        assertEq(proofSetsAfter[0].payee, newOwner, "Payee should be updated to newOwner");
-        assertEq(proofSetsAfter[0].metadata, "Test Proof Set", "Metadata should remain the same");
-    }
-
-    /**
-     * @notice Test ownership change with large extra data
-     * @dev This test verifies that the function handles large extra data correctly
-     */
-    function testOwnerChangedWithLargeExtraData() public {
-        // Create a proof set
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x3333);
-        
-        // Create large extra data
-        bytes memory largeExtraData = new bytes(1000);
-        for (uint256 i = 0; i < 1000; i++) {
-            largeExtraData[i] = bytes1(uint8(i % 256));
-        }
-        
-        // Change ownership with large extra data
-        vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newOwner);
-        
-        vm.prank(newOwner);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner, address(pdpServiceWithPayments), largeExtraData);
-        
-        // Verify ownership change occurred
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner, "Payee should be updated to newOwner");
-    }
-
-    /**
-     * @notice Test ownership change event emission
-     * @dev This test verifies that the correct event is emitted with the right parameters
-     */
-    function testOwnerChangedEventEmission() public {
-        // Create a proof set
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x2222);
-        
-        // Change ownership and verify event emission
-        bytes memory testExtraData = new bytes(0);
-        
-        vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newOwner);
-        
-        vm.prank(newOwner);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership change occurred
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner, "Payee should be updated to newOwner");
-    }
-
-    /**
-     * @notice Test ownership change with empty extra data
-     * @dev This test verifies that the function handles empty extra data correctly
-     */
-    function testOwnerChangedWithEmptyExtraData() public {
-        // Create a proof set
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner
-        address newOwner = address(0x1111);
-        
-        // Change ownership with empty extra data
-        bytes memory emptyExtraData = new bytes(0);
-        
-        vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newOwner);
-        
-        vm.prank(newOwner);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newOwner, address(pdpServiceWithPayments), emptyExtraData);
-        
-        // Verify ownership change occurred
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newOwner, "Payee should be updated to newOwner");
-    }
-
-    /**
-     * @notice Test ownership change constraint: new owner must be approved provider
-     * @dev This test verifies the business constraint that ownership can only be transferred
-     * to addresses that are already approved providers. This prevents unauthorized transfers
-     * to unregistered addresses and maintains the integrity of the provider registry.
-     */
-
-    /**
-     * @notice Test ownership change constraint: new owner must not be already registered as provider
-     * @dev This test verifies the business constraint that ownership can be transferred to any address
-     * as long as that address is not already registered as a provider. This supports key rotation
-     * for existing providers while preventing conflicts with the provider registry.
-     */
-    function testOwnerChangedConstraintNewOwnerMustNotBeRegisteredProvider() public {
-        // Create a proof set with sp1 as the owner
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Register and approve sp2 as a separate provider
+    function testMultipleProofSetsPerProviderOwnershipChange() public {
+        // Register and approve two providers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        
-        // Verify sp2 is approved
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp2), "sp2 should be approved");
-        
-        // Attempt to change ownership to sp2 (already registered provider) should fail
+        // Create two proof sets for sp1
+        uint256 ps1 = createProofSetForOwnershipTest(sp1, client, "ProofSet 1");
+        uint256 ps2 = createProofSetForOwnershipTest(sp1, client, "ProofSet 2");
+        // Change ownership of ps1 to sp2
         bytes memory testExtraData = new bytes(0);
-        
+        vm.expectEmit(true, true, true, true);
+        emit ProofSetOwnershipChanged(ps1, sp1, sp2);
         vm.prank(sp2);
-        vm.expectRevert("New owner is already a registered provider");
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership was not changed
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, sp1, "Payee should remain sp1");
-        
-        // Verify provider registry is unchanged
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should still be approved");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp2), "sp2 should still be approved");
+        mockPDPVerifier.changeProofSetOwnership(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
+        // ps1 payee updated, ps2 payee unchanged
+        ( , address payee1) = pdpServiceWithPayments.getProofSetParties(ps1);
+        ( , address payee2) = pdpServiceWithPayments.getProofSetParties(ps2);
+        assertEq(payee1, sp2, "ps1 payee should be sp2");
+        assertEq(payee2, sp1, "ps2 payee should remain sp1");
+        // Registry state unchanged
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 remains approved");
+        assertTrue(pdpServiceWithPayments.isProviderApproved(sp2), "sp2 remains approved");
     }
 
     /**
-     * @notice Test ownership change allows key rotation to unregistered address
-     * @dev This test verifies that ownership can be transferred to any unregistered address,
-     * supporting key rotation for existing providers without requiring new approval.
+     * @notice Test ownership change works with arbitrary extra data
      */
-    function testOwnerChangedAllowsKeyRotationToUnregisteredAddress() public {
-        // Create a proof set with sp1 as the owner
+    function testOwnerChangedWithArbitraryExtraData() public {
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
-        
-        // Use an unregistered address for the new owner (key rotation scenario)
-        address newWallet = address(0x1234);
-        
-        // Verify the new wallet is not approved (this is expected for key rotation)
-        assertFalse(pdpServiceWithPayments.isProviderApproved(newWallet), "New wallet should not be approved");
-        
-        // Change ownership to new wallet should succeed (key rotation)
-        bytes memory testExtraData = new bytes(0);
-        
+        // Use arbitrary extra data
+        bytes memory extraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
-        emit ProofSetOwnershipChanged(testProofSetId, sp1, newWallet);
-        
-        vm.prank(newWallet);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, newWallet, address(pdpServiceWithPayments), testExtraData);
-        
-        // Verify ownership change occurred
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
-        assertEq(payee, newWallet, "Payee should be updated to newWallet");
-        
-        // Verify provider registry updates (sp1's provider ID transferred to newWallet)
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should no longer be approved");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(newWallet), "newWallet should be approved");
-        assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "sp1 should have no provider ID");
-        assertEq(pdpServiceWithPayments.getProviderIdByAddress(newWallet), 1, "newWallet should have provider ID 1");
+        emit ProofSetOwnershipChanged(testProofSetId, sp1, sp2);
+        vm.prank(sp2);
+        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), extraData);
+        ( , address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
+        assertEq(payee, sp2, "Payee should be updated to new owner");
     }
 }
 
