@@ -29,10 +29,11 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
     uint256 public constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
     uint256 public constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
-    uint256 public constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
+    uint256 public constant EPOCHS_PER_DAY = 2880; // Number of epochs per day
+    uint256 public constant DEFAULT_LOCKUP_PERIOD = EPOCHS_PER_DAY * 10; // 10 days in epochs
     uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
-    uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
+    uint256 public constant EPOCHS_PER_MONTH = EPOCHS_PER_DAY * 30;
     
     // Pricing constants
     uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
@@ -840,6 +841,31 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      */
     function getProofSetWithCDN(uint256 proofSetId) external view returns (bool) {
         return proofSetInfo[proofSetId].withCDN;
+    }
+
+    /**
+     * @notice Get the leaf count for a proof set from PDPVerifier
+     * @param proofSetId The ID of the proof set
+     * @return leafCount Number of leaves in the proof set
+     */
+    function getProofSetLeafCount(
+        uint256 proofSetId
+    ) external view returns (uint256) {
+        PDPVerifier pdpVerifier = PDPVerifier(pdpVerifierAddress);
+        return pdpVerifier.getProofSetLeafCount(proofSetId);
+    }
+
+    /**
+     * @notice Calculate the daily cost for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return dailyCost The daily cost in the token's smallest unit
+     */
+    function getDailyProofSetCost(uint256 proofSetId) external view returns (uint256 dailyCost) {
+        uint256 leafCount = this.getProofSetLeafCount(proofSetId);
+        uint256 sizeBytes = getProofSetSizeInBytes(leafCount);
+        bool withCDN = proofSetInfo[proofSetId].withCDN;
+        uint256 pricePerEpoch = calculateStorageRatePerEpoch(sizeBytes, withCDN);
+        return pricePerEpoch * EPOCHS_PER_DAY;
     }
 
     /**
