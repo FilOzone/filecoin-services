@@ -26,10 +26,9 @@ import {
 import { SumTree } from "./sumTree";
 import {
   decodeStringAddressBoolBytes,
-  decodeAddServiceProviderFunction,
-  hasAddServiceProviderFunction,
   extractAddServiceProviderCalldatas,
 } from "./decode";
+import { ContractAddresses, FunctionSelectors } from "./constants";
 
 // --- Helper Functions
 function getProofSetEntityId(setId: BigInt): Bytes {
@@ -484,11 +483,16 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerId = event.params.providerId;
   const txInputHex = event.transaction.input.toHex();
 
+  // Pandora contract address
+  const toAddress = ContractAddresses.PANDORA;
+
   // Check if this event was emitted during addServiceProvider function call
   if (hasAddServiceProviderFunction(txInputHex)) {
-    // Extract all addServiceProvider calldatas
-    const addServiceProviderCalldatas =
-      extractAddServiceProviderCalldatas(txInputHex);
+    // Extract all addServiceProvider calldatas, passing the contract address for target verification
+    const addServiceProviderCalldatas = extractAddServiceProviderCalldatas(
+      event.transaction.input,
+      toAddress
+    );
 
     if (addServiceProviderCalldatas.length === 0) {
       log.warning(
@@ -504,26 +508,8 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
     for (let i = 0; i < addServiceProviderCalldatas.length; i++) {
       const calldata = addServiceProviderCalldatas[i];
 
-      // Remove function selector (first 4 bytes after 0x)
-      if (calldata.length <= 10) {
-        continue;
-      }
-
-      const functionParams = calldata.slice(10); // Remove '0x' + 8 chars (4 bytes)
-      const decodedData = decodeAddServiceProviderFunction(
-        Bytes.fromHexString(functionParams)
-      );
-
-      if (decodedData === null) {
-        log.warning(
-          "Failed to decode addServiceProvider calldata at index {} for provider: {}",
-          [i.toString(), providerAddress.toHexString()]
-        );
-        continue;
-      }
-
       // Check if this calldata matches our provider address
-      if (decodedData.provider.equals(providerAddress)) {
+      if (calldata.provider.equals(providerAddress)) {
         matchingProviderFound = true;
 
         let provider = Provider.load(providerAddress);
@@ -539,8 +525,8 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
         }
 
         provider.providerId = providerId;
-        provider.pdpUrl = decodedData.pdpUrl;
-        provider.pieceRetrievalUrl = decodedData.pieceRetrievalUrl;
+        provider.pdpUrl = calldata.pdpUrl;
+        provider.pieceRetrievalUrl = calldata.pieceRetrievalUrl;
         provider.approvedAt = event.block.number;
         provider.status = "Approved";
         provider.updatedAt = event.block.timestamp;
@@ -611,4 +597,20 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   provider.blockNumber = event.block.number;
 
   provider.save();
+}
+
+//------------------------
+// Utility Functions
+//------------------------
+
+/**
+ * Helper function to check if transaction contains addServiceProvider function calls
+ * This function is more efficient than the full extraction since it just checks for presence
+ */
+export function hasAddServiceProviderFunction(txInput: string): boolean {
+  const hexSelector = FunctionSelectors.ADD_SERVICE_PROVIDER.toHexString();
+  const cleanSelector = hexSelector.startsWith("0x")
+    ? hexSelector.slice(2)
+    : hexSelector;
+  return txInput.indexOf(cleanSelector) !== -1;
 }
