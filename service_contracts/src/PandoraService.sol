@@ -117,16 +117,17 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         
     struct ApprovedProviderInfo {
         address owner;
-        string pdpUrl;
-        string pieceRetrievalUrl;
+        string providerServiceUrl; // HTTP server URL for provider services; TODO: Standard API endpoints:{providerServiceUrl}/api/upload / {providerServiceUrl}/api/info 
+        bytes peerId; //libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt; 
-        uint256 approvedAt;   
+        uint256 approvedAt;
     }
     
     struct PendingProviderInfo {
-        string pdpUrl;
-        string pieceRetrievalUrl;
-        uint256 registeredAt; 
+        string providerServiceUrl; // HTTP server URL for provider services; TODO: Standard API endpoints:{providerServiceUrl}/api/upload / {providerServiceUrl}/api/info 
+        bytes peerId; //libp2p peer ID (optional - empty bytes if not provided)
+        uint256 registeredAt;
+        
     }
     
     mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
@@ -142,7 +143,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public challengeWindowSize;
     
     // Events for SP registry
-    event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
+    event ProviderRegistered(address indexed provider, string providerServiceUrl, bytes peerId);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
     event ProviderRejected(address indexed provider);
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
@@ -1100,24 +1101,27 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     
     /**
      * @notice Register as a service provider
-     * @dev SPs call this to register their URLs before approval
-     * @param pdpUrl The URL for PDP services
-     * @param pieceRetrievalUrl The URL for piece retrieval services
+     * @dev SPs call this to register their service URL and optionally peer ID before approval
+     * @param providerServiceUrl The HTTP server URL for provider services
+     * @param peerId The IPFS/libp2p peer ID for the provider (optional - pass empty bytes if not available)
      */
-    function registerServiceProvider(string calldata pdpUrl, string calldata pieceRetrievalUrl) external {
+    function registerServiceProvider(string calldata providerServiceUrl, bytes calldata peerId) external {
         require(!approvedProvidersMap[msg.sender], "Provider already approved");
+        require(bytes(providerServiceUrl).length > 0, "Provider service URL cannot be empty");
+        require(bytes(providerServiceUrl).length <= 256, "Provider service URL too long (max 256 bytes)");
+        require(peerId.length <= 64, "Peer ID too long (max 64 bytes)");
         
         // Check if registration is already pending
         require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
         
         // Store pending registration
         pendingProviders[msg.sender] = PendingProviderInfo({
-            pdpUrl: pdpUrl,
-            pieceRetrievalUrl: pieceRetrievalUrl,
+            providerServiceUrl: providerServiceUrl,
+            peerId: peerId, // Can be empty bytes
             registeredAt: block.number
         });
         
-        emit ProviderRegistered(msg.sender, pdpUrl, pieceRetrievalUrl);
+        emit ProviderRegistered(msg.sender, providerServiceUrl, peerId);
     }
     
     /**
@@ -1138,8 +1142,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 providerId = nextServiceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
             owner: provider,
-            pdpUrl: pending.pdpUrl,
-            pieceRetrievalUrl: pending.pieceRetrievalUrl,
+            providerServiceUrl: pending.providerServiceUrl,
+            peerId: pending.peerId,
             registeredAt: pending.registeredAt,
             approvedAt: block.number
         });
