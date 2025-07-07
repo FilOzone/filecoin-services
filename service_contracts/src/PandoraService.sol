@@ -1213,37 +1213,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         return providerToId[provider];
     }
     
-    /**
-     * @notice Add a service provider directly without registration process
-     * @dev Only owner can add providers directly. This bypasses the register+approve flow.
-     * @param provider The address of the provider to add
-     * @param pdpUrl The URL for PDP services
-     * @param pieceRetrievalUrl The URL for piece retrieval services
-     */
-    function addServiceProvider(address provider, string calldata pdpUrl, string calldata pieceRetrievalUrl) external onlyOwner {
-        require(provider != address(0), "Provider address cannot be zero");
-        require(!approvedProvidersMap[provider], "Provider already approved");
-        
-        // Assign ID and store provider info
-        uint256 providerId = nextServiceProviderId++;
-        approvedProviders[providerId] = ApprovedProviderInfo({
-            owner: provider,
-            pdpUrl: pdpUrl,
-            pieceRetrievalUrl: pieceRetrievalUrl,
-            registeredAt: block.number,
-            approvedAt: block.number
-        });
-        
-        approvedProvidersMap[provider] = true;
-        providerToId[provider] = providerId;
-        
-        // Clear any pending registration if it exists
-        if (pendingProviders[provider].registeredAt > 0) {
-            delete pendingProviders[provider];
-        }
-        
-        emit ProviderApproved(provider, providerId);
-    }
 
     function getClientProofSets(address client) public view returns (ProofSetInfo[] memory) {
         uint256[] memory proofSetIds = clientProofSets[client];
