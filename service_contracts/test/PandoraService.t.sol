@@ -152,7 +152,6 @@ contract PandoraServiceTest is Test {
     string public validServiceUrl2 = "http://sp2.example.com:8080";
     bytes public validPeerId = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070809";
     bytes public validPeerId2 = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070810";
-    bytes public emptyPeerId = "";
 
     // Events from Payments contract to verify
     event RailCreated(
