@@ -116,8 +116,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         
     struct ApprovedProviderInfo {
         address owner;
-        string providerServiceUrl; // HTTP server URL for provider services; TODO: Standard API endpoints:{providerServiceUrl}/api/upload / {providerServiceUrl}/api/info 
-        bytes peerId; //libp2p peer ID (optional - empty bytes if not provided)
+        string serviceUrl; // HTTP server URL for provider services; TODO: Standard API endpoints:{providerServiceUrl}/api/upload / {providerServiceUrl}/api/info 
+        bytes peerId; // libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt; 
         uint256 approvedAt;
     }
@@ -126,7 +126,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         string providerServiceUrl; // HTTP server URL for provider services; TODO: Standard API endpoints:{providerServiceUrl}/api/upload / {providerServiceUrl}/api/info 
         bytes peerId; //libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt;
-        
     }
     
     mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
