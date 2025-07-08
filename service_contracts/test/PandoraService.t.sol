@@ -207,7 +207,7 @@ contract PandoraServiceTest is Test {
     );
     
     // Registry events to verify
-    event ProviderRegistered(address indexed provider, string providerServiceUrl, bytes peerId);
+    event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
     event ProviderRejected(address indexed provider);
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
@@ -519,7 +519,7 @@ contract PandoraServiceTest is Test {
         
         // Verify pending registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertEq(pending.providerServiceUrl, validServiceUrl, "Provider service URL should match");
+        assertEq(pending.serviceURL, validServiceUrl, "Provider service URL should match");
         assertEq(pending.peerId, validPeerId, "Peer ID should match");
         assertEq(pending.registeredAt, block.number, "Registration epoch should match");
     }
@@ -575,7 +575,7 @@ contract PandoraServiceTest is Test {
         // Verify SP info
         PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
-        assertEq(info.providerServiceUrl, validServiceUrl, "Provider service URL should match");
+        assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
         assertEq(info.peerId, validPeerId, "Peer ID should match");
         assertEq(info.registeredAt, registrationBlock, "Registration epoch should match");
         assertEq(info.approvedAt, approvalBlock, "Approval epoch should match");
@@ -661,7 +661,7 @@ contract PandoraServiceTest is Test {
         // Verify new registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
-        assertEq(pending.providerServiceUrl, validServiceUrl2, "New provider service URL should match");
+        assertEq(pending.serviceURL, validServiceUrl2, "New provider service URL should match");
     }
 
     function testOnlyOwnerCanReject() public {
@@ -770,7 +770,7 @@ contract PandoraServiceTest is Test {
         // Verify new registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
-        assertEq(pending.providerServiceUrl, validServiceUrl2, "New provider service URL should match");
+        assertEq(pending.serviceURL, validServiceUrl2, "New provider service URL should match");
     }
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
@@ -855,7 +855,7 @@ contract PandoraServiceTest is Test {
         // Get provider info
         PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
-        assertEq(info.providerServiceUrl, validServiceUrl, "Provider service URL should match");
+        assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
     }
 
     function testGetApprovedProviderInvalidId() public {
@@ -897,7 +897,7 @@ contract PandoraServiceTest is Test {
         // Check pending
         pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
-        assertEq(pending.providerServiceUrl, validServiceUrl, "Provider service URL should match");
+        assertEq(pending.serviceURL, validServiceUrl, "Provider service URL should match");
     }
 
     function testGetProviderIdByAddress() public {
@@ -982,7 +982,7 @@ contract PandoraServiceTest is Test {
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
-        assertEq(pending.providerServiceUrl, validServiceUrl2, "Pending URL should match new registration");
+        assertEq(pending.serviceURL, validServiceUrl2, "Pending URL should match new registration");
     }
     
     function testRemoveProviderInvalidId() public {
@@ -1042,8 +1042,8 @@ contract PandoraServiceTest is Test {
         assertEq(providers[1].owner, sp3, "Second provider should be sp3 (sp2 filtered out)");
         
         // Verify the URLs are correct for remaining providers
-        assertEq(providers[0].providerServiceUrl, validServiceUrl, "SP1 provider service URL should be correct");
-        assertEq(providers[1].providerServiceUrl, "https://sp3.example.com", "SP3 provider service URL should be correct");
+        assertEq(providers[0].serviceURL, validServiceUrl, "SP1 provider service URL should be correct");
+        assertEq(providers[1].serviceURL, "https://sp3.example.com", "SP3 provider service URL should be correct");
         
         // Edge case 1: Remove all providers
         pdpServiceWithPayments.removeServiceProvider(1);
@@ -1068,7 +1068,7 @@ contract PandoraServiceTest is Test {
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 1, "Should have one approved provider");
         assertEq(providers[0].owner, sp1, "Provider should be sp1");
-        assertEq(providers[0].providerServiceUrl, validServiceUrl, "Provider service URL should match");
+        assertEq(providers[0].serviceURL, validServiceUrl, "Provider service URL should match");
         
         // Remove the single provider
         pdpServiceWithPayments.removeServiceProvider(1);
@@ -1116,8 +1116,8 @@ contract PandoraServiceTest is Test {
         assertEq(providers.length, 2, "Should only have two active providers");
         assertEq(providers[0].owner, sp2, "First active provider should be sp2");
         assertEq(providers[1].owner, address(0xf7), "Second active provider should be sp5");
-        assertEq(providers[0].providerServiceUrl, serviceUrls[1], "SP2 URL should match");
-        assertEq(providers[1].providerServiceUrl, serviceUrls[4], "SP5 URL should match");
+        assertEq(providers[0].serviceURL, serviceUrls[1], "SP2 URL should match");
+        assertEq(providers[1].serviceURL, serviceUrls[4], "SP5 URL should match");
     }
 
 
