@@ -23,6 +23,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
+    event ProofSetCreatedWithMetadata(
+        uint256 indexed proofSetId,
+        address creator,
+        address payer,
+        string[] metadataKeys,
+        bytes[] metadataValues
+    );
 
     // Constants
     uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
@@ -61,6 +68,11 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     mapping(address => uint256) public clientDataSetIDs;
     // Mapping from proof set ID to root ID to metadata
     mapping(uint256 => mapping(uint256 => string)) public proofSetRootMetadata;
+    // Mapping from proof set ID to key value pair metadata
+    // proofSetId => (key => value)
+    mapping(uint256 => mapping(string => bytes)) public proofSetMetadata;
+    // proofSetId => array of keys
+    mapping(uint256 => string[]) internal proofSetMetadataKeys;
 
     // Storage for proof set payment information
     struct ProofSetInfo {
@@ -68,7 +80,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
-        string metadata; // General metadata for the proof set
+        // string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the proof set is registered for CDN add-on
@@ -76,8 +88,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Decode structure for proof set creation extra data
     struct ProofSetCreateData {
-        string metadata;
         address payer;
+        string[] metadataKeys;
+        bytes[] metadataValues;
         bool withCDN;
         bytes signature; // Authentication signature
     }
@@ -381,7 +394,21 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
-        info.metadata = createData.metadata;
+        // info.metadata = createData.metadata;
+        // Store each metadata key-value entry for this proof set
+        for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
+            // proofSetMetadata[proofSetId][createData.metadataKeys[i]] = createData.metadataValues[i];
+            string memory key = createData.metadataKeys[i];
+            bytes memory value = createData.metadataValues[i];
+
+            if (proofSetMetadata[proofSetId][key].length == 0) {
+                // If the key doesn't exist, add it to the keys array
+                proofSetMetadataKeys[proofSetId].push(key);
+            }
+
+            // Store the metadata value
+            proofSetMetadata[proofSetId][key] = value;
+        }
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
@@ -423,6 +450,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Emit event for tracking
         emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
+
+        // Emit event for proof set creation with metadata
+        emit ProofSetCreatedWithMetadata(
+            proofSetId,
+            creator,
+            createData.payer,
+            createData.metadataKeys,
+            createData.metadataValues
+        );
     }
 
     /**
@@ -802,12 +838,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return decoded The decoded ProofSetCreateData struct
      */
     function decodeProofSetCreateData(bytes calldata extraData) internal pure returns (ProofSetCreateData memory) {
-         (string memory metadata, address payer, bool withCDN, bytes memory signature) = 
-        abi.decode(extraData, (string, address, bool, bytes));
+         (address payer, string[] memory keys, bytes[] memory values, bool withCDN, bytes memory signature) = 
+        abi.decode(extraData, (address, string[], bytes[], bool, bytes));
 
         return ProofSetCreateData({
-            metadata: metadata,
             payer: payer,
+            metadataKeys: keys,
+            metadataValues: values,
             withCDN: withCDN,
             signature: signature
         });
@@ -856,10 +893,20 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     /**
      * @notice Get the metadata for a proof set
      * @param proofSetId The ID of the proof set
+     * @param key The metadata key to look up
      * @return The metadata string
      */
-    function getProofSetMetadata(uint256 proofSetId) external view returns (string memory) {
-        return proofSetInfo[proofSetId].metadata;
+    function getProofSetMetadata(uint256 proofSetId, string calldata key) external view returns (bytes memory) {
+        return proofSetMetadata[proofSetId][key];
+    }
+
+    /*
+     * @notice Get all metadata keys for a given proof set
+     * @param proofSetId The ID of the proof set
+     * @return keys Array of metadata keys stored for the proof set
+     */
+    function getProofSetMetadataKeys(uint256 proofSetId) external view returns (string[] memory) {
+        return proofSetMetadataKeys[proofSetId];
     }
 
     /**
@@ -1287,7 +1334,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,
-                metadata: storageInfo.metadata,
+                // metadata: storageInfo.metadata,
                 rootMetadata: storageInfo.rootMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
                 withCDN: storageInfo.withCDN
