@@ -393,10 +393,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
-        // info.metadata = createData.metadata;
+
         // Store each metadata key-value entry for this proof set
         for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
-            // proofSetMetadata[proofSetId][createData.metadataKeys[i]] = createData.metadataValues[i];
             string memory key = createData.metadataKeys[i];
             bytes memory value = createData.metadataValues[i];
 
