@@ -53,7 +53,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public operatorCommissionBps;
     
     // Commission rates for different service types
-    uint256 public basicServiceCommissionBps;    // 5% for basic service (no CDN add-on)
+    uint256 public basicServiceCommissionBps;    // 0% for basic service (no CDN add-on)
     uint256 public cdnServiceCommissionBps;      // 40% for CDN service
 
     // Mapping from client address to clientDataSetId
@@ -208,8 +208,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
         
-        // Set commission rates: 5% for basic, 40% for service w/ CDN add-on
-        basicServiceCommissionBps = 500;  // 5%
+        // Set commission rates: 0% for basic, 40% for service w/ CDN add-on
+        basicServiceCommissionBps = 0;   // 0%
         cdnServiceCommissionBps = 4000;   // 40%
 
         // Read token decimals from the USDFC token contract

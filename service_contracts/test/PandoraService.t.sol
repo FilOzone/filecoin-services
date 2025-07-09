@@ -243,7 +243,7 @@ contract PandoraServiceTest is Test {
         );
         assertEq(
             pdpServiceWithPayments.basicServiceCommissionBps(),
-            500, // 5%
+            0, // 0%
             "Basic service commission should be set correctly"
         );
         assertEq(
@@ -431,7 +431,7 @@ contract PandoraServiceTest is Test {
         // Verify the commission rate was set correctly for basic service (no CDN)
         uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
         Payments.RailView memory rail = payments.getRail(railId);
-        assertEq(rail.commissionRateBps, 500, "Commission rate should be 5% for basic service (no CDN)");
+        assertEq(rail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
     }
 
     // Helper function to get account info from the Payments contract
@@ -1205,7 +1205,7 @@ contract PandoraServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            500, // 5% commission
+            0, // 0% commission
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
         );
@@ -1297,7 +1297,7 @@ contract PandoraServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            500, // 5% commission
+            0, // 0% commission
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
         );
