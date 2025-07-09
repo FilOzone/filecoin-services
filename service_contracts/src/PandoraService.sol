@@ -80,7 +80,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
-        // string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the proof set is registered for CDN add-on
@@ -1334,7 +1333,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,
-                // metadata: storageInfo.metadata,
                 rootMetadata: storageInfo.rootMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
                 withCDN: storageInfo.withCDN

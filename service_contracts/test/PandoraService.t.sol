@@ -332,6 +332,18 @@ contract PandoraServiceTest is Test {
         );
     }
 
+    function _getSingleMetadataKV(string memory key, string memory value) 
+        internal 
+        pure 
+        returns (string[] memory, bytes[] memory) 
+    {
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = key;
+        values[0] = abi.encode(value);
+        return (keys, values);
+    }
+
     function testCreateProofSetCreatesRailAndChargesFee() public {
         // First approve the storage provider
         vm.prank(storageProvider);
@@ -339,11 +351,13 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
+            PandoraService.ProofSetCreateData({payer: client, metadataKeys: metadataKeys, metadataValues: metadataValues, signature: FAKE_SIGNATURE, withCDN: true});
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -389,8 +403,8 @@ contract PandoraServiceTest is Test {
         assertEq(payee, storageProvider, "Payee should be set to storage provider");
 
         // Verify metadata was stored correctly
-        string memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId);
-        assertEq(metadata, "Test Proof Set", "Metadata should be stored correctly");
+        bytes memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId, metadataKeys[0]);
+        assertEq(metadata, abi.encode("Test Proof Set"), "Metadata should be stored correctly");
 
         // Verify proof set info
         PandoraService.ProofSetInfo memory proofSetInfo = pdpServiceWithPayments.getProofSet(newProofSetId);
@@ -440,11 +454,13 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+            PandoraService.ProofSetCreateData({payer: client, metadataKeys: metadataKeys, metadataValues: metadataValues, signature: FAKE_SIGNATURE, withCDN: false});
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -722,15 +738,18 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
         
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
                 payer: client,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -774,15 +793,18 @@ contract PandoraServiceTest is Test {
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
                 payer: client,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -812,15 +834,18 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
                 payer: client,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -1052,7 +1077,7 @@ contract PandoraServiceTest is Test {
         assertEq(providers.length, 0, "Should return empty array when all providers removed");
     }
     
-    function testGetAllApprovedProvidersNoProviders() public {
+    function testGetAllApprovedProvidersNoProviders() public view {
         // Edge case: No providers have been registered/approved
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 0, "Should return empty array when no providers registered");
@@ -1112,9 +1137,13 @@ contract PandoraServiceTest is Test {
         assertEq(providers[1].pdpUrl, pdpUrls[4], "SP5 URL should match");
     }
 
-
     // ===== Client-Proofset Tracking Tests =====
-    function createProofSetForClient(address provider, address clientAddress, string memory metadata) internal returns (uint256) {
+    function createProofSetForClient(
+        address provider, 
+        address clientAddress, 
+        string[] memory metadataKeys, 
+        bytes[] memory metadataValues
+    ) internal returns (uint256) {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
@@ -1125,13 +1154,15 @@ contract PandoraServiceTest is Test {
         // Prepare extra data
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: metadata,
                 payer: clientAddress,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 withCDN: false,
                 signature: FAKE_SIGNATURE
             });
 
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1163,9 +1194,9 @@ contract PandoraServiceTest is Test {
     
     function testGetClientProofSets_SingleProofSet() public {
         // Create a single proof set for the client
-        string memory metadata = "Test metadata";
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
         
-        createProofSetForClient(sp1, client, metadata);
+        createProofSetForClient(sp1, client, metadataKeys, metadataValues);
         
         // Get proof sets
         PandoraService.ProofSetInfo[] memory proofSets = 
@@ -1175,15 +1206,16 @@ contract PandoraServiceTest is Test {
         assertEq(proofSets.length, 1, "Should return one proof set");
         assertEq(proofSets[0].payer, client, "Payer should match");
         assertEq(proofSets[0].payee, sp1, "Payee should match");
-        assertEq(proofSets[0].metadata, metadata, "Metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
         assertGt(proofSets[0].railId, 0, "Rail ID should be set");
     }
     
     function testGetClientProofSets_MultipleProofSets() public {
         // Create multiple proof sets for the client
-        createProofSetForClient(sp1, client, "Metadata 1");
-        createProofSetForClient(sp2, client, "Metadata 2");
+        (string[] memory metadataKeys1, bytes[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, bytes[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        createProofSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        createProofSetForClient(sp2, client, metadataKeys2, metadataValues2);
         
         // Get proof sets
         PandoraService.ProofSetInfo[] memory proofSets = 
@@ -1195,13 +1227,11 @@ contract PandoraServiceTest is Test {
         // Check first proof set
         assertEq(proofSets[0].payer, client, "First proof set payer should match");
         assertEq(proofSets[0].payee, sp1, "First proof set payee should match");
-        assertEq(proofSets[0].metadata, "Metadata 1", "First proof set metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
         
         // Check second proof set
         assertEq(proofSets[1].payer, client, "Second proof set payer should match");
         assertEq(proofSets[1].payee, sp2, "Second proof set payee should match");
-        assertEq(proofSets[1].metadata, "Metadata 2", "Second proof set metadata should match");
         assertEq(proofSets[1].clientDataSetId, 1, "Second dataset ID should be 1");
     }
 
@@ -1419,6 +1449,73 @@ contract PandoraServiceTest is Test {
         mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), extraData);
         ( , address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
         assertEq(payee, sp2, "Payee should be updated to new owner");
+    }
+
+    // ===== Proof Set Metadata Storage Tests =====
+    function testProofSetMetadataStorage() public {
+        // Create a proof set with metadata
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Metadata");
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "label");
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata, abi.encode("Test Metadata"), "Stored metadata should match");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], "label", "Stored key should match 'label'");
+    }
+
+    function testProofSetMetadataStorageMultipleKeys() public {
+        // Create a proof set with multiple metadata entries
+        string[] memory metadataKeys = new string[](3);
+        bytes[] memory metadataValues = new bytes[](3);
+        
+        metadataKeys[0] = "label";
+        metadataValues[0] = abi.encode("Test Metadata 1");
+        
+        metadataKeys[1] = "description";
+        metadataValues[1] = abi.encode("Test Description");
+        
+        metadataKeys[2] = "version";
+        metadataValues[2] = abi.encode("1.0.0");
+        
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata1 = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "label");
+        bytes memory storedMetadata2 = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "description");
+        bytes memory storedMetadata3 = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "version");
+        
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata1, abi.encode("Test Metadata 1"), "Stored label should match");
+        assertEq(storedMetadata2, abi.encode("Test Description"), "Stored description should match");
+        assertEq(storedMetadata3, abi.encode("1.0.0"), "Stored version should match");
+        
+        assertEq(storedKeys.length, 3, "Should have three metadata keys");
+        assertEq(storedKeys[0], "label", "First key should be 'label'");
+        assertEq(storedKeys[1], "description", "Second key should be 'description'");
+        assertEq(storedKeys[2], "version", "Third key should be 'version'");
+    }
+
+    function testProofSetMetadataStorageMultipleProofSets() public {
+        // Create multiple proof sets with metadata
+        (string[] memory metadataKeys1, bytes[] memory metadataValues1) = _getSingleMetadataKV("label", "Proof Set 1");
+        (string[] memory metadataKeys2, bytes[] memory metadataValues2) = _getSingleMetadataKV("label", "Proof Set 2");
+        
+        uint256 proofSetId1 = createProofSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 proofSetId2 = createProofSetForClient(sp2, client, metadataKeys2, metadataValues2);
+
+        // read metadata for both proof sets
+        bytes memory storedMetadata1 = pdpServiceWithPayments.getProofSetMetadata(proofSetId1, "label");
+        bytes memory storedMetadata2 = pdpServiceWithPayments.getProofSetMetadata(proofSetId2, "label");
+
+        // Verify metadata matches
+        assertEq(storedMetadata1, abi.encode("Proof Set 1"), "Stored metadata for first proof set should match");
+        assertEq(storedMetadata2, abi.encode("Proof Set 2"), "Stored metadata for second proof set should match");
     }
 }
 
