@@ -360,7 +360,7 @@ contract PandoraServiceTest is Test {
         assertEq(rail.from, client, "From address should be client");
         assertEq(rail.to, storageProvider, "To address should be storage provider");
         assertEq(rail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(rail.arbiter, address(pdpServiceWithPayments), "Arbiter should be the PDP service");
+        assertEq(rail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(rail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
 
         // Verify lockupFixed is 0 since the one-time payment was made
