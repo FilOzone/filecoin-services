@@ -53,7 +53,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public operatorCommissionBps;
     
     // Commission rates for different service types
-    uint256 public basicServiceCommissionBps;    // 5% for basic service (no CDN add-on)
+    uint256 public basicServiceCommissionBps;    // 0% for basic service (no CDN add-on)
     uint256 public cdnServiceCommissionBps;      // 40% for CDN service
 
     // Mapping from client address to clientDataSetId
