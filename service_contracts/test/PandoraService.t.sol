@@ -1214,12 +1214,8 @@ contract PandoraServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-<<<<<<< HEAD
             filCDN,
-            500, // 5% commission
-=======
             0, // 0% commission
->>>>>>> main
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
         );
@@ -1313,12 +1309,8 @@ contract PandoraServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-<<<<<<< HEAD
             filCDN,
-            500, // 5% commission
-=======
             0, // 0% commission
->>>>>>> main
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
         );
