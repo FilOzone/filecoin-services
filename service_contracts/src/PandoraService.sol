@@ -393,7 +393,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
-        // Create the payment rail using the Payments contract
+        // Create the payment rails using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
