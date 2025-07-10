@@ -697,7 +697,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     function updatePaymentRates(uint256 proofSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this proof set
-        require(proofSetInfo[proofSetId].pdpRailId != 0, "No payment rail configured");
+        require(proofSetInfo[proofSetId].pdpRailId != 0, "No PDP payment rail configured");
 
         uint256 totalBytes = getProofSetSizeInBytes(leafCount);
         Payments payments = Payments(paymentsContractAddress);
