@@ -39,7 +39,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant CDN_PRICE_PER_TIB_PER_MONTH = 1; // 1 USDFC per TiB per month for CDN
 
     // Dynamic fee values based on token decimals
-    uint256 public PROOFSET_CREATION_FEE; // 0.1 USDFC with correct decimals
+    uint256 public PAYMENT_RAIL_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
     uint8 public tokenDecimals;
@@ -221,7 +221,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        PROOFSET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
+        PAYMENT_RAIL_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
         nextServiceProviderId = 1;
     }
 
@@ -414,7 +414,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         payments.modifyRailLockup(
             pdpRailId,
             DEFAULT_LOCKUP_PERIOD,
-            PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+            PAYMENT_RAIL_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
 
         // Charge the one-time proof set creation fee
@@ -422,7 +422,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         payments.modifyRailPayment(
             pdpRailId,
             0, // Initial rate is 0, will be updated when roots are added
-            PROOFSET_CREATION_FEE // One-time payment amount
+            PAYMENT_RAIL_CREATION_FEE // One-time payment amount
         );
 
         uint256 cacheMissRailId = 0;
@@ -438,6 +438,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             );
             info.cacheMissRailId = cacheMissRailId;
             railToProofSet[cacheMissRailId] = proofSetId;
+            payments.modifyRailLockup(
+                cacheMissRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                PAYMENT_RAIL_CREATION_FEE
+            );
+            payments.modifyRailPayment(
+                cacheMissRailId,
+                0, // Initial rate is 0, will be updated when roots are added
+                PAYMENT_RAIL_CREATION_FEE // One-time payment amount
+            );
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
@@ -448,9 +458,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             );
             info.cdnRailId = cdnRailId;
             railToProofSet[cdnRailId] = proofSetId;
-
-            // No need to pay a one-time creation fee, preventing service spam,
-            // as that has already locked up in the PDP rail
+            payments.modifyRailLockup(
+                cdnRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                PAYMENT_RAIL_CREATION_FEE
+            );
+            payments.modifyRailPayment(
+                cdnRailId,
+                0, // Initial rate is 0, will be updated when roots are added
+                PAYMENT_RAIL_CREATION_FEE // One-time payment amount
+            );
         }
 
         // Emit event for tracking
