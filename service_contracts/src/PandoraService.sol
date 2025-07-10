@@ -639,7 +639,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             provingActivationEpoch[proofSetId] = block.number;
 
             // Update the payment rates
-            updateRailPaymentRates(proofSetId, leafCount);
+            updateRailsPaymentRate(proofSetId, leafCount);
 
             return;
         }
@@ -692,10 +692,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         provenThisPeriod[proofSetId] = false;
 
         // Update the payment rates based on current proof set size
-        updateRailPaymentRates(proofSetId, leafCount);
+        updateRailsPaymentRate(proofSetId, leafCount);
     }
 
-    function updateRailPaymentRates(uint256 proofSetId, uint256 leafCount) internal {
+    function updateRailsPaymentRate(uint256 proofSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this proof set
         require(proofSetInfo[proofSetId].pdpRailId != 0, "No payment rail configured");
 
