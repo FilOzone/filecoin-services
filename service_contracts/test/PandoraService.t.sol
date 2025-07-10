@@ -136,7 +136,7 @@ contract PandoraServiceTest is Test {
     address public deployer;
     address public client;
     address public storageProvider;
-    
+
     // Additional test accounts for registry tests
     address public sp1;
     address public sp2;
@@ -146,7 +146,7 @@ contract PandoraServiceTest is Test {
     uint256 public initialOperatorCommissionBps = 500; // 5%
     uint256 public proofSetId;
     bytes public extraData;
-    
+
     // Test URLs for registry
     string public validPdpUrl = "https://sp1.example.com/pdp";
     string public validRetrievalUrl = "https://sp1.example.com/retrieve";
@@ -157,7 +157,7 @@ contract PandoraServiceTest is Test {
     event RailCreated(
         uint256 railId, address token, address from, address to, address arbiter, uint256 commissionRateBps
     );
-    
+
     // Registry events to verify
     event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
@@ -169,7 +169,7 @@ contract PandoraServiceTest is Test {
         deployer = address(this);
         client = address(0xf1);
         storageProvider = address(0xf2);
-        
+
         // Additional accounts for registry tests
         sp1 = address(0xf3);
         sp2 = address(0xf4);
@@ -205,7 +205,7 @@ contract PandoraServiceTest is Test {
             address(mockUSDFC),
             initialOperatorCommissionBps,
             uint64(2880), // maxProvingPeriod
-            uint256(60)   // challengeWindowSize
+            uint256(60) // challengeWindowSize
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
@@ -215,7 +215,7 @@ contract PandoraServiceTest is Test {
     function makeSignaturePass(address signer) public {
         vm.mockCall(
             address(0x01), // ecrecover precompile address
-            bytes(hex""),  // wildcard matching of all inputs requires precisely no bytes
+            bytes(hex""), // wildcard matching of all inputs requires precisely no bytes
             abi.encode(signer)
         );
     }
@@ -251,16 +251,8 @@ contract PandoraServiceTest is Test {
             4000, // 40%
             "CDN service commission should be set correctly"
         );
-        assertEq(
-            pdpServiceWithPayments.getMaxProvingPeriod(),
-            2880,
-            "Max proving period should be set correctly"
-        );
-        assertEq(
-            pdpServiceWithPayments.challengeWindow(),
-            60,
-            "Challenge window size should be set correctly"
-        );
+        assertEq(pdpServiceWithPayments.getMaxProvingPeriod(), 2880, "Max proving period should be set correctly");
+        assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window size should be set correctly");
         assertEq(
             pdpServiceWithPayments.maxProvingPeriod(),
             2880,
@@ -287,10 +279,14 @@ contract PandoraServiceTest is Test {
         vm.prank(storageProvider);
         pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
-        
+
         // Prepare ExtraData
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: true
+        });
 
         // Encode the extra data
         extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
@@ -388,10 +384,14 @@ contract PandoraServiceTest is Test {
         vm.prank(storageProvider);
         pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
-        
+
         // Prepare ExtraData
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: false
+        });
 
         // Encode the extra data
         extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
@@ -427,7 +427,7 @@ contract PandoraServiceTest is Test {
         // Verify withCDN was stored correctly
         bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
         assertFalse(withCDN, "withCDN should be false");
-        
+
         // Verify the commission rate was set correctly for basic service (no CDN)
         uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
         Payments.RailView memory rail = payments.getRail(railId);
@@ -453,19 +453,19 @@ contract PandoraServiceTest is Test {
         assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window should be 60 epochs");
         assertEq(pdpServiceWithPayments.getChallengesPerProof(), 5, "Challenges per proof should be 5");
     }
-    
+
     // ===== Storage Provider Registry Tests =====
 
     function testRegisterServiceProvider() public {
         vm.startPrank(sp1);
-        
+
         vm.expectEmit(true, false, false, true);
         emit ProviderRegistered(sp1, validPdpUrl, validRetrievalUrl);
-        
+
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         vm.stopPrank();
-        
+
         // Verify pending registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
@@ -475,14 +475,14 @@ contract PandoraServiceTest is Test {
 
     function testCannotRegisterTwiceWhilePending() public {
         vm.startPrank(sp1);
-        
+
         // First registration
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         // Try to register again
         vm.expectRevert("Registration already pending");
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         vm.stopPrank();
     }
 
@@ -490,9 +490,9 @@ contract PandoraServiceTest is Test {
         // Register and approve SP1
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Try to register again
         vm.prank(sp1);
         vm.expectRevert("Provider already approved");
@@ -503,24 +503,24 @@ contract PandoraServiceTest is Test {
         // SP registers
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         // Get the registration block from pending info
         PandoraService.PendingProviderInfo memory pendingInfo = pdpServiceWithPayments.getPendingProvider(sp1);
         uint256 registrationBlock = pendingInfo.registeredAt;
-        
+
         vm.roll(block.number + 10); // Advance blocks
         uint256 approvalBlock = block.number;
-        
+
         // Owner approves
         vm.expectEmit(true, true, false, false);
         emit ProviderApproved(sp1, 1);
-        
+
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Verify approval
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP should be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
-        
+
         // Verify SP info
         PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
@@ -528,7 +528,7 @@ contract PandoraServiceTest is Test {
         assertEq(info.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
         assertEq(info.registeredAt, registrationBlock, "Registration epoch should match");
         assertEq(info.approvedAt, approvalBlock, "Approval epoch should match");
-        
+
         // Verify pending registration cleared
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.registeredAt, 0, "Pending registration should be cleared");
@@ -538,14 +538,14 @@ contract PandoraServiceTest is Test {
         // Multiple SPs register
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         // Approve both
         pdpServiceWithPayments.approveServiceProvider(sp1);
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        
+
         // Verify IDs assigned sequentially
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP1 should have ID 1");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), 2, "SP2 should have ID 2");
@@ -555,7 +555,7 @@ contract PandoraServiceTest is Test {
     function testOnlyOwnerCanApprove() public {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -571,7 +571,7 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Try to approve again (would need to re-register first, but we test the check)
         vm.expectRevert("Provider already approved");
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -581,17 +581,17 @@ contract PandoraServiceTest is Test {
         // SP registers
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         // Owner rejects
         vm.expectEmit(true, false, false, false);
         emit ProviderRejected(sp1);
-        
+
         pdpServiceWithPayments.rejectServiceProvider(sp1);
-        
+
         // Verify not approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
-        
+
         // Verify pending registration cleared
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.registeredAt, 0, "Pending registration should be cleared");
@@ -602,11 +602,11 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.rejectServiceProvider(sp1);
-        
+
         // Register again with different URLs
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         // Verify new registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
@@ -616,7 +616,7 @@ contract PandoraServiceTest is Test {
     function testOnlyOwnerCanReject() public {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
         pdpServiceWithPayments.rejectServiceProvider(sp1);
@@ -626,96 +626,91 @@ contract PandoraServiceTest is Test {
         vm.expectRevert("No pending registration found");
         pdpServiceWithPayments.rejectServiceProvider(sp1);
     }
-    
+
     // ===== Removal Tests =====
-    
+
     function testRemoveServiceProvider() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Verify SP is approved
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP should be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
-        
+
         // Owner removes the provider
         vm.expectEmit(true, true, false, false);
         emit ProviderRemoved(sp1, 1);
-        
+
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         // Verify SP is no longer approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
     }
-    
+
     function testOnlyOwnerCanRemove() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Try to remove as non-owner
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
         pdpServiceWithPayments.removeServiceProvider(1);
     }
-    
+
     function testRemovedProviderCannotCreateProofSet() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Remove the provider
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
-                payer: client,
-                signature: FAKE_SIGNATURE,
-                withCDN: false
-            });
-        
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
-        
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: false
+        });
+
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
         // Setup client payment approval
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 10e6);
         payments.deposit(address(mockUSDFC), client, 10e6);
         vm.stopPrank();
-        
+
         // Try to create proof set as removed SP
         makeSignaturePass(client);
         vm.prank(sp1);
         vm.expectRevert();
         mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
     }
-    
+
     function testCanReregisterAfterRemoval() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Remove the provider
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         // Should be able to register again
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         // Verify new registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
@@ -724,30 +719,25 @@ contract PandoraServiceTest is Test {
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
-                payer: client,
-                signature: FAKE_SIGNATURE,
-                withCDN: false
-            });
-        
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
-        
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: false
+        });
+
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
         // Setup client payment approval
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 10e6);
         payments.deposit(address(mockUSDFC), client, 10e6);
         vm.stopPrank();
-        
+
         // Try to create proof set as non-approved SP
         makeSignaturePass(client);
         vm.prank(sp1);
@@ -760,37 +750,32 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
-                payer: client,
-                signature: FAKE_SIGNATURE,
-                withCDN: false
-            });
-        
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
-        
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: false
+        });
+
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
         // Setup client payment approval
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 10e6);
         payments.deposit(address(mockUSDFC), client, 10e6);
         vm.stopPrank();
-        
+
         // Create proof set as approved SP
         makeSignaturePass(client);
         vm.prank(sp1);
         uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
-        
+
         // Verify proof set was created
         assertTrue(newProofSetId > 0, "Proof set should be created");
     }
@@ -800,7 +785,7 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Get provider info
         PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
@@ -810,27 +795,27 @@ contract PandoraServiceTest is Test {
     function testGetApprovedProviderInvalidId() public {
         vm.expectRevert("Invalid provider ID");
         pdpServiceWithPayments.getApprovedProvider(0);
-        
+
         vm.expectRevert("Invalid provider ID");
         pdpServiceWithPayments.getApprovedProvider(1); // No providers approved yet
-        
+
         // Approve one provider
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         vm.expectRevert("Invalid provider ID");
         pdpServiceWithPayments.getApprovedProvider(2); // Only ID 1 exists
     }
 
     function testIsProviderApproved() public {
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "Should not be approved initially");
-        
+
         // Register and approve
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "Should be approved after approval");
     }
 
@@ -838,11 +823,11 @@ contract PandoraServiceTest is Test {
         // No pending registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertEq(pending.registeredAt, 0, "Should have no pending registration");
-        
+
         // Register
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         // Check pending
         pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
@@ -851,108 +836,110 @@ contract PandoraServiceTest is Test {
 
     function testGetProviderIdByAddress() public {
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "Should have no ID initially");
-        
+
         // Register and approve
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "Should have ID 1 after approval");
     }
 
     // Additional comprehensive tests for removeServiceProvider
-    
+
     function testRemoveServiceProviderAfterReregistration() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Remove the provider
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         // SP re-registers with different URLs
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         // Approve again
         pdpServiceWithPayments.approveServiceProvider(sp1);
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 2, "SP should have new ID 2");
-        
+
         // Remove again
         pdpServiceWithPayments.removeServiceProvider(2);
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
     }
-    
+
     function testRemoveMultipleProviders() public {
         // Register and approve multiple SPs
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
-        
+
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
-        
+        pdpServiceWithPayments.registerServiceProvider(
+            "https://sp3.example.com/pdp", "https://sp3.example.com/retrieve"
+        );
+
         // Approve all
         pdpServiceWithPayments.approveServiceProvider(sp1);
         pdpServiceWithPayments.approveServiceProvider(sp2);
         pdpServiceWithPayments.approveServiceProvider(sp3);
-        
+
         // Remove sp2
         pdpServiceWithPayments.removeServiceProvider(2);
-        
+
         // Verify sp1 and sp3 are still approved
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP1 should still be approved");
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp3), "SP3 should still be approved");
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp2), "SP2 should not be approved");
-        
+
         // Verify IDs
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP1 should still have ID 1");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), 0, "SP2 should have no ID");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp3), 3, "SP3 should still have ID 3");
     }
-    
+
     function testRemoveProviderWithPendingRegistration() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Remove the provider
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         // SP tries to register again while removed
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
-        
+
         // Verify SP has pending registration but is not approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
         assertEq(pending.pdpUrl, validPdpUrl2, "Pending URL should match new registration");
     }
-    
+
     function testRemoveProviderInvalidId() public {
         // Try to remove with ID 0
         vm.expectRevert("Invalid provider ID");
         pdpServiceWithPayments.removeServiceProvider(0);
-        
+
         // Try to remove with non-existent ID
         vm.expectRevert("Invalid provider ID");
         pdpServiceWithPayments.removeServiceProvider(999);
     }
-    
+
     function testCannotRemoveAlreadyRemovedProvider() public {
         // Register and approve SP
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         // Remove the provider
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         // Try to remove again
         vm.expectRevert("Provider not found");
         pdpServiceWithPayments.removeServiceProvider(1);
@@ -963,96 +950,98 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        
+
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider(
+            "https://sp3.example.com/pdp", "https://sp3.example.com/retrieve"
+        );
         pdpServiceWithPayments.approveServiceProvider(sp3);
-        
+
         // Verify all three are approved
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 3, "Should have three approved providers");
         assertEq(providers[0].owner, sp1, "First provider should be sp1");
         assertEq(providers[1].owner, sp2, "Second provider should be sp2");
         assertEq(providers[2].owner, sp3, "Third provider should be sp3");
-        
+
         // Remove the middle provider (sp2 with ID 2)
         pdpServiceWithPayments.removeServiceProvider(2);
-        
+
         // Get all approved providers again - should only return active providers
         providers = pdpServiceWithPayments.getAllApprovedProviders();
-        
+
         // Should only have 2 elements now (removed provider filtered out)
         assertEq(providers.length, 2, "Array should only contain active providers");
         assertEq(providers[0].owner, sp1, "First provider should still be sp1");
         assertEq(providers[1].owner, sp3, "Second provider should be sp3 (sp2 filtered out)");
-        
+
         // Verify the URLs are correct for remaining providers
         assertEq(providers[0].pdpUrl, validPdpUrl, "SP1 PDP URL should be correct");
         assertEq(providers[1].pdpUrl, "https://sp3.example.com/pdp", "SP3 PDP URL should be correct");
-        
+
         // Edge case 1: Remove all providers
         pdpServiceWithPayments.removeServiceProvider(1);
         pdpServiceWithPayments.removeServiceProvider(3);
-        
+
         providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 0, "Should return empty array when all providers removed");
     }
-    
+
     function testGetAllApprovedProvidersNoProviders() public {
         // Edge case: No providers have been registered/approved
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 0, "Should return empty array when no providers registered");
     }
-    
+
     function testGetAllApprovedProvidersSingleProvider() public {
         // Edge case: Only one approved provider
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        
+
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 1, "Should have one approved provider");
         assertEq(providers[0].owner, sp1, "Provider should be sp1");
         assertEq(providers[0].pdpUrl, validPdpUrl, "PDP URL should match");
-        
+
         // Remove the single provider
         pdpServiceWithPayments.removeServiceProvider(1);
-        
+
         providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 0, "Should return empty array after removing single provider");
     }
-    
+
     function testGetAllApprovedProvidersManyRemoved() public {
         // Edge case: Many providers removed, only few remain
         // Register and approve 5 providers
         address[5] memory sps = [sp1, sp2, sp3, address(0xf6), address(0xf7)];
         string[5] memory pdpUrls = [
             "https://sp1.example.com/pdp",
-            "https://sp2.example.com/pdp", 
+            "https://sp2.example.com/pdp",
             "https://sp3.example.com/pdp",
             "https://sp4.example.com/pdp",
             "https://sp5.example.com/pdp"
         ];
-        
-        for (uint i = 0; i < 5; i++) {
+
+        for (uint256 i = 0; i < 5; i++) {
             vm.prank(sps[i]);
             pdpServiceWithPayments.registerServiceProvider(pdpUrls[i], "https://example.com/retrieve");
             pdpServiceWithPayments.approveServiceProvider(sps[i]);
         }
-        
+
         // Verify all 5 are approved
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 5, "Should have five approved providers");
-        
+
         // Remove providers 1, 3, and 4 (keeping 2 and 5)
         pdpServiceWithPayments.removeServiceProvider(1);
-        pdpServiceWithPayments.removeServiceProvider(3);  
+        pdpServiceWithPayments.removeServiceProvider(3);
         pdpServiceWithPayments.removeServiceProvider(4);
-        
+
         // Should only return providers 2 and 5
         providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 2, "Should only have two active providers");
@@ -1062,36 +1051,35 @@ contract PandoraServiceTest is Test {
         assertEq(providers[1].pdpUrl, pdpUrls[4], "SP5 URL should match");
     }
 
-
     // ===== Client-Proofset Tracking Tests =====
-    function createProofSetForClient(address provider, address clientAddress, string memory metadata) internal returns (uint256) {
+    function createProofSetForClient(address provider, address clientAddress, string memory metadata)
+        internal
+        returns (uint256)
+    {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
-            pdpServiceWithPayments.registerServiceProvider("https://provider.example.com/pdp", "https://provider.example.com/retrieve");
+            pdpServiceWithPayments.registerServiceProvider(
+                "https://provider.example.com/pdp", "https://provider.example.com/retrieve"
+            );
             pdpServiceWithPayments.approveServiceProvider(provider);
         }
 
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: metadata,
-                payer: clientAddress,
-                withCDN: false,
-                signature: FAKE_SIGNATURE
-            });
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: metadata,
+            payer: clientAddress,
+            withCDN: false,
+            signature: FAKE_SIGNATURE
+        });
 
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 100e6);
         payments.deposit(address(mockUSDFC), clientAddress, 100e6);
@@ -1105,22 +1093,20 @@ contract PandoraServiceTest is Test {
 
     function testGetClientProofSets_EmptyClient() public view {
         // Test with a client that has no proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
-        
+        PandoraService.ProofSetInfo[] memory proofSets = pdpServiceWithPayments.getClientProofSets(client);
+
         assertEq(proofSets.length, 0, "Should return empty array for client with no proof sets");
     }
-    
+
     function testGetClientProofSets_SingleProofSet() public {
         // Create a single proof set for the client
         string memory metadata = "Test metadata";
-        
+
         createProofSetForClient(sp1, client, metadata);
-        
+
         // Get proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
-        
+        PandoraService.ProofSetInfo[] memory proofSets = pdpServiceWithPayments.getClientProofSets(client);
+
         // Verify results
         assertEq(proofSets.length, 1, "Should return one proof set");
         assertEq(proofSets[0].payer, client, "Payer should match");
@@ -1129,25 +1115,24 @@ contract PandoraServiceTest is Test {
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
         assertGt(proofSets[0].railId, 0, "Rail ID should be set");
     }
-    
+
     function testGetClientProofSets_MultipleProofSets() public {
         // Create multiple proof sets for the client
         createProofSetForClient(sp1, client, "Metadata 1");
         createProofSetForClient(sp2, client, "Metadata 2");
-        
+
         // Get proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
-        
+        PandoraService.ProofSetInfo[] memory proofSets = pdpServiceWithPayments.getClientProofSets(client);
+
         // Verify results
         assertEq(proofSets.length, 2, "Should return two proof sets");
-        
+
         // Check first proof set
         assertEq(proofSets[0].payer, client, "First proof set payer should match");
         assertEq(proofSets[0].payee, sp1, "First proof set payee should match");
         assertEq(proofSets[0].metadata, "Metadata 1", "First proof set metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
-        
+
         // Check second proof set
         assertEq(proofSets[1].payer, client, "Second proof set payer should match");
         assertEq(proofSets[1].payee, sp2, "Second proof set payee should match");
@@ -1157,9 +1142,9 @@ contract PandoraServiceTest is Test {
 }
 
 contract SignatureCheckingService is PandoraService {
-    constructor() {
-    }
-    function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) { 
+    constructor() {}
+
+    function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
     }
 }
@@ -1177,27 +1162,27 @@ contract PandoraServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
-    
+
     function setUp() public {
         // Set up test accounts with known private keys
         payerPrivateKey = 0x1234567890123456789012345678901234567890123456789012345678901234;
         payer = vm.addr(payerPrivateKey);
-        
+
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
-        
+
         creator = address(0xf2);
-        
+
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
         mockPDPVerifier = new MockPDPVerifier();
-        
+
         // Deploy actual Payments contract
         Payments paymentsImpl = new Payments();
         bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
         MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
         payments = Payments(address(paymentsProxy));
-        
+
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService();
         bytes memory initData = abi.encodeWithSelector(
@@ -1207,25 +1192,25 @@ contract PandoraServiceSignatureTest is Test {
             address(mockUSDFC),
             0, // 0% commission
             uint64(2880), // maxProvingPeriod
-            uint256(60)   // challengeWindowSize
+            uint256(60) // challengeWindowSize
         );
-        
+
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
         pdpService = SignatureCheckingService(address(serviceProxy));
-        
+
         // Fund the payer
-        mockUSDFC.transfer(payer, 1000 * 10**6); // 1000 USDFC
-    }    
+        mockUSDFC.transfer(payer, 1000 * 10 ** 6); // 1000 USDFC
+    }
 
     // Test the recoverSigner function indirectly through signature verification
     function testRecoverSignerWithValidSignature() public view {
         // Create the message hash that should be signed
         bytes32 messageHash = keccak256(abi.encode(42));
-        
+
         // Sign the message hash with the payer's private key
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerPrivateKey, messageHash);
         bytes memory validSignature = abi.encodePacked(r, s, v);
-        
+
         // Test that the signature verifies correctly
         address recoveredSigner = pdpService.doRecoverSigner(messageHash, validSignature);
         assertEq(recoveredSigner, payer, "Should recover the correct signer address");
@@ -1234,34 +1219,34 @@ contract PandoraServiceSignatureTest is Test {
     function testRecoverSignerWithWrongSigner() public view {
         // Create the message hash
         bytes32 messageHash = keccak256(abi.encode(42));
-        
+
         // Sign with wrong signer's private key
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wrongSignerPrivateKey, messageHash);
         bytes memory wrongSignature = abi.encodePacked(r, s, v);
-        
+
         // Test that the signature recovers the wrong signer (not the expected payer)
         address recoveredSigner = pdpService.doRecoverSigner(messageHash, wrongSignature);
         assertEq(recoveredSigner, wrongSigner, "Should recover the wrong signer address");
         assertTrue(recoveredSigner != payer, "Should not recover the expected payer address");
     }
-    
+
     function testRecoverSignerInvalidLength() public {
         bytes32 messageHash = keccak256(abi.encode(42));
         bytes memory invalidSignature = abi.encodePacked(bytes32(0), bytes16(0)); // Wrong length (48 bytes instead of 65)
-        
+
         vm.expectRevert("Invalid signature length");
         pdpService.doRecoverSigner(messageHash, invalidSignature);
     }
 
     function testRecoverSignerInvalidVValue() public {
         bytes32 messageHash = keccak256(abi.encode(42));
-        
+
         // Create signature with invalid v value
         bytes32 r = bytes32(uint256(1));
         bytes32 s = bytes32(uint256(2));
         uint8 v = 25; // Invalid v value (should be 27 or 28)
         bytes memory invalidSignature = abi.encodePacked(r, s, v);
-        
+
         vm.expectRevert("Unsupported signature 'v' value, we don't handle rare wrapped case");
         pdpService.doRecoverSigner(messageHash, invalidSignature);
     }
@@ -1273,22 +1258,22 @@ contract PandoraServiceUpgradeTest is Test {
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
-    
+
     address public deployer;
-    
+
     function setUp() public {
         deployer = address(this);
-        
+
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
         mockPDPVerifier = new MockPDPVerifier();
-        
+
         // Deploy actual Payments contract
         Payments paymentsImpl = new Payments();
         bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
         MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
         payments = Payments(address(paymentsProxy));
-        
+
         // Deploy PandoraService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
         PandoraService pandoraImpl = new PandoraService();
@@ -1299,51 +1284,57 @@ contract PandoraServiceUpgradeTest is Test {
             address(mockUSDFC),
             0, // 0% commission
             uint64(2880), // maxProvingPeriod
-            uint256(60)   // challengeWindowSize
+            uint256(60) // challengeWindowSize
         );
-        
+
         MyERC1967Proxy pandoraProxy = new MyERC1967Proxy(address(pandoraImpl), initData);
         pandoraService = PandoraService(address(pandoraProxy));
     }
-    
+
     function testInitializeV2() public {
         // Test that we can call initializeV2 to set new proving period parameters
         uint64 newMaxProvingPeriod = 120; // 2 hours
         uint256 newChallengeWindowSize = 30;
-        
+
         // This should work since we're using reinitializer(2)
         pandoraService.initializeV2(newMaxProvingPeriod, newChallengeWindowSize);
-        
+
         // Verify the values were set correctly
         assertEq(pandoraService.maxProvingPeriod(), newMaxProvingPeriod, "Max proving period should be updated");
-        assertEq(pandoraService.challengeWindowSize(), newChallengeWindowSize, "Challenge window size should be updated");
-        assertEq(pandoraService.getMaxProvingPeriod(), newMaxProvingPeriod, "getMaxProvingPeriod should return updated value");
-        assertEq(pandoraService.challengeWindow(), newChallengeWindowSize, "challengeWindow should return updated value");
+        assertEq(
+            pandoraService.challengeWindowSize(), newChallengeWindowSize, "Challenge window size should be updated"
+        );
+        assertEq(
+            pandoraService.getMaxProvingPeriod(), newMaxProvingPeriod, "getMaxProvingPeriod should return updated value"
+        );
+        assertEq(
+            pandoraService.challengeWindow(), newChallengeWindowSize, "challengeWindow should return updated value"
+        );
     }
-    
+
     function testInitializeV2WithInvalidParameters() public {
         // Test that initializeV2 validates parameters correctly
-        
+
         // Test zero max proving period
         vm.expectRevert("Max proving period must be greater than zero");
         pandoraService.initializeV2(0, 30);
-        
+
         // Test zero challenge window size
         vm.expectRevert("Invalid challenge window size");
         pandoraService.initializeV2(120, 0);
-        
+
         // Test challenge window size >= max proving period
         vm.expectRevert("Invalid challenge window size");
         pandoraService.initializeV2(120, 120);
-        
+
         vm.expectRevert("Invalid challenge window size");
         pandoraService.initializeV2(120, 150);
     }
-    
+
     function testInitializeV2OnlyOnce() public {
         // Test that initializeV2 can only be called once
         pandoraService.initializeV2(120, 30);
-        
+
         // Second call should fail - expecting the InvalidInitialization() custom error
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         pandoraService.initializeV2(240, 60);

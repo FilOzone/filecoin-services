@@ -16,12 +16,19 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 /// using the Payments contract. It creates payment rails for storage providers
 /// and adjusts payment rates based on storage size. Also implements arbitration
 /// to reduce payments for faulted epochs.
-contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
-
+contract PandoraService is
+    PDPListener,
+    IArbiter,
+    Initializable,
+    UUPSUpgradeable,
+    OwnableUpgradeable,
+    EIP712Upgradeable
+{
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
+    event ProofSetBeneficiaryResolved(uint256 indexed proofSetId, address beneficiary);
 
     // Constants
     uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
@@ -33,7 +40,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
-    
+
     // Pricing constants
     uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
     uint256 public constant PRICE_PER_TIB_PER_MONTH_WITH_CDN = 3; // 3 USDFC per TiB per month with CDN
@@ -51,10 +58,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
-    
+
     // Commission rates for different service types
-    uint256 public basicServiceCommissionBps;    // 0% for basic service (no CDN add-on)
-    uint256 public cdnServiceCommissionBps;      // 40% for CDN service
+    uint256 public basicServiceCommissionBps; // 0% for basic service (no CDN add-on)
+    uint256 public cdnServiceCommissionBps; // 40% for CDN service
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -65,12 +72,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     struct ProofSetInfo {
         uint256 railId; // ID of the payment rail
         address payer; // Address paying for storage
-        address payee; // SP's beneficiary address
+        address payee; // SP's control address
         uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
         string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the proof set is registered for CDN add-on
+        address beneficiary; // Payment recipient address (NEW, appended for storage compatibility)
     }
 
     // Decode structure for proof set creation extra data
@@ -83,10 +91,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN;  // Price without CDN add-on (2 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
-        address tokenAddress;               // Address of the USDFC token
-        uint256 epochsPerMonth;             // Number of epochs in a month
+        address tokenAddress; // Address of the USDFC token
+        uint256 epochsPerMonth; // Number of epochs in a month
     }
 
     // Mappings
@@ -102,7 +110,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event PaymentArbitrated(
         uint256 railId, uint256 proofSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
     );
-    
 
     // Track which proving periods have valid proofs (proofSetId => periodId => isProven)
     mapping(uint256 => mapping(uint256 => bool)) public provenPeriods;
@@ -111,35 +118,35 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     mapping(uint256 => uint256) public provingActivationEpoch;
 
     // ========== Storage Provider Registry State ==========
-    
+
     uint256 public nextServiceProviderId = 1;
-        
+
     struct ApprovedProviderInfo {
         address owner;
         string pdpUrl;
         string pieceRetrievalUrl;
-        uint256 registeredAt; 
-        uint256 approvedAt;   
+        uint256 registeredAt;
+        uint256 approvedAt;
     }
-    
+
     struct PendingProviderInfo {
         string pdpUrl;
         string pieceRetrievalUrl;
-        uint256 registeredAt; 
+        uint256 registeredAt;
     }
-    
+
     mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
-    
+
     mapping(address => bool) public approvedProvidersMap;
-    
+
     mapping(address => PendingProviderInfo) public pendingProviders;
-    
+
     mapping(address => uint256) public providerToId;
-    
+
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
     uint64 public maxProvingPeriod;
     uint256 public challengeWindowSize;
-    
+
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
@@ -147,29 +154,21 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
 
     // EIP-712 Type hashes
-    bytes32 private constant CREATE_PROOFSET_TYPEHASH = keccak256(
-        "CreateProofSet(uint256 clientDataSetId,bool withCDN,address payee)"
-    );
-    
-    bytes32 private constant CID_TYPEHASH = keccak256(
-        "Cid(bytes data)"
-    );
+    bytes32 private constant CREATE_PROOFSET_TYPEHASH =
+        keccak256("CreateProofSet(uint256 clientDataSetId,bool withCDN,address payee)");
 
-    bytes32 private constant ROOTDATA_TYPEHASH = keccak256(
-        "RootData(Cid root,uint256 rawSize)Cid(bytes data)"
-    );
+    bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
+
+    bytes32 private constant ROOTDATA_TYPEHASH = keccak256("RootData(Cid root,uint256 rawSize)Cid(bytes data)");
 
     bytes32 private constant ADD_ROOTS_TYPEHASH = keccak256(
         "AddRoots(uint256 clientDataSetId,uint256 firstAdded,RootData[] rootData)Cid(bytes data)RootData(Cid root,uint256 rawSize)"
     );
-    
-    bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH = keccak256(
-        "ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)"
-    );
-    
-    bytes32 private constant DELETE_PROOFSET_TYPEHASH = keccak256(
-        "DeleteProofSet(uint256 clientDataSetId)"
-    );
+
+    bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH =
+        keccak256("ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)");
+
+    bytes32 private constant DELETE_PROOFSET_TYPEHASH = keccak256("DeleteProofSet(uint256 clientDataSetId)");
 
     // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
@@ -207,10 +206,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         operatorCommissionBps = _initialOperatorCommissionBps;
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
-        
+
         // Set commission rates: 0% for basic, 40% for service w/ CDN add-on
-        basicServiceCommissionBps = 0;   // 0%
-        cdnServiceCommissionBps = 4000;   // 40%
+        basicServiceCommissionBps = 0; // 0%
+        cdnServiceCommissionBps = 4000; // 40%
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -228,13 +227,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      */
-    function initializeV2(
-        uint64 _maxProvingPeriod,
-        uint256 _challengeWindowSize
-    ) public reinitializer(2) {
+    function initializeV2(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public reinitializer(2) {
         require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
         require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
-        
+
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
     }
@@ -251,7 +247,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         basicServiceCommissionBps = newBasicCommissionBps;
         cdnServiceCommissionBps = newCdnCommissionBps;
     }
-    
 
     // SLA specification functions setting values for PDP service providers
     // Max number of epochs between two consecutive proofs
@@ -306,14 +301,14 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function getChallengesPerProof() public pure returns (uint64) {
         return 5;
     }
-    
+
     // Getters
     function getAllApprovedProviders() external view returns (ApprovedProviderInfo[] memory) {
         // Handle edge case: no providers have been registered
         if (nextServiceProviderId == 1) {
             return new ApprovedProviderInfo[](0);
         }
-        
+
         // First pass: Count non-empty providers (those with non-zero owner address)
         uint256 activeCount = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
@@ -321,15 +316,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 activeCount++;
             }
         }
-        
+
         // Handle edge case: all providers have been removed
         if (activeCount == 0) {
             return new ApprovedProviderInfo[](0);
         }
-        
+
         // Create correctly-sized array
         ApprovedProviderInfo[] memory providers = new ApprovedProviderInfo[](activeCount);
-        
+
         // Second pass: Fill array with only active providers
         uint256 currentIndex = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
@@ -338,7 +333,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 currentIndex++;
             }
         }
-        
+
         return providers;
     }
     // Listener interface methods
@@ -346,64 +341,54 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @notice Handles proof set creation by creating a payment rail
      * @dev Called by the PDPVerifier contract when a new proof set is created
      * @param proofSetId The ID of the newly created proof set
-     * @param creator The address that created the proof set and will receive payments
-     * @param extraData Encoded data containing metadata, payer information, and signature
+     * @param creator The address that created the proof set and will receive control rights
+     * @param extraData Encoded data containing metadata, payer information, beneficiary, and signature
      */
+
     function proofSetCreated(uint256 proofSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
-        // Decode the extra data to get the metadata, payer address, and signature
+        // Decode the extra data to get the metadata, payer address, beneficiary, and signature
         require(extraData.length > 0, "Extra data required for proof set creation");
-        ProofSetCreateData memory createData = decodeProofSetCreateData(extraData);
+        (ProofSetCreateData memory createData, address beneficiary) = decodeProofSetCreateData(extraData);
 
         // Validate the addresses
         require(createData.payer != address(0), "Payer address cannot be zero");
         require(creator != address(0), "Creator address cannot be zero");
-        
+        require(beneficiary != address(0), "Beneficiary address cannot be zero");
         // Check if the storage provider is whitelisted
         require(approvedProvidersMap[creator], "Storage provider not approved");
-        
-        // Update client state 
+        // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
         clientProofSets[createData.payer].push(proofSetId);
-        
-        // Verify the client's signature
+        // Verify the client's signature (does NOT include beneficiary)
         require(
             verifyCreateProofSetSignature(
-                createData.payer,
-                clientDataSetId,
-                creator,
-                createData.withCDN,
-                createData.signature
+                createData.payer, clientDataSetId, creator, createData.withCDN, createData.signature
             ),
             "Invalid signature for proof set creation"
         );
         // Initialize the ProofSetInfo struct
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Using creator as the payee
+        info.payee = creator; // Control address
         info.metadata = createData.metadata;
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
-
-
+        info.beneficiary = beneficiary;
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
-
         // Create the payment rail using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
         uint256 railId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // proofset creator, SPs in  most cases
+            beneficiary, // payment recipient (beneficiary)
             address(this), // this contract acts as the arbiter
             info.commissionBps // commission rate based on CDN usage
         );
-
         // Store the rail ID
         info.railId = railId;
-
         // Store reverse mapping from rail ID to proof set ID for arbitration
         railToProofSet[railId] = proofSetId;
-
         // First, set a lockupFixed value that's at least equal to the one-time payment
         // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
         payments.modifyRailLockup(
@@ -411,7 +396,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             DEFAULT_LOCKUP_PERIOD,
             PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
-
         // Charge the one-time proof set creation fee
         // This is a payment from payer to proofset creator of a fixed amount
         payments.modifyRailPayment(
@@ -419,9 +403,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             0, // Initial rate is 0, will be updated when roots are added
             PROOFSET_CREATION_FEE // One-time payment amount
         );
-
         // Emit event for tracking
         emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
+        emit ProofSetBeneficiaryResolved(proofSetId, beneficiary);
     }
 
     /**
@@ -432,30 +416,22 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      */
     function proofSetDeleted(
         uint256 proofSetId,
-        uint256,// deletedLeafCount, - not used 
+        uint256, // deletedLeafCount, - not used
         bytes calldata extraData
     ) external onlyPDPVerifier {
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
-        require(
-            info.railId != 0,
-            "Proof set not registered with payment system"
-        );
+        require(info.railId != 0, "Proof set not registered with payment system");
         (bytes memory signature) = abi.decode(extraData, (bytes));
-        
+
         // Get the payer address for this proof set
         address payer = proofSetInfo[proofSetId].payer;
-        
+
         // Verify the client's signature
         require(
-            verifyDeleteProofSetSignature(
-                payer,
-                info.clientDataSetId,
-                signature
-            ),
-            "Not authorized to delete proof set"
+            verifyDeleteProofSetSignature(payer, info.clientDataSetId, signature), "Not authorized to delete proof set"
         );
-        // TODO Proofset deletion logic         
+        // TODO Proofset deletion logic
     }
 
     /**
@@ -475,22 +451,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(info.railId != 0, "Proof set not registered with payment system");
-        
+
         // Get the payer address for this proof set
         address payer = info.payer;
         require(extraData.length > 0, "Extra data required for adding roots");
         // Decode the extra data
-        (bytes memory signature, string memory metadata) =  abi.decode(extraData, (bytes, string));
-        
+        (bytes memory signature, string memory metadata) = abi.decode(extraData, (bytes, string));
+
         // Verify the signature
         require(
-            verifyAddRootsSignature(
-                payer,
-                info.clientDataSetId,
-                rootData,
-                firstAdded,
-                signature
-            ),
+            verifyAddRootsSignature(payer, info.clientDataSetId, rootData, firstAdded, signature),
             "Invalid signature for adding roots"
         );
 
@@ -506,31 +476,23 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         external
         onlyPDPVerifier
     {
-        // Verify the proof set exists in our mapping   
+        // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
-        require(
-            info.railId != 0,
-            "Proof set not registered with payment system"
-        );
-        
+        require(info.railId != 0, "Proof set not registered with payment system");
+
         // Get the payer address for this proof set
         address payer = info.payer;
-        
+
         // Decode the signature from extraData
         require(extraData.length > 0, "Extra data required for scheduling removals");
         bytes memory signature = abi.decode(extraData, (bytes));
-        
+
         // Verify the signature
         require(
-            verifyScheduleRemovalsSignature(
-                payer,
-                info.clientDataSetId,
-                rootIds,
-                signature
-            ),
+            verifyScheduleRemovalsSignature(payer, info.clientDataSetId, rootIds, signature),
             "Invalid signature for scheduling root removals"
         );
-        
+
         // Additional logic for scheduling removals can be added here
     }
 
@@ -748,7 +710,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function calculateStorageRatePerEpoch(uint256 totalBytes, bool withCDN) public view returns (uint256) {
         // Determine the rate based on CDN usage using constants
         uint256 ratePerTiBPerMonth = withCDN ? PRICE_PER_TIB_PER_MONTH_WITH_CDN : PRICE_PER_TIB_PER_MONTH_NO_CDN;
-        
+
         uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
 
@@ -768,20 +730,49 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Decode extra data for proof set creation
+     * @notice Decodes extra data for proof set creation, supporting both legacy (4-param) and new (5-param) formats
+     * @dev The beneficiary is NOT included in the client signature and is parsed separately. For legacy, beneficiary is address(0).
      * @param extraData The encoded extra data from PDPVerifier
-     * @return decoded The decoded ProofSetCreateData struct
+     * @return createData The decoded ProofSetCreateData struct (excluding beneficiary)
+     * @return beneficiary The beneficiary address (payment recipient, or address(0) for legacy)
      */
-    function decodeProofSetCreateData(bytes calldata extraData) internal pure returns (ProofSetCreateData memory) {
-         (string memory metadata, address payer, bool withCDN, bytes memory signature) = 
-        abi.decode(extraData, (string, address, bool, bytes));
+    function decodeProofSetCreateData(bytes calldata extraData)
+        internal
+        pure
+        returns (ProofSetCreateData memory createData, address beneficiary)
+    {
+        // Try new format first (5 parameters)
+        try this._tryDecodeNewFormat(extraData) returns (
+            string memory metadata, address payer, bool withCDN, address _beneficiary, bytes memory signature
+        ) {
+            // New format succeeded
+            createData = ProofSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+            beneficiary = _beneficiary;
+        } catch {
+            // Fall back to legacy format (4 parameters)
+            (string memory metadata, address payer, bool withCDN, bytes memory signature) =
+                abi.decode(extraData, (string, address, bool, bytes));
+            createData = ProofSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+            beneficiary = address(0);
+        }
+    }
+    /**
+     * @notice Helper function to attempt decoding new format
+     * @dev This function is external so it can be called via try/catch
+     * @param extraData The encoded extra data
+     * @return metadata The metadata string
+     * @return payer The payer address
+     * @return withCDN Whether CDN is enabled
+     * @return beneficiary The beneficiary address
+     * @return signature The signature bytes
+     */
 
-        return ProofSetCreateData({
-            metadata: metadata,
-            payer: payer,
-            withCDN: withCDN,
-            signature: signature
-        });
+    function _tryDecodeNewFormat(bytes calldata extraData)
+        external
+        pure
+        returns (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature)
+    {
+        return abi.decode(extraData, (string, address, bool, address, bytes));
     }
 
     /**
@@ -864,7 +855,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             epochsPerMonth: EPOCHS_PER_MONTH
         });
     }
-    
+
     /**
      * @notice Get the effective rates after commission for both service types
      * @return basicServiceFee Service fee for basic service (per TiB per month)
@@ -872,19 +863,18 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return cdnServiceFee Service fee with CDN service (per TiB per month)
      * @return spPaymentWithCDN SP payment with CDN service (per TiB per month)
      */
-    function getEffectiveRates() external view returns (
-        uint256 basicServiceFee,
-        uint256 spPaymentBasic, 
-        uint256 cdnServiceFee,
-        uint256 spPaymentWithCDN
-    ) {
+    function getEffectiveRates()
+        external
+        view
+        returns (uint256 basicServiceFee, uint256 spPaymentBasic, uint256 cdnServiceFee, uint256 spPaymentWithCDN)
+    {
         uint256 basicTotal = PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals));
         uint256 cdnTotal = PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals));
-        
+
         // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
         basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
         spPaymentBasic = basicTotal - basicServiceFee;
-        
+
         // CDN service (40% commission = 1.2 USDFC service, 1.8 USDFC to SP)
         cdnServiceFee = (cdnTotal * cdnServiceCommissionBps) / COMMISSION_MAX_BPS;
         spPaymentWithCDN = cdnTotal - cdnServiceFee;
@@ -905,23 +895,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         bytes memory signature
     ) internal view returns (bool) {
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(
-            abi.encode(
-                CREATE_PROOFSET_TYPEHASH,
-                clientDataSetId,                       
-                withCDN,                                
-                payee
-            )
-        );
+        bytes32 structHash = keccak256(abi.encode(CREATE_PROOFSET_TYPEHASH, clientDataSetId, withCDN, payee));
         bytes32 digest = _hashTypedDataV4(structHash);
-        
+
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
-        
+
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
-    
+
     /**
      * @notice Verifies a signature for the AddRoots operation
      * @param payer The address of the payer who should have signed the message
@@ -941,39 +924,25 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         bytes32[] memory rootDataHashes = new bytes32[](rootDataArray.length);
         for (uint256 i = 0; i < rootDataArray.length; i++) {
             // Hash the Cid struct
-            bytes32 cidHash = keccak256(
-                abi.encode(
-                    CID_TYPEHASH,
-                    keccak256(rootDataArray[i].root.data)
-                )
-            );
+            bytes32 cidHash = keccak256(abi.encode(CID_TYPEHASH, keccak256(rootDataArray[i].root.data)));
             // Hash the RootData struct
-            rootDataHashes[i] = keccak256(
-                abi.encode(
-                    ROOTDATA_TYPEHASH,
-                    cidHash,
-                    rootDataArray[i].rawSize
-                )
-            );
+            rootDataHashes[i] = keccak256(abi.encode(ROOTDATA_TYPEHASH, cidHash, rootDataArray[i].rawSize));
         }
 
-        bytes32 structHash = keccak256(abi.encode(
-            ADD_ROOTS_TYPEHASH,
-            clientDataSetId,
-            firstAdded,
-            keccak256(abi.encodePacked(rootDataHashes))
-        ));
+        bytes32 structHash = keccak256(
+            abi.encode(ADD_ROOTS_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(rootDataHashes)))
+        );
 
         // Create the message hash
         bytes32 digest = _hashTypedDataV4(structHash);
-        
+
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
-        
+
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
-    
+
     /**
      * @notice Verifies a signature for the ScheduleRemovals operation
      * @param payer The address of the payer who should have signed the message
@@ -988,25 +957,19 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256[] memory rootIds,
         bytes memory signature
     ) internal view returns (bool) {
-
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(
-            abi.encode(
-                SCHEDULE_REMOVALS_TYPEHASH,
-                clientDataSetId,                        
-                keccak256(abi.encodePacked(rootIds))                           
-            )
-        );
-        
+        bytes32 structHash =
+            keccak256(abi.encode(SCHEDULE_REMOVALS_TYPEHASH, clientDataSetId, keccak256(abi.encodePacked(rootIds))));
+
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
-        
+
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
-    
+
     /**
      * @notice Verifies a signature for the DeleteProofSet operation
      * @param payer The address of the payer who should have signed the message
@@ -1014,61 +977,53 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param signature The signature bytes (v, r, s)
      * @return True if the signature is valid, false otherwise
      */
-    function verifyDeleteProofSetSignature(
-        address payer,
-        uint256 clientDataSetId,
-        bytes memory signature
-    ) internal view returns (bool) {
+    function verifyDeleteProofSetSignature(address payer, uint256 clientDataSetId, bytes memory signature)
+        internal
+        view
+        returns (bool)
+    {
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(
-            abi.encode(
-                DELETE_PROOFSET_TYPEHASH,
-                clientDataSetId                        
-            )
-        );
+        bytes32 structHash = keccak256(abi.encode(DELETE_PROOFSET_TYPEHASH, clientDataSetId));
         bytes32 digest = _hashTypedDataV4(structHash);
-        
+
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
-        
+
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
-    
+
     /**
      * @notice Recover the signer address from a signature
      * @param messageHash The signed message hash
      * @param signature The signature bytes (v, r, s)
      * @return The address that signed the message
      */
-    function recoverSigner(
-        bytes32 messageHash,
-        bytes memory signature
-    ) internal pure returns (address) {
+    function recoverSigner(bytes32 messageHash, bytes memory signature) internal pure returns (address) {
         require(signature.length == 65, "Invalid signature length");
-        
+
         bytes32 r;
         bytes32 s;
         uint8 v;
-        
+
         // Extract r, s, v from the signature
         assembly {
             r := mload(add(signature, 32))
             s := mload(add(signature, 64))
             v := byte(0, mload(add(signature, 96)))
         }
-        
+
         // If v is not 27 or 28, adjust it (for some wallets)
         if (v < 27) {
             v += 27;
         }
-        
+
         require(v == 27 || v == 28, "Unsupported signature 'v' value, we don't handle rare wrapped case");
-        
+
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
     }
-    
+
     /**
      * @notice Register as a service provider
      * @dev SPs call this to register their URLs before approval
@@ -1077,20 +1032,17 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      */
     function registerServiceProvider(string calldata pdpUrl, string calldata pieceRetrievalUrl) external {
         require(!approvedProvidersMap[msg.sender], "Provider already approved");
-        
+
         // Check if registration is already pending
         require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
-        
+
         // Store pending registration
-        pendingProviders[msg.sender] = PendingProviderInfo({
-            pdpUrl: pdpUrl,
-            pieceRetrievalUrl: pieceRetrievalUrl,
-            registeredAt: block.number
-        });
-        
+        pendingProviders[msg.sender] =
+            PendingProviderInfo({pdpUrl: pdpUrl, pieceRetrievalUrl: pieceRetrievalUrl, registeredAt: block.number});
+
         emit ProviderRegistered(msg.sender, pdpUrl, pieceRetrievalUrl);
     }
-    
+
     /**
      * @notice Approve a pending service provider
      * @dev Only owner can approve providers
@@ -1101,10 +1053,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         require(!approvedProvidersMap[provider], "Provider already approved");
         // Check if registration exists
         require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
-        
+
         // Get pending registration data
         PendingProviderInfo memory pending = pendingProviders[provider];
-        
+
         // Assign ID and store provider info
         uint256 providerId = nextServiceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
@@ -1114,16 +1066,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             registeredAt: pending.registeredAt,
             approvedAt: block.number
         });
-        
+
         approvedProvidersMap[provider] = true;
         providerToId[provider] = providerId;
-        
+
         // Clear pending registration
         delete pendingProviders[provider];
-        
+
         emit ProviderApproved(provider, providerId);
     }
-    
+
     /**
      * @notice Reject a pending service provider
      * @dev Only owner can reject providers
@@ -1133,14 +1085,14 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Check if registration exists
         require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
         require(!approvedProvidersMap[provider], "Provider already approved");
-        
+
         // Update mappings
         approvedProvidersMap[provider] = false;
         providerToId[provider] = 0;
-        
+
         // Clear pending registration
         delete pendingProviders[provider];
-        
+
         emit ProviderRejected(provider);
     }
 
@@ -1152,27 +1104,27 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function removeServiceProvider(uint256 providerId) external onlyOwner {
         // Validate provider ID
         require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
-        
+
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
         address providerAddress = providerInfo.owner;
         require(providerAddress != address(0), "Provider not found");
-        
+
         // Check if provider is currently approved
         require(approvedProvidersMap[providerAddress], "Provider not approved");
-        
+
         // Remove from approved mapping
         approvedProvidersMap[providerAddress] = false;
-        
+
         // Remove the provider ID mapping
         delete providerToId[providerAddress];
-        
+
         // Delete the provider info
         delete approvedProviders[providerId];
-        
+
         emit ProviderRemoved(providerAddress, providerId);
     }
-    
+
     /**
      * @notice Get service provider information by ID
      * @dev Only returns info for approved providers
@@ -1185,7 +1137,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         require(provider.owner != address(0), "Provider not found");
         return provider;
     }
-    
+
     /**
      * @notice Check if a provider is approved
      * @param provider The address to check
@@ -1194,7 +1146,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function isProviderApproved(address provider) external view returns (bool) {
         return approvedProvidersMap[provider];
     }
-    
+
     /**
      * @notice Get pending registration information
      * @param provider The address of the provider
@@ -1203,7 +1155,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function getPendingProvider(address provider) external view returns (PendingProviderInfo memory) {
         return pendingProviders[provider];
     }
-    
+
     /**
      * @notice Get the provider ID for a given address
      * @param provider The address of the provider
@@ -1212,7 +1164,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function getProviderIdByAddress(address provider) external view returns (uint256) {
         return providerToId[provider];
     }
-    
+
     /**
      * @notice Add a service provider directly without registration process
      * @dev Only owner can add providers directly. This bypasses the register+approve flow.
@@ -1220,10 +1172,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param pdpUrl The URL for PDP services
      * @param pieceRetrievalUrl The URL for piece retrieval services
      */
-    function addServiceProvider(address provider, string calldata pdpUrl, string calldata pieceRetrievalUrl) external onlyOwner {
+    function addServiceProvider(address provider, string calldata pdpUrl, string calldata pieceRetrievalUrl)
+        external
+        onlyOwner
+    {
         require(provider != address(0), "Provider address cannot be zero");
         require(!approvedProvidersMap[provider], "Provider already approved");
-        
+
         // Assign ID and store provider info
         uint256 providerId = nextServiceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
@@ -1233,21 +1188,21 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             registeredAt: block.number,
             approvedAt: block.number
         });
-        
+
         approvedProvidersMap[provider] = true;
         providerToId[provider] = providerId;
-        
+
         // Clear any pending registration if it exists
         if (pendingProviders[provider].registeredAt > 0) {
             delete pendingProviders[provider];
         }
-        
+
         emit ProviderApproved(provider, providerId);
     }
 
     function getClientProofSets(address client) public view returns (ProofSetInfo[] memory) {
         uint256[] memory proofSetIds = clientProofSets[client];
-   
+
         ProofSetInfo[] memory proofSets = new ProofSetInfo[](proofSetIds.length);
         for (uint256 i = 0; i < proofSetIds.length; i++) {
             uint256 proofSetId = proofSetIds[i];
@@ -1261,7 +1216,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 metadata: storageInfo.metadata,
                 rootMetadata: storageInfo.rootMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
-                withCDN: storageInfo.withCDN
+                withCDN: storageInfo.withCDN,
+                beneficiary: storageInfo.beneficiary
             });
         }
         return proofSets;
@@ -1270,18 +1226,20 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
      * @dev Implements the IArbiter interface function
-
+     *
      * @param railId ID of the payment rail
      * @param proposedAmount The originally proposed payment amount
      * @param fromEpoch Starting epoch (exclusive)
      * @param toEpoch Ending epoch (inclusive)
      * @return result The arbitration result with modified amount and settlement information
      */
-    function arbitratePayment(uint256 railId, uint256 proposedAmount, uint256 fromEpoch, uint256 toEpoch, uint256 /* rate */)
-        external
-        override
-        returns (ArbitrationResult memory result)
-    {
+    function arbitratePayment(
+        uint256 railId,
+        uint256 proposedAmount,
+        uint256 fromEpoch,
+        uint256 toEpoch,
+        uint256 /* rate */
+    ) external override returns (ArbitrationResult memory result) {
         // Get the proof set ID associated with this rail
         uint256 proofSetId = railToProofSet[railId];
         require(proofSetId != 0, "Rail not associated with any proof set");
@@ -1336,5 +1294,19 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    /**
+     * @notice Helper to resolve the beneficiary for a proof set (handles legacy and new proof sets)
+     * @dev For legacy proof sets (beneficiary == address(0)), returns payee
+     * @param proofSetId The ID of the proof set
+     * @return The resolved beneficiary address
+     */
+    function resolveBeneficiary(uint256 proofSetId) public view returns (address) {
+        address beneficiary = proofSetInfo[proofSetId].beneficiary;
+        if (beneficiary == address(0)) {
+            return proofSetInfo[proofSetId].payee;
+        }
+        return beneficiary;
     }
 }
