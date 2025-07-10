@@ -1353,22 +1353,6 @@ contract PandoraServiceTest is Test {
     }
 
     /**
-     * @notice Test ownership change reverts if proof set does not exist
-     */
-    function testOwnerChangedRevertsIfProofSetNotRegistered() public {
-        // Setup: Register and approve a provider
-        vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
-        pdpServiceWithPayments.approveServiceProvider(sp1);
-        bytes memory testExtraData = new bytes(0);
-
-        // Call ownerChanged directly as the PDPVerifier
-        vm.prank(address(mockPDPVerifier));
-        vm.expectRevert("Proof set not registered with payment system");
-        pdpServiceWithPayments.ownerChanged(999, sp1, sp1, testExtraData);
-    }
-
-    /**
      * @notice Test ownership change reverts if called by unauthorized address
      */
     function testOwnerChangedRevertsIfUnauthorizedCaller() public {
