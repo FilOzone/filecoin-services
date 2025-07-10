@@ -35,8 +35,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
     
     // Pricing constants
-    uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
-    uint256 public constant PRICE_PER_TIB_PER_MONTH_WITH_CDN = 3; // 3 USDFC per TiB per month with CDN
+    uint256 public constant STORAGE_PRICE_PER_TIB_PER_MONTH = 2; // 2 USDFC per TiB per month without CDN
+    uint256 public constant CDN_PRICE_PER_TIB_PER_MONTH = 1; // 1 USDFC per TiB per month for CDN
 
     // Dynamic fee values based on token decimals
     uint256 public PROOFSET_CREATION_FEE; // 0.1 USDFC with correct decimals
@@ -621,8 +621,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             // This marks when the proof set became active for proving
             provingActivationEpoch[proofSetId] = block.number;
 
-            // Update the payment rate
-            updateRailPaymentRate(proofSetId, leafCount);
+            // Update the payment rates
+            updateRailPaymentRates(proofSetId, leafCount);
 
             return;
         }
@@ -674,33 +674,48 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         provingDeadlines[proofSetId] = nextDeadline;
         provenThisPeriod[proofSetId] = false;
 
-        // Update the payment rate based on current proof set size
-        updateRailPaymentRate(proofSetId, leafCount);
+        // Update the payment rates based on current proof set size
+        updateRailPaymentRates(proofSetId, leafCount);
     }
 
-    function updateRailPaymentRate(uint256 proofSetId, uint256 leafCount) internal {
+    function updateRailPaymentRates(uint256 proofSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this proof set
         require(proofSetInfo[proofSetId].pdpRailId != 0, "No payment rail configured");
 
-        uint256 newRatePerEpoch = 0; // Default to 0 for empty proof sets
-
         uint256 totalBytes = getProofSetSizeInBytes(leafCount);
-        // Get the withCDN flag from the proof set info
-        bool withCDN = proofSetInfo[proofSetId].withCDN;
-        newRatePerEpoch = calculateStorageRatePerEpoch(totalBytes, withCDN);
-
-        // Update the rail payment rate
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = proofSetInfo[proofSetId].pdpRailId;
 
-        // Call modifyRailPayment with the new rate and no one-time payment
+        // Update the pdp rail payment rate with the new rate and no one-time
+        // payment
+        uint256 pdpRailId = proofSetInfo[proofSetId].pdpRailId;
+        uint256 newStorageRatePerEpoch = calculateStorageRatePerEpoch(totalBytes);
         payments.modifyRailPayment(
-            railId,
-            newRatePerEpoch,
+            pdpRailId,
+            newStorageRatePerEpoch,
             0 // No one-time payment during rate update
         );
+        emit RailRateUpdated(proofSetId, pdpRailId, newStorageRatePerEpoch);
 
-        emit RailRateUpdated(proofSetId, railId, newRatePerEpoch);
+        // Update the CDN rail payment rates, if applicable
+        if (proofSetInfo[proofSetId].withCDN) {
+            uint256 cacheMissRailId = proofSetInfo[proofSetId].cacheMissRailId;
+            uint256 newCacheMissRatePerEpoch = calculateCacheMissRatePerEpoch(totalBytes);
+            payments.modifyRailPayment(
+                cacheMissRailId,
+                newCacheMissRatePerEpoch,
+                0
+            );
+            emit RailRateUpdated(proofSetId, cacheMissRailId, newCacheMissRatePerEpoch);
+
+            uint256 cdnRailId = proofSetInfo[proofSetId].cdnRailId;
+            uint256 newCdnRatePerEpoch = calculateCdnRatePerEpoch(totalBytes);
+            payments.modifyRailPayment(
+                cdnRailId,
+                newCdnRatePerEpoch,
+                0
+            );
+            emit RailRateUpdated(proofSetId, cdnRailId, newCdnRatePerEpoch);
+        }
     }
 
     /**
@@ -772,15 +787,67 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Calculate the per-epoch rate based on total storage size and CDN usage
-     * @dev Rate is 2 USDFC per TiB per month without CDN, 3 USDFC per TiB per month with CDN.
+     * @notice Calculate PDP the per-epoch rate based on total storage size
+     * @dev Rate is 2 USDFC per TiB per month.
      * @param totalBytes Total size of the stored data in bytes
-     * @param withCDN Whether CDN is enabled for the proof set
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
-    function calculateStorageRatePerEpoch(uint256 totalBytes, bool withCDN) public view returns (uint256) {
-        // Determine the rate based on CDN usage using constants
-        uint256 ratePerTiBPerMonth = withCDN ? PRICE_PER_TIB_PER_MONTH_WITH_CDN : PRICE_PER_TIB_PER_MONTH_NO_CDN;
+    function calculateStorageRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        uint256 ratePerTiBPerMonth = STORAGE_PRICE_PER_TIB_PER_MONTH;
+
+        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
+        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
+
+        // Ensure denominator is not zero (shouldn't happen with constants)
+        require(denominator > 0, "Denominator cannot be zero");
+
+        uint256 ratePerEpoch = numerator / denominator;
+
+        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
+        // This prevents charging 0 for very small sizes due to integer division.
+        if (ratePerEpoch == 0 && totalBytes > 0) {
+            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
+            return minRate;
+        }
+
+        return ratePerEpoch;
+    }
+
+    /**
+     * @notice Calculate the cache miss per-epoch rate based on total storage size
+     * @dev Rate is 1 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateCacheMissRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
+
+        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
+        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
+
+        // Ensure denominator is not zero (shouldn't happen with constants)
+        require(denominator > 0, "Denominator cannot be zero");
+
+        uint256 ratePerEpoch = numerator / denominator;
+
+        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
+        // This prevents charging 0 for very small sizes due to integer division.
+        if (ratePerEpoch == 0 && totalBytes > 0) {
+            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
+            return minRate;
+        }
+
+        return ratePerEpoch;
+    }
+
+    /**
+     * @notice Calculate the CDN per-epoch rate based on total storage size
+     * @dev Rate is 1 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateCdnRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
         
         uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
@@ -891,8 +958,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals)),
-            pricePerTiBPerMonthWithCDN: PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthWithCDN: (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals)),
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -911,8 +978,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 cdnServiceFee,
         uint256 spPaymentWithCDN
     ) {
-        uint256 basicTotal = PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals));
-        uint256 cdnTotal = PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals));
+        uint256 basicTotal = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
+        uint256 cdnTotal = (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals));
         
         // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
         basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
