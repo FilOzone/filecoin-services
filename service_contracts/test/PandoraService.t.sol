@@ -194,11 +194,11 @@ contract PandoraServiceTest is Test {
     uint256 public proofSetId;
     bytes public extraData;
     
-    // Test URLs for registry
-    string public validPdpUrl = "https://sp1.example.com/pdp";
-    string public validRetrievalUrl = "https://sp1.example.com/retrieve";
-    string public validPdpUrl2 = "http://sp2.example.com:8080/pdp";
-    string public validRetrievalUrl2 = "http://sp2.example.com:8080/retrieve";
+    // Test URLs and peer IDs for registry
+    string public validServiceUrl = "https://sp1.example.com";
+    string public validServiceUrl2 = "http://sp2.example.com:8080";
+    bytes public validPeerId = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070809";
+    bytes public validPeerId2 = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070810";
 
     // Events from Payments contract to verify
     event RailCreated(
@@ -206,7 +206,7 @@ contract PandoraServiceTest is Test {
     );
     
     // Registry events to verify
-    event ProviderRegistered(address indexed provider, string pdpUrl, string pieceRetrievalUrl);
+    event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
     event ProviderRejected(address indexed provider);
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
@@ -510,16 +510,16 @@ contract PandoraServiceTest is Test {
         vm.startPrank(sp1);
         
         vm.expectEmit(true, false, false, true);
-        emit ProviderRegistered(sp1, validPdpUrl, validRetrievalUrl);
+        emit ProviderRegistered(sp1, validServiceUrl, validPeerId);
         
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         vm.stopPrank();
         
         // Verify pending registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
-        assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
-        assertEq(pending.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
+        assertEq(pending.serviceURL, validServiceUrl, "Provider service URL should match");
+        assertEq(pending.peerId, validPeerId, "Peer ID should match");
         assertEq(pending.registeredAt, block.number, "Registration epoch should match");
     }
 
@@ -527,11 +527,11 @@ contract PandoraServiceTest is Test {
         vm.startPrank(sp1);
         
         // First registration
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         // Try to register again
         vm.expectRevert("Registration already pending");
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         vm.stopPrank();
     }
@@ -539,20 +539,20 @@ contract PandoraServiceTest is Test {
     function testCannotRegisterIfAlreadyApproved() public {
         // Register and approve SP1
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Try to register again
         vm.prank(sp1);
         vm.expectRevert("Provider already approved");
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
     }
 
     function testApproveServiceProvider() public {
         // SP registers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         // Get the registration block from pending info
         PandoraService.PendingProviderInfo memory pendingInfo = pdpServiceWithPayments.getPendingProvider(sp1);
@@ -574,8 +574,8 @@ contract PandoraServiceTest is Test {
         // Verify SP info
         PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
-        assertEq(info.pdpUrl, validPdpUrl, "PDP URL should match");
-        assertEq(info.pieceRetrievalUrl, validRetrievalUrl, "Retrieval URL should match");
+        assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
+        assertEq(info.peerId, validPeerId, "Peer ID should match");
         assertEq(info.registeredAt, registrationBlock, "Registration epoch should match");
         assertEq(info.approvedAt, approvalBlock, "Approval epoch should match");
         
@@ -587,10 +587,10 @@ contract PandoraServiceTest is Test {
     function testApproveMultipleProviders() public {
         // Multiple SPs register
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         // Approve both
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -604,7 +604,7 @@ contract PandoraServiceTest is Test {
 
     function testOnlyOwnerCanApprove() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
@@ -619,7 +619,7 @@ contract PandoraServiceTest is Test {
     function testCannotApproveAlreadyApprovedProvider() public {
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Try to approve again (would need to re-register first, but we test the check)
@@ -630,7 +630,7 @@ contract PandoraServiceTest is Test {
     function testRejectServiceProvider() public {
         // SP registers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         // Owner rejects
         vm.expectEmit(true, false, false, false);
@@ -650,22 +650,22 @@ contract PandoraServiceTest is Test {
     function testCanReregisterAfterRejection() public {
         // Register and reject
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.rejectServiceProvider(sp1);
         
         // Register again with different URLs
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         // Verify new registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
-        assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
+        assertEq(pending.serviceURL, validServiceUrl2, "New provider service URL should match");
     }
 
     function testOnlyOwnerCanReject() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
@@ -682,7 +682,7 @@ contract PandoraServiceTest is Test {
     function testRemoveServiceProvider() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Verify SP is approved
@@ -703,7 +703,7 @@ contract PandoraServiceTest is Test {
     function testOnlyOwnerCanRemove() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Try to remove as non-owner
@@ -715,7 +715,7 @@ contract PandoraServiceTest is Test {
     function testRemovedProviderCannotCreateProofSet() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Remove the provider
@@ -756,7 +756,7 @@ contract PandoraServiceTest is Test {
     function testCanReregisterAfterRemoval() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Remove the provider
@@ -764,12 +764,12 @@ contract PandoraServiceTest is Test {
         
         // Should be able to register again
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         // Verify new registration
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "New pending registration should exist");
-        assertEq(pending.pdpUrl, validPdpUrl2, "New PDP URL should match");
+        assertEq(pending.serviceURL, validServiceUrl2, "New provider service URL should match");
     }
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
@@ -808,7 +808,7 @@ contract PandoraServiceTest is Test {
     function testWhitelistedProviderCanCreateProofSet() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Prepare extra data
@@ -848,13 +848,13 @@ contract PandoraServiceTest is Test {
     function testGetApprovedProvider() public {
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Get provider info
         PandoraService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
         assertEq(info.owner, sp1, "Owner should match");
-        assertEq(info.pdpUrl, validPdpUrl, "PDP URL should match");
+        assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
     }
 
     function testGetApprovedProviderInvalidId() public {
@@ -866,7 +866,7 @@ contract PandoraServiceTest is Test {
         
         // Approve one provider
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         vm.expectRevert("Invalid provider ID");
@@ -878,7 +878,7 @@ contract PandoraServiceTest is Test {
         
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "Should be approved after approval");
@@ -891,12 +891,12 @@ contract PandoraServiceTest is Test {
         
         // Register
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         // Check pending
         pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
-        assertEq(pending.pdpUrl, validPdpUrl, "PDP URL should match");
+        assertEq(pending.serviceURL, validServiceUrl, "Provider service URL should match");
     }
 
     function testGetProviderIdByAddress() public {
@@ -904,7 +904,7 @@ contract PandoraServiceTest is Test {
         
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "Should have ID 1 after approval");
@@ -915,7 +915,7 @@ contract PandoraServiceTest is Test {
     function testRemoveServiceProviderAfterReregistration() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Remove the provider
@@ -923,7 +923,7 @@ contract PandoraServiceTest is Test {
         
         // SP re-registers with different URLs
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         // Approve again
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -937,13 +937,13 @@ contract PandoraServiceTest is Test {
     function testRemoveMultipleProviders() public {
         // Register and approve multiple SPs
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070811");
         
         // Approve all
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -967,7 +967,7 @@ contract PandoraServiceTest is Test {
     function testRemoveProviderWithPendingRegistration() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Remove the provider
@@ -975,13 +975,13 @@ contract PandoraServiceTest is Test {
         
         // SP tries to register again while removed
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         
         // Verify SP has pending registration but is not approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
         PandoraService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
-        assertEq(pending.pdpUrl, validPdpUrl2, "Pending URL should match new registration");
+        assertEq(pending.serviceURL, validServiceUrl2, "Pending URL should match new registration");
     }
     
     function testRemoveProviderInvalidId() public {
@@ -997,7 +997,7 @@ contract PandoraServiceTest is Test {
     function testCannotRemoveAlreadyRemovedProvider() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Remove the provider
@@ -1011,15 +1011,15 @@ contract PandoraServiceTest is Test {
     function testGetAllApprovedProvidersAfterRemoval() public {
         // Register and approve three providers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
         pdpServiceWithPayments.approveServiceProvider(sp2);
         
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070811");
         pdpServiceWithPayments.approveServiceProvider(sp3);
         
         // Verify all three are approved
@@ -1041,8 +1041,8 @@ contract PandoraServiceTest is Test {
         assertEq(providers[1].owner, sp3, "Second provider should be sp3 (sp2 filtered out)");
         
         // Verify the URLs are correct for remaining providers
-        assertEq(providers[0].pdpUrl, validPdpUrl, "SP1 PDP URL should be correct");
-        assertEq(providers[1].pdpUrl, "https://sp3.example.com/pdp", "SP3 PDP URL should be correct");
+        assertEq(providers[0].serviceURL, validServiceUrl, "SP1 provider service URL should be correct");
+        assertEq(providers[1].serviceURL, "https://sp3.example.com", "SP3 provider service URL should be correct");
         
         // Edge case 1: Remove all providers
         pdpServiceWithPayments.removeServiceProvider(1);
@@ -1061,13 +1061,13 @@ contract PandoraServiceTest is Test {
     function testGetAllApprovedProvidersSingleProvider() public {
         // Edge case: Only one approved provider
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validPdpUrl, validRetrievalUrl);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 1, "Should have one approved provider");
         assertEq(providers[0].owner, sp1, "Provider should be sp1");
-        assertEq(providers[0].pdpUrl, validPdpUrl, "PDP URL should match");
+        assertEq(providers[0].serviceURL, validServiceUrl, "Provider service URL should match");
         
         // Remove the single provider
         pdpServiceWithPayments.removeServiceProvider(1);
@@ -1080,17 +1080,24 @@ contract PandoraServiceTest is Test {
         // Edge case: Many providers removed, only few remain
         // Register and approve 5 providers
         address[5] memory sps = [sp1, sp2, sp3, address(0xf6), address(0xf7)];
-        string[5] memory pdpUrls = [
-            "https://sp1.example.com/pdp",
-            "https://sp2.example.com/pdp", 
-            "https://sp3.example.com/pdp",
-            "https://sp4.example.com/pdp",
-            "https://sp5.example.com/pdp"
+        string[5] memory serviceUrls = [
+            "https://sp1.example.com",
+            "https://sp2.example.com", 
+            "https://sp3.example.com",
+            "https://sp4.example.com",
+            "https://sp5.example.com"
         ];
+        
+        bytes[5] memory peerIds;
+        peerIds[0] = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070801";
+        peerIds[1] = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070802";
+        peerIds[2] = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070803";
+        peerIds[3] = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070804";
+        peerIds[4] = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070805";
         
         for (uint i = 0; i < 5; i++) {
             vm.prank(sps[i]);
-            pdpServiceWithPayments.registerServiceProvider(pdpUrls[i], "https://example.com/retrieve");
+            pdpServiceWithPayments.registerServiceProvider(serviceUrls[i], peerIds[i]);
             pdpServiceWithPayments.approveServiceProvider(sps[i]);
         }
         
@@ -1108,8 +1115,8 @@ contract PandoraServiceTest is Test {
         assertEq(providers.length, 2, "Should only have two active providers");
         assertEq(providers[0].owner, sp2, "First active provider should be sp2");
         assertEq(providers[1].owner, address(0xf7), "Second active provider should be sp5");
-        assertEq(providers[0].pdpUrl, pdpUrls[1], "SP2 URL should match");
-        assertEq(providers[1].pdpUrl, pdpUrls[4], "SP5 URL should match");
+        assertEq(providers[0].serviceURL, serviceUrls[1], "SP2 URL should match");
+        assertEq(providers[1].serviceURL, serviceUrls[4], "SP5 URL should match");
     }
 
 
@@ -1118,7 +1125,7 @@ contract PandoraServiceTest is Test {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
-            pdpServiceWithPayments.registerServiceProvider("https://provider.example.com/pdp", "https://provider.example.com/retrieve");
+            pdpServiceWithPayments.registerServiceProvider("https://provider.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070850");
             pdpServiceWithPayments.approveServiceProvider(provider);
         }
 
