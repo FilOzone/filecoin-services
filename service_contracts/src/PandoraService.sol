@@ -662,7 +662,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     ) external override onlyPDPVerifier {
         // Verify the proof set exists and validate the old owner
         ProofSetInfo storage info = proofSetInfo[proofSetId];
-        require(info.railId != 0, "Proof set not registered with payment system");
         require(info.payee == oldOwner, "Old owner mismatch");
         require(newOwner != address(0), "New owner cannot be zero address");
         // New owner must be an approved provider
