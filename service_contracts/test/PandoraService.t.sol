@@ -322,7 +322,7 @@ contract PandoraServiceTest is Test {
 
         // Expect RailCreated event when creating the proof set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.ProofSetRailsCreated(1, 1, 1, 1, client, storageProvider, true);
+        emit PandoraService.ProofSetRailsCreated(1, 1, 2, 3, client, storageProvider, true);
 
         // Create a proof set as the storage provider
         makeSignaturePass(client);
