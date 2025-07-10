@@ -437,24 +437,18 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 0 // no service commission
             );
             info.cacheMissRailId = cacheMissRailId;
-            railToProofSet[cacheMissRailId] = proofSetId; // TODO
+            railToProofSet[cacheMissRailId] = proofSetId;
 
-            // TODO
-            // First, set a lockupFixed value that's at least equal to the one-time payment
-            // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
+            // Same lockup as for the PDP rail
             payments.modifyRailLockup(
                 cacheMissRailId,
                 DEFAULT_LOCKUP_PERIOD,
-                PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+                PROOFSET_CREATION_FEE
             );
-
-            // TODO
-            // Charge the one-time proof set creation fee
-            // This is a payment from payer to proofset creator of a fixed amount
             payments.modifyRailPayment(
                 cacheMissRailId,
-                0, // Initial rate is 0, will be updated when roots are added
-                PROOFSET_CREATION_FEE // One-time payment amount
+                0, // Initial rate is 0, TODO
+                PROOFSET_CREATION_FEE
             );
 
             cdnRailId = payments.createRail(
@@ -465,24 +459,18 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 0 // no service commission
             );
             info.cdnRailId = cdnRailId;
-            railToProofSet[cdnRailId] = proofSetId; // TODO
+            railToProofSet[cdnRailId] = proofSetId;
 
-            // TODO
-            // First, set a lockupFixed value that's at least equal to the one-time payment
-            // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
+            // Same lockup as for the PDP rail
             payments.modifyRailLockup(
                 cdnRailId,
                 DEFAULT_LOCKUP_PERIOD,
-                PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+                PROOFSET_CREATION_FEE
             );
-
-            // TODO
-            // Charge the one-time proof set creation fee
-            // This is a payment from payer to proofset creator of a fixed amount
             payments.modifyRailPayment(
                 cdnRailId,
-                0, // Initial rate is 0, will be updated when roots are added
-                PROOFSET_CREATION_FEE // One-time payment amount
+                0, // Initial rate is 0, TODO
+                PROOFSET_CREATION_FEE
             );
         }
 
