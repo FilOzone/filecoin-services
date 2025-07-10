@@ -14,7 +14,7 @@ remappings = [
     'forge-std/=lib/forge-std/src/',
     '@fws-payments/=lib/fws-payments/src/',
     '@pdp/=lib/pdp/src/',
-    '@pythnetwork/pyth-sdk-solidity/=lib/pdp/node_modules/@pythnetwork/pyth-sdk-solidity/',
+    '@pythnetwork/pyth-sdk-solidity/=lib/pdp/lib/pyth-sdk-solidity/',
 ]
 
 optimizer_runs = 1000000000
