@@ -1,11 +1,4 @@
-import {
-  BigInt,
-  Bytes,
-  crypto,
-  Address,
-  log,
-  ethereum,
-} from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, crypto, Address, log } from "@graphprotocol/graph-ts";
 import {
   FaultRecord as FaultRecordEvent,
   ProofSetRailCreated as ProofSetRailCreatedEvent,
@@ -31,7 +24,10 @@ import {
   RateChangeQueue,
 } from "../generated/schema";
 import { SumTree } from "./sumTree";
-import { decodeStringAddressBoolBytes } from "./decode";
+import {
+  decodeStringAddressBoolBytes,
+  decodeAddServiceProviderFunction,
+} from "./decode";
 
 // --- Helper Functions
 function getProofSetEntityId(setId: BigInt): Bytes {
@@ -480,7 +476,36 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerAddress = event.params.provider;
   const providerId = event.params.providerId;
 
-  let provider = Provider.load(providerAddress);
+  const txInputHex = event.transaction.input.toHex();
+
+  const addServiceProviderInput = isAddServiceProviderFunction(txInputHex);
+  if (addServiceProviderInput !== "0x") {
+    const provider = new Provider(providerAddress);
+
+    const decodedData = decodeAddServiceProviderFunction(
+      Bytes.fromHexString(addServiceProviderInput.slice(10))
+    );
+
+    provider.address = providerAddress;
+    provider.providerId = providerId;
+    provider.pdpUrl = decodedData.pdpUrl;
+    provider.pieceRetrievalUrl = decodedData.pieceRetrievalUrl;
+    provider.approvedAt = event.block.number;
+    provider.status = "Approved";
+    provider.totalFaultedPeriods = BigInt.fromI32(0);
+    provider.totalFaultedRoots = BigInt.fromI32(0);
+    provider.totalProofSets = BigInt.fromI32(0);
+    provider.totalRoots = BigInt.fromI32(0);
+    provider.totalDataSize = BigInt.fromI32(0);
+    provider.createdAt = event.block.timestamp;
+    provider.updatedAt = event.block.timestamp;
+    provider.blockNumber = event.block.number;
+
+    provider.save();
+    return;
+  }
+
+  const provider = Provider.load(providerAddress);
   if (!provider) return;
 
   provider.providerId = providerId;
@@ -524,4 +549,18 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   provider.blockNumber = event.block.number;
 
   provider.save();
+}
+
+// Helper function to decode function selector
+function isAddServiceProviderFunction(funcSelector: string): string {
+  const addServiceProviderFunctionSelector = "5f6840ec";
+  const selectorPosition = funcSelector.indexOf(
+    addServiceProviderFunctionSelector
+  );
+
+  if (selectorPosition === -1) {
+    return "0x";
+  }
+
+  return "0x" + funcSelector.slice(selectorPosition);
 }

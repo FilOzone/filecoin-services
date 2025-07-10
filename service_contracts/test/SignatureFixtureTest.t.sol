@@ -261,7 +261,7 @@ contract SignatureFixtureTest is Test {
         console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
         console.log('        "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
         console.log('      ],');
-        console.log('      "rootSizes": [2032, 4064]');
+        console.log('      "rootSizes": [2048, 4096]');
         console.log('    },');
         console.log('    "scheduleRemovals": {');
         console.log('      "signature": "%s",', vm.toString(scheduleRemovalsSig));
@@ -425,7 +425,7 @@ contract SignatureFixtureTest is Test {
             root: Cids.Cid({
                 data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
             }),
-            rawSize: 2032 // Zero-padded size of 1024
+            rawSize: 2048 // Piece size of 1024
         });
 
         // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
@@ -433,7 +433,7 @@ contract SignatureFixtureTest is Test {
             root: Cids.Cid({
                 data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
             }),
-            rawSize: 4064 // Zero-padded size of 2048
+            rawSize: 4096 // Piece size of 2048
         });
 
         return rootDataArray;

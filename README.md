@@ -35,19 +35,19 @@ git clone https://github.com/your-org/filecoin-services.git
 cd filecoin-services/service_contracts
 ```
 
-2. Initialize submodules:
+2. Install dependencies and initialize submodules:
 ```bash
-git submodule update --init --recursive
+make install
 ```
 
 3. Build the contracts:
 ```bash
-forge build
+make build
 ```
 
 4. Run tests:
 ```bash
-forge test
+make test
 ```
 
 ## 📋 Project Structure
@@ -86,13 +86,37 @@ Check the [latest tags](https://github.com/your-org/filecoin-services/tags) to f
 
 ```bash
 # Run all tests
-forge test
+make test
 
-# Run tests with verbosity
-forge test -vvv
+# Run tests with specific verbosity (using forge directly)
+forge test -vvv --via-ir
 
-# Run specific test file
-forge test --match-path test/PandoraService.t.sol
+# Run specific test file (using forge directly)
+forge test --match-path test/PandoraService.t.sol --via-ir
+```
+
+### Code Quality
+
+```bash
+# Format code
+make fmt
+
+# Check code formatting
+make fmt-check
+
+# Generate test coverage
+make coverage
+
+# Clean build artifacts
+make clean
+```
+
+### Available Make Targets
+
+Run `make help` to see all available targets:
+
+```bash
+make help
 ```
 
 ### Deployment
