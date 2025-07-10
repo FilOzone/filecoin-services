@@ -439,18 +439,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             info.cacheMissRailId = cacheMissRailId;
             railToProofSet[cacheMissRailId] = proofSetId;
 
-            // Same lockup as for the PDP rail
-            payments.modifyRailLockup(
-                cacheMissRailId,
-                DEFAULT_LOCKUP_PERIOD,
-                PROOFSET_CREATION_FEE
-            );
-            payments.modifyRailPayment(
-                cacheMissRailId,
-                0, // Initial rate is 0, TODO
-                PROOFSET_CREATION_FEE
-            );
-
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -461,17 +449,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             info.cdnRailId = cdnRailId;
             railToProofSet[cdnRailId] = proofSetId;
 
-            // Same lockup as for the PDP rail
-            payments.modifyRailLockup(
-                cdnRailId,
-                DEFAULT_LOCKUP_PERIOD,
-                PROOFSET_CREATION_FEE
-            );
-            payments.modifyRailPayment(
-                cdnRailId,
-                0, // Initial rate is 0, TODO
-                PROOFSET_CREATION_FEE
-            );
+            // No need to pay a one-time creation fee, preventing service spam,
+            // as that has already locked up in the PDP rail
         }
 
         // Emit event for tracking
