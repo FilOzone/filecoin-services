@@ -340,15 +340,21 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param extraData Encoded data containing metadata, payer information, beneficiary, and signature
      */
 
-    function proofSetCreated(uint256 proofSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
-        // Decode the extra data to get the metadata, payer address, beneficiary, and signature
+    function proofSetCreated(uint256 proofSetId, address creator, bytes calldata extraData) external override onlyPDPVerifier {
         require(extraData.length > 0, "Extra data required for proof set creation");
-        (ProofSetCreateData memory createData, address beneficiary) = decodeProofSetCreateData(extraData);
-
-        // Validate the addresses
+        (ProofSetCreateData memory createData, address beneficiary, bool isNewFormat) = decodeProofSetCreateData(extraData);
         require(createData.payer != address(0), "Payer address cannot be zero");
         require(creator != address(0), "Creator address cannot be zero");
-        require(beneficiary != address(0), "Beneficiary address cannot be zero");
+        require(approvedProvidersMap[creator], "Storage provider not approved");
+        // Determine actual beneficiary for payment rail and event
+        address actualBeneficiary;
+        if (isNewFormat) {
+            require(beneficiary != address(0), "Beneficiary address cannot be zero");
+            actualBeneficiary = beneficiary;
+        } else {
+            // Legacy format: use creator as beneficiary
+            actualBeneficiary = creator;
+        }
         // Check if the storage provider is whitelisted
         require(approvedProvidersMap[creator], "Storage provider not approved");
         // Update client state
@@ -372,13 +378,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         info.beneficiary = beneficiary;
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
         // Create the payment rail using the Payments contract
-        Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = payments.createRail(
-            usdfcTokenAddress, // token address
-            createData.payer, // from (payer)
-            beneficiary, // payment recipient (beneficiary)
-            address(this), // this contract acts as the arbiter
-            info.commissionBps // commission rate based on CDN usage
+        uint256 commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
+        uint256 railId = Payments(paymentsContractAddress).createRail(
+            usdfcTokenAddress,
+            createData.payer,
+            actualBeneficiary,
+            address(this), 
+            commissionBps
         );
         // Store the rail ID
         info.railId = railId;
@@ -386,21 +392,22 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         railToProofSet[railId] = proofSetId;
         // First, set a lockupFixed value that's at least equal to the one-time payment
         // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
-        payments.modifyRailLockup(
+        Payments(paymentsContractAddress).modifyRailLockup(
             railId,
             DEFAULT_LOCKUP_PERIOD,
             PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
         // Charge the one-time proof set creation fee
         // This is a payment from payer to proofset creator of a fixed amount
-        payments.modifyRailPayment(
+        Payments(paymentsContractAddress).modifyRailPayment(
             railId,
             0, // Initial rate is 0, will be updated when roots are added
             PROOFSET_CREATION_FEE // One-time payment amount
         );
         // Emit event for tracking
         emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
-        emit ProofSetBeneficiaryResolved(proofSetId, beneficiary);
+        // Always emit event with resolved beneficiary
+        emit ProofSetBeneficiaryResolved(proofSetId, resolveBeneficiary(proofSetId));
     }
 
     /**
@@ -758,42 +765,51 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param extraData The encoded extra data from PDPVerifier
      * @return createData The decoded ProofSetCreateData struct (excluding beneficiary)
      * @return beneficiary The beneficiary address (payment recipient, or address(0) for legacy)
+     * @return isNewFormat True if new (5-param) format, false if legacy (4-param)
      */
     function decodeProofSetCreateData(bytes calldata extraData)
         internal
-        pure
-        returns (ProofSetCreateData memory createData, address beneficiary)
+        view
+        returns (ProofSetCreateData memory createData, address beneficiary, bool isNewFormat)
     {
         // Try new format first (5 parameters)
         try this._tryDecodeNewFormat(extraData) returns (
-            string memory metadata, address payer, bool withCDN, address _beneficiary, bytes memory signature
+            string memory metadata,
+            address payer,
+            bool withCDN,
+            address _beneficiary,
+            bytes memory signature
         ) {
-            // New format succeeded
-            createData = ProofSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+            createData = ProofSetCreateData({
+                metadata: metadata,
+                payer: payer,
+                withCDN: withCDN,
+                signature: signature
+            });
             beneficiary = _beneficiary;
+            isNewFormat = true;
         } catch {
-            // Fall back to legacy format (4 parameters)
+            // Legacy format (4 parameters)
             (string memory metadata, address payer, bool withCDN, bytes memory signature) =
                 abi.decode(extraData, (string, address, bool, bytes));
-            createData = ProofSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+            createData = ProofSetCreateData({
+                metadata: metadata,
+                payer: payer,
+                withCDN: withCDN,
+                signature: signature
+            });
             beneficiary = address(0);
+            isNewFormat = false;
         }
     }
-    /**
-     * @notice Helper function to attempt decoding new format
-     * @dev This function is external so it can be called via try/catch
-     * @param extraData The encoded extra data
-     * @return metadata The metadata string
-     * @return payer The payer address
-     * @return withCDN Whether CDN is enabled
-     * @return beneficiary The beneficiary address
-     * @return signature The signature bytes
-     */
 
+    /**
+     * @notice Helper for try/catch decode of new format
+     */
     function _tryDecodeNewFormat(bytes calldata extraData)
         external
         pure
-        returns (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature)
+        returns (string memory, address, bool, address, bytes memory)
     {
         return abi.decode(extraData, (string, address, bool, address, bytes));
     }
