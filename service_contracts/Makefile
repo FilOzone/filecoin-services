@@ -18,7 +18,6 @@ all: install build test
 .PHONY: install
 install:
 	forge install
-	cd lib/pdp && npm install
 
 # Build target
 .PHONY: build

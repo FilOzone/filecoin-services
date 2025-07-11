@@ -26,8 +26,9 @@ import {
 import { SumTree } from "./sumTree";
 import {
   decodeStringAddressBoolBytes,
-  decodeAddServiceProviderFunction,
+  extractAddServiceProviderCalldatas,
 } from "./decode";
+import { ContractAddresses, FunctionSelectors } from "./constants";
 
 // --- Helper Functions
 function getProofSetEntityId(setId: BigInt): Bytes {
@@ -470,51 +471,98 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
 
 /**
  * Handler for ProviderApproved event
- * Adds providerId with approvedAt = block.number and status = "Approved"
+ * Follows the intended flow:
+ * 1. Check if event is emitted in addServiceProvider function
+ * 2. If yes, extract all addServiceProvider calldatas and find matching provider
+ * 3. If no match found in calldatas, log warning
+ * 4. If not addServiceProvider function, find existing provider and update status
+ * 5. If no existing provider found, log warning
  */
 export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerAddress = event.params.provider;
   const providerId = event.params.providerId;
-
   const txInputHex = event.transaction.input.toHex();
 
-  const addServiceProviderInput = isAddServiceProviderFunction(txInputHex);
-  if (addServiceProviderInput !== "0x") {
-    const provider = new Provider(providerAddress);
+  // Pandora contract address
+  const toAddress = ContractAddresses.PANDORA;
 
-    const decodedData = decodeAddServiceProviderFunction(
-      Bytes.fromHexString(addServiceProviderInput.slice(10))
+  // Check if this event was emitted during addServiceProvider function call
+  if (hasAddServiceProviderFunction(txInputHex)) {
+    // Extract all addServiceProvider calldatas, passing the contract address for target verification
+    const addServiceProviderCalldatas = extractAddServiceProviderCalldatas(
+      event.transaction.input,
+      toAddress
     );
 
-    provider.address = providerAddress;
+    if (addServiceProviderCalldatas.length === 0) {
+      log.warning(
+        "No valid addServiceProvider calldatas found in transaction input for provider: {}",
+        [providerAddress.toHexString()]
+      );
+      return;
+    }
+
+    let matchingProviderFound = false;
+
+    // Process each addServiceProvider calldata
+    for (let i = 0; i < addServiceProviderCalldatas.length; i++) {
+      const calldata = addServiceProviderCalldatas[i];
+
+      // Check if this calldata matches our provider address
+      if (calldata.provider.equals(providerAddress)) {
+        matchingProviderFound = true;
+
+        let provider = Provider.load(providerAddress);
+        if (provider === null) {
+          provider = new Provider(providerAddress);
+          provider.address = providerAddress;
+          provider.totalFaultedPeriods = BigInt.fromI32(0);
+          provider.totalFaultedRoots = BigInt.fromI32(0);
+          provider.totalProofSets = BigInt.fromI32(0);
+          provider.totalRoots = BigInt.fromI32(0);
+          provider.totalDataSize = BigInt.fromI32(0);
+          provider.createdAt = event.block.timestamp;
+        }
+
+        provider.providerId = providerId;
+        provider.pdpUrl = calldata.pdpUrl;
+        provider.pieceRetrievalUrl = calldata.pieceRetrievalUrl;
+        provider.approvedAt = event.block.number;
+        provider.status = "Approved";
+        provider.updatedAt = event.block.timestamp;
+        provider.blockNumber = event.block.number;
+
+        provider.save();
+
+        break;
+      }
+    }
+
+    if (!matchingProviderFound) {
+      log.warning(
+        "ProviderApproved event emitted in addServiceProvider function but no matching provider calldata found for provider: {}",
+        [providerAddress.toHexString()]
+      );
+    }
+  } else {
+    const provider = Provider.load(providerAddress);
+
+    if (provider === null) {
+      log.warning(
+        "ProviderApproved: existing provider not found for address: {}",
+        [providerAddress.toHexString()]
+      );
+      return;
+    }
+
     provider.providerId = providerId;
-    provider.pdpUrl = decodedData.pdpUrl;
-    provider.pieceRetrievalUrl = decodedData.pieceRetrievalUrl;
     provider.approvedAt = event.block.number;
     provider.status = "Approved";
-    provider.totalFaultedPeriods = BigInt.fromI32(0);
-    provider.totalFaultedRoots = BigInt.fromI32(0);
-    provider.totalProofSets = BigInt.fromI32(0);
-    provider.totalRoots = BigInt.fromI32(0);
-    provider.totalDataSize = BigInt.fromI32(0);
-    provider.createdAt = event.block.timestamp;
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
 
     provider.save();
-    return;
   }
-
-  const provider = Provider.load(providerAddress);
-  if (!provider) return;
-
-  provider.providerId = providerId;
-  provider.approvedAt = event.block.number;
-  provider.status = "Approved";
-  provider.updatedAt = event.block.timestamp;
-  provider.blockNumber = event.block.number;
-
-  provider.save();
 }
 
 /**
@@ -551,16 +599,18 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   provider.save();
 }
 
-// Helper function to decode function selector
-function isAddServiceProviderFunction(funcSelector: string): string {
-  const addServiceProviderFunctionSelector = "5f6840ec";
-  const selectorPosition = funcSelector.indexOf(
-    addServiceProviderFunctionSelector
-  );
+//------------------------
+// Utility Functions
+//------------------------
 
-  if (selectorPosition === -1) {
-    return "0x";
-  }
-
-  return "0x" + funcSelector.slice(selectorPosition);
+/**
+ * Helper function to check if transaction contains addServiceProvider function calls
+ * This function is more efficient than the full extraction since it just checks for presence
+ */
+export function hasAddServiceProviderFunction(txInput: string): boolean {
+  const hexSelector = FunctionSelectors.ADD_SERVICE_PROVIDER.toHexString();
+  const cleanSelector = hexSelector.startsWith("0x")
+    ? hexSelector.slice(2)
+    : hexSelector;
+  return txInput.indexOf(cleanSelector) !== -1;
 }
