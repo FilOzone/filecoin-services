@@ -101,7 +101,7 @@ contract MockERC20 is IERC20, IERC20Metadata {
 // MockPDPVerifier is used to simulate the PDPVerifier for our tests
 contract MockPDPVerifier {
     uint256 public nextProofSetId = 1;
-    
+
     // Track proof set ownership for testing
     mapping(uint256 => address) public proofSetOwners;
 
@@ -255,7 +255,7 @@ contract PandoraServiceTest is Test {
             address(mockUSDFC),
             initialOperatorCommissionBps,
             uint64(2880), // maxProvingPeriod
-            uint256(60)   // challengeWindowSize
+            uint256(60) // challengeWindowSize
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
@@ -265,7 +265,7 @@ contract PandoraServiceTest is Test {
     function makeSignaturePass(address signer) public {
         vm.mockCall(
             address(0x01), // ecrecover precompile address
-            bytes(hex""),  // wildcard matching of all inputs requires precisely no bytes
+            bytes(hex""), // wildcard matching of all inputs requires precisely no bytes
             abi.encode(signer)
         );
     }
@@ -301,16 +301,8 @@ contract PandoraServiceTest is Test {
             4000, // 40%
             "CDN service commission should be set correctly"
         );
-        assertEq(
-            pdpServiceWithPayments.getMaxProvingPeriod(),
-            2880,
-            "Max proving period should be set correctly"
-        );
-        assertEq(
-            pdpServiceWithPayments.challengeWindow(),
-            60,
-            "Challenge window size should be set correctly"
-        );
+        assertEq(pdpServiceWithPayments.getMaxProvingPeriod(), 2880, "Max proving period should be set correctly");
+        assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window size should be set correctly");
         assertEq(
             pdpServiceWithPayments.maxProvingPeriod(),
             2880,
@@ -339,8 +331,12 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: true
+        });
 
         // Encode the extra data
         extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
@@ -440,8 +436,12 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
+            metadata: "Test Proof Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: false
+        });
 
         // Encode the extra data
         extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
@@ -722,25 +722,20 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
         
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 10e6);
         payments.deposit(address(mockUSDFC), client, 10e6);
@@ -774,25 +769,20 @@ contract PandoraServiceTest is Test {
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 10e6);
         payments.deposit(address(mockUSDFC), client, 10e6);
@@ -812,25 +802,20 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
                 metadata: "Test Proof Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 10e6);
         payments.deposit(address(mockUSDFC), client, 10e6);
@@ -943,7 +928,9 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.registerServiceProvider(validPdpUrl2, validRetrievalUrl2);
         
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider(
+            "https://sp3.example.com/pdp", "https://sp3.example.com/retrieve"
+        );
         
         // Approve all
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -1019,7 +1006,9 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp2);
         
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider("https://sp3.example.com/pdp", "https://sp3.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider(
+            "https://sp3.example.com/pdp", "https://sp3.example.com/retrieve"
+        );
         pdpServiceWithPayments.approveServiceProvider(sp3);
         
         // Verify all three are approved
@@ -1088,7 +1077,7 @@ contract PandoraServiceTest is Test {
             "https://sp5.example.com/pdp"
         ];
         
-        for (uint i = 0; i < 5; i++) {
+        for (uint256 i = 0; i < 5; i++) {
             vm.prank(sps[i]);
             pdpServiceWithPayments.registerServiceProvider(pdpUrls[i], "https://example.com/retrieve");
             pdpServiceWithPayments.approveServiceProvider(sps[i]);
@@ -1112,36 +1101,35 @@ contract PandoraServiceTest is Test {
         assertEq(providers[1].pdpUrl, pdpUrls[4], "SP5 URL should match");
     }
 
-
     // ===== Client-Proofset Tracking Tests =====
-    function createProofSetForClient(address provider, address clientAddress, string memory metadata) internal returns (uint256) {
+    function createProofSetForClient(address provider, address clientAddress, string memory metadata)
+        internal
+        returns (uint256)
+    {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
-            pdpServiceWithPayments.registerServiceProvider("https://provider.example.com/pdp", "https://provider.example.com/retrieve");
+            pdpServiceWithPayments.registerServiceProvider(
+                "https://provider.example.com/pdp", "https://provider.example.com/retrieve"
+            );
             pdpServiceWithPayments.approveServiceProvider(provider);
         }
 
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
+        PandoraService.ProofSetCreateData memory createData = PandoraService.ProofSetCreateData({
                 metadata: metadata,
                 payer: clientAddress,
                 withCDN: false,
                 signature: FAKE_SIGNATURE
             });
 
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
         payments.setOperatorApproval(
-            address(mockUSDFC),
-            address(pdpServiceWithPayments),
-            true,
-            1000e6,
-            1000e6,
-            365 days
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
         );
         mockUSDFC.approve(address(payments), 100e6);
         payments.deposit(address(mockUSDFC), clientAddress, 100e6);
@@ -1155,8 +1143,7 @@ contract PandoraServiceTest is Test {
 
     function testGetClientProofSets_EmptyClient() public view {
         // Test with a client that has no proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
+        PandoraService.ProofSetInfo[] memory proofSets = pdpServiceWithPayments.getClientProofSets(client);
         
         assertEq(proofSets.length, 0, "Should return empty array for client with no proof sets");
     }
@@ -1168,8 +1155,7 @@ contract PandoraServiceTest is Test {
         createProofSetForClient(sp1, client, metadata);
         
         // Get proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
+        PandoraService.ProofSetInfo[] memory proofSets = pdpServiceWithPayments.getClientProofSets(client);
         
         // Verify results
         assertEq(proofSets.length, 1, "Should return one proof set");
@@ -1186,8 +1172,7 @@ contract PandoraServiceTest is Test {
         createProofSetForClient(sp2, client, "Metadata 2");
         
         // Get proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
+        PandoraService.ProofSetInfo[] memory proofSets = pdpServiceWithPayments.getClientProofSets(client);
         
         // Verify results
         assertEq(proofSets.length, 2, "Should return two proof sets");
@@ -1203,6 +1188,267 @@ contract PandoraServiceTest is Test {
         assertEq(proofSets[1].payee, sp2, "Second proof set payee should match");
         assertEq(proofSets[1].metadata, "Metadata 2", "Second proof set metadata should match");
         assertEq(proofSets[1].clientDataSetId, 1, "Second dataset ID should be 1");
+    }
+
+    // === Beneficiary Separation & Backward Compatibility Test Helpers ===
+    function encodeLegacyExtraData(string memory metadata, address payer, bool withCDN, bytes memory signature) internal pure returns (bytes memory) {
+        return abi.encode(metadata, payer, withCDN, signature);
+    }
+    function encodeNewExtraData(string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature) internal pure returns (bytes memory) {
+        return abi.encode(metadata, payer, withCDN, beneficiary, signature);
+    }
+    function measureProofSetCreationGas(address provider, bytes memory _extraData) internal returns (uint256 gasUsed, uint256 _proofSetId) {
+        makeSignaturePass(client);
+        vm.startPrank(provider);
+        uint256 gasStart = gasleft();
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), _extraData);
+        uint256 gasEnd = gasleft();
+        vm.stopPrank();
+        return (gasStart - gasEnd, psId);
+    }
+
+    // === 1. Backward Compatibility Tests ===
+    function testLegacyProofSetFormatSupport() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        string memory metadata = "Legacy Format";
+        bytes memory legacyExtraData = encodeLegacyExtraData(metadata, client, true, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.expectEmit(true, false, false, false);
+        emit PandoraService.ProofSetBeneficiaryResolved(1, storageProvider);
+        vm.startPrank(storageProvider);
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), legacyExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo memory info = pdpServiceWithPayments.getProofSet(psId);
+        assertEq(info.beneficiary, address(0), "Legacy: beneficiary should be address(0)");
+        address resolved = pdpServiceWithPayments.resolveBeneficiary(psId);
+        assertEq(resolved, info.payee, "Legacy: resolveBeneficiary should return payee");
+        Payments.RailView memory rail = payments.getRail(info.railId);
+        assertEq(rail.to, info.payee, "Legacy: payment rail recipient should be payee");
+    }
+    function testNewProofSetFormatSupport() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        string memory metadata = "New Format";
+        address beneficiary = address(0xbeef);
+        bytes memory newExtraData = encodeNewExtraData(metadata, client, false, beneficiary, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.expectEmit(true, false, false, false);
+        emit PandoraService.ProofSetBeneficiaryResolved(1, beneficiary);
+        vm.startPrank(storageProvider);
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo memory info = pdpServiceWithPayments.getProofSet(psId);
+        assertEq(info.beneficiary, beneficiary, "New: beneficiary should be set");
+        address resolved = pdpServiceWithPayments.resolveBeneficiary(psId);
+        assertEq(resolved, beneficiary, "New: resolveBeneficiary should return beneficiary");
+        Payments.RailView memory rail = payments.getRail(info.railId);
+        assertEq(rail.to, beneficiary, "New: payment rail recipient should be beneficiary");
+    }
+
+    // === 2. resolveBeneficiary Direct Tests ===
+    function testResolveBeneficiaryLegacy() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        bytes memory legacyExtraData = encodeLegacyExtraData("Legacy", client, false, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), legacyExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo memory info = pdpServiceWithPayments.getProofSet(psId);
+        address resolved = pdpServiceWithPayments.resolveBeneficiary(psId);
+        assertEq(resolved, info.payee, "resolveBeneficiary (legacy) should return payee");
+    }
+    function testResolveBeneficiaryNew() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        address beneficiary = address(0x1234);
+        bytes memory newExtraData = encodeNewExtraData("New", client, true, beneficiary, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo memory info = pdpServiceWithPayments.getProofSet(psId);
+        address resolved = pdpServiceWithPayments.resolveBeneficiary(psId);
+        assertEq(resolved, info.beneficiary, "resolveBeneficiary (new) should return beneficiary");
+    }
+
+    // === 3. Event Verification ===
+    function testProofSetBeneficiaryResolvedEvent() public {
+        // New format
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        address beneficiary = address(0xdead);
+        bytes memory newExtraData = encodeNewExtraData("EventNew", client, false, beneficiary, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.expectEmit(true, false, false, false);
+        emit PandoraService.ProofSetBeneficiaryResolved(1, beneficiary);
+        vm.startPrank(storageProvider);
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+        // Legacy format
+        bytes memory legacyExtraData = encodeLegacyExtraData("EventLegacy", client, false, FAKE_SIGNATURE);
+        vm.expectEmit(true, false, false, false);
+        emit PandoraService.ProofSetBeneficiaryResolved(2, storageProvider);
+        vm.startPrank(storageProvider);
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), legacyExtraData);
+        vm.stopPrank();
+    }
+
+    // === 4. Gas Optimization Testing ===
+    function testGasComparisonLegacyVsNew() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        bytes memory legacyExtraData = encodeLegacyExtraData("GasLegacy", client, false, FAKE_SIGNATURE);
+        bytes memory newExtraData = encodeNewExtraData("GasNew", client, false, address(0xbeef), FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        (uint256 gasLegacy, ) = measureProofSetCreationGas(storageProvider, legacyExtraData);
+        (uint256 gasNew, ) = measureProofSetCreationGas(storageProvider, newExtraData);
+        assertLt(gasNew, gasLegacy * 110 / 100, "Gas increase should be < 10%");
+    }
+
+    // === 5. Edge Cases ===
+    function testZeroBeneficiaryValidation() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        bytes memory newExtraData = encodeNewExtraData("ZeroBeneficiary", client, false, address(0), FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.expectRevert("Beneficiary address cannot be zero");
+        vm.startPrank(storageProvider);
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+    }
+    function testBeneficiaryEqualsPayee() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        bytes memory newExtraData = encodeNewExtraData("SameBeneficiary", client, false, storageProvider, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo memory info = pdpServiceWithPayments.getProofSet(psId);
+        assertEq(info.beneficiary, storageProvider, "Beneficiary should equal payee");
+        assertEq(info.payee, storageProvider, "Payee should be storageProvider");
+    }
+    function testBeneficiaryDifferentFromPayee() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        address beneficiary = address(0x1234);
+        bytes memory newExtraData = encodeNewExtraData("DiffBeneficiary", client, false, beneficiary, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 psId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo memory info = pdpServiceWithPayments.getProofSet(psId);
+        assertEq(info.beneficiary, beneficiary, "Beneficiary should be set");
+        assertTrue(info.beneficiary != info.payee, "Beneficiary should differ from payee");
+        Payments.RailView memory rail = payments.getRail(info.railId);
+        assertEq(rail.to, beneficiary, "Rail recipient should be beneficiary");
+    }
+
+    // === 6. Integration Tests ===
+    function testMixedLegacyAndNewProofSets() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        // Legacy
+        bytes memory legacyExtraData = encodeLegacyExtraData("MixLegacy", client, false, FAKE_SIGNATURE);
+        // New
+        address beneficiary = address(0x8888);
+        bytes memory newExtraData = encodeNewExtraData("MixNew", client, false, beneficiary, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 legacyId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), legacyExtraData);
+        uint256 newId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData);
+        vm.stopPrank();
+        PandoraService.ProofSetInfo[] memory sets = pdpServiceWithPayments.getClientProofSets(client);
+        assertEq(sets.length, 2, "Client should have two proof sets");
+        // Check both
+        assertEq(sets[0].beneficiary, address(0), "Legacy: beneficiary should be address(0)");
+        assertEq(sets[1].beneficiary, beneficiary, "New: beneficiary should be set");
+    }
+    function testSignatureIndependentOfBeneficiary() public {
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        address beneficiary1 = address(0x1111);
+        address beneficiary2 = address(0x2222);
+        string memory metadata = "SigIndep";
+        bytes memory newExtraData1 = encodeNewExtraData(metadata, client, false, beneficiary1, FAKE_SIGNATURE);
+        bytes memory newExtraData2 = encodeNewExtraData(metadata, client, false, beneficiary2, FAKE_SIGNATURE);
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.startPrank(storageProvider);
+        uint256 psId1 = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData1);
+        uint256 psId2 = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), newExtraData2);
+        vm.stopPrank();
+        assertTrue(psId1 != psId2, "Should create two distinct proof sets");
+        PandoraService.ProofSetInfo memory info1 = pdpServiceWithPayments.getProofSet(psId1);
+        PandoraService.ProofSetInfo memory info2 = pdpServiceWithPayments.getProofSet(psId2);
+        assertEq(info1.payee, info2.payee, "Payee should be same");
+        assertTrue(info1.beneficiary != info2.beneficiary, "Beneficiaries should differ");
     }
 
     // ===== Proof Set Ownership Change Tests =====
@@ -1412,19 +1658,19 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         // Use arbitrary extra data
-        bytes memory extraData = abi.encode("arbitrary", 123, address(this));
+        bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
         emit ProofSetOwnershipChanged(testProofSetId, sp1, sp2);
         vm.prank(sp2);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), extraData);
+        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
         ( , address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
         assertEq(payee, sp2, "Payee should be updated to new owner");
     }
 }
 
 contract SignatureCheckingService is PandoraService {
-    constructor() {
-    }
+    constructor() {}
+
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) { 
         return recoverSigner(messageHash, signature);
     }
@@ -1473,14 +1719,14 @@ contract PandoraServiceSignatureTest is Test {
             address(mockUSDFC),
             0, // 0% commission
             uint64(2880), // maxProvingPeriod
-            uint256(60)   // challengeWindowSize
+            uint256(60) // challengeWindowSize
         );
         
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
         pdpService = SignatureCheckingService(address(serviceProxy));
         
         // Fund the payer
-        mockUSDFC.transfer(payer, 1000 * 10**6); // 1000 USDFC
+        mockUSDFC.transfer(payer, 1000 * 10 ** 6); // 1000 USDFC
     }    
 
     // Test the recoverSigner function indirectly through signature verification
@@ -1565,7 +1811,7 @@ contract PandoraServiceUpgradeTest is Test {
             address(mockUSDFC),
             0, // 0% commission
             uint64(2880), // maxProvingPeriod
-            uint256(60)   // challengeWindowSize
+            uint256(60) // challengeWindowSize
         );
         
         MyERC1967Proxy pandoraProxy = new MyERC1967Proxy(address(pandoraImpl), initData);
@@ -1582,9 +1828,15 @@ contract PandoraServiceUpgradeTest is Test {
         
         // Verify the values were set correctly
         assertEq(pandoraService.maxProvingPeriod(), newMaxProvingPeriod, "Max proving period should be updated");
-        assertEq(pandoraService.challengeWindowSize(), newChallengeWindowSize, "Challenge window size should be updated");
-        assertEq(pandoraService.getMaxProvingPeriod(), newMaxProvingPeriod, "getMaxProvingPeriod should return updated value");
-        assertEq(pandoraService.challengeWindow(), newChallengeWindowSize, "challengeWindow should return updated value");
+        assertEq(
+            pandoraService.challengeWindowSize(), newChallengeWindowSize, "Challenge window size should be updated"
+        );
+        assertEq(
+            pandoraService.getMaxProvingPeriod(), newMaxProvingPeriod, "getMaxProvingPeriod should return updated value"
+        );
+        assertEq(
+            pandoraService.challengeWindow(), newChallengeWindowSize, "challengeWindow should return updated value"
+        );
     }
     
     function testInitializeV2WithInvalidParameters() public {
