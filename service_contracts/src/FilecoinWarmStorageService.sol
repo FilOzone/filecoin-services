@@ -94,7 +94,8 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
         uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
-        address payee; // SP's beneficiary address
+        address payee; // SP's beneficiary address (hot key)
+        address beneficiary; // Payment address (cold key)
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         string metadata; // General metadata for the data set
         string[] pieceMetadata; // Array of metadata for each piece
@@ -404,14 +405,16 @@ contract FilecoinWarmStorageService is
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, "Extra data required for data set creation");
-        DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+        (DataSetCreateData memory createData, address beneficiary, bool isNewFormat) = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
         require(createData.payer != address(0), "Payer address cannot be zero");
         require(creator != address(0), "Creator address cannot be zero");
-
-        // Check if the storage provider is whitelisted
         require(approvedProvidersMap[creator], "Storage provider not approved");
+        // Set beneficiary (use provided or fallback to creator)
+        address actualBeneficiary = isNewFormat ? 
+        (beneficiary != address(0) ? beneficiary : creator) : 
+        creator;
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -427,7 +430,8 @@ contract FilecoinWarmStorageService is
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Control address
+        info.payee = creator; // Control address (hot key)
+        info.beneficiary = actualBeneficiary; // Payment address (cold key)
         info.metadata = createData.metadata;
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
@@ -440,7 +444,7 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // data set creator, SPs in  most cases
+            actualBeneficiary,  // Payments go to beneficiary
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
             address(this)
@@ -474,7 +478,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                creator, // data set creator, SPs in most cases
+                actualBeneficiary, // data set creator, SPs in most cases
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -486,6 +490,7 @@ contract FilecoinWarmStorageService is
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
+                actualBeneficiary,
                 filCDNAddress,
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
@@ -733,6 +738,17 @@ contract FilecoinWarmStorageService is
         // Emit event for off-chain tracking
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
     }
+    
+    /**
+     * @notice Get the beneficiary address for a data set
+     * @dev Returns the beneficiary if set, otherwise falls back to the payee
+     * @param dataSetId The ID of the data set
+     * @return The beneficiary address (or payee if beneficiary not set)
+     */
+    function getBeneficiary(uint256 dataSetId) public view returns (address) {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        return info.beneficiary != address(0) ? info.beneficiary : info.payee;
+    }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this data set
@@ -894,46 +910,55 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Decode extra data for data set creation
-     * @param extraData The encoded extra data from PDPVerifier
-     * @return createData The decoded DataSetCreateData struct (excluding beneficiary)
-     * @return beneficiary The beneficiary address (payment recipient, or address(0) for legacy)
-     */
-    function decodeProofSetCreateData(bytes calldata extraData)
+    * @notice Decode extra data for data set creation with beneficiary support
+    * @param extraData The encoded extra data from PDPVerifier
+    * @return createData The decoded DataSetCreateData struct
+    * @return beneficiary The beneficiary address (payment recipient, or address(0) for legacy)
+    * @return isNewFormat True if new (5-param) format, false if legacy (4-param)
+    */
+    function decodeDataSetCreateData(bytes calldata extraData)
         internal
-        pure
-        returns (ProofSetCreateData memory createData, address beneficiary)
+        view
+        returns (DataSetCreateData memory createData, address beneficiary, bool isNewFormat)
     {
         // Try new format first (5 parameters)
         try this._tryDecodeNewFormat(extraData) returns (
-            string memory metadata, address payer, bool withCDN, address _beneficiary, bytes memory signature
+            string memory metadata,
+            address payer,
+            bool withCDN,
+            address _beneficiary,
+            bytes memory signature
         ) {
-            // New format succeeded
-            createData = ProofSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+            createData = DataSetCreateData({
+                metadata: metadata,
+                payer: payer,
+                withCDN: withCDN,
+                signature: signature
+            });
             beneficiary = _beneficiary;
+            isNewFormat = true;
         } catch {
-            // Fall back to legacy format (4 parameters)
+            // Legacy format (4 parameters)
             (string memory metadata, address payer, bool withCDN, bytes memory signature) =
                 abi.decode(extraData, (string, address, bool, bytes));
-            createData = ProofSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+            createData = DataSetCreateData({
+                metadata: metadata,
+                payer: payer,
+                withCDN: withCDN,
+                signature: signature
+            });
             beneficiary = address(0);
+            isNewFormat = false;
         }
     }
-    /**
-     * @notice Helper function to attempt decoding new format
-     * @dev This function is external so it can be called via try/catch
-     * @param extraData The encoded extra data
-     * @return metadata The metadata string
-     * @return payer The payer address
-     * @return withCDN Whether CDN is enabled
-     * @return beneficiary The beneficiary address
-     * @return signature The signature bytes
-     */
 
+    /**
+     * @notice Helper for try/catch decode of new format
+     */
     function _tryDecodeNewFormat(bytes calldata extraData)
         external
         pure
-        returns (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature)
+        returns (string memory, address, bool, address, bytes memory)
     {
         return abi.decode(extraData, (string, address, bool, address, bytes));
     }
