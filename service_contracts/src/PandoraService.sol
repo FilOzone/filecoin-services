@@ -201,6 +201,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
+        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
         require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
         require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
         require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
@@ -208,10 +209,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         pdpVerifierAddress = _pdpVerifierAddress;
         paymentsContractAddress = _paymentsContractAddress;
         usdfcTokenAddress = _usdfcTokenAddress;
+        filCDNAddress = _filCDNAddress;
         operatorCommissionBps = _initialOperatorCommissionBps;
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
-        filCDNAddress = _filCDNAddress;
         
         // Set commission rates: 0% for basic, 40% for service w/ CDN add-on
         basicServiceCommissionBps = 0;   // 0%
