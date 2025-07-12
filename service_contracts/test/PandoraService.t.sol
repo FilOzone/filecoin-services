@@ -306,7 +306,7 @@ contract PandoraServiceTest is Test {
         );
         assertEq(
             pdpServiceWithPayments.cdnServiceCommissionBps(),
-            4000, // 40%
+            0, // 0%
             "CDN service commission should be set correctly"
         );
         assertEq(
@@ -424,7 +424,7 @@ contract PandoraServiceTest is Test {
         assertEq(pdpRail.to, storageProvider, "To address should be storage provider");
         assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(pdpRail.arbiter, address(pdpServiceWithPayments), "Arbiter should be the PDP service");
-        assertEq(pdpRail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
+        assertEq(pdpRail.commissionRateBps, 0, "No commission");
         assertEq(pdpRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
         assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
