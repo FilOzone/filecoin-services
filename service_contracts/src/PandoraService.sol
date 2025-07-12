@@ -20,7 +20,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     event ProofSetOwnershipChanged(uint256 indexed proofSetId, address indexed oldOwner, address indexed newOwner);
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
-    event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
+    event ProofSetRailsCreated(uint256 indexed proofSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
 
@@ -36,11 +36,11 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
     
     // Pricing constants
-    uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
-    uint256 public constant PRICE_PER_TIB_PER_MONTH_WITH_CDN = 3; // 3 USDFC per TiB per month with CDN
+    uint256 public constant STORAGE_PRICE_PER_TIB_PER_MONTH = 2; // 2 USDFC per TiB per month without CDN
+    uint256 public constant CDN_PRICE_PER_TIB_PER_MONTH = 1; // 1 USDFC per TiB per month for CDN
 
     // Dynamic fee values based on token decimals
-    uint256 public PROOFSET_CREATION_FEE; // 0.1 USDFC with correct decimals
+    uint256 public PAYMENT_RAIL_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
     uint8 public tokenDecimals;
@@ -49,13 +49,14 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     address public pdpVerifierAddress;
     address public paymentsContractAddress;
     address public usdfcTokenAddress;
+    address public filCDNAddress;
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
     
     // Commission rates for different service types
     uint256 public basicServiceCommissionBps;    // 0% for basic service (no CDN add-on)
-    uint256 public cdnServiceCommissionBps;      // 40% for CDN service
+    uint256 public cdnServiceCommissionBps;      // 0% for CDN service
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -64,7 +65,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Storage for proof set payment information
     struct ProofSetInfo {
-        uint256 railId; // ID of the payment rail
+        uint256 pdpRailId; // ID of the pdp payment rail
+        uint256 cacheMissRailId; // ID of the cache miss payment rail (for CDN add-on)
+        uint256 cdnRailId; // ID of the CDN payment rail (for CDN add-on)
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
@@ -187,6 +190,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
+        address _filCDNAddress,
         uint256 _initialOperatorCommissionBps,
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize
@@ -198,6 +202,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
+        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
         require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
         require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
         require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
@@ -205,19 +210,20 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         pdpVerifierAddress = _pdpVerifierAddress;
         paymentsContractAddress = _paymentsContractAddress;
         usdfcTokenAddress = _usdfcTokenAddress;
+        filCDNAddress = _filCDNAddress;
         operatorCommissionBps = _initialOperatorCommissionBps;
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
         
-        // Set commission rates: 0% for basic, 40% for service w/ CDN add-on
+        // Set commission rates: 0% for basic, 0% for service w/ CDN add-on
         basicServiceCommissionBps = 0;   // 0%
-        cdnServiceCommissionBps = 4000;   // 40%
+        cdnServiceCommissionBps = 0;   // 0%
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        PROOFSET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
+        PAYMENT_RAIL_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
         nextServiceProviderId = 1;
     }
 
@@ -244,13 +250,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @notice Updates the service commission rates
      * @dev Only callable by the contract owner
      * @param newBasicCommissionBps New commission rate for basic service (no CDN) in basis points
-     * @param newCdnCommissionBps New commission rate for CDN service in basis points
+     * @param newCDNCommissionBps New commission rate for CDN service in basis points
      */
-    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCdnCommissionBps) external onlyOwner {
+    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCDNCommissionBps) external onlyOwner {
         require(newBasicCommissionBps <= COMMISSION_MAX_BPS, "Basic commission exceeds maximum");
-        require(newCdnCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
+        require(newCDNCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
         basicServiceCommissionBps = newBasicCommissionBps;
-        cdnServiceCommissionBps = newCdnCommissionBps;
+        cdnServiceCommissionBps = newCDNCommissionBps;
     }
     
 
@@ -389,9 +395,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the proof set
 
-        // Create the payment rail using the Payments contract
+        // Create the payment rails using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = payments.createRail(
+        uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
             creator, // proofset creator, SPs in  most cases
@@ -400,29 +406,74 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         );
 
         // Store the rail ID
-        info.railId = railId;
+        info.pdpRailId = pdpRailId;
 
         // Store reverse mapping from rail ID to proof set ID for arbitration
-        railToProofSet[railId] = proofSetId;
+        railToProofSet[pdpRailId] = proofSetId;
 
         // First, set a lockupFixed value that's at least equal to the one-time payment
         // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
         payments.modifyRailLockup(
-            railId,
+            pdpRailId,
             DEFAULT_LOCKUP_PERIOD,
-            PROOFSET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+            PAYMENT_RAIL_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
 
         // Charge the one-time proof set creation fee
         // This is a payment from payer to proofset creator of a fixed amount
         payments.modifyRailPayment(
-            railId,
+            pdpRailId,
             0, // Initial rate is 0, will be updated when roots are added
-            PROOFSET_CREATION_FEE // One-time payment amount
+            PAYMENT_RAIL_CREATION_FEE // One-time payment amount
         );
 
+        uint256 cacheMissRailId = 0;
+        uint256 cdnRailId = 0;
+
+        if (createData.withCDN == true) {
+            cacheMissRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                creator, // proofset creator, SPs in most cases
+                address(this), // this contract acts as the arbiter
+                0 // no service commission
+            );
+            info.cacheMissRailId = cacheMissRailId;
+            railToProofSet[cacheMissRailId] = proofSetId;
+            payments.modifyRailLockup(
+                cacheMissRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                PAYMENT_RAIL_CREATION_FEE
+            );
+            payments.modifyRailPayment(
+                cacheMissRailId,
+                0, // Initial rate is 0, will be updated when roots are added
+                PAYMENT_RAIL_CREATION_FEE // One-time payment amount
+            );
+
+            cdnRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                filCDNAddress,
+                address(this), // this contract acts as the arbiter
+                0 // no service commission
+            );
+            info.cdnRailId = cdnRailId;
+            railToProofSet[cdnRailId] = proofSetId;
+            payments.modifyRailLockup(
+                cdnRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                PAYMENT_RAIL_CREATION_FEE
+            );
+            payments.modifyRailPayment(
+                cdnRailId,
+                0, // Initial rate is 0, will be updated when roots are added
+                PAYMENT_RAIL_CREATION_FEE // One-time payment amount
+            );
+        }
+
         // Emit event for tracking
-        emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
+        emit ProofSetRailsCreated(proofSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN);
     }
 
     /**
@@ -439,7 +490,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
-            info.railId != 0,
+            info.pdpRailId != 0,
             "Proof set not registered with payment system"
         );
         (bytes memory signature) = abi.decode(extraData, (bytes));
@@ -475,7 +526,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     ) external onlyPDPVerifier {
         // Verify the proof set exists in our mapping
         ProofSetInfo storage info = proofSetInfo[proofSetId];
-        require(info.railId != 0, "Proof set not registered with payment system");
+        require(info.pdpRailId != 0, "Proof set not registered with payment system");
         
         // Get the payer address for this proof set
         address payer = info.payer;
@@ -510,7 +561,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Verify the proof set exists in our mapping   
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         require(
-            info.railId != 0,
+            info.pdpRailId != 0,
             "Proof set not registered with payment system"
         );
         
@@ -589,8 +640,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             // This marks when the proof set became active for proving
             provingActivationEpoch[proofSetId] = block.number;
 
-            // Update the payment rate
-            updateRailPaymentRate(proofSetId, leafCount);
+            // Update the payment rates
+            updatePaymentRates(proofSetId, leafCount);
 
             return;
         }
@@ -642,8 +693,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         provingDeadlines[proofSetId] = nextDeadline;
         provenThisPeriod[proofSetId] = false;
 
-        // Update the payment rate based on current proof set size
-        updateRailPaymentRate(proofSetId, leafCount);
+        // Update the payment rates based on current proof set size
+        updatePaymentRates(proofSetId, leafCount);
     }
 
     /**
@@ -674,29 +725,44 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         emit ProofSetOwnershipChanged(proofSetId, oldOwner, newOwner);
     }
 
-    function updateRailPaymentRate(uint256 proofSetId, uint256 leafCount) internal {
+    function updatePaymentRates(uint256 proofSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this proof set
-        require(proofSetInfo[proofSetId].railId != 0, "No payment rail configured");
-
-        uint256 newRatePerEpoch = 0; // Default to 0 for empty proof sets
+        require(proofSetInfo[proofSetId].pdpRailId != 0, "No PDP payment rail configured");
 
         uint256 totalBytes = getProofSetSizeInBytes(leafCount);
-        // Get the withCDN flag from the proof set info
-        bool withCDN = proofSetInfo[proofSetId].withCDN;
-        newRatePerEpoch = calculateStorageRatePerEpoch(totalBytes, withCDN);
-
-        // Update the rail payment rate
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = proofSetInfo[proofSetId].railId;
 
-        // Call modifyRailPayment with the new rate and no one-time payment
+        // Update the pdp rail payment rate with the new rate and no one-time
+        // payment
+        uint256 pdpRailId = proofSetInfo[proofSetId].pdpRailId;
+        uint256 newStorageRatePerEpoch = calculateStorageRatePerEpoch(totalBytes);
         payments.modifyRailPayment(
-            railId,
-            newRatePerEpoch,
+            pdpRailId,
+            newStorageRatePerEpoch,
             0 // No one-time payment during rate update
         );
+        emit RailRateUpdated(proofSetId, pdpRailId, newStorageRatePerEpoch);
 
-        emit RailRateUpdated(proofSetId, railId, newRatePerEpoch);
+        // Update the CDN rail payment rates, if applicable
+        if (proofSetInfo[proofSetId].withCDN) {
+            uint256 cacheMissRailId = proofSetInfo[proofSetId].cacheMissRailId;
+            uint256 newCacheMissRatePerEpoch = calculateCacheMissRatePerEpoch(totalBytes);
+            payments.modifyRailPayment(
+                cacheMissRailId,
+                newCacheMissRatePerEpoch,
+                0
+            );
+            emit RailRateUpdated(proofSetId, cacheMissRailId, newCacheMissRatePerEpoch);
+
+            uint256 cdnRailId = proofSetInfo[proofSetId].cdnRailId;
+            uint256 newCDNRatePerEpoch = calculateCDNRatePerEpoch(totalBytes);
+            payments.modifyRailPayment(
+                cdnRailId,
+                newCDNRatePerEpoch,
+                0
+            );
+            emit RailRateUpdated(proofSetId, cdnRailId, newCDNRatePerEpoch);
+        }
     }
 
     /**
@@ -768,15 +834,67 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Calculate the per-epoch rate based on total storage size and CDN usage
-     * @dev Rate is 2 USDFC per TiB per month without CDN, 3 USDFC per TiB per month with CDN.
+     * @notice Calculate PDP the per-epoch rate based on total storage size
+     * @dev Rate is 2 USDFC per TiB per month.
      * @param totalBytes Total size of the stored data in bytes
-     * @param withCDN Whether CDN is enabled for the proof set
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
-    function calculateStorageRatePerEpoch(uint256 totalBytes, bool withCDN) public view returns (uint256) {
-        // Determine the rate based on CDN usage using constants
-        uint256 ratePerTiBPerMonth = withCDN ? PRICE_PER_TIB_PER_MONTH_WITH_CDN : PRICE_PER_TIB_PER_MONTH_NO_CDN;
+    function calculateStorageRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        uint256 ratePerTiBPerMonth = STORAGE_PRICE_PER_TIB_PER_MONTH;
+
+        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
+        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
+
+        // Ensure denominator is not zero (shouldn't happen with constants)
+        require(denominator > 0, "Denominator cannot be zero");
+
+        uint256 ratePerEpoch = numerator / denominator;
+
+        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
+        // This prevents charging 0 for very small sizes due to integer division.
+        if (ratePerEpoch == 0 && totalBytes > 0) {
+            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
+            return minRate;
+        }
+
+        return ratePerEpoch;
+    }
+
+    /**
+     * @notice Calculate the cache miss per-epoch rate based on total storage size
+     * @dev Rate is 1 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateCacheMissRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
+
+        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
+        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
+
+        // Ensure denominator is not zero (shouldn't happen with constants)
+        require(denominator > 0, "Denominator cannot be zero");
+
+        uint256 ratePerEpoch = numerator / denominator;
+
+        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
+        // This prevents charging 0 for very small sizes due to integer division.
+        if (ratePerEpoch == 0 && totalBytes > 0) {
+            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
+            return minRate;
+        }
+
+        return ratePerEpoch;
+    }
+
+    /**
+     * @notice Calculate the CDN per-epoch rate based on total storage size
+     * @dev Rate is 1 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateCDNRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
         
         uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
@@ -834,12 +952,30 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get the payment rail ID for a proof set
+     * @notice Get the PDP payment rail ID for a proof set
      * @param proofSetId The ID of the proof set
      * @return The payment rail ID, or 0 if not found
      */
-    function getProofSetRailId(uint256 proofSetId) external view returns (uint256) {
-        return proofSetInfo[proofSetId].railId;
+    function getProofSetPdpRailId(uint256 proofSetId) external view returns (uint256) {
+        return proofSetInfo[proofSetId].pdpRailId;
+    }
+
+    /**
+     * @notice Get the cache miss payment rail ID for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return The payment rail ID, or 0 if not found
+     */
+    function getProofSetCacheMissRailId(uint256 proofSetId) external view returns (uint256) {
+        return proofSetInfo[proofSetId].cacheMissRailId;
+    }
+
+    /**
+     * @notice Get the CDN payment rail ID for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return The payment rail ID, or 0 if not found
+     */
+    function getProofSetCDNRailId(uint256 proofSetId) external view returns (uint256) {
+        return proofSetInfo[proofSetId].cdnRailId;
     }
 
     /**
@@ -887,8 +1023,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals)),
-            pricePerTiBPerMonthWithCDN: PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthWithCDN: (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals)),
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -907,8 +1043,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 cdnServiceFee,
         uint256 spPaymentWithCDN
     ) {
-        uint256 basicTotal = PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals));
-        uint256 cdnTotal = PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals));
+        uint256 basicTotal = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
+        uint256 cdnTotal = (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals));
         
         // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
         basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
@@ -1283,7 +1419,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             ProofSetInfo storage storageInfo = proofSetInfo[proofSetId];
             // Create a memory copy of the struct (excluding any mappings)
             proofSets[i] = ProofSetInfo({
-                railId: storageInfo.railId,
+                pdpRailId: storageInfo.pdpRailId,
+                cacheMissRailId: storageInfo.cacheMissRailId,
+                cdnRailId: storageInfo.cdnRailId,
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,
