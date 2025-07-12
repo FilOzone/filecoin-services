@@ -922,12 +922,30 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get the payment rail ID for a proof set
+     * @notice Get the PDP payment rail ID for a proof set
      * @param proofSetId The ID of the proof set
      * @return The payment rail ID, or 0 if not found
      */
     function getProofSetPdpRailId(uint256 proofSetId) external view returns (uint256) {
         return proofSetInfo[proofSetId].pdpRailId;
+    }
+
+    /**
+     * @notice Get the cache miss payment rail ID for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return The payment rail ID, or 0 if not found
+     */
+    function getProofSetCacheMissRailId(uint256 proofSetId) external view returns (uint256) {
+        return proofSetInfo[proofSetId].cacheMissRailId;
+    }
+
+    /**
+     * @notice Get the CDN payment rail ID for a proof set
+     * @param proofSetId The ID of the proof set
+     * @return The payment rail ID, or 0 if not found
+     */
+    function getProofSetCdnRailId(uint256 proofSetId) external view returns (uint256) {
+        return proofSetInfo[proofSetId].cdnRailId;
     }
 
     /**
