@@ -48,7 +48,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     address public pdpVerifierAddress;
     address public paymentsContractAddress;
     address public usdfcTokenAddress;
-    address public filCdnAddress;
+    address public filCDNAddress;
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
@@ -189,7 +189,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCdnAddress,
+        address _filCDNAddress,
         uint256 _initialOperatorCommissionBps,
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize
@@ -211,7 +211,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         operatorCommissionBps = _initialOperatorCommissionBps;
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
-        filCdnAddress = _filCdnAddress;
+        filCDNAddress = _filCDNAddress;
         
         // Set commission rates: 0% for basic, 40% for service w/ CDN add-on
         basicServiceCommissionBps = 0;   // 0%
@@ -248,13 +248,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @notice Updates the service commission rates
      * @dev Only callable by the contract owner
      * @param newBasicCommissionBps New commission rate for basic service (no CDN) in basis points
-     * @param newCdnCommissionBps New commission rate for CDN service in basis points
+     * @param newCDNCommissionBps New commission rate for CDN service in basis points
      */
-    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCdnCommissionBps) external onlyOwner {
+    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCDNCommissionBps) external onlyOwner {
         require(newBasicCommissionBps <= COMMISSION_MAX_BPS, "Basic commission exceeds maximum");
-        require(newCdnCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
+        require(newCDNCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
         basicServiceCommissionBps = newBasicCommissionBps;
-        cdnServiceCommissionBps = newCdnCommissionBps;
+        cdnServiceCommissionBps = newCDNCommissionBps;
     }
     
 
@@ -452,7 +452,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                filCdnAddress,
+                filCDNAddress,
                 address(this), // this contract acts as the arbiter
                 0 // no service commission
             );
@@ -725,13 +725,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             emit RailRateUpdated(proofSetId, cacheMissRailId, newCacheMissRatePerEpoch);
 
             uint256 cdnRailId = proofSetInfo[proofSetId].cdnRailId;
-            uint256 newCdnRatePerEpoch = calculateCdnRatePerEpoch(totalBytes);
+            uint256 newCDNRatePerEpoch = calculateCDNRatePerEpoch(totalBytes);
             payments.modifyRailPayment(
                 cdnRailId,
-                newCdnRatePerEpoch,
+                newCDNRatePerEpoch,
                 0
             );
-            emit RailRateUpdated(proofSetId, cdnRailId, newCdnRatePerEpoch);
+            emit RailRateUpdated(proofSetId, cdnRailId, newCDNRatePerEpoch);
         }
     }
 
@@ -863,7 +863,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param totalBytes Total size of the stored data in bytes
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
-    function calculateCdnRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+    function calculateCDNRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
         uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
         
         uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
@@ -944,7 +944,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param proofSetId The ID of the proof set
      * @return The payment rail ID, or 0 if not found
      */
-    function getProofSetCdnRailId(uint256 proofSetId) external view returns (uint256) {
+    function getProofSetCDNRailId(uint256 proofSetId) external view returns (uint256) {
         return proofSetInfo[proofSetId].cdnRailId;
     }
 
