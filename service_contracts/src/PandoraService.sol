@@ -18,6 +18,7 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 /// to reduce payments for faulted epochs.
 contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
+    event ProofSetOwnershipChanged(uint256 indexed proofSetId, address indexed oldOwner, address indexed newOwner);
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
     event ProofSetRailsCreated(uint256 indexed proofSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
@@ -694,6 +695,34 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Update the payment rates based on current proof set size
         updatePaymentRates(proofSetId, leafCount);
+    }
+
+    /**
+     * @notice Handles proof set ownership changes by updating internal state only
+     * @dev Called by the PDPVerifier contract when proof set ownership is transferred. This function is now fully decoupled from the provider registry.
+     * @param proofSetId The ID of the proof set whose ownership is changing
+     * @param oldOwner The previous owner address
+     * @param newOwner The new owner address (must be an approved provider)
+     * @param extraData Additional data (not used)
+     */
+    function ownerChanged(
+        uint256 proofSetId,
+        address oldOwner,
+        address newOwner,
+        bytes calldata extraData
+    ) external override onlyPDPVerifier {
+        // Verify the proof set exists and validate the old owner
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
+        require(info.payee == oldOwner, "Old owner mismatch");
+        require(newOwner != address(0), "New owner cannot be zero address");
+        // New owner must be an approved provider
+        require(approvedProvidersMap[newOwner], "New owner must be an approved provider");
+
+        // Update the proof set payee (storage provider)
+        info.payee = newOwner;
+
+        // Emit event for off-chain tracking
+        emit ProofSetOwnershipChanged(proofSetId, oldOwner, newOwner);
     }
 
     function updatePaymentRates(uint256 proofSetId, uint256 leafCount) internal {
