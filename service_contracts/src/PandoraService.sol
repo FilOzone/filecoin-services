@@ -539,6 +539,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             "Invalid signature for adding roots"
         );
 
+        require(metadataKeys.length > 0, "Root metadata key array cannot be empty");
+        require(metadataValues.length > 0, "Root metadata value array cannot be empty");
+
         // Store metadata for each new root
         for (uint256 i = 0; i < rootData.length; i++) {
             uint256 rootId = firstAdded + i;
