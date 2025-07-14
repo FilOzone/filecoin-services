@@ -1232,7 +1232,7 @@ contract PandoraServiceTest is Test {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
-            pdpServiceWithPayments.registerServiceProvider("https://provider.example.com/pdp", "https://provider.example.com/retrieve");
+            pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://provider.example.com/pdp", "https://provider.example.com/retrieve");
             pdpServiceWithPayments.approveServiceProvider(provider);
         }
 
@@ -1274,10 +1274,10 @@ contract PandoraServiceTest is Test {
     function testOwnerChangedSuccessDecoupled() public {
         // Register and approve two providers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
 
         // Create a proof set with sp1 as the owner
@@ -1313,7 +1313,7 @@ contract PandoraServiceTest is Test {
     function testOwnerChangedRevertsIfNewOwnerNotApproved() public {
         // Register and approve sp1
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         // Create a proof set with sp1 as the owner
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
@@ -1334,7 +1334,7 @@ contract PandoraServiceTest is Test {
      */
     function testOwnerChangedRevertsIfNewOwnerZeroAddress() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         bytes memory testExtraData = new bytes(0);
@@ -1348,10 +1348,10 @@ contract PandoraServiceTest is Test {
      */
     function testOwnerChangedRevertsIfOldOwnerMismatch() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         bytes memory testExtraData = new bytes(0);
@@ -1366,10 +1366,10 @@ contract PandoraServiceTest is Test {
      */
     function testOwnerChangedRevertsIfUnauthorizedCaller() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         bytes memory testExtraData = new bytes(0);
@@ -1385,10 +1385,10 @@ contract PandoraServiceTest is Test {
     function testMultipleProofSetsPerProviderOwnershipChange() public {
         // Register and approve two providers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
         // Create two proof sets for sp1
         uint256 ps1 = createProofSetForOwnershipTest(sp1, client, "ProofSet 1");
@@ -1414,10 +1414,10 @@ contract PandoraServiceTest is Test {
      */
     function testOwnerChangedWithArbitraryExtraData() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         // Use arbitrary extra data
