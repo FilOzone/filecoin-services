@@ -1268,15 +1268,18 @@ contract PandoraServiceTest is Test {
         }
 
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: metadata,
                 payer: clientAddress,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 withCDN: false,
                 signature: FAKE_SIGNATURE
             });
 
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1452,7 +1455,7 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         // Use arbitrary extra data
-        bytes memory extraData = abi.encode("arbitrary", 123, address(this));
+        extraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
         emit ProofSetOwnershipChanged(testProofSetId, sp1, sp2);
         vm.prank(sp2);
