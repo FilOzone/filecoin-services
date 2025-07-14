@@ -1563,9 +1563,67 @@ contract PandoraServiceTest is Test {
         // compute composite proofSetRootId
         uint256 proofSetRootId = pdpServiceWithPayments.getProofSetRootId(proofSetId, rootId);
 
-        // Expect RootMetadataAdded event
-        vm.expectEmit(true, false, false, true);
-        emit PandoraService.RootMetadataAdded(proofSetRootId, keys, values);
+        if (caller == address(mockPDPVerifier)){
+            if (keys.length != values.length) {
+                // Expect revert if keys and values length mismatch
+                vm.expectRevert("Metadata keys/values length mismatch");
+            } else if (keys.length == 0) {
+                // Expect revert if keys or values are empty
+                vm.expectRevert("Root metadata key array cannot be empty");
+            } else if (values.length == 0) {
+                // Expect revert if keys or values are empty
+                vm.expectRevert("Root metadata value array cannot be empty");
+            } else {
+                // Check for empty keys
+                bool hasEmptyKey = false;
+                for (uint256 i = 0; i < keys.length; i++) {
+                    if (bytes(keys[i]).length == 0) {
+                        hasEmptyKey = true;
+                        break;
+                    }
+                }
+                if (hasEmptyKey) {
+                    vm.expectRevert("Root metadata key cannot be empty");
+                } else {
+                    // check for empty values
+                    bool hasEmptyValue = false;
+                    for (uint256 i = 0; i < values.length; i++) {
+                        if (values[i].length == 0) {
+                            hasEmptyValue = true;
+                            break;
+                        }
+                    }
+                    if (hasEmptyValue) {
+                        vm.expectRevert("Root metadata value cannot be empty");
+                    } else {
+                        // check for duplicate keys
+                        bool hasDuplicateKeys = false;
+                        for (uint256 i = 0; i < keys.length; i++) {
+                            for (uint256 j = i + 1; j < keys.length; j++) {
+                                if (keccak256(abi.encode(keys[i])) == keccak256(abi.encode(keys[j]))) {
+                                    hasDuplicateKeys = true;
+                                    break;
+                                }
+                            }
+                            if (hasDuplicateKeys) {
+                                break;
+                            }
+                        }
+
+                        if (hasDuplicateKeys) {
+                            vm.expectRevert("Duplicate metadata key provided for root");
+                        } else {
+                            // All good: expect RootMetadataAdded event
+                            vm.expectEmit(true, false, false, true);
+                            emit PandoraService.RootMetadataAdded(proofSetRootId, keys, values);
+                        }
+                    }
+                } 
+            } 
+        } else {
+            // Expect revert if not called by mockPDPVerifier
+            vm.expectRevert("Caller is not the PDP verifier");
+        } 
 
         vm.prank(caller);
         pdpServiceWithPayments.rootsAdded(proofSetId, rootId, rootData, extraData);
@@ -1578,8 +1636,6 @@ contract PandoraServiceTest is Test {
             rootData: rootData,
             extraData: extraData
         });
-
-        require (keys.length == values.length, "Keys and values must have the same length");
     }
 
     function testRootMetadataStorageAndRetrieval() public {
@@ -1628,6 +1684,102 @@ contract PandoraServiceTest is Test {
             setup.rootData, 
             setup.extraData
         );
+    }
+
+    function testRootMetadataCannotBeAddedByNonPDPVerifier() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(client));
+    }
+
+    function testRootMetadataCannotBeCalledWithMoreValues() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](3);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+        values[2] = abi.encode("extraValue"); // Extra value to cause mismatch
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithMoreKeys() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](3);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+        keys[2] = "extraKey"; // Extra key to cause mismatch
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithEmptyKeysAndValues() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](0);
+        bytes[] memory values = new bytes[](0);
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithDuplicateKeys() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "filename"; // Duplicate key
+        values[1] = abi.encode("cat.jpg");
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithEmptyKey() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = ""; // Empty key
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithEmptyValue() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = ""; // Empty value
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
     }
 
     function testGetRootMetadata() public {
