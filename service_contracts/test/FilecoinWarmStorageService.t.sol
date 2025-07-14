@@ -250,6 +250,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.deal(sp1, 100 ether);
         vm.deal(sp2, 100 ether);
         vm.deal(sp3, 100 ether);
+        vm.deal(address(0xf10), 100 ether);
+        vm.deal(address(0xf11), 100 ether);
+        vm.deal(address(0xf12), 100 ether);
+        vm.deal(address(0xf13), 100 ether);
+        vm.deal(address(0xf14), 100 ether);
 
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -347,7 +352,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCreateDataSetCreatesRailAndChargesFee() public {
         // First approve the storage provider
         vm.prank(storageProvider);
-        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
 
         // Prepare ExtraData
@@ -473,7 +478,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCreateDataSetNoCDN() public {
         // First approve the storage provider
         vm.prank(storageProvider);
-        pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
 
         // Prepare ExtraData
@@ -559,7 +564,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.expectEmit(true, false, false, true);
         emit ProviderRegistered(sp1, validServiceUrl, validPeerId);
 
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         vm.stopPrank();
 
@@ -574,11 +579,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.startPrank(sp1);
 
         // First registration
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         // Try to register again
         vm.expectRevert("Registration already pending");
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         vm.stopPrank();
     }
@@ -586,20 +591,20 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCannotRegisterIfAlreadyApproved() public {
         // Register and approve SP1
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Try to register again
         vm.prank(sp1);
         vm.expectRevert("Provider already approved");
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
     }
 
     function testApproveServiceProvider() public {
         // SP registers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         // Get the registration block from pending info
         FilecoinWarmStorageService.PendingProviderInfo memory pendingInfo =
@@ -635,10 +640,10 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testApproveMultipleProviders() public {
         // Multiple SPs register
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         // Approve both
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -652,7 +657,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testOnlyOwnerCanApprove() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
@@ -667,7 +672,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCannotApproveAlreadyApprovedProvider() public {
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Try to approve again (would need to re-register first, but we test the check)
@@ -678,7 +683,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testRejectServiceProvider() public {
         // SP registers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         // Owner rejects
         vm.expectEmit(true, false, false, false);
@@ -698,12 +703,12 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCanReregisterAfterRejection() public {
         // Register and reject
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.rejectServiceProvider(sp1);
 
         // Register again with different URLs
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         // Verify new registration
         FilecoinWarmStorageService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
@@ -713,7 +718,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testOnlyOwnerCanReject() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, sp2));
@@ -730,7 +735,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testRemoveServiceProvider() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Verify SP is approved
@@ -751,7 +756,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testOnlyOwnerCanRemove() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Try to remove as non-owner
@@ -763,7 +768,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testRemovedProviderCannotCreateDataSet() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Remove the provider
@@ -799,7 +804,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCanReregisterAfterRemoval() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Remove the provider
@@ -807,7 +812,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should be able to register again
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         // Verify new registration
         FilecoinWarmStorageService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
@@ -846,7 +851,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testWhitelistedProviderCanCreateDataSet() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Prepare extra data
@@ -881,7 +886,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testGetApprovedProvider() public {
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Get provider info
@@ -899,7 +904,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Approve one provider
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         vm.expectRevert("Invalid provider ID");
@@ -911,7 +916,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "Should be approved after approval");
@@ -924,7 +929,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Register
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         // Check pending
         pending = pdpServiceWithPayments.getPendingProvider(sp1);
@@ -937,7 +942,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Register and approve
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "Should have ID 1 after approval");
@@ -948,7 +953,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testRemoveServiceProviderAfterReregistration() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Remove the provider
@@ -956,7 +961,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // SP re-registers with different URLs
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         // Approve again
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -970,13 +975,13 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testRemoveMultipleProviders() public {
         // Register and approve multiple SPs
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
 
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp3.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070811"
         );
 
@@ -1002,7 +1007,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testRemoveProviderWithPendingRegistration() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Remove the provider
@@ -1010,7 +1015,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // SP tries to register again while removed
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
 
         // Verify SP has pending registration but is not approved
         assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
@@ -1032,7 +1037,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testCannotRemoveAlreadyRemovedProvider() public {
         // Register and approve SP
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Remove the provider
@@ -1046,15 +1051,15 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testGetAllApprovedProvidersAfterRemoval() public {
         // Register and approve three providers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl2, validPeerId2);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl2, validPeerId2);
         pdpServiceWithPayments.approveServiceProvider(sp2);
 
         vm.prank(sp3);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp3.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070811"
         );
         pdpServiceWithPayments.approveServiceProvider(sp3);
@@ -1100,7 +1105,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testGetAllApprovedProvidersSingleProvider() public {
         // Edge case: Only one approved provider
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         FilecoinWarmStorageService.ApprovedProviderInfo[] memory providers =
@@ -1137,7 +1142,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(sps[i]);
-            pdpServiceWithPayments.registerServiceProvider(serviceUrls[i], peerIds[i]);
+            pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(serviceUrls[i], peerIds[i]);
             pdpServiceWithPayments.approveServiceProvider(sps[i]);
         }
 
@@ -1168,7 +1173,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
-            pdpServiceWithPayments.registerServiceProvider(
+            pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
                 "https://provider.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070850"
             );
             pdpServiceWithPayments.approveServiceProvider(provider);
@@ -1266,7 +1271,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
-            pdpServiceWithPayments.registerServiceProvider(
+            pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
                 "https://provider.example.com/pdp", "https://provider.example.com/retrieve"
             );
             pdpServiceWithPayments.approveServiceProvider(provider);
@@ -1305,12 +1310,12 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testStorageProviderChangedSuccessDecoupled() public {
         // Register and approve two providers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
@@ -1348,7 +1353,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testStorageProviderChangedRevertsIfNewStorageProviderNotApproved() public {
         // Register and approve sp1
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -1373,7 +1378,7 @@ contract FilecoinWarmStorageServiceTest is Test {
      */
     function testStorageProviderChangedRevertsIfNewStorageProviderZeroAddress() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
@@ -1391,12 +1396,12 @@ contract FilecoinWarmStorageServiceTest is Test {
      */
     function testStorageProviderChangedRevertsIfOldStorageProviderMismatch() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
@@ -1413,12 +1418,12 @@ contract FilecoinWarmStorageServiceTest is Test {
      */
     function testStorageProviderChangedRevertsIfUnauthorizedCaller() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
@@ -1436,12 +1441,12 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testMultipleDataSetsPerProviderStorageProviderChange() public {
         // Register and approve two providers
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
@@ -1469,12 +1474,12 @@ contract FilecoinWarmStorageServiceTest is Test {
      */
     function testStorageProviderChangedWithArbitraryExtraData() public {
         vm.prank(sp1);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
         vm.prank(sp2);
-        pdpServiceWithPayments.registerServiceProvider(
+        pdpServiceWithPayments.registerServiceProvider{value : 1 ether}(
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);

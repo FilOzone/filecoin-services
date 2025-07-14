@@ -191,6 +191,7 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    uint256 public constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
@@ -1158,7 +1159,7 @@ contract FilecoinWarmStorageService is
      * @param serviceURL The HTTP server URL for provider services
      * @param peerId The IPFS/libp2p peer ID for the provider (optional - pass empty bytes if not available)
      */
-    function registerServiceProvider(string calldata serviceURL, bytes calldata peerId) external {
+    function registerServiceProvider(string calldata serviceURL, bytes calldata peerId) external payable {
         require(!approvedProvidersMap[msg.sender], "Provider already approved");
         require(bytes(serviceURL).length > 0, "Provider service URL cannot be empty");
         require(bytes(serviceURL).length <= 256, "Provider service URL too long (max 256 bytes)");
@@ -1166,6 +1167,11 @@ contract FilecoinWarmStorageService is
 
         // Check if registration is already pending
         require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
+        
+        // Burn one-time fee to register
+        require(msg.value == SP_REGISTRATION_FEE, "Incorrect registration fee");
+        (bool sent, ) = address(0xff00000000000000000000000000000000000063).call{value: msg.value}("");
+        require(sent, "Burn failed");
 
         // Store pending registration
         pendingProviders[msg.sender] = PendingProviderInfo({
