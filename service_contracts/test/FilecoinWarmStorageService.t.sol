@@ -1493,6 +1493,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         (, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, sp2, "Payee should be updated to new storage provider");
     }
+
+    function testRegisterServiceProviderRevertsIfNoValue() public {
+        vm.startPrank(sp1);
+        vm.expectRevert("Incorrect registration fee");
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        vm.stopPrank();
+    }
+
+    function testRegisterServiceProviderRevertsIfWrongValue() public {
+        vm.startPrank(sp1);
+        vm.expectRevert("Incorrect registration fee");
+        pdpServiceWithPayments.registerServiceProvider{value: 0.5 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        vm.stopPrank();
+    }
 }
 
 contract SignatureCheckingService is FilecoinWarmStorageService {
