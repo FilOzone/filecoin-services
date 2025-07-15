@@ -1429,6 +1429,20 @@ contract PandoraServiceTest is Test {
         ( , address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
         assertEq(payee, sp2, "Payee should be updated to new owner");
     }
+
+    function testRegisterServiceProviderRevertsIfNoValue() public {
+        vm.startPrank(sp1);
+        vm.expectRevert("Incorrect registration fee");
+        pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        vm.stopPrank();
+    }
+
+    function testRegisterServiceProviderRevertsIfWrongValue() public {
+        vm.startPrank(sp1);
+        vm.expectRevert("Incorrect registration fee");
+        pdpServiceWithPayments.registerServiceProvider{value: 0.5 ether}("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
+        vm.stopPrank();
+    }
 }
 
 contract SignatureCheckingService is PandoraService {
