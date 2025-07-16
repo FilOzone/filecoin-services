@@ -23,6 +23,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
     event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
+    event GracePeriodStarted(uint256 indexed proofSetId, uint256 expiresAt);
 
     // Constants
     uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
@@ -395,8 +396,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
             creator, // proofset creator, SPs in  most cases
-            address(this), // this contract acts as the arbiter
-            info.commissionBps // commission rate based on CDN usage
+            address(this), // this contract acts as the validator/arbiter
+            info.commissionBps, // commission rate based on CDN usage
+            address(this) // service fee recipient (this contract)
         );
 
         // Store the rail ID
@@ -429,7 +431,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @notice Handles proof set deletion and terminates the payment rail
      * @dev Called by the PDPVerifier contract when a proof set is deleted
      * @param proofSetId The ID of the proof set being deleted
-     * @param extraData Signature for authentication
+     * @param extraData Flag (1 byte) + Signature for authentication
+     *        Flag: 0x01 = client deletion (signature required), 0x02 = provider deletion (grace period check)
      */
     function proofSetDeleted(
         uint256 proofSetId,
@@ -442,21 +445,64 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             info.railId != 0,
             "Proof set not registered with payment system"
         );
-        (bytes memory signature) = abi.decode(extraData, (bytes));
+        
+        require(extraData.length >= 1, "ExtraData must contain at least deletion type flag");
+        
+        // Extract the deletion type flag (first byte)
+        uint8 deletionType = uint8(extraData[0]);
         
         // Get the payer address for this proof set
         address payer = proofSetInfo[proofSetId].payer;
         
-        // Verify the client's signature
-        require(
-            verifyDeleteProofSetSignature(
+        bool authorized = false;
+        
+        if (deletionType == 0x01) {
+            // Client deletion - check signature
+            require(extraData.length > 1, "ExtraData must contain signature for client deletion");
+            bytes memory signature = extraData[1:];
+            
+            authorized = verifyDeleteProofSetSignature(
                 payer,
                 info.clientDataSetId,
                 signature
-            ),
-            "Not authorized to delete proof set"
-        );
-        // TODO Proofset deletion logic         
+            );
+            require(authorized, "Invalid client signature for proof set deletion");
+            
+        } else if (deletionType == 0x02) {
+            // Provider deletion - check grace period
+            uint256 fundedUntilEpoch;
+            if (info.railId != 0) {
+                // Get the payments contract
+                Payments payments = Payments(paymentsContractAddress);
+                
+                // Get account info to check funded status
+                (uint256 _fundedUntilEpoch, uint256 currentFunds, uint256 availableFunds, uint256 currentLockupRate) = 
+                    payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
+                fundedUntilEpoch = _fundedUntilEpoch;
+                
+                // Check if grace period has expired
+                if (fundedUntilEpoch < block.number && fundedUntilEpoch > 0) {
+                    uint256 gracePeriodExpiresAt = fundedUntilEpoch + DEFAULT_LOCKUP_PERIOD;
+                    authorized = block.number >= gracePeriodExpiresAt;
+                }
+            }
+            require(authorized, "Grace period has not expired yet");
+            
+            // First terminate the rail to stop future payments
+            Payments paymentsContract = Payments(paymentsContractAddress);
+            paymentsContract.terminateRail(info.railId);
+            
+            // Then settle the rail to actually receive the payment
+            paymentsContract.settleRail(info.railId, block.number);
+            
+        } else {
+            revert("Invalid deletion type flag");
+        }
+        
+        // Clean up the proof set info
+        uint256 railIdToDelete = info.railId;
+        delete proofSetInfo[proofSetId];
+        delete railToProofSet[railIdToDelete];         
     }
 
     /**
@@ -565,6 +611,21 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         provenPeriods[proofSetId][currentPeriod] = true;
     }
 
+    /**
+     * @notice Called when proof set ownership is changed in PDPVerifier
+     * @dev This function is called by the PDPVerifier when a proof set ownership changes
+     * @param proofSetId The ID of the proof set whose ownership changed
+     * @param oldOwner The previous owner address
+     * @param newOwner The new owner address  
+     * @param extraData Additional data from the ownership change (currently unused)
+     */
+    function ownerChanged(uint256 proofSetId, address oldOwner, address newOwner, bytes calldata extraData) external onlyPDPVerifier {
+        // For now, we implement this as a no-op since PandoraService doesn't currently
+        // need to track ownership changes for its payment functionality.
+        // This could be extended in the future to handle payment rail ownership updates
+        // or emit events for tracking purposes.
+    }
+
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
     // Additionally it enforces constraints on the update of its state:
     // 1. One update per proving period.
@@ -644,6 +705,28 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Update the payment rate based on current proof set size
         updateRailPaymentRate(proofSetId, leafCount);
+        
+        // Check if we're in grace period
+        checkAndEmitGracePeriod(proofSetId);
+    }
+
+    function checkAndEmitGracePeriod(uint256 proofSetId) internal {
+        ProofSetInfo storage info = proofSetInfo[proofSetId];
+        if (info.railId == 0) return; // No payment rail configured
+        
+        // Get the payments contract
+        Payments payments = Payments(paymentsContractAddress);
+        
+        // Get account info to check funded status
+        (uint256 fundedUntilEpoch, uint256 currentFunds, uint256 availableFunds, uint256 currentLockupRate) = 
+            payments.getAccountInfoIfSettled(usdfcTokenAddress, info.payer);
+        
+        // Check if funded until epoch is in the past (grace period started)
+        if (fundedUntilEpoch < block.number && fundedUntilEpoch > 0) {
+            // Calculate when grace period expires
+            uint256 gracePeriodExpiresAt = fundedUntilEpoch + DEFAULT_LOCKUP_PERIOD;
+            emit GracePeriodStarted(proofSetId, gracePeriodExpiresAt);
+        }
     }
 
     /**
