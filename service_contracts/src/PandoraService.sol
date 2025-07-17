@@ -834,14 +834,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Calculate PDP the per-epoch rate based on total storage size
-     * @dev Rate is 2 USDFC per TiB per month.
+     * @notice Calculate a per-epoch rate based on total storage size
      * @param totalBytes Total size of the stored data in bytes
+     * @param ratePerTiBPerMonth The rate per TiB per month in the token's smallest unit
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
-    function calculateStorageRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        uint256 ratePerTiBPerMonth = STORAGE_PRICE_PER_TIB_PER_MONTH;
-
+    function calculateStorageSizeBasedRatePerEpoch(
+        uint256 totalBytes,
+        uint256 ratePerTiBPerMonth
+    ) internal view returns (uint256) {
         uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
 
@@ -858,6 +859,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         }
 
         return ratePerEpoch;
+    }
+
+    /**
+     * @notice Calculate the PDP per-epoch rate based on total storage size
+     * @dev Rate is 2 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateStorageRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
@@ -867,24 +878,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
     function calculateCacheMissRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
-
-        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
-        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
-
-        // Ensure denominator is not zero (shouldn't happen with constants)
-        require(denominator > 0, "Denominator cannot be zero");
-
-        uint256 ratePerEpoch = numerator / denominator;
-
-        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
-        // This prevents charging 0 for very small sizes due to integer division.
-        if (ratePerEpoch == 0 && totalBytes > 0) {
-            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
-            return minRate;
-        }
-
-        return ratePerEpoch;
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH / 2);
     }
 
     /**
@@ -894,24 +888,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
     function calculateCDNRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        uint256 ratePerTiBPerMonth = CDN_PRICE_PER_TIB_PER_MONTH / 2;
-        
-        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
-        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
-
-        // Ensure denominator is not zero (shouldn't happen with constants)
-        require(denominator > 0, "Denominator cannot be zero");
-
-        uint256 ratePerEpoch = numerator / denominator;
-
-        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
-        // This prevents charging 0 for very small sizes due to integer division.
-        if (ratePerEpoch == 0 && totalBytes > 0) {
-            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
-            return minRate;
-        }
-
-        return ratePerEpoch;
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH / 2);
     }
 
     /**
