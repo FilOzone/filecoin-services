@@ -16,9 +16,9 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - ProofSet
+        - DataSet
         - Provider
-        - Root
+        - Piece
         - Rail
         - RateChangeQueue
         - SumTreeCount
@@ -43,31 +43,31 @@ dataSources:
           handler: handleNextProvingPeriod
       file: ./src/pdp-verifier.ts
   - kind: ethereum
-    name: PandoraService
+    name: FilecoinWarmStorageService
     network: filecoin-testnet
     source:
       address: "0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5"
-      abi: PandoraService
+      abi: FilecoinWarmStorageService
       startBlock: 2730790
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - ProofSet
-        - Root
+        - DataSet
+        - Piece
         - Rail
         - RateChangeQueue
         - SumTreeCount
         - FaultRecord
       abis:
-        - name: PandoraService
-          file: ./abis/PandoraService.json
+        - name: FilecoinWarmStorageService
+          file: ./abis/FilecoinWarmStorageService.json
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: "ProofSetRailCreated(indexed uint256,uint256,address,address,bool)"
-          handler: handleProofSetRailCreated
+        - event: "DataSetRailCreated(indexed uint256,uint256,address,address,bool)"
+          handler: handleDataSetRailCreated
         - event: "RailRateUpdated(indexed uint256,uint256,uint256)"
           handler: handleRailRateUpdated
         - event: "FaultRecord(indexed uint256,uint256,uint256)"
@@ -80,4 +80,4 @@ dataSources:
           handler: handleProviderRejected
         - event: "ProviderRemoved(indexed address,indexed uint256)"
           handler: handleProviderRemoved
-      file: ./src/pandora-service.ts
+      file: ./src/filecoin-warm-storage-service.ts
