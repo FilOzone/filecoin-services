@@ -4,7 +4,7 @@ Building Filecoin onchain programmable services that integrate with the Filecoin
 
 ## ⚠️ IMPORTANT DISCLAIMER
 
-**🚨 THE PANDORA CONTRACT IS CURRENTLY UNDER ACTIVE DEVELOPMENT AND IS NOT READY FOR PRODUCTION USE 🚨**
+**🚨 THE FILECOIN WARM STORAGE CONTRACT IS CURRENTLY UNDER ACTIVE DEVELOPMENT AND IS NOT READY FOR PRODUCTION USE 🚨**
 
 **DO NOT USE IN PRODUCTION ENVIRONMENTS**
 
@@ -16,7 +16,7 @@ This software is provided for development, testing, and research purposes only. 
 
 This repository contains smart contracts and services for the Filecoin ecosystem, featuring:
 
-- **PandoraService**: A comprehensive service contract that combines PDP (Proof of Data Possession) verification with integrated payment rails
+- **FilecoinWarmStorageService**: A comprehensive service contract that combines PDP (Proof of Data Possession) verification with integrated payment rails
 - **Payment Integration**: Built on top of the [Filecoin Services Payments](https://github.com/FilOzone/filecoin-services-payments) framework
 - **Data Verification**: Uses [PDP verifiers](https://github.com/FilOzone/pdp) for cryptographic proof of data possession
 
@@ -55,9 +55,9 @@ make test
 ```
 service_contracts/
 ├── src/                    # Smart contract source files
-│   └── PandoraService.sol  # Main service contract with PDP and payment integration
+│   └── FilecoinWarmStorageService.sol  # Main service contract with PDP and payment integration
 ├── test/                   # Test files
-│   └── PandoraService.t.sol # Contract tests
+│   └── FilecoinWarmStorageService.t.sol # Contract tests
 ├── tools/                  # Deployment and utility scripts
 ├── lib/                    # Dependencies (git submodules)
 │   ├── forge-std/          # Foundry standard library
@@ -70,9 +70,22 @@ service_contracts/
 ## 🌐 Deployed Contracts
 
 ### Calibnet (Testnet)
-- **Pandora Service**: [`0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5`](https://calibration.filfox.info/en/address/0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5)
-  - Pandora service implements UUPSUpgradeable & EIP712Upgradeable and this is the proxy contract address - it is relatively stable at this point. 
-- **Latest Implementation**: [`0xA970e9517425FA4C09d9ECAf7d24a5677170392a`](https://calibration.filfox.info/en/address/0xA970e9517425FA4C09d9ECAf7d24a5677170392a)
+#### Live but soon to be deprecated
+
+We are updating contract terminology to make the codebase more self-explanatory. As part of this process, we will be deploying a new set of contracts on Calibration and deprecating the existing Pandora Service contract.
+
+Key points:
+- New data (“root”) additions to the current contract will be frozen around the end of July.
+- Storage Providers may remove existing datasets during this period.
+- Please migrate to the new set of contracts as soon as possible!
+- Thank you for your cooperation as we improve developer experience and clarity.
+
+Pandora Service**: [`0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5`](https://calibration.filfox.info/en/address/0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5)
+
+#### Coming next
+- **FilecoinWarmStorageService**: [TBD](https://calibration.filfox.info/en/address/TBD)
+  - FilecoinWarmStorageService implements UUPSUpgradeable & EIP712Upgradeable and this is the proxy contract address - it is relatively stable at this point. 
+- **Latest Implementation**: [`TBD`](https://calibration.filfox.info/en/address/TBD)
 
 ### Mainnet
 🚧 **Coming Soon** - Mainnet deployment is in progress
@@ -92,7 +105,7 @@ make test
 forge test -vvv --via-ir
 
 # Run specific test file (using forge directly)
-forge test --match-path test/PandoraService.t.sol --via-ir
+forge test --match-path test/FilecoinWarmStorageService.t.sol --via-ir
 ```
 
 ### Code Quality
