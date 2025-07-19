@@ -334,7 +334,7 @@ contract PandoraServiceTest is Test {
         // Check fee constants are correctly calculated based on token decimals
         uint256 expectedProofSetCreationFee = (1 * 10 ** mockUSDFC.decimals()) / 10; // 0.1 USDFC
         assertEq(
-            pdpServiceWithPayments.PAYMENT_RAIL_CREATION_FEE(),
+            pdpServiceWithPayments.PROOFSET_CREATION_FEE(),
             expectedProofSetCreationFee,
             "Proof set creation fee should be set correctly"
         );
@@ -366,7 +366,7 @@ contract PandoraServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.PAYMENT_RAIL_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.PROOFSET_CREATION_FEE(); // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
@@ -453,7 +453,7 @@ contract PandoraServiceTest is Test {
         (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), storageProvider);
 
         // Calculate expected client balance
-        uint256 expectedClientFundsAfter = clientFundsBefore - 3 * pdpServiceWithPayments.PAYMENT_RAIL_CREATION_FEE();
+        uint256 expectedClientFundsAfter = clientFundsBefore - pdpServiceWithPayments.PROOFSET_CREATION_FEE();
 
         // Verify balances changed correctly (one-time fee transferred)
         assertEq(
@@ -488,7 +488,7 @@ contract PandoraServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.PAYMENT_RAIL_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.PROOFSET_CREATION_FEE(); // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
