@@ -58,7 +58,7 @@
   },
   {
     "type": "function",
-    "name": "PROOFSET_CREATION_FEE",
+    "name": "DATA_SET_CREATION_FEE",
     "inputs": [],
     "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "view"
@@ -175,7 +175,7 @@
   },
   {
     "type": "function",
-    "name": "clientProofSets",
+    "name": "clientDataSets",
     "inputs": [
       { "name": "", "type": "address", "internalType": "address" },
       { "name": "", "type": "uint256", "internalType": "uint256" }
@@ -281,7 +281,7 @@
   },
   {
     "type": "function",
-    "name": "getClientProofSets",
+    "name": "getClientDataSets",
     "inputs": [
       { "name": "client", "type": "address", "internalType": "address" }
     ],
@@ -289,7 +289,7 @@
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct SimplePDPServiceWithPayments.ProofSetInfo[]",
+        "internalType": "struct SimplePDPServiceWithPayments.DataSetInfo[]",
         "components": [
           { "name": "railId", "type": "uint256", "internalType": "uint256" },
           { "name": "payer", "type": "address", "internalType": "address" },
@@ -301,7 +301,7 @@
           },
           { "name": "metadata", "type": "string", "internalType": "string" },
           {
-            "name": "rootMetadata",
+            "name": "pieceMetadata",
             "type": "string[]",
             "internalType": "string[]"
           },
@@ -353,18 +353,18 @@
   },
   {
     "type": "function",
-    "name": "getProofSetMetadata",
+    "name": "getDataSetMetadata",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [{ "name": "", "type": "string", "internalType": "string" }],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "getProofSetParties",
+    "name": "getDataSetParties",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [
       { "name": "payer", "type": "address", "internalType": "address" },
@@ -374,16 +374,16 @@
   },
   {
     "type": "function",
-    "name": "getProofSetRailId",
+    "name": "getDataSetRailId",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "getProofSetSizeInBytes",
+    "name": "getDataSetSizeInBytes",
     "inputs": [
       { "name": "leafCount", "type": "uint256", "internalType": "uint256" }
     ],
@@ -392,9 +392,9 @@
   },
   {
     "type": "function",
-    "name": "getProofSetWithCDN",
+    "name": "getDataSetWithCDN",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
     "stateMutability": "view"
@@ -412,7 +412,7 @@
     "type": "function",
     "name": "getProvingPeriodForEpoch",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       { "name": "epoch", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
@@ -420,10 +420,10 @@
   },
   {
     "type": "function",
-    "name": "getRootMetadata",
+    "name": "getPieceMetadata",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootId", "type": "uint256", "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "pieceId", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [{ "name": "", "type": "string", "internalType": "string" }],
     "stateMutability": "view"
@@ -490,7 +490,7 @@
     "type": "function",
     "name": "isEpochProven",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       { "name": "epoch", "type": "uint256", "internalType": "uint256" }
     ],
     "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
@@ -518,7 +518,7 @@
     "type": "function",
     "name": "nextProvingPeriod",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       {
         "name": "challengeEpoch",
         "type": "uint256",
@@ -584,7 +584,7 @@
     "type": "function",
     "name": "possessionProven",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       { "name": "", "type": "uint256", "internalType": "uint256" },
       { "name": "", "type": "uint256", "internalType": "uint256" },
       {
@@ -598,9 +598,9 @@
   },
   {
     "type": "function",
-    "name": "proofSetCreated",
+    "name": "dataSetCreated",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       { "name": "creator", "type": "address", "internalType": "address" },
       { "name": "extraData", "type": "bytes", "internalType": "bytes" }
     ],
@@ -609,9 +609,9 @@
   },
   {
     "type": "function",
-    "name": "proofSetDeleted",
+    "name": "dataSetDeleted",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       { "name": "", "type": "uint256", "internalType": "uint256" },
       { "name": "extraData", "type": "bytes", "internalType": "bytes" }
     ],
@@ -620,7 +620,7 @@
   },
   {
     "type": "function",
-    "name": "proofSetInfo",
+    "name": "dataSetInfo",
     "inputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "outputs": [
       { "name": "railId", "type": "uint256", "internalType": "uint256" },
@@ -643,7 +643,7 @@
   },
   {
     "type": "function",
-    "name": "proofSetRootMetadata",
+    "name": "dataSetPieceMetadata",
     "inputs": [
       { "name": "", "type": "uint256", "internalType": "uint256" },
       { "name": "", "type": "uint256", "internalType": "uint256" }
@@ -698,7 +698,7 @@
   },
   {
     "type": "function",
-    "name": "railToProofSet",
+    "name": "railToDataSet",
     "inputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "view"
@@ -744,9 +744,9 @@
   },
   {
     "type": "function",
-    "name": "rootsAdded",
+    "name": "piecesAdded",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
       { "name": "firstAdded", "type": "uint256", "internalType": "uint256" },
       {
         "name": "rootData",
@@ -771,10 +771,10 @@
   },
   {
     "type": "function",
-    "name": "rootsScheduledRemove",
+    "name": "piecesScheduledRemove",
     "inputs": [
-      { "name": "proofSetId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootIds", "type": "uint256[]", "internalType": "uint256[]" },
+      { "name": "dataSetId", "type": "uint256", "internalType": "uint256" },
+      { "name": "pieceIds", "type": "uint256[]", "internalType": "uint256[]" },
       { "name": "extraData", "type": "bytes", "internalType": "bytes" }
     ],
     "outputs": [],
@@ -850,7 +850,7 @@
     "name": "FaultRecord",
     "inputs": [
       {
-        "name": "proofSetId",
+        "name": "dataSetId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
@@ -913,7 +913,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "proofSetId",
+        "name": "dataSetId",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -941,10 +941,10 @@
   },
   {
     "type": "event",
-    "name": "ProofSetRailCreated",
+    "name": "DataSetRailCreated",
     "inputs": [
       {
-        "name": "proofSetId",
+        "name": "dataSetId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
@@ -1057,7 +1057,7 @@
     "name": "RailRateUpdated",
     "inputs": [
       {
-        "name": "proofSetId",
+        "name": "dataSetId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
@@ -1079,16 +1079,16 @@
   },
   {
     "type": "event",
-    "name": "RootMetadataAdded",
+    "name": "PieceMetadataAdded",
     "inputs": [
       {
-        "name": "proofSetId",
+        "name": "dataSetId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
       },
       {
-        "name": "rootId",
+        "name": "pieceId",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

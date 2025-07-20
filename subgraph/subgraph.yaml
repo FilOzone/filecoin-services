@@ -16,9 +16,9 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - ProofSet
+        - DataSet
         - Provider
-        - Root
+        - Piece
         - Rail
         - RateChangeQueue
         - SumTreeCount
@@ -27,16 +27,16 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: ProofSetOwnerChanged(indexed uint256,indexed address,indexed address)
-          handler: handleProofSetOwnerChanged
-        - event: ProofSetDeleted(indexed uint256,uint256)
-          handler: handleProofSetDeleted
-        - event: RootsAdded(indexed uint256,uint256[])
-          handler: handleRootsAdded
-        - event: RootsRemoved(indexed uint256,uint256[])
-          handler: handleRootsRemoved
-        - event: ProofSetEmpty(indexed uint256)
-          handler: handleProofSetEmpty
+        - event: DataSetOwnerChanged(indexed uint256,indexed address,indexed address)
+          handler: handleDataSetOwnerChanged
+        - event: DataSetDeleted(indexed uint256,uint256)
+          handler: handleDataSetDeleted
+        - event: PiecesAdded(indexed uint256,uint256[])
+          handler: handlePiecesAdded
+        - event: PiecesRemoved(indexed uint256,uint256[])
+          handler: handlePiecesRemoved
+        - event: DataSetEmpty(indexed uint256)
+          handler: handleDataSetEmpty
         - event: PossessionProven(indexed uint256,(uint256,uint256)[])
           handler: handlePossessionProven
         - event: NextProvingPeriod(indexed uint256,uint256,uint256)
@@ -54,8 +54,8 @@ dataSources:
       apiVersion: 0.0.9
       language: wasm/assemblyscript
       entities:
-        - ProofSet
-        - Root
+        - DataSet
+        - Piece
         - Rail
         - RateChangeQueue
         - SumTreeCount
@@ -66,8 +66,8 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: "ProofSetRailCreated(indexed uint256,uint256,address,address,bool)"
-          handler: handleProofSetRailCreated
+        - event: "DataSetRailCreated(indexed uint256,uint256,address,address,bool)"
+          handler: handleDataSetRailCreated
         - event: "RailRateUpdated(indexed uint256,uint256,uint256)"
           handler: handleRailRateUpdated
         - event: "FaultRecord(indexed uint256,uint256,uint256)"

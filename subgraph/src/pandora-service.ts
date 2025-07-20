@@ -1,7 +1,7 @@
 import { BigInt, Bytes, crypto, Address, log } from "@graphprotocol/graph-ts";
 import {
   FaultRecord as FaultRecordEvent,
-  ProofSetRailCreated as ProofSetRailCreatedEvent,
+  DataSetRailCreated as DataSetRailCreatedEvent,
   RailRateUpdated as RailRateUpdatedEvent,
   ProviderRegistered as ProviderRegisteredEvent,
   ProviderApproved as ProviderApprovedEvent,
@@ -16,10 +16,10 @@ import {
   DefaultLockupPeriod,
 } from "../utils";
 import {
-  ProofSet,
+  DataSet,
   Provider,
   FaultRecord,
-  Root,
+  Piece,
   Rail,
   RateChangeQueue,
 } from "../generated/schema";
@@ -31,12 +31,12 @@ import {
 import { ContractAddresses, FunctionSelectors } from "./constants";
 
 // --- Helper Functions
-function getProofSetEntityId(setId: BigInt): Bytes {
+function getDataSetEntityId(setId: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromBigInt(setId));
 }
 
-function getRootEntityId(setId: BigInt, rootId: BigInt): Bytes {
-  return Bytes.fromUTF8(setId.toString() + "-" + rootId.toString());
+function getPieceEntityId(setId: BigInt, pieceId: BigInt): Bytes {
+  return Bytes.fromUTF8(setId.toString() + "-" + pieceId.toString());
 }
 
 function getRailEntityId(railId: BigInt): Bytes {
@@ -66,12 +66,12 @@ function padTo32Bytes(input: Uint8Array): Uint8Array {
 }
 
 /**
- * Generates a deterministic challenge index using seed, proofSetID, proofIndex, and totalLeaves.
+ * Generates a deterministic challenge index using seed, dataSetID, proofIndex, and totalLeaves.
  * Mirrors the logic from Go's generateChallengeIndex.
  */
 export function generateChallengeIndex(
   seed: Uint8Array,
-  proofSetID: BigInt,
+  dataSetID: BigInt,
   proofIndex: i32,
   totalLeaves: BigInt
 ): BigInt {
@@ -80,10 +80,10 @@ export function generateChallengeIndex(
   const paddedSeed = padTo32Bytes(seed);
   data.set(paddedSeed, 0);
 
-  // Convert proofSetID to Bytes and pad to 32 bytes (Big-Endian padding implied by padTo32Bytes)
-  const psIDBytes = Bytes.fromBigInt(proofSetID);
-  const psIDPadded = padTo32Bytes(psIDBytes);
-  data.set(psIDPadded, 32); // Write 32 bytes at offset 32
+  // Convert dataSetID to Bytes and pad to 32 bytes (Big-Endian padding implied by padTo32Bytes)
+  const dsIDBytes = Bytes.fromBigInt(dataSetID);
+  const dsIDPadded = padTo32Bytes(dsIDBytes);
+  data.set(dsIDPadded, 32); // Write 32 bytes at offset 32
 
   // Convert proofIndex (i32) to an 8-byte Uint8Array (uint64 Big-Endian)
   const idxBuf = new Uint8Array(8); // Create 8-byte buffer, initialized to zeros
@@ -102,8 +102,8 @@ export function generateChallengeIndex(
 
   if (totalLeaves.isZero()) {
     log.error(
-      "generateChallengeIndex: totalLeaves is zero, cannot calculate modulus. ProofSetID: {}. Seed: {}",
-      [proofSetID.toString(), Bytes.fromUint8Array(seed).toHex()]
+      "generateChallengeIndex: totalLeaves is zero, cannot calculate modulus. DataSetID: {}. Seed: {}",
+      [dataSetID.toString(), Bytes.fromUint8Array(seed).toHex()]
     );
     return BigInt.fromI32(0);
   }
@@ -121,9 +121,9 @@ export function ensureEvenHex(value: BigInt): string {
   return "0x" + paddedHex;
 }
 
-export function findChallengedRoots(
-  proofSetId: BigInt,
-  nextRootId: BigInt,
+export function findChallengedPieces(
+  dataSetId: BigInt,
+  nextPieceId: BigInt,
   challengeEpoch: BigInt,
   totalLeaves: BigInt,
   blockNumber: BigInt
@@ -134,7 +134,7 @@ export function findChallengedRoots(
 
   const seedIntResult = instance.try_getRandomness(challengeEpoch);
   if (seedIntResult.reverted) {
-    log.warning("findChallengedRoots: Failed to get randomness for epoch {}", [
+    log.warning("findChallengedPieces: Failed to get randomness for epoch {}", [
       challengeEpoch.toString(),
     ]);
     return [];
@@ -146,15 +146,15 @@ export function findChallengedRoots(
   const challenges: BigInt[] = [];
   if (totalLeaves.isZero()) {
     log.warning(
-      "findChallengedRoots: totalLeaves is zero for ProofSet {}. Cannot generate challenges.",
-      [proofSetId.toString()]
+      "findChallengedPieces: totalLeaves is zero for DataSet {}. Cannot generate challenges.",
+      [dataSetId.toString()]
     );
     return [];
   }
   for (let i = 0; i < NumChallenges; i++) {
     const leafIdx = generateChallengeIndex(
       Bytes.fromHexString(seedHex),
-      proofSetId,
+      dataSetId,
       i32(i),
       totalLeaves
     );
@@ -162,24 +162,24 @@ export function findChallengedRoots(
   }
 
   const sumTreeInstance = new SumTree();
-  const rootIds = sumTreeInstance.findRootIds(
-    proofSetId.toI32(),
-    nextRootId.toI32(),
+  const pieceIds = sumTreeInstance.findRootIds(
+    dataSetId.toI32(),
+    nextPieceId.toI32(),
     challenges,
     blockNumber
   );
-  if (!rootIds) {
-    log.warning("findChallengedRoots: findRootIds reverted for proofSetId {}", [
-      proofSetId.toString(),
+  if (!pieceIds) {
+    log.warning("findChallengedPieces: findRootIds reverted for dataSetId {}", [
+      dataSetId.toString(),
     ]);
     return [];
   }
 
-  const rootIdsArray: BigInt[] = [];
-  for (let i = 0; i < rootIds.length; i++) {
-    rootIdsArray.push(rootIds[i].rootId);
+  const pieceIdsArray: BigInt[] = [];
+  for (let i = 0; i < pieceIds.length; i++) {
+    pieceIdsArray.push(pieceIds[i].rootId);
   }
-  return rootIdsArray;
+  return pieceIdsArray;
 }
 
 /**
@@ -187,18 +187,18 @@ export function findChallengedRoots(
  * Records a fault for a specific proof set.
  */
 export function handleFaultRecord(event: FaultRecordEvent): void {
-  const setId = event.params.proofSetId;
+  const setId = event.params.dataSetId;
   const periodsFaultedParam = event.params.periodsFaulted;
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
   const entityId = getEventLogEntityId(event.transaction.hash, event.logIndex);
 
-  const proofSet = ProofSet.load(proofSetEntityId);
-  if (!proofSet) return; // proofSet doesn't belong to Pandora Service
+  const dataSet = DataSet.load(dataSetEntityId);
+  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
 
-  const challengeEpoch = proofSet.nextChallengeEpoch;
-  const challengeRange = proofSet.challengeRange;
-  const proofSetOwner = proofSet.owner;
-  const nextRootId = proofSet.totalRoots;
+  const challengeEpoch = dataSet.nextChallengeEpoch;
+  const challengeRange = dataSet.challengeRange;
+  const dataSetOwner = dataSet.owner;
+  const nextPieceId = dataSet.totalPieces;
 
   let nextChallengeEpoch = BigInt.fromI32(0);
   const inputData = event.transaction.input;
@@ -217,64 +217,64 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     );
   }
 
-  const rootIds = findChallengedRoots(
+  const pieceIds = findChallengedPieces(
     setId,
-    nextRootId,
+    nextPieceId,
     challengeEpoch,
     challengeRange,
     event.block.number
   );
 
-  if (rootIds.length === 0) {
+  if (pieceIds.length === 0) {
     log.info(
-      "handleFaultRecord: No roots found for challenge epoch {} in ProofSet {}",
+      "handleFaultRecord: No pieces found for challenge epoch {} in DataSet {}",
       [challengeEpoch.toString(), setId.toString()]
     );
   }
 
-  let uniqueRootIds: BigInt[] = [];
-  let rootIdMap = new Map<string, boolean>();
-  for (let i = 0; i < rootIds.length; i++) {
-    const rootIdStr = rootIds[i].toString();
-    if (!rootIdMap.has(rootIdStr)) {
-      uniqueRootIds.push(rootIds[i]);
-      rootIdMap.set(rootIdStr, true);
+  let uniquePieceIds: BigInt[] = [];
+  let pieceIdMap = new Map<string, boolean>();
+  for (let i = 0; i < pieceIds.length; i++) {
+    const pieceIdStr = pieceIds[i].toString();
+    if (!pieceIdMap.has(pieceIdStr)) {
+      uniquePieceIds.push(pieceIds[i]);
+      pieceIdMap.set(pieceIdStr, true);
     }
   }
 
-  let rootEntityIds: Bytes[] = [];
-  for (let i = 0; i < uniqueRootIds.length; i++) {
-    const rootId = uniqueRootIds[i];
-    const rootEntityId = getRootEntityId(setId, rootId);
+  let pieceEntityIds: Bytes[] = [];
+  for (let i = 0; i < uniquePieceIds.length; i++) {
+    const pieceId = uniquePieceIds[i];
+    const pieceEntityId = getPieceEntityId(setId, pieceId);
 
-    const root = Root.load(rootEntityId);
-    if (root) {
-      if (!root.lastFaultedEpoch.equals(challengeEpoch)) {
-        root.totalPeriodsFaulted =
-          root.totalPeriodsFaulted.plus(periodsFaultedParam);
+    const piece = Piece.load(pieceEntityId);
+    if (piece) {
+      if (!piece.lastFaultedEpoch.equals(challengeEpoch)) {
+        piece.totalPeriodsFaulted =
+          piece.totalPeriodsFaulted.plus(periodsFaultedParam);
       } else {
         log.info(
-          "handleFaultRecord: Root {} in Set {} already marked faulted for epoch {}",
-          [rootId.toString(), setId.toString(), challengeEpoch.toString()]
+          "handleFaultRecord: Piece {} in Set {} already marked faulted for epoch {}",
+          [pieceId.toString(), setId.toString(), challengeEpoch.toString()]
         );
       }
-      root.lastFaultedEpoch = challengeEpoch;
-      root.lastFaultedAt = event.block.timestamp;
-      root.updatedAt = event.block.timestamp;
-      root.blockNumber = event.block.number;
-      root.save();
+      piece.lastFaultedEpoch = challengeEpoch;
+      piece.lastFaultedAt = event.block.timestamp;
+      piece.updatedAt = event.block.timestamp;
+      piece.blockNumber = event.block.number;
+      piece.save();
     } else {
       log.warning(
-        "handleFaultRecord: Root {} for Set {} not found while recording fault",
-        [rootId.toString(), setId.toString()]
+        "handleFaultRecord: Piece {} for Set {} not found while recording fault",
+        [pieceId.toString(), setId.toString()]
       );
     }
-    rootEntityIds.push(rootEntityId);
+    pieceEntityIds.push(pieceEntityId);
   }
 
   const faultRecord = new FaultRecord(entityId);
-  faultRecord.proofSetId = setId;
-  faultRecord.rootIds = uniqueRootIds;
+  faultRecord.dataSetId = setId;
+  faultRecord.pieceIds = uniquePieceIds;
   faultRecord.currentChallengeEpoch = challengeEpoch;
   faultRecord.nextChallengeEpoch = nextChallengeEpoch;
   faultRecord.periodsFaulted = periodsFaultedParam;
@@ -282,56 +282,56 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   faultRecord.createdAt = event.block.timestamp;
   faultRecord.blockNumber = event.block.number;
 
-  faultRecord.proofSet = proofSetEntityId;
-  faultRecord.roots = rootEntityIds;
+  faultRecord.dataSet = dataSetEntityId;
+  faultRecord.pieces = pieceEntityIds;
 
   faultRecord.save();
 
-  proofSet.totalFaultedPeriods =
-    proofSet.totalFaultedPeriods.plus(periodsFaultedParam);
-  proofSet.totalFaultedRoots = proofSet.totalFaultedRoots.plus(
-    BigInt.fromI32(uniqueRootIds.length)
+  dataSet.totalFaultedPeriods =
+    dataSet.totalFaultedPeriods.plus(periodsFaultedParam);
+  dataSet.totalFaultedPieces = dataSet.totalFaultedPieces.plus(
+    BigInt.fromI32(uniquePieceIds.length)
   );
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 
-  const provider = Provider.load(proofSetOwner);
+  const provider = Provider.load(dataSetOwner);
   if (provider) {
     provider.totalFaultedPeriods =
       provider.totalFaultedPeriods.plus(periodsFaultedParam);
-    provider.totalFaultedRoots = provider.totalFaultedRoots.plus(
-      BigInt.fromI32(uniqueRootIds.length)
+    provider.totalFaultedPieces = provider.totalFaultedPieces.plus(
+      BigInt.fromI32(uniquePieceIds.length)
     );
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("handleFaultRecord: Provider {} not found for ProofSet {}", [
-      proofSetOwner.toHex(),
+    log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [
+      dataSetOwner.toHex(),
       setId.toString(),
     ]);
   }
 }
 
 /**
- * Handles the ProofSetRailCreated event.
- * Creates a new rail for a proof set.
+ * Handles the DataSetRailCreated event.
+ * Creates a new rail for a data set.
  */
-export function handleProofSetRailCreated(
-  event: ProofSetRailCreatedEvent
+export function handleDataSetRailCreated(
+  event: DataSetRailCreatedEvent
 ): void {
   const listenerAddr = event.address;
-  const setId = event.params.proofSetId;
+  const setId = event.params.dataSetId;
   const railId = event.params.railId;
   const clientAddr = event.params.payer;
   const owner = event.params.payee;
   const withCDN = event.params.withCDN;
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
   const railEntityId = getRailEntityId(railId);
   const providerEntityId = owner; // Provider ID is the owner address
 
-  let proofSet = new ProofSet(proofSetEntityId);
+  let dataSet = new DataSet(dataSetEntityId);
 
   const inputData = event.transaction.input;
   const extraDataStart = 4 + 32 + 32 + 32;
@@ -344,29 +344,29 @@ export function handleProofSetRailCreated(
 
   let metadata: string = decodedData.stringValue;
 
-  // Create ProofSet
-  proofSet.setId = setId;
-  proofSet.metadata = metadata;
-  proofSet.clientAddr = clientAddr;
-  proofSet.withCDN = withCDN;
-  proofSet.owner = providerEntityId; // Link to Provider via owner address (which is Provider's ID)
-  proofSet.listener = listenerAddr;
-  proofSet.isActive = true;
-  proofSet.leafCount = BigInt.fromI32(0);
-  proofSet.challengeRange = BigInt.fromI32(0);
-  proofSet.lastProvenEpoch = BigInt.fromI32(0);
-  proofSet.nextChallengeEpoch = BigInt.fromI32(0);
-  proofSet.totalRoots = BigInt.fromI32(0);
-  proofSet.nextRootId = BigInt.fromI32(0);
-  proofSet.totalDataSize = BigInt.fromI32(0);
-  proofSet.totalFaultedPeriods = BigInt.fromI32(0);
-  proofSet.totalFaultedRoots = BigInt.fromI32(0);
-  proofSet.totalProofs = BigInt.fromI32(0);
-  proofSet.totalProvedRoots = BigInt.fromI32(0);
-  proofSet.createdAt = event.block.timestamp;
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  // Create DataSet
+  dataSet.setId = setId;
+  dataSet.metadata = metadata;
+  dataSet.clientAddr = clientAddr;
+  dataSet.withCDN = withCDN;
+  dataSet.owner = providerEntityId; // Link to Provider via owner address (which is Provider's ID)
+  dataSet.listener = listenerAddr;
+  dataSet.isActive = true;
+  dataSet.leafCount = BigInt.fromI32(0);
+  dataSet.challengeRange = BigInt.fromI32(0);
+  dataSet.lastProvenEpoch = BigInt.fromI32(0);
+  dataSet.nextChallengeEpoch = BigInt.fromI32(0);
+  dataSet.totalPieces = BigInt.fromI32(0);
+  dataSet.nextPieceId = BigInt.fromI32(0);
+  dataSet.totalDataSize = BigInt.fromI32(0);
+  dataSet.totalFaultedPeriods = BigInt.fromI32(0);
+  dataSet.totalFaultedPieces = BigInt.fromI32(0);
+  dataSet.totalProofs = BigInt.fromI32(0);
+  dataSet.totalProvedPieces = BigInt.fromI32(0);
+  dataSet.createdAt = event.block.timestamp;
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 
   // Create Rail
   let rail = new Rail(railEntityId);
@@ -382,7 +382,7 @@ export function handleProofSetRailCreated(
   rail.settledUpto = BigInt.fromI32(0);
   rail.endEpoch = BigInt.fromI32(0);
   rail.queueLength = BigInt.fromI32(0);
-  rail.proofSet = proofSetEntityId;
+  rail.dataSet = dataSetEntityId;
   rail.save();
 
   // Create or Update Provider
@@ -391,19 +391,19 @@ export function handleProofSetRailCreated(
     provider = new Provider(providerEntityId);
     provider.address = owner;
     provider.status = "Created";
-    provider.totalRoots = BigInt.fromI32(0);
-    provider.totalProofSets = BigInt.fromI32(1);
+    provider.totalPieces = BigInt.fromI32(0);
+    provider.totalDataSets = BigInt.fromI32(1);
     provider.totalFaultedPeriods = BigInt.fromI32(0);
-    provider.totalFaultedRoots = BigInt.fromI32(0);
+    provider.totalFaultedPieces = BigInt.fromI32(0);
     provider.totalDataSize = BigInt.fromI32(0);
     provider.createdAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
   } else {
     // Update timestamp/block even if exists
-    provider.totalProofSets = provider.totalProofSets.plus(BigInt.fromI32(1));
+    provider.totalDataSets = provider.totalDataSets.plus(BigInt.fromI32(1));
     provider.blockNumber = event.block.number;
   }
-  // provider.proofSetIds = provider.proofSetIds.concat([event.params.setId]); // REMOVED - Handled by @derivedFrom
+  // provider.dataSetIds = provider.dataSetIds.concat([event.params.setId]); // REMOVED - Handled by @derivedFrom
   provider.updatedAt = event.block.timestamp;
   provider.save();
 }
@@ -452,9 +452,9 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
     provider = new Provider(providerAddress);
     provider.address = providerAddress;
     provider.totalFaultedPeriods = BigInt.fromI32(0);
-    provider.totalFaultedRoots = BigInt.fromI32(0);
-    provider.totalProofSets = BigInt.fromI32(0);
-    provider.totalRoots = BigInt.fromI32(0);
+    provider.totalFaultedPieces = BigInt.fromI32(0);
+    provider.totalDataSets = BigInt.fromI32(0);
+    provider.totalPieces = BigInt.fromI32(0);
     provider.totalDataSize = BigInt.fromI32(0);
     provider.createdAt = event.block.timestamp;
   }
@@ -517,9 +517,9 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
           provider = new Provider(providerAddress);
           provider.address = providerAddress;
           provider.totalFaultedPeriods = BigInt.fromI32(0);
-          provider.totalFaultedRoots = BigInt.fromI32(0);
-          provider.totalProofSets = BigInt.fromI32(0);
-          provider.totalRoots = BigInt.fromI32(0);
+          provider.totalFaultedPieces = BigInt.fromI32(0);
+          provider.totalDataSets = BigInt.fromI32(0);
+          provider.totalPieces = BigInt.fromI32(0);
           provider.totalDataSize = BigInt.fromI32(0);
           provider.createdAt = event.block.timestamp;
         }
