@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {PandoraService} from "../src/PandoraService.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -1621,4 +1621,63 @@ contract PandoraServiceUpgradeTest is Test {
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         pandoraService.initializeV2(240, 60);
     }
+
+    function testVersioning() public {
+        // Test that VERSION constant is accessible and has expected value
+        string memory version = pandoraService.VERSION();
+        assertEq(version, "0.1.0", "VERSION should be 0.1.0");
+    }
+
+    function testMigrate() public {
+        // Test migrate function for versioning
+        // Note: This would typically be called during a proxy upgrade via upgradeToAndCall
+        // We're testing the function directly here for simplicity
+        
+        // Start recording logs
+        vm.recordLogs();
+        
+        // Simulate calling migrate during upgrade (called by proxy)
+        vm.prank(address(pandoraService));
+        pandoraService.migrate();
+        
+        // Get recorded logs
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        
+        // Find the ContractUpgraded event (reinitializer also emits Initialized event)
+        bytes32 expectedTopic = keccak256("ContractUpgraded(string,address)");
+        bool foundEvent = false;
+        
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == expectedTopic) {
+                // Decode and verify the event data
+                (string memory version, address implementation) = abi.decode(logs[i].data, (string, address));
+                assertEq(version, "0.1.0", "Version should be 0.1.0");
+                assertTrue(implementation != address(0), "Implementation address should not be zero");
+                foundEvent = true;
+                break;
+            }
+        }
+        
+        assertTrue(foundEvent, "Should emit ContractUpgraded event");
+    }
+
+    function testMigrateOnlyCallableDuringUpgrade() public {
+        // Test that migrate can only be called by the contract itself
+        vm.expectRevert("Only callable by self during upgrade");
+        pandoraService.migrate();
+    }
+
+    function testMigrateOnlyOnce() public {
+        // Test that migrate can only be called once per reinitializer version
+        vm.prank(address(pandoraService));
+        pandoraService.migrate();
+        
+        // Second call should fail
+        vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
+        vm.prank(address(pandoraService));
+        pandoraService.migrate();
+    }
+
+    // Event declaration for testing (must match the contract's event)
+    event ContractUpgraded(string version, address implementation);
 }

@@ -9,6 +9,7 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 
 /// @title PandoraService
@@ -19,6 +20,11 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 /// to reduce payments for faulted epochs.
 contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
+    // Version tracking
+    string public constant VERSION = "0.1.0";
+    
+    // Events
+    event ContractUpgraded(string version, address implementation);
     event DataSetOwnershipChanged(uint256 indexed dataSetId, address indexed oldOwner, address indexed newOwner);
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailCreated(uint256 indexed dataSetId, uint256 railId, address payer, address payee, bool withCDN);
@@ -239,6 +245,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
+    }
+
+    /**
+     * @notice Migration function for contract upgrades
+     * @dev This function should be called during upgrades to emit version tracking events
+     * Only callable during proxy upgrade process
+     */
+    function migrate() public onlyProxy reinitializer(3) {
+        require(msg.sender == address(this), "Only callable by self during upgrade");
+        emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
     }
 
     /**
