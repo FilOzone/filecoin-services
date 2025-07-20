@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import {PandoraService} from "../src/PandoraService.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -35,11 +36,11 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     );
 
     bytes32 private constant ROOTDATA_TYPEHASH = keccak256(
-        "RootData(Cid root,uint256 rawSize)Cid(bytes data)"
+        "PieceData(Cid piece,uint256 rawSize)Cid(bytes data)"
     );
 
     bytes32 private constant ADD_ROOTS_TYPEHASH = keccak256(
-        "AddRoots(uint256 clientDataSetId,uint256 firstAdded,RootData[] rootData)Cid(bytes data)RootData(Cid root,uint256 rawSize)"
+        "AddRoots(uint256 clientDataSetId,uint256 firstAdded,PieceData[] rootData)Cid(bytes data)PieceData(Cid piece,uint256 rawSize)"
     );
 
     bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH = keccak256(
@@ -73,7 +74,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     function verifyAddRootsSignatureTest(
         address payer,
         uint256 clientDataSetId,
-        PDPVerifier.RootData[] memory rootDataArray,
+        IPDPTypes.PieceData[] memory rootDataArray,
         uint256 firstAdded,
         bytes memory signature
     ) public view returns (bool) {
@@ -123,19 +124,19 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     function getAddRootsDigest(
         uint256 clientDataSetId,
         uint256 firstAdded,
-        PDPVerifier.RootData[] memory rootDataArray
+        IPDPTypes.PieceData[] memory rootDataArray
     ) public view returns (bytes32) {
-        // Hash each RootData struct
+        // Hash each PieceData struct
         bytes32[] memory rootDataHashes = new bytes32[](rootDataArray.length);
         for (uint256 i = 0; i < rootDataArray.length; i++) {
             // Hash the Cid struct
             bytes32 cidHash = keccak256(
                 abi.encode(
                     CID_TYPEHASH,
-                    keccak256(rootDataArray[i].root.data)
+                    keccak256(rootDataArray[i].piece.data)
                 )
             );
-            // Hash the RootData struct
+            // Hash the PieceData struct
             rootDataHashes[i] = keccak256(
                 abi.encode(
                     ROOTDATA_TYPEHASH,
@@ -224,8 +225,8 @@ contract SignatureFixtureTest is Test {
         // Get the message digests for verification
         bytes32 createProofSetDigest = testContract.getCreateProofSetDigest(CLIENT_DATASET_ID, WITH_CDN, PAYEE);
 
-        // Create RootData for AddRoots digest
-        PDPVerifier.RootData[] memory rootDataArray = createTestRootData();
+        // Create PieceData for AddRoots digest
+        IPDPTypes.PieceData[] memory rootDataArray = createTestRootData();
         bytes32 addRootsDigest = testContract.getAddRootsDigest(CLIENT_DATASET_ID, FIRST_ADDED, rootDataArray);
 
         uint256[] memory testRootIds = new uint256[](3);
@@ -361,15 +362,15 @@ contract SignatureFixtureTest is Test {
         console.log('    { name: "data", type: "bytes" }');
         console.log("  ]");
         console.log("");
-        console.log("  RootData: [");
-        console.log('    { name: "root", type: "Cid" },');
+        console.log("  PieceData: [");
+        console.log('    { name: "piece", type: "Cid" },');
         console.log('    { name: "rawSize", type: "uint256" }');
         console.log("  ]");
         console.log("");
         console.log("  AddRoots: [");
         console.log('    { name: "clientDataSetId", type: "uint256" },');
         console.log('    { name: "firstAdded", type: "uint256" },');
-        console.log('    { name: "rootData", type: "RootData[]" }');
+        console.log('    { name: "rootData", type: "PieceData[]" }');
         console.log("  ]");
         console.log("");
         console.log("  ScheduleRemovals: [");
@@ -391,7 +392,7 @@ contract SignatureFixtureTest is Test {
     }
 
     function generateAddRootsSignature() internal view returns (bytes memory) {
-        PDPVerifier.RootData[] memory rootDataArray = createTestRootData();
+        IPDPTypes.PieceData[] memory rootDataArray = createTestRootData();
         bytes32 digest = testContract.getAddRootsDigest(CLIENT_DATASET_ID, FIRST_ADDED, rootDataArray);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
@@ -416,21 +417,21 @@ contract SignatureFixtureTest is Test {
 
     // ============= HELPER FUNCTIONS =============
 
-    function createTestRootData() internal pure returns (PDPVerifier.RootData[] memory) {
-        PDPVerifier.RootData[] memory rootDataArray = new PDPVerifier.RootData[](2);
+    function createTestRootData() internal pure returns (IPDPTypes.PieceData[] memory) {
+        IPDPTypes.PieceData[] memory rootDataArray = new IPDPTypes.PieceData[](2);
 
         // Create Cid with full CID bytes (not just digest)
         // CID baga6ea4seaqpy7usqklokfx2vxuynmupslkeutzexe2uqurdg5vhtebhxqmpqmy
-        rootDataArray[0] = PDPVerifier.RootData({
-            root: Cids.Cid({
+        rootDataArray[0] = IPDPTypes.PieceData({
+            piece: Cids.Cid({
                 data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
             }),
             rawSize: 2048 // Piece size of 1024
         });
 
         // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
-        rootDataArray[1] = PDPVerifier.RootData({
-            root: Cids.Cid({
+        rootDataArray[1] = IPDPTypes.PieceData({
+            piece: Cids.Cid({
                 data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
             }),
             rawSize: 4096 // Piece size of 2048
@@ -470,11 +471,11 @@ contract SignatureFixtureTest is Test {
 
         require(rootCidBytes.length == sizes.length, "CID bytes and size arrays must be same length");
 
-        // Create RootData array
-        PDPVerifier.RootData[] memory rootData = new PDPVerifier.RootData[](rootCidBytes.length);
+        // Create PieceData array
+        IPDPTypes.PieceData[] memory rootData = new IPDPTypes.PieceData[](rootCidBytes.length);
         for (uint256 i = 0; i < rootCidBytes.length; i++) {
-            rootData[i] = PDPVerifier.RootData({
-                root: Cids.Cid({
+            rootData[i] = IPDPTypes.PieceData({
+                piece: Cids.Cid({
                     data: rootCidBytes[i]
                 }),
                 rawSize: sizes[i]

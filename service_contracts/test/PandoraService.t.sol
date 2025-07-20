@@ -102,19 +102,19 @@ contract MockERC20 is IERC20, IERC20Metadata {
 contract MockPDPVerifier {
     uint256 public nextProofSetId = 1;
     
-    // Track proof set ownership for testing
+    // Track data set ownership for testing
     mapping(uint256 => address) public proofSetOwners;
 
     event ProofSetCreated(uint256 indexed setId, address indexed owner);
     event ProofSetOwnershipChanged(uint256 indexed setId, address indexed oldOwner, address indexed newOwner);
 
-    // Basic implementation to create proof sets and call the listener
+    // Basic implementation to create data sets and call the listener
     function createProofSet(address listenerAddr, bytes calldata extraData) public payable returns (uint256) {
         uint256 setId = nextProofSetId++;
 
         // Call the listener if specified
         if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).proofSetCreated(setId, msg.sender, extraData);
+            PDPListener(listenerAddr).dataSetCreated(setId, msg.sender, extraData);
         }
 
         // Track ownership
@@ -127,7 +127,7 @@ contract MockPDPVerifier {
     /**
      * @notice Simulates ownership change for testing purposes
      * @dev This function mimics the PDPVerifier's claimProofSetOwnership functionality
-     * @param proofSetId The ID of the proof set
+     * @param proofSetId The ID of the data set
      * @param newOwner The new owner address
      * @param listenerAddr The listener contract address
      * @param extraData Additional data to pass to the listener
@@ -138,7 +138,7 @@ contract MockPDPVerifier {
         address listenerAddr,
         bytes calldata extraData
     ) external {
-        require(proofSetOwners[proofSetId] != address(0), "Proof set does not exist");
+        require(proofSetOwners[proofSetId] != address(0), "Data set does not exist");
         require(newOwner != address(0), "New owner cannot be zero address");
         
         address oldOwner = proofSetOwners[proofSetId];
@@ -156,11 +156,11 @@ contract MockPDPVerifier {
     }
 
     /**
-     * @notice Get the current owner of a proof set
-     * @param proofSetId The ID of the proof set
+     * @notice Get the current owner of a data set
+     * @param proofSetId The ID of the data set
      * @return The current owner address
      */
-    function getProofSetOwner(uint256 proofSetId) external view returns (address) {
+    function getDataSetOwner(uint256 proofSetId) external view returns (address) {
         return proofSetOwners[proofSetId];
     }
 }
@@ -326,21 +326,21 @@ contract PandoraServiceTest is Test {
         // Check fee constants are correctly calculated based on token decimals
         uint256 expectedProofSetCreationFee = (1 * 10 ** mockUSDFC.decimals()) / 10; // 0.1 USDFC
         assertEq(
-            pdpServiceWithPayments.PROOFSET_CREATION_FEE(),
+            pdpServiceWithPayments.DATASET_CREATION_FEE(),
             expectedProofSetCreationFee,
-            "Proof set creation fee should be set correctly"
+            "Data set creation fee should be set correctly"
         );
     }
 
-    function testCreateProofSetCreatesRailAndChargesFee() public {
+    function testCreateDataSetCreatesRailAndChargesFee() public {
         // First approve the storage provider
         vm.prank(storageProvider);
         pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({metadata: "Test Data Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
 
         // Encode the extra data
         extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
@@ -358,49 +358,49 @@ contract PandoraServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.PROOFSET_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.DATASET_CREATION_FEE(); // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
 
-        // Get account balances before creating proof set
+        // Get account balances before creating data set
         (uint256 clientFundsBefore,) = getAccountInfo(address(mockUSDFC), client);
         (uint256 spFundsBefore,) = getAccountInfo(address(mockUSDFC), storageProvider);
 
-        // Expect RailCreated event when creating the proof set
+        // Expect RailCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.ProofSetRailCreated(1, 1, client, storageProvider, true);
+        emit PandoraService.DataSetRailCreated(1, 1, client, storageProvider, true);
 
-        // Create a proof set as the storage provider
+        // Create a data set as the storage provider
         makeSignaturePass(client);
         vm.startPrank(storageProvider);
-        uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), extraData);
+        uint256 newDataSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
         // Get the rail ID from the PDP service
-        uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
+        uint256 railId = pdpServiceWithPayments.getDataSetRailId(newDataSetId);
 
         // Verify a valid rail ID was created
         assertTrue(railId > 0, "Rail ID should be non-zero");
 
-        // Verify proof set info was stored correctly
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(newProofSetId);
+        // Verify data set info was stored correctly
+        (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(newDataSetId);
         assertEq(payer, client, "Payer should be set to client");
         assertEq(payee, storageProvider, "Payee should be set to storage provider");
 
         // Verify metadata was stored correctly
-        string memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId);
-        assertEq(metadata, "Test Proof Set", "Metadata should be stored correctly");
+        string memory metadata = pdpServiceWithPayments.getDataSetMetadata(newDataSetId);
+        assertEq(metadata, "Test Data Set", "Metadata should be stored correctly");
 
-        // Verify proof set info
-        PandoraService.ProofSetInfo memory proofSetInfo = pdpServiceWithPayments.getProofSet(newProofSetId);
-        assertEq(proofSetInfo.railId, railId, "Rail ID should match");
-        assertEq(proofSetInfo.payer, client, "Payer should match");
-        assertEq(proofSetInfo.payee, storageProvider, "Payee should match");
-        assertEq(proofSetInfo.withCDN, true, "withCDN should be true");
+        // Verify data set info
+        PandoraService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
+        assertEq(dataSetInfo.railId, railId, "Rail ID should match");
+        assertEq(dataSetInfo.payer, client, "Payer should match");
+        assertEq(dataSetInfo.payee, storageProvider, "Payee should match");
+        assertEq(dataSetInfo.withCDN, true, "withCDN should be true");
 
         // Verify withCDN was stored correctly
-        bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
+        bool withCDN = pdpServiceWithPayments.getDataSetWithCDN(newDataSetId);
         assertTrue(withCDN, "withCDN should be true");
 
         // Verify the rail in the actual Payments contract
@@ -419,29 +419,29 @@ contract PandoraServiceTest is Test {
         // Verify initial payment rate is 0 (will be updated when roots are added)
         assertEq(rail.paymentRate, 0, "Initial payment rate should be 0");
 
-        // Get account balances after creating proof set
+        // Get account balances after creating data set
         (uint256 clientFundsAfter,) = getAccountInfo(address(mockUSDFC), client);
         (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), storageProvider);
 
         // Calculate expected client balance
-        uint256 expectedClientFundsAfter = clientFundsBefore - pdpServiceWithPayments.PROOFSET_CREATION_FEE();
+        uint256 expectedClientFundsAfter = clientFundsBefore - pdpServiceWithPayments.DATASET_CREATION_FEE();
 
         // Verify balances changed correctly (one-time fee transferred)
         assertEq(
-            clientFundsAfter, expectedClientFundsAfter, "Client funds should decrease by the proof set creation fee"
+            clientFundsAfter, expectedClientFundsAfter, "Client funds should decrease by the data set creation fee"
         );
         assertTrue(spFundsAfter > spFundsBefore, "Storage provider funds should increase");
     }
 
-    function testCreateProofSetNoCDN() public {
+    function testCreateDataSetNoCDN() public {
         // First approve the storage provider
         vm.prank(storageProvider);
         pdpServiceWithPayments.registerServiceProvider("https://sp.example.com/pdp", "https://sp.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({metadata: "Test Data Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
 
         // Encode the extra data
         extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
@@ -459,27 +459,27 @@ contract PandoraServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.PROOFSET_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.DATASET_CREATION_FEE(); // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
 
-        // Expect RailCreated event when creating the proof set
+        // Expect RailCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.ProofSetRailCreated(1, 1, client, storageProvider, false);
+        emit PandoraService.DataSetRailCreated(1, 1, client, storageProvider, false);
 
-        // Create a proof set as the storage provider
+        // Create a data set as the storage provider
         makeSignaturePass(client);
         vm.startPrank(storageProvider);
-        uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), extraData);
+        uint256 newDataSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
         // Verify withCDN was stored correctly
-        bool withCDN = pdpServiceWithPayments.getProofSetWithCDN(newProofSetId);
+        bool withCDN = pdpServiceWithPayments.getDataSetWithCDN(newDataSetId);
         assertFalse(withCDN, "withCDN should be false");
         
         // Verify the commission rate was set correctly for basic service (no CDN)
-        uint256 railId = pdpServiceWithPayments.getProofSetRailId(newProofSetId);
+        uint256 railId = pdpServiceWithPayments.getDataSetRailId(newDataSetId);
         Payments.RailView memory rail = payments.getRail(railId);
         assertEq(rail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
     }
@@ -722,9 +722,9 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
         
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({
+                metadata: "Test Data Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
@@ -746,7 +746,7 @@ contract PandoraServiceTest is Test {
         payments.deposit(address(mockUSDFC), client, 10e6);
         vm.stopPrank();
         
-        // Try to create proof set as removed SP
+        // Try to create data set as removed SP
         makeSignaturePass(client);
         vm.prank(sp1);
         vm.expectRevert();
@@ -774,9 +774,9 @@ contract PandoraServiceTest is Test {
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({
+                metadata: "Test Data Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
@@ -798,7 +798,7 @@ contract PandoraServiceTest is Test {
         payments.deposit(address(mockUSDFC), client, 10e6);
         vm.stopPrank();
         
-        // Try to create proof set as non-approved SP
+        // Try to create data set as non-approved SP
         makeSignaturePass(client);
         vm.prank(sp1);
         vm.expectRevert();
@@ -812,9 +812,9 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({
+                metadata: "Test Data Set",
                 payer: client,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
@@ -836,13 +836,13 @@ contract PandoraServiceTest is Test {
         payments.deposit(address(mockUSDFC), client, 10e6);
         vm.stopPrank();
         
-        // Create proof set as approved SP
+        // Create data set as approved SP
         makeSignaturePass(client);
         vm.prank(sp1);
-        uint256 newProofSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+        uint256 newDataSetId = mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
         
-        // Verify proof set was created
-        assertTrue(newProofSetId > 0, "Proof set should be created");
+        // Verify data set was created
+        assertTrue(newDataSetId > 0, "Data set should be created");
     }
 
     function testGetApprovedProvider() public {
@@ -1130,8 +1130,8 @@ contract PandoraServiceTest is Test {
         }
 
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({
                 metadata: metadata,
                 payer: clientAddress,
                 withCDN: false,
@@ -1154,32 +1154,32 @@ contract PandoraServiceTest is Test {
         payments.deposit(address(mockUSDFC), clientAddress, 100e6);
         vm.stopPrank();
 
-        // Create proof set as approved provider
+        // Create data set as approved provider
         makeSignaturePass(clientAddress);
         vm.prank(provider);
         return mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
     }
 
-    function testGetClientProofSets_EmptyClient() public view {
-        // Test with a client that has no proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
+    function testGetClientDataSets_EmptyClient() public view {
+        // Test with a client that has no data sets
+        PandoraService.DataSetInfo[] memory proofSets = 
+            pdpServiceWithPayments.getClientDataSets(client);
         
-        assertEq(proofSets.length, 0, "Should return empty array for client with no proof sets");
+        assertEq(proofSets.length, 0, "Should return empty array for client with no data sets");
     }
     
-    function testGetClientProofSets_SingleProofSet() public {
-        // Create a single proof set for the client
+    function testGetClientDataSets_SingleProofSet() public {
+        // Create a single data set for the client
         string memory metadata = "Test metadata";
         
         createProofSetForClient(sp1, client, metadata);
         
-        // Get proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
+        // Get data sets
+        PandoraService.DataSetInfo[] memory proofSets = 
+            pdpServiceWithPayments.getClientDataSets(client);
         
         // Verify results
-        assertEq(proofSets.length, 1, "Should return one proof set");
+        assertEq(proofSets.length, 1, "Should return one data set");
         assertEq(proofSets[0].payer, client, "Payer should match");
         assertEq(proofSets[0].payee, sp1, "Payee should match");
         assertEq(proofSets[0].metadata, metadata, "Metadata should match");
@@ -1187,40 +1187,40 @@ contract PandoraServiceTest is Test {
         assertGt(proofSets[0].railId, 0, "Rail ID should be set");
     }
     
-    function testGetClientProofSets_MultipleProofSets() public {
-        // Create multiple proof sets for the client
+    function testGetClientDataSets_MultipleProofSets() public {
+        // Create multiple data sets for the client
         createProofSetForClient(sp1, client, "Metadata 1");
         createProofSetForClient(sp2, client, "Metadata 2");
         
-        // Get proof sets
-        PandoraService.ProofSetInfo[] memory proofSets = 
-            pdpServiceWithPayments.getClientProofSets(client);
+        // Get data sets
+        PandoraService.DataSetInfo[] memory proofSets = 
+            pdpServiceWithPayments.getClientDataSets(client);
         
         // Verify results
-        assertEq(proofSets.length, 2, "Should return two proof sets");
+        assertEq(proofSets.length, 2, "Should return two data sets");
         
-        // Check first proof set
-        assertEq(proofSets[0].payer, client, "First proof set payer should match");
-        assertEq(proofSets[0].payee, sp1, "First proof set payee should match");
-        assertEq(proofSets[0].metadata, "Metadata 1", "First proof set metadata should match");
+        // Check first data set
+        assertEq(proofSets[0].payer, client, "First data set payer should match");
+        assertEq(proofSets[0].payee, sp1, "First data set payee should match");
+        assertEq(proofSets[0].metadata, "Metadata 1", "First data set metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
         
-        // Check second proof set
-        assertEq(proofSets[1].payer, client, "Second proof set payer should match");
-        assertEq(proofSets[1].payee, sp2, "Second proof set payee should match");
-        assertEq(proofSets[1].metadata, "Metadata 2", "Second proof set metadata should match");
+        // Check second data set
+        assertEq(proofSets[1].payer, client, "Second data set payer should match");
+        assertEq(proofSets[1].payee, sp2, "Second data set payee should match");
+        assertEq(proofSets[1].metadata, "Metadata 2", "Second data set metadata should match");
         assertEq(proofSets[1].clientDataSetId, 1, "Second dataset ID should be 1");
     }
 
     // ===== Proof Set Ownership Change Tests =====
 
     /**
-     * @notice Helper function to create a proof set and return its ID
+     * @notice Helper function to create a data set and return its ID
      * @dev This function sets up the necessary state for ownership change testing
      * @param provider The storage provider address
      * @param clientAddress The client address
-     * @param metadata The proof set metadata
-     * @return The created proof set ID
+     * @param metadata The data set metadata
+     * @return The created data set ID
      */
     function createProofSetForOwnershipTest(
         address provider,
@@ -1235,8 +1235,8 @@ contract PandoraServiceTest is Test {
         }
 
         // Prepare extra data
-        PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({
+        PandoraService.DataSetCreateData memory createData =
+            PandoraService.DataSetCreateData({
                 metadata: metadata,
                 payer: clientAddress,
                 withCDN: false,
@@ -1259,7 +1259,7 @@ contract PandoraServiceTest is Test {
         payments.deposit(address(mockUSDFC), clientAddress, 100e6);
         vm.stopPrank();
 
-        // Create proof set as approved provider
+        // Create data set as approved provider
         makeSignaturePass(clientAddress);
         vm.prank(provider);
         return mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
@@ -1267,7 +1267,7 @@ contract PandoraServiceTest is Test {
 
     /**
      * @notice Test successful ownership change between two approved providers
-     * @dev Verifies only the proof set's payee is updated, event is emitted, and registry state is unchanged.
+     * @dev Verifies only the data set's payee is updated, event is emitted, and registry state is unchanged.
      */
     function testOwnerChangedSuccessDecoupled() public {
         // Register and approve two providers
@@ -1278,8 +1278,8 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
 
-        // Create a proof set with sp1 as the owner
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        // Create a data set with sp1 as the owner
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Data Set");
 
         // Registry state before
         bool sp1ApprovedBefore = pdpServiceWithPayments.isProviderApproved(sp1);
@@ -1294,8 +1294,8 @@ contract PandoraServiceTest is Test {
         vm.prank(sp2);
         mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
-        // Only the proof set's payee is updated
-        (address payer, address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
+        // Only the data set's payee is updated
+        (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(testProofSetId);
         assertEq(payee, sp2, "Payee should be updated to new owner");
 
         // Registry state is unchanged
@@ -1313,8 +1313,8 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        // Create a proof set with sp1 as the owner
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        // Create a data set with sp1 as the owner
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Data Set");
         // Use an unapproved address for the new owner
         address unapproved = address(0x9999);
         assertFalse(pdpServiceWithPayments.isProviderApproved(unapproved), "Unapproved should not be approved");
@@ -1334,7 +1334,7 @@ contract PandoraServiceTest is Test {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider("https://sp1.example.com/pdp", "https://sp1.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
         vm.prank(sp1);
         vm.expectRevert("New owner cannot be zero address");
@@ -1351,7 +1351,7 @@ contract PandoraServiceTest is Test {
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
         // Call directly as PDPVerifier with wrong old owner
         vm.prank(address(mockPDPVerifier));
@@ -1369,7 +1369,7 @@ contract PandoraServiceTest is Test {
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
         // Call directly as sp2 (not PDPVerifier)
         vm.prank(sp2);
@@ -1378,7 +1378,7 @@ contract PandoraServiceTest is Test {
     }
 
     /**
-     * @notice Test multiple proof sets per provider: only the targeted proof set's payee is updated
+     * @notice Test multiple data sets per provider: only the targeted data set's payee is updated
      */
     function testMultipleProofSetsPerProviderOwnershipChange() public {
         // Register and approve two providers
@@ -1388,7 +1388,7 @@ contract PandoraServiceTest is Test {
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        // Create two proof sets for sp1
+        // Create two data sets for sp1
         uint256 ps1 = createProofSetForOwnershipTest(sp1, client, "ProofSet 1");
         uint256 ps2 = createProofSetForOwnershipTest(sp1, client, "ProofSet 2");
         // Change ownership of ps1 to sp2
@@ -1398,8 +1398,8 @@ contract PandoraServiceTest is Test {
         vm.prank(sp2);
         mockPDPVerifier.changeProofSetOwnership(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
         // ps1 payee updated, ps2 payee unchanged
-        ( , address payee1) = pdpServiceWithPayments.getProofSetParties(ps1);
-        ( , address payee2) = pdpServiceWithPayments.getProofSetParties(ps2);
+        ( , address payee1) = pdpServiceWithPayments.getDataSetParties(ps1);
+        ( , address payee2) = pdpServiceWithPayments.getDataSetParties(ps2);
         assertEq(payee1, sp2, "ps1 payee should be sp2");
         assertEq(payee2, sp1, "ps2 payee should remain sp1");
         // Registry state unchanged
@@ -1417,14 +1417,14 @@ contract PandoraServiceTest is Test {
         vm.prank(sp2);
         pdpServiceWithPayments.registerServiceProvider("https://sp2.example.com/pdp", "https://sp2.example.com/retrieve");
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
+        uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Data Set");
         // Use arbitrary extra data
-        bytes memory extraData = abi.encode("arbitrary", 123, address(this));
+        bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
         emit ProofSetOwnershipChanged(testProofSetId, sp1, sp2);
         vm.prank(sp2);
-        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), extraData);
-        ( , address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
+        mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), testExtraData);
+        ( , address payee) = pdpServiceWithPayments.getDataSetParties(testProofSetId);
         assertEq(payee, sp2, "Payee should be updated to new owner");
     }
 }

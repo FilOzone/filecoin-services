@@ -29,9 +29,9 @@ echo "Using wallet address: $MY_ADDRESS"
 CURRENT_NONCE=$(cast nonce --rpc-url "$RPC_URL" $MY_ADDRESS)
 echo "Current nonce: $CURRENT_NONCE"
 
-# Prepare the extraData for proofset creation (metadata and payer address)
+# Prepare the extraData for dataset creation (metadata and payer address)
 # Format: (string metadata, address payer)
-METADATA="My first proof set"
+METADATA="My first data set"
 EXTRA_DATA=$(cast abi-encode "f((string,address))" "($METADATA,$MY_ADDRESS)")
 
 # Check USDFC balance before
@@ -96,33 +96,33 @@ sleep 15
 CURRENT_NONCE=$((CURRENT_NONCE + 1))
 echo "Next nonce: $CURRENT_NONCE"
 
-# Create the proof set
-echo "Creating proof set..."
+# Create the data set
+echo "Creating data set..."
 CALLDATA=$(cast calldata "createProofSet(address,bytes)" $PDP_SERVICE_PROXY $EXTRA_DATA)
 CREATE_TX=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" \
     $PDP_VERIFIER_PROXY $CALLDATA --value "100000000000000000" --gas-limit 3000000000 --nonce $CURRENT_NONCE)
-echo "Create proof set TX: $CREATE_TX"
+echo "Create data set TX: $CREATE_TX"
 
 # Wait for transaction to be mined
-echo "Waiting for proof set creation transaction to be mined..."
+echo "Waiting for data set creation transaction to be mined..."
 sleep 15
 
-# Get the latest proofset ID and rail ID
-echo "Getting the latest proofset ID and rail ID..."
-# Extract the ProofSetRailCreated event to get the IDs
+# Get the latest dataset ID and rail ID
+echo "Getting the latest dataset ID and rail ID..."
+# Extract the DataSetRailCreated event to get the IDs
 LATEST_EVENTS=$(cast logs --rpc-url "$RPC_URL" --from-block "latest-50" --to-block latest $PDP_SERVICE_PROXY)
-PROOFSET_ID=$(echo "$LATEST_EVENTS" | grep "ProofSetRailCreated" | tail -1 | cut -d' ' -f3)
-RAIL_ID=$(echo "$LATEST_EVENTS" | grep "ProofSetRailCreated" | tail -1 | cut -d' ' -f4)
-echo "Latest ProofSet ID: $PROOFSET_ID"
+DATASET_ID=$(echo "$LATEST_EVENTS" | grep "DataSetRailCreated" | tail -1 | cut -d' ' -f3)
+RAIL_ID=$(echo "$LATEST_EVENTS" | grep "DataSetRailCreated" | tail -1 | cut -d' ' -f4)
+echo "Latest DataSet ID: $DATASET_ID"
 echo "Rail ID: $RAIL_ID"
 
 # Check USDFC balance after
-echo "Checking USDFC balance after proofset creation..."
+echo "Checking USDFC balance after dataset creation..."
 BALANCE_AFTER=$(cast call --rpc-url "$RPC_URL" $USDFC_TOKEN "balanceOf(address)" $MY_ADDRESS)
 echo "USDFC Balance after: $BALANCE_AFTER"
 
 # Check Payments contract internal balance after proofset creation
-echo "Checking Payments contract internal balance after proofset creation..."
+echo "Checking Payments contract internal balance after dataset creation..."
 ACCOUNT_INFO_AFTER=$(cast call --rpc-url "$RPC_URL" $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN $MY_ADDRESS)
 echo "Payer internal account balance after: $ACCOUNT_INFO_AFTER"
 
@@ -159,14 +159,14 @@ parse_account() {
   echo "Lockup Last Settled At: $LOCKUP_SETTLED"
 }
 
-echo "Payer account details before proofset creation:"
+echo "Payer account details before dataset creation:"
 parse_account "$ACCOUNT_INFO_AFTER_DEPOSIT"
 
-echo "Payer account details after proofset creation:"
+echo "Payer account details after dataset creation:"
 parse_account "$ACCOUNT_INFO_AFTER"
 
 if [ -n "$PAYEE_BALANCE" ]; then
-    echo "Payee account details after proofset creation:"
+    echo "Payee account details after dataset creation:"
     parse_account "$PAYEE_BALANCE"
 fi
 

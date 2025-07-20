@@ -16,7 +16,7 @@ This software is provided for development, testing, and research purposes only. 
 
 This repository contains smart contracts and services for the Filecoin ecosystem, featuring:
 
-- **PandoraService**: A comprehensive service contract that combines PDP (Proof of Data Possession) verification with integrated payment rails
+- **PandoraService**: A comprehensive service contract that combines PDP (Proof of Data Possession) verification with integrated payment rails for data set management
 - **Payment Integration**: Built on top of the [Filecoin Services Payments](https://github.com/FilOzone/filecoin-services-payments) framework
 - **Data Verification**: Uses [PDP verifiers](https://github.com/FilOzone/pdp) for cryptographic proof of data possession
 

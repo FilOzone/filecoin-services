@@ -7,7 +7,7 @@
     "withCDN": true
   },
   "addRoots": {
-    "signature": "0x93eb7bcccb7763258d7a4b86053a186db9234a93403a6e006f56fa716d85eff72e23538848e13c2632bef16c5b8380a5fddef7b81d34ede127f632217c7eab5d1c",
+    "signature": "0x7298edd9694e1d0ffe05a5d03cb14ceb09eec438adcb4cd8bec6e410ffc6dffb7433980dc1646c5cbef4a2c7c298625f29bd333de4a9e4bf035d2152f4530e4e1b",
     "clientDataSetId": 12345,
     "firstAdded": 1,
     "rootCidBytes": ["0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833", "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"],

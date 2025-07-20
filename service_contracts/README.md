@@ -9,7 +9,7 @@ This directory contains the smart contracts for different Filecoin services usin
 - `test/` - Test files  
   - `PandoraService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
-  - `create_proofset_with_payments.sh` - Script to create proof sets with payments
+  - `create_proofset_with_payments.sh` - Script to create data sets with payments
   - `deploy-pandora-calibnet.sh` - Deployment script for Pandora service on Calibnet
   - `deploy-all-pandora-calibnet.sh` - Deployment script for all Pandora contracts on Calibnet
 - `lib/` - Dependencies (git submodules)
