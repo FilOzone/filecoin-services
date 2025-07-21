@@ -1,7 +1,7 @@
 {
   "signer": "0x2e988A386a799F506693793c6A5AF6B54dfAaBfB",
-  "createProofSet": {
-    "signature": "0x69addf4632ef95bfae97137421ba09576f9c55b12219e2c90442cbc1524421247b373dfad6e59256f87256f08220b0c008bbab7cdaceb1dd51454de094a7ffa51b",
+  "createDataSet": {
+    "signature": "0x8ba99aecf50cca63d7455267675e8b0120de59a6d1fccc80d05abb892bcff41455e54122ad6d4767b77e0e3a9933d024053f897cb072896e1de65afb1cb421d71c",
     "clientDataSetId": 12345,
     "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
     "withCDN": true
@@ -18,8 +18,8 @@
     "clientDataSetId": 12345,
     "rootIds": [1, 3, 5]
   },
-  "deleteProofSet": {
-    "signature": "0x093fae193f81a7fe72d2124ed9d70337747458ac2d568c5b9a42072782adb7c4393f49b2f3bce9a84d94ee2c93ef4c9af8c0b258be3bde3f8df0536fa4eea65b1c",
+  "deleteDataSet": {
+    "signature": "0x0e4630107f6e92aeb17ad659eb810085812c2ff72d65a38f2357ca77a15ce2896cdd63c346f198300fd802965a337c53aa3fb30830886d336d25cbc37c52e8631c",
     "clientDataSetId": 12345
   }
 }

@@ -25,7 +25,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     
     // Events
     event ContractUpgraded(string version, address implementation);
-    event DataSetOwnershipChanged(uint256 indexed dataSetId, address indexed oldOwner, address indexed newOwner);
+    event DataSetStorageProviderChanged(uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider);
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailCreated(uint256 indexed dataSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
@@ -123,7 +123,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public nextServiceProviderId = 1;
         
     struct ApprovedProviderInfo {
-        address owner;
+        address storageProvider;
         string serviceURL; // HTTP server URL for provider services; TODO: Standard API endpoints:{serviceURL}/api/upload / {serviceURL}/api/info 
         bytes peerId; // libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt; 
@@ -320,7 +320,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         return thisChallengeWindowStart(setId);
     }
 
-    // Challenges / merkle inclusion proofs provided per proof set
+    // Challenges / merkle inclusion proofs provided per data set
     function getChallengesPerProof() public pure returns (uint64) {
         return 5;
     }
@@ -332,10 +332,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             return new ApprovedProviderInfo[](0);
         }
         
-        // First pass: Count non-empty providers (those with non-zero owner address)
+        // First pass: Count non-empty providers (those with non-zero storage provider address)
         uint256 activeCount = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].owner != address(0)) {
+            if (approvedProviders[i].storageProvider != address(0)) {
                 activeCount++;
             }
         }
@@ -351,7 +351,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Second pass: Fill array with only active providers
         uint256 currentIndex = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].owner != address(0)) {
+            if (approvedProviders[i].storageProvider != address(0)) {
                 providers[currentIndex] = approvedProviders[i];
                 currentIndex++;
             }
@@ -411,7 +411,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 railId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // dataset creator, SPs in  most cases
+            creator, // data set creator, SPs in  most cases
             address(this), // this contract acts as the arbiter
             info.commissionBps // commission rate based on CDN usage
         );
@@ -431,7 +431,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         );
 
         // Charge the one-time data set creation fee
-        // This is a payment from payer to dataset creator of a fixed amount
+        // This is a payment from payer to data set creator of a fixed amount
         payments.modifyRailPayment(
             railId,
             0, // Initial rate is 0, will be updated when pieces are added
@@ -473,7 +473,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             ),
             "Not authorized to delete data set"
         );
-        // TODO Dataset deletion logic         
+        // TODO Data set deletion logic         
     }
 
     /**
@@ -593,7 +593,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         external
         onlyPDPVerifier
     {
-        // initialize state for new proofset
+        // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline = block.number + getMaxProvingPeriod();
             if (challengeEpoch < firstDeadline - challengeWindow() || challengeEpoch > firstDeadline) {
@@ -603,7 +603,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             provenThisPeriod[dataSetId] = false;
 
             // Initialize the activation epoch when proving first starts
-            // This marks when the proof set became active for proving
+            // This marks when the data set became active for proving
             provingActivationEpoch[dataSetId] = block.number;
 
             // Update the payment rate
@@ -629,7 +629,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         }
 
         uint256 nextDeadline;
-        // the proofset has become empty and provingDeadline is set inactive
+        // the data set has become empty and provingDeadline is set inactive
         if (challengeEpoch == NO_CHALLENGE_SCHEDULED) {
             nextDeadline = NO_PROVING_DEADLINE;
         } else {
@@ -659,46 +659,46 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Update the payment rate based on current proof set size
+        // Update the payment rate based on current data set size
         updateRailPaymentRate(dataSetId, leafCount);
     }
 
     /**
-     * @notice Handles proof set ownership changes by updating internal state only
-     * @dev Called by the PDPVerifier contract when proof set ownership is transferred. This function is now fully decoupled from the provider registry.
-     * @param dataSetId The ID of the data set whose ownership is changing
-     * @param oldOwner The previous owner address
-     * @param newOwner The new owner address (must be an approved provider)
+     * @notice Handles data set storage provider changes by updating internal state only
+     * @dev Called by the PDPVerifier contract when data set storage provider is transferred. This function is now fully decoupled from the provider registry.
+     * @param dataSetId The ID of the data set whose storage provider is changing
+     * @param oldStorageProvider The previous storage provider address
+     * @param newStorageProvider The new storage provider address (must be an approved provider)
      * @param extraData Additional data (not used)
      */
     function ownerChanged(
         uint256 dataSetId,
-        address oldOwner,
-        address newOwner,
+        address oldStorageProvider,
+        address newStorageProvider,
         bytes calldata extraData
     ) external override onlyPDPVerifier {
-        // Verify the proof set exists and validate the old owner
+        // Verify the data set exists and validate the old storage provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.payee == oldOwner, "Old owner mismatch");
-        require(newOwner != address(0), "New owner cannot be zero address");
-        // New owner must be an approved provider
-        require(approvedProvidersMap[newOwner], "New owner must be an approved provider");
+        require(info.payee == oldStorageProvider, "Old storage provider mismatch");
+        require(newStorageProvider != address(0), "New storage provider cannot be zero address");
+        // New storage provider must be an approved provider
+        require(approvedProvidersMap[newStorageProvider], "New storage provider must be an approved provider");
 
-        // Update the proof set payee (storage provider)
-        info.payee = newOwner;
+        // Update the data set payee (storage provider)
+        info.payee = newStorageProvider;
 
         // Emit event for off-chain tracking
-        emit DataSetOwnershipChanged(dataSetId, oldOwner, newOwner);
+        emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
     }
 
     function updateRailPaymentRate(uint256 dataSetId, uint256 leafCount) internal {
-        // Revert if no payment rail is configured for this proof set
+        // Revert if no payment rail is configured for this data set
         require(dataSetInfo[dataSetId].railId != 0, "No payment rail configured");
 
-        uint256 newRatePerEpoch = 0; // Default to 0 for empty proof sets
+        uint256 newRatePerEpoch = 0; // Default to 0 for empty data sets
 
         uint256 totalBytes = getDataSetSizeInBytes(leafCount);
-        // Get the withCDN flag from the proof set info
+        // Get the withCDN flag from the data set info
         bool withCDN = dataSetInfo[dataSetId].withCDN;
         newRatePerEpoch = calculateStorageRatePerEpoch(totalBytes, withCDN);
 
@@ -747,7 +747,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return True if the epoch has been proven, false otherwise
      */
     function isEpochProven(uint256 dataSetId, uint256 epoch) public view returns (bool) {
-        // Check if proof set is active
+        // Check if data set is active
         if (provingActivationEpoch[dataSetId] == 0) {
             return false;
         }
@@ -788,7 +788,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @notice Calculate the per-epoch rate based on total storage size and CDN usage
      * @dev Rate is 2 USDFC per TiB per month without CDN, 3 USDFC per TiB per month with CDN.
      * @param totalBytes Total size of the stored data in bytes
-     * @param withCDN Whether CDN is enabled for the proof set
+     * @param withCDN Whether CDN is enabled for the data set
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
     function calculateStorageRatePerEpoch(uint256 totalBytes, bool withCDN) public view returns (uint256) {
@@ -814,9 +814,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Decode extra data for proof set creation
+     * @notice Decode extra data for data set creation
      * @param extraData The encoded extra data from PDPVerifier
-     * @return decoded The decoded ProofSetCreateData struct
+     * @return decoded The decoded DataSetCreateData struct
      */
     function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
          (string memory metadata, address payer, bool withCDN, bytes memory signature) = 
@@ -831,8 +831,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get the total size of a proof set in bytes
-     * @param leafCount Number of leaves in the proof set
+     * @notice Get the total size of a data set in bytes
+     * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
     function getDataSetSizeInBytes(uint256 leafCount) public pure returns (uint256) {
@@ -842,16 +842,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     // --- Public getter functions ---
 
     /**
-     * @notice Get proof set information by ID
+     * @notice Get data set information by ID
      * @param dataSetId The ID of the data set
-     * @return The proof set information struct
+     * @return The data set information struct
      */
     function getDataSet(uint256 dataSetId) external view returns (DataSetInfo memory) {
         return dataSetInfo[dataSetId];
     }
 
     /**
-     * @notice Get the payment rail ID for a proof set
+     * @notice Get the payment rail ID for a data set
      * @param dataSetId The ID of the data set
      * @return The payment rail ID, or 0 if not found
      */
@@ -860,7 +860,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get payer and payee addresses for a proof set
+     * @notice Get payer and payee addresses for a data set
      * @param dataSetId The ID of the data set
      * @return payer The address paying for storage
      * @return payee The address receiving payments (SP beneficiary)
@@ -871,7 +871,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get the metadata for a proof set
+     * @notice Get the metadata for a data set
      * @param dataSetId The ID of the data set
      * @return The metadata string
      */
@@ -880,7 +880,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get CDN enabled for a proof set
+     * @notice Get CDN enabled for a data set
      * @param dataSetId The ID of the data set
      * @return CDN enabled
      */
@@ -889,10 +889,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get the metadata for a specific root
+     * @notice Get the metadata for a specific piece
      * @param dataSetId The ID of the data set
      * @param pieceId The ID of the piece
-     * @return The metadata string for the root
+     * @return The metadata string for the piece
      */
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
         return dataSetPieceMetadata[dataSetId][pieceId];
@@ -939,7 +939,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     /**
      * @notice Verifies a signature for the CreateDataSet operation
      * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The unique ID for the client's dataset
+     * @param clientDataSetId The unique ID for the client's data set
      * @param signature The signature bytes (v, r, s)
      * @return True if the signature is valid, false otherwise
      */
@@ -1157,7 +1157,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Assign ID and store provider info
         uint256 providerId = nextServiceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
-            owner: provider,
+            storageProvider: provider,
             serviceURL: pending.serviceURL,
             peerId: pending.peerId,
             registeredAt: pending.registeredAt,
@@ -1204,7 +1204,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
-        address providerAddress = providerInfo.owner;
+        address providerAddress = providerInfo.storageProvider;
         require(providerAddress != address(0), "Provider not found");
         
         // Check if provider is currently approved
@@ -1231,7 +1231,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     function getApprovedProvider(uint256 providerId) external view returns (ApprovedProviderInfo memory) {
         require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
         ApprovedProviderInfo memory provider = approvedProviders[providerId];
-        require(provider.owner != address(0), "Provider not found");
+        require(provider.storageProvider != address(0), "Provider not found");
         return provider;
     }
     
@@ -1300,7 +1300,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         override
         returns (ArbitrationResult memory result)
     {
-        // Get the proof set ID associated with this rail
+        // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, "Rail not associated with any data set");
 
@@ -1308,12 +1308,12 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, "Invalid epoch range");
 
-        // If proving wasn't ever activated for this proof set, don't pay anything
+        // If proving wasn't ever activated for this data set, don't pay anything
         if (provingActivationEpoch[dataSetId] == 0) {
             return ArbitrationResult({
                 modifiedAmount: 0,
                 settleUpto: fromEpoch,
-                note: "Proving never activated for this proof set"
+                note: "Proving never activated for this data set"
             });
         }
 
