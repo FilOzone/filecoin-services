@@ -27,7 +27,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     constructor() EIP712("PandoraService", "1") {}
 
     // Re-declare the type hashes from parent contract (they're private)
-    bytes32 private constant CREATE_DATASET_TYPEHASH = keccak256(
+    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)"
     );
 
@@ -47,7 +47,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
         "ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)"
     );
 
-    bytes32 private constant DELETE_DATASET_TYPEHASH = keccak256(
+    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256(
         "DeleteDataSet(uint256 clientDataSetId)"
     );
 
@@ -60,7 +60,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     ) public view returns (bool) {
         bytes32 structHash = keccak256(
             abi.encode(
-                CREATE_DATASET_TYPEHASH,
+                CREATE_DATA_SET_TYPEHASH,
                 clientDataSetId,
                 withCDN,
                 payee
@@ -112,7 +112,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
-                CREATE_DATASET_TYPEHASH,
+                CREATE_DATA_SET_TYPEHASH,
                 clientDataSetId,
                 withCDN,
                 payee
@@ -174,7 +174,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
     ) public view returns (bytes32) {
         bytes32 structHash = keccak256(
             abi.encode(
-                DELETE_DATASET_TYPEHASH,
+                DELETE_DATA_SET_TYPEHASH,
                 clientDataSetId
             )
         );
@@ -195,7 +195,7 @@ contract SignatureFixtureTest is Test {
     address constant TEST_SIGNER = 0x2e988A386a799F506693793c6A5AF6B54dfAaBfB;
 
     // Test data
-    uint256 constant CLIENT_DATASET_ID = 12345;
+    uint256 constant CLIENT_DATA_SET_ID = 12345;
     address constant PAYEE = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     bool constant WITH_CDN = true;
     uint256 constant FIRST_ADDED = 1;
@@ -223,19 +223,19 @@ contract SignatureFixtureTest is Test {
         bytes memory deleteDataSetSig = generateDeleteDataSetSignature();
 
         // Get the message digests for verification
-        bytes32 createDataSetDigest = testContract.getCreateDataSetDigest(CLIENT_DATASET_ID, WITH_CDN, PAYEE);
+        bytes32 createDataSetDigest = testContract.getCreateDataSetDigest(CLIENT_DATA_SET_ID, WITH_CDN, PAYEE);
 
         // Create PieceData for AddRoots digest
         IPDPTypes.PieceData[] memory rootDataArray = createTestRootData();
-        bytes32 addRootsDigest = testContract.getAddRootsDigest(CLIENT_DATASET_ID, FIRST_ADDED, rootDataArray);
+        bytes32 addRootsDigest = testContract.getAddRootsDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, rootDataArray);
 
         uint256[] memory testRootIds = new uint256[](3);
         testRootIds[0] = 1;
         testRootIds[1] = 3;
         testRootIds[2] = 5;
-        bytes32 scheduleRemovalsDigest = testContract.getScheduleRemovalsDigest(CLIENT_DATASET_ID, testRootIds);
+        bytes32 scheduleRemovalsDigest = testContract.getScheduleRemovalsDigest(CLIENT_DATA_SET_ID, testRootIds);
 
-        bytes32 deleteDataSetDigest = testContract.getDeleteDataSetDigest(CLIENT_DATASET_ID);
+        bytes32 deleteDataSetDigest = testContract.getDeleteDataSetDigest(CLIENT_DATA_SET_ID);
 
         // Output JSON format for copying to synapse-sdk tests
         console.log("Copy this JSON to synapse-sdk src/test/pdp-auth.test.ts:");
@@ -249,14 +249,14 @@ contract SignatureFixtureTest is Test {
         console.log('    "createDataSet": {');
         console.log('      "signature": "%s",', vm.toString(createDataSetSig));
         console.log('      "digest": "%s",', vm.toString(createDataSetDigest));
-        console.log('      "clientDataSetId": %d,', CLIENT_DATASET_ID);
+        console.log('      "clientDataSetId": %d,', CLIENT_DATA_SET_ID);
         console.log('      "payee": "%s",', PAYEE);
         console.log('      "withCDN": %s', WITH_CDN ? "true" : "false");
         console.log('    },');
         console.log('    "addRoots": {');
         console.log('      "signature": "%s",', vm.toString(addRootsSig));
         console.log('      "digest": "%s",', vm.toString(addRootsDigest));
-        console.log('      "clientDataSetId": %d,', CLIENT_DATASET_ID);
+        console.log('      "clientDataSetId": %d,', CLIENT_DATA_SET_ID);
         console.log('      "firstAdded": %d,', FIRST_ADDED);
         console.log('      "rootCidBytes": [');
         console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
@@ -267,13 +267,13 @@ contract SignatureFixtureTest is Test {
         console.log('    "scheduleRemovals": {');
         console.log('      "signature": "%s",', vm.toString(scheduleRemovalsSig));
         console.log('      "digest": "%s",', vm.toString(scheduleRemovalsDigest));
-        console.log('      "clientDataSetId": %d,', CLIENT_DATASET_ID);
+        console.log('      "clientDataSetId": %d,', CLIENT_DATA_SET_ID);
         console.log('      "rootIds": [1, 3, 5]');
         console.log('    },');
         console.log('    "deleteDataSet": {');
         console.log('      "signature": "%s",', vm.toString(deleteDataSetSig));
         console.log('      "digest": "%s",', vm.toString(deleteDataSetDigest));
-        console.log('      "clientDataSetId": %d', CLIENT_DATASET_ID);
+        console.log('      "clientDataSetId": %d', CLIENT_DATA_SET_ID);
         console.log('    }');
         console.log('  }');
         console.log('}');
@@ -282,7 +282,7 @@ contract SignatureFixtureTest is Test {
         assertTrue(
             testContract.verifyCreateDataSetSignatureTest(
                 TEST_SIGNER,
-                CLIENT_DATASET_ID,
+                CLIENT_DATA_SET_ID,
                 PAYEE,
                 WITH_CDN,
                 createDataSetSig
@@ -293,7 +293,7 @@ contract SignatureFixtureTest is Test {
         assertTrue(
             testContract.verifyAddRootsSignatureTest(
                 TEST_SIGNER,
-                CLIENT_DATASET_ID,
+                CLIENT_DATA_SET_ID,
                 rootDataArray,
                 FIRST_ADDED,
                 addRootsSig
@@ -304,7 +304,7 @@ contract SignatureFixtureTest is Test {
         assertTrue(
             testContract.verifyScheduleRemovalsSignatureTest(
                 TEST_SIGNER,
-                CLIENT_DATASET_ID,
+                CLIENT_DATA_SET_ID,
                 testRootIds,
                 scheduleRemovalsSig
             ),
@@ -314,7 +314,7 @@ contract SignatureFixtureTest is Test {
         assertTrue(
             testContract.verifyDeleteDataSetSignatureTest(
                 TEST_SIGNER,
-                CLIENT_DATASET_ID,
+                CLIENT_DATA_SET_ID,
                 deleteDataSetSig
             ),
             "DeleteDataSet signature verification failed"
@@ -386,14 +386,14 @@ contract SignatureFixtureTest is Test {
     // ============= SIGNATURE GENERATION FUNCTIONS =============
 
     function generateCreateDataSetSignature() internal view returns (bytes memory) {
-        bytes32 digest = testContract.getCreateDataSetDigest(CLIENT_DATASET_ID, WITH_CDN, PAYEE);
+        bytes32 digest = testContract.getCreateDataSetDigest(CLIENT_DATA_SET_ID, WITH_CDN, PAYEE);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }
 
     function generateAddRootsSignature() internal view returns (bytes memory) {
         IPDPTypes.PieceData[] memory rootDataArray = createTestRootData();
-        bytes32 digest = testContract.getAddRootsDigest(CLIENT_DATASET_ID, FIRST_ADDED, rootDataArray);
+        bytes32 digest = testContract.getAddRootsDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, rootDataArray);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -404,13 +404,13 @@ contract SignatureFixtureTest is Test {
         testRootIds[1] = 3;
         testRootIds[2] = 5;
 
-        bytes32 digest = testContract.getScheduleRemovalsDigest(CLIENT_DATASET_ID, testRootIds);
+        bytes32 digest = testContract.getScheduleRemovalsDigest(CLIENT_DATA_SET_ID, testRootIds);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }
 
     function generateDeleteDataSetSignature() internal view returns (bytes memory) {
-        bytes32 digest = testContract.getDeleteDataSetDigest(CLIENT_DATASET_ID);
+        bytes32 digest = testContract.getDeleteDataSetDigest(CLIENT_DATA_SET_ID);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }

@@ -58,7 +58,7 @@
   },
   {
     "type": "function",
-    "name": "DATASET_CREATION_FEE",
+    "name": "DATA_SET_CREATION_FEE",
     "inputs": [],
     "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "view"

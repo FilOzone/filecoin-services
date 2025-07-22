@@ -22,7 +22,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Version tracking
     string public constant VERSION = "0.1.0";
-    
+
     // Events
     event ContractUpgraded(string version, address implementation);
     event DataSetStorageProviderChanged(uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider);
@@ -47,7 +47,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant PRICE_PER_TIB_PER_MONTH_WITH_CDN = 3; // 3 USDFC per TiB per month with CDN
 
     // Dynamic fee values based on token decimals
-    uint256 public DATASET_CREATION_FEE; // 0.1 USDFC with correct decimals
+    uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
     uint8 public tokenDecimals;
@@ -155,15 +155,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
 
     // EIP-712 Type hashes
-    bytes32 private constant CREATE_DATASET_TYPEHASH = keccak256(
+    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)"
     );
     
-    bytes32 private constant PIECECID_TYPEHASH = keccak256(
+    bytes32 private constant PIECE_CID_TYPEHASH = keccak256(
         "PieceCid(bytes data)"
     );
 
-    bytes32 private constant PIECEDATA_TYPEHASH = keccak256(
+    bytes32 private constant PIECE_DATA_TYPEHASH = keccak256(
         "PieceData(PieceCid piece,uint256 rawSize)PieceCid(bytes data)"
     );
 
@@ -175,7 +175,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         "SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)"
     );
     
-    bytes32 private constant DELETE_DATASET_TYPEHASH = keccak256(
+    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256(
         "DeleteDataSet(uint256 clientDataSetId)"
     );
 
@@ -224,7 +224,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        DATASET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
+        DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
         nextServiceProviderId = 1;
     }
 
@@ -427,7 +427,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         payments.modifyRailLockup(
             railId,
             DEFAULT_LOCKUP_PERIOD,
-            DATASET_CREATION_FEE // lockupFixed equal to the one-time payment amount
+            DATA_SET_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
 
         // Charge the one-time data set creation fee
@@ -435,7 +435,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         payments.modifyRailPayment(
             railId,
             0, // Initial rate is 0, will be updated when pieces are added
-            DATASET_CREATION_FEE // One-time payment amount
+            DATA_SET_CREATION_FEE // One-time payment amount
         );
 
         // Emit event for tracking
@@ -473,7 +473,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             ),
             "Not authorized to delete data set"
         );
-        // TODO Data set deletion logic         
+        // TODO Data set deletion logic
     }
 
     /**
@@ -524,7 +524,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         external
         onlyPDPVerifier
     {
-        // Verify the data set exists in our mapping   
+        // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
             info.railId != 0,
@@ -671,7 +671,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @param newStorageProvider The new storage provider address (must be an approved provider)
      * @param extraData Additional data (not used)
      */
-    function ownerChanged(
+    function storageProviderChanged(
         uint256 dataSetId,
         address oldStorageProvider,
         address newStorageProvider,
@@ -953,7 +953,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Prepare the message hash that was signed
         bytes32 structHash = keccak256(
             abi.encode(
-                CREATE_DATASET_TYPEHASH,
+                CREATE_DATA_SET_TYPEHASH,
                 clientDataSetId,                       
                 withCDN,                                
                 payee
@@ -989,14 +989,14 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             // Hash the PieceCid struct
             bytes32 cidHash = keccak256(
                 abi.encode(
-                    PIECECID_TYPEHASH,
+                    PIECE_CID_TYPEHASH,
                     keccak256(pieceDataArray[i].piece.data)
                 )
             );
             // Hash the PieceData struct
             pieceDataHashes[i] = keccak256(
                 abi.encode(
-                    PIECEDATA_TYPEHASH,
+                    PIECE_DATA_TYPEHASH,
                     cidHash,
                     pieceDataArray[i].rawSize
                 )
@@ -1040,7 +1040,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             abi.encode(
                 SCHEDULE_PIECE_REMOVALS_TYPEHASH,
                 clientDataSetId,                        
-                keccak256(abi.encodePacked(pieceIds))                           
+                keccak256(abi.encodePacked(pieceIds))
             )
         );
         
@@ -1068,7 +1068,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Prepare the message hash that was signed
         bytes32 structHash = keccak256(
             abi.encode(
-                DELETE_DATASET_TYPEHASH,
+                DELETE_DATA_SET_TYPEHASH,
                 clientDataSetId                        
             )
         );

@@ -147,9 +147,9 @@ contract MockPDPVerifier {
         // Update storage provider
         dataSetStorageProviders[dataSetId] = newStorageProvider;
         
-        // Call the listener's ownerChanged function
+        // Call the listener's storageProviderChanged function
         if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).ownerChanged(dataSetId, oldStorageProvider, newStorageProvider, extraData);
+            PDPListener(listenerAddr).storageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider, extraData);
         }
         
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
@@ -326,7 +326,7 @@ contract PandoraServiceTest is Test {
         // Check fee constants are correctly calculated based on token decimals
         uint256 expectedDataSetCreationFee = (1 * 10 ** mockUSDFC.decimals()) / 10; // 0.1 USDFC
         assertEq(
-            pdpServiceWithPayments.DATASET_CREATION_FEE(),
+            pdpServiceWithPayments.DATA_SET_CREATION_FEE(),
             expectedDataSetCreationFee,
             "Data set creation fee should be set correctly"
         );
@@ -358,7 +358,7 @@ contract PandoraServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.DATASET_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.DATA_SET_CREATION_FEE(); // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
@@ -424,7 +424,7 @@ contract PandoraServiceTest is Test {
         (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), storageProvider);
 
         // Calculate expected client balance
-        uint256 expectedClientFundsAfter = clientFundsBefore - pdpServiceWithPayments.DATASET_CREATION_FEE();
+        uint256 expectedClientFundsAfter = clientFundsBefore - pdpServiceWithPayments.DATA_SET_CREATION_FEE();
 
         // Verify balances changed correctly (one-time fee transferred)
         assertEq(
@@ -459,7 +459,7 @@ contract PandoraServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.DATASET_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 10 * pdpServiceWithPayments.DATA_SET_CREATION_FEE(); // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
@@ -1162,7 +1162,7 @@ contract PandoraServiceTest is Test {
 
     function testGetClientDataSets_EmptyClient() public view {
         // Test with a client that has no data sets
-        PandoraService.DataSetInfo[] memory dataSets = 
+        PandoraService.DataSetInfo[] memory dataSets =
             pdpServiceWithPayments.getClientDataSets(client);
         
         assertEq(dataSets.length, 0, "Should return empty array for client with no data sets");
@@ -1175,7 +1175,7 @@ contract PandoraServiceTest is Test {
         createDataSetForClient(sp1, client, metadata);
         
         // Get data sets
-        PandoraService.DataSetInfo[] memory dataSets = 
+        PandoraService.DataSetInfo[] memory dataSets =
             pdpServiceWithPayments.getClientDataSets(client);
         
         // Verify results
@@ -1193,7 +1193,7 @@ contract PandoraServiceTest is Test {
         createDataSetForClient(sp2, client, "Metadata 2");
         
         // Get data sets
-        PandoraService.DataSetInfo[] memory dataSets = 
+        PandoraService.DataSetInfo[] memory dataSets =
             pdpServiceWithPayments.getClientDataSets(client);
         
         // Verify results
@@ -1356,7 +1356,7 @@ contract PandoraServiceTest is Test {
         // Call directly as PDPVerifier with wrong old storage provider
         vm.prank(address(mockPDPVerifier));
         vm.expectRevert("Old storage provider mismatch");
-        pdpServiceWithPayments.ownerChanged(testDataSetId, sp2, sp2, testExtraData);
+        pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp2, sp2, testExtraData);
     }
 
     /**
@@ -1374,7 +1374,7 @@ contract PandoraServiceTest is Test {
         // Call directly as sp2 (not PDPVerifier)
         vm.prank(sp2);
         vm.expectRevert("Caller is not the PDP verifier");
-        pdpServiceWithPayments.ownerChanged(testDataSetId, sp1, sp2, testExtraData);
+        pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp1, sp2, testExtraData);
     }
 
     /**
@@ -1632,21 +1632,21 @@ contract PandoraServiceUpgradeTest is Test {
         // Test migrate function for versioning
         // Note: This would typically be called during a proxy upgrade via upgradeToAndCall
         // We're testing the function directly here for simplicity
-        
+
         // Start recording logs
         vm.recordLogs();
-        
+
         // Simulate calling migrate during upgrade (called by proxy)
         vm.prank(address(pandoraService));
         pandoraService.migrate();
-        
+
         // Get recorded logs
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        
+
         // Find the ContractUpgraded event (reinitializer also emits Initialized event)
         bytes32 expectedTopic = keccak256("ContractUpgraded(string,address)");
         bool foundEvent = false;
-        
+
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].topics[0] == expectedTopic) {
                 // Decode and verify the event data
@@ -1657,7 +1657,7 @@ contract PandoraServiceUpgradeTest is Test {
                 break;
             }
         }
-        
+
         assertTrue(foundEvent, "Should emit ContractUpgraded event");
     }
 
@@ -1671,7 +1671,7 @@ contract PandoraServiceUpgradeTest is Test {
         // Test that migrate can only be called once per reinitializer version
         vm.prank(address(pandoraService));
         pandoraService.migrate();
-        
+
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         vm.prank(address(pandoraService));
