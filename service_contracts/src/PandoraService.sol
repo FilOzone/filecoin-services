@@ -440,6 +440,11 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             );
             info.cacheMissRailId = cacheMissRailId;
             railToProofSet[cacheMissRailId] = proofSetId;
+            payments.modifyRailLockup(
+                cacheMissRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                0
+            );
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
@@ -450,6 +455,11 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             );
             info.cdnRailId = cdnRailId;
             railToProofSet[cdnRailId] = proofSetId;
+            payments.modifyRailLockup(
+                cdnRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                0
+            );
         }
 
         // Emit event for tracking
