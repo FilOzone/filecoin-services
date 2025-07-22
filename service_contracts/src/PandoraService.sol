@@ -10,15 +10,15 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
-import {Payments, IArbiter} from "@fws-payments/Payments.sol";
+import {Payments, IValidator} from "@fws-payments/Payments.sol";
 
 /// @title PandoraService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
 /// using the Payments contract. It creates payment rails for storage providers
-/// and adjusts payment rates based on storage size. Also implements arbitration
+/// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
-contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
+contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
 
     // Version tracking
     string public constant VERSION = "0.1.0";
@@ -103,10 +103,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     mapping(uint256 => DataSetInfo) public dataSetInfo;
     mapping(address => uint256[]) public clientDataSets;
 
-    // Mapping from rail ID to data set ID for arbitration
+    // Mapping from rail ID to data set ID for validation
     mapping(uint256 => uint256) public railToDataSet;
 
-    // Event for arbitration
+    // Event for validation
     event PaymentArbitrated(
         uint256 railId, uint256 dataSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
     );
@@ -412,14 +412,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
             creator, // data set creator, SPs in  most cases
-            address(this), // this contract acts as the arbiter
-            info.commissionBps // commission rate based on CDN usage
+            address(this), // this contract acts as the validator
+            info.commissionBps, // commission rate based on CDN usage
+           address(this)
         );
 
         // Store the rail ID
         info.railId = railId;
 
-        // Store reverse mapping from rail ID to data set ID for arbitration
+        // Store reverse mapping from rail ID to data set ID for validation
         railToDataSet[railId] = dataSetId;
 
         // First, set a lockupFixed value that's at least equal to the one-time payment
@@ -1287,18 +1288,18 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
-     * @dev Implements the IArbiter interface function
+     * @dev Implements the IValidator interface function
 
      * @param railId ID of the payment rail
      * @param proposedAmount The originally proposed payment amount
      * @param fromEpoch Starting epoch (exclusive)
      * @param toEpoch Ending epoch (inclusive)
-     * @return result The arbitration result with modified amount and settlement information
+     * @return result The validation result with modified amount and settlement information
      */
-    function arbitratePayment(uint256 railId, uint256 proposedAmount, uint256 fromEpoch, uint256 toEpoch, uint256 /* rate */)
+    function validatePayment(uint256 railId, uint256 proposedAmount, uint256 fromEpoch, uint256 toEpoch, uint256 /* rate */)
         external
         override
-        returns (ArbitrationResult memory result)
+        returns (ValidationResult memory result)
     {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
@@ -1310,7 +1311,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // If proving wasn't ever activated for this data set, don't pay anything
         if (provingActivationEpoch[dataSetId] == 0) {
-            return ArbitrationResult({
+            return ValidationResult({
                 modifiedAmount: 0,
                 settleUpto: fromEpoch,
                 note: "Proving never activated for this data set"
@@ -1333,7 +1334,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
-            return ArbitrationResult({
+            return ValidationResult({
                 modifiedAmount: 0,
                 settleUpto: fromEpoch,
                 note: "No proven epochs in the requested range"
@@ -1349,7 +1350,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         // Emit event for logging
         emit PaymentArbitrated(railId, dataSetId, proposedAmount, modifiedAmount, faultedEpochs);
 
-        return ArbitrationResult({
+        return ValidationResult({
             modifiedAmount: modifiedAmount,
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
