@@ -604,10 +604,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      */
     function decomposeProofSetRootId(uint256 proofSetRootId) public pure returns (uint256 proofSetId, uint256 rootId) {
         // Extract the proofSetId and rootId from the composite ID
-        proofSetId = proofSetRootId >> 128; // Get the upper 128 bits
-        rootId = proofSetRootId & ((1 << 128) - 1); // Get the lower 128 bits
-        require(proofSetId < (1 << 128), "ProofSetId overflow");
-        require(rootId < (1 << 128), "RootId overflow");
+        proofSetId = proofSetRootId >> ID_BITS; // Get the upper 128 bits
+        rootId = proofSetRootId & ((1 << ID_BITS) - 1); // Get the lower 128 bits
+        require(proofSetId < (1 << ID_BITS), "ProofSetId overflow");
+        require(rootId < (1 << ID_BITS), "RootId overflow");
     }
 
     function rootsScheduledRemove(uint256 proofSetId, uint256[] memory rootIds, bytes calldata extraData)
