@@ -41,6 +41,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
+
+    // ID bit size for composite IDs
+    uint256 private constant ID_BITS = 128;
     
     // Pricing constants
     uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
@@ -568,15 +571,16 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     /**
      * @notice Combines proofSetId and rootId into a composite proofSetRootId.
-     * @param proofSetId The proof set ID (must fit in 128 bits)
-     * @param rootId The root ID (must fit in 128 bits)
+     * @dev Each ID must fit within `ID_BITS` bits (currently 128 bits).
+     * @param proofSetId The proof set ID (must fit in ID_BITS bits)
+     * @param rootId The root ID (must fit in ID_BITS bits)
      * @return proofSetRootId The composite 256-bit ID
      */
     function getProofSetRootId(uint256 proofSetId, uint256 rootId) public pure returns (uint256) {
-        require(proofSetId < (1 << 128), "ProofSetId overflow");
-        require(rootId < (1 << 128), "RootId overflow");
+        require(proofSetId < (1 << ID_BITS), "ProofSetId overflow");
+        require(rootId < (1 << ID_BITS), "RootId overflow");
         // Combine proofSetId and rootId into a single 256-bit ID
-        return (proofSetId << 128) | rootId;
+        return (proofSetId << ID_BITS) | rootId;
     }
 
     /**
