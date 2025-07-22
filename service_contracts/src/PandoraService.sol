@@ -1055,7 +1055,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         for (uint256 i = 0; i < keys.length; i++) {
             values[i] = proofSetRootMetadata[proofSetRootId][keys[i]];
         }
-        require(keys.length == values.length, "Keys and values length mismatch");
     }
 
     /**
