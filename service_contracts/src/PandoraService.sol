@@ -44,6 +44,12 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // ID bit size for composite IDs
     uint256 private constant ID_BITS = 128;
+
+    // Metadata size and count limits
+    uint256 public constant MAX_KEY_LENGTH = 64;
+    uint256 public constant MAX_VALUE_LENGTH = 512;
+    uint256 public constant MAX_KEYS_PER_PROOFSET = 10;
+    uint256 public constant MAX_KEYS_PER_ROOT = 5;
     
     // Pricing constants
     uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
@@ -403,6 +409,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Store each metadata key-value entry for this proof set
         require(createData.metadataKeys.length == createData.metadataValues.length, "Length mismatch between metadata keys and values");
+        require(createData.metadataKeys.length <= MAX_KEYS_PER_PROOFSET, "Exceeded max keys per proof set");
+
         for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
             string memory key = createData.metadataKeys[i];
             bytes memory value = createData.metadataValues[i];
@@ -410,7 +418,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             require(proofSetMetadata[proofSetId][key].length == 0, "Duplicate metadata key provided");
             require(bytes(key).length > 0, "Metadata key cannot be empty");
             require(value.length > 0, "Metadata value cannot be empty");
-            
+            require(bytes(key).length <= MAX_KEY_LENGTH, "Metadata key exceeds maximum length");
+            require(value.length <= MAX_VALUE_LENGTH, "Metadata value exceeds maximum length");
+
             // Store the metadata key in the array for this proof set
             proofSetMetadataKeys[proofSetId].push(key);
 
@@ -544,6 +554,7 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         require(metadataKeys.length > 0, "Root metadata key array cannot be empty");
         require(metadataValues.length > 0, "Root metadata value array cannot be empty");
+        require(metadataKeys.length <= MAX_KEYS_PER_ROOT, "Exceeded max keys per root");
 
         // Store metadata for each new root
         for (uint256 i = 0; i < rootData.length; i++) {
@@ -560,6 +571,8 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                     proofSetRootMetadata[proofSetRootId][key].length == 0,
                     "Duplicate metadata key provided for root"
                 );
+                require(bytes(key).length <= MAX_KEY_LENGTH, "Root metadata key exceeds maximum length");
+                require(value.length <= MAX_VALUE_LENGTH, "Root metadata value exceeds maximum length");
 
                 proofSetRootMetadata[proofSetRootId][key] = value;
                 proofSetRootMetadataKeys[proofSetRootId].push(key);
