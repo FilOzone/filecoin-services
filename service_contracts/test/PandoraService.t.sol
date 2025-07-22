@@ -6,7 +6,7 @@ import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {PandoraService} from "../src/PandoraService.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Cids} from "@pdp/Cids.sol";
-import {Payments, IArbiter} from "@fws-payments/Payments.sol";
+import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -202,7 +202,14 @@ contract PandoraServiceTest is Test {
 
     // Events from Payments contract to verify
     event RailCreated(
-        uint256 railId, address token, address from, address to, address arbiter, uint256 commissionRateBps
+        uint256 indexed railId,
+        address indexed payer,
+        address indexed payee,
+        address token,
+        address operator,
+        address validator,
+        address serviceFeeRecipient,
+        uint256 commissionRateBps
     );
     
     // Registry events to verify
@@ -410,7 +417,7 @@ contract PandoraServiceTest is Test {
         assertEq(rail.from, client, "From address should be client");
         assertEq(rail.to, storageProvider, "To address should be storage provider");
         assertEq(rail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(rail.arbiter, address(pdpServiceWithPayments), "Arbiter should be the PDP service");
+        assertEq(rail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(rail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
 
         // Verify lockupFixed is 0 since the one-time payment was made
