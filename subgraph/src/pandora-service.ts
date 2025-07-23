@@ -162,14 +162,14 @@ export function findChallengedPieces(
   }
 
   const sumTreeInstance = new SumTree();
-  const pieceIds = sumTreeInstance.findRootIds(
+  const pieceIds = sumTreeInstance.findPieceIds(
     dataSetId.toI32(),
     nextPieceId.toI32(),
     challenges,
     blockNumber
   );
   if (!pieceIds) {
-    log.warning("findChallengedPieces: findRootIds reverted for dataSetId {}", [
+    log.warning("findChallengedPieces: findPieceIds reverted for dataSetId {}", [
       dataSetId.toString(),
     ]);
     return [];
@@ -177,7 +177,7 @@ export function findChallengedPieces(
 
   const pieceIdsArray: BigInt[] = [];
   for (let i = 0; i < pieceIds.length; i++) {
-    pieceIdsArray.push(pieceIds[i].rootId);
+    pieceIdsArray.push(pieceIds[i].pieceId);
   }
   return pieceIdsArray;
 }

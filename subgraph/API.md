@@ -9,8 +9,8 @@ This document provides a comprehensive guide to the GraphQL API for the Pandora 
 - [Entity Relationships](#entity-relationships)
 - [Query Examples](#query-examples)
   - [Providers](#providers)
-  - [Proof Sets](#proof-sets)
-  - [Roots](#roots)
+  - [Data Sets](#data-sets)
+  - [Pieces](#piece)
   - [Rails](#rails)
   - [Rate Change Queue](#rate-change-queue)
 - [Advanced Queries](#advanced-queries)
@@ -23,7 +23,7 @@ This document provides a comprehensive guide to the GraphQL API for the Pandora 
 
 ## Overview
 
-The Pandora subgraph indexes data from the Pandora Service on the Filecoin network. It provides structured access to providers, proof sets, roots, and proof set Rails.
+The Pandora subgraph indexes data from the Pandora Service on the Filecoin network. It provides structured access to providers, data sets, piece, and data set Rails.
 
 ## Common Query Parameters
 
@@ -41,18 +41,18 @@ Most queries support the following parameters:
 
 Understanding the relationships between entities helps in constructing effective queries:
 
-- **Provider** → **ProofSet**: One-to-many (A provider can have multiple proof sets)
-- **ProofSet** → **Root**: One-to-many (A proof set can have multiple roots)
-- **ProofSet** → **Rail**: One-to-one (A proof set can have one rail)
+- **Provider** → **DataSet**: One-to-many (A provider can have multiple data sets)
+- **DataSet** → **Piece**: One-to-many (A data set can have multiple piece)
+- **DataSet** → **Rail**: One-to-one (A data set can have one rail)
 - **Rail** → **RateChangeQueue**: One-to-many (A rail can have multiple rate changes)
-- **ProofSet** → **FaultRecord**: One-to-many (A proof set can have multiple fault records)
-- **Root** → **FaultRecord**: Many-to-many (Multiple roots can be in multiple fault records)
+- **DataSet** → **FaultRecord**: One-to-many (A data set can have multiple fault records)
+- **Piece** → **FaultRecord**: Many-to-many (Multiple piece can be in multiple fault records)
 
 ## Query Examples
 
 ### Providers
 
-Providers are entities that manage proof sets in the PDP system.
+Providers are entities that manage data sets in the PDP system.
 
 #### Query All Providers
 
@@ -67,10 +67,10 @@ query AllProviders($first: Int, $skip: Int) {
     id
     address
     totalDataSize
-    totalProofSets
-    totalRoots
+    totalDataSets
+    totalPieces
     totalFaultedPeriods
-    totalFaultedRoots
+    totalFaultedPieces
     createdAt
   }
 }
@@ -84,10 +84,10 @@ query ProviderById($providerId: ID!) {
     id
     address
     totalDataSize
-    totalProofSets
-    totalRoots
+    totalDataSets
+    totalPieces
     totalFaultedPeriods
-    totalFaultedRoots
+    totalFaultedPieces
     createdAt
     updatedAt
     blockNumber
@@ -95,20 +95,20 @@ query ProviderById($providerId: ID!) {
 }
 ```
 
-#### Query Provider with Proof Sets
+#### Query Provider with Data Sets
 
 ```graphql
-query ProviderWithProofSets($providerId: ID!, $first: Int, $skip: Int) {
+query ProviderWithDataSets($providerId: ID!, $first: Int, $skip: Int) {
   provider(id: $providerId) {
     id
     address
     totalDataSize
-    totalProofSets
-    totalRoots
-    totalFaultedRoots
+    totalDataSets
+    totalPieces
+    totalFaultedPieces
     totalFaultedPeriods
     createdAt
-    proofSets(
+    dataSets(
       first: $first
       skip: $skip
       orderBy: createdAt
@@ -118,7 +118,7 @@ query ProviderWithProofSets($providerId: ID!, $first: Int, $skip: Int) {
       setId
       isActive
       totalDataSize
-      totalRoots
+      totalPieces
       createdAt
       lastProvenEpoch
     }
@@ -139,21 +139,21 @@ query FilteredProviders($minDataSize: BigInt) {
     id
     address
     totalDataSize
-    totalProofSets
+    totalDataSets
     createdAt
   }
 }
 ```
 
-### Proof Sets
+### Data Sets
 
-Proof Sets are collections of roots that providers maintain and prove possession of.
+Data Sets are collections of piece that providers maintain and prove possession of.
 
-#### Query All Proof Sets
+#### Query All Data Sets
 
 ```graphql
-query AllProofSets($first: Int, $skip: Int) {
-  proofSets(
+query AllDataSets($first: Int, $skip: Int) {
+  dataSets(
     first: $first
     skip: $skip
     orderBy: createdAt
@@ -162,7 +162,7 @@ query AllProofSets($first: Int, $skip: Int) {
     id
     setId
     isActive
-    totalRoots
+    totalPieces
     totalProofs
     totalDataSize
     createdAt
@@ -173,11 +173,11 @@ query AllProofSets($first: Int, $skip: Int) {
 }
 ```
 
-#### Query Proof Set by ID
+#### Query Data Set by ID
 
 ```graphql
-query ProofSetById($proofSetId: ID!) {
-  proofSet(id: $proofSetId) {
+query DataSetById($dataSetId: ID!) {
+  dataSet(id: $dataSetId) {
     id
     setId
     isActive
@@ -189,13 +189,13 @@ query ProofSetById($proofSetId: ID!) {
     challengeRange
     lastProvenEpoch
     nextChallengeEpoch
-    totalRoots
+    totalPieces
     totalDataSize
     totalProofs
-    totalProvedRoots
+    totalProvedPieces
     totalFeePaid
     totalFaultedPeriods
-    totalFaultedRoots
+    totalFaultedPieces
     createdAt
     updatedAt
     blockNumber
@@ -203,19 +203,19 @@ query ProofSetById($proofSetId: ID!) {
 }
 ```
 
-#### Query Proof Set with Roots
+#### Query Data Set with Pieces
 
 ```graphql
-query ProofSetWithRoots($proofSetId: ID!, $first: Int, $skip: Int) {
-  proofSet(id: $proofSetId) {
+query DataSetWithPieces($dataSetId: ID!, $first: Int, $skip: Int) {
+  dataSet(id: $dataSetId) {
     id
     setId
     isActive
-    totalRoots
+    totalPieces
     totalDataSize
-    roots(first: $first, skip: $skip, orderBy: rootId, orderDirection: desc) {
+    piece(first: $first, skip: $skip, orderBy: pieceId, orderDirection: desc) {
       id
-      rootId
+      pieceId
       rawSize
       cid
       removed
@@ -229,11 +229,11 @@ query ProofSetWithRoots($proofSetId: ID!, $first: Int, $skip: Int) {
 }
 ```
 
-#### Filter Proof Sets by Status
+#### Filter Data Sets by Status
 
 ```graphql
-query ActiveProofSets($first: Int) {
-  proofSets(
+query ActiveDataSets($first: Int) {
+  dataSets(
     where: { isActive: true }
     orderBy: totalDataSize
     orderDirection: desc
@@ -241,7 +241,7 @@ query ActiveProofSets($first: Int) {
   ) {
     id
     setId
-    totalRoots
+    totalPieces
     totalDataSize
     createdAt
     owner {
@@ -251,17 +251,17 @@ query ActiveProofSets($first: Int) {
 }
 ```
 
-### Roots
+### Pieces
 
-Roots represent data commitments within proof sets.
+Pieces represent data commitments within data sets.
 
-#### Query All Roots
+#### Query All Pieces
 
 ```graphql
-query AllRoots($first: Int, $skip: Int) {
-  roots(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
+query AllPieces($first: Int, $skip: Int) {
+  piece(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
     id
-    rootId
+    pieceId
     setId
     rawSize
     cid
@@ -269,7 +269,7 @@ query AllRoots($first: Int, $skip: Int) {
     totalProofsSubmitted
     totalPeriodsFaulted
     createdAt
-    proofSet {
+    dataSet {
       id
       setId
     }
@@ -277,13 +277,13 @@ query AllRoots($first: Int, $skip: Int) {
 }
 ```
 
-#### Query Root by ID
+#### Query Piece by ID
 
 ```graphql
-query RootById($rootId: ID!) {
-  root(id: $rootId) {
+query PieceById($pieceId: ID!) {
+  piece(id: $pieceId) {
     id
-    rootId
+    pieceId
     setId
     rawSize
     leafCount
@@ -298,7 +298,7 @@ query RootById($rootId: ID!) {
     createdAt
     updatedAt
     blockNumber
-    proofSet {
+    dataSet {
       id
       setId
       owner {
@@ -309,23 +309,23 @@ query RootById($rootId: ID!) {
 }
 ```
 
-#### Filter Roots by Criteria
+#### Filter Pieces by Criteria
 
 ```graphql
-query FilteredRoots($minSize: BigInt, $isRemoved: Boolean) {
-  roots(
+query FilteredPieces($minSize: BigInt, $isRemoved: Boolean) {
+  piece(
     where: { rawSize_gte: $minSize, removed: $isRemoved }
     orderBy: rawSize
     orderDirection: desc
     first: 10
   ) {
     id
-    rootId
+    pieceId
     setId
     rawSize
     cid
     createdAt
-    proofSet {
+    dataSet {
       id
       owner {
         address
@@ -337,7 +337,7 @@ query FilteredRoots($minSize: BigInt, $isRemoved: Boolean) {
 
 ### Rails
 
-Rails represent payment channels associated with proof sets.
+Rails represent payment channels associated with data sets.
 
 #### Query All Rails
 
@@ -357,7 +357,7 @@ query AllRails($first: Int, $skip: Int) {
     settledUpto
     endEpoch
     queueLength
-    proofSet {
+    dataSet {
       id
       setId
     }
@@ -383,7 +383,7 @@ query RailById($railId: ID!) {
     settledUpto
     endEpoch
     queueLength
-    proofSet {
+    dataSet {
       id
       setId
       owner {
@@ -417,7 +417,7 @@ query RailsByClient($clientAddress: Bytes!) {
     lockupFixed
     settledUpto
     endEpoch
-    proofSet {
+    dataSet {
       id
       setId
       metadata
@@ -444,7 +444,7 @@ query RailsByProvider($providerAddress: Bytes!) {
     lockupFixed
     settledUpto
     endEpoch
-    proofSet {
+    dataSet {
       id
       setId
       metadata
@@ -471,7 +471,7 @@ query HighPaymentRails($minRate: BigInt!) {
     paymentRate
     lockupPeriod
     lockupFixed
-    proofSet {
+    dataSet {
       id
       setId
     }
@@ -544,7 +544,7 @@ query UpcomingRateChanges($currentEpoch: BigInt!) {
       paymentRate
       from
       to
-      proofSet {
+      dataSet {
         id
         setId
       }
@@ -555,19 +555,19 @@ query UpcomingRateChanges($currentEpoch: BigInt!) {
 
 ## Advanced Queries
 
-### Combined Provider and Proof Set Data
+### Combined Provider and Data Set Data
 
 ```graphql
-query ProviderWithDetailedProofSets($providerId: ID!, $first: Int, $skip: Int) {
+query ProviderWithDetailedDataSets($providerId: ID!, $first: Int, $skip: Int) {
   provider(id: $providerId) {
     id
     address
     totalDataSize
-    totalProofSets
-    totalRoots
-    totalFaultedRoots
+    totalDataSets
+    totalPieces
+    totalFaultedPieces
     totalFaultedPeriods
-    proofSets(
+    dataSets(
       first: $first
       skip: $skip
       orderBy: createdAt
@@ -576,17 +576,17 @@ query ProviderWithDetailedProofSets($providerId: ID!, $first: Int, $skip: Int) {
       id
       setId
       isActive
-      totalRoots
+      totalPieces
       totalDataSize
       totalProofs
-      totalProvedRoots
+      totalProvedPieces
       totalFaultedPeriods
       lastProvenEpoch
       nextChallengeEpoch
       createdAt
-      roots(first: 5, orderBy: rootId, orderDirection: desc) {
+      piece(first: 5, orderBy: pieceId, orderDirection: desc) {
         id
-        rootId
+        pieceId
         rawSize
         cid
         removed
@@ -595,7 +595,7 @@ query ProviderWithDetailedProofSets($providerId: ID!, $first: Int, $skip: Int) {
     }
     weeklyProviderActivities(first: 4, orderBy: id, orderDirection: desc) {
       id
-      totalRootsAdded
+      totalPiecesAdded
       totalDataSizeAdded
       totalProofs
     }
@@ -603,19 +603,19 @@ query ProviderWithDetailedProofSets($providerId: ID!, $first: Int, $skip: Int) {
 }
 ```
 
-### Search by Provider or Proof Set ID
+### Search by Provider or Data Set ID
 
 ```graphql
-query Search($providerId: ID, $proofSetId: Bytes) {
+query Search($providerId: ID, $dataSetId: Bytes) {
   # Search for provider
   provider(id: $providerId) {
     id
     address
-    totalProofSets
+    totalDataSets
     totalDataSize
   }
-  # Search for proof set
-  proofSets(where: { id: $proofSetId }) {
+  # Search for data set
+  dataSets(where: { id: $dataSetId }) {
     id
     setId
     isActive
@@ -627,11 +627,11 @@ query Search($providerId: ID, $proofSetId: Bytes) {
 }
 ```
 
-### Search by client address for proof sets and their providers
+### Search by client address for data sets and their providers
 
 ```graphql
 query Search($clientAddress: Bytes!) {
-  proofSets(where: { clientAddr: $clientAddress }) {
+  dataSets(where: { clientAddr: $clientAddress }) {
     id
     setId
     isActive
@@ -644,31 +644,31 @@ query Search($clientAddress: Bytes!) {
 }
 ```
 
-### Search by piece Cid for proof sets and their providers
+### Search by piece Cid for data sets and their providers
 
-This query returns the root and proof set details for a specific piece Cid.
+This query returns the piece and data set details for a specific piece Cid.
 
 _Need to parse cid before using it in the query._
 
 ```js
 import { CID } from "multiformats/cid";
 
-const rootCid = "baga6ea4seaq..........";
-const parsedCid = CID.parse(rootCid); // "0x0181e203922020........."
+const pieceCid = "baga6ea4seaq..........";
+const parsedCid = CID.parse(pieceCid); // "0x0181e203922020........."
 ```
 
 _**Use parsedCid in the query.**_
 
 ```graphql
 query Search($cid: Bytes!) {
-  roots(where: { cid: $cid }) {
+  piece(where: { cid: $cid }) {
     id
-    rootId
+    pieceId
     setId
     rawSize
     cid
     metadata
-    proofSet {
+    dataSet {
       id
       setId
       metadata
@@ -704,14 +704,14 @@ import { request, gql } from "graphql-request";
 const SUBGRAPH_URL =
   "https://api.goldsky.com/api/public/${YOUR_PROJECT_ID}/subgraphs/${YOUR_PROJECT_NAME}/${SUBGRAPH_DEPLOYMENT_VERSION}/gn";
 
-const fetchProofSets = async () => {
+const fetchDataSets = async () => {
   const query = gql`
-    query GetProofSets($first: Int) {
-      proofSets(first: $first, orderBy: createdAt, orderDirection: desc) {
+    query GetDataSets($first: Int) {
+      dataSets(first: $first, orderBy: createdAt, orderDirection: desc) {
         id
         setId
         isActive
-        totalRoots
+        totalPieces
         totalDataSize
         metadata
         owner {
@@ -727,16 +727,16 @@ const fetchProofSets = async () => {
 
   try {
     const data = await request(SUBGRAPH_URL, query, variables);
-    console.log("ProofSets:", data.proofSets);
-    return data.proofSets;
+    console.log("DataSets:", data.dataSets);
+    return data.dataSets;
   } catch (error) {
-    console.error("Error fetching proof sets:", error);
+    console.error("Error fetching data sets:", error);
     return [];
   }
 };
 
 // Call the function
-fetchProofSets();
+fetchDataSets();
 ```
 
 ### Apollo Client
@@ -769,15 +769,15 @@ const GET_PROVIDER = gql`
     provider(id: $providerId) {
       id
       address
-      totalProofSets
+      totalDataSets
       totalDataSize
-      totalRoots
+      totalPieces
       createdAt
-      proofSets(first: 5, orderBy: createdAt, orderDirection: desc) {
+      dataSets(first: 5, orderBy: createdAt, orderDirection: desc) {
         id
         setId
         isActive
-        totalRoots
+        totalPieces
       }
     }
   }
@@ -797,14 +797,14 @@ function ProviderDetails({ providerId }) {
   return (
     <div>
       <h2>Provider: {provider.address}</h2>
-      <p>Total Proof Sets: {provider.totalProofSets.toString()}</p>
+      <p>Total Data Sets: {provider.totalDataSets.toString()}</p>
       <p>Total Data Size: {provider.totalDataSize.toString()} bytes</p>
-      <h3>Recent Proof Sets</h3>
+      <h3>Recent Data Sets</h3>
       <ul>
-        {provider.proofSets.map(set => (
+        {provider.dataSets.map(set => (
           <li key={set.id}>
             Set ID: {set.setId.toString()} -
-            Roots: {set.totalRoots.toString()} -
+            Pieces: {set.totalPieces.toString()} -
             Status: {set.isActive ? 'Active' : 'Inactive'}
           </li>
         ))}
@@ -857,7 +857,7 @@ const GET_RAILS = gql`
       paymentRate
       lockupPeriod
       lockupFixed
-      proofSet {
+      dataSet {
         id
         setId
       }
@@ -919,14 +919,14 @@ async function fetchFaultRecords() {
     query GetFaultRecords {
       faultRecords(first: 10, orderBy: createdAt, orderDirection: desc) {
         id
-        proofSetId
-        rootIds
+        dataSetId
+        pieceIds
         currentChallengeEpoch
         nextChallengeEpoch
         periodsFaulted
         deadline
         createdAt
-        proofSet {
+        dataSet {
           id
           setId
         }
@@ -979,14 +979,14 @@ const SUBGRAPH_URL =
 async function searchByCid(cid) {
   const query = `
     query SearchByCid($cid: Bytes!) {
-      roots(where: { cid: $cid }) {
+      piece(where: { cid: $cid }) {
         id
-        rootId
+        pieceId
         setId
         rawSize
         cid
         metadata
-        proofSet {
+        dataSet {
           id
           setId
           metadata
@@ -1008,7 +1008,7 @@ async function searchByCid(cid) {
       variables,
     });
 
-    return response.data.data.roots;
+    return response.data.data.piece;
   } catch (error) {
     console.error("Error searching by CID:", error);
     return [];
@@ -1016,13 +1016,13 @@ async function searchByCid(cid) {
 }
 
 // Example usage
-async function findRootByCid() {
+async function findPieceByCid() {
   // Note: In a real application, you would parse the CID first
-  const roots = await searchByCid("0x0181e203922020.........");
-  console.log("Found roots:", roots);
+  const piece = await searchByCid("0x0181e203922020.........");
+  console.log("Found piece:", piece);
 }
 
-findRootByCid();
+findPieceByCid();
 ```
 
 ## Conclusion
