@@ -10,6 +10,7 @@ import {Payments, IArbiter} from "@fws-payments/Payments.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -200,6 +201,28 @@ contract PandoraServiceTest is Test {
     bytes public validPeerId = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070809";
     bytes public validPeerId2 = hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070810";
 
+    // Structs
+    struct RootMetadataSetup {
+        uint256 proofSetId;
+        uint256 rootId;
+        uint256 proofSetRootId;
+        Cids.Cid[] cids;
+        PDPVerifier.RootData[] rootData;
+        bytes extraData;
+    }
+
+    struct MetadataValidation {
+        bool lengthMismatch;
+        bool keysEmpty;
+        bool valuesEmpty;
+        bool hasEmptyKey;
+        bool hasEmptyValue;
+        bool hasDuplicateKeys;
+        bool keyTooLong;
+        bool valueTooLong;
+        bool keysOverRootLimit;
+    }
+
     // Events from Payments contract to verify
     event RailCreated(
         uint256 railId, address token, address from, address to, address arbiter, uint256 commissionRateBps
@@ -332,6 +355,18 @@ contract PandoraServiceTest is Test {
         );
     }
 
+    function _getSingleMetadataKV(string memory key, string memory value) 
+        internal 
+        pure 
+        returns (string[] memory, bytes[] memory) 
+    {
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = key;
+        values[0] = abi.encode(value);
+        return (keys, values);
+    }
+
     function testCreateProofSetCreatesRailAndChargesFee() public {
         // First approve the storage provider
         vm.prank(storageProvider);
@@ -339,11 +374,13 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: true});
+            PandoraService.ProofSetCreateData({payer: client, metadataKeys: metadataKeys, metadataValues: metadataValues, signature: FAKE_SIGNATURE, withCDN: true});
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -389,8 +426,8 @@ contract PandoraServiceTest is Test {
         assertEq(payee, storageProvider, "Payee should be set to storage provider");
 
         // Verify metadata was stored correctly
-        string memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId);
-        assertEq(metadata, "Test Proof Set", "Metadata should be stored correctly");
+        bytes memory metadata = pdpServiceWithPayments.getProofSetMetadata(newProofSetId, metadataKeys[0]);
+        assertEq(metadata, abi.encode("Test Proof Set"), "Metadata should be stored correctly");
 
         // Verify proof set info
         PandoraService.ProofSetInfo memory proofSetInfo = pdpServiceWithPayments.getProofSet(newProofSetId);
@@ -440,11 +477,13 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(storageProvider);
         
         // Prepare ExtraData
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
-            PandoraService.ProofSetCreateData({metadata: "Test Proof Set", payer: client, signature: FAKE_SIGNATURE, withCDN: false});
+            PandoraService.ProofSetCreateData({payer: client, metadataKeys: metadataKeys, metadataValues: metadataValues, signature: FAKE_SIGNATURE, withCDN: false});
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -722,15 +761,18 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
         
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
                 payer: client,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -774,15 +816,18 @@ contract PandoraServiceTest is Test {
 
     function testNonWhitelistedProviderCannotCreateProofSet() public {
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
                 payer: client,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -812,15 +857,18 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
         
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: "Test Proof Set",
                 payer: client,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 signature: FAKE_SIGNATURE,
                 withCDN: false
             });
         
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
         
         // Setup client payment approval
         vm.startPrank(client);
@@ -1052,7 +1100,7 @@ contract PandoraServiceTest is Test {
         assertEq(providers.length, 0, "Should return empty array when all providers removed");
     }
     
-    function testGetAllApprovedProvidersNoProviders() public {
+    function testGetAllApprovedProvidersNoProviders() public view {
         // Edge case: No providers have been registered/approved
         PandoraService.ApprovedProviderInfo[] memory providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 0, "Should return empty array when no providers registered");
@@ -1119,9 +1167,13 @@ contract PandoraServiceTest is Test {
         assertEq(providers[1].serviceURL, serviceUrls[4], "SP5 URL should match");
     }
 
-
     // ===== Client-Proofset Tracking Tests =====
-    function createProofSetForClient(address provider, address clientAddress, string memory metadata) internal returns (uint256) {
+    function prepareProofSetForClient(
+        address provider,
+        address clientAddress,
+        string[] memory metadataKeys,
+        bytes[] memory metadataValues
+    ) internal returns (bytes memory) {
         // Register and approve provider if not already approved
         if (!pdpServiceWithPayments.isProviderApproved(provider)) {
             vm.prank(provider);
@@ -1132,13 +1184,15 @@ contract PandoraServiceTest is Test {
         // Prepare extra data
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: metadata,
                 payer: clientAddress,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 withCDN: false,
                 signature: FAKE_SIGNATURE
             });
 
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1156,6 +1210,18 @@ contract PandoraServiceTest is Test {
 
         // Create proof set as approved provider
         makeSignaturePass(clientAddress);
+
+        return encodedData;
+    }
+
+    function createProofSetForClient(
+        address provider, 
+        address clientAddress, 
+        string[] memory metadataKeys, 
+        bytes[] memory metadataValues
+    ) internal returns (uint256) {
+        bytes memory encodedData = prepareProofSetForClient(provider, clientAddress, metadataKeys, metadataValues);
+
         vm.prank(provider);
         return mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
     }
@@ -1170,9 +1236,9 @@ contract PandoraServiceTest is Test {
     
     function testGetClientProofSets_SingleProofSet() public {
         // Create a single proof set for the client
-        string memory metadata = "Test metadata";
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
         
-        createProofSetForClient(sp1, client, metadata);
+        createProofSetForClient(sp1, client, metadataKeys, metadataValues);
         
         // Get proof sets
         PandoraService.ProofSetInfo[] memory proofSets = 
@@ -1182,15 +1248,16 @@ contract PandoraServiceTest is Test {
         assertEq(proofSets.length, 1, "Should return one proof set");
         assertEq(proofSets[0].payer, client, "Payer should match");
         assertEq(proofSets[0].payee, sp1, "Payee should match");
-        assertEq(proofSets[0].metadata, metadata, "Metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
         assertGt(proofSets[0].railId, 0, "Rail ID should be set");
     }
     
     function testGetClientProofSets_MultipleProofSets() public {
         // Create multiple proof sets for the client
-        createProofSetForClient(sp1, client, "Metadata 1");
-        createProofSetForClient(sp2, client, "Metadata 2");
+        (string[] memory metadataKeys1, bytes[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, bytes[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        createProofSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        createProofSetForClient(sp2, client, metadataKeys2, metadataValues2);
         
         // Get proof sets
         PandoraService.ProofSetInfo[] memory proofSets = 
@@ -1202,13 +1269,11 @@ contract PandoraServiceTest is Test {
         // Check first proof set
         assertEq(proofSets[0].payer, client, "First proof set payer should match");
         assertEq(proofSets[0].payee, sp1, "First proof set payee should match");
-        assertEq(proofSets[0].metadata, "Metadata 1", "First proof set metadata should match");
         assertEq(proofSets[0].clientDataSetId, 0, "First dataset ID should be 0");
         
         // Check second proof set
         assertEq(proofSets[1].payer, client, "Second proof set payer should match");
         assertEq(proofSets[1].payee, sp2, "Second proof set payee should match");
-        assertEq(proofSets[1].metadata, "Metadata 2", "Second proof set metadata should match");
         assertEq(proofSets[1].clientDataSetId, 1, "Second dataset ID should be 1");
     }
 
@@ -1235,15 +1300,18 @@ contract PandoraServiceTest is Test {
         }
 
         // Prepare extra data
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Proof Set");
+
         PandoraService.ProofSetCreateData memory createData =
             PandoraService.ProofSetCreateData({
-                metadata: metadata,
                 payer: clientAddress,
+                metadataKeys: metadataKeys,
+                metadataValues: metadataValues,
                 withCDN: false,
                 signature: FAKE_SIGNATURE
             });
 
-        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        bytes memory encodedData = abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.withCDN, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1419,13 +1487,845 @@ contract PandoraServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp2);
         uint256 testProofSetId = createProofSetForOwnershipTest(sp1, client, "Test Proof Set");
         // Use arbitrary extra data
-        bytes memory extraData = abi.encode("arbitrary", 123, address(this));
+        extraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
         emit ProofSetOwnershipChanged(testProofSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeProofSetOwnership(testProofSetId, sp2, address(pdpServiceWithPayments), extraData);
         ( , address payee) = pdpServiceWithPayments.getProofSetParties(testProofSetId);
         assertEq(payee, sp2, "Payee should be updated to new owner");
+    }
+
+    // ===== Proof Set Metadata Storage Tests =====
+    function testProofSetMetadataStorage() public {
+        // Create a proof set with metadata
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Metadata");
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "label");
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata, abi.encode("Test Metadata"), "Stored metadata should match");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], "label", "Stored key should match 'label'");
+    }
+
+    function testProofSetMetadataStorageMultipleKeys() public {
+        // Create a proof set with multiple metadata entries
+        string[] memory metadataKeys = new string[](3);
+        bytes[] memory metadataValues = new bytes[](3);
+        
+        metadataKeys[0] = "label";
+        metadataValues[0] = abi.encode("Test Metadata 1");
+        
+        metadataKeys[1] = "description";
+        metadataValues[1] = abi.encode("Test Description");
+        
+        metadataKeys[2] = "version";
+        metadataValues[2] = abi.encode("1.0.0");
+        
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata1 = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "label");
+        bytes memory storedMetadata2 = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "description");
+        bytes memory storedMetadata3 = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "version");
+        
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata1, abi.encode("Test Metadata 1"), "Stored label should match");
+        assertEq(storedMetadata2, abi.encode("Test Description"), "Stored description should match");
+        assertEq(storedMetadata3, abi.encode("1.0.0"), "Stored version should match");
+        
+        assertEq(storedKeys.length, 3, "Should have three metadata keys");
+        assertEq(storedKeys[0], "label", "First key should be 'label'");
+        assertEq(storedKeys[1], "description", "Second key should be 'description'");
+        assertEq(storedKeys[2], "version", "Third key should be 'version'");
+    }
+
+    function testProofSetMetadataStorageMultipleProofSets() public {
+        // Create multiple proof sets with metadata
+        (string[] memory metadataKeys1, bytes[] memory metadataValues1) = _getSingleMetadataKV("label", "Proof Set 1");
+        (string[] memory metadataKeys2, bytes[] memory metadataValues2) = _getSingleMetadataKV("label", "Proof Set 2");
+        
+        uint256 proofSetId1 = createProofSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 proofSetId2 = createProofSetForClient(sp2, client, metadataKeys2, metadataValues2);
+
+        // read metadata for both proof sets
+        bytes memory storedMetadata1 = pdpServiceWithPayments.getProofSetMetadata(proofSetId1, "label");
+        bytes memory storedMetadata2 = pdpServiceWithPayments.getProofSetMetadata(proofSetId2, "label");
+
+        // Verify metadata matches
+        assertEq(storedMetadata1, abi.encode("Proof Set 1"), "Stored metadata for first proof set should match");
+        assertEq(storedMetadata2, abi.encode("Proof Set 2"), "Stored metadata for second proof set should match");
+    }
+
+    function testProofSetMetadataKeyJustBelowMaxAllowedLength() public {
+        // Create a proof set with a metadata key just below max length
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV(_makeStringOfLength(63), "Test Metadata");
+        
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata = pdpServiceWithPayments.getProofSetMetadata(proofSetId, metadataKeys[0]);
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata, metadataValues[0], "Stored metadata should match for long key");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], metadataKeys[0], "Stored key should match the long key");
+    }
+
+    function testProofSetMetadataKeyMaxAllowedLength() public {
+        // Create a proof set with a metadata key at max length
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV(_makeStringOfLength(64), "Test Metadata");
+        
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata = pdpServiceWithPayments.getProofSetMetadata(proofSetId, metadataKeys[0]);
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata, metadataValues[0], "Stored metadata should match for long key");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], metadataKeys[0], "Stored key should match the long key");
+    }
+
+    function testProofSetMetadataKeyExceedsMaxLength() public {
+        // Create a proof set with a metadata key exceeding max length
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV(_makeStringOfLength(65), "Test Metadata");
+
+        bytes memory encodedData = prepareProofSetForClient(sp1, client, metadataKeys, metadataValues);
+        
+        vm.prank(sp1);
+        vm.expectRevert("Metadata key exceeds maximum length");
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+    }
+
+    function testProofSetMetadataValueJustBelowMaxAllowedLength() public {
+        string[] memory metadataKeys = new string[](1);
+        bytes[] memory metadataValues = new bytes[](1);
+        metadataKeys[0] = "key";
+        metadataValues[0] = _makeBytesOfLength(511);
+
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "key");
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata, metadataValues[0], "Stored metadata should match for long value");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], metadataKeys[0], "Stored key should match 'key'");
+    }
+
+    function testProofSetMetadataValueMaxAllowedLength() public {
+        string[] memory metadataKeys = new string[](1);
+        bytes[] memory metadataValues = new bytes[](1);
+        metadataKeys[0] = "key";
+        metadataValues[0] = _makeBytesOfLength(512);
+
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        bytes memory storedMetadata = pdpServiceWithPayments.getProofSetMetadata(proofSetId, "key");
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+
+        // Verify metadata matches
+        assertEq(storedMetadata, metadataValues[0], "Stored metadata should match for long value");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], metadataKeys[0], "Stored key should match 'key'");
+    }
+
+    function testProofSetMetadataValueExceedsMaxLength() public {
+        // Create a proof set with a metadata value exceeding max length
+        string[] memory metadataKeys = new string[](1);
+        bytes[] memory metadataValues = new bytes[](1);
+
+        metadataKeys[0] = "key";
+        metadataValues[0] = _makeBytesOfLength(513);
+
+        bytes memory encodedData = prepareProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.prank(sp1);
+        vm.expectRevert("Metadata value exceeds maximum length");
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+    }
+
+    function testProofSetMetadataKeysJustBelowMaxValues() public {
+        // Create a proof set with maximum allowed keys
+        string[] memory metadataKeys = new string[](pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET() - 1);
+        bytes[] memory metadataValues = new bytes[](pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET() - 1);
+
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            metadataKeys[i] = string.concat(_makeStringOfLength(32), Strings.toString(i)); // Use valid key length
+            metadataValues[i] = _makeBytesOfLength(64); // Use valid value length
+        }
+
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+        assertEq(storedKeys.length, pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET() - 1, "Should have max - 1 keys");
+    }
+
+    function testProofSetMetadataKeysMaxValues() public {
+        // Create a proof set with maximum allowed keys
+        string[] memory metadataKeys = new string[](pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET());
+        bytes[] memory metadataValues = new bytes[](pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET());
+
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            metadataKeys[i] = string.concat(_makeStringOfLength(32), Strings.toString(i)); // Use valid key length
+            metadataValues[i] = _makeBytesOfLength(64); // Use valid value length
+        }
+
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata and metadata keys from contract
+        string[] memory storedKeys = pdpServiceWithPayments.getProofSetMetadataKeys(proofSetId);
+        assertEq(storedKeys.length, pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET(), "Should have max keys");
+    }
+
+    function testProofSetMetadataKeysExceedMax() public {
+        // Create a proof set with keys exceeding max allowed
+        string[] memory metadataKeys = new string[](pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET() + 1);
+        bytes[] memory metadataValues = new bytes[](pdpServiceWithPayments.MAX_KEYS_PER_PROOFSET() + 1);
+
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            metadataKeys[i] = string.concat(_makeStringOfLength(32), Strings.toString(i)); // Use valid key length
+            metadataValues[i] = _makeBytesOfLength(64); // Use valid value length
+        }
+
+        bytes memory encodedData = prepareProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.prank(sp1);
+        vm.expectRevert("Exceeded max keys per proof set");
+        mockPDPVerifier.createProofSet(address(pdpServiceWithPayments), encodedData);
+    }
+
+    function _validateRootMetadata(
+        string[] memory keys,
+        bytes[] memory values
+    ) internal view returns (MetadataValidation memory data) {
+        if (keys.length != values.length) {
+            data.lengthMismatch = true;
+            return data;
+        }
+        if (keys.length == 0) {
+            data.keysEmpty = true;
+            return data;
+        }
+        if (values.length == 0) {
+            data.valuesEmpty = true;
+            return data;
+        }
+        if (keys.length > pdpServiceWithPayments.MAX_KEYS_PER_ROOT()) {
+            data.keysOverRootLimit = true;
+            return data;
+        }
+
+        // Check for empty keys, key length, and value length
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory key = bytes(keys[i]);
+            if (key.length == 0) {
+                data.hasEmptyKey = true;
+                return data;
+            }
+            if (values[i].length == 0) {
+                data.hasEmptyValue = true;
+                return data;
+            }
+            if (key.length > pdpServiceWithPayments.MAX_KEY_LENGTH()) {
+                data.keyTooLong = true;
+                return data;
+            }
+            if (values[i].length > pdpServiceWithPayments.MAX_VALUE_LENGTH()) {
+                data.valueTooLong = true;
+                return data;
+            }
+
+            for (uint256 j = i + 1; j < keys.length; j++) {
+                if (keccak256(abi.encode(keys[i])) == keccak256(abi.encode(keys[j]))) {
+                    data.hasDuplicateKeys = true;
+                    return data;
+                }
+            }
+        }
+        // All checks passed
+    }
+
+    function setupProofSetWithRootMetadata(
+        uint256 rootId,
+        string[] memory keys,
+        bytes[] memory values,
+        bytes memory signature,
+        address caller
+    ) internal returns (RootMetadataSetup memory setup) {
+        (string[] memory metadataKeys, bytes[] memory metadataValues) = _getSingleMetadataKV("label", "Test Root Metadata");
+        proofSetId = createProofSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Mock CIDs for the root 
+        Cids.Cid[] memory cids = new Cids.Cid[](2);
+        bytes memory prefix = hex"01551b20"; // (CIDV1: 0x01, raw (0x55), keccak-256 (0x1b), hash digest (32B))
+        cids[0] = Cids.cidFromDigest(prefix, keccak256(abi.encodePacked("file")));
+        cids[1] = Cids.cidFromDigest(prefix, keccak256(abi.encodePacked("image")));
+
+        PDPVerifier.RootData[] memory rootData = new PDPVerifier.RootData[](2);
+        rootData[0] = PDPVerifier.RootData({
+            root: cids[0],
+            rawSize: 4096
+        });
+
+        rootData[1] = PDPVerifier.RootData({
+            root: cids[1],
+            rawSize: 4096
+        });
+        
+        // Encode extraData: (signature, metdadataKeys, metadataValues)
+        extraData = abi.encode(signature, keys, values);
+
+        // compute composite proofSetRootId
+        uint256 proofSetRootId = pdpServiceWithPayments.getProofSetRootId(proofSetId, rootId);
+
+        if (caller == address(mockPDPVerifier)){
+            // Validate root metadata
+            MetadataValidation memory validation = _validateRootMetadata(keys, values);
+
+            if (validation.lengthMismatch) {
+                // Expect revert if keys and values length mismatch
+                vm.expectRevert("Metadata keys/values length mismatch");
+            } else if (validation.keysEmpty) {
+                // Expect revert if keys are empty
+                vm.expectRevert("Root metadata key array cannot be empty");
+            } else if (validation.valuesEmpty) {
+                // Expect revert if values are empty
+                vm.expectRevert("Root metadata value array cannot be empty");
+            } else if (validation.hasEmptyKey) {
+                // Expect revert if any key is empty
+                vm.expectRevert("Root metadata key cannot be empty");
+            } else if (validation.keyTooLong) {
+                // Expect revert if any key exceeds max length
+                vm.expectRevert("Root metadata key exceeds maximum length");
+            } else if (validation.valueTooLong) {
+                // Expect revert if any value exceeds max length
+                vm.expectRevert("Root metadata value exceeds maximum length");
+            } else if (validation.hasEmptyValue) {
+                // Expect revert if any value is empty
+                vm.expectRevert("Root metadata value cannot be empty");
+            } else if (validation.hasDuplicateKeys) {
+                // Expect revert if duplicate keys are found
+                vm.expectRevert("Duplicate metadata key provided for root");
+            } else if (validation.keysOverRootLimit) {
+                // Expect revert if keys exceed root limit
+                vm.expectRevert("Exceeded max keys per root");
+            } else {
+                // All good: expect RootMetadataAdded event
+                vm.expectEmit(true, false, false, true);
+                emit PandoraService.RootMetadataAdded(proofSetRootId, keys, values);
+            }
+        } else {
+            // Expect revert if not called by mockPDPVerifier
+            vm.expectRevert("Caller is not the PDP verifier");
+        } 
+
+        vm.prank(caller);
+        pdpServiceWithPayments.rootsAdded(proofSetId, rootId, rootData, extraData);
+
+        setup = RootMetadataSetup({
+            proofSetId: proofSetId,
+            rootId: rootId,
+            proofSetRootId: proofSetRootId,
+            cids: cids,
+            rootData: rootData,
+            extraData: extraData
+        });
+    }
+
+    function testRootMetadataStorageAndRetrieval() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+        // Verify root metadata storage
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[i]);
+            assertEq(storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i]));
+        }
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        for (uint256 i = 0; i < values.length; i++) {
+            assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
+        }
+    }
+
+    function testRootMetadataKeyLengthJustBelowMaxAllowedLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = _makeStringOfLength(63); // Just below max length key
+        values[0] = abi.encode("dog.jpg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify root metadata storage
+        bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[0]);
+        assertEq(storedMetadata, values[0], "Stored metadata should match for just below max length key");
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], keys[0], "Stored key should match just below max length key");
+    }
+
+    function testRootMetadataKeyLengthMaxAllowedLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = _makeStringOfLength(64); // Max length key
+        values[0] = abi.encode("dog.jpg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify root metadata storage
+        bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[0]);
+        assertEq(storedMetadata, values[0], "Stored metadata should match for max length key");
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], keys[0], "Stored key should match max length key");
+    }
+
+    function testRootMetadataKeyLengthExceedMaxLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = _makeStringOfLength(65); // Exceed max length key
+        values[0] = abi.encode("dog.jpg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataValueLengthJustBelowMaxAllowedLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = "filename";
+        values[0] = _makeBytesOfLength(511); // Just below max length value
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify root metadata storage
+        bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[0]);
+        assertEq(storedMetadata, values[0], "Stored metadata should match for just below max length value");
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], keys[0], "Stored key should match 'filename'");
+    }
+
+    function testRootMetadataValueMaxAllowedLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = "filename";
+        values[0] = _makeBytesOfLength(512); // Max length value
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify root metadata storage
+        bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[0]);
+        assertEq(storedMetadata, values[0], "Stored metadata should match for max length value");
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], keys[0], "Stored key should match 'filename'");
+    }
+
+    function testRootMetadataValueExceedMaxLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](1);
+        bytes[] memory values = new bytes[](1);
+        keys[0] = "filename";
+        values[0] = _makeBytesOfLength(513); // Exceed max length value
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataNumberOfKeysJustBelowMaxAllowedLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](pdpServiceWithPayments.MAX_KEYS_PER_ROOT() - 1); // Just below max allowed keys
+        bytes[] memory values = new bytes[](pdpServiceWithPayments.MAX_KEYS_PER_ROOT() - 1);
+        for (uint256 i = 0; i < pdpServiceWithPayments.MAX_KEYS_PER_ROOT() - 1; i++) {
+            keys[i] = string(abi.encodePacked("key", i));
+            values[i] = abi.encode(string(abi.encodePacked("value", i)));
+        }
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify root metadata storage
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[i]);
+            assertEq(storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i]));
+        }
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, keys.length, "Should have max-1 metadata keys");
+    }
+
+    function testRootMetadataNumberOfKeysMaxAllowedLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](pdpServiceWithPayments.MAX_KEYS_PER_ROOT()); // Max allowed keys
+        bytes[] memory values = new bytes[](pdpServiceWithPayments.MAX_KEYS_PER_ROOT());
+        for (uint256 i = 0; i < pdpServiceWithPayments.MAX_KEYS_PER_ROOT(); i++) {
+            keys[i] = string(abi.encodePacked("key", i));
+            values[i] = abi.encode(string(abi.encodePacked("value", i)));
+        }
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify root metadata storage
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[i]);
+            assertEq(storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i]));
+        }
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, keys.length, "Should have five metadata keys");
+    }
+
+    function testRootMetadataNumberOfKeysExceedMaxLimit() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](pdpServiceWithPayments.MAX_KEYS_PER_ROOT() + 1); // Exceed max allowed keys
+        bytes[] memory values = new bytes[](pdpServiceWithPayments.MAX_KEYS_PER_ROOT() + 1);
+        for (uint256 i = 0; i < pdpServiceWithPayments.MAX_KEYS_PER_ROOT() + 1; i++) {
+            keys[i] = string(abi.encodePacked("key", i));
+            values[i] = abi.encode(string(abi.encodePacked("value", i)));
+        }
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataForSameKeyCannotRewrite() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Try to add the exact same metadata again for the same proofSetId/rootId
+        vm.expectRevert("Duplicate metadata key provided for root");
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.rootsAdded(
+            setup.proofSetId, 
+            setup.rootId, 
+            setup.rootData, 
+            setup.extraData
+        );
+    }
+
+    function testRootMetadataCannotBeAddedByNonPDPVerifier() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(client));
+    }
+
+    function testRootMetadataCannotBeCalledWithMoreValues() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](3);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+        values[2] = abi.encode("extraValue"); // Extra value to cause mismatch
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithMoreKeys() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](3);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+        keys[2] = "extraKey"; // Extra key to cause mismatch
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithEmptyKeysAndValues() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](0);
+        bytes[] memory values = new bytes[](0);
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithDuplicateKeys() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "filename"; // Duplicate key
+        values[1] = abi.encode("cat.jpg");
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithEmptyKey() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = ""; // Empty key
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testRootMetadataCannotBeCalledWithEmptyValue() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = ""; // Empty value
+
+        setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+    }
+
+    function testGetRootMetadata() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Test getRootMetadata for existing keys
+        bytes memory filename = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, "filename");
+        assertEq(filename, abi.encode("dog.jpg"), "Filename metadata should match");
+
+        bytes memory contentType = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, "contentType");
+        assertEq(contentType, abi.encode("image/jpeg"), "Content type metadata should match");
+
+        // Test getRootMetadata for non-existent key
+        bytes memory nonExistentKey = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, "nonExistentKey");
+        assertEq(nonExistentKey.length, 0, "Should return empty bytes for non-existent key");
+    }
+
+    function testGetRootMetadataByIds() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory storedMetadata = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, keys[i]);
+            assertEq(storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i]));
+        }
+    }
+
+    function testGetRootMetadataKeys() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        string[] memory storedKeys = pdpServiceWithPayments.getRootMetadataKeys(setup.proofSetRootId);
+        assertEq(storedKeys.length, keys.length, "Should return correct number of keys");
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
+        }
+    }
+
+    function testGetRootMetadataAllKeys() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        (string[] memory allKeys, bytes[] memory allValues) = pdpServiceWithPayments.getRootMetadataAllKeys(setup.proofSetRootId);
+        assertEq(allKeys.length, keys.length, "Should return correct number of keys");
+        assertEq(allValues.length, values.length, "Should return correct number of values");
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            assertEq(allKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
+            assertEq(allValues[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
+        }
+    }
+
+    function testGetRootMetadataAllKeysByIds() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        (string[] memory allKeysByIds, bytes[] memory allValuesByIds) = pdpServiceWithPayments.getRootMetadataAllKeysByIds(setup.proofSetId, setup.rootId);
+        assertEq(allKeysByIds.length, keys.length, "Should return correct number of keys");
+        assertEq(allValuesByIds.length, values.length, "Should return correct number of values");
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            assertEq(allKeysByIds[i], keys[i], string.concat("Stored key should match: ", keys[i]));
+            assertEq(allValuesByIds[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
+        }
+    }
+
+    function testGetRootMetadata_NonExistentProofSet() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+        
+        uint256 nonExistentProofSetRootId = setup.proofSetRootId + 100;
+        bytes memory filename = pdpServiceWithPayments.getRootMetadata(nonExistentProofSetRootId, keys[0]);
+        assertEq(filename.length, 0, "Should return empty bytes for non-existent root metadata");
+    }
+
+    function testGetRootMetadata_NonExistentKey() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+        
+        bytes memory nonExistentKey = pdpServiceWithPayments.getRootMetadata(setup.proofSetRootId, "nonExistentKey");
+        assertEq(nonExistentKey.length, 0, "Should return empty bytes for non-existent key");
+    }
+
+    function testGetRootMetadata_NonExistentProofSetAndKey() public {
+        uint256 rootId = 42;
+
+        // Set metadata for the root
+        string[] memory keys = new string[](2);
+        bytes[] memory values = new bytes[](2);
+        keys[0] = "filename";
+        values[0] = abi.encode("dog.jpg");
+        keys[1] = "contentType";
+        values[1] = abi.encode("image/jpeg");
+
+        RootMetadataSetup memory setup = setupProofSetWithRootMetadata(rootId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+        
+        uint256 nonExistentProofSetRootId = setup.proofSetRootId + 100;
+        bytes memory nonExistentKey = pdpServiceWithPayments.getRootMetadata(nonExistentProofSetRootId, "nonExistentKey");
+        assertEq(nonExistentKey.length, 0, "Should return empty bytes for non-existent proof set and key");
+    }
+
+    // Utility
+    function _makeStringOfLength(uint256 len) internal pure returns (string memory s) {
+        s = string(_makeBytesOfLength(len));
+    }
+
+    function _makeBytesOfLength(uint256 len) internal pure returns (bytes memory b) {
+        b = new bytes(len);
+        for (uint i = 0; i < len; i++) b[i] = "a";
     }
 }
 

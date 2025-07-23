@@ -22,7 +22,14 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     event FaultRecord(uint256 indexed proofSetId, uint256 periodsFaulted, uint256 deadline);
     event ProofSetRailCreated(uint256 indexed proofSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed proofSetId, uint256 railId, uint256 newRate);
-    event RootMetadataAdded(uint256 indexed proofSetId, uint256 rootId, string metadata);
+    event RootMetadataAdded(uint256 indexed proofSetRootId, string[] keys, bytes[] values);
+    event ProofSetCreatedWithMetadata(
+        uint256 indexed proofSetId,
+        address creator,
+        address payer,
+        string[] metadataKeys,
+        bytes[] metadataValues
+    );
 
     // Constants
     uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
@@ -34,6 +41,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
+
+    // ID bit size for composite IDs
+    uint256 private constant ID_BITS = 128;
+
+    // Metadata size and count limits
+    uint256 public constant MAX_KEY_LENGTH = 64;
+    uint256 public constant MAX_VALUE_LENGTH = 512;
+    uint256 public constant MAX_KEYS_PER_PROOFSET = 10;
+    uint256 public constant MAX_KEYS_PER_ROOT = 5;
     
     // Pricing constants
     uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
@@ -59,8 +75,17 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
-    // Mapping from proof set ID to root ID to metadata
-    mapping(uint256 => mapping(uint256 => string)) public proofSetRootMetadata;
+
+    // proofSetRootId => (key => value)
+    mapping(uint256 => mapping(string => bytes)) public proofSetRootMetadata;
+    // proofSetRootId => array of keys
+    mapping(uint256 => string[]) internal proofSetRootMetadataKeys;
+
+    // Mapping from proof set ID to key value pair metadata
+    // proofSetId => (key => value)
+    mapping(uint256 => mapping(string => bytes)) public proofSetMetadata;
+    // proofSetId => array of keys
+    mapping(uint256 => string[]) internal proofSetMetadataKeys;
 
     // Storage for proof set payment information
     struct ProofSetInfo {
@@ -68,7 +93,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this proof set (dynamic based on whether the client purchases CDN add-on)
-        string metadata; // General metadata for the proof set
         string[] rootMetadata; // Array of metadata for each root
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the proof set is registered for CDN add-on
@@ -76,8 +100,9 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
     // Decode structure for proof set creation extra data
     struct ProofSetCreateData {
-        string metadata;
         address payer;
+        string[] metadataKeys;
+        bytes[] metadataValues;
         bool withCDN;
         bytes signature; // Authentication signature
     }
@@ -381,7 +406,27 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         ProofSetInfo storage info = proofSetInfo[proofSetId];
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
-        info.metadata = createData.metadata;
+
+        // Store each metadata key-value entry for this proof set
+        require(createData.metadataKeys.length == createData.metadataValues.length, "Length mismatch between metadata keys and values");
+        require(createData.metadataKeys.length <= MAX_KEYS_PER_PROOFSET, "Exceeded max keys per proof set");
+
+        for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
+            string memory key = createData.metadataKeys[i];
+            bytes memory value = createData.metadataValues[i];
+
+            require(proofSetMetadata[proofSetId][key].length == 0, "Duplicate metadata key provided");
+            require(bytes(key).length > 0, "Metadata key cannot be empty");
+            require(value.length > 0, "Metadata value cannot be empty");
+            require(bytes(key).length <= MAX_KEY_LENGTH, "Metadata key exceeds maximum length");
+            require(value.length <= MAX_VALUE_LENGTH, "Metadata value exceeds maximum length");
+
+            // Store the metadata key in the array for this proof set
+            proofSetMetadataKeys[proofSetId].push(key);
+
+            // Store the metadata value
+            proofSetMetadata[proofSetId][key] = value;
+        }
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
@@ -423,6 +468,15 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
 
         // Emit event for tracking
         emit ProofSetRailCreated(proofSetId, railId, createData.payer, creator, createData.withCDN);
+
+        // Emit event for proof set creation with metadata
+        emit ProofSetCreatedWithMetadata(
+            proofSetId,
+            creator,
+            createData.payer,
+            createData.metadataKeys,
+            createData.metadataValues
+        );
     }
 
     /**
@@ -481,7 +535,10 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
         address payer = info.payer;
         require(extraData.length > 0, "Extra data required for adding roots");
         // Decode the extra data
-        (bytes memory signature, string memory metadata) =  abi.decode(extraData, (bytes, string));
+        (bytes memory signature, string[] memory metadataKeys, bytes[] memory metadataValues) =  abi.decode(extraData, (bytes, string[], bytes[]));
+
+        // Check that number of metadata keys and values are equal
+        require(metadataKeys.length == metadataValues.length, "Metadata keys/values length mismatch");
         
         // Verify the signature
         require(
@@ -495,12 +552,62 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
             "Invalid signature for adding roots"
         );
 
+        require(metadataKeys.length > 0, "Root metadata key array cannot be empty");
+        require(metadataValues.length > 0, "Root metadata value array cannot be empty");
+        require(metadataKeys.length <= MAX_KEYS_PER_ROOT, "Exceeded max keys per root");
+
         // Store metadata for each new root
         for (uint256 i = 0; i < rootData.length; i++) {
             uint256 rootId = firstAdded + i;
-            proofSetRootMetadata[proofSetId][rootId] = metadata;
-            emit RootMetadataAdded(proofSetId, rootId, metadata);
+            uint256 proofSetRootId = getProofSetRootId(proofSetId, rootId);
+
+            for (uint256 k = 0; k < metadataKeys.length; k++) {
+                string memory key = metadataKeys[k];
+                bytes memory value = metadataValues[k];
+
+                require(bytes(key).length > 0, "Root metadata key cannot be empty");
+                require(value.length > 0, "Root metadata value cannot be empty");
+                require(
+                    proofSetRootMetadata[proofSetRootId][key].length == 0,
+                    "Duplicate metadata key provided for root"
+                );
+                require(bytes(key).length <= MAX_KEY_LENGTH, "Root metadata key exceeds maximum length");
+                require(value.length <= MAX_VALUE_LENGTH, "Root metadata value exceeds maximum length");
+
+                proofSetRootMetadata[proofSetRootId][key] = value;
+                proofSetRootMetadataKeys[proofSetRootId].push(key);
+            }
+
+            emit RootMetadataAdded(proofSetRootId, metadataKeys, metadataValues);
         }
+    }
+
+    /**
+     * @notice Combines proofSetId and rootId into a composite proofSetRootId.
+     * @dev Each ID must fit within `ID_BITS` bits (currently 128 bits).
+     * @param proofSetId The proof set ID (must fit in ID_BITS bits)
+     * @param rootId The root ID (must fit in ID_BITS bits)
+     * @return proofSetRootId The composite 256-bit ID
+     */
+    function getProofSetRootId(uint256 proofSetId, uint256 rootId) public pure returns (uint256) {
+        require(proofSetId < (1 << ID_BITS), "ProofSetId overflow");
+        require(rootId < (1 << ID_BITS), "RootId overflow");
+        // Combine proofSetId and rootId into a single 256-bit ID
+        return (proofSetId << ID_BITS) | rootId;
+    }
+
+    /**
+     * @notice Splits a composite proofSetRootId into its component proofSetId and rootId.
+     * @param proofSetRootId The composite ID to split
+     * @return proofSetId The extracted proof set ID
+     * @return rootId The extracted root ID
+     */
+    function decomposeProofSetRootId(uint256 proofSetRootId) public pure returns (uint256 proofSetId, uint256 rootId) {
+        // Extract the proofSetId and rootId from the composite ID
+        proofSetId = proofSetRootId >> ID_BITS; // Get the upper 128 bits
+        rootId = proofSetRootId & ((1 << ID_BITS) - 1); // Get the lower 128 bits
+        require(proofSetId < (1 << ID_BITS), "ProofSetId overflow");
+        require(rootId < (1 << ID_BITS), "RootId overflow");
     }
 
     function rootsScheduledRemove(uint256 proofSetId, uint256[] memory rootIds, bytes calldata extraData)
@@ -802,12 +909,13 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
      * @return decoded The decoded ProofSetCreateData struct
      */
     function decodeProofSetCreateData(bytes calldata extraData) internal pure returns (ProofSetCreateData memory) {
-         (string memory metadata, address payer, bool withCDN, bytes memory signature) = 
-        abi.decode(extraData, (string, address, bool, bytes));
+         (address payer, string[] memory keys, bytes[] memory values, bool withCDN, bytes memory signature) = 
+        abi.decode(extraData, (address, string[], bytes[], bool, bytes));
 
         return ProofSetCreateData({
-            metadata: metadata,
             payer: payer,
+            metadataKeys: keys,
+            metadataValues: values,
             withCDN: withCDN,
             signature: signature
         });
@@ -856,10 +964,20 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     /**
      * @notice Get the metadata for a proof set
      * @param proofSetId The ID of the proof set
+     * @param key The metadata key to look up
      * @return The metadata string
      */
-    function getProofSetMetadata(uint256 proofSetId) external view returns (string memory) {
-        return proofSetInfo[proofSetId].metadata;
+    function getProofSetMetadata(uint256 proofSetId, string calldata key) external view returns (bytes memory) {
+        return proofSetMetadata[proofSetId][key];
+    }
+
+    /*
+     * @notice Get all metadata keys for a given proof set
+     * @param proofSetId The ID of the proof set
+     * @return keys Array of metadata keys stored for the proof set
+     */
+    function getProofSetMetadataKeys(uint256 proofSetId) external view returns (string[] memory) {
+        return proofSetMetadataKeys[proofSetId];
     }
 
     /**
@@ -872,13 +990,84 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
     }
 
     /**
-     * @notice Get the metadata for a specific root
-     * @param proofSetId The ID of the proof set
-     * @param rootId The ID of the root
-     * @return The metadata string for the root
+     * @notice Get the metadata for a specific root and key
+     * @param proofSetRootId The composite ID for (proofSetId, rootId)
+              (generated as: proofSetRootId = (proofSetId << 128) | rootId)  
+     * @param key The metadata key (as string) to look up (e.g., "filename", "contentType", etc.)
+     * @return The metadata value as bytes
      */
-    function getRootMetadata(uint256 proofSetId, uint256 rootId) external view returns (string memory) {
-        return proofSetRootMetadata[proofSetId][rootId];
+    function getRootMetadata(uint256 proofSetRootId, string calldata key) external view returns (bytes memory) {
+        return _getRootMetadata(proofSetRootId, key);
+    }
+
+    /**
+     * @notice Get the metadata for a specific root and key by proofSetId and rootId
+     * @param proofSetId The ID of the proof set
+     * @param rootId The ID of the root within the proof set
+     * @param key The metadata key (as string) to look up (e.g., "filename", "contentType", etc.)
+     * @return The metadata value as bytes
+     */
+    function getRootMetadataByIds(uint256 proofSetId, uint256 rootId, string calldata key) external view returns (bytes memory) {
+        uint256 proofSetRootId = getProofSetRootId(proofSetId, rootId);
+        return _getRootMetadata(proofSetRootId, key);
+    }
+
+    /**
+     * @notice Internal function to retrieve the metadata value for a specific root and key.
+     * @param proofSetRootId The composite ID for (proofSetId, rootId).
+     * @param key The metadata key to look up.
+     * @return The metadata value as bytes.
+     */
+    function _getRootMetadata(uint256 proofSetRootId, string memory key) internal view returns (bytes memory) {
+        return proofSetRootMetadata[proofSetRootId][key];
+    }
+
+    /**
+     * @notice Get the list of metadata keys for a specific root.
+     * @param proofSetRootId The composite ID for (proofSetId, rootId)
+     *        (generated as: proofSetRootId = (proofSetId << 128) | rootId)
+     * @return An array of metadata keys associated with the root.
+     */
+    function getRootMetadataKeys(uint256 proofSetRootId) external view returns (string[] memory) {
+        return proofSetRootMetadataKeys[proofSetRootId];
+    }
+
+    /**
+     * @notice Get all metadata keys and values for a specific proof set root
+     * @param proofSetRootId The composite ID for (proofSetId, rootId)
+     * @return keys An array of metadata keys corresponding to the proof set root
+     * @return values An array of metadata values corresponding to the keys
+     */
+    function getRootMetadataAllKeys(uint256 proofSetRootId) 
+        external 
+        view 
+        returns (string[] memory keys, bytes[] memory values) 
+    {
+        (keys, values) = _getRootMetadataAllKeys(proofSetRootId);
+    }
+
+    /**
+     * @notice Get all metadata keys and values for a specific proof set root by proofSetId and rootId
+     * @param proofSetId The ID of the proof set
+     * @param rootId The ID of the root within the proof set
+     * @return keys An array of metadata keys corresponding to the proof set root
+     * @return values An array of metadata values corresponding to the keys
+     */
+    function getRootMetadataAllKeysByIds(uint256 proofSetId, uint256 rootId) 
+        external 
+        view 
+        returns (string[] memory keys, bytes[] memory values) 
+    {
+        uint256 proofSetRootId = getProofSetRootId(proofSetId, rootId);
+        (keys, values) = _getRootMetadataAllKeys(proofSetRootId);
+    }
+
+    function _getRootMetadataAllKeys(uint256 proofSetRootId) internal view returns (string[] memory keys, bytes[] memory values) {
+        keys = proofSetRootMetadataKeys[proofSetRootId];
+        values = new bytes[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = proofSetRootMetadata[proofSetRootId][keys[i]];
+        }
     }
 
     /**
@@ -1259,7 +1448,6 @@ contract PandoraService is PDPListener, IArbiter, Initializable, UUPSUpgradeable
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,
-                metadata: storageInfo.metadata,
                 rootMetadata: storageInfo.rootMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
                 withCDN: storageInfo.withCDN
