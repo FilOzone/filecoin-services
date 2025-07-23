@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - `ProofSetCreated` → `DataSetCreated`
   - `ProofSetDeleted` → `DataSetDeleted`
   - `ProofSetOwnershipChanged` → `DataSetStorageProviderChanged`
-  - `ProofSetRailCreated` → `DataSetRailsCreated`
+  - `ProofSetRailCreated` → `DataSetRailCreated`
   - `RootMetadataAdded` → `PieceMetadataAdded`
 - **State Variable and Mapping Renames:**
   - `proofSetInfo` → `dataSetInfo`
