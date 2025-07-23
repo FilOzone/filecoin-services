@@ -1,34 +1,30 @@
-import { BigInt, Bytes, crypto, Address, log } from "@graphprotocol/graph-ts";
+import { Address, BigInt, Bytes, crypto, log } from "@graphprotocol/graph-ts";
 import {
-  FaultRecord as FaultRecordEvent,
   DataSetRailCreated as DataSetRailCreatedEvent,
-  RailRateUpdated as RailRateUpdatedEvent,
-  ProviderRegistered as ProviderRegisteredEvent,
+  FaultRecord as FaultRecordEvent,
   ProviderApproved as ProviderApprovedEvent,
-  ProviderRemoved as ProviderRemovedEvent,
+  ProviderRegistered as ProviderRegisteredEvent,
   ProviderRejected as ProviderRejectedEvent,
+  ProviderRemoved as ProviderRemovedEvent,
+  RailRateUpdated as RailRateUpdatedEvent,
 } from "../generated/PandoraService/PandoraService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import {
-  PDPVerifierAddress,
-  NumChallenges,
-  USDFCTokenAddress,
-  DefaultLockupPeriod,
-} from "../utils";
-import {
   DataSet,
-  Provider,
   FaultRecord,
   Piece,
+  Provider,
   Rail,
   RateChangeQueue,
 } from "../generated/schema";
-import { SumTree } from "./sumTree";
 import {
-  decodeStringAddressBoolBytes,
-  extractAddServiceProviderCalldatas,
-} from "./decode";
-import { ContractAddresses, FunctionSelectors } from "./constants";
+  DefaultLockupPeriod,
+  NumChallenges,
+  PDPVerifierAddress,
+  USDFCTokenAddress,
+} from "../utils";
+import { decodeStringAddressBoolBytes } from "./decode";
+import { SumTree } from "./sumTree";
 
 // --- Helper Functions
 function getDataSetEntityId(setId: BigInt): Bytes {
@@ -169,9 +165,10 @@ export function findChallengedPieces(
     blockNumber
   );
   if (!pieceIds) {
-    log.warning("findChallengedPieces: findPieceIds reverted for dataSetId {}", [
-      dataSetId.toString(),
-    ]);
+    log.warning(
+      "findChallengedPieces: findPieceIds reverted for dataSetId {}",
+      [dataSetId.toString()]
+    );
     return [];
   }
 
@@ -184,7 +181,7 @@ export function findChallengedPieces(
 
 /**
  * Handles the FaultRecord event.
- * Records a fault for a specific proof set.
+ * Records a fault for a specific data set.
  */
 export function handleFaultRecord(event: FaultRecordEvent): void {
   const setId = event.params.dataSetId;
@@ -197,7 +194,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 
   const challengeEpoch = dataSet.nextChallengeEpoch;
   const challengeRange = dataSet.challengeRange;
-  const dataSetOwner = dataSet.owner;
+  const storageProvider = dataSet.storageProvider;
   const nextPieceId = dataSet.totalPieces;
 
   let nextChallengeEpoch = BigInt.fromI32(0);
@@ -296,7 +293,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(dataSetOwner);
+  const provider = Provider.load(storageProvider);
   if (provider) {
     provider.totalFaultedPeriods =
       provider.totalFaultedPeriods.plus(periodsFaultedParam);
@@ -308,7 +305,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     provider.save();
   } else {
     log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [
-      dataSetOwner.toHex(),
+      storageProvider.toHex(),
       setId.toString(),
     ]);
   }
@@ -318,18 +315,16 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
  * Handles the DataSetRailCreated event.
  * Creates a new rail for a data set.
  */
-export function handleDataSetRailCreated(
-  event: DataSetRailCreatedEvent
-): void {
+export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   const listenerAddr = event.address;
   const setId = event.params.dataSetId;
   const railId = event.params.railId;
   const clientAddr = event.params.payer;
-  const owner = event.params.payee;
+  const storageProvider = event.params.payee;
   const withCDN = event.params.withCDN;
   const dataSetEntityId = getDataSetEntityId(setId);
   const railEntityId = getRailEntityId(railId);
-  const providerEntityId = owner; // Provider ID is the owner address
+  const providerEntityId = storageProvider; // Provider ID is the storageProvider address
 
   let dataSet = new DataSet(dataSetEntityId);
 
@@ -349,7 +344,7 @@ export function handleDataSetRailCreated(
   dataSet.metadata = metadata;
   dataSet.clientAddr = clientAddr;
   dataSet.withCDN = withCDN;
-  dataSet.owner = providerEntityId; // Link to Provider via owner address (which is Provider's ID)
+  dataSet.storageProvider = providerEntityId; // Link to Provider via storageProvider address (which is Provider's ID)
   dataSet.listener = listenerAddr;
   dataSet.isActive = true;
   dataSet.leafCount = BigInt.fromI32(0);
@@ -373,7 +368,7 @@ export function handleDataSetRailCreated(
   rail.railId = railId;
   rail.token = Address.fromHexString(USDFCTokenAddress);
   rail.from = clientAddr;
-  rail.to = owner;
+  rail.to = storageProvider;
   rail.operator = listenerAddr;
   rail.arbiter = listenerAddr;
   rail.paymentRate = BigInt.fromI32(0);
@@ -389,7 +384,7 @@ export function handleDataSetRailCreated(
   let provider = Provider.load(providerEntityId);
   if (provider == null) {
     provider = new Provider(providerEntityId);
-    provider.address = owner;
+    provider.address = storageProvider;
     provider.status = "Created";
     provider.totalPieces = BigInt.fromI32(0);
     provider.totalDataSets = BigInt.fromI32(1);
@@ -440,12 +435,12 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
 
 /**
  * Handler for ProviderRegistered event
- * Adds pdpUrl and pieceRetrievalUrl and updates registeredAt to block number with status update to "Registered"
+ * Adds serviceUrl and peerId and updates registeredAt to block number with status update to "Registered"
  */
 export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
   const providerAddress = event.params.provider;
-  const pdpUrl = event.params.pdpUrl;
-  const pieceRetrievalUrl = event.params.pieceRetrievalUrl;
+  const serviceUrl = event.params.serviceURL;
+  const peerId = event.params.peerId;
 
   let provider = Provider.load(providerAddress);
   if (!provider) {
@@ -459,8 +454,8 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
     provider.createdAt = event.block.timestamp;
   }
 
-  provider.pdpUrl = pdpUrl;
-  provider.pieceRetrievalUrl = pieceRetrievalUrl;
+  provider.serviceUrl = serviceUrl;
+  provider.peerId = peerId;
   provider.registeredAt = event.block.number;
   provider.status = "Registered";
   provider.updatedAt = event.block.timestamp;
@@ -481,88 +476,24 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
 export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerAddress = event.params.provider;
   const providerId = event.params.providerId;
-  const txInputHex = event.transaction.input.toHex();
 
-  // Pandora contract address
-  const toAddress = ContractAddresses.PANDORA;
+  const provider = Provider.load(providerAddress);
 
-  // Check if this event was emitted during addServiceProvider function call
-  if (hasAddServiceProviderFunction(txInputHex)) {
-    // Extract all addServiceProvider calldatas, passing the contract address for target verification
-    const addServiceProviderCalldatas = extractAddServiceProviderCalldatas(
-      event.transaction.input,
-      toAddress
+  if (provider === null) {
+    log.warning(
+      "ProviderApproved: existing provider not found for address: {}",
+      [providerAddress.toHexString()]
     );
-
-    if (addServiceProviderCalldatas.length === 0) {
-      log.warning(
-        "No valid addServiceProvider calldatas found in transaction input for provider: {}",
-        [providerAddress.toHexString()]
-      );
-      return;
-    }
-
-    let matchingProviderFound = false;
-
-    // Process each addServiceProvider calldata
-    for (let i = 0; i < addServiceProviderCalldatas.length; i++) {
-      const calldata = addServiceProviderCalldatas[i];
-
-      // Check if this calldata matches our provider address
-      if (calldata.provider.equals(providerAddress)) {
-        matchingProviderFound = true;
-
-        let provider = Provider.load(providerAddress);
-        if (provider === null) {
-          provider = new Provider(providerAddress);
-          provider.address = providerAddress;
-          provider.totalFaultedPeriods = BigInt.fromI32(0);
-          provider.totalFaultedPieces = BigInt.fromI32(0);
-          provider.totalDataSets = BigInt.fromI32(0);
-          provider.totalPieces = BigInt.fromI32(0);
-          provider.totalDataSize = BigInt.fromI32(0);
-          provider.createdAt = event.block.timestamp;
-        }
-
-        provider.providerId = providerId;
-        provider.pdpUrl = calldata.pdpUrl;
-        provider.pieceRetrievalUrl = calldata.pieceRetrievalUrl;
-        provider.approvedAt = event.block.number;
-        provider.status = "Approved";
-        provider.updatedAt = event.block.timestamp;
-        provider.blockNumber = event.block.number;
-
-        provider.save();
-
-        break;
-      }
-    }
-
-    if (!matchingProviderFound) {
-      log.warning(
-        "ProviderApproved event emitted in addServiceProvider function but no matching provider calldata found for provider: {}",
-        [providerAddress.toHexString()]
-      );
-    }
-  } else {
-    const provider = Provider.load(providerAddress);
-
-    if (provider === null) {
-      log.warning(
-        "ProviderApproved: existing provider not found for address: {}",
-        [providerAddress.toHexString()]
-      );
-      return;
-    }
-
-    provider.providerId = providerId;
-    provider.approvedAt = event.block.number;
-    provider.status = "Approved";
-    provider.updatedAt = event.block.timestamp;
-    provider.blockNumber = event.block.number;
-
-    provider.save();
+    return;
   }
+
+  provider.providerId = providerId;
+  provider.approvedAt = event.block.number;
+  provider.status = "Approved";
+  provider.updatedAt = event.block.timestamp;
+  provider.blockNumber = event.block.number;
+
+  provider.save();
 }
 
 /**
@@ -597,20 +528,4 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   provider.blockNumber = event.block.number;
 
   provider.save();
-}
-
-//------------------------
-// Utility Functions
-//------------------------
-
-/**
- * Helper function to check if transaction contains addServiceProvider function calls
- * This function is more efficient than the full extraction since it just checks for presence
- */
-export function hasAddServiceProviderFunction(txInput: string): boolean {
-  const hexSelector = FunctionSelectors.ADD_SERVICE_PROVIDER.toHexString();
-  const cleanSelector = hexSelector.startsWith("0x")
-    ? hexSelector.slice(2)
-    : hexSelector;
-  return txInput.indexOf(cleanSelector) !== -1;
 }

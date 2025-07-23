@@ -1,17 +1,17 @@
-import { BigInt, Bytes, log, ethereum, Address } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, log } from "@graphprotocol/graph-ts";
 import {
-  NextProvingPeriod as NextProvingPeriodEvent,
-  PossessionProven as PossessionProvenEvent,
   DataSetDeleted as DataSetDeletedEvent,
   DataSetEmpty as DataSetEmptyEvent,
-  DataSetOwnerChanged as DataSetOwnerChangedEvent,
+  NextProvingPeriod as NextProvingPeriodEvent,
   PiecesAdded as PiecesAddedEvent,
   PiecesRemoved as PiecesRemovedEvent,
+  PossessionProven as PossessionProvenEvent,
+  StorageProviderChanged as StorageProviderChangedEvent,
 } from "../generated/PDPVerifier/PDPVerifier";
-import { Provider, DataSet, Piece } from "../generated/schema";
-import { SumTree } from "./sumTree";
-import { decodeBytesString } from "./decode";
+import { DataSet, Piece, Provider } from "../generated/schema";
 import { LeafSize } from "../utils";
+import { decodeBytesString } from "./decode";
+import { SumTree } from "./sumTree";
 
 // --- Helper Functions for ID Generation ---
 function getDataSetEntityId(setId: BigInt): Bytes {
@@ -40,10 +40,10 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
     return;
   }
 
-  const ownerAddress = dataSet.owner;
+  const storageProvider = dataSet.storageProvider;
 
-  // Load Provider (to update stats before changing owner)
-  const provider = Provider.load(ownerAddress);
+  // Load Provider (to update stats before changing storageProvider)
+  const provider = Provider.load(storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(
       dataSet.totalDataSize
@@ -57,14 +57,14 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
     provider.save();
   } else {
     log.warning("DataSetDeleted: Provider {} for DataSet {} not found", [
-      ownerAddress.toHexString(),
+      storageProvider.toHexString(),
       setId.toString(),
     ]);
   }
 
   // Update DataSet
   dataSet.isActive = false;
-  dataSet.owner = Bytes.empty();
+  dataSet.storageProvider = Bytes.empty();
   dataSet.totalPieces = BigInt.fromI32(0);
   dataSet.totalDataSize = BigInt.fromI32(0);
   dataSet.nextChallengeEpoch = BigInt.fromI32(0);
@@ -79,15 +79,15 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
 }
 
 /**
- * Handles the DataSetOwnerChanged event.
- * Changes the owner of a data set and updates the provider's stats.
+ * Handles the StorageProviderChanged event.
+ * Changes the storageProvider of a data set and updates the provider's stats.
  */
-export function handleDataSetOwnerChanged(
-  event: DataSetOwnerChangedEvent
+export function handleStorageProviderChanged(
+  event: StorageProviderChangedEvent
 ): void {
   const setId = event.params.setId;
-  const oldOwner = event.params.oldOwner;
-  const newOwner = event.params.newOwner;
+  const oldStorageProvider = event.params.oldStorageProvider;
+  const newStorageProvider = event.params.oldStorageProvider;
 
   const dataSetEntityId = getDataSetEntityId(setId);
 
@@ -99,7 +99,7 @@ export function handleDataSetOwnerChanged(
   }
 
   // Load Old Provider (if exists) - Just update timestamp, derived field handles removal
-  const oldProvider = Provider.load(oldOwner);
+  const oldProvider = Provider.load(oldStorageProvider);
   if (oldProvider) {
     oldProvider.totalDataSets = oldProvider.totalDataSets.minus(
       BigInt.fromI32(1)
@@ -108,16 +108,16 @@ export function handleDataSetOwnerChanged(
     oldProvider.blockNumber = event.block.number;
     oldProvider.save();
   } else {
-    log.warning("DataSetOwnerChanged: Old Provider {} not found", [
-      oldOwner.toHexString(),
+    log.warning("StorageProviderChanged: Old Provider {} not found", [
+      oldStorageProvider.toHexString(),
     ]);
   }
 
   // Load or Create New Provider - Just update timestamp/create, derived field handles addition
-  let newProvider = Provider.load(newOwner);
+  let newProvider = Provider.load(newStorageProvider);
   if (newProvider == null) {
-    newProvider = new Provider(newOwner);
-    newProvider.address = newOwner;
+    newProvider = new Provider(newStorageProvider);
+    newProvider.address = newStorageProvider;
     newProvider.status = "Created";
     newProvider.totalPieces = BigInt.fromI32(0);
     newProvider.totalFaultedPeriods = BigInt.fromI32(0);
@@ -135,8 +135,8 @@ export function handleDataSetOwnerChanged(
   newProvider.updatedAt = event.block.timestamp;
   newProvider.save();
 
-  // Update DataSet Owner (this updates the derived relationship on both old and new Provider)
-  dataSet.owner = newOwner; // Set owner to the new provider's ID
+  // Update DataSet storageProvider (this updates the derived relationship on both old and new Provider)
+  dataSet.storageProvider = newStorageProvider; // Set storageProvider to the new provider's ID
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
   dataSet.save();
@@ -166,7 +166,7 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
   dataSet.save();
 
   // Update Provider's total data size
-  const provider = Provider.load(dataSet.owner);
+  const provider = Provider.load(dataSet.storageProvider);
   if (provider) {
     // Subtract the size this data set had *before* it was zeroed
     provider.totalDataSize = provider.totalDataSize.minus(oldTotalDataSize);
@@ -177,9 +177,9 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    // It's possible the provider was deleted or owner changed before this event
+    // It's possible the provider was deleted or storageProvider changed before this event
     log.warning("DataSetEmpty: Provider {} for DataSet {} not found", [
-      dataSet.owner.toHexString(),
+      dataSet.storageProvider.toHexString(),
       setId.toString(),
     ]);
   }
@@ -208,7 +208,7 @@ export function handlePossessionProven(event: PossessionProvenEvent): void {
   // Process each challenge
   for (let i = 0; i < challenges.length; i++) {
     const challenge = challenges[i];
-    const pieceId = challenge.rootId; // Note: keeping .rootId for now as it's the event field name
+    const pieceId = challenge.pieceId; // Note: keeping .pieceId for now as it's the event field name
 
     const pieceIdStr = pieceId.toString();
     if (!pieceIdMap.has(pieceIdStr)) {
@@ -279,7 +279,7 @@ export function handleNextProvingPeriod(event: NextProvingPeriodEvent): void {
  */
 export function handlePiecesAdded(event: PiecesAddedEvent): void {
   const setId = event.params.setId;
-  const pieceIdsFromEvent = event.params.rootIds; // Get piece IDs from event params (keeping field name for compatibility)
+  const pieceIdsFromEvent = event.params.pieceIds; // Get piece IDs from event params (keeping field name for compatibility)
 
   // Input parsing is necessary to get rawSize and piece bytes (cid)
   const txInput = event.transaction.input;
@@ -341,10 +341,10 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
   piecesDataLength = readUint256(encodedData, piecesDataOffset).toI32(); // Length is at the offset
 
   if (piecesDataLength < 0) {
-    log.error("handlePiecesAdded: Invalid negative piecesDataLength {}. Tx: {}", [
-      piecesDataLength.toString(),
-      event.transaction.hash.toHex(),
-    ]);
+    log.error(
+      "handlePiecesAdded: Invalid negative piecesDataLength {}. Tx: {}",
+      [piecesDataLength.toString(), event.transaction.hash.toHex()]
+    );
     return;
   }
 
@@ -460,7 +460,7 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
   dataSet.save();
 
   // Update Provider stats
-  const provider = Provider.load(dataSet.owner);
+  const provider = Provider.load(dataSet.storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.plus(totalDataSizeAdded);
     provider.totalPieces = provider.totalPieces.plus(
@@ -471,7 +471,7 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
     provider.save();
   } else {
     log.warning("handlePiecesAdded: Provider {} for DataSet {} not found", [
-      dataSet.owner.toHex(),
+      dataSet.storageProvider.toHex(),
       setId.toString(),
     ]);
   }
@@ -483,7 +483,7 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
  */
 export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   const setId = event.params.setId;
-  const pieceIds = event.params.rootIds; // Keeping field name for compatibility
+  const pieceIds = event.params.pieceIds; // Keeping field name for compatibility
 
   const dataSetEntityId = getDataSetEntityId(setId);
 
@@ -564,14 +564,14 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   dataSet.save();
 
   // Update Provider stats
-  const provider = Provider.load(dataSet.owner);
+  const provider = Provider.load(dataSet.storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(removedDataSize);
     // Ensure provider totalDataSize doesn't go negative
     if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
       log.warning(
         "handlePiecesRemoved: Provider {} totalDataSize went negative. Setting to 0.",
-        [dataSet.owner.toHex()]
+        [dataSet.storageProvider.toHex()]
       );
       provider.totalDataSize = BigInt.fromI32(0);
     }
@@ -582,7 +582,7 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
     if (provider.totalPieces.lt(BigInt.fromI32(0))) {
       log.warning(
         "handlePiecesRemoved: Provider {} totalPieces went negative. Setting to 0.",
-        [dataSet.owner.toHex()]
+        [dataSet.storageProvider.toHex()]
       );
       provider.totalPieces = BigInt.fromI32(0);
     }
@@ -591,7 +591,7 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
     provider.save();
   } else {
     log.warning("handlePiecesRemoved: Provider {} for DataSet {} not found", [
-      dataSet.owner.toHex(),
+      dataSet.storageProvider.toHex(),
       setId.toString(),
     ]);
   }

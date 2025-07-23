@@ -166,7 +166,7 @@ query AllDataSets($first: Int, $skip: Int) {
     totalProofs
     totalDataSize
     createdAt
-    owner {
+    storageProvider {
       address
     }
   }
@@ -181,7 +181,7 @@ query DataSetById($dataSetId: ID!) {
     id
     setId
     isActive
-    owner {
+    storageProvider {
       id
       address
     }
@@ -244,7 +244,7 @@ query ActiveDataSets($first: Int) {
     totalPieces
     totalDataSize
     createdAt
-    owner {
+    storageProvider {
       address
     }
   }
@@ -301,7 +301,7 @@ query PieceById($pieceId: ID!) {
     dataSet {
       id
       setId
-      owner {
+      storageProvider {
         address
       }
     }
@@ -327,7 +327,7 @@ query FilteredPieces($minSize: BigInt, $isRemoved: Boolean) {
     createdAt
     dataSet {
       id
-      owner {
+      storageProvider {
         address
       }
     }
@@ -386,7 +386,7 @@ query RailById($railId: ID!) {
     dataSet {
       id
       setId
-      owner {
+      storageProvider {
         address
       }
     }
@@ -620,7 +620,7 @@ query Search($providerId: ID, $dataSetId: Bytes) {
     setId
     isActive
     totalDataSize
-    owner {
+    storageProvider {
       address
     }
   }
@@ -637,7 +637,7 @@ query Search($clientAddress: Bytes!) {
     isActive
     totalDataSize
     metadata
-    owner {
+    storageProvider {
       address
     }
   }
@@ -672,7 +672,7 @@ query Search($cid: Bytes!) {
       id
       setId
       metadata
-      owner {
+      storageProvider {
         address
       }
     }
@@ -714,7 +714,7 @@ const fetchDataSets = async () => {
         totalPieces
         totalDataSize
         metadata
-        owner {
+        storageProvider {
           address
         }
       }
@@ -990,7 +990,7 @@ async function searchByCid(cid) {
           id
           setId
           metadata
-          owner {
+          storageProvider {
             address
           }
         }

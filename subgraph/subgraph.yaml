@@ -27,8 +27,8 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: DataSetOwnerChanged(indexed uint256,indexed address,indexed address)
-          handler: handleDataSetOwnerChanged
+        - event: StorageProviderChanged(indexed uint256,indexed address,indexed address)
+          handler: handleStorageProviderChanged
         - event: DataSetDeleted(indexed uint256,uint256)
           handler: handleDataSetDeleted
         - event: PiecesAdded(indexed uint256,uint256[])
@@ -72,7 +72,7 @@ dataSources:
           handler: handleRailRateUpdated
         - event: "FaultRecord(indexed uint256,uint256,uint256)"
           handler: handleFaultRecord
-        - event: "ProviderRegistered(indexed address,string,string)"
+        - event: "ProviderRegistered(indexed address,string,bytes)"
           handler: handleProviderRegistered
         - event: "ProviderApproved(indexed address,indexed uint256)"
           handler: handleProviderApproved

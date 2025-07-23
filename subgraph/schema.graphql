@@ -4,7 +4,7 @@ type DataSet @entity(immutable: false) {
   listener: Bytes! # address
   clientAddr: Bytes! # address
   withCDN: Boolean!
-  owner: Provider! # address of the provider
+  storageProvider: Provider! # address of the provider
   leafCount: BigInt! # uint256
   challengeRange: BigInt! # uint256
   isActive: Boolean!
@@ -67,8 +67,8 @@ type Provider @entity(immutable: false) {
   id: Bytes! # address
   address: Bytes!
   providerId: BigInt
-  pdpUrl: String
-  pieceRetrievalUrl: String
+  serviceUrl: String
+  peerId: Bytes
   registeredAt: BigInt
   approvedAt: BigInt
   status: ProviderStatus!
@@ -82,7 +82,7 @@ type Provider @entity(immutable: false) {
   blockNumber: BigInt!
 
   # Derived relationship
-  dataSets: [DataSet!]! @derivedFrom(field: "owner")
+  dataSets: [DataSet!]! @derivedFrom(field: "storageProvider")
 }
 
 type Piece @entity(immutable: false) {

@@ -3,7 +3,7 @@ import { SumTreeCount } from "../generated/schema";
 
 // Define a class for the structure instead of a type alias
 class PieceIdAndOffset {
-  rootId: BigInt; // Keeping field name for compatibility with existing usage
+  pieceId: BigInt; // Keeping field name for compatibility with existing usage
   offset: BigInt;
 }
 
@@ -160,18 +160,18 @@ export class SumTree {
     candidate = acc.plus(this.getSum(setId, searchPtr, blockNumber));
     if (candidate.le(leafIndex)) {
       return {
-        rootId: BigInt.fromI32(searchPtr + 1), // Keeping field name for compatibility
-        offset: leafIndex.minus(candidate),
+        pieceId: BigInt.fromI32(searchPtr + 1), // Keeping field name for compatibility
+        offset: leafIndex.minus(candidate)
       };
     }
     return {
-      rootId: BigInt.fromI32(searchPtr), // Keeping field name for compatibility
-      offset: leafIndex.minus(acc),
+      pieceId: BigInt.fromI32(searchPtr), // Keeping field name for compatibility
+      offset: leafIndex.minus(acc)
     };
   }
 
-  // findRootIds (batched) - keeping method name for compatibility
-  findRootIds(
+  // findPieceIds (batched) - keeping method name for compatibility
+  findPieceIds(
     setId: i32,
     nextPieceId: i32,
     leafIndexes: BigInt[],
