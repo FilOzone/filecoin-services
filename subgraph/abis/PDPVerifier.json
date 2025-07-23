@@ -1,59 +1,111 @@
 [
-  { "type": "constructor", "inputs": [], "stateMutability": "nonpayable" },
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
   {
     "type": "function",
     "name": "BURN_ACTOR",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "EXTRA_DATA_MAX_SIZE",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "FIL_USD_PRICE_FEED_ID",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "bytes32", "internalType": "bytes32" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "LEAF_SIZE",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "MAX_ENQUEUED_REMOVALS",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "MAX_ROOT_SIZE",
+    "name": "MAX_PIECE_SIZE",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "NO_CHALLENGE_SCHEDULED",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "NO_PROVEN_EPOCH",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
@@ -61,7 +113,11 @@
     "name": "PYTH",
     "inputs": [],
     "outputs": [
-      { "name": "", "type": "address", "internalType": "contract IPyth" }
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IPyth"
+      }
     ],
     "stateMutability": "view"
   },
@@ -69,101 +125,214 @@
     "type": "function",
     "name": "RANDOMNESS_PRECOMPILE",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "SECONDS_IN_DAY",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "UPGRADE_INTERFACE_VERSION",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "string", "internalType": "string" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "addRoots",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
+    "name": "VERSION",
+    "inputs": [],
+    "outputs": [
       {
-        "name": "rootData",
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "addPieces",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceData",
         "type": "tuple[]",
-        "internalType": "struct PDPVerifier.RootData[]",
+        "internalType": "struct IPDPTypes.PieceData[]",
         "components": [
           {
-            "name": "root",
+            "name": "piece",
             "type": "tuple",
             "internalType": "struct Cids.Cid",
             "components": [
-              { "name": "data", "type": "bytes", "internalType": "bytes" }
+              {
+                "name": "data",
+                "type": "bytes",
+                "internalType": "bytes"
+              }
             ]
           },
-          { "name": "rawSize", "type": "uint256", "internalType": "uint256" }
+          {
+            "name": "rawSize",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
         ]
       },
-      { "name": "extraData", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "calculateProofFee",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
       {
         "name": "estimatedGasFee",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "stateMutability": "view"
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "claimProofSetOwnership",
+    "name": "claimDataSetStorageProvider",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "createProofSet",
+    "name": "createDataSet",
     "inputs": [
       {
         "name": "listenerAddr",
         "type": "address",
         "internalType": "address"
       },
-      { "name": "extraData", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "payable"
   },
   {
     "type": "function",
-    "name": "deleteProofSet",
+    "name": "dataSetLive",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "extraData", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "deleteDataSet",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "findRootIds",
+    "name": "findPieceIds",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
       {
         "name": "leafIndexs",
         "type": "uint256[]",
@@ -174,11 +343,89 @@
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct PDPVerifier.RootIdAndOffset[]",
+        "internalType": "struct IPDPTypes.PieceIdAndOffset[]",
         "components": [
-          { "name": "rootId", "type": "uint256", "internalType": "uint256" },
-          { "name": "offset", "type": "uint256", "internalType": "uint256" }
+          {
+            "name": "pieceId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "offset",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getActivePieceCount",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "activeCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getActivePieces",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "pieces",
+        "type": "tuple[]",
+        "internalType": "struct Cids.Cid[]",
+        "components": [
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "pieceIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "rawSizes",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "hasMore",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -187,16 +434,113 @@
     "type": "function",
     "name": "getChallengeFinality",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "getChallengeRange",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetLastProvenEpoch",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetLeafCount",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetListener",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetStorageProvider",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "stateMutability": "view"
   },
   {
@@ -204,90 +548,84 @@
     "name": "getFILUSDPrice",
     "inputs": [],
     "outputs": [
-      { "name": "", "type": "uint64", "internalType": "uint64" },
-      { "name": "", "type": "int32", "internalType": "int32" }
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "",
+        "type": "int32",
+        "internalType": "int32"
+      }
     ],
-    "stateMutability": "view"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
     "name": "getNextChallengeEpoch",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getNextProofSetId",
-    "inputs": [],
-    "outputs": [{ "name": "", "type": "uint64", "internalType": "uint64" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getNextRootId",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getProofSetLastProvenEpoch",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getProofSetLeafCount",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getProofSetListener",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getProofSetOwner",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
     "outputs": [
-      { "name": "", "type": "address", "internalType": "address" },
-      { "name": "", "type": "address", "internalType": "address" }
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "getRandomness",
-    "inputs": [
-      { "name": "epoch", "type": "uint256", "internalType": "uint256" }
+    "name": "getNextDataSetId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "getRootCid",
+    "name": "getNextPieceId",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootId", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPieceCid",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
     "outputs": [
       {
@@ -295,7 +633,11 @@
         "type": "tuple",
         "internalType": "struct Cids.Cid",
         "components": [
-          { "name": "data", "type": "bytes", "internalType": "bytes" }
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
         ]
       }
     ],
@@ -303,22 +645,63 @@
   },
   {
     "type": "function",
-    "name": "getRootLeafCount",
+    "name": "getPieceLeafCount",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootId", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
-    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRandomness",
+    "inputs": [
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "view"
   },
   {
     "type": "function",
     "name": "getScheduledRemovals",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
     ],
     "outputs": [
-      { "name": "", "type": "uint256[]", "internalType": "uint256[]" }
+      {
+        "name": "",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
     ],
     "stateMutability": "view"
   },
@@ -337,15 +720,30 @@
   },
   {
     "type": "function",
+    "name": "migrate",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "nextProvingPeriod",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
       {
         "name": "challengeEpoch",
         "type": "uint256",
         "internalType": "uint256"
       },
-      { "name": "extraData", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -354,24 +752,77 @@
     "type": "function",
     "name": "owner",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "proofSetLive",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" }
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
-    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
     "stateMutability": "view"
   },
   {
     "type": "function",
-    "name": "proposeProofSetOwner",
+    "name": "pieceChallengable",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "newOwner", "type": "address", "internalType": "address" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pieceLive",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposeDataSetStorageProvider",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newStorageProvider",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -380,13 +831,21 @@
     "type": "function",
     "name": "provePossession",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
       {
         "name": "proofs",
         "type": "tuple[]",
-        "internalType": "struct PDPVerifier.Proof[]",
+        "internalType": "struct IPDPTypes.Proof[]",
         "components": [
-          { "name": "leaf", "type": "bytes32", "internalType": "bytes32" },
+          {
+            "name": "leaf",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
           {
             "name": "proof",
             "type": "bytes32[]",
@@ -402,7 +861,13 @@
     "type": "function",
     "name": "proxiableUUID",
     "inputs": [],
-    "outputs": [{ "name": "", "type": "bytes32", "internalType": "bytes32" }],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
     "stateMutability": "view"
   },
   {
@@ -414,31 +879,23 @@
   },
   {
     "type": "function",
-    "name": "rootChallengable",
+    "name": "schedulePieceDeletions",
     "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "rootLive",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootId", "type": "uint256", "internalType": "uint256" }
-    ],
-    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "scheduleRemovals",
-    "inputs": [
-      { "name": "setId", "type": "uint256", "internalType": "uint256" },
-      { "name": "rootIds", "type": "uint256[]", "internalType": "uint256[]" },
-      { "name": "extraData", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      },
+      {
+        "name": "extraData",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -447,7 +904,11 @@
     "type": "function",
     "name": "transferOwnership",
     "inputs": [
-      { "name": "newOwner", "type": "address", "internalType": "address" }
+      {
+        "name": "newOwner",
+        "type": "address",
+        "internalType": "address"
+      }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -461,25 +922,80 @@
         "type": "address",
         "internalType": "address"
       },
-      { "name": "data", "type": "bytes", "internalType": "bytes" }
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
     ],
     "outputs": [],
     "stateMutability": "payable"
   },
   {
     "type": "event",
-    "name": "Debug",
+    "name": "ContractUpgraded",
     "inputs": [
       {
-        "name": "message",
+        "name": "version",
         "type": "string",
         "indexed": false,
         "internalType": "string"
       },
       {
-        "name": "value",
+        "name": "implementation",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DataSetCreated",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "storageProvider",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DataSetDeleted",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "deletedLeafCount",
         "type": "uint256",
         "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DataSetEmpty",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
         "internalType": "uint256"
       }
     ],
@@ -544,6 +1060,44 @@
   },
   {
     "type": "event",
+    "name": "PiecesAdded",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceIds",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PiecesRemoved",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceIds",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PossessionProven",
     "inputs": [
       {
@@ -556,11 +1110,32 @@
         "name": "challenges",
         "type": "tuple[]",
         "indexed": false,
-        "internalType": "struct PDPVerifier.RootIdAndOffset[]",
+        "internalType": "struct IPDPTypes.PieceIdAndOffset[]",
         "components": [
-          { "name": "rootId", "type": "uint256", "internalType": "uint256" },
-          { "name": "offset", "type": "uint256", "internalType": "uint256" }
+          {
+            "name": "pieceId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "offset",
+            "type": "uint256",
+            "internalType": "uint256"
+          }
         ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PriceOracleFailure",
+    "inputs": [
+      {
+        "name": "reason",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
       }
     ],
     "anonymous": false
@@ -598,7 +1173,7 @@
   },
   {
     "type": "event",
-    "name": "ProofSetCreated",
+    "name": "StorageProviderChanged",
     "inputs": [
       {
         "name": "setId",
@@ -607,105 +1182,16 @@
         "internalType": "uint256"
       },
       {
-        "name": "owner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProofSetDeleted",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "deletedLeafCount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProofSetEmpty",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProofSetOwnerChanged",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "oldOwner",
+        "name": "oldStorageProvider",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newOwner",
+        "name": "newStorageProvider",
         "type": "address",
         "indexed": true,
         "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RootsAdded",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "rootIds",
-        "type": "uint256[]",
-        "indexed": false,
-        "internalType": "uint256[]"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RootsRemoved",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "rootIds",
-        "type": "uint256[]",
-        "indexed": false,
-        "internalType": "uint256[]"
       }
     ],
     "anonymous": false
@@ -727,7 +1213,11 @@
     "type": "error",
     "name": "AddressEmptyCode",
     "inputs": [
-      { "name": "target", "type": "address", "internalType": "address" }
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
     ]
   },
   {
@@ -741,36 +1231,78 @@
       }
     ]
   },
-  { "type": "error", "name": "ERC1967NonPayable", "inputs": [] },
-  { "type": "error", "name": "FailedCall", "inputs": [] },
+  {
+    "type": "error",
+    "name": "ERC1967NonPayable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FailedCall",
+    "inputs": []
+  },
   {
     "type": "error",
     "name": "IndexedError",
     "inputs": [
-      { "name": "idx", "type": "uint256", "internalType": "uint256" },
-      { "name": "msg", "type": "string", "internalType": "string" }
+      {
+        "name": "idx",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "msg",
+        "type": "string",
+        "internalType": "string"
+      }
     ]
   },
-  { "type": "error", "name": "InvalidInitialization", "inputs": [] },
-  { "type": "error", "name": "NotInitializing", "inputs": [] },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
   {
     "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
-      { "name": "owner", "type": "address", "internalType": "address" }
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      }
     ]
   },
   {
     "type": "error",
     "name": "OwnableUnauthorizedAccount",
     "inputs": [
-      { "name": "account", "type": "address", "internalType": "address" }
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
     ]
   },
-  { "type": "error", "name": "UUPSUnauthorizedCallContext", "inputs": [] },
+  {
+    "type": "error",
+    "name": "UUPSUnauthorizedCallContext",
+    "inputs": []
+  },
   {
     "type": "error",
     "name": "UUPSUnsupportedProxiableUUID",
-    "inputs": [{ "name": "slot", "type": "bytes32", "internalType": "bytes32" }]
+    "inputs": [
+      {
+        "name": "slot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
   }
 ]

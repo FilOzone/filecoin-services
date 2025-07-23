@@ -1,133 +1,133 @@
-import { BigInt, Bytes, log, ethereum, Address } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, log } from "@graphprotocol/graph-ts";
 import {
+  DataSetDeleted as DataSetDeletedEvent,
+  DataSetEmpty as DataSetEmptyEvent,
   NextProvingPeriod as NextProvingPeriodEvent,
+  PiecesAdded as PiecesAddedEvent,
+  PiecesRemoved as PiecesRemovedEvent,
   PossessionProven as PossessionProvenEvent,
-  ProofSetDeleted as ProofSetDeletedEvent,
-  ProofSetEmpty as ProofSetEmptyEvent,
-  ProofSetOwnerChanged as ProofSetOwnerChangedEvent,
-  RootsAdded as RootsAddedEvent,
-  RootsRemoved as RootsRemovedEvent,
+  StorageProviderChanged as StorageProviderChangedEvent,
 } from "../generated/PDPVerifier/PDPVerifier";
-import { Provider, ProofSet, Root } from "../generated/schema";
-import { SumTree } from "./sumTree";
-import { decodeBytesString } from "./decode";
+import { DataSet, Piece, Provider } from "../generated/schema";
 import { LeafSize } from "../utils";
+import { decodeBytesString } from "./decode";
+import { SumTree } from "./sumTree";
 
 // --- Helper Functions for ID Generation ---
-function getProofSetEntityId(setId: BigInt): Bytes {
+function getDataSetEntityId(setId: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromBigInt(setId));
 }
 
-function getRootEntityId(setId: BigInt, rootId: BigInt): Bytes {
-  return Bytes.fromUTF8(setId.toString() + "-" + rootId.toString());
+function getPieceEntityId(setId: BigInt, pieceId: BigInt): Bytes {
+  return Bytes.fromUTF8(setId.toString() + "-" + pieceId.toString());
 }
 
 // -----------------------------------------
 
 /**
- * Handles the ProofSetDeleted event.
- * Deletes a proof set and updates the provider's stats.
+ * Handles the DataSetDeleted event.
+ * Deletes a data set and updates the provider's stats.
  */
-export function handleProofSetDeleted(event: ProofSetDeletedEvent): void {
+export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
   const setId = event.params.setId;
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Load ProofSet
-  const proofSet = ProofSet.load(proofSetEntityId);
-  if (!proofSet) {
-    // proofSet doesn't belong to Pandora Service
+  // Load DataSet
+  const dataSet = DataSet.load(dataSetEntityId);
+  if (!dataSet) {
+    // dataSet doesn't belong to Pandora Service
     return;
   }
 
-  const ownerAddress = proofSet.owner;
+  const storageProvider = dataSet.storageProvider;
 
-  // Load Provider (to update stats before changing owner)
-  const provider = Provider.load(ownerAddress);
+  // Load Provider (to update stats before changing storageProvider)
+  const provider = Provider.load(storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(
-      proofSet.totalDataSize
+      dataSet.totalDataSize
     );
     if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
       provider.totalDataSize = BigInt.fromI32(0);
     }
-    provider.totalProofSets = provider.totalProofSets.minus(BigInt.fromI32(1));
+    provider.totalDataSets = provider.totalDataSets.minus(BigInt.fromI32(1));
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("ProofSetDeleted: Provider {} for ProofSet {} not found", [
-      ownerAddress.toHexString(),
+    log.warning("DataSetDeleted: Provider {} for DataSet {} not found", [
+      storageProvider.toHexString(),
       setId.toString(),
     ]);
   }
 
-  // Update ProofSet
-  proofSet.isActive = false;
-  proofSet.owner = Bytes.empty();
-  proofSet.totalRoots = BigInt.fromI32(0);
-  proofSet.totalDataSize = BigInt.fromI32(0);
-  proofSet.nextChallengeEpoch = BigInt.fromI32(0);
-  proofSet.lastProvenEpoch = BigInt.fromI32(0);
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  // Update DataSet
+  dataSet.isActive = false;
+  dataSet.storageProvider = Bytes.empty();
+  dataSet.totalPieces = BigInt.fromI32(0);
+  dataSet.totalDataSize = BigInt.fromI32(0);
+  dataSet.nextChallengeEpoch = BigInt.fromI32(0);
+  dataSet.lastProvenEpoch = BigInt.fromI32(0);
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 
-  // Note: Roots associated with this ProofSet are not automatically removed or updated here.
-  // They still exist but are linked to an inactive ProofSet.
-  // Consider if Roots should be marked as inactive or removed in handleRootsRemoved if needed.
+  // Note: Pieces associated with this DataSet are not automatically removed or updated here.
+  // They still exist but are linked to an inactive DataSet.
+  // Consider if Pieces should be marked as inactive or removed in handlePiecesRemoved if needed.
 }
 
 /**
- * Handles the ProofSetOwnerChanged event.
- * Changes the owner of a proof set and updates the provider's stats.
+ * Handles the StorageProviderChanged event.
+ * Changes the storageProvider of a data set and updates the provider's stats.
  */
-export function handleProofSetOwnerChanged(
-  event: ProofSetOwnerChangedEvent
+export function handleStorageProviderChanged(
+  event: StorageProviderChangedEvent
 ): void {
   const setId = event.params.setId;
-  const oldOwner = event.params.oldOwner;
-  const newOwner = event.params.newOwner;
+  const oldStorageProvider = event.params.oldStorageProvider;
+  const newStorageProvider = event.params.oldStorageProvider;
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Load ProofSet
-  const proofSet = ProofSet.load(proofSetEntityId);
-  if (!proofSet) {
-    // proofSet doesn't belong to Pandora Service
+  // Load DataSet
+  const dataSet = DataSet.load(dataSetEntityId);
+  if (!dataSet) {
+    // dataSet doesn't belong to Pandora Service
     return;
   }
 
   // Load Old Provider (if exists) - Just update timestamp, derived field handles removal
-  const oldProvider = Provider.load(oldOwner);
+  const oldProvider = Provider.load(oldStorageProvider);
   if (oldProvider) {
-    oldProvider.totalProofSets = oldProvider.totalProofSets.minus(
+    oldProvider.totalDataSets = oldProvider.totalDataSets.minus(
       BigInt.fromI32(1)
     );
     oldProvider.updatedAt = event.block.timestamp;
     oldProvider.blockNumber = event.block.number;
     oldProvider.save();
   } else {
-    log.warning("ProofSetOwnerChanged: Old Provider {} not found", [
-      oldOwner.toHexString(),
+    log.warning("StorageProviderChanged: Old Provider {} not found", [
+      oldStorageProvider.toHexString(),
     ]);
   }
 
   // Load or Create New Provider - Just update timestamp/create, derived field handles addition
-  let newProvider = Provider.load(newOwner);
+  let newProvider = Provider.load(newStorageProvider);
   if (newProvider == null) {
-    newProvider = new Provider(newOwner);
-    newProvider.address = newOwner;
+    newProvider = new Provider(newStorageProvider);
+    newProvider.address = newStorageProvider;
     newProvider.status = "Created";
-    newProvider.totalRoots = BigInt.fromI32(0);
+    newProvider.totalPieces = BigInt.fromI32(0);
     newProvider.totalFaultedPeriods = BigInt.fromI32(0);
-    newProvider.totalFaultedRoots = BigInt.fromI32(0);
+    newProvider.totalFaultedPieces = BigInt.fromI32(0);
     newProvider.totalDataSize = BigInt.fromI32(0);
-    newProvider.totalProofSets = BigInt.fromI32(1);
+    newProvider.totalDataSets = BigInt.fromI32(1);
     newProvider.createdAt = event.block.timestamp;
     newProvider.blockNumber = event.block.number;
   } else {
-    newProvider.totalProofSets = newProvider.totalProofSets.plus(
+    newProvider.totalDataSets = newProvider.totalDataSets.plus(
       BigInt.fromI32(1)
     );
     newProvider.blockNumber = event.block.number;
@@ -135,40 +135,40 @@ export function handleProofSetOwnerChanged(
   newProvider.updatedAt = event.block.timestamp;
   newProvider.save();
 
-  // Update ProofSet Owner (this updates the derived relationship on both old and new Provider)
-  proofSet.owner = newOwner; // Set owner to the new provider's ID
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  // Update DataSet storageProvider (this updates the derived relationship on both old and new Provider)
+  dataSet.storageProvider = newStorageProvider; // Set storageProvider to the new provider's ID
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 }
 
 /**
- * Handles the ProofSetEmpty event.
- * Empties a proof set and updates the provider's stats.
+ * Handles the DataSetEmpty event.
+ * Empties a data set and updates the provider's stats.
  */
-export function handleProofSetEmpty(event: ProofSetEmptyEvent): void {
+export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
   const setId = event.params.setId;
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Update ProofSet
-  const proofSet = ProofSet.load(proofSetEntityId);
+  // Update DataSet
+  const dataSet = DataSet.load(dataSetEntityId);
 
-  if (!proofSet) return; // proofSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
 
-  const oldTotalDataSize = proofSet.totalDataSize; // Store size before zeroing
+  const oldTotalDataSize = dataSet.totalDataSize; // Store size before zeroing
 
-  proofSet.totalRoots = BigInt.fromI32(0);
-  proofSet.totalDataSize = BigInt.fromI32(0);
-  proofSet.leafCount = BigInt.fromI32(0);
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  dataSet.totalPieces = BigInt.fromI32(0);
+  dataSet.totalDataSize = BigInt.fromI32(0);
+  dataSet.leafCount = BigInt.fromI32(0);
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 
   // Update Provider's total data size
-  const provider = Provider.load(proofSet.owner);
+  const provider = Provider.load(dataSet.storageProvider);
   if (provider) {
-    // Subtract the size this proof set had *before* it was zeroed
+    // Subtract the size this data set had *before* it was zeroed
     provider.totalDataSize = provider.totalDataSize.minus(oldTotalDataSize);
     if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
       provider.totalDataSize = BigInt.fromI32(0); // Prevent negative size
@@ -177,9 +177,9 @@ export function handleProofSetEmpty(event: ProofSetEmptyEvent): void {
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    // It's possible the provider was deleted or owner changed before this event
-    log.warning("ProofSetEmpty: Provider {} for ProofSet {} not found", [
-      proofSet.owner.toHexString(),
+    // It's possible the provider was deleted or storageProvider changed before this event
+    log.warning("DataSetEmpty: Provider {} for DataSet {} not found", [
+      dataSet.storageProvider.toHexString(),
       setId.toString(),
     ]);
   }
@@ -187,115 +187,115 @@ export function handleProofSetEmpty(event: ProofSetEmptyEvent): void {
 
 /**
  * Handles the PossessionProven event.
- * Proves possession of a proof set and updates the provider's stats.
+ * Proves possession of a data set and updates the provider's stats.
  */
 export function handlePossessionProven(event: PossessionProvenEvent): void {
   const setId = event.params.setId;
-  const challenges = event.params.challenges; // Array of { rootId: BigInt, offset: BigInt }
+  const challenges = event.params.challenges; // Array of { pieceId: BigInt, offset: BigInt }
   const currentBlockNumber = event.block.number; // Use block number as epoch indicator
   const currentTimestamp = event.block.timestamp;
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Load ProofSet early to check if it belongs to Pandora Service
-  const proofSet = ProofSet.load(proofSetEntityId);
+  // Load DataSet early to check if it belongs to Pandora Service
+  const dataSet = DataSet.load(dataSetEntityId);
 
-  if (!proofSet) return; // proofSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
 
-  let uniqueRoots: BigInt[] = [];
-  let rootIdMap = new Map<string, boolean>();
+  let uniquePieces: BigInt[] = [];
+  let pieceIdMap = new Map<string, boolean>();
 
   // Process each challenge
   for (let i = 0; i < challenges.length; i++) {
     const challenge = challenges[i];
-    const rootId = challenge.rootId;
+    const pieceId = challenge.pieceId; // Note: keeping .pieceId for now as it's the event field name
 
-    const rootIdStr = rootId.toString();
-    if (!rootIdMap.has(rootIdStr)) {
-      uniqueRoots.push(rootId);
-      rootIdMap.set(rootIdStr, true);
+    const pieceIdStr = pieceId.toString();
+    if (!pieceIdMap.has(pieceIdStr)) {
+      uniquePieces.push(pieceId);
+      pieceIdMap.set(pieceIdStr, true);
     }
   }
 
-  for (let i = 0; i < uniqueRoots.length; i++) {
-    const rootId = uniqueRoots[i];
-    const rootEntityId = getRootEntityId(setId, rootId);
-    const root = Root.load(rootEntityId);
-    if (root) {
-      root.lastProvenEpoch = currentBlockNumber;
-      root.lastProvenAt = currentTimestamp;
-      root.totalProofsSubmitted = root.totalProofsSubmitted.plus(
+  for (let i = 0; i < uniquePieces.length; i++) {
+    const pieceId = uniquePieces[i];
+    const pieceEntityId = getPieceEntityId(setId, pieceId);
+    const piece = Piece.load(pieceEntityId);
+    if (piece) {
+      piece.lastProvenEpoch = currentBlockNumber;
+      piece.lastProvenAt = currentTimestamp;
+      piece.totalProofsSubmitted = piece.totalProofsSubmitted.plus(
         BigInt.fromI32(1)
       );
-      root.updatedAt = currentTimestamp;
-      root.blockNumber = currentBlockNumber;
-      root.save();
+      piece.updatedAt = currentTimestamp;
+      piece.blockNumber = currentBlockNumber;
+      piece.save();
     } else {
       log.warning(
-        "PossessionProven: Root {} for Set {} not found during challenge processing",
-        [rootId.toString(), setId.toString()]
+        "PossessionProven: Piece {} for Set {} not found during challenge processing",
+        [pieceId.toString(), setId.toString()]
       );
     }
   }
 
-  // Update ProofSet
+  // Update DataSet
 
-  proofSet.lastProvenEpoch = currentBlockNumber; // Update last proven epoch for the set
-  proofSet.totalProvedRoots = proofSet.totalProvedRoots.plus(
-    BigInt.fromI32(uniqueRoots.length)
+  dataSet.lastProvenEpoch = currentBlockNumber; // Update last proven epoch for the set
+  dataSet.totalProvedPieces = dataSet.totalProvedPieces.plus(
+    BigInt.fromI32(uniquePieces.length)
   );
-  proofSet.totalProofs = proofSet.totalProofs.plus(BigInt.fromI32(1));
-  proofSet.updatedAt = currentTimestamp;
-  proofSet.blockNumber = currentBlockNumber;
-  proofSet.save();
+  dataSet.totalProofs = dataSet.totalProofs.plus(BigInt.fromI32(1));
+  dataSet.updatedAt = currentTimestamp;
+  dataSet.blockNumber = currentBlockNumber;
+  dataSet.save();
 }
 
 /**
  * Handles the NextProvingPeriod event.
- * Updates the next challenge epoch and challenge range for a proof set.
+ * Updates the next challenge epoch and challenge range for a data set.
  */
 export function handleNextProvingPeriod(event: NextProvingPeriodEvent): void {
   const setId = event.params.setId;
   const challengeEpoch = event.params.challengeEpoch;
   const leafCount = event.params.leafCount;
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Update Proof Set
-  const proofSet = ProofSet.load(proofSetEntityId);
+  // Update Data Set
+  const dataSet = DataSet.load(dataSetEntityId);
 
-  if (!proofSet) return; // proofSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
 
-  proofSet.nextChallengeEpoch = challengeEpoch;
-  proofSet.challengeRange = leafCount;
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  dataSet.nextChallengeEpoch = challengeEpoch;
+  dataSet.challengeRange = leafCount;
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 }
 
 /**
- * Handles the RootsAdded event.
- * Adds roots to a proof set and updates the provider's stats.
+ * Handles the PiecesAdded event.
+ * Adds pieces to a data set and updates the provider's stats.
  */
-export function handleRootsAdded(event: RootsAddedEvent): void {
+export function handlePiecesAdded(event: PiecesAddedEvent): void {
   const setId = event.params.setId;
-  const rootIdsFromEvent = event.params.rootIds; // Get root IDs from event params
+  const pieceIdsFromEvent = event.params.pieceIds; // Get piece IDs from event params (keeping field name for compatibility)
 
-  // Input parsing is necessary to get rawSize and root bytes (cid)
+  // Input parsing is necessary to get rawSize and piece bytes (cid)
   const txInput = event.transaction.input;
 
   if (txInput.length < 4) {
-    log.error("Invalid tx input length in handleRootsAdded: {}", [
+    log.error("Invalid tx input length in handlePiecesAdded: {}", [
       event.transaction.hash.toHex(),
     ]);
     return;
   }
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Load ProofSet
-  const proofSet = ProofSet.load(proofSetEntityId);
-  if (!proofSet) return; // proofSet doesn't belong to Pandora Service
+  // Load DataSet
+  const dataSet = DataSet.load(dataSetEntityId);
+  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
 
   // --- Parse Transaction Input --- Requires helper functions
   // Skip function selector (first 4 bytes)
@@ -305,7 +305,7 @@ export function handleRootsAdded(event: RootsAddedEvent): void {
   let decodedSetId: BigInt = readUint256(encodedData, 0);
   if (decodedSetId != setId) {
     log.warning(
-      "Decoded setId {} does not match event param {} in handleRootsAdded. Tx: {}. Using event param.",
+      "Decoded setId {} does not match event param {} in handlePiecesAdded. Tx: {}. Using event param.",
       [
         decodedSetId.toString(),
         setId.toString(),
@@ -322,15 +322,15 @@ export function handleRootsAdded(event: RootsAddedEvent): void {
   const decodedData = decodeBytesString(Bytes.fromUint8Array(extraDataBytes));
   let metadata: string = decodedData.stringValue;
 
-  // Decode rootsData (tuple[])
-  let rootsDataOffset = readUint256(encodedData, 32).toI32(); // Offset is at byte 32
-  let rootsDataLength: i32;
+  // Decode piecesData (tuple[])
+  let piecesDataOffset = readUint256(encodedData, 32).toI32(); // Offset is at byte 32
+  let piecesDataLength: i32;
 
-  if (rootsDataOffset < 0 || encodedData.length < rootsDataOffset + 32) {
+  if (piecesDataOffset < 0 || encodedData.length < piecesDataOffset + 32) {
     log.error(
-      "handleRootsAdded: Invalid rootsDataOffset {} or data length {} for reading rootsData length. Tx: {}",
+      "handlePiecesAdded: Invalid piecesDataOffset {} or data length {} for reading piecesData length. Tx: {}",
       [
-        rootsDataOffset.toString(),
+        piecesDataOffset.toString(),
         encodedData.length.toString(),
         event.transaction.hash.toHex(),
       ]
@@ -338,53 +338,53 @@ export function handleRootsAdded(event: RootsAddedEvent): void {
     return;
   }
 
-  rootsDataLength = readUint256(encodedData, rootsDataOffset).toI32(); // Length is at the offset
+  piecesDataLength = readUint256(encodedData, piecesDataOffset).toI32(); // Length is at the offset
 
-  if (rootsDataLength < 0) {
-    log.error("handleRootsAdded: Invalid negative rootsDataLength {}. Tx: {}", [
-      rootsDataLength.toString(),
-      event.transaction.hash.toHex(),
-    ]);
+  if (piecesDataLength < 0) {
+    log.error(
+      "handlePiecesAdded: Invalid negative piecesDataLength {}. Tx: {}",
+      [piecesDataLength.toString(), event.transaction.hash.toHex()]
+    );
     return;
   }
 
-  // Check if number of roots from input matches event param
-  if (rootsDataLength != rootIdsFromEvent.length) {
+  // Check if number of pieces from input matches event param
+  if (piecesDataLength != pieceIdsFromEvent.length) {
     log.error(
-      "handleRootsAdded: Decoded roots count ({}) does not match event param count ({}). Tx: {}",
+      "handlePiecesAdded: Decoded pieces count ({}) does not match event param count ({}). Tx: {}",
       [
-        rootsDataLength.toString(),
-        rootIdsFromEvent.length.toString(),
+        piecesDataLength.toString(),
+        pieceIdsFromEvent.length.toString(),
         event.transaction.hash.toHex(),
       ]
     );
     // Decide how to proceed. For now, use the event length as the source of truth for iteration.
-    rootsDataLength = rootIdsFromEvent.length;
+    piecesDataLength = pieceIdsFromEvent.length;
   }
 
-  let addedRootCount = 0;
+  let addedPieceCount = 0;
   let totalDataSizeAdded = BigInt.fromI32(0);
 
-  // Create Root entities
-  const structsBaseOffset = rootsDataOffset + 32; // Start of struct offsets/data
+  // Create Piece entities
+  const structsBaseOffset = piecesDataOffset + 32; // Start of struct offsets/data
 
-  for (let i = 0; i < rootsDataLength; i++) {
-    const rootId = rootIdsFromEvent[i]; // Use rootId from event params
+  for (let i = 0; i < piecesDataLength; i++) {
+    const pieceId = pieceIdsFromEvent[i]; // Use pieceId from event params
 
     // Calculate offset for this struct's data
     const structDataRelOffset = readUint256(
       encodedData,
       structsBaseOffset + i * 32
     ).toI32();
-    const structDataAbsOffset = rootsDataOffset + 32 + structDataRelOffset; // Correct absolute offset
+    const structDataAbsOffset = piecesDataOffset + 32 + structDataRelOffset; // Correct absolute offset
 
-    // Check bounds for reading struct content (root offset + rawSize)
+    // Check bounds for reading struct content (piece offset + rawSize)
     if (
       structDataAbsOffset < 0 ||
       encodedData.length < structDataAbsOffset + 64
     ) {
       log.error(
-        "handleRootsAdded: Encoded data too short or invalid offset for root struct content. Index: {}, Offset: {}, Len: {}. Tx: {}",
+        "handlePiecesAdded: Encoded data too short or invalid offset for piece struct content. Index: {}, Offset: {}, Len: {}. Tx: {}",
         [
           i.toString(),
           structDataAbsOffset.toString(),
@@ -392,206 +392,206 @@ export function handleRootsAdded(event: RootsAddedEvent): void {
           event.transaction.hash.toHex(),
         ]
       );
-      continue; // Skip this root
+      continue; // Skip this piece
     }
 
-    // Decode root tuple (bytes stored within the struct)
-    const rootBytes = readBytes(encodedData, structDataAbsOffset); // Reads dynamic bytes
-    // Decode rawSize (uint256 stored after root bytes offset)
+    // Decode piece tuple (bytes stored within the struct)
+    const pieceBytes = readBytes(encodedData, structDataAbsOffset); // Reads dynamic bytes
+    // Decode rawSize (uint256 stored after piece bytes offset)
     const rawSize = readUint256(encodedData, structDataAbsOffset + 32);
 
-    const rootEntityId = getRootEntityId(setId, rootId);
+    const pieceEntityId = getPieceEntityId(setId, pieceId);
 
-    let root = Root.load(rootEntityId);
-    if (root) {
+    let piece = Piece.load(pieceEntityId);
+    if (piece) {
       log.warning(
-        "handleRootsAdded: Root {} for Set {} already exists. This shouldn't happen. Skipping.",
-        [rootId.toString(), setId.toString()]
+        "handlePiecesAdded: Piece {} for Set {} already exists. This shouldn't happen. Skipping.",
+        [pieceId.toString(), setId.toString()]
       );
       continue;
     }
 
-    root = new Root(rootEntityId);
-    root.rootId = rootId;
-    root.setId = setId;
-    root.metadata = metadata;
-    root.rawSize = rawSize; // Use correct field name
-    root.leafCount = rawSize.div(BigInt.fromI32(LeafSize));
-    root.cid = rootBytes.length > 0 ? rootBytes : Bytes.empty(); // Use correct field name
-    root.removed = false; // Explicitly set removed to false
-    root.lastProvenEpoch = BigInt.fromI32(0);
-    root.lastProvenAt = BigInt.fromI32(0);
-    root.lastFaultedEpoch = BigInt.fromI32(0);
-    root.lastFaultedAt = BigInt.fromI32(0);
-    root.totalProofsSubmitted = BigInt.fromI32(0);
-    root.totalPeriodsFaulted = BigInt.fromI32(0);
-    root.createdAt = event.block.timestamp;
-    root.updatedAt = event.block.timestamp;
-    root.blockNumber = event.block.number;
-    root.proofSet = proofSetEntityId; // Link to ProofSet
+    piece = new Piece(pieceEntityId);
+    piece.pieceId = pieceId;
+    piece.setId = setId;
+    piece.metadata = metadata;
+    piece.rawSize = rawSize; // Use correct field name
+    piece.leafCount = rawSize.div(BigInt.fromI32(LeafSize));
+    piece.cid = pieceBytes.length > 0 ? pieceBytes : Bytes.empty(); // Use correct field name
+    piece.removed = false; // Explicitly set removed to false
+    piece.lastProvenEpoch = BigInt.fromI32(0);
+    piece.lastProvenAt = BigInt.fromI32(0);
+    piece.lastFaultedEpoch = BigInt.fromI32(0);
+    piece.lastFaultedAt = BigInt.fromI32(0);
+    piece.totalProofsSubmitted = BigInt.fromI32(0);
+    piece.totalPeriodsFaulted = BigInt.fromI32(0);
+    piece.createdAt = event.block.timestamp;
+    piece.updatedAt = event.block.timestamp;
+    piece.blockNumber = event.block.number;
+    piece.dataSet = dataSetEntityId; // Link to DataSet
 
-    root.save();
+    piece.save();
 
     // Update SumTree
     const sumTree = new SumTree();
     sumTree.sumTreeAdd(
       setId.toI32(),
       rawSize.div(BigInt.fromI32(LeafSize)),
-      rootId.toI32()
+      pieceId.toI32()
     );
 
-    addedRootCount += 1;
+    addedPieceCount += 1;
     totalDataSizeAdded = totalDataSizeAdded.plus(rawSize);
   }
 
-  // Update ProofSet stats
-  proofSet.totalRoots = proofSet.totalRoots.plus(
-    BigInt.fromI32(addedRootCount)
+  // Update DataSet stats
+  dataSet.totalPieces = dataSet.totalPieces.plus(
+    BigInt.fromI32(addedPieceCount)
   ); // Use correct field name
-  proofSet.nextRootId = proofSet.nextRootId.plus(
-    BigInt.fromI32(addedRootCount)
+  dataSet.nextPieceId = dataSet.nextPieceId.plus(
+    BigInt.fromI32(addedPieceCount)
   );
-  proofSet.totalDataSize = proofSet.totalDataSize.plus(totalDataSizeAdded);
-  proofSet.leafCount = proofSet.leafCount.plus(
+  dataSet.totalDataSize = dataSet.totalDataSize.plus(totalDataSizeAdded);
+  dataSet.leafCount = dataSet.leafCount.plus(
     totalDataSizeAdded.div(BigInt.fromI32(LeafSize))
   );
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 
   // Update Provider stats
-  const provider = Provider.load(proofSet.owner);
+  const provider = Provider.load(dataSet.storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.plus(totalDataSizeAdded);
-    provider.totalRoots = provider.totalRoots.plus(
-      BigInt.fromI32(addedRootCount)
+    provider.totalPieces = provider.totalPieces.plus(
+      BigInt.fromI32(addedPieceCount)
     );
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("handleRootsAdded: Provider {} for ProofSet {} not found", [
-      proofSet.owner.toHex(),
+    log.warning("handlePiecesAdded: Provider {} for DataSet {} not found", [
+      dataSet.storageProvider.toHex(),
       setId.toString(),
     ]);
   }
 }
 
 /**
- * Handles the RootsRemoved event.
- * Removes roots from a proof set and updates the provider's stats.
+ * Handles the PiecesRemoved event.
+ * Removes pieces from a data set and updates the provider's stats.
  */
-export function handleRootsRemoved(event: RootsRemovedEvent): void {
+export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   const setId = event.params.setId;
-  const rootIds = event.params.rootIds;
+  const pieceIds = event.params.pieceIds; // Keeping field name for compatibility
 
-  const proofSetEntityId = getProofSetEntityId(setId);
+  const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Load ProofSet
-  const proofSet = ProofSet.load(proofSetEntityId);
-  if (!proofSet) return; // proofSet doesn't belong to Pandora Service
+  // Load DataSet
+  const dataSet = DataSet.load(dataSetEntityId);
+  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
 
-  let removedRootCount = 0;
+  let removedPieceCount = 0;
   let removedDataSize = BigInt.fromI32(0);
 
-  // Mark Root entities as removed (soft delete)
-  for (let i = 0; i < rootIds.length; i++) {
-    const rootId = rootIds[i];
-    const rootEntityId = getRootEntityId(setId, rootId);
+  // Mark Piece entities as removed (soft delete)
+  for (let i = 0; i < pieceIds.length; i++) {
+    const pieceId = pieceIds[i];
+    const pieceEntityId = getPieceEntityId(setId, pieceId);
 
-    const root = Root.load(rootEntityId);
-    if (root) {
-      removedRootCount += 1;
-      removedDataSize = removedDataSize.plus(root.rawSize); // Use correct field name
+    const piece = Piece.load(pieceEntityId);
+    if (piece) {
+      removedPieceCount += 1;
+      removedDataSize = removedDataSize.plus(piece.rawSize); // Use correct field name
 
-      // Mark the Root entity as removed instead of deleting
-      root.removed = true;
-      root.updatedAt = event.block.timestamp;
-      root.blockNumber = event.block.number;
-      root.save();
+      // Mark the Piece entity as removed instead of deleting
+      piece.removed = true;
+      piece.updatedAt = event.block.timestamp;
+      piece.blockNumber = event.block.number;
+      piece.save();
 
       // Update SumTree
       const sumTree = new SumTree();
       sumTree.sumTreeRemove(
         setId.toI32(),
-        proofSet.nextRootId.toI32(),
-        rootId.toI32(),
-        root.rawSize.div(BigInt.fromI32(LeafSize)),
+        dataSet.nextPieceId.toI32(),
+        pieceId.toI32(),
+        piece.rawSize.div(BigInt.fromI32(LeafSize)),
         event.block.number
       );
     } else {
       log.warning(
-        "handleRootsRemoved: Root {} for Set {} not found. Cannot remove.",
-        [rootId.toString(), setId.toString()]
+        "handlePiecesRemoved: Piece {} for Set {} not found. Cannot remove.",
+        [pieceId.toString(), setId.toString()]
       );
     }
   }
 
-  // Update ProofSet stats
-  proofSet.totalRoots = proofSet.totalRoots.minus(
-    BigInt.fromI32(removedRootCount)
+  // Update DataSet stats
+  dataSet.totalPieces = dataSet.totalPieces.minus(
+    BigInt.fromI32(removedPieceCount)
   ); // Use correct field name
-  proofSet.totalDataSize = proofSet.totalDataSize.minus(removedDataSize);
-  proofSet.leafCount = proofSet.leafCount.minus(
+  dataSet.totalDataSize = dataSet.totalDataSize.minus(removedDataSize);
+  dataSet.leafCount = dataSet.leafCount.minus(
     removedDataSize.div(BigInt.fromI32(LeafSize))
   );
 
   // Ensure stats don't go negative
-  if (proofSet.totalRoots.lt(BigInt.fromI32(0))) {
+  if (dataSet.totalPieces.lt(BigInt.fromI32(0))) {
     // Use correct field name
     log.warning(
-      "handleRootsRemoved: ProofSet {} rootCount went negative. Setting to 0.",
+      "handlePiecesRemoved: DataSet {} pieceCount went negative. Setting to 0.",
       [setId.toString()]
     );
-    proofSet.totalRoots = BigInt.fromI32(0); // Use correct field name
+    dataSet.totalPieces = BigInt.fromI32(0); // Use correct field name
   }
-  if (proofSet.totalDataSize.lt(BigInt.fromI32(0))) {
+  if (dataSet.totalDataSize.lt(BigInt.fromI32(0))) {
     log.warning(
-      "handleRootsRemoved: ProofSet {} totalDataSize went negative. Setting to 0.",
+      "handlePiecesRemoved: DataSet {} totalDataSize went negative. Setting to 0.",
       [setId.toString()]
     );
-    proofSet.totalDataSize = BigInt.fromI32(0);
+    dataSet.totalDataSize = BigInt.fromI32(0);
   }
-  if (proofSet.leafCount.lt(BigInt.fromI32(0))) {
+  if (dataSet.leafCount.lt(BigInt.fromI32(0))) {
     log.warning(
-      "handleRootsRemoved: ProofSet {} leafCount went negative. Setting to 0.",
+      "handlePiecesRemoved: DataSet {} leafCount went negative. Setting to 0.",
       [setId.toString()]
     );
-    proofSet.leafCount = BigInt.fromI32(0);
+    dataSet.leafCount = BigInt.fromI32(0);
   }
-  proofSet.updatedAt = event.block.timestamp;
-  proofSet.blockNumber = event.block.number;
-  proofSet.save();
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
 
   // Update Provider stats
-  const provider = Provider.load(proofSet.owner);
+  const provider = Provider.load(dataSet.storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(removedDataSize);
     // Ensure provider totalDataSize doesn't go negative
     if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
       log.warning(
-        "handleRootsRemoved: Provider {} totalDataSize went negative. Setting to 0.",
-        [proofSet.owner.toHex()]
+        "handlePiecesRemoved: Provider {} totalDataSize went negative. Setting to 0.",
+        [dataSet.storageProvider.toHex()]
       );
       provider.totalDataSize = BigInt.fromI32(0);
     }
-    provider.totalRoots = provider.totalRoots.minus(
-      BigInt.fromI32(removedRootCount)
+    provider.totalPieces = provider.totalPieces.minus(
+      BigInt.fromI32(removedPieceCount)
     );
-    // Ensure provider totalRoots doesn't go negative
-    if (provider.totalRoots.lt(BigInt.fromI32(0))) {
+    // Ensure provider totalPieces doesn't go negative
+    if (provider.totalPieces.lt(BigInt.fromI32(0))) {
       log.warning(
-        "handleRootsRemoved: Provider {} totalRoots went negative. Setting to 0.",
-        [proofSet.owner.toHex()]
+        "handlePiecesRemoved: Provider {} totalPieces went negative. Setting to 0.",
+        [dataSet.storageProvider.toHex()]
       );
-      provider.totalRoots = BigInt.fromI32(0);
+      provider.totalPieces = BigInt.fromI32(0);
     }
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("handleRootsRemoved: Provider {} for ProofSet {} not found", [
-      proofSet.owner.toHex(),
+    log.warning("handlePiecesRemoved: Provider {} for DataSet {} not found", [
+      dataSet.storageProvider.toHex(),
       setId.toString(),
     ]);
   }
