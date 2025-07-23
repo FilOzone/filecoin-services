@@ -43,8 +43,9 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
     
     // Pricing constants
-    uint256 public constant STORAGE_PRICE_PER_TIB_PER_MONTH = 2; // 2 USDFC per TiB per month without CDN
-    uint256 public constant CDN_PRICE_PER_TIB_PER_MONTH = 1; // 1 USDFC per TiB per month for CDN
+    uint256 public STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
+    uint256 public CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Dynamic fee values based on token decimals
     uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
@@ -230,7 +231,10 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (2 * 10 ** tokenDecimals); // 2 USDFC
         DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
+        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
+        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
         nextServiceProviderId = 1;
     }
 
@@ -853,7 +857,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         uint256 totalBytes,
         uint256 ratePerTiBPerMonth
     ) internal view returns (uint256) {
-        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
+        uint256 numerator = totalBytes * ratePerTiBPerMonth;
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
 
         // Ensure denominator is not zero (shouldn't happen with constants)
@@ -888,7 +892,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
     function calculateCacheMissRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH / 2);
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
@@ -898,7 +902,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
     function calculateCDNRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH / 2);
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
