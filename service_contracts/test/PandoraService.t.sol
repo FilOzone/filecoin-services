@@ -6,6 +6,7 @@ import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {PandoraService} from "../src/PandoraService.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Cids} from "@pdp/Cids.sol";
+import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -503,6 +504,250 @@ contract PandoraServiceTest is Test {
 
     // Constants for calculations
     uint256 constant COMMISSION_MAX_BPS = 10000;
+
+    // ============= Rail Termination Tests =============
+
+    function setupDataSetForTerminationTests() internal returns (uint256, uint256) {
+        // Register and approve storage provider
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        
+        // Prepare data set creation data
+        PandoraService.DataSetCreateData memory createData = PandoraService.DataSetCreateData({
+            metadata: "Test Data Set for Termination",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: false
+        });
+        
+        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        
+        // Setup client payment approval and deposit
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6, // rate allowance
+            1000e6, // lockup allowance
+            365 days // max lockup period
+        );
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        
+        // Create data set
+        makeSignaturePass(client);
+        vm.prank(storageProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        
+        // Get rail ID
+        uint256 railId = pdpServiceWithPayments.getDataSetRailId(dataSetId);
+        
+        return (dataSetId, railId);
+    }
+
+    function testOnlyPaymentsContractCanCallRailTermination() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // Try to call railTerminated from non-payments contract address
+        vm.prank(client);
+        vm.expectRevert("Only payments contract can terminate rails");
+        pdpServiceWithPayments.railTerminated(railId, client, block.number + 100);
+        
+        // Try from storage provider
+        vm.prank(storageProvider);
+        vm.expectRevert("Only payments contract can terminate rails");
+        pdpServiceWithPayments.railTerminated(railId, storageProvider, block.number + 100);
+        
+        // Try from deployer/owner
+        vm.expectRevert("Only payments contract can terminate rails");
+        pdpServiceWithPayments.railTerminated(railId, deployer, block.number + 100);
+        
+        // Verify rail is not terminated
+        (bool isTerminated, uint256 endEpoch) = pdpServiceWithPayments.isRailTerminated(railId);
+        assertFalse(isTerminated, "Rail should not be terminated");
+        assertEq(endEpoch, 0, "End epoch should be 0");
+    }
+
+    function testRailTerminationByPaymentsContract() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // Call railTerminated from payments contract
+        uint256 terminationEndEpoch = block.number + 1000;
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(railId, client, terminationEndEpoch);
+        
+        // Verify rail is terminated
+        (bool isTerminated, uint256 endEpoch) = pdpServiceWithPayments.isRailTerminated(railId);
+        assertTrue(isTerminated, "Rail should be terminated");
+        assertEq(endEpoch, terminationEndEpoch, "End epoch should match");
+    }
+
+    function testPiecesAddedFailsAfterRailTermination() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // Terminate the rail
+        uint256 terminationEndEpoch = block.number + 1000;
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(railId, client, terminationEndEpoch);
+        
+        // Prepare pieces data
+        Cids.Cid memory cid = Cids.Cid({data: hex"1234567890abcdef"});
+        IPDPTypes.PieceData[] memory pieces = new IPDPTypes.PieceData[](1);
+        pieces[0] = IPDPTypes.PieceData({piece: cid, rawSize: 1024});
+        
+        bytes memory extraData = abi.encode(FAKE_SIGNATURE, "piece metadata");
+        
+        // Try to add pieces - should fail
+        makeSignaturePass(client);
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("Cannot add pieces: rail is terminated");
+        pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieces, extraData);
+    }
+
+    function testOperationsFailAfterRailEndEpoch() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // Terminate the rail with end epoch in near future
+        uint256 terminationEndEpoch = block.number + 10;
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(railId, client, terminationEndEpoch);
+        
+        // Move past the end epoch
+        vm.roll(terminationEndEpoch + 1);
+        
+        // Test piecesScheduledRemove fails after end epoch
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
+        
+        makeSignaturePass(client);
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("Operation rejected: rail terminated and beyond end epoch");
+        pdpServiceWithPayments.piecesScheduledRemove(dataSetId, pieceIds, scheduleRemoveData);
+        
+        // Test possessionProven fails after end epoch
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("Operation rejected: rail terminated and beyond end epoch");
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        
+        // Test nextProvingPeriod fails after end epoch
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("Operation rejected: rail terminated and beyond end epoch");
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + 100, 100, "");
+    }
+
+    function testOperationsAllowedBeforeRailEndEpoch() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // First initialize proving period before termination
+        uint256 maxProvingPeriod = pdpServiceWithPayments.getMaxProvingPeriod();
+        uint256 challengeWindow = pdpServiceWithPayments.challengeWindow();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - 30;
+        
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        
+        // Terminate the rail with end epoch well in the future (after the proving deadline)
+        uint256 terminationEndEpoch = block.number + 5000;
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(railId, client, terminationEndEpoch);
+        
+        // Verify we're still before end epoch
+        assertTrue(block.number <= terminationEndEpoch, "Should be before end epoch");
+        
+        // Test piecesScheduledRemove works before end epoch
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
+        
+        makeSignaturePass(client);
+        vm.prank(address(mockPDPVerifier));
+        // Should not revert
+        pdpServiceWithPayments.piecesScheduledRemove(dataSetId, pieceIds, scheduleRemoveData);
+        
+        // Move to challenge window for possessionProven
+        uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
+        uint256 challengeWindowStart = provingDeadline - challengeWindow;
+        vm.roll(challengeWindowStart + 1);
+        
+        // Test possessionProven works before end epoch
+        vm.prank(address(mockPDPVerifier));
+        // Should not revert
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        
+        // Move past proving deadline
+        vm.roll(provingDeadline + 1);
+        
+        // Test nextProvingPeriod for next period works before end epoch
+        vm.prank(address(mockPDPVerifier));
+        // Should not revert
+        pdpServiceWithPayments.nextProvingPeriod(
+            dataSetId, 
+            block.number + maxProvingPeriod - 30, 
+            100, 
+            ""
+        );
+    }
+
+    function testStorageProviderChangeAllowedAfterTermination() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // Terminate the rail
+        uint256 terminationEndEpoch = block.number + 10;
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(railId, client, terminationEndEpoch);
+        
+        // Move past the end epoch
+        vm.roll(terminationEndEpoch + 1);
+        
+        // Register and approve a new storage provider
+        address newStorageProvider = address(0x999);
+        vm.deal(newStorageProvider, 10 ether);
+        vm.prank(newStorageProvider);
+        pdpServiceWithPayments.registerServiceProvider("https://newsp.example.com", hex"abcdef");
+        pdpServiceWithPayments.approveServiceProvider(newStorageProvider);
+        
+        // Storage provider change should still work after termination
+        vm.prank(address(mockPDPVerifier));
+        // Should not revert
+        pdpServiceWithPayments.storageProviderChanged(dataSetId, storageProvider, newStorageProvider, "");
+        
+        // Verify the change took effect
+        (, address payee) = pdpServiceWithPayments.getDataSetParties(dataSetId);
+        assertEq(payee, newStorageProvider, "Storage provider should be updated");
+    }
+
+    function testDataSetDeletionAllowedAfterTermination() public {
+        (uint256 dataSetId, uint256 railId) = setupDataSetForTerminationTests();
+        
+        // Terminate the rail
+        uint256 terminationEndEpoch = block.number + 10;
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(railId, client, terminationEndEpoch);
+        
+        // Move past the end epoch
+        vm.roll(terminationEndEpoch + 1);
+        
+        // Data set deletion should still work after termination
+        bytes memory deleteData = abi.encode(FAKE_SIGNATURE);
+        
+        makeSignaturePass(client);
+        vm.prank(address(mockPDPVerifier));
+        // Should not revert
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 100, deleteData);
+    }
+
+    function testRailTerminationForNonExistentRail() public {
+        // Try to terminate a non-existent rail
+        uint256 nonExistentRailId = 999;
+        
+        vm.prank(address(payments));
+        vm.expectRevert("Rail not associated with any data set");
+        pdpServiceWithPayments.railTerminated(nonExistentRailId, client, block.number + 100);
+    }
 
     function testGlobalParameters() public view {
         // These parameters should be the same as in SimplePDPService

@@ -30,6 +30,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     event DataSetRailCreated(uint256 indexed dataSetId, uint256 railId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
+    event RailTerminatedInService(uint256 indexed railId, address indexed terminator, uint256 endEpoch);
 
     // Constants
     uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
@@ -117,6 +118,15 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
 
     // Track when proving was first activated for each data set
     mapping(uint256 => uint256) public provingActivationEpoch;
+
+    // Rail termination tracking
+    struct RailTerminationStatus {
+        bool isTerminated;
+        uint256 endEpoch;
+    }
+
+    // Mapping from rail ID to termination status
+    mapping(uint256 => RailTerminationStatus) public railTerminationStatus;
 
     // ========== Storage Provider Registry State ==========
     
@@ -495,6 +505,9 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.railId != 0, "Data set not registered with payment system");
         
+        // Check if the rail is terminated
+        require(!railTerminationStatus[info.railId].isTerminated, "Cannot add pieces: rail is terminated");
+        
         // Get the payer address for this data set
         address payer = info.payer;
         require(extraData.length > 0, "Extra data required for adding pieces");
@@ -532,6 +545,13 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
             "Data set not registered with payment system"
         );
         
+        // Check if rail is terminated and beyond end epoch
+        RailTerminationStatus memory termStatus = railTerminationStatus[info.railId];
+        require(
+            !termStatus.isTerminated || block.number <= termStatus.endEpoch,
+            "Operation rejected: rail terminated and beyond end epoch"
+        );
+        
         // Get the payer address for this data set
         address payer = info.payer;
         
@@ -561,6 +581,16 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         uint256, /*seed*/
         uint256 challengeCount
     ) external onlyPDPVerifier {
+        // Check if rail is terminated and beyond end epoch
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        if (info.railId != 0) {
+            RailTerminationStatus memory termStatus = railTerminationStatus[info.railId];
+            require(
+                !termStatus.isTerminated || block.number <= termStatus.endEpoch,
+                "Operation rejected: rail terminated and beyond end epoch"
+            );
+        }
+        
         if (provenThisPeriod[dataSetId]) {
             revert("Only one proof of possession allowed per proving period. Open a new proving period.");
         }
@@ -594,6 +624,16 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         external
         onlyPDPVerifier
     {
+        // Check if rail is terminated and beyond end epoch
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        if (info.railId != 0) {
+            RailTerminationStatus memory termStatus = railTerminationStatus[info.railId];
+            require(
+                !termStatus.isTerminated || block.number <= termStatus.endEpoch,
+                "Operation rejected: rail terminated and beyond end epoch"
+            );
+        }
+        
         // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline = block.number + getMaxProvingPeriod();
@@ -1355,5 +1395,40 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    /**
+     * @notice Called when a payment rail is terminated in the Payments contract
+     * @dev Implements the IValidator interface function
+     * @param railId ID of the payment rail being terminated
+     * @param terminator Address that initiated the termination
+     * @param endEpoch The final epoch up to which the rail can be settled
+     */
+    function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
+        // Only payments contract can call this
+        require(msg.sender == paymentsContractAddress, "Only payments contract can terminate rails");
+        
+        // Verify rail exists in our mapping
+        uint256 dataSetId = railToDataSet[railId];
+        require(dataSetId != 0, "Rail not associated with any data set");
+        
+        // Update termination status
+        railTerminationStatus[railId] = RailTerminationStatus({
+            isTerminated: true,
+            endEpoch: endEpoch
+        });
+        
+        emit RailTerminatedInService(railId, terminator, endEpoch);
+    }
+
+    /**
+     * @notice Check if a rail is terminated and get its end epoch
+     * @param railId The ID of the rail to check
+     * @return isTerminated Whether the rail is terminated
+     * @return endEpoch The end epoch for the terminated rail (0 if not terminated)
+     */
+    function isRailTerminated(uint256 railId) external view returns (bool isTerminated, uint256 endEpoch) {
+        RailTerminationStatus memory status = railTerminationStatus[railId];
+        return (status.isTerminated, status.endEpoch);
     }
 }
