@@ -546,7 +546,7 @@
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct PandoraService.ApprovedProviderInfo[]",
+        "internalType": "struct FilecoinWarmStorageService.ApprovedProviderInfo[]",
         "components": [
           {
             "name": "storageProvider",
@@ -592,7 +592,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct PandoraService.ApprovedProviderInfo",
+        "internalType": "struct FilecoinWarmStorageService.ApprovedProviderInfo",
         "components": [
           {
             "name": "storageProvider",
@@ -651,7 +651,7 @@
       {
         "name": "",
         "type": "tuple[]",
-        "internalType": "struct PandoraService.DataSetInfo[]",
+        "internalType": "struct FilecoinWarmStorageService.DataSetInfo[]",
         "components": [
           {
             "name": "railId",
@@ -712,7 +712,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct PandoraService.DataSetInfo",
+        "internalType": "struct FilecoinWarmStorageService.DataSetInfo",
         "components": [
           {
             "name": "railId",
@@ -914,7 +914,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct PandoraService.PendingProviderInfo",
+        "internalType": "struct FilecoinWarmStorageService.PendingProviderInfo",
         "components": [
           {
             "name": "serviceURL",
@@ -1011,7 +1011,7 @@
       {
         "name": "pricing",
         "type": "tuple",
-        "internalType": "struct PandoraService.ServicePricing",
+        "internalType": "struct FilecoinWarmStorageService.ServicePricing",
         "components": [
           {
             "name": "pricePerTiBPerMonthNoCDN",

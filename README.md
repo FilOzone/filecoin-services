@@ -4,7 +4,7 @@ Building Filecoin onchain programmable services that integrate with the Filecoin
 
 ## ⚠️ IMPORTANT DISCLAIMER
 
-**🚨 THE PANDORA CONTRACT IS CURRENTLY UNDER ACTIVE DEVELOPMENT AND IS NOT READY FOR PRODUCTION USE 🚨**
+**🚨 THE WARM STORAGE CONTRACT IS CURRENTLY UNDER ACTIVE DEVELOPMENT AND IS NOT READY FOR PRODUCTION USE 🚨**
 
 **DO NOT USE IN PRODUCTION ENVIRONMENTS**
 
@@ -16,7 +16,7 @@ This software is provided for development, testing, and research purposes only. 
 
 This repository contains smart contracts and services for the Filecoin ecosystem, featuring:
 
-- **PandoraService**: A comprehensive service contract that combines PDP (Proof of Data Possession) verification with integrated payment rails for data set management
+- **FilecoinWarmStorageService**: A comprehensive service contract that combines PDP (Proof of Data Possession) verification with integrated payment rails for data set management
 - **Payment Integration**: Built on top of the [Filecoin Services Payments](https://github.com/FilOzone/filecoin-services-payments) framework
 - **Data Verification**: Uses [PDP verifiers](https://github.com/FilOzone/pdp) for cryptographic proof of data possession
 
@@ -54,24 +54,24 @@ make test
 
 ```
 service_contracts/
-├── src/                    # Smart contract source files
-│   └── PandoraService.sol  # Main service contract with PDP and payment integration
-├── test/                   # Test files
-│   └── PandoraService.t.sol # Contract tests
-├── tools/                  # Deployment and utility scripts
-├── lib/                    # Dependencies (git submodules)
-│   ├── forge-std/          # Foundry standard library
+├── src/                                 # Smart contract source files
+│   └── FilecoinWarmStorageService.sol   # Main service contract with PDP and payment integration
+├── test/                                # Test files
+│   └── FilecoinWarmStorageService.t.sol # Contract tests
+├── tools/                               # Deployment and utility scripts
+├── lib/                                 # Dependencies (git submodules)
+│   ├── forge-std/                       # Foundry standard library
 │   ├── openzeppelin-contracts/
-│   ├── fws-payments/       # Filecoin Services payments
-│   └── pdp/               # PDP verifier contracts
-└── out/                    # Compiled artifacts
+│   ├── fws-payments/                    # Filecoin Services payments
+│   └── pdp/                             # PDP verifier contracts
+└── out/                                 # Compiled artifacts
 ```
 
 ## 🌐 Deployed Contracts
 
 ### Calibnet (Testnet)
-- **Pandora Service**: [`0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5`](https://calibration.filfox.info/en/address/0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5)
-  - Pandora service implements UUPSUpgradeable & EIP712Upgradeable and this is the proxy contract address - it is relatively stable at this point. 
+- **Warm Storage Service**: [`0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5`](https://calibration.filfox.info/en/address/0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5)
+  - Warm Storage service implements `UUPSUpgradeable` & `EIP712Upgradeable` and this is the proxy contract address - it is relatively stable at this point.
 - **Latest Implementation**: [`0xA970e9517425FA4C09d9ECAf7d24a5677170392a`](https://calibration.filfox.info/en/address/0xA970e9517425FA4C09d9ECAf7d24a5677170392a)
 
 ### Mainnet
@@ -85,6 +85,8 @@ Check the [latest tags](https://github.com/your-org/filecoin-services/tags) to f
 ### Running Tests
 
 ```bash
+cd ./service_contracts/
+
 # Run all tests
 make test
 
@@ -92,7 +94,7 @@ make test
 forge test -vvv --via-ir
 
 # Run specific test file (using forge directly)
-forge test --match-path test/PandoraService.t.sol --via-ir
+forge test --match-path test/FilecoinWarmStorageService.t.sol --via-ir
 ```
 
 ### Code Quality
@@ -125,13 +127,13 @@ Use the provided deployment scripts in the `tools/` directory:
 
 ```bash
 # Deploy to Calibnet
-./tools/deploy-pandora-calibnet.sh
+./tools/deploy-warm-storage-calibnet.sh
 
 # Deploy all contracts
-./tools/deploy-all-pandora-calibnet.sh
+./tools/deploy-all-warm-storage-calibnet.sh
 
 # Upgrade existing deployment
-./tools/upgrade-pandora-calibnet.sh
+./tools/upgrade-warm-storage-calibnet.sh
 ```
 
 ## 🔗 Dependencies

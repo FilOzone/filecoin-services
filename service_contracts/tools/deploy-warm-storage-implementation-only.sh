@@ -1,12 +1,12 @@
 #!/bin/bash
-# deploy-pandora-implementation-only.sh - Deploy only PandoraService implementation (no proxy)
+# deploy-warm-storage-implementation-only.sh - Deploy only FilecoinWarmStorageService implementation (no proxy)
 # This allows updating an existing proxy to point to the new implementation
 # Assumption: KEYSTORE, PASSWORD, RPC_URL env vars are set
-# Optional: PANDORA_PROXY_ADDRESS to automatically upgrade the proxy
+# Optional: WARM_STORAGE_PROXY_ADDRESS to automatically upgrade the proxy
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
-echo "Deploying PandoraService Implementation Only (no proxy)"
+echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
@@ -25,27 +25,27 @@ echo "Deploying from address: $ADDR"
 # Get current nonce
 NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
-# Deploy PandoraService implementation
-echo "Deploying PandoraService implementation..."
-PANDORA_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/PandoraService.sol:PandoraService --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+# Deploy FilecoinWarmStorageService implementation
+echo "Deploying FilecoinWarmStorageService implementation..."
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 
-if [ -z "$PANDORA_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to deploy PandoraService implementation"
+if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
+    echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
     exit 1
 fi
 
 echo ""
 echo "=== DEPLOYMENT COMPLETE ==="
-echo "PandoraService Implementation deployed at: $PANDORA_IMPLEMENTATION_ADDRESS"
+echo "FilecoinWarmStorageService Implementation deployed at: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
 echo ""
 
 # If proxy address is provided, perform the upgrade
-if [ -n "$PANDORA_PROXY_ADDRESS" ]; then
-    echo "Proxy address provided: $PANDORA_PROXY_ADDRESS"
+if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
+    echo "Proxy address provided: $WARM_STORAGE_PROXY_ADDRESS"
     
     # First check if we're the owner
     echo "Checking proxy ownership..."
-    PROXY_OWNER=$(cast call "$PANDORA_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
+    PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
     
     if [ -z "$PROXY_OWNER" ]; then
         echo "Warning: Could not determine proxy owner. Attempting upgrade anyway..."
@@ -64,7 +64,7 @@ if [ -n "$PANDORA_PROXY_ADDRESS" ]; then
             echo "3. If the owner is a multisig, create a proposal"
             echo ""
             echo "To manually upgrade (as owner):"
-            echo "cast send $PANDORA_PROXY_ADDRESS \"upgradeTo(address)\" $PANDORA_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL"
+            echo "cast send $WARM_STORAGE_PROXY_ADDRESS \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL"
             exit 1
         fi
     fi
@@ -75,7 +75,7 @@ if [ -n "$PANDORA_PROXY_ADDRESS" ]; then
     NONCE=$(expr $NONCE + "1")
     
     # Call upgradeToAndCall on the proxy (works better on Filecoin)
-    TX_HASH=$(cast send "$PANDORA_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$PANDORA_IMPLEMENTATION_ADDRESS" 0x \
+    TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" 0x \
         --rpc-url "$RPC_URL" \
         --keystore "$KEYSTORE" \
         --password "$PASSWORD" \
@@ -101,21 +101,21 @@ if [ -n "$PANDORA_PROXY_ADDRESS" ]; then
     # Verify the upgrade by checking the implementation address
     echo "Verifying upgrade (waiting for Filecoin 30s block time)..."
     sleep 35
-    NEW_IMPL=$(cast rpc eth_getStorageAt "$PANDORA_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
+    NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
     
-    if [ "$NEW_IMPL" = "$PANDORA_IMPLEMENTATION_ADDRESS" ]; then
-        echo "✅ Upgrade successful! Proxy now points to: $PANDORA_IMPLEMENTATION_ADDRESS"
+    if [ "$NEW_IMPL" = "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
+        echo "✅ Upgrade successful! Proxy now points to: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
     else
         echo "⚠️  Warning: Could not verify upgrade. Please check manually."
-        echo "Expected: $PANDORA_IMPLEMENTATION_ADDRESS"
+        echo "Expected: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
         echo "Got: $NEW_IMPL"
     fi
 else
-    echo "No PANDORA_PROXY_ADDRESS provided. Skipping automatic upgrade."
+    echo "No WARM_STORAGE_PROXY_ADDRESS provided. Skipping automatic upgrade."
     echo ""
     echo "To upgrade an existing proxy manually:"
-    echo "1. Export the proxy address: export PANDORA_PROXY_ADDRESS=<your_proxy_address>"
+    echo "1. Export the proxy address: export WARM_STORAGE_PROXY_ADDRESS=<your_proxy_address>"
     echo "2. Run this script again, or"
     echo "3. Run manually:"
-    echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $PANDORA_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
+    echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
 fi

@@ -129,6 +129,6 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
 
 ## Further Information
 
-- **Pandora Subgraph Api Documentation** [graphql](./API.md)
+- **Warm Storage Subgraph Api Documentation** [graphql](./API.md)
 - **Graph Protocol Documentation:** [https://thegraph.com/docs/en/](https://thegraph.com/docs/en/)
 - **Goldsky Documentation:** [https://docs.goldsky.com/](https://docs.goldsky.com/)

@@ -5,13 +5,13 @@ This directory contains the smart contracts for different Filecoin services usin
 ## Structure
 
 - `src/` - Contract source files
-  - `PandoraService.sol` - A service contract with [PDP](https://github.com/FilOzone/pdp) (Proof of Data Possession) and payment integration
+  - `FilecoinWarmStorageService.sol` - A service contract with [PDP](https://github.com/FilOzone/pdp) (Proof of Data Possession) and payment integration
 - `test/` - Test files  
-  - `PandoraService.t.sol` - Tests for the service contract
+  - `FilecoinWarmStorageService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
   - `create_data_set_with_payments.sh` - Script to create data sets with payments
-  - `deploy-pandora-calibnet.sh` - Deployment script for Pandora service on Calibnet
-  - `deploy-all-pandora-calibnet.sh` - Deployment script for all Pandora contracts on Calibnet
+  - `deploy-warm-storage-calibnet.sh` - Deployment script for Warm Storage service on Calibnet
+  - `deploy-all-warm-storage-calibnet.sh` - Deployment script for all Warm Storage contracts on Calibnet
 - `lib/` - Dependencies (git submodules)
   - `forge-std` - Foundry standard library
   - `openzeppelin-contracts` - OpenZeppelin contracts

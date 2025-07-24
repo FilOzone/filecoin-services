@@ -25,6 +25,6 @@ export class TransactionConstants {
  * Contract Address
  */
 export class ContractAddresses {
-  static readonly PANDORA: string =
+  static readonly WARM_STORAGE: string =
     "0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5";
 }
