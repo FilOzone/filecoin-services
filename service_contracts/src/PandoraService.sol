@@ -27,7 +27,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     event ContractUpgraded(string version, address implementation);
     event DataSetStorageProviderChanged(uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider);
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
-    event DataSetRailCreated(uint256 indexed dataSetId, uint256 railId, address payer, address payee, bool withCDN);
+    event DataSetRailsCreated(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId, address payer, address payee, bool withCDN);
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
 
@@ -43,8 +43,9 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
     
     // Pricing constants
-    uint256 public constant PRICE_PER_TIB_PER_MONTH_NO_CDN = 2; // 2 USDFC per TiB per month without CDN
-    uint256 public constant PRICE_PER_TIB_PER_MONTH_WITH_CDN = 3; // 3 USDFC per TiB per month with CDN
+    uint256 public STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
+    uint256 public CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Dynamic fee values based on token decimals
     uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
@@ -56,13 +57,14 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     address public pdpVerifierAddress;
     address public paymentsContractAddress;
     address public usdfcTokenAddress;
+    address public filCDNAddress;
 
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
     
     // Commission rates for different service types
     uint256 public basicServiceCommissionBps;    // 0% for basic service (no CDN add-on)
-    uint256 public cdnServiceCommissionBps;      // 40% for CDN service
+    uint256 public cdnServiceCommissionBps;      // 0% for CDN service
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -71,7 +73,9 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
 
     // Storage for data set payment information
     struct DataSetInfo {
-        uint256 railId; // ID of the payment rail
+        uint256 pdpRailId; // ID of the PDP payment rail
+        uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
+        uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
@@ -194,6 +198,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
+        address _filCDNAddress,
         uint256 _initialOperatorCommissionBps,
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize
@@ -205,6 +210,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
+        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
         require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
         require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
         require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
@@ -212,19 +218,23 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         pdpVerifierAddress = _pdpVerifierAddress;
         paymentsContractAddress = _paymentsContractAddress;
         usdfcTokenAddress = _usdfcTokenAddress;
+        filCDNAddress = _filCDNAddress;
         operatorCommissionBps = _initialOperatorCommissionBps;
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
         
-        // Set commission rates: 0% for basic, 40% for service w/ CDN add-on
+        // Set commission rates: 0% for basic, 0% for service w/ CDN add-on
         basicServiceCommissionBps = 0;   // 0%
-        cdnServiceCommissionBps = 4000;   // 40%
+        cdnServiceCommissionBps = 0;   // 0%
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (2 * 10 ** tokenDecimals); // 2 USDFC
         DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
+        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
+        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
         nextServiceProviderId = 1;
     }
 
@@ -261,13 +271,13 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
      * @notice Updates the service commission rates
      * @dev Only callable by the contract owner
      * @param newBasicCommissionBps New commission rate for basic service (no CDN) in basis points
-     * @param newCdnCommissionBps New commission rate for CDN service in basis points
+     * @param newCDNCommissionBps New commission rate for CDN service in basis points
      */
-    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCdnCommissionBps) external onlyOwner {
+    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCDNCommissionBps) external onlyOwner {
         require(newBasicCommissionBps <= COMMISSION_MAX_BPS, "Basic commission exceeds maximum");
-        require(newCdnCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
+        require(newCDNCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
         basicServiceCommissionBps = newBasicCommissionBps;
-        cdnServiceCommissionBps = newCdnCommissionBps;
+        cdnServiceCommissionBps = newCDNCommissionBps;
     }
     
 
@@ -406,9 +416,9 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
 
-        // Create the payment rail using the Payments contract
+        // Create the payment rails using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = payments.createRail(
+        uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
             creator, // data set creator, SPs in  most cases
@@ -418,15 +428,15 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         );
 
         // Store the rail ID
-        info.railId = railId;
+        info.pdpRailId = pdpRailId;
 
         // Store reverse mapping from rail ID to data set ID for validation
-        railToDataSet[railId] = dataSetId;
+        railToDataSet[pdpRailId] = dataSetId;
 
         // First, set a lockupFixed value that's at least equal to the one-time payment
         // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
         payments.modifyRailLockup(
-            railId,
+            pdpRailId,
             DEFAULT_LOCKUP_PERIOD,
             DATA_SET_CREATION_FEE // lockupFixed equal to the one-time payment amount
         );
@@ -434,13 +444,50 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         // Charge the one-time data set creation fee
         // This is a payment from payer to data set creator of a fixed amount
         payments.modifyRailPayment(
-            railId,
-            0, // Initial rate is 0, will be updated when pieces are added
+            pdpRailId,
+            0, // Initial rate is 0, will be updated when roots are added
             DATA_SET_CREATION_FEE // One-time payment amount
         );
 
+        uint256 cacheMissRailId = 0;
+        uint256 cdnRailId = 0;
+
+        if (createData.withCDN == true) {
+            cacheMissRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                creator, // data set creator, SPs in most cases
+                address(this), // this contract acts as the arbiter
+                0, // no service commission
+                address(this)
+            );
+            info.cacheMissRailId = cacheMissRailId;
+            railToDataSet[cacheMissRailId] = dataSetId;
+            payments.modifyRailLockup(
+                cacheMissRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                0
+            );
+
+            cdnRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                filCDNAddress,
+                address(this), // this contract acts as the arbiter
+                0, // no service commission
+                address(this)
+            );
+            info.cdnRailId = cdnRailId;
+            railToDataSet[cdnRailId] = dataSetId;
+            payments.modifyRailLockup(
+                cdnRailId,
+                DEFAULT_LOCKUP_PERIOD,
+                0
+            );
+        }
+
         // Emit event for tracking
-        emit DataSetRailCreated(dataSetId, railId, createData.payer, creator, createData.withCDN);
+        emit DataSetRailsCreated(dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN);
     }
 
     /**
@@ -457,7 +504,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.railId != 0,
+            info.pdpRailId != 0,
             "Data set not registered with payment system"
         );
         (bytes memory signature) = abi.decode(extraData, (bytes));
@@ -493,7 +540,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     ) external onlyPDPVerifier {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.railId != 0, "Data set not registered with payment system");
+        require(info.pdpRailId != 0, "Data set not registered with payment system");
         
         // Get the payer address for this data set
         address payer = info.payer;
@@ -528,7 +575,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.railId != 0,
+            info.pdpRailId != 0,
             "Data set not registered with payment system"
         );
         
@@ -607,8 +654,8 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
             // This marks when the data set became active for proving
             provingActivationEpoch[dataSetId] = block.number;
 
-            // Update the payment rate
-            updateRailPaymentRate(dataSetId, leafCount);
+            // Update the payment rates
+            updatePaymentRates(dataSetId, leafCount);
 
             return;
         }
@@ -660,8 +707,8 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Update the payment rate based on current data set size
-        updateRailPaymentRate(dataSetId, leafCount);
+        // Update the payment rates based on current data set size
+        updatePaymentRates(dataSetId, leafCount);
     }
 
     /**
@@ -692,29 +739,44 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
     }
 
-    function updateRailPaymentRate(uint256 dataSetId, uint256 leafCount) internal {
+    function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this data set
-        require(dataSetInfo[dataSetId].railId != 0, "No payment rail configured");
-
-        uint256 newRatePerEpoch = 0; // Default to 0 for empty data sets
+        require(dataSetInfo[dataSetId].pdpRailId != 0, "No PDP payment rail configured");
 
         uint256 totalBytes = getDataSetSizeInBytes(leafCount);
-        // Get the withCDN flag from the data set info
-        bool withCDN = dataSetInfo[dataSetId].withCDN;
-        newRatePerEpoch = calculateStorageRatePerEpoch(totalBytes, withCDN);
-
-        // Update the rail payment rate
         Payments payments = Payments(paymentsContractAddress);
-        uint256 railId = dataSetInfo[dataSetId].railId;
 
-        // Call modifyRailPayment with the new rate and no one-time payment
+        // Update the PDP rail payment rate with the new rate and no one-time
+        // payment
+        uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
+        uint256 newStorageRatePerEpoch = calculateStorageRatePerEpoch(totalBytes);
         payments.modifyRailPayment(
-            railId,
-            newRatePerEpoch,
+            pdpRailId,
+            newStorageRatePerEpoch,
             0 // No one-time payment during rate update
         );
+        emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
 
-        emit RailRateUpdated(dataSetId, railId, newRatePerEpoch);
+        // Update the CDN rail payment rates, if applicable
+        if (dataSetInfo[dataSetId].withCDN) {
+            uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
+            uint256 newCacheMissRatePerEpoch = calculateCacheMissRatePerEpoch(totalBytes);
+            payments.modifyRailPayment(
+                cacheMissRailId,
+                newCacheMissRatePerEpoch,
+                0
+            );
+            emit RailRateUpdated(dataSetId, cacheMissRailId, newCacheMissRatePerEpoch);
+
+            uint256 cdnRailId = dataSetInfo[dataSetId].cdnRailId;
+            uint256 newCDNRatePerEpoch = calculateCDNRatePerEpoch(totalBytes);
+            payments.modifyRailPayment(
+                cdnRailId,
+                newCDNRatePerEpoch,
+                0
+            );
+            emit RailRateUpdated(dataSetId, cdnRailId, newCDNRatePerEpoch);
+        }
     }
 
     /**
@@ -786,17 +848,16 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     }
 
     /**
-     * @notice Calculate the per-epoch rate based on total storage size and CDN usage
-     * @dev Rate is 2 USDFC per TiB per month without CDN, 3 USDFC per TiB per month with CDN.
+     * @notice Calculate a per-epoch rate based on total storage size
      * @param totalBytes Total size of the stored data in bytes
-     * @param withCDN Whether CDN is enabled for the data set
+     * @param ratePerTiBPerMonth The rate per TiB per month in the token's smallest unit
      * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
      */
-    function calculateStorageRatePerEpoch(uint256 totalBytes, bool withCDN) public view returns (uint256) {
-        // Determine the rate based on CDN usage using constants
-        uint256 ratePerTiBPerMonth = withCDN ? PRICE_PER_TIB_PER_MONTH_WITH_CDN : PRICE_PER_TIB_PER_MONTH_NO_CDN;
-        
-        uint256 numerator = totalBytes * ratePerTiBPerMonth * (10 ** uint256(tokenDecimals));
+    function calculateStorageSizeBasedRatePerEpoch(
+        uint256 totalBytes,
+        uint256 ratePerTiBPerMonth
+    ) internal view returns (uint256) {
+        uint256 numerator = totalBytes * ratePerTiBPerMonth;
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
 
         // Ensure denominator is not zero (shouldn't happen with constants)
@@ -812,6 +873,36 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         }
 
         return ratePerEpoch;
+    }
+
+    /**
+     * @notice Calculate the PDP per-epoch rate based on total storage size
+     * @dev Rate is 2 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateStorageRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
+    }
+
+    /**
+     * @notice Calculate the cache miss per-epoch rate based on total storage size
+     * @dev Rate is 1 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateCacheMissRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
+    }
+
+    /**
+     * @notice Calculate the CDN per-epoch rate based on total storage size
+     * @dev Rate is 1 USDFC per TiB per month.
+     * @param totalBytes Total size of the stored data in bytes
+     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     */
+    function calculateCDNRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
@@ -856,8 +947,26 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
      * @param dataSetId The ID of the data set
      * @return The payment rail ID, or 0 if not found
      */
-    function getDataSetRailId(uint256 dataSetId) external view returns (uint256) {
-        return dataSetInfo[dataSetId].railId;
+    function getDataSetPdpRailId(uint256 dataSetId) external view returns (uint256) {
+        return dataSetInfo[dataSetId].pdpRailId;
+    }
+
+    /**
+     * @notice Get the cache miss payment rail ID for a data set
+     * @param dataSetId The ID of the data set
+     * @return The payment rail ID, or 0 if not found
+     */
+    function getDataSetCacheMissRailId(uint256 dataSetId) external view returns (uint256) {
+        return dataSetInfo[dataSetId].cacheMissRailId;
+    }
+
+    /**
+     * @notice Get the CDN payment rail ID for a data set
+     * @param dataSetId The ID of the data set
+     * @return The payment rail ID, or 0 if not found
+     */
+    function getDataSetCDNRailId(uint256 dataSetId) external view returns (uint256) {
+        return dataSetInfo[dataSetId].cdnRailId;
     }
 
     /**
@@ -905,8 +1014,8 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals)),
-            pricePerTiBPerMonthWithCDN: PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthWithCDN: (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals)),
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -925,8 +1034,8 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         uint256 cdnServiceFee,
         uint256 spPaymentWithCDN
     ) {
-        uint256 basicTotal = PRICE_PER_TIB_PER_MONTH_NO_CDN * (10 ** uint256(tokenDecimals));
-        uint256 cdnTotal = PRICE_PER_TIB_PER_MONTH_WITH_CDN * (10 ** uint256(tokenDecimals));
+        uint256 basicTotal = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
+        uint256 cdnTotal = (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals));
         
         // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
         basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
@@ -1273,7 +1382,9 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
             DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
             // Create a memory copy of the struct (excluding any mappings)
             dataSets[i] = DataSetInfo({
-                railId: storageInfo.railId,
+                pdpRailId: storageInfo.pdpRailId,
+                cacheMissRailId: storageInfo.cacheMissRailId,
+                cdnRailId: storageInfo.cdnRailId,
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,

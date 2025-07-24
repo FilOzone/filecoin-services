@@ -183,6 +183,7 @@ contract PandoraServiceTest is Test {
     address public deployer;
     address public client;
     address public storageProvider;
+    address public filCDN;
     
     // Additional test accounts for registry tests
     address public sp1;
@@ -226,6 +227,7 @@ contract PandoraServiceTest is Test {
         deployer = address(this);
         client = address(0xf1);
         storageProvider = address(0xf2);
+        filCDN = address(0xf3);
         
         // Additional accounts for registry tests
         sp1 = address(0xf3);
@@ -260,6 +262,7 @@ contract PandoraServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
+            filCDN,
             initialOperatorCommissionBps,
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
@@ -294,6 +297,11 @@ contract PandoraServiceTest is Test {
             "USDFC token address should be set correctly"
         );
         assertEq(
+            pdpServiceWithPayments.filCDNAddress(),
+            filCDN,
+            "FilCDN address should be set correctly"
+        );
+        assertEq(
             pdpServiceWithPayments.operatorCommissionBps(),
             initialOperatorCommissionBps,
             "Operator commission should be set correctly"
@@ -305,7 +313,7 @@ contract PandoraServiceTest is Test {
         );
         assertEq(
             pdpServiceWithPayments.cdnServiceCommissionBps(),
-            4000, // 40%
+            0, // 0%
             "CDN service commission should be set correctly"
         );
         assertEq(
@@ -376,7 +384,7 @@ contract PandoraServiceTest is Test {
 
         // Expect RailCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.DataSetRailCreated(1, 1, client, storageProvider, true);
+        emit PandoraService.DataSetRailsCreated(1, 1, 2, 3, client, storageProvider, true);
 
         // Create a data set as the storage provider
         makeSignaturePass(client);
@@ -384,11 +392,15 @@ contract PandoraServiceTest is Test {
         uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
-        // Get the rail ID from the PDP service
-        uint256 railId = pdpServiceWithPayments.getDataSetRailId(newDataSetId);
+        // Get payment rails
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSetPdpRailId(newDataSetId);
+        uint256 cacheMissRailId = pdpServiceWithPayments.getDataSetCacheMissRailId(newDataSetId);
+        uint256 cdnRailId = pdpServiceWithPayments.getDataSetCDNRailId(newDataSetId);
 
-        // Verify a valid rail ID was created
-        assertTrue(railId > 0, "Rail ID should be non-zero");
+        // Verify valid rail IDs were created
+        assertTrue(pdpRailId > 0, "PDP Rail ID should be non-zero");
+        assertTrue(cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
+        assertTrue(cdnRailId > 0, "CDN Rail ID should be non-zero");
 
         // Verify data set info was stored correctly
         (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(newDataSetId);
@@ -401,7 +413,9 @@ contract PandoraServiceTest is Test {
 
         // Verify data set info
         PandoraService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
-        assertEq(dataSetInfo.railId, railId, "Rail ID should match");
+        assertEq(dataSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");
+        assertNotEq(dataSetInfo.cacheMissRailId, 0, "Cache miss rail ID should be set");
+        assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
         assertEq(dataSetInfo.payer, client, "Payer should match");
         assertEq(dataSetInfo.payee, storageProvider, "Payee should match");
         assertEq(dataSetInfo.withCDN, true, "withCDN should be true");
@@ -410,21 +424,36 @@ contract PandoraServiceTest is Test {
         bool withCDN = pdpServiceWithPayments.getDataSetWithCDN(newDataSetId);
         assertTrue(withCDN, "withCDN should be true");
 
-        // Verify the rail in the actual Payments contract
-        Payments.RailView memory rail = payments.getRail(railId);
+        // Verify the rails in the actual Payments contract
+        Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
+        assertEq(pdpRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(pdpRail.from, client, "From address should be client");
+        assertEq(pdpRail.to, storageProvider, "To address should be storage provider");
+        assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
+        assertEq(pdpRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(pdpRail.commissionRateBps, 0, "No commission");
+        assertEq(pdpRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
-        assertEq(rail.token, address(mockUSDFC), "Token should be USDFC");
-        assertEq(rail.from, client, "From address should be client");
-        assertEq(rail.to, storageProvider, "To address should be storage provider");
-        assertEq(rail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(rail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
-        assertEq(rail.commissionRateBps, 4000, "Commission rate should match the CDN service rate (40%)");
+        Payments.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
+        assertEq(cacheMissRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(cacheMissRail.from, client, "From address should be client");
+        assertEq(cacheMissRail.to, storageProvider, "To address should be storage provider");
+        assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
+        assertEq(cacheMissRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(cacheMissRail.commissionRateBps, 0, "No commission");
+        assertEq(cacheMissRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
-        // Verify lockupFixed is 0 since the one-time payment was made
-        assertEq(rail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
-
-        // Verify initial payment rate is 0 (will be updated when roots are added)
-        assertEq(rail.paymentRate, 0, "Initial payment rate should be 0");
+        Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
+        assertEq(cdnRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(cdnRail.from, client, "From address should be client");
+        assertEq(cdnRail.to, filCDN, "To address should be FilCDN");
+        assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
+        assertEq(cdnRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(cdnRail.commissionRateBps, 0, "No commission");
+        assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
 
         // Get account balances after creating data set
         (uint256 clientFundsAfter,) = getAccountInfo(address(mockUSDFC), client);
@@ -473,7 +502,7 @@ contract PandoraServiceTest is Test {
 
         // Expect RailCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit PandoraService.DataSetRailCreated(1, 1, client, storageProvider, false);
+        emit PandoraService.DataSetRailsCreated(1, 1, 0, 0, client, storageProvider, false);
 
         // Create a data set as the storage provider
         makeSignaturePass(client);
@@ -486,9 +515,15 @@ contract PandoraServiceTest is Test {
         assertFalse(withCDN, "withCDN should be false");
         
         // Verify the commission rate was set correctly for basic service (no CDN)
-        uint256 railId = pdpServiceWithPayments.getDataSetRailId(newDataSetId);
-        Payments.RailView memory rail = payments.getRail(railId);
-        assertEq(rail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSetPdpRailId(newDataSetId);
+        Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
+        assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
+
+        uint256 cacheMissRailId = pdpServiceWithPayments.getDataSetCacheMissRailId(newDataSetId);
+        assertEq(cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
+
+        uint256 cdnRailId = pdpServiceWithPayments.getDataSetCDNRailId(newDataSetId);
+        assertEq(cdnRailId, 0, "CDN rail ID should be 0 for basic service (no CDN)");
     }
 
     // Helper function to get account info from the Payments contract
@@ -1191,7 +1226,7 @@ contract PandoraServiceTest is Test {
         assertEq(dataSets[0].payee, sp1, "Payee should match");
         assertEq(dataSets[0].metadata, metadata, "Metadata should match");
         assertEq(dataSets[0].clientDataSetId, 0, "First data set ID should be 0");
-        assertGt(dataSets[0].railId, 0, "Rail ID should be set");
+        assertGt(dataSets[0].pdpRailId, 0, "Rail ID should be set");
     }
     
     function testGetClientDataSets_MultipleDataSets() public {
@@ -1457,6 +1492,8 @@ contract PandoraServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
+    uint256 public filCDNPrivateKey;
+    address public filCDN;
     
     function setUp() public {
         // Set up test accounts with known private keys
@@ -1465,6 +1502,9 @@ contract PandoraServiceSignatureTest is Test {
         
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
+
+        filCDNPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
+        filCDN = vm.addr(filCDNPrivateKey);
         
         creator = address(0xf2);
         
@@ -1485,6 +1525,7 @@ contract PandoraServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
+            filCDN,
             0, // 0% commission
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize
@@ -1555,9 +1596,11 @@ contract PandoraServiceUpgradeTest is Test {
     MockERC20 public mockUSDFC;
     
     address public deployer;
+    address public filCDN;
     
     function setUp() public {
         deployer = address(this);
+        filCDN = address(0xf2);
         
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -1577,6 +1620,7 @@ contract PandoraServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
+            filCDN,
             0, // 0% commission
             uint64(2880), // maxProvingPeriod
             uint256(60)   // challengeWindowSize

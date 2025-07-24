@@ -66,8 +66,8 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: "DataSetRailCreated(indexed uint256,uint256,address,address,bool)"
-          handler: handleDataSetRailCreated
+        - event: "DataSetRailsCreated(indexed uint256,uint256,uint256,uint256,address,address,bool)"
+          handler: handleDataSetRailsCreated
         - event: "RailRateUpdated(indexed uint256,uint256,uint256)"
           handler: handleRailRateUpdated
         - event: "FaultRecord(indexed uint256,uint256,uint256)"
