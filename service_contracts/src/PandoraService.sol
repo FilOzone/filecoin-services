@@ -74,8 +74,8 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
     // Storage for data set payment information
     struct DataSetInfo {
         uint256 pdpRailId; // ID of the PDP payment rail
-        uint256 cacheMissRailId; // ID of the cache miss payment rail (for CDN add-on)
-        uint256 cdnRailId; // ID of the CDN payment rail (for CDN add-on)
+        uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
+        uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
