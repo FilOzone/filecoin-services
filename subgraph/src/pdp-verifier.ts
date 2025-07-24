@@ -36,7 +36,7 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
   // Load DataSet
   const dataSet = DataSet.load(dataSetEntityId);
   if (!dataSet) {
-    // dataSet doesn't belong to Pandora Service
+    // dataSet doesn't belong to Warm Storage Service
     return;
   }
 
@@ -94,7 +94,7 @@ export function handleStorageProviderChanged(
   // Load DataSet
   const dataSet = DataSet.load(dataSetEntityId);
   if (!dataSet) {
-    // dataSet doesn't belong to Pandora Service
+    // dataSet doesn't belong to Warm Storage Service
     return;
   }
 
@@ -154,7 +154,7 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
   // Update DataSet
   const dataSet = DataSet.load(dataSetEntityId);
 
-  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   const oldTotalDataSize = dataSet.totalDataSize; // Store size before zeroing
 
@@ -197,10 +197,10 @@ export function handlePossessionProven(event: PossessionProvenEvent): void {
 
   const dataSetEntityId = getDataSetEntityId(setId);
 
-  // Load DataSet early to check if it belongs to Pandora Service
+  // Load DataSet early to check if it belongs to Warm Storage Service
   const dataSet = DataSet.load(dataSetEntityId);
 
-  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   let uniquePieces: BigInt[] = [];
   let pieceIdMap = new Map<string, boolean>();
@@ -264,7 +264,7 @@ export function handleNextProvingPeriod(event: NextProvingPeriodEvent): void {
   // Update Data Set
   const dataSet = DataSet.load(dataSetEntityId);
 
-  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   dataSet.nextChallengeEpoch = challengeEpoch;
   dataSet.challengeRange = leafCount;
@@ -295,7 +295,7 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
 
   // Load DataSet
   const dataSet = DataSet.load(dataSetEntityId);
-  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   // --- Parse Transaction Input --- Requires helper functions
   // Skip function selector (first 4 bytes)
@@ -489,7 +489,7 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
 
   // Load DataSet
   const dataSet = DataSet.load(dataSetEntityId);
-  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   let removedPieceCount = 0;
   let removedDataSize = BigInt.fromI32(0);
