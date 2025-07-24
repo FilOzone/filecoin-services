@@ -73,7 +73,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
 
     // Storage for data set payment information
     struct DataSetInfo {
-        uint256 pdpRailId; // ID of the pdp payment rail
+        uint256 pdpRailId; // ID of the PDP payment rail
         uint256 cacheMissRailId; // ID of the cache miss payment rail (for CDN add-on)
         uint256 cdnRailId; // ID of the CDN payment rail (for CDN add-on)
         address payer; // Address paying for storage
@@ -746,7 +746,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         uint256 totalBytes = getDataSetSizeInBytes(leafCount);
         Payments payments = Payments(paymentsContractAddress);
 
-        // Update the pdp rail payment rate with the new rate and no one-time
+        // Update the PDP rail payment rate with the new rate and no one-time
         // payment
         uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
         uint256 newStorageRatePerEpoch = calculateStorageRatePerEpoch(totalBytes);
