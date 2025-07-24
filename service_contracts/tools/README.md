@@ -1,12 +1,12 @@
-# PandoraService Deployment Scripts
+# FilecoinWarmStorageService Deployment Scripts
 
-This directory contains scripts for deploying and upgrading the PandoraService contract on Calibration testnet.
+This directory contains scripts for deploying and upgrading the FilecoinWarmStorageService contract on Calibration testnet.
 
 ## Scripts Overview
 
-- `deploy-pandora-calibnet.sh` - Deploy PandoraService only (requires existing PDPVerifier and Payments contracts)
-- `deploy-all-pandora-calibnet.sh` - Deploy all contracts (PDPVerifier, Payments, and PandoraService) 
-- `upgrade-pandora-calibnet.sh` - Upgrade existing PandoraService contract with new proving period parameters
+- `deploy-pandora-calibnet.sh` - Deploy FilecoinWarmStorageService only (requires existing PDPVerifier and Payments contracts)
+- `deploy-all-pandora-calibnet.sh` - Deploy all contracts (PDPVerifier, Payments, and FilecoinWarmStorageService) 
+- `upgrade-pandora-calibnet.sh` - Upgrade existing FilecoinWarmStorageService contract with new proving period parameters
 
 ## Environment Variables
 
@@ -24,7 +24,7 @@ This directory contains scripts for deploying and upgrading the PandoraService c
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
 
 - `upgrade-pandora-calibnet.sh` requires:
-  - `PANDORA_SERVICE_PROXY_ADDRESS` - Address of existing PandoraService proxy to upgrade
+  - `FILECOIN_WARM_STORAGE_SERVICE_PROXY_ADDRESS` - Address of existing FilecoinWarmStorageService proxy to upgrade
 
 ### Optional proving period configuration:
 - `MAX_PROVING_PERIOD` - Maximum epochs between proofs (default: 30 epochs = 15 minutes on calibnet)
@@ -47,7 +47,7 @@ export CHALLENGE_WINDOW_SIZE="20"     # 20 epochs instead of default 15
 ./deploy-all-pandora-calibnet.sh
 ```
 
-### Deploy PandoraService Only
+### Deploy FilecoinWarmStorageService Only
 
 ```bash
 export KEYSTORE="/path/to/keystore.json"
@@ -65,7 +65,7 @@ export PAYMENTS_CONTRACT_ADDRESS="0x456..."
 export KEYSTORE="/path/to/keystore.json"
 export PASSWORD="your-password"
 export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export PANDORA_SERVICE_PROXY_ADDRESS="0x789..."
+export FILECOIN_WARM_STORAGE_SERVICE_PROXY_ADDRESS="0x789..."
 
 # Optional: Set new proving period parameters
 export MAX_PROVING_PERIOD="120"       # 1 hour
@@ -76,7 +76,7 @@ export CHALLENGE_WINDOW_SIZE="30"     # 30 epochs
 
 ## Contract Upgrade Process
 
-The PandoraService contract uses OpenZeppelin's upgradeable pattern. When upgrading:
+The FilecoinWarmStorageService contract uses OpenZeppelin's upgradeable pattern. When upgrading:
 
 1. **Deploy new implementation**: The script deploys a new implementation contract
 2. **Upgrade proxy**: Uses `upgradeToAndCall` to point the proxy to the new implementation
@@ -104,12 +104,12 @@ The PandoraService contract uses OpenZeppelin's upgradeable pattern. When upgrad
 
 Run the upgrade tests:
 ```bash
-forge test --match-contract PandoraServiceUpgradeTest
+forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 ```
 
 ## Storage Layout Verification
 
 To verify storage layout compatibility:
 ```bash
-forge inspect src/PandoraService.sol:PandoraService storageLayout
+forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
 ```

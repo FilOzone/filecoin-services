@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {PandoraService} from "../src/PandoraService.sol";
+import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /**
  * @title EIP-712 Signature Fixture Test
- * @dev Generate and test EIP-712 signatures for PandoraService compatibility
+ * @dev Generate and test EIP-712 signatures for FilecoinWarmStorageService compatibility
  *
  * This contract serves two purposes:
  * 1. Generate reference EIP-712 signatures from Solidity (for testing external applications)
@@ -23,8 +23,8 @@ import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
  */
 
 // Simple standalone contract just for EIP-712 testing
-contract TestablePandoraServiceEIP712 is EIP712 {
-    constructor() EIP712("PandoraService", "1") {}
+contract TestableFilecoinWarmStorageServiceEIP712 is EIP712 {
+    constructor() EIP712("FilecoinWarmStorageService", "1") {}
 
     // Re-declare the type hashes from parent contract (they're private)
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
@@ -188,7 +188,7 @@ contract TestablePandoraServiceEIP712 is EIP712 {
 }
 
 contract SignatureFixtureTest is Test {
-    TestablePandoraServiceEIP712 public testContract;
+    TestableFilecoinWarmStorageServiceEIP712 public testContract;
 
     // Test private key (well-known test key, never use in production)
     uint256 constant TEST_PRIVATE_KEY = 0x1234567890123456789012345678901234567890123456789012345678901234;
@@ -202,7 +202,7 @@ contract SignatureFixtureTest is Test {
 
     function setUp() public {
         // Deploy the contract with proper EIP712 domain initialization
-        testContract = new TestablePandoraServiceEIP712();
+        testContract = new TestableFilecoinWarmStorageServiceEIP712();
     }
 
     /**
@@ -346,7 +346,7 @@ contract SignatureFixtureTest is Test {
         console.log("=== EIP-712 TYPE STRUCTURES ===");
         console.log("");
         console.log("Domain:");
-        console.log('  name: "PandoraService"');
+        console.log('  name: "FilecoinWarmStorageService"');
         console.log('  version: "1"');
         console.log('  chainId: %d', block.chainid);
         console.log('  verifyingContract: %s', address(testContract));
