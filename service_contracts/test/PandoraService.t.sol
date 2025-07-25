@@ -10,6 +10,7 @@ import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -163,6 +164,12 @@ contract MockPDPVerifier {
     function getDataSetStorageProvider(uint256 dataSetId) external view returns (address) {
         return dataSetStorageProviders[dataSetId];
     }
+
+    function piecesScheduledRemove(uint256 dataSetId, uint256[] memory pieceIds, address listenerAddr, bytes calldata extraData) external {
+        if (listenerAddr != address(0)) {
+            PDPListener(listenerAddr).piecesScheduledRemove(dataSetId, pieceIds, extraData);
+        }
+    }
 }
 
 contract PandoraServiceTest is Test {
@@ -192,7 +199,6 @@ contract PandoraServiceTest is Test {
 
     // Test parameters
     uint256 public initialOperatorCommissionBps = 500; // 5%
-    uint256 public dataSetId;
     bytes public extraData;
     
     // Test URLs and peer IDs for registry
@@ -1337,7 +1343,7 @@ contract PandoraServiceTest is Test {
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
         // Only the data set's payee is updated
-        (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
+        ( , address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, sp2, "Payee should be updated to new storage provider");
 
         // Registry state is unchanged
@@ -1468,6 +1474,129 @@ contract PandoraServiceTest is Test {
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
         ( , address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, sp2, "Payee should be updated to new storage provider");
+    }
+
+    // ============= Data Set Payment Termination Tests =============
+
+      function testTerminateDataSetPaymentLifecycle() public {
+        console.log("=== Test: Data Set Payment Termination Lifecycle ===");
+        
+        // 1. Setup: Create a dataset with CDN enabled.
+        console.log("1. Setting up: Registering and approving storage provider");
+        // Register and approve storage provider
+        vm.prank(storageProvider);
+        pdpServiceWithPayments.registerServiceProvider(validServiceUrl, validPeerId);
+        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+
+        // Prepare data set creation data
+        PandoraService.DataSetCreateData memory createData = PandoraService.DataSetCreateData({
+            metadata: "Test Data Set for Termination",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: true // CDN enabled
+        });
+
+        bytes memory encodedData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
+        // Setup client payment approval and deposit
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6, // rate allowance
+            1000e6, // lockup allowance
+            365 days // max lockup period
+        );
+        uint256 depositAmount = 100e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(address(mockUSDFC), client, depositAmount);
+        vm.stopPrank();
+
+        // Create data set
+        makeSignaturePass(client);
+        vm.prank(storageProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        console.log("Created data set with ID:", dataSetId);
+        
+        // 2. Submit a valid proof.
+        console.log("\n2. Starting proving period and submitting proof");
+        // Start proving period
+        uint256 maxProvingPeriod = pdpServiceWithPayments.getMaxProvingPeriod();
+        uint256 challengeWindow = pdpServiceWithPayments.challengeWindow();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, ""); 
+
+        // Warp to challenge window
+        uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
+        vm.roll(provingDeadline - (challengeWindow / 2));
+        
+        // Submit proof
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        console.log("Proof submitted successfully");
+
+        // 3. Terminate payment
+        console.log("\n3. Terminating payment rails");
+        console.log("Current block:", block.number);
+        vm.prank(client); // client terminates
+        pdpServiceWithPayments.terminateDataSetPayment(dataSetId);
+
+        // 4. Assertions
+        // Check paymentEndEpoch is set
+        PandoraService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        assertTrue(info.paymentEndEpoch > 0, "paymentEndEpoch should be set after termination");
+        console.log("Payment termination successful. Payment end epoch:", info.paymentEndEpoch);
+
+        // Ensure piecesAdded reverts
+        console.log("\n4. Testing operations after termination");
+        console.log("Testing piecesAdded - should revert (payment terminated)");
+        vm.prank(address(mockPDPVerifier));
+        IPDPTypes.PieceData[] memory pieces = new IPDPTypes.PieceData[](1);
+        bytes memory pieceData = hex"010203";
+        pieces[0] = IPDPTypes.PieceData({piece: Cids.Cid({data: pieceData}), rawSize: 3});
+        bytes memory addPiecesExtraData = abi.encode(FAKE_SIGNATURE, "some metadata");
+        makeSignaturePass(client);
+        vm.expectRevert("failed to execute operation: dataset payment has already been terminated");
+        pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieces, addPiecesExtraData);
+        console.log("[OK] piecesAdded correctly reverted after termination");
+
+        // Wait for payment end epoch to elapse
+        console.log("\n5. Rolling past payment end epoch");
+        console.log("Current block:", block.number);
+        console.log("Rolling to block:", info.paymentEndEpoch + 1);
+        vm.roll(info.paymentEndEpoch + 1);
+
+        // Ensure other functions also revert now
+        console.log("\n6. Testing operations after payment end epoch");
+        // piecesScheduledRemove
+        console.log("Testing piecesScheduledRemove - should revert (beyond payment end epoch)");
+        vm.prank(address(mockPDPVerifier));
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(client);
+        vm.expectRevert("cannot execute operation: dataset is beyond it's payment end epoch: remove proofset to make progress");
+        mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
+        console.log("[OK] piecesScheduledRemove correctly reverted");
+
+        // possessionProven
+        console.log("Testing possessionProven - should revert (beyond payment end epoch)");
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("cannot execute operation: dataset is beyond it's payment end epoch: remove proofset to make progress");
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        console.log("[OK] possessionProven correctly reverted");
+
+        // nextProvingPeriod
+        console.log("Testing nextProvingPeriod - should revert (beyond payment end epoch)");
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert("cannot execute operation: dataset is beyond it's payment end epoch: remove proofset to make progress");
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
+        console.log("[OK] nextProvingPeriod correctly reverted");
+        
+        console.log("\n=== Test completed successfully! ===");
     }
 }
 
