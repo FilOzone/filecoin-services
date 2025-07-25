@@ -83,6 +83,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         string[] pieceMetadata; // Array of metadata for each piece
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the data set is registered for CDN add-on
+        uint256 paymentEndEpoch; // 0 if payment is not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -538,6 +539,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         IPDPTypes.PieceData[] memory pieceData,
         bytes calldata extraData
     ) external onlyPDPVerifier {
+        requirePaymentNotTerminated(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, "Data set not registered with payment system");
@@ -572,6 +574,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         external
         onlyPDPVerifier
     {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
@@ -608,6 +611,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         uint256, /*seed*/
         uint256 challengeCount
     ) external onlyPDPVerifier {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
         if (provenThisPeriod[dataSetId]) {
             revert("Only one proof of possession allowed per proving period. Open a new proving period.");
         }
@@ -641,6 +645,7 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
         external
         onlyPDPVerifier
     {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
         // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline = block.number + getMaxProvingPeriod();
@@ -737,6 +742,44 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
 
         // Emit event for off-chain tracking
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
+    }
+
+    function terminateDataSetPayment(uint256 dataSetId) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, "invalid dataset ID");
+
+        // Check if already terminated
+        require(info.paymentEndEpoch == 0, "dataset payment already terminated");
+
+        // Check authorization
+        require(msg.sender == info.payer || msg.sender == info.payee, "Only payer or payee can terminate dataset payment");
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        if (info.pdpRailId != 0) {
+            payments.terminateRail(info.pdpRailId);
+        }
+        if (info.withCDN) {
+            if (info.cacheMissRailId != 0) {
+                payments.terminateRail(info.cacheMissRailId);
+            }
+            if (info.cdnRailId != 0) {
+                payments.terminateRail(info.cdnRailId);
+            }
+        }
+    }
+
+    function requirePaymentNotTerminated(uint256 dataSetId) internal {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, "invalid dataset ID");
+        require(info.paymentEndEpoch == 0, "failed to execute operation: dataset payment has already been terminated");
+    }
+
+    function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        if (info.paymentEndEpoch != 0) {
+            require(block.number <= info.paymentEndEpoch, "cannot execute operation: dataset is beyond it's payment end epoch: remove proofset to make progress");
+        }
     }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
@@ -1391,11 +1434,14 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
                 metadata: storageInfo.metadata,
                 pieceMetadata: storageInfo.pieceMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
-                withCDN: storageInfo.withCDN
+                withCDN: storageInfo.withCDN,
+                paymentEndEpoch: storageInfo.paymentEndEpoch
             });
         }
         return dataSets;
     }
+
+    
 
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
@@ -1466,5 +1512,24 @@ contract PandoraService is PDPListener, IValidator, Initializable, UUPSUpgradeab
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    function railTerminated(uint256 railId, address terminator, uint256 endEpoch)
+        external
+        override
+    {
+        require(msg.sender == paymentsContractAddress, "Caller is not the Payments contract");
+
+        if (terminator != address(this)) {
+            revert("cannot terminate rail using Payments contract: call `terminateProofsetRails` on the service contract");
+        }
+
+        uint256 dataSetId = railToDataSet[railId];
+        if (dataSetId != 0) {
+            DataSetInfo storage info = dataSetInfo[dataSetId];
+            if (info.paymentEndEpoch == 0) {
+                info.paymentEndEpoch = endEpoch;
+            }
+        }
     }
 }
