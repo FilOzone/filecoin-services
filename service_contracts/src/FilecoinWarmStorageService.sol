@@ -64,7 +64,7 @@ contract FilecoinWarmStorageService is
     uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Burn Address
-    address constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
+    address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
     // Dynamic fee values based on token decimals
     uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
@@ -1176,7 +1176,7 @@ contract FilecoinWarmStorageService is
         
         // Burn one-time fee to register
         require(msg.value == SP_REGISTRATION_FEE, "Incorrect registration fee");
-        (bool sent, ) = BURN_ACTOR.call{value: msg.value}("");
+        (bool sent, ) = BURN_ADDRESS.call{value: msg.value}("");
         require(sent, "Burn failed");
 
         // Store pending registration
