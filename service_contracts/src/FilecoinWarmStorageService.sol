@@ -102,6 +102,7 @@ contract FilecoinWarmStorageService is
         string[] pieceMetadata; // Array of metadata for each piece
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the data set is registered for CDN add-on
+        uint256 paymentEndEpoch; // 0 if payment is not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -198,6 +199,7 @@ contract FilecoinWarmStorageService is
     /// @dev This fee is burned to prevent spam registrations
     uint256 public constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
+
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
         _;
@@ -530,6 +532,7 @@ contract FilecoinWarmStorageService is
         IPDPTypes.PieceData[] memory pieceData,
         bytes calldata extraData
     ) external onlyPDPVerifier {
+        requirePaymentNotTerminated(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, "Data set not registered with payment system");
@@ -558,6 +561,7 @@ contract FilecoinWarmStorageService is
         external
         onlyPDPVerifier
     {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, "Data set not registered with payment system");
@@ -586,6 +590,7 @@ contract FilecoinWarmStorageService is
         uint256, /*seed*/
         uint256 challengeCount
     ) external onlyPDPVerifier {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
         if (provenThisPeriod[dataSetId]) {
             revert("Only one proof of possession allowed per proving period. Open a new proving period.");
         }
@@ -619,6 +624,7 @@ contract FilecoinWarmStorageService is
         external
         onlyPDPVerifier
     {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
         // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline = block.number + getMaxProvingPeriod();
@@ -715,6 +721,44 @@ contract FilecoinWarmStorageService is
 
         // Emit event for off-chain tracking
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
+    }
+
+    function terminateDataSetPayment(uint256 dataSetId) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, "invalid dataset ID");
+
+        // Check if already terminated
+        require(info.paymentEndEpoch == 0, "dataset payment already terminated");
+
+        // Check authorization
+        require(
+            msg.sender == info.payer || msg.sender == info.payee, "Only payer or payee can terminate data set payment"
+        );
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        payments.terminateRail(info.pdpRailId);
+
+        if (info.withCDN) {
+            payments.terminateRail(info.cacheMissRailId);
+            payments.terminateRail(info.cdnRailId);
+        }
+    }
+
+    function requirePaymentNotTerminated(uint256 dataSetId) internal view {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, "invalid dataset ID");
+        require(info.paymentEndEpoch == 0, "data set payment has already been terminated");
+    }
+
+    function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        if (info.paymentEndEpoch != 0) {
+            require(
+                block.number <= info.paymentEndEpoch,
+                "data set is beyond its payment end epoch: remove data set to make progress"
+            );
+        }
     }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
@@ -1173,10 +1217,10 @@ contract FilecoinWarmStorageService is
 
         // Check if registration is already pending
         require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
-        
+
         // Burn one-time fee to register
         require(msg.value == SP_REGISTRATION_FEE, "Incorrect registration fee");
-        (bool sent, ) = BURN_ADDRESS.call{value: msg.value}("");
+        (bool sent,) = BURN_ADDRESS.call{value: msg.value}("");
         require(sent, "Burn failed");
 
         // Store pending registration
@@ -1329,7 +1373,8 @@ contract FilecoinWarmStorageService is
                 metadata: storageInfo.metadata,
                 pieceMetadata: storageInfo.pieceMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
-                withCDN: storageInfo.withCDN
+                withCDN: storageInfo.withCDN,
+                paymentEndEpoch: storageInfo.paymentEndEpoch
             });
         }
         return dataSets;
@@ -1406,5 +1451,22 @@ contract FilecoinWarmStorageService is
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
+        require(msg.sender == paymentsContractAddress, "Caller is not the Payments contract");
+
+        if (terminator != address(this)) {
+            revert(
+                "cannot terminate rail using Payments contract: call `terminateDataSetPayment` on the service contract"
+            );
+        }
+
+        uint256 dataSetId = railToDataSet[railId];
+        require(dataSetId != 0, "data set does not exist for given rail");
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        if (info.paymentEndEpoch == 0) {
+            info.paymentEndEpoch = endEpoch;
+        }
     }
 }
