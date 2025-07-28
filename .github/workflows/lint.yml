@@ -20,6 +20,5 @@ jobs:
 
       - name: Run Lint
         run: |
-          export PATH="/home/runner/.config/.foundry/bin:$PATH";
           cd service_contracts
           forge fmt --check

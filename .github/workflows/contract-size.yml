@@ -28,4 +28,4 @@ jobs:
         run: sudo apt-get install -y jq
 
       - name: Check contract size
-        run: bash .github/scripts/check-contract-size.sh
+        run: bash service_contracts/tools/check-contract-size.sh
