@@ -7,7 +7,7 @@ import {
   ProviderRejected as ProviderRejectedEvent,
   ProviderRemoved as ProviderRemovedEvent,
   RailRateUpdated as RailRateUpdatedEvent,
-} from "../generated/PandoraService/PandoraService";
+} from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import {
   DataSet,
@@ -190,7 +190,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   const entityId = getEventLogEntityId(event.transaction.hash, event.logIndex);
 
   const dataSet = DataSet.load(dataSetEntityId);
-  if (!dataSet) return; // dataSet doesn't belong to Pandora Service
+  if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   const challengeEpoch = dataSet.nextChallengeEpoch;
   const challengeRange = dataSet.challengeRange;

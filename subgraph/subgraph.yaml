@@ -43,11 +43,11 @@ dataSources:
           handler: handleNextProvingPeriod
       file: ./src/pdp-verifier.ts
   - kind: ethereum
-    name: PandoraService
+    name: FilecoinWarmStorageService
     network: filecoin-testnet
     source:
       address: "0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5"
-      abi: PandoraService
+      abi: FilecoinWarmStorageService
       startBlock: 2730790
     mapping:
       kind: ethereum/events
@@ -61,8 +61,8 @@ dataSources:
         - SumTreeCount
         - FaultRecord
       abis:
-        - name: PandoraService
-          file: ./abis/PandoraService.json
+        - name: FilecoinWarmStorageService
+          file: ./abis/FilecoinWarmStorageService.json
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
@@ -80,4 +80,4 @@ dataSources:
           handler: handleProviderRejected
         - event: "ProviderRemoved(indexed address,indexed uint256)"
           handler: handleProviderRemoved
-      file: ./src/pandora-service.ts
+      file: ./src/filecoin-warm-storage-service.ts

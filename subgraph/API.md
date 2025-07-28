@@ -1,6 +1,6 @@
-# Pandora - GraphQL API Documentation
+# Warm Storage - GraphQL API Documentation
 
-This document provides a comprehensive guide to the GraphQL API for the Pandora subgraph. It includes query examples, available parameters, and entity relationships to help you effectively interact with the Pandora Service data.
+This document provides a comprehensive guide to the GraphQL API for the Warm Storage subgraph. It includes query examples, available parameters, and entity relationships to help you effectively interact with the Warm Storage Service data.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ This document provides a comprehensive guide to the GraphQL API for the Pandora 
 
 ## Overview
 
-The Pandora subgraph indexes data from the Pandora Service on the Filecoin network. It provides structured access to providers, data sets, piece, and data set Rails.
+The Warm Storage subgraph indexes data from the Warm Storage Service on the Filecoin network. It provides structured access to providers, data sets, piece, and data set Rails.
 
 ## Common Query Parameters
 
@@ -682,7 +682,7 @@ query Search($cid: Bytes!) {
 
 ## Integrating with the API
 
-This section provides examples of how to integrate with the Pandora GraphQL API using various JavaScript/TypeScript libraries. Choose the approach that best fits your project's requirements.
+This section provides examples of how to integrate with the Warm Storage GraphQL API using various JavaScript/TypeScript libraries. Choose the approach that best fits your project's requirements.
 
 ### GraphQL Request
 
@@ -1027,6 +1027,6 @@ findPieceByCid();
 
 ## Conclusion
 
-This documentation provides a comprehensive overview of the GraphQL API for the Pandora subgraph. By using these query examples and understanding the entity relationships, you can effectively interact with and analyze data from the Proof of Data Possession protocol on the Filecoin network.
+This documentation provides a comprehensive overview of the GraphQL API for the Warm Storage subgraph. By using these query examples and understanding the entity relationships, you can effectively interact with and analyze data from the Proof of Data Possession protocol on the Filecoin network.
 
 For more information on how to deploy your own subgraph, refer to the [Deployment Guide](./README.md).
