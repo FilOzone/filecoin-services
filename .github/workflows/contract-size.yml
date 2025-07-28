@@ -27,8 +27,5 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Ensure script is executable
-        run: chmod +x .github/scripts/check-contract-size.sh
-
       - name: Check contract size
-        run: .github/scripts/check-contract-size.sh
+        run: bash .github/scripts/check-contract-size.sh
