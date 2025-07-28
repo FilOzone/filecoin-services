@@ -25,7 +25,7 @@ jobs:
           forge install
 
       - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: sudo apt-get install -y jq
 
       - name: Ensure script is executable
         run: chmod +x .github/scripts/check-contract-size.sh
