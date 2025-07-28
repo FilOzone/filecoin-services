@@ -63,6 +63,9 @@ contract FilecoinWarmStorageService is
     uint256 public CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
+    // Burn Address
+    address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
+
     // Dynamic fee values based on token decimals
     uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
 
@@ -191,6 +194,9 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    /// @notice Registration fee required for service providers (1 FIL)
+    /// @dev This fee is burned to prevent spam registrations
+    uint256 public constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
@@ -1157,8 +1163,9 @@ contract FilecoinWarmStorageService is
      * @dev SPs call this to register their service URL and optionally peer ID before approval
      * @param serviceURL The HTTP server URL for provider services
      * @param peerId The IPFS/libp2p peer ID for the provider (optional - pass empty bytes if not available)
+     * @dev Requires exact payment of SP_REGISTRATION_FEE which is burned to f099
      */
-    function registerServiceProvider(string calldata serviceURL, bytes calldata peerId) external {
+    function registerServiceProvider(string calldata serviceURL, bytes calldata peerId) external payable {
         require(!approvedProvidersMap[msg.sender], "Provider already approved");
         require(bytes(serviceURL).length > 0, "Provider service URL cannot be empty");
         require(bytes(serviceURL).length <= 256, "Provider service URL too long (max 256 bytes)");
@@ -1166,6 +1173,11 @@ contract FilecoinWarmStorageService is
 
         // Check if registration is already pending
         require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
+        
+        // Burn one-time fee to register
+        require(msg.value == SP_REGISTRATION_FEE, "Incorrect registration fee");
+        (bool sent, ) = BURN_ADDRESS.call{value: msg.value}("");
+        require(sent, "Burn failed");
 
         // Store pending registration
         pendingProviders[msg.sender] = PendingProviderInfo({
