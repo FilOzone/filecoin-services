@@ -1525,10 +1525,10 @@ contract FilecoinWarmStorageService is
      * @param proofSetId The ID of the proof set
      * @return The resolved beneficiary address
      */
-    function resolveBeneficiary(uint256 proofSetId) public view returns (address) {
-        address beneficiary = proofSetInfo[proofSetId].beneficiary;
+    function resolveBeneficiary(uint256 dataSetId) public view returns (address) {
+        address beneficiary = dataSetInfo[dataSetId].beneficiary;
         if (beneficiary == address(0)) {
-            return proofSetInfo[proofSetId].payee;
+            return dataSetInfo[dataSetId].payee;
         }
         return beneficiary;
     }
