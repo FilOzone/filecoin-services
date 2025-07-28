@@ -9,14 +9,22 @@
 
 set -euo pipefail
 
+# Require contract source folder as argument 1
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <contracts_source_folder>"
+  exit 1
+fi
+
+SRC_DIR="$1"
+
 command -v jq >/dev/null 2>&1 || { echo >&2 "jq is required but not installed."; exit 1; }
 command -v forge >/dev/null 2>&1 || { echo >&2 "forge is required but not installed."; exit 1; }
 
 # Gather contract and library names from service_contracts/src/
 # Only matches [A-Za-z0-9_] in contract/library names (no special characters)
-if [[ -d service_contracts/src/ ]]; then
-    mapfile -t contracts < <(grep -rE '^(contract|library) ' service_contracts/src/ 2>/dev/null | sed -E 's/.*(contract|library) ([A-Za-z0-9_]+).*/\2/')
-else 
+if [[ -d "$SRC_DIR" ]]; then
+    mapfile -t contracts < <(grep -rE '^(contract|library) ' "$SRC_DIR" 2>/dev/null | sed -E 's/.*(contract|library) ([A-Za-z0-9_]+).*/\2/')
+else
     contracts=()
 fi
 
@@ -26,7 +34,7 @@ if [[ ${#contracts[@]} -eq 0 ]]; then
     exit 0
 fi
 
-cd service_contracts || { echo "Failed to change directory to service_contracts"; exit 1; }
+# cd service_contracts || { echo "Failed to change directory to service_contracts"; exit 1; }
 trap 'rm -f contract_sizes.json' EXIT
 
 # Build the contracts, get size info as JSON (ignore non-zero exit to always parse output)
@@ -83,9 +91,6 @@ fi
 if [[ $status -eq 0 ]]; then
   echo "All contracts are within the EIP-170 runtime and EIP-3860 init code size limits."
 fi
-
-# Clean up temporary file
-rm -f contract_sizes.json
 
 # Exit with appropriate status
 exit $status
