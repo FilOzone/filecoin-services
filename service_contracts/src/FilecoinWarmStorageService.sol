@@ -199,6 +199,7 @@ contract FilecoinWarmStorageService is
     /// @dev This fee is burned to prevent spam registrations
     uint256 public constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
+
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
         _;
@@ -730,33 +731,33 @@ contract FilecoinWarmStorageService is
         require(info.paymentEndEpoch == 0, "dataset payment already terminated");
 
         // Check authorization
-        require(msg.sender == info.payer || msg.sender == info.payee, "Only payer or payee can terminate dataset payment");
+        require(
+            msg.sender == info.payer || msg.sender == info.payee, "Only payer or payee can terminate data set payment"
+        );
 
         Payments payments = Payments(paymentsContractAddress);
 
-        if (info.pdpRailId != 0) {
-            payments.terminateRail(info.pdpRailId);
-        }
+        payments.terminateRail(info.pdpRailId);
+
         if (info.withCDN) {
-            if (info.cacheMissRailId != 0) {
-                payments.terminateRail(info.cacheMissRailId);
-            }
-            if (info.cdnRailId != 0) {
-                payments.terminateRail(info.cdnRailId);
-            }
+            payments.terminateRail(info.cacheMissRailId);
+            payments.terminateRail(info.cdnRailId);
         }
     }
 
-    function requirePaymentNotTerminated(uint256 dataSetId) internal {
+    function requirePaymentNotTerminated(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, "invalid dataset ID");
-        require(info.paymentEndEpoch == 0, "failed to execute operation: dataset payment has already been terminated");
+        require(info.paymentEndEpoch == 0, "data set payment has already been terminated");
     }
 
     function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.paymentEndEpoch != 0) {
-            require(block.number <= info.paymentEndEpoch, "cannot execute operation: dataset is beyond it's payment end epoch: remove proofset to make progress");
+            require(
+                block.number <= info.paymentEndEpoch,
+                "data set is beyond its payment end epoch: remove data set to make progress"
+            );
         }
     }
 
@@ -1216,10 +1217,10 @@ contract FilecoinWarmStorageService is
 
         // Check if registration is already pending
         require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
-        
+
         // Burn one-time fee to register
         require(msg.value == SP_REGISTRATION_FEE, "Incorrect registration fee");
-        (bool sent, ) = BURN_ADDRESS.call{value: msg.value}("");
+        (bool sent,) = BURN_ADDRESS.call{value: msg.value}("");
         require(sent, "Burn failed");
 
         // Store pending registration
@@ -1379,8 +1380,6 @@ contract FilecoinWarmStorageService is
         return dataSets;
     }
 
-    
-
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
      * @dev Implements the IValidator interface function
@@ -1454,22 +1453,20 @@ contract FilecoinWarmStorageService is
         });
     }
 
-    function railTerminated(uint256 railId, address terminator, uint256 endEpoch)
-        external
-        override
-    {
+    function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
         require(msg.sender == paymentsContractAddress, "Caller is not the Payments contract");
 
         if (terminator != address(this)) {
-            revert("cannot terminate rail using Payments contract: call `terminateProofsetRails` on the service contract");
+            revert(
+                "cannot terminate rail using Payments contract: call `terminateDataSetPayment` on the service contract"
+            );
         }
 
         uint256 dataSetId = railToDataSet[railId];
-        if (dataSetId != 0) {
-            DataSetInfo storage info = dataSetInfo[dataSetId];
-            if (info.paymentEndEpoch == 0) {
-                info.paymentEndEpoch = endEpoch;
-            }
+        require(dataSetId != 0, "data set does not exist for given rail");
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        if (info.paymentEndEpoch == 0) {
+            info.paymentEndEpoch = endEpoch;
         }
     }
 }
