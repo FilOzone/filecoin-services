@@ -1,0 +1,33 @@
+name: Solidity Contract Size Check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  check_contract_size:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+      
+      - name: Install Dependencies
+        run: |
+          cd service_contracts 
+          forge install
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Check contract size
+        run: |
+          cd service_contracts
+          make contract-size-check

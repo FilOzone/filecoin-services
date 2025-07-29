@@ -6,6 +6,9 @@ out = 'out'
 libs = ['lib']
 cache_path = 'cache'
 solc = "0.8.27"
+via_ir = true
+optimizer = true
+optimizer_runs = 200
 
 # For dependencies
 remappings = [
@@ -16,9 +19,6 @@ remappings = [
     '@pdp/=lib/pdp/src/',
     '@pythnetwork/pyth-sdk-solidity/=lib/pdp/lib/pyth-sdk-solidity/',
 ]
-
-optimizer_runs = 1000000000
-via_ir = true
 
 # Allow reading test data files
 fs_permissions = [{ access = "read", path = "./test" }]
