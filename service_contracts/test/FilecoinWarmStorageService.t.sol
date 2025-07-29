@@ -1425,9 +1425,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes memory testExtraData = new bytes(0);
         // Call directly as PDPVerifier with wrong old storage provider
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(abi.encodeWithSelector(
-            Errors.OldStorageProviderMismatch.selector, 1, sp1, sp2
-        ));
+        vm.expectRevert(abi.encodeWithSelector(Errors.OldStorageProviderMismatch.selector, 1, sp1, sp2));
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp2, sp2, testExtraData);
     }
 
@@ -1617,21 +1615,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         pieceIds[0] = 0;
         bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
         makeSignaturePass(client);
-        vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+            )
+        );
         mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
         console.log("[OK] piecesScheduledRemove correctly reverted");
 
         // possessionProven
         console.log("Testing possessionProven - should revert (beyond payment end epoch)");
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+            )
+        );
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         console.log("[OK] possessionProven correctly reverted");
 
         // nextProvingPeriod
         console.log("Testing nextProvingPeriod - should revert (beyond payment end epoch)");
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+            )
+        );
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
         console.log("[OK] nextProvingPeriod correctly reverted");
 
