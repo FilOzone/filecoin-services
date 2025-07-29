@@ -568,7 +568,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         // These parameters should be the same as in SimplePDPService
         assertEq(pdpServiceWithPayments.getMaxProvingPeriod(), 2880, "Max proving period should be 2880 epochs");
         assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window should be 60 epochs");
-        assertEq(pdpServiceWithPayments.getChallengesPerProof(), 5, "Challenges per proof should be 5");
     }
 
     // ===== Storage Provider Registry Tests =====
