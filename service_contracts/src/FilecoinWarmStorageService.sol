@@ -59,31 +59,31 @@ contract FilecoinWarmStorageService is
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
     // Pricing constants
-    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
-    uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
-    uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 public STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
+    uint256 public CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
     // Dynamic fee values based on token decimals
-    uint256 private immutable DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
+    uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
-    uint8 private immutable tokenDecimals;
+    uint8 public tokenDecimals;
 
     // External contract addresses
-    address public immutable pdpVerifierAddress;
-    address public immutable paymentsContractAddress;
-    address public immutable usdfcTokenAddress;
-    address public immutable filCDNAddress;
+    address public pdpVerifierAddress;
+    address public paymentsContractAddress;
+    address public usdfcTokenAddress;
+    address public filCDNAddress;
 
     // Commission rate in basis points (100 = 1%)
-    uint256 public immutable operatorCommissionBps;
+    uint256 public operatorCommissionBps;
 
     // Commission rates for different service types
-    uint256 public immutable basicServiceCommissionBps; // 0% for basic service (no CDN add-on)
-    uint256 public immutable cdnServiceCommissionBps; // 0% for CDN service
+    uint256 public basicServiceCommissionBps; // 0% for basic service (no CDN add-on)
+    uint256 public cdnServiceCommissionBps; // 0% for CDN service
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -143,7 +143,7 @@ contract FilecoinWarmStorageService is
 
     // ========== Storage Provider Registry State ==========
 
-    uint256 private nextServiceProviderId = 1;
+    uint256 public nextServiceProviderId = 1;
 
     struct ApprovedProviderInfo {
         address storageProvider;
