@@ -27,7 +27,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "0.1.0";
+    string private constant VERSION = "0.1.0";
 
     // Events
     event ContractUpgraded(string version, address implementation);
@@ -48,15 +48,15 @@ contract FilecoinWarmStorageService is
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
 
     // Constants
-    uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
-    uint256 public constant NO_PROVING_DEADLINE = 0;
-    uint256 public constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 public constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
-    uint256 public constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
-    uint256 public constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
-    uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
-    uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
-    uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
+    uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
+    uint256 private constant NO_PROVING_DEADLINE = 0;
+    uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
+    uint256 private constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
+    uint256 private constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
+    uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
+    uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
+    uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
     // Pricing constants
     uint256 public STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
@@ -197,7 +197,7 @@ contract FilecoinWarmStorageService is
 
     /// @notice Registration fee required for service providers (1 FIL)
     /// @dev This fee is burned to prevent spam registrations
-    uint256 public constant SP_REGISTRATION_FEE = 1 ether;
+    uint256 private constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
