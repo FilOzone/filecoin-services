@@ -281,14 +281,15 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService();
-        bytes memory initializeData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
+        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
             filCDN,
-            initialOperatorCommissionBps,
+            initialOperatorCommissionBps
+        );
+        bytes memory initializeData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60) // challengeWindowSize
         );
@@ -349,15 +350,6 @@ contract FilecoinWarmStorageServiceTest is Test {
             60,
             "Challenge window size storage variable should be set correctly"
         );
-        assertEq(pdpServiceWithPayments.tokenDecimals(), mockUSDFC.decimals(), "Token decimals should be correct");
-
-        // Check fee constants are correctly calculated based on token decimals
-        uint256 expectedDataSetCreationFee = (1 * 10 ** mockUSDFC.decimals()) / 10; // 0.1 USDFC
-        assertEq(
-            pdpServiceWithPayments.DATA_SET_CREATION_FEE(),
-            expectedDataSetCreationFee,
-            "Data set creation fee should be set correctly"
-        );
     }
 
     function testCreateDataSetCreatesRailAndChargesFee() public {
@@ -392,7 +384,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.DATA_SET_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 1e6; // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
@@ -479,7 +471,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), storageProvider);
 
         // Calculate expected client balance
-        uint256 expectedClientFundsAfter = clientFundsBefore - pdpServiceWithPayments.DATA_SET_CREATION_FEE();
+        uint256 expectedClientFundsAfter = clientFundsBefore - 1e5;
 
         // Verify balances changed correctly (one-time fee transferred)
         assertEq(
@@ -520,7 +512,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 10 * pdpServiceWithPayments.DATA_SET_CREATION_FEE(); // 10x the required fee
+        uint256 depositAmount = 1e6; // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
@@ -666,7 +658,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify IDs assigned sequentially
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP1 should have ID 1");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), 2, "SP2 should have ID 2");
-        assertEq(pdpServiceWithPayments.nextServiceProviderId(), 3, "Next ID should be 3");
     }
 
     function testOnlyOwnerCanApprove() public {
@@ -1654,7 +1645,19 @@ contract FilecoinWarmStorageServiceTest is Test {
 }
 
 contract SignatureCheckingService is FilecoinWarmStorageService {
-    constructor() {}
+    constructor(
+        address _pdpVerifierAddress,
+        address _paymentsContractAddress,
+        address _usdfcTokenAddress,
+        address _filCDNAddress,
+        uint256 _initialOperatorCommissionBps
+    ) FilecoinWarmStorageService(
+        _pdpVerifierAddress,
+        _paymentsContractAddress,
+        _usdfcTokenAddress,
+        _filCDNAddress,
+        _initialOperatorCommissionBps
+    ) {}
 
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
@@ -1701,14 +1704,15 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         payments = Payments(address(paymentsProxy));
 
         // Deploy and initialize the service
-        SignatureCheckingService serviceImpl = new SignatureCheckingService();
-        bytes memory initData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
+        SignatureCheckingService serviceImpl = new SignatureCheckingService(
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
             filCDN,
-            0, // 0% commission
+            0 // 0% commission
+        );
+        bytes memory initData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60) // challengeWindowSize
         );
@@ -1796,14 +1800,15 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
-        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService();
-        bytes memory initData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
+        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
             filCDN,
-            0, // 0% commission
+            0 // 0% commission
+        );
+        bytes memory initData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60) // challengeWindowSize
         );
