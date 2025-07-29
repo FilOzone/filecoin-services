@@ -168,8 +168,8 @@ contract FilecoinWarmStorageService is
     mapping(address => uint256) public providerToId;
 
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
-    uint64 public maxProvingPeriod;
-    uint256 public challengeWindowSize;
+    uint64 private maxProvingPeriod;
+    uint256 private challengeWindowSize;
 
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);

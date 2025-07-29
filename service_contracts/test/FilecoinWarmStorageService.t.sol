@@ -340,12 +340,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(pdpServiceWithPayments.getMaxProvingPeriod(), 2880, "Max proving period should be set correctly");
         assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window size should be set correctly");
         assertEq(
-            pdpServiceWithPayments.maxProvingPeriod(),
+            pdpServiceWithPayments.getMaxProvingPeriod(),
             2880,
             "Max proving period storage variable should be set correctly"
         );
         assertEq(
-            pdpServiceWithPayments.challengeWindowSize(),
+            pdpServiceWithPayments.challengeWindow(),
             60,
             "Challenge window size storage variable should be set correctly"
         );
@@ -1822,9 +1822,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.initializeV2(newMaxProvingPeriod, newChallengeWindowSize);
 
         // Verify the values were set correctly
-        assertEq(warmStorageService.maxProvingPeriod(), newMaxProvingPeriod, "Max proving period should be updated");
+        assertEq(warmStorageService.getMaxProvingPeriod(), newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(
-            warmStorageService.challengeWindowSize(), newChallengeWindowSize, "Challenge window size should be updated"
+            warmStorageService.challengeWindow(), newChallengeWindowSize, "Challenge window size should be updated"
         );
         assertEq(
             warmStorageService.getMaxProvingPeriod(),
