@@ -1213,13 +1213,14 @@ contract FilecoinWarmStorageService is
             s := mload(add(signature, 64))
             v := byte(0, mload(add(signature, 96)))
         }
+        uint8 originalV = v;
 
         // If v is not 27 or 28, adjust it (for some wallets)
         if (v < 27) {
             v += 27;
         }
 
-        require(v == 27 || v == 28, Errors.UnsupportedSignatureV(v));
+        require(v == 27 || v == 28, Errors.UnsupportedSignatureV(originalV));
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
