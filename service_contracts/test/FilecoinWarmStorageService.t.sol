@@ -328,14 +328,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             "Operator commission should be set correctly"
         );
         assertEq(
-            pdpServiceWithPayments.basicServiceCommissionBps(),
+            pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
-            "Basic service commission should be set correctly"
-        );
-        assertEq(
-            pdpServiceWithPayments.cdnServiceCommissionBps(),
-            0, // 0%
-            "CDN service commission should be set correctly"
+            "Service commission should be set correctly"
         );
         assertEq(pdpServiceWithPayments.getMaxProvingPeriod(), 2880, "Max proving period should be set correctly");
         assertEq(pdpServiceWithPayments.challengeWindow(), 60, "Challenge window size should be set correctly");

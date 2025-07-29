@@ -81,9 +81,8 @@ contract FilecoinWarmStorageService is
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
 
-    // Commission rates for different service types
-    uint256 public basicServiceCommissionBps; // 0% for basic service (no CDN add-on)
-    uint256 public cdnServiceCommissionBps; // 0% for CDN service
+    // Commission rates
+    uint256 public serviceCommissionBps;
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -239,9 +238,8 @@ contract FilecoinWarmStorageService is
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
 
-        // Set commission rates: 0% for basic, 0% for service w/ CDN add-on
-        basicServiceCommissionBps = 0; // 0%
-        cdnServiceCommissionBps = 0; // 0%
+        // Set commission rates
+        serviceCommissionBps = 0; // 0%
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -283,14 +281,11 @@ contract FilecoinWarmStorageService is
     /**
      * @notice Updates the service commission rates
      * @dev Only callable by the contract owner
-     * @param newBasicCommissionBps New commission rate for basic service (no CDN) in basis points
-     * @param newCDNCommissionBps New commission rate for CDN service in basis points
+     * @param newCommissionBps New commission rate for basic service (no CDN) in basis points
      */
-    function updateServiceCommission(uint256 newBasicCommissionBps, uint256 newCDNCommissionBps) external onlyOwner {
-        require(newBasicCommissionBps <= COMMISSION_MAX_BPS, "Basic commission exceeds maximum");
-        require(newCDNCommissionBps <= COMMISSION_MAX_BPS, "CDN commission exceeds maximum");
-        basicServiceCommissionBps = newBasicCommissionBps;
-        cdnServiceCommissionBps = newCDNCommissionBps;
+    function updateServiceCommission(uint256 newCommissionBps) external onlyOwner {
+        require(newCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
+        serviceCommissionBps = newCommissionBps;
     }
 
     // SLA specification functions setting values for PDP service providers
@@ -418,7 +413,7 @@ contract FilecoinWarmStorageService is
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
         info.metadata = createData.metadata;
-        info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
+        info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
 
@@ -1034,27 +1029,20 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Get the effective rates after commission for both service types
-     * @return basicServiceFee Service fee for basic service (per TiB per month)
-     * @return spPaymentBasic SP payment for basic service (per TiB per month)
-     * @return cdnServiceFee Service fee with CDN service (per TiB per month)
-     * @return spPaymentWithCDN SP payment with CDN service (per TiB per month)
+     * @return serviceFee Service fee for basic service (per TiB per month)
+     * @return spPayment SP payment (per TiB per month)
      */
     function getEffectiveRates()
         external
         view
-        returns (uint256 basicServiceFee, uint256 spPaymentBasic, uint256 cdnServiceFee, uint256 spPaymentWithCDN)
+        returns (uint256 serviceFee, uint256 spPayment)
     {
-        uint256 basicTotal = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
-        uint256 cdnTotal =
-            (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH) * (10 ** uint256(tokenDecimals));
+        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
 
-        // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
-        basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
-        spPaymentBasic = basicTotal - basicServiceFee;
+        serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
+        spPayment = total - serviceFee;
 
-        // CDN service (40% commission = 1.2 USDFC service, 1.8 USDFC to SP)
-        cdnServiceFee = (cdnTotal * cdnServiceCommissionBps) / COMMISSION_MAX_BPS;
-        spPaymentWithCDN = cdnTotal - cdnServiceFee;
+        return (serviceFee, spPayment);
     }
 
     /**
