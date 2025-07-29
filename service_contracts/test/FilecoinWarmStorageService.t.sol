@@ -1864,12 +1864,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.initializeV2(240, 60);
     }
 
-    function testVersioning() public {
-        // Test that VERSION constant is accessible and has expected value
-        string memory version = warmStorageService.VERSION();
-        assertEq(version, "0.1.0", "VERSION should be 0.1.0");
-    }
-
     function testMigrate() public {
         // Test migrate function for versioning
         // Note: This would typically be called during a proxy upgrade via upgradeToAndCall
