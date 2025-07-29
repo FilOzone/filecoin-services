@@ -1032,11 +1032,7 @@ contract FilecoinWarmStorageService is
      * @return serviceFee Service fee for basic service (per TiB per month)
      * @return spPayment SP payment (per TiB per month)
      */
-    function getEffectiveRates()
-        external
-        view
-        returns (uint256 serviceFee, uint256 spPayment)
-    {
+    function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
         uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
 
         serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
