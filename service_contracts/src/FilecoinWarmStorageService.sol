@@ -49,6 +49,7 @@ contract FilecoinWarmStorageService is
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
+    uint256 private constant CHALLENGES_PER_PROOF = 5;
     uint256 private constant NO_PROVING_DEADLINE = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
     uint256 private constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
@@ -342,11 +343,6 @@ contract FilecoinWarmStorageService is
         return thisChallengeWindowStart(setId);
     }
 
-    // Challenges / merkle inclusion proofs provided per data set
-    function getChallengesPerProof() public pure returns (uint64) {
-        return 5;
-    }
-
     // Getters
     function getAllApprovedProviders() external view returns (ApprovedProviderInfo[] memory) {
         // Handle edge case: no providers have been registered
@@ -594,7 +590,7 @@ contract FilecoinWarmStorageService is
         if (provenThisPeriod[dataSetId]) {
             revert("Only one proof of possession allowed per proving period. Open a new proving period.");
         }
-        if (challengeCount < getChallengesPerProof()) {
+        if (challengeCount < CHALLENGES_PER_PROOF) {
             revert("Invalid challenge count < 5");
         }
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
