@@ -89,7 +89,7 @@ contract FilecoinWarmStorageService is
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
     // Mapping from data set ID to piece ID to metadata
-    mapping(uint256 => mapping(uint256 => string)) public dataSetPieceMetadata;
+    mapping(uint256 => mapping(uint256 => string)) private dataSetPieceMetadata;
 
     // Storage for data set payment information
     struct DataSetInfo {
