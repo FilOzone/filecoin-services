@@ -257,12 +257,11 @@ contract FilecoinWarmStorageService is
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /**
-     * @notice Initializes the new proving period parameters for contract upgrade
-     * @dev This function should be called after upgrading to set the new proving period constants
+     * @notice Sets new proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      */
-    function initializeV2(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public reinitializer(2) {
+    function configureProvingPeriod(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) external onlyOwner {
         require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
         require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
 

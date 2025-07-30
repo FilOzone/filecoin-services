@@ -1813,13 +1813,13 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService = FilecoinWarmStorageService(address(warmStorageProxy));
     }
 
-    function testInitializeV2() public {
-        // Test that we can call initializeV2 to set new proving period parameters
+    function testConfigureProvingPeriod() public {
+        // Test that we can call configureProvingPeriod to set new proving period parameters
         uint64 newMaxProvingPeriod = 120; // 2 hours
         uint256 newChallengeWindowSize = 30;
 
         // This should work since we're using reinitializer(2)
-        warmStorageService.initializeV2(newMaxProvingPeriod, newChallengeWindowSize);
+        warmStorageService.configureProvingPeriod(newMaxProvingPeriod, newChallengeWindowSize);
 
         // Verify the values were set correctly
         assertEq(warmStorageService.maxProvingPeriod(), newMaxProvingPeriod, "Max proving period should be updated");
@@ -1836,32 +1836,23 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         );
     }
 
-    function testInitializeV2WithInvalidParameters() public {
-        // Test that initializeV2 validates parameters correctly
+    function testConfigureProvingPeriodWithInvalidParameters() public {
+        // Test that configureChallengePeriod validates parameters correctly
 
         // Test zero max proving period
         vm.expectRevert("Max proving period must be greater than zero");
-        warmStorageService.initializeV2(0, 30);
+        warmStorageService.configureProvingPeriod(0, 30);
 
         // Test zero challenge window size
         vm.expectRevert("Invalid challenge window size");
-        warmStorageService.initializeV2(120, 0);
+        warmStorageService.configureProvingPeriod(120, 0);
 
         // Test challenge window size >= max proving period
         vm.expectRevert("Invalid challenge window size");
-        warmStorageService.initializeV2(120, 120);
+        warmStorageService.configureProvingPeriod(120, 120);
 
         vm.expectRevert("Invalid challenge window size");
-        warmStorageService.initializeV2(120, 150);
-    }
-
-    function testInitializeV2OnlyOnce() public {
-        // Test that initializeV2 can only be called once
-        warmStorageService.initializeV2(120, 30);
-
-        // Second call should fail - expecting the InvalidInitialization() custom error
-        vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
-        warmStorageService.initializeV2(240, 60);
+        warmStorageService.configureProvingPeriod(120, 150);
     }
 
     function testVersioning() public {
