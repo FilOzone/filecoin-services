@@ -233,10 +233,10 @@ contract FilecoinWarmStorageService is
                 Errors.CommissionType.Operator, COMMISSION_MAX_BPS, _initialOperatorCommissionBps
             )
         );
-        require(_maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
+        require(maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
         require(
-            _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
-            Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
+            challengeWindowSize > 0 && challengeWindowSize < maxProvingPeriod,
+            Errors.InvalidChallengeWindowSize(challengeWindowSize, maxProvingPeriod)
         );
 
         pdpVerifierAddress = _pdpVerifierAddress;
@@ -613,7 +613,7 @@ contract FilecoinWarmStorageService is
             revert Errors.ProofAlreadySubmitted(dataSetId);
         }
 
-        uint256 expectedChallengeCount = getChallengesPerProof();
+        uint256 expectedChallengeCount = CHALLENGES_PER_PROOF;
         if (challengeCount < expectedChallengeCount) {
             revert Errors.InvalidChallengeCount(dataSetId, expectedChallengeCount, challengeCount);
         }
