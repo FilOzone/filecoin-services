@@ -48,6 +48,13 @@ if ! jq empty contract_sizes.json 2>/dev/null; then
     exit 1
 fi
 
+if jq -e '. == {}' contract_sizes.json >/dev/null; then
+    echo "forge did not find any contracts. forge build:"
+    # This usually means build failure
+    forge build
+    exit 1
+fi
+
 json=$(cat contract_sizes.json)
 
 # Filter JSON: keep only contracts/libraries from src/
