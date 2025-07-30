@@ -241,10 +241,7 @@ contract FilecoinWarmStorageService is
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
     }
 
-    function initialize(
-        uint64 _maxProvingPeriod,
-        uint256 _challengeWindowSize
-    ) public initializer {
+    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");

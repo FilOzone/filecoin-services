@@ -282,11 +282,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            address(mockUSDFC),
-            filCDN,
-            initialOperatorCommissionBps
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, initialOperatorCommissionBps
         );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
@@ -1651,13 +1647,15 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _usdfcTokenAddress,
         address _filCDNAddress,
         uint256 _initialOperatorCommissionBps
-    ) FilecoinWarmStorageService(
-        _pdpVerifierAddress,
-        _paymentsContractAddress,
-        _usdfcTokenAddress,
-        _filCDNAddress,
-        _initialOperatorCommissionBps
-    ) {}
+    )
+        FilecoinWarmStorageService(
+            _pdpVerifierAddress,
+            _paymentsContractAddress,
+            _usdfcTokenAddress,
+            _filCDNAddress,
+            _initialOperatorCommissionBps
+        )
+    {}
 
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
