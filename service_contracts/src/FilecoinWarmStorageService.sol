@@ -81,6 +81,7 @@ contract FilecoinWarmStorageService is
     // Commission rate in basis points (100 = 1%)
     uint256 public operatorCommissionBps;
 
+
     // Commission rates for different service types
     uint256 public basicServiceCommissionBps; // 0% for basic service (no CDN add-on)
     uint256 public cdnServiceCommissionBps; // 0% for CDN service
@@ -96,7 +97,8 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
         uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
-        address payee; // SP's beneficiary address
+        address payee; // SP's beneficiary address (hot key)
+        address beneficiary; // Payment address (cold key)
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         string metadata; // General metadata for the data set
         string[] pieceMetadata; // Array of metadata for each piece
@@ -116,7 +118,10 @@ contract FilecoinWarmStorageService is
     // Structure for service pricing information
     struct ServicePricing {
         uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
+        address tokenAddress; // Address of the USDFC token
+        uint256 epochsPerMonth; // Number of epochs in a month
         address tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
     }
@@ -143,7 +148,9 @@ contract FilecoinWarmStorageService is
 
     // ========== Storage Provider Registry State ==========
 
+
     uint256 public nextServiceProviderId = 1;
+
 
     struct ApprovedProviderInfo {
         address storageProvider;
@@ -159,17 +166,23 @@ contract FilecoinWarmStorageService is
         uint256 registeredAt;
     }
 
+
     mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
+
 
     mapping(address => bool) public approvedProvidersMap;
 
+
     mapping(address => PendingProviderInfo) public pendingProviders;
 
+
     mapping(address => uint256) public providerToId;
+
 
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
     uint64 public maxProvingPeriod;
     uint256 public challengeWindowSize;
+
 
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
@@ -263,8 +276,10 @@ contract FilecoinWarmStorageService is
      * @param _challengeWindowSize Number of epochs for the challenge window
      */
     function initializeV2(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public reinitializer(2) {
+    function initializeV2(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public reinitializer(2) {
         require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
         require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
+
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
@@ -347,6 +362,7 @@ contract FilecoinWarmStorageService is
         return 5;
     }
 
+
     // Getters
     function getAllApprovedProviders() external view returns (ApprovedProviderInfo[] memory) {
         // Handle edge case: no providers have been registered
@@ -362,13 +378,16 @@ contract FilecoinWarmStorageService is
             }
         }
 
+
         // Handle edge case: all providers have been removed
         if (activeCount == 0) {
             return new ApprovedProviderInfo[](0);
         }
 
+
         // Create correctly-sized array
         ApprovedProviderInfo[] memory providers = new ApprovedProviderInfo[](activeCount);
+
 
         // Second pass: Fill array with only active providers
         uint256 currentIndex = 0;
@@ -378,6 +397,7 @@ contract FilecoinWarmStorageService is
                 currentIndex++;
             }
         }
+
 
         return providers;
     }
@@ -393,14 +413,16 @@ contract FilecoinWarmStorageService is
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, "Extra data required for data set creation");
-        DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+        (DataSetCreateData memory createData, address beneficiary, bool isNewFormat) = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
         require(createData.payer != address(0), "Payer address cannot be zero");
         require(creator != address(0), "Creator address cannot be zero");
-
-        // Check if the storage provider is whitelisted
         require(approvedProvidersMap[creator], "Storage provider not approved");
+        // Set beneficiary (use provided or fallback to creator)
+        address actualBeneficiary = isNewFormat ? 
+        (beneficiary != address(0) ? beneficiary : creator) : 
+        creator;
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -416,7 +438,8 @@ contract FilecoinWarmStorageService is
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Using creator as the payee
+        info.payee = creator; // Control address (hot key)
+        info.beneficiary = actualBeneficiary; // Payment address (cold key)
         info.metadata = createData.metadata;
         info.commissionBps = createData.withCDN ? cdnServiceCommissionBps : basicServiceCommissionBps;
         info.clientDataSetId = clientDataSetId;
@@ -429,12 +452,11 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // data set creator, SPs in  most cases
+            actualBeneficiary,  // Payments go to beneficiary
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
             address(this)
         );
-
         // Store the rail ID
         info.pdpRailId = pdpRailId;
 
@@ -464,7 +486,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                creator, // data set creator, SPs in most cases
+                actualBeneficiary, // data set creator, SPs in most cases
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -476,6 +498,7 @@ contract FilecoinWarmStorageService is
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
+                actualBeneficiary,
                 filCDNAddress,
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
@@ -543,6 +566,8 @@ contract FilecoinWarmStorageService is
         // Decode the extra data
         (bytes memory signature, string memory metadata) = abi.decode(extraData, (bytes, string));
 
+        (bytes memory signature, string memory metadata) = abi.decode(extraData, (bytes, string));
+
         // Verify the signature
         require(
             verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature),
@@ -569,15 +594,18 @@ contract FilecoinWarmStorageService is
         // Get the payer address for this data set
         address payer = info.payer;
 
+
         // Decode the signature from extraData
         require(extraData.length > 0, "Extra data required for scheduling removals");
         bytes memory signature = abi.decode(extraData, (bytes));
+
 
         // Verify the signature
         require(
             verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature),
             "Invalid signature for scheduling piece removals"
         );
+
 
         // Additional logic for scheduling removals can be added here
     }
@@ -721,6 +749,17 @@ contract FilecoinWarmStorageService is
 
         // Emit event for off-chain tracking
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
+    }
+    
+    /**
+     * @notice Get the beneficiary address for a data set
+     * @dev Returns the beneficiary if set, otherwise falls back to the payee
+     * @param dataSetId The ID of the data set
+     * @return The beneficiary address (or payee if beneficiary not set)
+     */
+    function getBeneficiary(uint256 dataSetId) public view returns (address) {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        return info.beneficiary != address(0) ? info.beneficiary : info.payee;
     }
 
     function terminateDataSetPayment(uint256 dataSetId) external {
@@ -921,15 +960,57 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Decode extra data for data set creation
-     * @param extraData The encoded extra data from PDPVerifier
-     * @return decoded The decoded DataSetCreateData struct
-     */
-    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (string memory metadata, address payer, bool withCDN, bytes memory signature) =
-            abi.decode(extraData, (string, address, bool, bytes));
+    * @notice Decode extra data for data set creation with beneficiary support
+    * @param extraData The encoded extra data from PDPVerifier
+    * @return createData The decoded DataSetCreateData struct
+    * @return beneficiary The beneficiary address (payment recipient, or address(0) for legacy)
+    * @return isNewFormat True if new (5-param) format, false if legacy (4-param)
+    */
+    function decodeDataSetCreateData(bytes calldata extraData)
+        internal
+        view
+        returns (DataSetCreateData memory createData, address beneficiary, bool isNewFormat)
+    {
+        // Try new format first (5 parameters)
+        try this._tryDecodeNewFormat(extraData) returns (
+            string memory metadata,
+            address payer,
+            bool withCDN,
+            address _beneficiary,
+            bytes memory signature
+        ) {
+            createData = DataSetCreateData({
+                metadata: metadata,
+                payer: payer,
+                withCDN: withCDN,
+                signature: signature
+            });
+            beneficiary = _beneficiary;
+            isNewFormat = true;
+        } catch {
+            // Legacy format (4 parameters)
+            (string memory metadata, address payer, bool withCDN, bytes memory signature) =
+                abi.decode(extraData, (string, address, bool, bytes));
+            createData = DataSetCreateData({
+                metadata: metadata,
+                payer: payer,
+                withCDN: withCDN,
+                signature: signature
+            });
+            beneficiary = address(0);
+            isNewFormat = false;
+        }
+    }
 
-        return DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+    /**
+     * @notice Helper for try/catch decode of new format
+     */
+    function _tryDecodeNewFormat(bytes calldata extraData)
+        external
+        pure
+        returns (string memory, address, bool, address, bytes memory)
+    {
+        return abi.decode(extraData, (string, address, bool, address, bytes));
     }
 
     /**
@@ -1032,6 +1113,7 @@ contract FilecoinWarmStorageService is
         });
     }
 
+
     /**
      * @notice Get the effective rates after commission for both service types
      * @return basicServiceFee Service fee for basic service (per TiB per month)
@@ -1051,6 +1133,7 @@ contract FilecoinWarmStorageService is
         // Basic service (5% commission = 0.1 USDFC service, 1.9 USDFC to SP)
         basicServiceFee = (basicTotal * basicServiceCommissionBps) / COMMISSION_MAX_BPS;
         spPaymentBasic = basicTotal - basicServiceFee;
+
 
         // CDN service (40% commission = 1.2 USDFC service, 1.8 USDFC to SP)
         cdnServiceFee = (cdnTotal * cdnServiceCommissionBps) / COMMISSION_MAX_BPS;
@@ -1075,12 +1158,15 @@ contract FilecoinWarmStorageService is
         bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, withCDN, payee));
         bytes32 digest = _hashTypedDataV4(structHash);
 
+
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
+
 
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
+
 
     /**
      * @notice Verifies a signature for the AddPieces operation
@@ -1113,12 +1199,15 @@ contract FilecoinWarmStorageService is
         // Create the message hash
         bytes32 digest = _hashTypedDataV4(structHash);
 
+
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
+
 
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
+
 
     /**
      * @notice Verifies a signature for the SchedulePieceRemovals operation
@@ -1144,9 +1233,11 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
+
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
+
 
     /**
      * @notice Verifies a signature for the DeleteDataSet operation
@@ -1164,12 +1255,15 @@ contract FilecoinWarmStorageService is
         bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, clientDataSetId));
         bytes32 digest = _hashTypedDataV4(structHash);
 
+
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
+
 
         // Check if the recovered signer matches the expected payer
         return recoveredSigner == payer;
     }
+
 
     /**
      * @notice Recover the signer address from a signature
@@ -1178,11 +1272,14 @@ contract FilecoinWarmStorageService is
      * @return The address that signed the message
      */
     function recoverSigner(bytes32 messageHash, bytes memory signature) internal pure returns (address) {
+    function recoverSigner(bytes32 messageHash, bytes memory signature) internal pure returns (address) {
         require(signature.length == 65, "Invalid signature length");
+
 
         bytes32 r;
         bytes32 s;
         uint8 v;
+
 
         // Extract r, s, v from the signature
         assembly {
@@ -1191,16 +1288,20 @@ contract FilecoinWarmStorageService is
             v := byte(0, mload(add(signature, 96)))
         }
 
+
         // If v is not 27 or 28, adjust it (for some wallets)
         if (v < 27) {
             v += 27;
         }
 
+
         require(v == 27 || v == 28, "Unsupported signature 'v' value, we don't handle rare wrapped case");
+
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
     }
+
 
     /**
      * @notice Register as a service provider
@@ -1223,6 +1324,7 @@ contract FilecoinWarmStorageService is
         (bool sent,) = BURN_ADDRESS.call{value: msg.value}("");
         require(sent, "Burn failed");
 
+
         // Store pending registration
         pendingProviders[msg.sender] = PendingProviderInfo({
             serviceURL: serviceURL,
@@ -1232,6 +1334,7 @@ contract FilecoinWarmStorageService is
 
         emit ProviderRegistered(msg.sender, serviceURL, peerId);
     }
+
 
     /**
      * @notice Approve a pending service provider
@@ -1244,8 +1347,10 @@ contract FilecoinWarmStorageService is
         // Check if registration exists
         require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
 
+
         // Get pending registration data
         PendingProviderInfo memory pending = pendingProviders[provider];
+
 
         // Assign ID and store provider info
         uint256 providerId = nextServiceProviderId++;
@@ -1257,14 +1362,18 @@ contract FilecoinWarmStorageService is
             approvedAt: block.number
         });
 
+
         approvedProvidersMap[provider] = true;
         providerToId[provider] = providerId;
+
 
         // Clear pending registration
         delete pendingProviders[provider];
 
+
         emit ProviderApproved(provider, providerId);
     }
+
 
     /**
      * @notice Reject a pending service provider
@@ -1276,12 +1385,15 @@ contract FilecoinWarmStorageService is
         require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
         require(!approvedProvidersMap[provider], "Provider already approved");
 
+
         // Update mappings
         approvedProvidersMap[provider] = false;
         providerToId[provider] = 0;
 
+
         // Clear pending registration
         delete pendingProviders[provider];
+
 
         emit ProviderRejected(provider);
     }
@@ -1295,25 +1407,32 @@ contract FilecoinWarmStorageService is
         // Validate provider ID
         require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
 
+
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
         address providerAddress = providerInfo.storageProvider;
         require(providerAddress != address(0), "Provider not found");
 
+
         // Check if provider is currently approved
         require(approvedProvidersMap[providerAddress], "Provider not approved");
+
 
         // Remove from approved mapping
         approvedProvidersMap[providerAddress] = false;
 
+
         // Remove the provider ID mapping
         delete providerToId[providerAddress];
+
 
         // Delete the provider info
         delete approvedProviders[providerId];
 
+
         emit ProviderRemoved(providerAddress, providerId);
     }
+
 
     /**
      * @notice Get service provider information by ID
@@ -1328,6 +1447,7 @@ contract FilecoinWarmStorageService is
         return provider;
     }
 
+
     /**
      * @notice Check if a provider is approved
      * @param provider The address to check
@@ -1337,6 +1457,7 @@ contract FilecoinWarmStorageService is
         return approvedProvidersMap[provider];
     }
 
+
     /**
      * @notice Get pending registration information
      * @param provider The address of the provider
@@ -1345,6 +1466,7 @@ contract FilecoinWarmStorageService is
     function getPendingProvider(address provider) external view returns (PendingProviderInfo memory) {
         return pendingProviders[provider];
     }
+
 
     /**
      * @notice Get the provider ID for a given address
@@ -1374,6 +1496,7 @@ contract FilecoinWarmStorageService is
                 pieceMetadata: storageInfo.pieceMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
                 withCDN: storageInfo.withCDN,
+                beneficiary: storageInfo.beneficiary,
                 paymentEndEpoch: storageInfo.paymentEndEpoch
             });
         }
@@ -1451,6 +1574,20 @@ contract FilecoinWarmStorageService is
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    /**
+     * @notice Helper to resolve the beneficiary for a proof set (handles legacy and new proof sets)
+     * @dev For legacy proof sets (beneficiary == address(0)), returns payee
+     * @param proofSetId The ID of the proof set
+     * @return The resolved beneficiary address
+     */
+    function resolveBeneficiary(uint256 dataSetId) public view returns (address) {
+        address beneficiary = dataSetInfo[dataSetId].beneficiary;
+        if (beneficiary == address(0)) {
+            return dataSetInfo[dataSetId].payee;
+        }
+        return beneficiary;
     }
 
     function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
