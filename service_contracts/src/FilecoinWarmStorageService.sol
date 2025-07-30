@@ -233,11 +233,6 @@ contract FilecoinWarmStorageService is
                 Errors.CommissionType.Operator, COMMISSION_MAX_BPS, _initialOperatorCommissionBps
             )
         );
-        require(maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
-        require(
-            challengeWindowSize > 0 && challengeWindowSize < maxProvingPeriod,
-            Errors.InvalidChallengeWindowSize(challengeWindowSize, maxProvingPeriod)
-        );
 
         pdpVerifierAddress = _pdpVerifierAddress;
 
@@ -262,8 +257,11 @@ contract FilecoinWarmStorageService is
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
 
-        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
-        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
+        require(_maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
+        require(
+            _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
+            Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
+        );
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;

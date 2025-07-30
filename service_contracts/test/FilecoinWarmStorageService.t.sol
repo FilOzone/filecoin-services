@@ -1050,7 +1050,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
     }
 
-    function testGetAllApprovedProvidersAfterRemoval() public {
+    function testGetAllApprovedProvidersAfterRemoval() public view {
         // Register and approve three providers
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl, validPeerId);
