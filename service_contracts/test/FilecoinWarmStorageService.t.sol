@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
+import {Errors} from "../src/Errors.sol";
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -584,7 +585,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl, validPeerId);
 
         // Try to register again
-        vm.expectRevert("Registration already pending");
+        vm.expectRevert(abi.encodeWithSelector(Errors.RegistrationAlreadyPending.selector, sp1));
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl2, validPeerId2);
 
         vm.stopPrank();
@@ -599,7 +600,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Try to register again
         vm.prank(sp1);
-        vm.expectRevert("Provider already approved");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, sp1));
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl2, validPeerId2);
     }
 
@@ -666,7 +667,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testCannotApproveNonExistentRegistration() public {
-        vm.expectRevert("No pending registration found");
+        vm.expectRevert(abi.encodeWithSelector(Errors.NoPendingRegistrationFound.selector, sp1));
         pdpServiceWithPayments.approveServiceProvider(sp1);
     }
 
@@ -677,7 +678,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Try to approve again (would need to re-register first, but we test the check)
-        vm.expectRevert("Provider already approved");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, sp1));
         pdpServiceWithPayments.approveServiceProvider(sp1);
     }
 
@@ -727,7 +728,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testCannotRejectNonExistentRegistration() public {
-        vm.expectRevert("No pending registration found");
+        vm.expectRevert(abi.encodeWithSelector(Errors.NoPendingRegistrationFound.selector, sp1));
         pdpServiceWithPayments.rejectServiceProvider(sp1);
     }
 
@@ -897,10 +898,10 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testGetApprovedProviderInvalidId() public {
-        vm.expectRevert("Invalid provider ID");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidProviderId.selector, 1, 0));
         pdpServiceWithPayments.getApprovedProvider(0);
 
-        vm.expectRevert("Invalid provider ID");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidProviderId.selector, 1, 1));
         pdpServiceWithPayments.getApprovedProvider(1); // No providers approved yet
 
         // Approve one provider
@@ -908,7 +909,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
-        vm.expectRevert("Invalid provider ID");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidProviderId.selector, 2, 2));
         pdpServiceWithPayments.getApprovedProvider(2); // Only ID 1 exists
     }
 
@@ -1027,11 +1028,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testRemoveProviderInvalidId() public {
         // Try to remove with ID 0
-        vm.expectRevert("Invalid provider ID");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidProviderId.selector, 1, 0));
         pdpServiceWithPayments.removeServiceProvider(0);
 
         // Try to remove with non-existent ID
-        vm.expectRevert("Invalid provider ID");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidProviderId.selector, 1, 999));
         pdpServiceWithPayments.removeServiceProvider(999);
     }
 
@@ -1045,7 +1046,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
 
         // Try to remove again
-        vm.expectRevert("Provider not found");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotFound.selector, 1));
         pdpServiceWithPayments.removeServiceProvider(1);
     }
 
@@ -1366,7 +1367,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Attempt storage provider change
         bytes memory testExtraData = new bytes(0);
         vm.prank(unapproved);
-        vm.expectRevert("New storage provider must be an approved provider");
+        vm.expectRevert(abi.encodeWithSelector(Errors.NewStorageProviderNotApproved.selector, unapproved));
         mockPDPVerifier.changeDataSetStorageProvider(
             testDataSetId, unapproved, address(pdpServiceWithPayments), testExtraData
         );
@@ -1410,7 +1411,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes memory testExtraData = new bytes(0);
         // Call directly as PDPVerifier with wrong old storage provider
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert("Old storage provider mismatch");
+        vm.expectRevert(abi.encodeWithSelector(Errors.OldStorageProviderMismatch.selector, 1, sp1, sp2));
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp2, sp2, testExtraData);
     }
 
@@ -1432,7 +1433,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes memory testExtraData = new bytes(0);
         // Call directly as sp2 (not PDPVerifier)
         vm.prank(sp2);
-        vm.expectRevert("Caller is not the PDP verifier");
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyPDPVerifierAllowed.selector, address(mockPDPVerifier), sp2));
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp1, sp2, testExtraData);
     }
 
@@ -1581,7 +1582,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pieces[0] = IPDPTypes.PieceData({piece: Cids.Cid({data: pieceData}), rawSize: 3});
         bytes memory addPiecesExtraData = abi.encode(FAKE_SIGNATURE, "some metadata");
         makeSignaturePass(client);
-        vm.expectRevert("data set payment has already been terminated");
+        vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentAlreadyTerminated.selector, dataSetId));
         pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieces, addPiecesExtraData);
         console.log("[OK] piecesAdded correctly reverted after termination");
 
@@ -1600,21 +1601,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         pieceIds[0] = 0;
         bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
         makeSignaturePass(client);
-        vm.expectRevert("data set is beyond its payment end epoch: remove data set to make progress");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+            )
+        );
         mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
         console.log("[OK] piecesScheduledRemove correctly reverted");
 
         // possessionProven
         console.log("Testing possessionProven - should revert (beyond payment end epoch)");
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert("data set is beyond its payment end epoch: remove data set to make progress");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+            )
+        );
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         console.log("[OK] possessionProven correctly reverted");
 
         // nextProvingPeriod
         console.log("Testing nextProvingPeriod - should revert (beyond payment end epoch)");
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert("data set is beyond its payment end epoch: remove data set to make progress");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+            )
+        );
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
         console.log("[OK] nextProvingPeriod correctly reverted");
 
@@ -1623,7 +1636,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testRegisterServiceProviderRevertsIfNoValue() public {
         vm.startPrank(sp1);
-        vm.expectRevert("Incorrect registration fee");
+        vm.expectRevert(abi.encodeWithSelector(Errors.IncorrectRegistrationFee.selector, 1 ether, 0));
         pdpServiceWithPayments.registerServiceProvider(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
@@ -1632,7 +1645,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testRegisterServiceProviderRevertsIfWrongValue() public {
         vm.startPrank(sp1);
-        vm.expectRevert("Incorrect registration fee");
+        vm.expectRevert(abi.encodeWithSelector(Errors.IncorrectRegistrationFee.selector, 1 ether, 0.5 ether));
         pdpServiceWithPayments.registerServiceProvider{value: 0.5 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
@@ -1754,11 +1767,11 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         bytes32 messageHash = keccak256(abi.encode(42));
         bytes memory invalidSignature = abi.encodePacked(bytes32(0), bytes16(0)); // Wrong length (48 bytes instead of 65)
 
-        vm.expectRevert("Invalid signature length");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignatureLength.selector, 65, invalidSignature.length));
         pdpService.doRecoverSigner(messageHash, invalidSignature);
     }
 
-    function testRecoverSignerInvalidVValue() public {
+    function testRecoverSignerInvalidValue() public {
         bytes32 messageHash = keccak256(abi.encode(42));
 
         // Create signature with invalid v value
@@ -1767,7 +1780,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         uint8 v = 25; // Invalid v value (should be 27 or 28)
         bytes memory invalidSignature = abi.encodePacked(r, s, v);
 
-        vm.expectRevert("Unsupported signature 'v' value, we don't handle rare wrapped case");
+        vm.expectRevert(abi.encodeWithSelector(Errors.UnsupportedSignatureV.selector, 25));
         pdpService.doRecoverSigner(messageHash, invalidSignature);
     }
 }
@@ -1842,18 +1855,18 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Test that configureChallengePeriod validates parameters correctly
 
         // Test zero max proving period
-        vm.expectRevert("Max proving period must be greater than zero");
+        vm.expectRevert(abi.encodeWithSelector(Errors.MaxProvingPeriodZero.selector));
         warmStorageService.configureProvingPeriod(0, 30);
 
         // Test zero challenge window size
-        vm.expectRevert("Invalid challenge window size");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidChallengeWindowSize.selector, 120, 0));
         warmStorageService.configureProvingPeriod(120, 0);
 
         // Test challenge window size >= max proving period
-        vm.expectRevert("Invalid challenge window size");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidChallengeWindowSize.selector, 120, 120));
         warmStorageService.configureProvingPeriod(120, 120);
 
-        vm.expectRevert("Invalid challenge window size");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidChallengeWindowSize.selector, 120, 150));
         warmStorageService.configureProvingPeriod(120, 150);
     }
 
@@ -1892,7 +1905,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
     function testMigrateOnlyCallableDuringUpgrade() public {
         // Test that migrate can only be called by the contract itself
-        vm.expectRevert("Only callable by self during upgrade");
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlySelf.selector, address(warmStorageService), address(this)));
         warmStorageService.migrate();
     }
 
