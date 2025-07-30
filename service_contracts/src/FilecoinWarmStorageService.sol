@@ -27,7 +27,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "0.1.0";
+    string private constant VERSION = "0.1.0";
 
     // Events
     event ContractUpgraded(string version, address implementation);
@@ -48,38 +48,39 @@ contract FilecoinWarmStorageService is
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
 
     // Constants
-    uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
-    uint256 public constant NO_PROVING_DEADLINE = 0;
-    uint256 public constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 public constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
-    uint256 public constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
-    uint256 public constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
-    uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
-    uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
-    uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
+    uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
+    uint256 private constant CHALLENGES_PER_PROOF = 5;
+    uint256 private constant NO_PROVING_DEADLINE = 0;
+    uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
+    uint256 private constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
+    uint256 private constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
+    uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
+    uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
+    uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
     // Pricing constants
-    uint256 public STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
-    uint256 public CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
-    uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
     // Dynamic fee values based on token decimals
-    uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
+    uint256 private immutable DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
-    uint8 public tokenDecimals;
+    uint8 private immutable tokenDecimals;
 
     // External contract addresses
-    address public pdpVerifierAddress;
-    address public paymentsContractAddress;
-    address public usdfcTokenAddress;
-    address public filCDNAddress;
+    address public immutable pdpVerifierAddress;
+    address public immutable paymentsContractAddress;
+    address public immutable usdfcTokenAddress;
+    address public immutable filCDNAddress;
 
     // Commission rate in basis points (100 = 1%)
-    uint256 public operatorCommissionBps;
+    uint256 public immutable operatorCommissionBps;
 
     // Commission rates for different service types
     uint256 public basicServiceCommissionBps; // 0% for basic service (no CDN add-on)
@@ -88,7 +89,7 @@ contract FilecoinWarmStorageService is
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
     // Mapping from data set ID to piece ID to metadata
-    mapping(uint256 => mapping(uint256 => string)) public dataSetPieceMetadata;
+    mapping(uint256 => mapping(uint256 => string)) private dataSetPieceMetadata;
 
     // Storage for data set payment information
     struct DataSetInfo {
@@ -143,7 +144,7 @@ contract FilecoinWarmStorageService is
 
     // ========== Storage Provider Registry State ==========
 
-    uint256 public nextServiceProviderId = 1;
+    uint256 private nextServiceProviderId = 1;
 
     struct ApprovedProviderInfo {
         address storageProvider;
@@ -168,8 +169,8 @@ contract FilecoinWarmStorageService is
     mapping(address => uint256) public providerToId;
 
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
-    uint64 public maxProvingPeriod;
-    uint256 public challengeWindowSize;
+    uint64 private maxProvingPeriod;
+    uint256 private challengeWindowSize;
 
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
@@ -197,7 +198,7 @@ contract FilecoinWarmStorageService is
 
     /// @notice Registration fee required for service providers (1 FIL)
     /// @dev This fee is burned to prevent spam registrations
-    uint256 public constant SP_REGISTRATION_FEE = 1 ether;
+    uint256 private constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
@@ -206,42 +207,29 @@ contract FilecoinWarmStorageService is
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(
+    constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
         address _filCDNAddress,
-        uint256 _initialOperatorCommissionBps,
-        uint64 _maxProvingPeriod,
-        uint256 _challengeWindowSize
-    ) public initializer {
-        __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
-        __EIP712_init("FilecoinWarmStorageService", "1");
+        uint256 _initialOperatorCommissionBps
+    ) {
+        _disableInitializers();
+
+        require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
+        usdfcTokenAddress = _usdfcTokenAddress;
+
+        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
+        filCDNAddress = _filCDNAddress;
 
         require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
-        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
-        require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
-        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
-        require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
-        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
-        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
-
         pdpVerifierAddress = _pdpVerifierAddress;
-        paymentsContractAddress = _paymentsContractAddress;
-        usdfcTokenAddress = _usdfcTokenAddress;
-        filCDNAddress = _filCDNAddress;
-        operatorCommissionBps = _initialOperatorCommissionBps;
-        maxProvingPeriod = _maxProvingPeriod;
-        challengeWindowSize = _challengeWindowSize;
 
-        // Set commission rates: 0% for basic, 0% for service w/ CDN add-on
-        basicServiceCommissionBps = 0; // 0%
-        cdnServiceCommissionBps = 0; // 0%
+        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
+        paymentsContractAddress = _paymentsContractAddress;
+
+        require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
+        operatorCommissionBps = _initialOperatorCommissionBps;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -251,6 +239,23 @@ contract FilecoinWarmStorageService is
         DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
+    }
+
+    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+        __EIP712_init("FilecoinWarmStorageService", "1");
+
+        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
+        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
+
+        maxProvingPeriod = _maxProvingPeriod;
+        challengeWindowSize = _challengeWindowSize;
+
+        // Set commission rates: 0% for basic, 0% for service w/ CDN add-on
+        basicServiceCommissionBps = 0; // 0%
+        cdnServiceCommissionBps = 0; // 0%
+
         nextServiceProviderId = 1;
     }
 
@@ -339,11 +344,6 @@ contract FilecoinWarmStorageService is
         }
         // If the current period is not yet open this is the current period's challenge window
         return thisChallengeWindowStart(setId);
-    }
-
-    // Challenges / merkle inclusion proofs provided per data set
-    function getChallengesPerProof() public pure returns (uint64) {
-        return 5;
     }
 
     // Getters
@@ -593,7 +593,7 @@ contract FilecoinWarmStorageService is
         if (provenThisPeriod[dataSetId]) {
             revert("Only one proof of possession allowed per proving period. Open a new proving period.");
         }
-        if (challengeCount < getChallengesPerProof()) {
+        if (challengeCount < CHALLENGES_PER_PROOF) {
             revert("Invalid challenge count < 5");
         }
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
