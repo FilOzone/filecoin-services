@@ -24,7 +24,9 @@ fi
 
 # Fixed addresses for initialization
 PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
-FILCDN_ADDRESS="0x0000000000000000000000000000000000000000" # TODO Placeholder
+if [ -z "$FILCDN_WALLET"]; then
+    FILCDN_WALLET = "0xff00000000000000000000000000000000000063"
+fi
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 OPERATOR_COMMISSION_BPS="100"                                         # 1% commission in basis points
 
@@ -81,7 +83,7 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 5: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $OPERATOR_COMMISSION_BPS --optimizer-runs 1 --via-ir  | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET $OPERATOR_COMMISSION_BPS --optimizer-runs 1 --via-ir  | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
