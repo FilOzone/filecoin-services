@@ -24,11 +24,11 @@ fi
 
 # Fixed addresses for initialization
 PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
-if [ -z "$FILCDN_WALLET"]; then
-    FILCDN_WALLET = "0xff00000000000000000000000000000000000063"
+if [ -z "$FILCDN_WALLET" ]; then
+    FILCDN_WALLET="0xff00000000000000000000000000000000000063"
 fi
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
-OPERATOR_COMMISSION_BPS="100"                                         # 1% commission in basis points
+OPERATOR_COMMISSION_BPS=100                                         # 1% commission in basis points
 
 # Proving period configuration - use defaults if not set
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
