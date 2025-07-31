@@ -280,7 +280,8 @@ contract FilecoinWarmStorageService is
         // Initialize service metadata
         name = "Filecoin Warm Storage Service";
         // TODO: add the url w/ more service info
-        description = "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
+        description =
+            "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
 
         // Emit deployment event
         emit ServiceDeployed(name, description, address(this));
@@ -1404,7 +1405,6 @@ contract FilecoinWarmStorageService is
     function getProviderIdByAddress(address provider) external view returns (uint256) {
         return providerToId[provider];
     }
-
 
     function getClientDataSets(address client) public view returns (DataSetInfo[] memory) {
         uint256[] memory dataSetIds = clientDataSets[client];
