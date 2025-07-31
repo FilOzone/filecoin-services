@@ -173,6 +173,10 @@ contract FilecoinWarmStorageService is
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
 
+    // Service metadata
+    string public name;
+    string public description;
+
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
@@ -271,6 +275,11 @@ contract FilecoinWarmStorageService is
         cdnServiceCommissionBps = 0; // 0%
 
         nextServiceProviderId = 1;
+
+        // Initialize service metadata
+        name = "Filecoin Warm Storage Service";
+        // TODO: add the url w/ more service info
+        description = "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -320,6 +329,15 @@ contract FilecoinWarmStorageService is
         );
         basicServiceCommissionBps = newBasicCommissionBps;
         cdnServiceCommissionBps = newCDNCommissionBps;
+    }
+
+    /**
+     * @notice Updates the service description
+     * @dev Only callable by the contract owner
+     * @param newDescription The new description for the service
+     */
+    function updateDescription(string calldata newDescription) external onlyOwner {
+        description = newDescription;
     }
 
     // SLA specification functions setting values for PDP service providers
@@ -1382,6 +1400,7 @@ contract FilecoinWarmStorageService is
     function getProviderIdByAddress(address provider) external view returns (uint256) {
         return providerToId[provider];
     }
+
 
     function getClientDataSets(address client) public view returns (DataSetInfo[] memory) {
         uint256[] memory dataSetIds = clientDataSets[client];
