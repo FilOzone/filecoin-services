@@ -35,6 +35,7 @@ contract FilecoinWarmStorageService is
     event DataSetStorageProviderChanged(
         uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider
     );
+    event ServiceDeployed(string name, string description, address indexed deployedAt);
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
         uint256 indexed dataSetId,
@@ -280,6 +281,9 @@ contract FilecoinWarmStorageService is
         name = "Filecoin Warm Storage Service";
         // TODO: add the url w/ more service info
         description = "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
+
+        // Emit deployment event
+        emit ServiceDeployed(name, description, address(this));
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
