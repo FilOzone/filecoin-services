@@ -19,11 +19,6 @@ import {Errors} from "./Errors.sol";
 /// using the Payments contract. It creates payment rails for storage providers
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
-///
-/// Service Information:
-/// - Name: Filecoin Warm Storage Service
-/// - Description: Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery
-/// - Version: 0.1.0
 contract FilecoinWarmStorageService is
     PDPListener,
     IValidator,
