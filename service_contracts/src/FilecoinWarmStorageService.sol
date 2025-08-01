@@ -302,7 +302,7 @@ contract FilecoinWarmStorageService is
     /**
      * @notice Updates the service commission rates
      * @dev Only callable by the contract owner
-     * @param newCommissionBps New commission rate for basic service (no CDN) in basis points
+     * @param newCommissionBps New commission rate in basis points
      */
     function updateServiceCommission(uint256 newCommissionBps) external onlyOwner {
         require(
