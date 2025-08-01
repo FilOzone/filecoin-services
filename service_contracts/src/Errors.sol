@@ -28,10 +28,8 @@ library Errors {
     enum CommissionType {
         /// The operator commission rate
         Operator,
-        /// The basic service commission rate (applies to non-CDN storage service)
-        BasicService,
-        /// The CDN service commission rate (applies to FilecoinCDN storage service)
-        CDNService
+        /// The service commission rate
+        Service
     }
 
     /// @notice An expected contract or participant address was the zero address
