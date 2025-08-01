@@ -80,13 +80,11 @@ The FilecoinWarmStorageService contract uses OpenZeppelin's upgradeable pattern.
 
 1. **Deploy new implementation**: The script deploys a new implementation contract
 2. **Upgrade proxy**: Uses `upgradeToAndCall` to point the proxy to the new implementation
-3. **Initialize V2**: Calls `initializeV2` to set the new proving period parameters
 
 ### Important Notes for Upgrades:
 
 - The original `initialize` function can only be called once during initial deployment
-- For upgrades, use `initializeV2` to set the new proving period parameters
-- The upgrade script automatically calls `initializeV2` as part of the upgrade process
+- Use `configureProvingPeriod` to set the new proving period parameters
 - Storage layout is preserved - new variables are added at the end of existing storage
 
 ## Proving Period Parameters

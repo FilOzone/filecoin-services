@@ -11,6 +11,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
+import {Errors} from "./Errors.sol";
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -27,7 +28,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "0.1.0";
+    string private constant VERSION = "0.1.0";
 
     // Events
     event ContractUpgraded(string version, address implementation);
@@ -48,38 +49,39 @@ contract FilecoinWarmStorageService is
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
 
     // Constants
-    uint256 public constant NO_CHALLENGE_SCHEDULED = 0;
-    uint256 public constant NO_PROVING_DEADLINE = 0;
-    uint256 public constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 public constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
-    uint256 public constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
-    uint256 public constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
-    uint256 public constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
-    uint256 public constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
-    uint256 public constant EPOCHS_PER_MONTH = 2880 * 30;
+    uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
+    uint256 private constant CHALLENGES_PER_PROOF = 5;
+    uint256 private constant NO_PROVING_DEADLINE = 0;
+    uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
+    uint256 private constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
+    uint256 private constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
+    uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
+    uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
+    uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
     // Pricing constants
-    uint256 public STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
-    uint256 public CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
-    uint256 public CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
     // Dynamic fee values based on token decimals
-    uint256 public DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
+    uint256 private immutable DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
-    uint8 public tokenDecimals;
+    uint8 private immutable tokenDecimals;
 
     // External contract addresses
-    address public pdpVerifierAddress;
-    address public paymentsContractAddress;
-    address public usdfcTokenAddress;
-    address public filCDNAddress;
+    address public immutable pdpVerifierAddress;
+    address public immutable paymentsContractAddress;
+    address public immutable usdfcTokenAddress;
+    address public immutable filCDNAddress;
 
     // Commission rate in basis points (100 = 1%)
-    uint256 public operatorCommissionBps;
+    uint256 public immutable operatorCommissionBps;
 
     // Commission rates
     uint256 public serviceCommissionBps;
@@ -87,7 +89,7 @@ contract FilecoinWarmStorageService is
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
     // Mapping from data set ID to piece ID to metadata
-    mapping(uint256 => mapping(uint256 => string)) public dataSetPieceMetadata;
+    mapping(uint256 => mapping(uint256 => string)) private dataSetPieceMetadata;
 
     // Storage for data set payment information
     struct DataSetInfo {
@@ -142,7 +144,7 @@ contract FilecoinWarmStorageService is
 
     // ========== Storage Provider Registry State ==========
 
-    uint256 public nextServiceProviderId = 1;
+    uint256 private nextServiceProviderId = 1;
 
     struct ApprovedProviderInfo {
         address storageProvider;
@@ -167,8 +169,8 @@ contract FilecoinWarmStorageService is
     mapping(address => uint256) public providerToId;
 
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
-    uint64 public maxProvingPeriod;
-    uint256 public challengeWindowSize;
+    uint64 private maxProvingPeriod;
+    uint256 private challengeWindowSize;
 
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
@@ -196,50 +198,48 @@ contract FilecoinWarmStorageService is
 
     /// @notice Registration fee required for service providers (1 FIL)
     /// @dev This fee is burned to prevent spam registrations
-    uint256 public constant SP_REGISTRATION_FEE = 1 ether;
+    uint256 private constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
-        require(msg.sender == pdpVerifierAddress, "Caller is not the PDP verifier");
+        require(msg.sender == pdpVerifierAddress, Errors.OnlyPDPVerifierAllowed(pdpVerifierAddress, msg.sender));
         _;
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(
+    constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
         address _filCDNAddress,
-        uint256 _initialOperatorCommissionBps,
-        uint64 _maxProvingPeriod,
-        uint256 _challengeWindowSize
-    ) public initializer {
-        __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
-        __EIP712_init("FilecoinWarmStorageService", "1");
+        uint256 _initialOperatorCommissionBps
+    ) {
+        _disableInitializers();
 
-        require(_pdpVerifierAddress != address(0), "PDP verifier address cannot be zero");
-        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
+        usdfcTokenAddress = _usdfcTokenAddress;
+
         require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
-        require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
-        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
-        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
+        filCDNAddress = _filCDNAddress;
+
+        require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
+        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
+        require(
+            _initialOperatorCommissionBps <= COMMISSION_MAX_BPS,
+            Errors.CommissionExceedsMaximum(
+                Errors.CommissionType.Operator, COMMISSION_MAX_BPS, _initialOperatorCommissionBps
+            )
+        );
 
         pdpVerifierAddress = _pdpVerifierAddress;
-        paymentsContractAddress = _paymentsContractAddress;
-        usdfcTokenAddress = _usdfcTokenAddress;
-        filCDNAddress = _filCDNAddress;
-        operatorCommissionBps = _initialOperatorCommissionBps;
-        maxProvingPeriod = _maxProvingPeriod;
-        challengeWindowSize = _challengeWindowSize;
 
-        // Set commission rates
-        serviceCommissionBps = 0; // 0%
+        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
+        paymentsContractAddress = _paymentsContractAddress;
+
+        require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
+        operatorCommissionBps = _initialOperatorCommissionBps;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -249,20 +249,41 @@ contract FilecoinWarmStorageService is
         DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
+    }
+
+    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+        __EIP712_init("FilecoinWarmStorageService", "1");
+
+        require(_maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
+        require(
+            _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
+            Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
+        );
+
+        maxProvingPeriod = _maxProvingPeriod;
+        challengeWindowSize = _challengeWindowSize;
+
+        // Set commission rate
+        serviceCommissionBps = 0; // 0%
+
         nextServiceProviderId = 1;
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     /**
-     * @notice Initializes the new proving period parameters for contract upgrade
-     * @dev This function should be called after upgrading to set the new proving period constants
+     * @notice Sets new proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      */
-    function initializeV2(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public reinitializer(2) {
-        require(_maxProvingPeriod > 0, "Max proving period must be greater than zero");
-        require(_challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod, "Invalid challenge window size");
+    function configureProvingPeriod(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) external onlyOwner {
+        require(_maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
+        require(
+            _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
+            Errors.InvalidChallengeWindowSize(_maxProvingPeriod, _challengeWindowSize)
+        );
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
@@ -274,7 +295,7 @@ contract FilecoinWarmStorageService is
      * Only callable during proxy upgrade process
      */
     function migrate() public onlyProxy reinitializer(3) {
-        require(msg.sender == address(this), "Only callable by self during upgrade");
+        require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
     }
 
@@ -284,7 +305,12 @@ contract FilecoinWarmStorageService is
      * @param newCommissionBps New commission rate for basic service (no CDN) in basis points
      */
     function updateServiceCommission(uint256 newCommissionBps) external onlyOwner {
-        require(newCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
+        require(
+            newCommissionBps <= COMMISSION_MAX_BPS,
+            Errors.CommissionExceedsMaximum(
+                Errors.CommissionType.BasicService, COMMISSION_MAX_BPS, newCommissionBps
+            )
+        );
         serviceCommissionBps = newCommissionBps;
     }
 
@@ -309,7 +335,7 @@ contract FilecoinWarmStorageService is
     // The start of the challenge window for the current proving period
     function thisChallengeWindowStart(uint256 setId) public view returns (uint256) {
         if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert("Proving period not yet initialized");
+            revert Errors.ProvingPeriodNotInitialized(setId);
         }
 
         uint256 periodsSkipped;
@@ -327,7 +353,7 @@ contract FilecoinWarmStorageService is
     // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
     function nextChallengeWindowStart(uint256 setId) public view returns (uint256) {
         if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert("Proving period not yet initialized");
+            revert Errors.ProvingPeriodNotInitialized(setId);
         }
         // If the current period is open this is the next period's challenge window
         if (block.number <= provingDeadlines[setId]) {
@@ -335,11 +361,6 @@ contract FilecoinWarmStorageService is
         }
         // If the current period is not yet open this is the current period's challenge window
         return thisChallengeWindowStart(setId);
-    }
-
-    // Challenges / merkle inclusion proofs provided per data set
-    function getChallengesPerProof() public pure returns (uint64) {
-        return 5;
     }
 
     // Getters
@@ -387,27 +408,25 @@ contract FilecoinWarmStorageService is
 
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
-        require(extraData.length > 0, "Extra data required for data set creation");
+        require(extraData.length > 0, Errors.ExtraDataRequired());
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
-        require(createData.payer != address(0), "Payer address cannot be zero");
-        require(creator != address(0), "Creator address cannot be zero");
+        require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
+        require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
 
         // Check if the storage provider is whitelisted
-        require(approvedProvidersMap[creator], "Storage provider not approved");
+        require(approvedProvidersMap[creator], Errors.StorageProviderNotApproved(creator));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
-        require(
-            verifyCreateDataSetSignature(
-                createData.payer, clientDataSetId, creator, createData.withCDN, createData.signature
-            ),
-            "Invalid signature for data set creation"
+        verifyCreateDataSetSignature(
+            createData.payer, clientDataSetId, creator, createData.withCDN, createData.signature
         );
+
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
@@ -500,16 +519,15 @@ contract FilecoinWarmStorageService is
     ) external onlyPDPVerifier {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, "Data set not registered with payment system");
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
         (bytes memory signature) = abi.decode(extraData, (bytes));
 
         // Get the payer address for this data set
         address payer = dataSetInfo[dataSetId].payer;
 
         // Verify the client's signature
-        require(
-            verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature), "Not authorized to delete data set"
-        );
+        verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
+
         // TODO Data set deletion logic
     }
 
@@ -530,19 +548,16 @@ contract FilecoinWarmStorageService is
         requirePaymentNotTerminated(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, "Data set not registered with payment system");
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
         // Get the payer address for this data set
         address payer = info.payer;
-        require(extraData.length > 0, "Extra data required for adding pieces");
+        require(extraData.length > 0, Errors.ExtraDataRequired());
         // Decode the extra data
         (bytes memory signature, string memory metadata) = abi.decode(extraData, (bytes, string));
 
         // Verify the signature
-        require(
-            verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature),
-            "Invalid signature for adding pieces"
-        );
+        verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -559,20 +574,17 @@ contract FilecoinWarmStorageService is
         requirePaymentNotBeyondEndEpoch(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, "Data set not registered with payment system");
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
         // Get the payer address for this data set
         address payer = info.payer;
 
         // Decode the signature from extraData
-        require(extraData.length > 0, "Extra data required for scheduling removals");
+        require(extraData.length > 0, Errors.ExtraDataRequired());
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
-        require(
-            verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature),
-            "Invalid signature for scheduling piece removals"
-        );
+        verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
 
         // Additional logic for scheduling removals can be added here
     }
@@ -586,22 +598,28 @@ contract FilecoinWarmStorageService is
         uint256 challengeCount
     ) external onlyPDPVerifier {
         requirePaymentNotBeyondEndEpoch(dataSetId);
+
         if (provenThisPeriod[dataSetId]) {
-            revert("Only one proof of possession allowed per proving period. Open a new proving period.");
-        }
-        if (challengeCount < getChallengesPerProof()) {
-            revert("Invalid challenge count < 5");
-        }
-        if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
-            revert("Proving not yet started");
-        }
-        // check for proof outside of challenge window
-        if (provingDeadlines[dataSetId] < block.number) {
-            revert("Current proving period passed. Open a new proving period.");
+            revert Errors.ProofAlreadySubmitted(dataSetId);
         }
 
-        if (provingDeadlines[dataSetId] - challengeWindow() > block.number) {
-            revert("Too early. Wait for challenge window to open");
+        uint256 expectedChallengeCount = CHALLENGES_PER_PROOF;
+        if (challengeCount < expectedChallengeCount) {
+            revert Errors.InvalidChallengeCount(dataSetId, expectedChallengeCount, challengeCount);
+        }
+
+        if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingNotStarted(dataSetId);
+        }
+
+        // check for proof outside of challenge window
+        if (provingDeadlines[dataSetId] < block.number) {
+            revert Errors.ProvingPeriodPassed(dataSetId, provingDeadlines[dataSetId], block.number);
+        }
+
+        uint256 windowStart = provingDeadlines[dataSetId] - challengeWindow();
+        if (windowStart > block.number) {
+            revert Errors.ChallengeWindowTooEarly(dataSetId, windowStart, block.number);
         }
         provenThisPeriod[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
@@ -623,8 +641,10 @@ contract FilecoinWarmStorageService is
         // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline = block.number + getMaxProvingPeriod();
-            if (challengeEpoch < firstDeadline - challengeWindow() || challengeEpoch > firstDeadline) {
-                revert("Next challenge epoch must fall within the next challenge window");
+            uint256 minWindow = firstDeadline - challengeWindow();
+            uint256 maxWindow = firstDeadline;
+            if (challengeEpoch < minWindow || challengeEpoch > maxWindow) {
+                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
             provenThisPeriod[dataSetId] = false;
@@ -643,7 +663,7 @@ contract FilecoinWarmStorageService is
         // Can only get here if calling nextProvingPeriod multiple times within the same proving period
         uint256 prevDeadline = provingDeadlines[dataSetId] - getMaxProvingPeriod();
         if (block.number <= prevDeadline) {
-            revert("One call to nextProvingPeriod allowed per proving period");
+            revert Errors.NextProvingPeriodAlreadyCalled(dataSetId, prevDeadline, block.number);
         }
 
         uint256 periodsSkipped;
@@ -661,8 +681,11 @@ contract FilecoinWarmStorageService is
             nextDeadline = NO_PROVING_DEADLINE;
         } else {
             nextDeadline = provingDeadlines[dataSetId] + getMaxProvingPeriod() * (periodsSkipped + 1);
-            if (challengeEpoch < nextDeadline - challengeWindow() || challengeEpoch > nextDeadline) {
-                revert("Next challenge epoch must fall within the next challenge window");
+            uint256 windowStart = nextDeadline - challengeWindow();
+            uint256 windowEnd = nextDeadline;
+
+            if (challengeEpoch < windowStart || challengeEpoch > windowEnd) {
+                revert Errors.InvalidChallengeEpoch(dataSetId, windowStart, windowEnd, challengeEpoch);
             }
         }
         uint256 faultPeriods = periodsSkipped;
@@ -706,10 +729,13 @@ contract FilecoinWarmStorageService is
     ) external override onlyPDPVerifier {
         // Verify the data set exists and validate the old storage provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.payee == oldStorageProvider, "Old storage provider mismatch");
-        require(newStorageProvider != address(0), "New storage provider cannot be zero address");
+        require(
+            info.payee == oldStorageProvider,
+            Errors.OldStorageProviderMismatch(dataSetId, info.payee, oldStorageProvider)
+        );
+        require(newStorageProvider != address(0), Errors.ZeroAddress(Errors.AddressField.StorageProvider));
         // New storage provider must be an approved provider
-        require(approvedProvidersMap[newStorageProvider], "New storage provider must be an approved provider");
+        require(approvedProvidersMap[newStorageProvider], Errors.NewStorageProviderNotApproved(newStorageProvider));
 
         // Update the data set payee (storage provider)
         info.payee = newStorageProvider;
@@ -720,14 +746,15 @@ contract FilecoinWarmStorageService is
 
     function terminateDataSetPayment(uint256 dataSetId) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, "invalid dataset ID");
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.paymentEndEpoch == 0, "dataset payment already terminated");
+        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
         require(
-            msg.sender == info.payer || msg.sender == info.payee, "Only payer or payee can terminate data set payment"
+            msg.sender == info.payer || msg.sender == info.payee,
+            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.payee, msg.sender)
         );
 
         Payments payments = Payments(paymentsContractAddress);
@@ -742,8 +769,8 @@ contract FilecoinWarmStorageService is
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, "invalid dataset ID");
-        require(info.paymentEndEpoch == 0, "data set payment has already been terminated");
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
     }
 
     function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
@@ -751,14 +778,14 @@ contract FilecoinWarmStorageService is
         if (info.paymentEndEpoch != 0) {
             require(
                 block.number <= info.paymentEndEpoch,
-                "data set is beyond its payment end epoch: remove data set to make progress"
+                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.paymentEndEpoch, block.number)
             );
         }
     }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this data set
-        require(dataSetInfo[dataSetId].pdpRailId != 0, "No PDP payment rail configured");
+        require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         uint256 totalBytes = getDataSetSizeInBytes(leafCount);
         Payments payments = Payments(paymentsContractAddress);
@@ -871,7 +898,7 @@ contract FilecoinWarmStorageService is
         uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
 
         // Ensure denominator is not zero (shouldn't happen with constants)
-        require(denominator > 0, "Denominator cannot be zero");
+        require(denominator > 0, Errors.DivisionByZero());
 
         uint256 ratePerEpoch = numerator / denominator;
 
@@ -1046,7 +1073,6 @@ contract FilecoinWarmStorageService is
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The unique ID for the client's data set
      * @param signature The signature bytes (v, r, s)
-     * @return True if the signature is valid, false otherwise
      */
     function verifyCreateDataSetSignature(
         address payer,
@@ -1054,7 +1080,7 @@ contract FilecoinWarmStorageService is
         address payee,
         bool withCDN,
         bytes memory signature
-    ) internal view returns (bool) {
+    ) internal view {
         // Prepare the message hash that was signed
         bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, withCDN, payee));
         bytes32 digest = _hashTypedDataV4(structHash);
@@ -1062,8 +1088,7 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        // Check if the recovered signer matches the expected payer
-        return recoveredSigner == payer;
+        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
     }
 
     /**
@@ -1072,7 +1097,6 @@ contract FilecoinWarmStorageService is
      * @param clientDataSetId The ID of the data set
      * @param pieceDataArray Array of PieceSignatureData structures
      * @param signature The signature bytes (v, r, s)
-     * @return True if the signature is valid, false otherwise
      */
     function verifyAddPiecesSignature(
         address payer,
@@ -1080,7 +1104,7 @@ contract FilecoinWarmStorageService is
         IPDPTypes.PieceData[] memory pieceDataArray,
         uint256 firstAdded,
         bytes memory signature
-    ) internal view returns (bool) {
+    ) internal view {
         // Hash each PieceData struct
         bytes32[] memory pieceDataHashes = new bytes32[](pieceDataArray.length);
         for (uint256 i = 0; i < pieceDataArray.length; i++) {
@@ -1100,8 +1124,7 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        // Check if the recovered signer matches the expected payer
-        return recoveredSigner == payer;
+        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
     }
 
     /**
@@ -1110,14 +1133,13 @@ contract FilecoinWarmStorageService is
      * @param clientDataSetId The ID of the data set
      * @param pieceIds Array of piece IDs to be removed
      * @param signature The signature bytes (v, r, s)
-     * @return True if the signature is valid, false otherwise
      */
     function verifySchedulePieceRemovalsSignature(
         address payer,
         uint256 clientDataSetId,
         uint256[] memory pieceIds,
         bytes memory signature
-    ) internal view returns (bool) {
+    ) internal view {
         // Prepare the message hash that was signed
         bytes32 structHash = keccak256(
             abi.encode(SCHEDULE_PIECE_REMOVALS_TYPEHASH, clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
@@ -1128,8 +1150,7 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        // Check if the recovered signer matches the expected payer
-        return recoveredSigner == payer;
+        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
     }
 
     /**
@@ -1137,12 +1158,10 @@ contract FilecoinWarmStorageService is
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param signature The signature bytes (v, r, s)
-     * @return True if the signature is valid, false otherwise
      */
     function verifyDeleteDataSetSignature(address payer, uint256 clientDataSetId, bytes memory signature)
         internal
         view
-        returns (bool)
     {
         // Prepare the message hash that was signed
         bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, clientDataSetId));
@@ -1151,8 +1170,7 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        // Check if the recovered signer matches the expected payer
-        return recoveredSigner == payer;
+        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
     }
 
     /**
@@ -1162,7 +1180,7 @@ contract FilecoinWarmStorageService is
      * @return The address that signed the message
      */
     function recoverSigner(bytes32 messageHash, bytes memory signature) internal pure returns (address) {
-        require(signature.length == 65, "Invalid signature length");
+        require(signature.length == 65, Errors.InvalidSignatureLength(65, signature.length));
 
         bytes32 r;
         bytes32 s;
@@ -1174,13 +1192,14 @@ contract FilecoinWarmStorageService is
             s := mload(add(signature, 64))
             v := byte(0, mload(add(signature, 96)))
         }
+        uint8 originalV = v;
 
         // If v is not 27 or 28, adjust it (for some wallets)
         if (v < 27) {
             v += 27;
         }
 
-        require(v == 27 || v == 28, "Unsupported signature 'v' value, we don't handle rare wrapped case");
+        require(v == 27 || v == 28, Errors.UnsupportedSignatureV(originalV));
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
@@ -1194,18 +1213,18 @@ contract FilecoinWarmStorageService is
      * @dev Requires exact payment of SP_REGISTRATION_FEE which is burned to f099
      */
     function registerServiceProvider(string calldata serviceURL, bytes calldata peerId) external payable {
-        require(!approvedProvidersMap[msg.sender], "Provider already approved");
-        require(bytes(serviceURL).length > 0, "Provider service URL cannot be empty");
-        require(bytes(serviceURL).length <= 256, "Provider service URL too long (max 256 bytes)");
-        require(peerId.length <= 64, "Peer ID too long (max 64 bytes)");
+        require(!approvedProvidersMap[msg.sender], Errors.ProviderAlreadyApproved(msg.sender));
+        require(bytes(serviceURL).length > 0, Errors.ServiceURLEmpty());
+        require(bytes(serviceURL).length <= 256, Errors.ServiceURLTooLong(bytes(serviceURL).length, 256));
+        require(peerId.length <= 64, Errors.PeerIdTooLong(peerId.length, 64));
 
         // Check if registration is already pending
-        require(pendingProviders[msg.sender].registeredAt == 0, "Registration already pending");
+        require(pendingProviders[msg.sender].registeredAt == 0, Errors.RegistrationAlreadyPending(msg.sender));
 
         // Burn one-time fee to register
-        require(msg.value == SP_REGISTRATION_FEE, "Incorrect registration fee");
+        require(msg.value == SP_REGISTRATION_FEE, Errors.IncorrectRegistrationFee(SP_REGISTRATION_FEE, msg.value));
         (bool sent,) = BURN_ADDRESS.call{value: msg.value}("");
-        require(sent, "Burn failed");
+        require(sent, Errors.BurnFailed());
 
         // Store pending registration
         pendingProviders[msg.sender] = PendingProviderInfo({
@@ -1224,9 +1243,9 @@ contract FilecoinWarmStorageService is
      */
     function approveServiceProvider(address provider) external onlyOwner {
         // Check if not already approved
-        require(!approvedProvidersMap[provider], "Provider already approved");
+        require(!approvedProvidersMap[provider], Errors.ProviderAlreadyApproved(provider));
         // Check if registration exists
-        require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
+        require(pendingProviders[provider].registeredAt > 0, Errors.NoPendingRegistrationFound(provider));
 
         // Get pending registration data
         PendingProviderInfo memory pending = pendingProviders[provider];
@@ -1257,8 +1276,8 @@ contract FilecoinWarmStorageService is
      */
     function rejectServiceProvider(address provider) external onlyOwner {
         // Check if registration exists
-        require(pendingProviders[provider].registeredAt > 0, "No pending registration found");
-        require(!approvedProvidersMap[provider], "Provider already approved");
+        require(pendingProviders[provider].registeredAt > 0, Errors.NoPendingRegistrationFound(provider));
+        require(!approvedProvidersMap[provider], Errors.ProviderAlreadyApproved(provider));
 
         // Update mappings
         approvedProvidersMap[provider] = false;
@@ -1277,15 +1296,18 @@ contract FilecoinWarmStorageService is
      */
     function removeServiceProvider(uint256 providerId) external onlyOwner {
         // Validate provider ID
-        require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
+        require(
+            providerId > 0 && providerId < nextServiceProviderId,
+            Errors.InvalidProviderId(nextServiceProviderId, providerId)
+        );
 
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
         address providerAddress = providerInfo.storageProvider;
-        require(providerAddress != address(0), "Provider not found");
+        require(providerAddress != address(0), Errors.ProviderNotFound(providerId));
 
         // Check if provider is currently approved
-        require(approvedProvidersMap[providerAddress], "Provider not approved");
+        require(approvedProvidersMap[providerAddress], Errors.ProviderNotApproved(providerAddress));
 
         // Remove from approved mapping
         approvedProvidersMap[providerAddress] = false;
@@ -1306,9 +1328,12 @@ contract FilecoinWarmStorageService is
      * @return The service provider information
      */
     function getApprovedProvider(uint256 providerId) external view returns (ApprovedProviderInfo memory) {
-        require(providerId > 0 && providerId < nextServiceProviderId, "Invalid provider ID");
+        require(
+            providerId > 0 && providerId < nextServiceProviderId,
+            Errors.InvalidProviderId(nextServiceProviderId, providerId)
+        );
         ApprovedProviderInfo memory provider = approvedProviders[providerId];
-        require(provider.storageProvider != address(0), "Provider not found");
+        require(provider.storageProvider != address(0), Errors.ProviderNotFound(providerId));
         return provider;
     }
 
@@ -1383,11 +1408,11 @@ contract FilecoinWarmStorageService is
     ) external override returns (ValidationResult memory result) {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
-        require(dataSetId != 0, "Rail not associated with any data set");
+        require(dataSetId != 0, Errors.RailNotAssociated(railId));
 
         // Calculate the total number of epochs in the requested range
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
-        require(totalEpochsRequested > 0, "Invalid epoch range");
+        require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
         // If proving wasn't ever activated for this data set, don't pay anything
         if (provingActivationEpoch[dataSetId] == 0) {
@@ -1438,16 +1463,14 @@ contract FilecoinWarmStorageService is
     }
 
     function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
-        require(msg.sender == paymentsContractAddress, "Caller is not the Payments contract");
+        require(msg.sender == paymentsContractAddress, Errors.CallerNotPayments(paymentsContractAddress, msg.sender));
 
         if (terminator != address(this)) {
-            revert(
-                "cannot terminate rail using Payments contract: call `terminateDataSetPayment` on the service contract"
-            );
+            revert Errors.ServiceContractMustTerminateRail();
         }
 
         uint256 dataSetId = railToDataSet[railId];
-        require(dataSetId != 0, "data set does not exist for given rail");
+        require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.paymentEndEpoch == 0) {
             info.paymentEndEpoch = endEpoch;
