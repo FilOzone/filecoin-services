@@ -28,13 +28,14 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string private constant VERSION = "0.1.0";
+    string public version;
 
     // Events
     event ContractUpgraded(string version, address implementation);
     event DataSetStorageProviderChanged(
         uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider
     );
+    event ServiceDeployed(string name, string description);
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
         uint256 indexed dataSetId,
@@ -169,6 +170,10 @@ contract FilecoinWarmStorageService is
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
 
+    // Service metadata
+    string public constant name = "Filecoin Warm Storage Service";
+    string public description;
+
     // Events for SP registry
     event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
     event ProviderApproved(address indexed provider, uint256 indexed providerId);
@@ -256,6 +261,15 @@ contract FilecoinWarmStorageService is
         serviceCommissionBps = 0; // 0%
 
         nextServiceProviderId = 1;
+
+        // Initialize service metadata
+        version = "1.0.0";
+        // TODO: add the url w/ more service info
+        description =
+            "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
+
+        // Emit deployment event
+        emit ServiceDeployed(name, description);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -283,7 +297,11 @@ contract FilecoinWarmStorageService is
      */
     function migrate() public onlyProxy reinitializer(3) {
         require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
-        emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+
+        // Update version for this upgrade
+        version = "1.0.0"; // TODO: Update this version number for each upgrade
+
+        emit ContractUpgraded(version, ERC1967Utils.getImplementation());
     }
 
     /**
