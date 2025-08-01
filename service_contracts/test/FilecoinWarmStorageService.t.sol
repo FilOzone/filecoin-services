@@ -512,7 +512,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
-        
+
         // Verify withCDN was stored correctly
         assertFalse(dataSet.withCDN, "withCDN should be false");
 
