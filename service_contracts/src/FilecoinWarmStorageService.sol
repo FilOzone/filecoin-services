@@ -308,7 +308,7 @@ contract FilecoinWarmStorageService is
         require(
             newCommissionBps <= COMMISSION_MAX_BPS,
             Errors.CommissionExceedsMaximum(
-                Errors.CommissionType.BasicService, COMMISSION_MAX_BPS, newCommissionBps
+                Errors.CommissionType.Service, COMMISSION_MAX_BPS, newCommissionBps
             )
         );
         serviceCommissionBps = newCommissionBps;
