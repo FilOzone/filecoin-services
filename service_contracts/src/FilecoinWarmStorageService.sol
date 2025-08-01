@@ -19,6 +19,11 @@ import {Errors} from "./Errors.sol";
 /// using the Payments contract. It creates payment rails for storage providers
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
+///
+/// Service Information:
+/// - Name: Filecoin Warm Storage Service
+/// - Description: Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery
+/// - Version: 0.1.0
 contract FilecoinWarmStorageService is
     PDPListener,
     IValidator,
@@ -35,7 +40,7 @@ contract FilecoinWarmStorageService is
     event DataSetStorageProviderChanged(
         uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider
     );
-    event ServiceDeployed(string name, string description, address indexed deployedAt);
+    event ServiceDeployed(string name, string description);
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
         uint256 indexed dataSetId,
@@ -175,7 +180,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // Service metadata
-    string public name;
+    string public constant name = "Filecoin Warm Storage Service";
     string public description;
 
     // Events for SP registry
@@ -278,13 +283,12 @@ contract FilecoinWarmStorageService is
         nextServiceProviderId = 1;
 
         // Initialize service metadata
-        name = "Filecoin Warm Storage Service";
         // TODO: add the url w/ more service info
         description =
             "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
 
         // Emit deployment event
-        emit ServiceDeployed(name, description, address(this));
+        emit ServiceDeployed(name, description);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -334,15 +338,6 @@ contract FilecoinWarmStorageService is
         );
         basicServiceCommissionBps = newBasicCommissionBps;
         cdnServiceCommissionBps = newCDNCommissionBps;
-    }
-
-    /**
-     * @notice Updates the service description
-     * @dev Only callable by the contract owner
-     * @param newDescription The new description for the service
-     */
-    function updateDescription(string calldata newDescription) external onlyOwner {
-        description = newDescription;
     }
 
     // SLA specification functions setting values for PDP service providers
