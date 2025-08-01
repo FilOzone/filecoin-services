@@ -80,9 +80,6 @@ contract FilecoinWarmStorageService is
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
 
-    // Commission rate in basis points (100 = 1%)
-    uint256 public immutable operatorCommissionBps;
-
     // Commission rates
     uint256 public serviceCommissionBps;
 
@@ -211,8 +208,7 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress,
-        uint256 _initialOperatorCommissionBps
+        address _filCDNAddress
     ) {
         _disableInitializers();
 
@@ -226,20 +222,11 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
-        require(
-            _initialOperatorCommissionBps <= COMMISSION_MAX_BPS,
-            Errors.CommissionExceedsMaximum(
-                Errors.CommissionType.Operator, COMMISSION_MAX_BPS, _initialOperatorCommissionBps
-            )
-        );
 
         pdpVerifierAddress = _pdpVerifierAddress;
 
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         paymentsContractAddress = _paymentsContractAddress;
-
-        require(_initialOperatorCommissionBps <= COMMISSION_MAX_BPS, "Commission exceeds maximum");
-        operatorCommissionBps = _initialOperatorCommissionBps;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();

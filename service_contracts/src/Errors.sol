@@ -26,8 +26,6 @@ library Errors {
     /// @notice Enumerates the types of commission rates used in the protocol
     /// @dev Used as a parameter to {CommissionExceedsMaximum} to specify which commission type exceeded the limit
     enum CommissionType {
-        /// The operator commission rate
-        Operator,
         /// The service commission rate
         Service
     }
