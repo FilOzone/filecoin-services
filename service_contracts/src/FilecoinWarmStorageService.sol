@@ -307,9 +307,7 @@ contract FilecoinWarmStorageService is
     function updateServiceCommission(uint256 newCommissionBps) external onlyOwner {
         require(
             newCommissionBps <= COMMISSION_MAX_BPS,
-            Errors.CommissionExceedsMaximum(
-                Errors.CommissionType.Service, COMMISSION_MAX_BPS, newCommissionBps
-            )
+            Errors.CommissionExceedsMaximum(Errors.CommissionType.Service, COMMISSION_MAX_BPS, newCommissionBps)
         );
         serviceCommissionBps = newCommissionBps;
     }
