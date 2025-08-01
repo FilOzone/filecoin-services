@@ -388,10 +388,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
-        // Get payment rails
-        uint256 pdpRailId = pdpServiceWithPayments.getDataSetPdpRailId(newDataSetId);
-        uint256 cacheMissRailId = pdpServiceWithPayments.getDataSetCacheMissRailId(newDataSetId);
-        uint256 cdnRailId = pdpServiceWithPayments.getDataSetCDNRailId(newDataSetId);
+        // Get data set info
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        uint256 pdpRailId = dataSet.pdpRailId;
+        uint256 cacheMissRailId = dataSet.cacheMissRailId;
+        uint256 cdnRailId = dataSet.cdnRailId;
 
         // Verify valid rail IDs were created
         assertTrue(pdpRailId > 0, "PDP Rail ID should be non-zero");
@@ -399,13 +400,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(cdnRailId > 0, "CDN Rail ID should be non-zero");
 
         // Verify data set info was stored correctly
-        (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(newDataSetId);
-        assertEq(payer, client, "Payer should be set to client");
-        assertEq(payee, storageProvider, "Payee should be set to storage provider");
+        assertEq(dataSet.payer, client, "Payer should be set to client");
+        assertEq(dataSet.payee, storageProvider, "Payee should be set to storage provider");
 
         // Verify metadata was stored correctly
-        string memory metadata = pdpServiceWithPayments.getDataSetMetadata(newDataSetId);
-        assertEq(metadata, "Test Data Set", "Metadata should be stored correctly");
+        assertEq(dataSet.metadata, "Test Data Set", "Metadata should be stored correctly");
 
         // Verify data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
@@ -417,8 +416,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSetInfo.withCDN, true, "withCDN should be true");
 
         // Verify withCDN was stored correctly
-        bool withCDN = pdpServiceWithPayments.getDataSetWithCDN(newDataSetId);
-        assertTrue(withCDN, "withCDN should be true");
+        assertTrue(dataSet.withCDN, "withCDN should be true");
 
         // Verify the rails in the actual Payments contract
         Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
@@ -512,20 +510,18 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
+        // Get data set info
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        
         // Verify withCDN was stored correctly
-        bool withCDN = pdpServiceWithPayments.getDataSetWithCDN(newDataSetId);
-        assertFalse(withCDN, "withCDN should be false");
+        assertFalse(dataSet.withCDN, "withCDN should be false");
 
         // Verify the commission rate was set correctly for basic service (no CDN)
-        uint256 pdpRailId = pdpServiceWithPayments.getDataSetPdpRailId(newDataSetId);
-        Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
+        Payments.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
         assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
 
-        uint256 cacheMissRailId = pdpServiceWithPayments.getDataSetCacheMissRailId(newDataSetId);
-        assertEq(cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
-
-        uint256 cdnRailId = pdpServiceWithPayments.getDataSetCDNRailId(newDataSetId);
-        assertEq(cdnRailId, 0, "CDN rail ID should be 0 for basic service (no CDN)");
+        assertEq(dataSet.cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
+        assertEq(dataSet.cdnRailId, 0, "CDN rail ID should be 0 for basic service (no CDN)");
     }
 
     // Helper function to get account info from the Payments contract
@@ -612,7 +608,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Verify approval
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP should be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "SP should be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
 
         // Verify SP info
@@ -682,7 +678,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.rejectServiceProvider(sp1);
 
         // Verify not approved
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) == 0, "SP should not be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
 
         // Verify pending registration cleared
@@ -729,7 +725,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
         // Verify SP is approved
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP should be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "SP should be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP should have ID 1");
 
         // Owner removes the provider
@@ -739,7 +735,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(1);
 
         // Verify SP is no longer approved
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) == 0, "SP should not be approved");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 0, "SP should have no ID");
     }
 
@@ -902,14 +898,14 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testIsProviderApproved() public {
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "Should not be approved initially");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) == 0, "Should not be approved initially");
 
         // Register and approve
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl, validPeerId);
         pdpServiceWithPayments.approveServiceProvider(sp1);
 
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "Should be approved after approval");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "Should be approved after approval");
     }
 
     function testGetPendingProvider() public {
@@ -959,7 +955,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Remove again
         pdpServiceWithPayments.removeServiceProvider(2);
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) == 0, "SP should not be approved");
     }
 
     function testRemoveMultipleProviders() public {
@@ -984,9 +980,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.removeServiceProvider(2);
 
         // Verify sp1 and sp3 are still approved
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "SP1 should still be approved");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp3), "SP3 should still be approved");
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp2), "SP2 should not be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "SP1 should still be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp3) != 0, "SP3 should still be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp2) == 0, "SP2 should not be approved");
 
         // Verify IDs
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), 1, "SP1 should still have ID 1");
@@ -1008,7 +1004,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(validServiceUrl2, validPeerId2);
 
         // Verify SP has pending registration but is not approved
-        assertFalse(pdpServiceWithPayments.isProviderApproved(sp1), "SP should not be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) == 0, "SP should not be approved");
         FilecoinWarmStorageService.PendingProviderInfo memory pending = pdpServiceWithPayments.getPendingProvider(sp1);
         assertTrue(pending.registeredAt > 0, "Should have pending registration");
         assertEq(pending.serviceURL, validServiceUrl2, "Pending URL should match new registration");
@@ -1161,7 +1157,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         returns (uint256)
     {
         // Register and approve provider if not already approved
-        if (!pdpServiceWithPayments.isProviderApproved(provider)) {
+        if (pdpServiceWithPayments.getProviderIdByAddress(provider) == 0) {
             vm.prank(provider);
             pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
                 "https://provider.example.com", hex"122019e5f1b0e1e7c1c1b1a1b1c1d1e1f1010203040506070850"
@@ -1259,7 +1255,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         returns (uint256)
     {
         // Register and approve provider if not already approved
-        if (!pdpServiceWithPayments.isProviderApproved(provider)) {
+        if (pdpServiceWithPayments.getProviderIdByAddress(provider) == 0) {
             vm.prank(provider);
             pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
                 "https://provider.example.com/pdp", "https://provider.example.com/retrieve"
@@ -1314,8 +1310,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
 
         // Registry state before
-        bool sp1ApprovedBefore = pdpServiceWithPayments.isProviderApproved(sp1);
-        bool sp2ApprovedBefore = pdpServiceWithPayments.isProviderApproved(sp2);
         uint256 sp1IdBefore = pdpServiceWithPayments.getProviderIdByAddress(sp1);
         uint256 sp2IdBefore = pdpServiceWithPayments.getProviderIdByAddress(sp2);
 
@@ -1327,12 +1321,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
         // Only the data set's payee is updated
-        (, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
-        assertEq(payee, sp2, "Payee should be updated to new storage provider");
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(testDataSetId);
+        assertEq(dataSet.payee, sp2, "Payee should be updated to new storage provider");
 
         // Registry state is unchanged
-        assertEq(pdpServiceWithPayments.isProviderApproved(sp1), sp1ApprovedBefore, "sp1 registry state unchanged");
-        assertEq(pdpServiceWithPayments.isProviderApproved(sp2), sp2ApprovedBefore, "sp2 registry state unchanged");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), sp1IdBefore, "sp1 provider ID unchanged");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), sp2IdBefore, "sp2 provider ID unchanged");
     }
@@ -1351,7 +1343,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
         // Use an unapproved address for the new storage provider
         address unapproved = address(0x9999);
-        assertFalse(pdpServiceWithPayments.isProviderApproved(unapproved), "Unapproved should not be approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(unapproved) == 0, "Unapproved should not be approved");
         // Attempt storage provider change
         bytes memory testExtraData = new bytes(0);
         vm.prank(unapproved);
@@ -1360,7 +1352,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             testDataSetId, unapproved, address(pdpServiceWithPayments), testExtraData
         );
         // Registry state is unchanged
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 should remain approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "sp1 should remain approved");
     }
 
     /**
@@ -1450,13 +1442,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetStorageProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
         // ps1 payee updated, ps2 payee unchanged
-        (, address payee1) = pdpServiceWithPayments.getDataSetParties(ps1);
-        (, address payee2) = pdpServiceWithPayments.getDataSetParties(ps2);
-        assertEq(payee1, sp2, "ps1 payee should be sp2");
-        assertEq(payee2, sp1, "ps2 payee should remain sp1");
+        FilecoinWarmStorageService.DataSetInfo memory dataSet1 = pdpServiceWithPayments.getDataSet(ps1);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet2 = pdpServiceWithPayments.getDataSet(ps2);
+        assertEq(dataSet1.payee, sp2, "ps1 payee should be sp2");
+        assertEq(dataSet2.payee, sp1, "ps2 payee should remain sp1");
         // Registry state unchanged
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 remains approved");
-        assertTrue(pdpServiceWithPayments.isProviderApproved(sp2), "sp2 remains approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "sp1 remains approved");
+        assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp2) != 0, "sp2 remains approved");
     }
 
     /**
@@ -1480,8 +1472,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        (, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
-        assertEq(payee, sp2, "Payee should be updated to new storage provider");
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(testDataSetId);
+        assertEq(dataSet.payee, sp2, "Payee should be updated to new storage provider");
     }
 
     // ============= Data Set Payment Termination Tests =============
