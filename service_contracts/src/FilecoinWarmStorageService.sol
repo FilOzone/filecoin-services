@@ -28,7 +28,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string private constant VERSION = "0.1.0";
+    string public version;
 
     // Events
     event ContractUpgraded(string version, address implementation);
@@ -278,6 +278,7 @@ contract FilecoinWarmStorageService is
         nextServiceProviderId = 1;
 
         // Initialize service metadata
+        version = "1.0.0";
         // TODO: add the url w/ more service info
         description =
             "Verifiable storage powered by Filecoin PDP, with optional CDN integration for fast content delivery.";
@@ -311,7 +312,11 @@ contract FilecoinWarmStorageService is
      */
     function migrate() public onlyProxy reinitializer(3) {
         require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
-        emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+
+        // Update version for this upgrade
+        version = "1.0.0"; // TODO: Update this version number for each upgrade
+
+        emit ContractUpgraded(version, ERC1967Utils.getImplementation());
     }
 
     /**
