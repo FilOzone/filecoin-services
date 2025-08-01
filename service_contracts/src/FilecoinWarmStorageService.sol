@@ -1056,7 +1056,7 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Get the effective rates after commission for both service types
-     * @return serviceFee Service fee for basic service (per TiB per month)
+     * @return serviceFee Service fee (per TiB per month)
      * @return spPayment SP payment (per TiB per month)
      */
     function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
