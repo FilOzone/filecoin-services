@@ -211,7 +211,6 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public sp3;
 
     // Test parameters
-    uint256 public initialOperatorCommissionBps = 500; // 5%
     bytes public extraData;
 
     // Test URLs and peer IDs for registry
@@ -283,7 +282,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, initialOperatorCommissionBps
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN
         );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
@@ -320,11 +319,6 @@ contract FilecoinWarmStorageServiceTest is Test {
             "USDFC token address should be set correctly"
         );
         assertEq(pdpServiceWithPayments.filCDNAddress(), filCDN, "FilCDN address should be set correctly");
-        assertEq(
-            pdpServiceWithPayments.operatorCommissionBps(),
-            initialOperatorCommissionBps,
-            "Operator commission should be set correctly"
-        );
         assertEq(
             pdpServiceWithPayments.basicServiceCommissionBps(),
             0, // 0%
@@ -1658,15 +1652,13 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress,
-        uint256 _initialOperatorCommissionBps
+        address _filCDNAddress
     )
         FilecoinWarmStorageService(
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
-            _filCDNAddress,
-            _initialOperatorCommissionBps
+            _filCDNAddress
         )
     {}
 
@@ -1719,8 +1711,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
-            0 // 0% commission
+            filCDN
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
@@ -1815,8 +1806,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
-            0 // 0% commission
+            filCDN
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,

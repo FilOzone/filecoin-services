@@ -26,8 +26,6 @@ library Errors {
     /// @notice Enumerates the types of commission rates used in the protocol
     /// @dev Used as a parameter to {CommissionExceedsMaximum} to specify which commission type exceeded the limit
     enum CommissionType {
-        /// The operator commission rate
-        Operator,
         /// The basic service commission rate (applies to non-CDN storage service)
         BasicService,
         /// The CDN service commission rate (applies to FilecoinCDN storage service)
