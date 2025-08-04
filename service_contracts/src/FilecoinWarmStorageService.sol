@@ -105,6 +105,7 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the data set is registered for CDN add-on
         uint256 paymentEndEpoch; // 0 if payment is not terminated
+        bool isNewFormat; // Track whether this dataset uses new format (explicit beneficiary)
     }
 
     // Decode structure for data set creation extra data
@@ -410,7 +411,7 @@ contract FilecoinWarmStorageService is
             require(beneficiary != address(0), Errors.ZeroAddress(Errors.AddressField.Beneficiary));
             actualBeneficiary = beneficiary;
         } else {
-            // Legacy format: beneficiary is the creator
+            // Legacy format: beneficiary is the creator (initial storage provider)
             actualBeneficiary = creator;
         }
 
@@ -439,6 +440,7 @@ contract FilecoinWarmStorageService is
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
+        info.isNewFormat = isNewFormat; // Track the format for security
 
         // Create the payment rails using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
@@ -730,6 +732,12 @@ contract FilecoinWarmStorageService is
 
         // Update the data set payee (storage provider)
         info.payee = newStorageProvider;
+
+        // Only update beneficiary for legacy format (where beneficiary follows payee)
+        // For new format, beneficiary should NEVER change (hot/cold key separation)
+        if (!info.isNewFormat && info.beneficiary == oldStorageProvider) {
+            info.beneficiary = newStorageProvider;
+        }
 
         // Emit event for off-chain tracking
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
@@ -1466,7 +1474,8 @@ contract FilecoinWarmStorageService is
                 pieceMetadata: storageInfo.pieceMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
                 withCDN: storageInfo.withCDN,
-                paymentEndEpoch: storageInfo.paymentEndEpoch
+                paymentEndEpoch: storageInfo.paymentEndEpoch,
+                isNewFormat: storageInfo.isNewFormat
             });
         }
         return dataSets;
