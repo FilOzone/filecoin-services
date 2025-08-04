@@ -313,7 +313,7 @@ contract FilecoinWarmStorageService is
 
     // Initial value for challenge window start
     // Can be used for first call to nextProvingPeriod
-    function initChallengeWindowStart() external view returns (uint256) {
+    function initChallengeWindowStart() public view returns (uint256) {
         return block.number + getMaxProvingPeriod() - challengeWindow();
     }
 

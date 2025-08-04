@@ -12,5 +12,4 @@
 	url = https://github.com/FilOzone/fws-payments
 [submodule "service_contracts/lib/pdp"]
 	path = service_contracts/lib/pdp
-	url = https://github.com/FilOzone/pdp.git
-	branch = main
+	url = https://github.com/FilOzone/pdp
