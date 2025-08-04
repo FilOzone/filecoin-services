@@ -1294,8 +1294,8 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     /**
-     * @notice Test successful storage provider change between two approved providers
-     * @dev Verifies only the data set's payee is updated, event is emitted, and registry state is unchanged.
+     * @notice Test successful storage provider change between two approved providers (Legacy Format)
+     * @dev Verifies that for legacy format, both payee and beneficiary are updated since they're the same
      */
     function testStorageProviderChangedSuccessDecoupled() public {
         // Register and approve two providers
@@ -1310,7 +1310,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
 
-        // Create a data set with sp1 as the storage provider
+        // Create a data set with sp1 as the storage provider (legacy format)
         uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
 
         // Registry state before
@@ -1326,15 +1326,93 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
-        // Only the data set's payee is updated
-        (, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
-        assertEq(payee, sp2, "Payee should be updated to new storage provider");
+        // After changing the storage provider, check:
+        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
+        assertEq(info.payee, sp2, "Payee should be updated");
+        assertEq(info.beneficiary, sp2, "Beneficiary should follow payee for legacy format");
+        assertEq(info.isNewFormat, false, "Should be legacy format");
+
+        // resolveBeneficiary returns current payee for legacy (since beneficiary follows payee)
+        address resolved = pdpServiceWithPayments.resolveBeneficiary(testDataSetId);
+        assertEq(resolved, sp2, "Resolved beneficiary follows current payee for legacy");
 
         // Registry state is unchanged
         assertEq(pdpServiceWithPayments.isProviderApproved(sp1), sp1ApprovedBefore, "sp1 registry state unchanged");
         assertEq(pdpServiceWithPayments.isProviderApproved(sp2), sp2ApprovedBefore, "sp2 registry state unchanged");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), sp1IdBefore, "sp1 provider ID unchanged");
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp2), sp2IdBefore, "sp2 provider ID unchanged");
+    }
+
+    /**
+     * @notice Test storage provider change with new format (separate beneficiary)
+     * @dev Verifies that for new format, payee changes but beneficiary can remain separate
+     */
+    function testStorageProviderChangedWithNewFormat() public {
+        // Register and approve two providers
+        vm.prank(sp1);
+        pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
+            "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
+        );
+        pdpServiceWithPayments.approveServiceProvider(sp1);
+        vm.prank(sp2);
+        pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
+            "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
+        );
+        pdpServiceWithPayments.approveServiceProvider(sp2);
+
+        // Create a data set with new format (separate beneficiary)
+        address beneficiary = address(0x1234); // Separate beneficiary
+        
+        // Prepare extra data with new format (5 parameters)
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            metadata: "Test Data Set New Format",
+            payer: client,
+            withCDN: false,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedData = abi.encode(
+            createData.metadata, 
+            createData.payer, 
+            createData.withCDN, 
+            beneficiary, // Separate beneficiary
+            createData.signature
+        );
+
+        // Setup client payment approval
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
+        );
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+
+        // Create data set as approved provider
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        uint256 testDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+
+        // Verify initial state: payee is sp1, beneficiary is separate
+        (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
+        assertEq(payee, beneficiary, "Beneficiary should be the separate address");
+        
+        (, address actualPayee,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
+        assertEq(actualPayee, sp1, "Payee should be sp1 initially");
+
+        // Change storage provider from sp1 to sp2
+        bytes memory testExtraData = new bytes(0);
+        vm.expectEmit(true, true, true, true);
+        emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
+        vm.prank(sp2);
+        mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
+
+        // For new format: payee should change, but beneficiary remains the same
+        (payer, payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
+        assertEq(payee, beneficiary, "Beneficiary should remain unchanged (new format)");
+        
+        (, actualPayee,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
+        assertEq(actualPayee, sp2, "Payee should be updated to new storage provider");
     }
 
     /**
@@ -1449,11 +1527,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit DataSetStorageProviderChanged(ps1, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetStorageProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
-        // ps1 payee updated, ps2 payee unchanged
-        (, address payee1) = pdpServiceWithPayments.getDataSetParties(ps1);
-        (, address payee2) = pdpServiceWithPayments.getDataSetParties(ps2);
-        assertEq(payee1, sp2, "ps1 payee should be sp2");
-        assertEq(payee2, sp1, "ps2 payee should remain sp1");
+        // If we have multiple datasets:
+        FilecoinWarmStorageService.DataSetInfo memory info1 = pdpServiceWithPayments.getDataSet(ps1);
+        FilecoinWarmStorageService.DataSetInfo memory info2 = pdpServiceWithPayments.getDataSet(ps2);
+        assertEq(info1.payee, sp2, "ps1 payee should be sp2");
+        assertEq(info2.payee, sp1, "ps2 payee should remain sp1");
+        assertEq(info1.beneficiary, sp2, "ps1 beneficiary should follow payee for legacy format");
+        assertEq(info2.beneficiary, sp1, "ps2 beneficiary should remain original storage provider for legacy format");
+        assertEq(info1.isNewFormat, false, "ps1 should be legacy format");
+        assertEq(info2.isNewFormat, false, "ps2 should be legacy format");
+
+        address resolvedBeneficiary1 = pdpServiceWithPayments.resolveBeneficiary(ps1);
+        address resolvedBeneficiary2 = pdpServiceWithPayments.resolveBeneficiary(ps2);
+        assertEq(resolvedBeneficiary1, sp2, "ps1 resolved beneficiary should be current payee");
+        assertEq(resolvedBeneficiary2, sp1, "ps2 resolved beneficiary should be current payee");
         // Registry state unchanged
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp1), "sp1 remains approved");
         assertTrue(pdpServiceWithPayments.isProviderApproved(sp2), "sp2 remains approved");
@@ -1480,8 +1567,15 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        (, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
-        assertEq(payee, sp2, "Payee should be updated to new storage provider");
+        // For legacy format: payee should be updated, beneficiary should follow payee
+        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
+        assertEq(info.payee, sp2, "Payee should be updated to new storage provider");
+        assertEq(info.beneficiary, sp2, "Beneficiary should follow payee for legacy format");
+        assertEq(info.isNewFormat, false, "Should be legacy format");
+        
+        // For legacy format: resolveBeneficiary returns current payee (since beneficiary follows payee)
+        address resolvedBeneficiary = pdpServiceWithPayments.resolveBeneficiary(testDataSetId);
+        assertEq(resolvedBeneficiary, sp2, "Resolved beneficiary should be current payee for legacy format");
     }
 
     // ============= Data Set Payment Termination Tests =============
