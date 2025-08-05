@@ -55,6 +55,11 @@ contract-size-check:
 	@echo "Checking contract sizes..."
 	bash tools/check-contract-size.sh src/
 
+.PHONY: abi
+abi:
+	@echo "Generating ABI files for all contracts in src/"
+	bash tools/generate-abi.sh src/ ../subgraph/abis
+
 # Help target
 .PHONY: help
 help:
@@ -66,5 +71,6 @@ help:
 	@echo "  fmt        - Format code"
 	@echo "  fmt-check  - Check code formatting"
 	@echo "  coverage   - Generate test coverage"
-	@echo "  help       - Show this help message"
 	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
+	@echo "  abi        - Generate ABI files for all contracts (not libraries) in src/"
+	@echo "  help       - Show this help message"
