@@ -341,7 +341,7 @@ contract FilecoinWarmStorageService is
 
     // The start of the NEXT OPEN proving period's challenge window
     // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
-    function nextChallengeWindowStart(uint256 setId) public view returns (uint256) {
+    function nextChallengeWindowStart(uint256 setId) external view returns (uint256) {
         if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
             revert Errors.ProvingPeriodNotInitialized(setId);
         }
@@ -786,13 +786,13 @@ contract FilecoinWarmStorageService is
         // Revert if no payment rail is configured for this data set
         require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
-        uint256 totalBytes = getDataSetSizeInBytes(leafCount);
+        uint256 totalBytes = leafCount * BYTES_PER_LEAF;
         Payments payments = Payments(paymentsContractAddress);
 
         // Update the PDP rail payment rate with the new rate and no one-time
         // payment
         uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
-        uint256 newStorageRatePerEpoch = calculateStorageRatePerEpoch(totalBytes);
+        uint256 newStorageRatePerEpoch = _calculateStorageRate(totalBytes);
         payments.modifyRailPayment(
             pdpRailId,
             newStorageRatePerEpoch,
@@ -802,13 +802,13 @@ contract FilecoinWarmStorageService is
 
         // Update the CDN rail payment rates, if applicable
         if (dataSetInfo[dataSetId].withCDN) {
+            (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
+
             uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
-            uint256 newCacheMissRatePerEpoch = calculateCacheMissRatePerEpoch(totalBytes);
             payments.modifyRailPayment(cacheMissRailId, newCacheMissRatePerEpoch, 0);
             emit RailRateUpdated(dataSetId, cacheMissRailId, newCacheMissRatePerEpoch);
 
             uint256 cdnRailId = dataSetInfo[dataSetId].cdnRailId;
-            uint256 newCDNRatePerEpoch = calculateCDNRatePerEpoch(totalBytes);
             payments.modifyRailPayment(cdnRailId, newCDNRatePerEpoch, 0);
             emit RailRateUpdated(dataSetId, cdnRailId, newCDNRatePerEpoch);
         }
@@ -912,33 +912,41 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Calculate the PDP per-epoch rate based on total storage size
-     * @dev Rate is 2 USDFC per TiB per month.
+     * @notice Calculate all per-epoch rates based on total storage size
+     * @dev Returns storage, cache miss, and CDN rates per TiB per month
      * @param totalBytes Total size of the stored data in bytes
-     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     * @return storageRate The PDP storage rate per epoch
+     * @return cacheMissRate The cache miss rate per epoch
+     * @return cdnRate The CDN rate per epoch
      */
-    function calculateStorageRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
+    function calculateRatesPerEpoch(uint256 totalBytes)
+        external
+        view
+        returns (uint256 storageRate, uint256 cacheMissRate, uint256 cdnRate)
+    {
+        storageRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
+        cacheMissRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
+        cdnRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
+    }
+
+    /**
+     * @notice Calculate the storage rate per epoch (internal use)
+     * @param totalBytes Total size of the stored data in bytes
+     * @return The storage rate per epoch
+     */
+    function _calculateStorageRate(uint256 totalBytes) internal view returns (uint256) {
         return calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
-     * @notice Calculate the cache miss per-epoch rate based on total storage size
-     * @dev Rate is 1 USDFC per TiB per month.
+     * @notice Calculate the CDN rates per epoch (internal use)
      * @param totalBytes Total size of the stored data in bytes
-     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
+     * @return cacheMissRate The cache miss rate per epoch
+     * @return cdnRate The CDN rate per epoch
      */
-    function calculateCacheMissRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
-    }
-
-    /**
-     * @notice Calculate the CDN per-epoch rate based on total storage size
-     * @dev Rate is 1 USDFC per TiB per month.
-     * @param totalBytes Total size of the stored data in bytes
-     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
-     */
-    function calculateCDNRatePerEpoch(uint256 totalBytes) public view returns (uint256) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
+    function _calculateCDNRates(uint256 totalBytes) internal view returns (uint256 cacheMissRate, uint256 cdnRate) {
+        cacheMissRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
+        cdnRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
@@ -1017,7 +1025,7 @@ contract FilecoinWarmStorageService is
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(uint256 leafCount) public pure returns (uint256) {
+    function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
     }
 
@@ -1049,33 +1057,6 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Get the payment rail ID for a data set
-     * @param dataSetId The ID of the data set
-     * @return The payment rail ID, or 0 if not found
-     */
-    function getDataSetPdpRailId(uint256 dataSetId) external view returns (uint256) {
-        return dataSetInfo[dataSetId].pdpRailId;
-    }
-
-    /**
-     * @notice Get the cache miss payment rail ID for a data set
-     * @param dataSetId The ID of the data set
-     * @return The payment rail ID, or 0 if not found
-     */
-    function getDataSetCacheMissRailId(uint256 dataSetId) external view returns (uint256) {
-        return dataSetInfo[dataSetId].cacheMissRailId;
-    }
-
-    /**
-     * @notice Get the CDN payment rail ID for a data set
-     * @param dataSetId The ID of the data set
-     * @return The payment rail ID, or 0 if not found
-     */
-    function getDataSetCDNRailId(uint256 dataSetId) external view returns (uint256) {
-        return dataSetInfo[dataSetId].cdnRailId;
-    }
-
-    /**
      * @notice Get payer and payee addresses for a data set (backward compatible)
      * @dev Returns the payment recipient which could be beneficiary or payee
      * @param dataSetId The ID of the data set
@@ -1100,24 +1081,6 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
         return (info.payer, info.payee, resolveBeneficiary(dataSetId));
-    }
-
-    /**
-     * @notice Get the metadata for a data set
-     * @param dataSetId The ID of the data set
-     * @return The metadata string
-     */
-    function getDataSetMetadata(uint256 dataSetId) external view returns (string memory) {
-        return dataSetInfo[dataSetId].metadata;
-    }
-
-    /**
-     * @notice Get CDN enabled for a data set
-     * @param dataSetId The ID of the data set
-     * @return CDN enabled
-     */
-    function getDataSetWithCDN(uint256 dataSetId) external view returns (bool) {
-        return dataSetInfo[dataSetId].withCDN;
     }
 
     /**
@@ -1428,15 +1391,6 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Check if a provider is approved
-     * @param provider The address to check
-     * @return True if approved, false otherwise
-     */
-    function isProviderApproved(address provider) external view returns (bool) {
-        return approvedProvidersMap[provider];
-    }
-
-    /**
      * @notice Get pending registration information
      * @param provider The address of the provider
      * @return The pending registration info
@@ -1454,7 +1408,7 @@ contract FilecoinWarmStorageService is
         return providerToId[provider];
     }
 
-    function getClientDataSets(address client) public view returns (DataSetInfo[] memory) {
+    function getClientDataSets(address client) external view returns (DataSetInfo[] memory) {
         uint256[] memory dataSetIds = clientDataSets[client];
 
         DataSetInfo[] memory dataSets = new DataSetInfo[](dataSetIds.length);
