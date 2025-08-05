@@ -144,7 +144,7 @@ contract FilecoinWarmStorageService is
     uint256 private nextServiceProviderId = 1;
 
     struct ApprovedProviderInfo {
-        address storageProvider;
+        address serviceProvider;
         string serviceURL; // HTTP server URL for provider services; TODO: Standard API endpoints:{serviceURL}/api/upload / {serviceURL}/api/info
         bytes peerId; // libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt;
@@ -355,10 +355,10 @@ contract FilecoinWarmStorageService is
             return new ApprovedProviderInfo[](0);
         }
 
-        // First pass: Count non-empty providers (those with non-zero storage provider address)
+        // First pass: Count non-empty providers (those with non-zero service provider address)
         uint256 activeCount = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].storageProvider != address(0)) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
                 activeCount++;
             }
         }
@@ -374,7 +374,7 @@ contract FilecoinWarmStorageService is
         // Second pass: Fill array with only active providers
         uint256 currentIndex = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].storageProvider != address(0)) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
                 providers[currentIndex] = approvedProviders[i];
                 currentIndex++;
             }
@@ -1190,7 +1190,7 @@ contract FilecoinWarmStorageService is
         // Assign ID and store provider info
         uint256 providerId = nextServiceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
-            storageProvider: provider,
+            serviceProvider: provider,
             serviceURL: pending.serviceURL,
             peerId: pending.peerId,
             registeredAt: pending.registeredAt,
@@ -1240,7 +1240,7 @@ contract FilecoinWarmStorageService is
 
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
-        address providerAddress = providerInfo.storageProvider;
+        address providerAddress = providerInfo.serviceProvider;
         require(providerAddress != address(0), Errors.ProviderNotFound(providerId));
 
         // Check if provider is currently approved
@@ -1270,7 +1270,7 @@ contract FilecoinWarmStorageService is
             Errors.InvalidProviderId(nextServiceProviderId, providerId)
         );
         ApprovedProviderInfo memory provider = approvedProviders[providerId];
-        require(provider.storageProvider != address(0), Errors.ProviderNotFound(providerId));
+        require(provider.serviceProvider != address(0), Errors.ProviderNotFound(providerId));
         return provider;
     }
 
