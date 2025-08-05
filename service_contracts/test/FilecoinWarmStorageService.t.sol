@@ -613,7 +613,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify SP info
         FilecoinWarmStorageService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
-        assertEq(info.storageProvider, sp1, "Storage provider should match");
+        assertEq(info.serviceProvider, sp1, "Storage provider should match");
         assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
         assertEq(info.peerId, validPeerId, "Peer ID should match");
         assertEq(info.registeredAt, registrationBlock, "Registration epoch should match");
@@ -877,7 +877,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get provider info
         FilecoinWarmStorageService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
-        assertEq(info.storageProvider, sp1, "Storage provider should match");
+        assertEq(info.serviceProvider, sp1, "Storage provider should match");
         assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
     }
 
@@ -1054,9 +1054,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ApprovedProviderInfo[] memory providers =
             pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 3, "Should have three approved providers");
-        assertEq(providers[0].storageProvider, sp1, "First provider should be sp1");
-        assertEq(providers[1].storageProvider, sp2, "Second provider should be sp2");
-        assertEq(providers[2].storageProvider, sp3, "Third provider should be sp3");
+        assertEq(providers[0].serviceProvider, sp1, "First provider should be sp1");
+        assertEq(providers[1].serviceProvider, sp2, "Second provider should be sp2");
+        assertEq(providers[2].serviceProvider, sp3, "Third provider should be sp3");
 
         // Remove the middle provider (sp2 with ID 2)
         pdpServiceWithPayments.removeServiceProvider(2);
@@ -1066,8 +1066,8 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should only have 2 elements now (removed provider filtered out)
         assertEq(providers.length, 2, "Array should only contain active providers");
-        assertEq(providers[0].storageProvider, sp1, "First provider should still be sp1");
-        assertEq(providers[1].storageProvider, sp3, "Second provider should be sp3 (sp2 filtered out)");
+        assertEq(providers[0].serviceProvider, sp1, "First provider should still be sp1");
+        assertEq(providers[1].serviceProvider, sp3, "Second provider should be sp3 (sp2 filtered out)");
 
         // Verify the URLs are correct for remaining providers
         assertEq(providers[0].serviceURL, validServiceUrl, "SP1 provider service URL should be correct");
@@ -1097,7 +1097,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ApprovedProviderInfo[] memory providers =
             pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 1, "Should have one approved provider");
-        assertEq(providers[0].storageProvider, sp1, "Provider should be sp1");
+        assertEq(providers[0].serviceProvider, sp1, "Provider should be sp1");
         assertEq(providers[0].serviceURL, validServiceUrl, "Provider service URL should match");
 
         // Remove the single provider
@@ -1145,8 +1145,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Should only return providers 2 and 5
         providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 2, "Should only have two active providers");
-        assertEq(providers[0].storageProvider, sps[1], "First active provider should be sp2");
-        assertEq(providers[1].storageProvider, sps[4], "Second active provider should be sp5");
+        assertEq(providers[0].serviceProvider, sps[1], "First active provider should be sp2");
+        assertEq(providers[1].serviceProvider, sps[4], "Second active provider should be sp5");
         assertEq(providers[0].serviceURL, serviceUrls[1], "SP2 URL should match");
         assertEq(providers[1].serviceURL, serviceUrls[4], "SP5 URL should match");
     }
