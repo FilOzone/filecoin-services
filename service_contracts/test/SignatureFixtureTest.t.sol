@@ -100,11 +100,11 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
         return _hashTypedDataV4(structHash);
     }
 
-    function getAddPiecesDigest(uint256 clientDataSetId, uint256 firstAdded, IPDPTypes.PieceData[] memory pieceDataArray)
-        public
-        view
-        returns (bytes32)
-    {
+    function getAddPiecesDigest(
+        uint256 clientDataSetId,
+        uint256 firstAdded,
+        IPDPTypes.PieceData[] memory pieceDataArray
+    ) public view returns (bytes32) {
         // Hash each PieceData struct
         bytes32[] memory pieceDataHashes = new bytes32[](pieceDataArray.length);
         for (uint256 i = 0; i < pieceDataArray.length; i++) {
@@ -125,8 +125,9 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
         view
         returns (bytes32)
     {
-        bytes32 structHash =
-            keccak256(abi.encode(SCHEDULE_PIECE_REMOVALS_TYPEHASH, clientDataSetId, keccak256(abi.encodePacked(pieceIds))));
+        bytes32 structHash = keccak256(
+            abi.encode(SCHEDULE_PIECE_REMOVALS_TYPEHASH, clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
+        );
         return _hashTypedDataV4(structHash);
     }
 
@@ -187,58 +188,59 @@ contract SignatureFixtureTest is Test {
         testPieceIds[0] = 1;
         testPieceIds[1] = 3;
         testPieceIds[2] = 5;
-        bytes32 schedulePieceRemovalsDigest = testContract.getSchedulePieceRemovalsDigest(CLIENT_DATA_SET_ID, testPieceIds);
+        bytes32 schedulePieceRemovalsDigest =
+            testContract.getSchedulePieceRemovalsDigest(CLIENT_DATA_SET_ID, testPieceIds);
 
         bytes32 deleteDataSetDigest = testContract.getDeleteDataSetDigest(CLIENT_DATA_SET_ID);
 
         // Output JavaScript format for copying to synapse-sdk tests
         console.log("Copy this JavaScript const to synapse-sdk src/test/pdp-auth.test.ts:");
         console.log("const FIXTURES = {");
-        console.log('  // Test private key from Solidity (never use in production!)');
+        console.log("  // Test private key from Solidity (never use in production!)");
         console.log('  privateKey: "0x%s",', vm.toString(TEST_PRIVATE_KEY));
         console.log('  signerAddress: "%s",', TEST_SIGNER);
         console.log('  contractAddress: "%s",', address(testContract));
-        console.log('  chainId: %d,', block.chainid);
+        console.log("  chainId: %d,", block.chainid);
         console.log('  domainSeparator: "%s",', vm.toString(testContract.getDomainSeparator()));
         console.log("");
-        console.log('  // EIP-712 domain separator components');
-        console.log('  domain: {');
+        console.log("  // EIP-712 domain separator components");
+        console.log("  domain: {");
         console.log('    name: "FilecoinWarmStorageService",');
         console.log('    version: "1",');
-        console.log('    chainId: %d,', block.chainid);
+        console.log("    chainId: %d,", block.chainid);
         console.log('    verifyingContract: "%s"', address(testContract));
-        console.log('  },');
+        console.log("  },");
         console.log("");
-        console.log('  // Expected EIP-712 signatures');
-        console.log('  signatures: {');
-        console.log('    createDataSet: {');
+        console.log("  // Expected EIP-712 signatures");
+        console.log("  signatures: {");
+        console.log("    createDataSet: {");
         console.log('      signature: "%s",', vm.toString(createDataSetSig));
         console.log('      digest: "%s",', vm.toString(createDataSetDigest));
-        console.log('      clientDataSetId: %d,', CLIENT_DATA_SET_ID);
+        console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
         console.log('      payee: "%s",', PAYEE);
-        console.log('      withCDN: %s', WITH_CDN ? "true" : "false");
+        console.log("      withCDN: %s", WITH_CDN ? "true" : "false");
         console.log("    },");
-        console.log('    addPieces: {');
+        console.log("    addPieces: {");
         console.log('      signature: "%s",', vm.toString(addPiecesSig));
         console.log('      digest: "%s",', vm.toString(addPiecesDigest));
-        console.log('      clientDataSetId: %d,', CLIENT_DATA_SET_ID);
-        console.log('      firstAdded: %d,', FIRST_ADDED);
-        console.log('      pieceCidBytes: [');
+        console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
+        console.log("      firstAdded: %d,", FIRST_ADDED);
+        console.log("      pieceCidBytes: [");
         console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
         console.log('        "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
         console.log("      ],");
-        console.log('      pieceSizes: [2048, 4096]');
+        console.log("      pieceSizes: [2048, 4096]");
         console.log("    },");
-        console.log('    schedulePieceRemovals: {');
+        console.log("    schedulePieceRemovals: {");
         console.log('      signature: "%s",', vm.toString(schedulePieceRemovalsSig));
         console.log('      digest: "%s",', vm.toString(schedulePieceRemovalsDigest));
-        console.log('      clientDataSetId: %d,', CLIENT_DATA_SET_ID);
-        console.log('      pieceIds: [1, 3, 5]');
+        console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
+        console.log("      pieceIds: [1, 3, 5]");
         console.log("    },");
-        console.log('    deleteDataSet: {');
+        console.log("    deleteDataSet: {");
         console.log('      signature: "%s",', vm.toString(deleteDataSetSig));
         console.log('      digest: "%s",', vm.toString(deleteDataSetDigest));
-        console.log('      clientDataSetId: %d', CLIENT_DATA_SET_ID);
+        console.log("      clientDataSetId: %d", CLIENT_DATA_SET_ID);
         console.log("    }");
         console.log("  }");
         console.log("}");
