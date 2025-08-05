@@ -1354,7 +1354,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Create a data set with new format (separate beneficiary)
         address beneficiary = address(0x1234); // Separate beneficiary
-        
+
         // Prepare extra data with new format (5 parameters)
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set New Format",
@@ -1364,9 +1364,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         });
 
         bytes memory encodedData = abi.encode(
-            createData.metadata, 
-            createData.payer, 
-            createData.withCDN, 
+            createData.metadata,
+            createData.payer,
+            createData.withCDN,
             beneficiary, // Separate beneficiary
             createData.signature
         );
@@ -1388,7 +1388,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify initial state: payee is sp1, beneficiary is separate
         (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, beneficiary, "Beneficiary should be the separate address");
-        
+
         (, address actualPayee,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
         assertEq(actualPayee, sp1, "Payee should be sp1 initially");
 
@@ -1402,7 +1402,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // For new format: payee should change, but beneficiary remains the same
         (payer, payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, beneficiary, "Beneficiary should remain unchanged (new format)");
-        
+
         (, actualPayee,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
         assertEq(actualPayee, sp2, "Payee should be updated to new storage provider");
     }
@@ -1564,7 +1564,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(info.payee, sp2, "Payee should be updated to new storage provider");
         assertEq(info.beneficiary, sp2, "Beneficiary should follow payee for legacy format");
         assertEq(info.isNewFormat, false, "Should be legacy format");
-        
+
         // For legacy format: resolveBeneficiary returns current payee (since beneficiary follows payee)
         address resolvedBeneficiary = pdpServiceWithPayments.resolveBeneficiary(testDataSetId);
         assertEq(resolvedBeneficiary, sp2, "Resolved beneficiary should be current payee for legacy format");

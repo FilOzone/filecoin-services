@@ -45,7 +45,7 @@ contract FilecoinWarmStorageService is
         address payee,
         bool withCDN
     );
-    
+
     // Emitted when a data set's beneficiary is set or resolved
     event DataSetBeneficiaryResolved(uint256 indexed dataSetId, address indexed beneficiary);
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
@@ -399,11 +399,11 @@ contract FilecoinWarmStorageService is
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, Errors.ExtraDataRequired());
-    
+
         // Decode with support for both legacy and new formats
-        (DataSetCreateData memory createData, address beneficiary, bool isNewFormat) = 
+        (DataSetCreateData memory createData, address beneficiary, bool isNewFormat) =
             decodeDataSetCreateData(extraData);
-        
+
         // Determine actual beneficiary based on format
         address actualBeneficiary;
         if (isNewFormat) {
@@ -445,12 +445,12 @@ contract FilecoinWarmStorageService is
         // Create the payment rails using the Payments contract
         Payments payments = Payments(paymentsContractAddress);
         uint256 pdpRailId = payments.createRail(
-            usdfcTokenAddress,        // token address
-            createData.payer,         // from (payer)
-            actualBeneficiary,        // to (beneficiary) - CHANGED from creator
-            address(this),            // validator
-            info.commissionBps,       // commission rate
-            address(this)             // terminator
+            usdfcTokenAddress, // token address
+            createData.payer, // from (payer)
+            actualBeneficiary, // to (beneficiary) - CHANGED from creator
+            address(this), // validator
+            info.commissionBps, // commission rate
+            address(this) // terminator
         );
 
         // Store the rail ID
@@ -466,24 +466,24 @@ contract FilecoinWarmStorageService is
 
         if (createData.withCDN == true) {
             cacheMissRailId = payments.createRail(
-                usdfcTokenAddress,    // token address
-                createData.payer,     // from (payer)
-                actualBeneficiary,    // Payment goes to beneficiary
-                address(this),        // arbiter
-                0,                    // no service commission
-                address(this)         // terminator
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                actualBeneficiary, // Payment goes to beneficiary
+                address(this), // arbiter
+                0, // no service commission
+                address(this) // terminator
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
             payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, 0);
 
             cdnRailId = payments.createRail(
-                usdfcTokenAddress,    // token address
-                createData.payer,     // from (payer)
-                filCDNAddress,        // to (CDN) - unchanged
-                address(this),        // arbiter
-                0,                    // no service commission
-                address(this)         // terminator
+                usdfcTokenAddress, // token address
+                createData.payer, // from (payer)
+                filCDNAddress, // to (CDN) - unchanged
+                address(this), // arbiter
+                0, // no service commission
+                address(this) // terminator
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
@@ -494,7 +494,7 @@ contract FilecoinWarmStorageService is
         emit DataSetRailsCreated(
             dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
         );
-    
+
         // Emit beneficiary resolution event - ADDED THIS
         emit DataSetBeneficiaryResolved(dataSetId, actualBeneficiary);
     }
@@ -953,16 +953,10 @@ contract FilecoinWarmStorageService is
      * @notice Helper function to try decoding new format
      * @dev This needs to be external for try/catch to work
      */
-    function tryDecodeNewFormat(bytes calldata extraData) 
-        external 
-        pure 
-        returns (
-        string memory metadata,
-        address payer,
-        bool withCDN,
-        address beneficiary,
-        bytes memory signature
-    ) 
+    function tryDecodeNewFormat(bytes calldata extraData)
+        external
+        pure
+        returns (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature)
     {
         return abi.decode(extraData, (string, address, bool, address, bytes));
     }
@@ -974,50 +968,32 @@ contract FilecoinWarmStorageService is
      * @return beneficiary The beneficiary address (address(0) for legacy format)
      * @return isNewFormat Whether the new format was used
      */
-    function decodeDataSetCreateData(bytes calldata extraData) 
-        internal 
-        view 
-        returns (
-        DataSetCreateData memory createData,
-        address beneficiary,
-        bool isNewFormat
-    ) 
+    function decodeDataSetCreateData(bytes calldata extraData)
+        internal
+        view
+        returns (DataSetCreateData memory createData, address beneficiary, bool isNewFormat)
     {
-    // Try to decode with the new format first (5 parameters)
-    try this.tryDecodeNewFormat(extraData) returns (
-        string memory metadata,
-        address payer,
-        bool withCDN,
-        address beneficiaryAddr,
-        bytes memory signature
-    ) {
-        // Successfully decoded new format
-        return (
-            DataSetCreateData({
-                metadata: metadata,
-                payer: payer,
-                withCDN: withCDN,
-                signature: signature
-            }),
-            beneficiaryAddr,
-            true
-        );
-    } catch {
-        // Fall back to legacy format (4 parameters)
-        (string memory metadata, address payer, bool withCDN, bytes memory signature) =
-            abi.decode(extraData, (string, address, bool, bytes));
-        
-        return (
-            DataSetCreateData({
-                metadata: metadata,
-                payer: payer,
-                withCDN: withCDN,
-                signature: signature
-            }),
-            address(0),
-            false
-        );
-    }
+        // Try to decode with the new format first (5 parameters)
+        try this.tryDecodeNewFormat(extraData) returns (
+            string memory metadata, address payer, bool withCDN, address beneficiaryAddr, bytes memory signature
+        ) {
+            // Successfully decoded new format
+            return (
+                DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature}),
+                beneficiaryAddr,
+                true
+            );
+        } catch {
+            // Fall back to legacy format (4 parameters)
+            (string memory metadata, address payer, bool withCDN, bytes memory signature) =
+                abi.decode(extraData, (string, address, bool, bytes));
+
+            return (
+                DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature}),
+                address(0),
+                false
+            );
+        }
     }
 
     /**
@@ -1037,14 +1013,14 @@ contract FilecoinWarmStorageService is
      * @return The beneficiary address
      */
     function resolveBeneficiary(uint256 dataSetId) public view returns (address) {
-    DataSetInfo storage info = dataSetInfo[dataSetId];
-    require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
-    
-    address beneficiary = info.beneficiary;
-    if (beneficiary == address(0)) {
-        return info.payee; // Legacy fallback
-    }
-    return beneficiary;
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+
+        address beneficiary = info.beneficiary;
+        if (beneficiary == address(0)) {
+            return info.payee; // Legacy fallback
+        }
+        return beneficiary;
     }
 
     /**
@@ -1076,8 +1052,11 @@ contract FilecoinWarmStorageService is
      * @return payee The SP's control address (hot key)
      * @return beneficiary The SP's payment address (cold key)
      */
-    function getDataSetPartiesExtended(uint256 dataSetId) 
-        external view returns (address payer, address payee, address beneficiary) {
+    function getDataSetPartiesExtended(uint256 dataSetId)
+        external
+        view
+        returns (address payer, address payee, address beneficiary)
+    {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
         return (info.payer, info.payee, resolveBeneficiary(dataSetId));
