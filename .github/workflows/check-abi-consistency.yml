@@ -31,4 +31,4 @@ jobs:
         run: |
           cd service_contracts
           make abi
-          git diff --exit-code subgraph/abis/ || (echo "ABI files are not consistent. Please run 'make abi' inside service_contracts."; exit 1)
+          git diff --exit-code -- subgraph/abis/ || (echo "ABI files are not consistent. Please run 'make abi' inside service_contracts."; exit 1)
