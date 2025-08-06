@@ -20,7 +20,9 @@ library Errors {
         /// Payer address
         Payer,
         /// Storage provider address
-        StorageProvider
+        StorageProvider,
+        /// Beneficiary address
+        Beneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
