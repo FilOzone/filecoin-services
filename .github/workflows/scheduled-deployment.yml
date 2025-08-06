@@ -1,9 +1,9 @@
 name: Scheduled Contract Deployment
 
 on:
-  # Run weekly on Sundays at 2 AM UTC to minimize impact
+  # Run daily at 2 AM UTC.
   schedule:
-    - cron: '0 2 * * 0'
+    - cron: '0 2 * * *'
   
   # Allow manual triggering for testing and on-demand deployments
   workflow_dispatch:
@@ -170,7 +170,7 @@ jobs:
             
             ### Deployment Details
             - **Timestamp:** ${deploymentTime}
-            - **Trigger:** ${trigger === 'schedule' ? 'Scheduled (Weekly)' : 'Manual'}
+            - **Trigger:** ${trigger === 'schedule' ? 'Scheduled (Daily)' : 'Manual'}
             - **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             
             ### Contract Addresses
@@ -227,7 +227,7 @@ jobs:
             
             ### Failure Details
             - **Timestamp:** ${deploymentTime}
-            - **Trigger:** ${trigger === 'schedule' ? 'Scheduled (Weekly)' : 'Manual'}
+            - **Trigger:** ${trigger === 'schedule' ? 'Scheduled (Daily)' : 'Manual'}
             - **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             
             ### Configuration Parameters
