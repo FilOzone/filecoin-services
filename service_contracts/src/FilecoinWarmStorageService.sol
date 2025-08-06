@@ -13,6 +13,15 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
 
+/// @notice Interface for contracts that can receive migrated data sets
+interface IMigrationReceiver {
+    /**
+     * @notice Receives a migrated data set from another contract
+     * @param migrationData The data about the migrated data set
+     */
+    function migrateReceiver(FilecoinWarmStorageService.MigrationData calldata migrationData) external;
+}
+
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -47,6 +56,13 @@ contract FilecoinWarmStorageService is
     );
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
+    event DataSetMigrated(
+        uint256 indexed dataSetId,
+        uint256 indexed clientDataSetId,
+        address indexed receiverContract,
+        address payer,
+        address payee
+    );
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
@@ -109,6 +125,17 @@ contract FilecoinWarmStorageService is
         address payer;
         bool withCDN;
         bytes signature; // Authentication signature
+    }
+
+    // Structure for migrating data sets to another contract
+    struct MigrationData {
+        uint256 dataSetId;
+        uint256 clientDataSetId;
+        address payer;
+        address payee;
+        string metadata;
+        string[] pieceMetadata;
+        bool withCDN;
     }
 
     // Structure for service pricing information
@@ -192,6 +219,9 @@ contract FilecoinWarmStorageService is
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
+
+    bytes32 private constant MIGRATE_DATA_SET_TYPEHASH =
+        keccak256("MigrateDataSet(uint256 clientDataSetId,address receiverContract)");
 
     /// @notice Registration fee required for service providers (1 FIL)
     /// @dev This fee is burned to prevent spam registrations
@@ -1111,6 +1141,14 @@ contract FilecoinWarmStorageService is
     }
 
     /**
+     * @notice Returns the domain separator for EIP-712 signatures
+     * @return The domain separator hash
+     */
+    function DOMAIN_SEPARATOR() external view returns (bytes32) {
+        return _domainSeparatorV4();
+    }
+
+    /**
      * @notice Recover the signer address from a signature
      * @param messageHash The signed message hash
      * @param signature The signature bytes (v, r, s)
@@ -1403,5 +1441,88 @@ contract FilecoinWarmStorageService is
         if (info.paymentEndEpoch == 0) {
             info.paymentEndEpoch = endEpoch;
         }
+    }
+
+    /**
+     * @notice Migrates a data set to another contract
+     * @dev Requires signatures from both payer and payee. Terminates payment rails and calls migrateReceiver on destination.
+     * @param dataSetId The ID of the data set to migrate
+     * @param receiverContract The address of the contract that will receive the migrated data set
+     * @param payerSignature Signature from the payer authorizing the migration
+     * @param payeeSignature Signature from the payee authorizing the migration
+     */
+    function migrateSender(
+        uint256 dataSetId,
+        address receiverContract,
+        bytes calldata payerSignature,
+        bytes calldata payeeSignature
+    ) external {
+        // Verify the data set exists
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+
+        // Verify signatures from both payer and payee
+        verifyMigrateDataSetSignature(info.payer, info.clientDataSetId, receiverContract, payerSignature);
+        verifyMigrateDataSetSignature(info.payee, info.clientDataSetId, receiverContract, payeeSignature);
+
+        // Prepare migration data
+        MigrationData memory migrationData = MigrationData({
+            dataSetId: dataSetId,
+            clientDataSetId: info.clientDataSetId,
+            payer: info.payer,
+            payee: info.payee,
+            metadata: info.metadata,
+            pieceMetadata: info.pieceMetadata,
+            withCDN: info.withCDN
+        });
+
+        // Terminate payment rails
+        Payments payments = Payments(paymentsContractAddress);
+        payments.terminateRail(info.pdpRailId);
+        
+        if (info.withCDN) {
+            payments.terminateRail(info.cacheMissRailId);
+            payments.terminateRail(info.cdnRailId);
+        }
+
+        // Call migrateReceiver on the destination contract
+        IMigrationReceiver(receiverContract).migrateReceiver(migrationData);
+
+        // Clean up local state
+        // Remove rail mappings
+        delete railToDataSet[info.pdpRailId];
+        if (info.withCDN) {
+            delete railToDataSet[info.cacheMissRailId];
+            delete railToDataSet[info.cdnRailId];
+        }
+
+        // Clear data set info (keep some records for audit trail)
+        info.paymentEndEpoch = block.number; // Mark as ended
+        
+        // Emit event for tracking
+        emit DataSetMigrated(dataSetId, info.clientDataSetId, receiverContract, info.payer, info.payee);
+    }
+
+    /**
+     * @notice Verifies a signature for the MigrateDataSet operation
+     * @param signer The address that should have signed the message
+     * @param clientDataSetId The client's data set ID
+     * @param receiverContract The address of the receiver contract
+     * @param signature The signature bytes (v, r, s)
+     */
+    function verifyMigrateDataSetSignature(
+        address signer,
+        uint256 clientDataSetId,
+        address receiverContract,
+        bytes memory signature
+    ) internal view {
+        // Prepare the message hash that was signed
+        bytes32 structHash = keccak256(abi.encode(MIGRATE_DATA_SET_TYPEHASH, clientDataSetId, receiverContract));
+        bytes32 digest = _hashTypedDataV4(structHash);
+
+        // Recover signer address from the signature
+        address recoveredSigner = recoverSigner(digest, signature);
+
+        require(signer == recoveredSigner, Errors.InvalidSignature(signer, recoveredSigner));
     }
 }
