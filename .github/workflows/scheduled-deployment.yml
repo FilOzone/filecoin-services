@@ -186,7 +186,7 @@ jobs:
             - **Challenge Window Size:** ${challengeWindowSize} epochs
             
             ### Validation Results
-            All 19 validation tests passed successfully:
+            All 26 validation tests passed successfully:
             - ✅ Contract existence verification
             - ✅ Proxy configuration validation  
             - ✅ Basic functionality testing
@@ -195,10 +195,6 @@ jobs:
             ### Network Information
             - **Network:** Calibration Testnet
             - **Chain ID:** 314159
-            - **RPC Endpoint:** Configured via secrets
-            
-            ### Next Steps
-            The contracts are ready for use on Calibnet. This deployment has been automatically validated and is confirmed to be working correctly.
             
             ---
             *This issue was automatically created by the scheduled deployment workflow.*
