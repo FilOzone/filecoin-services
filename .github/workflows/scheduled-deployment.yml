@@ -117,13 +117,28 @@ jobs:
           fi
           
           # Extract contract addresses from deployment log for summary
-          PDP_VERIFIER=$(grep "PDPVerifier Proxy:" $DEPLOYMENT_LOG | awk '{print $NF}' || echo "Not found")
-          PAYMENTS_PROXY=$(grep "Payments Proxy:" $DEPLOYMENT_LOG | awk '{print $NF}' || echo "Not found")
-          WARM_STORAGE_PROXY=$(grep "FilecoinWarmStorageService Proxy:" $DEPLOYMENT_LOG | awk '{print $NF}' || echo "Not found")
+          PDP_VERIFIER=$(grep "PDPVerifier Proxy:" $DEPLOYMENT_LOG | tail -1 | awk '{print $NF}' | tr -d '\r' || echo "Not found")
+          PAYMENTS_PROXY=$(grep "Payments Proxy:" $DEPLOYMENT_LOG | tail -1 | awk '{print $NF}' | tr -d '\r' || echo "Not found")
+          WARM_STORAGE_PROXY=$(grep "FilecoinWarmStorageService Proxy:" $DEPLOYMENT_LOG | tail -1 | awk '{print $NF}' | tr -d '\r' || echo "Not found")
           
-          echo "PDP_VERIFIER_ADDRESS=$PDP_VERIFIER" >> $GITHUB_OUTPUT
-          echo "PAYMENTS_ADDRESS=$PAYMENTS_PROXY" >> $GITHUB_OUTPUT
-          echo "WARM_STORAGE_ADDRESS=$WARM_STORAGE_PROXY" >> $GITHUB_OUTPUT
+          # Validate address format
+          if [[ $PDP_VERIFIER =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "PDP_VERIFIER_ADDRESS=$PDP_VERIFIER" >> $GITHUB_OUTPUT
+          else
+            echo "PDP_VERIFIER_ADDRESS=Not found" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ $PAYMENTS_PROXY =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "PAYMENTS_ADDRESS=$PAYMENTS_PROXY" >> $GITHUB_OUTPUT
+          else
+            echo "PAYMENTS_ADDRESS=Not found" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ $WARM_STORAGE_PROXY =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "WARM_STORAGE_ADDRESS=$WARM_STORAGE_PROXY" >> $GITHUB_OUTPUT
+          else
+            echo "WARM_STORAGE_ADDRESS=Not found" >> $GITHUB_OUTPUT
+          fi
       
       - name: Upload deployment logs
         if: always()
@@ -135,6 +150,7 @@ jobs:
       
       - name: Create success issue
         if: steps.deployment.outputs.DEPLOYMENT_STATUS == 'success' && (github.event.inputs.create_issue_on_success == 'true' || github.event_name == 'schedule')
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
@@ -198,6 +214,7 @@ jobs:
       
       - name: Create failure issue
         if: failure()
+        continue-on-error: true
         uses: actions/github-script@v7
         with:
           script: |
