@@ -30,13 +30,10 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
         keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)");
 
-    bytes32 private constant PIECE_CID_TYPEHASH = keccak256("PieceCid(bytes data)");
-
-    bytes32 private constant PIECE_DATA_TYPEHASH =
-        keccak256("PieceData(PieceCid piece,uint256 rawSize)PieceCid(bytes data)");
+    bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,PieceData[] pieceData)PieceCid(bytes data)PieceData(PieceCid piece,uint256 rawSize)"
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)"
     );
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
@@ -60,11 +57,11 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
     function verifyAddPiecesSignatureTest(
         address payer,
         uint256 clientDataSetId,
-        IPDPTypes.PieceData[] memory pieceDataArray,
+        Cids.Cid[] memory pieceCidsArray,
         uint256 firstAdded,
         bytes memory signature
     ) public view returns (bool) {
-        bytes32 digest = getAddPiecesDigest(clientDataSetId, firstAdded, pieceDataArray);
+        bytes32 digest = getAddPiecesDigest(clientDataSetId, firstAdded, pieceCidsArray);
         address signer = ECDSA.recover(digest, signature);
         return signer == payer;
     }
@@ -103,19 +100,17 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
     function getAddPiecesDigest(
         uint256 clientDataSetId,
         uint256 firstAdded,
-        IPDPTypes.PieceData[] memory pieceDataArray
+        Cids.Cid[] memory pieceCidsArray
     ) public view returns (bytes32) {
         // Hash each PieceData struct
-        bytes32[] memory pieceDataHashes = new bytes32[](pieceDataArray.length);
-        for (uint256 i = 0; i < pieceDataArray.length; i++) {
+        bytes32[] memory pieceCidsHashes = new bytes32[](pieceCidsArray.length);
+        for (uint256 i = 0; i < pieceCidsArray.length; i++) {
             // Hash the Cid struct
-            bytes32 cidHash = keccak256(abi.encode(PIECE_CID_TYPEHASH, keccak256(pieceDataArray[i].piece.data)));
-            // Hash the PieceData struct
-            pieceDataHashes[i] = keccak256(abi.encode(PIECE_DATA_TYPEHASH, cidHash, pieceDataArray[i].rawSize));
+            pieceCidsHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceCidsArray[i].data)));
         }
 
         bytes32 structHash = keccak256(
-            abi.encode(ADD_PIECES_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(pieceDataHashes)))
+            abi.encode(ADD_PIECES_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(pieceCidsHashes)))
         );
         return _hashTypedDataV4(structHash);
     }
@@ -180,9 +175,9 @@ contract SignatureFixtureTest is Test {
         // Get the message digests for verification
         bytes32 createDataSetDigest = testContract.getCreateDataSetDigest(CLIENT_DATA_SET_ID, WITH_CDN, PAYEE);
 
-        // Create PieceData for AddPieces digest
-        IPDPTypes.PieceData[] memory pieceDataArray = createTestPieceData();
-        bytes32 addPiecesDigest = testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, pieceDataArray);
+        // Create Cids for AddPieces digest
+        Cids.Cid[] memory pieceCidsArray = createTestPieceCids();
+        bytes32 addPiecesDigest = testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, pieceCidsArray);
 
         uint256[] memory testPieceIds = new uint256[](3);
         testPieceIds[0] = 1;
@@ -228,8 +223,7 @@ contract SignatureFixtureTest is Test {
         console.log("      pieceCidBytes: [");
         console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
         console.log('        "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
-        console.log("      ],");
-        console.log("      pieceSizes: [2048, 4096]");
+        console.log("      ]");
         console.log("    },");
         console.log("    schedulePieceRemovals: {");
         console.log('      signature: "%s",', vm.toString(schedulePieceRemovalsSig));
@@ -255,7 +249,7 @@ contract SignatureFixtureTest is Test {
 
         assertTrue(
             testContract.verifyAddPiecesSignatureTest(
-                TEST_SIGNER, CLIENT_DATA_SET_ID, pieceDataArray, FIRST_ADDED, addPiecesSig
+                TEST_SIGNER, CLIENT_DATA_SET_ID, pieceCidsArray, FIRST_ADDED, addPiecesSig
             ),
             "AddPieces signature verification failed"
         );
@@ -314,15 +308,10 @@ contract SignatureFixtureTest is Test {
         console.log('    { name: "data", type: "bytes" }');
         console.log("  ]");
         console.log("");
-        console.log("  PieceData: [");
-        console.log('    { name: "piece", type: "Cid" },');
-        console.log('    { name: "rawSize", type: "uint256" }');
-        console.log("  ]");
-        console.log("");
         console.log("  AddPieces: [");
         console.log('    { name: "clientDataSetId", type: "uint256" },');
         console.log('    { name: "firstAdded", type: "uint256" },');
-        console.log('    { name: "pieceData", type: "PieceData[]" }');
+        console.log('    { name: "pieceData", type: "Cid[]" }');
         console.log("  ]");
         console.log("");
         console.log("  SchedulePieceRemovals: [");
@@ -344,8 +333,8 @@ contract SignatureFixtureTest is Test {
     }
 
     function generateAddPiecesSignature() internal view returns (bytes memory) {
-        IPDPTypes.PieceData[] memory pieceDataArray = createTestPieceData();
-        bytes32 digest = testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, pieceDataArray);
+        Cids.Cid[] memory pieceCidsArray = createTestPieceCids();
+        bytes32 digest = testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, pieceCidsArray);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -369,27 +358,19 @@ contract SignatureFixtureTest is Test {
 
     // ============= HELPER FUNCTIONS =============
 
-    function createTestPieceData() internal pure returns (IPDPTypes.PieceData[] memory) {
-        IPDPTypes.PieceData[] memory pieceDataArray = new IPDPTypes.PieceData[](2);
+    function createTestPieceCids() internal pure returns (Cids.Cid[] memory) {
+        Cids.Cid[] memory pieceCidsArray = new Cids.Cid[](2);
 
         // Create Cid with full CID bytes (not just digest)
         // CID baga6ea4seaqpy7usqklokfx2vxuynmupslkeutzexe2uqurdg5vhtebhxqmpqmy
-        pieceDataArray[0] = IPDPTypes.PieceData({
-            piece: Cids.Cid({
+        pieceCidsArray[0] = Cids.Cid({
                 data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
-            }),
-            rawSize: 2048 // Piece size of 1024
-        });
-
+            });
         // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
-        pieceDataArray[1] = IPDPTypes.PieceData({
-            piece: Cids.Cid({
+        pieceCidsArray[1] = Cids.Cid({
                 data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
-            }),
-            rawSize: 4096 // Piece size of 2048
-        });
-
-        return pieceDataArray;
+            });
+        return pieceCidsArray;
     }
 
     // ============= SIGNATURE VERIFICATION FUNCTIONS =============
@@ -415,14 +396,11 @@ contract SignatureFixtureTest is Test {
 
         // Parse piece data arrays
         bytes[] memory pieceCidBytes = vm.parseJsonBytesArray(json, ".addPieces.pieceCidBytes");
-        uint256[] memory sizes = vm.parseJsonUintArray(json, ".addPieces.pieceSizes");
 
-        require(pieceCidBytes.length == sizes.length, "CID bytes and size arrays must be same length");
-
-        // Create PieceData array
-        IPDPTypes.PieceData[] memory pieceData = new IPDPTypes.PieceData[](pieceCidBytes.length);
+        // Create Cids array
+        Cids.Cid[] memory pieceData = new Cids.Cid[](pieceCidBytes.length);
         for (uint256 i = 0; i < pieceCidBytes.length; i++) {
-            pieceData[i] = IPDPTypes.PieceData({piece: Cids.Cid({data: pieceCidBytes[i]}), rawSize: sizes[i]});
+            pieceData[i] = Cids.Cid({data: pieceCidBytes[i]});
         }
 
         bool isValid = testContract.verifyAddPiecesSignatureTest(
