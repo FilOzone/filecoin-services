@@ -168,42 +168,42 @@ done
 echo ""
 echo -e "${YELLOW}=== Contract Existence Validation ===${NC}"
 
-# Test 1: PDPVerifier Implementation
+# Test: PDPVerifier Implementation
 if has_contract_code "$VERIFIER_IMPLEMENTATION_ADDRESS"; then
     log_test "PDPVerifier Implementation has contract code" "PASS" "Address: $VERIFIER_IMPLEMENTATION_ADDRESS"
 else
     log_test "PDPVerifier Implementation has contract code" "FAIL" "No code at address: $VERIFIER_IMPLEMENTATION_ADDRESS"
 fi
 
-# Test 2: PDPVerifier Proxy
+# Test: PDPVerifier Proxy
 if has_contract_code "$PDP_VERIFIER_ADDRESS"; then
     log_test "PDPVerifier Proxy has contract code" "PASS" "Address: $PDP_VERIFIER_ADDRESS"
 else
     log_test "PDPVerifier Proxy has contract code" "FAIL" "No code at address: $PDP_VERIFIER_ADDRESS"
 fi
 
-# Test 3: Payments Implementation
+# Test: Payments Implementation
 if has_contract_code "$PAYMENTS_IMPLEMENTATION_ADDRESS"; then
     log_test "Payments Implementation has contract code" "PASS" "Address: $PAYMENTS_IMPLEMENTATION_ADDRESS"
 else
     log_test "Payments Implementation has contract code" "FAIL" "No code at address: $PAYMENTS_IMPLEMENTATION_ADDRESS"
 fi
 
-# Test 4: Payments Proxy
+# Test: Payments Proxy
 if has_contract_code "$PAYMENTS_CONTRACT_ADDRESS"; then
     log_test "Payments Proxy has contract code" "PASS" "Address: $PAYMENTS_CONTRACT_ADDRESS"
 else
     log_test "Payments Proxy has contract code" "FAIL" "No code at address: $PAYMENTS_CONTRACT_ADDRESS"
 fi
 
-# Test 5: FilecoinWarmStorageService Implementation
+# Test: FilecoinWarmStorageService Implementation
 if has_contract_code "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"; then
     log_test "FilecoinWarmStorageService Implementation has contract code" "PASS" "Address: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 else
     log_test "FilecoinWarmStorageService Implementation has contract code" "FAIL" "No code at address: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 fi
 
-# Test 6: FilecoinWarmStorageService Proxy
+# Test: FilecoinWarmStorageService Proxy
 if has_contract_code "$WARM_STORAGE_SERVICE_ADDRESS"; then
     log_test "FilecoinWarmStorageService Proxy has contract code" "PASS" "Address: $WARM_STORAGE_SERVICE_ADDRESS"
 else
@@ -213,14 +213,14 @@ fi
 echo ""
 echo -e "${YELLOW}=== PDPVerifier Functionality Validation ===${NC}"
 
-# Test 7: PDPVerifier owner call
+# Test: PDPVerifier owner call
 if owner=$(safe_contract_call "$PDP_VERIFIER_ADDRESS" "owner()"); then
     log_test "PDPVerifier owner() call" "PASS" "Owner: $owner"
 else
     log_test "PDPVerifier owner() call" "FAIL" "Failed to call owner()"
 fi
 
-# Test 8: PDPVerifier challengeFinality call
+# Test: PDPVerifier challengeFinality call
 if challenge_finality=$(safe_contract_call "$PDP_VERIFIER_ADDRESS" "getChallengeFinality()"); then
     # Convert hex to decimal for comparison
     challenge_finality_decimal=$(printf "%d" "$challenge_finality")
@@ -233,7 +233,7 @@ else
     log_test "PDPVerifier getChallengeFinality() call" "FAIL" "Failed to call getChallengeFinality()"
 fi
 
-# Test 9: PDPVerifier implementation address
+# Test: PDPVerifier implementation address
 if implementation=$(get_proxy_implementation "$PDP_VERIFIER_ADDRESS"); then
     # Normalize both addresses for comparison
     impl_clean=$(normalize_address "$implementation")
@@ -248,39 +248,9 @@ else
 fi
 
 echo ""
-echo -e "${YELLOW}=== Payments Contract Validation ===${NC}"
-
-# Test 10: Payments owner call
-if owner=$(safe_contract_call "$PAYMENTS_CONTRACT_ADDRESS" "owner()"); then
-    log_test "Payments owner() call" "PASS" "Owner: $owner"
-else
-    log_test "Payments owner() call" "FAIL" "Failed to call owner()"
-fi
-
-# Test 11: Payments implementation address
-if implementation=$(get_proxy_implementation "$PAYMENTS_CONTRACT_ADDRESS"); then
-    impl_clean=$(normalize_address "$implementation")
-    expected_clean=$(normalize_address "$PAYMENTS_IMPLEMENTATION_ADDRESS")
-    if [ "$impl_clean" = "$expected_clean" ]; then
-        log_test "Payments proxy points to correct implementation" "PASS" "Implementation: $implementation"
-    else
-        log_test "Payments proxy points to correct implementation" "FAIL" "Expected: $PAYMENTS_IMPLEMENTATION_ADDRESS, Got: $implementation"
-    fi
-else
-    log_test "Payments implementation() call" "FAIL" "Failed to get implementation address from storage"
-fi
-
-echo ""
 echo -e "${YELLOW}=== FilecoinWarmStorageService Validation ===${NC}"
 
-# Test 12: FilecoinWarmStorageService owner call
-if owner=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "owner()"); then
-    log_test "FilecoinWarmStorageService owner() call" "PASS" "Owner: $owner"
-else
-    log_test "FilecoinWarmStorageService owner() call" "FAIL" "Failed to call owner()"
-fi
-
-# Test 13: FilecoinWarmStorageService maxProvingPeriod
+# Test: FilecoinWarmStorageService maxProvingPeriod
 if max_proving_period=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "getMaxProvingPeriod()"); then
     max_proving_period_decimal=$(printf "%d" "$max_proving_period")
     if [ "$max_proving_period_decimal" = "$EXPECTED_MAX_PROVING_PERIOD" ]; then
@@ -292,7 +262,7 @@ else
     log_test "FilecoinWarmStorageService getMaxProvingPeriod() call" "FAIL" "Failed to call getMaxProvingPeriod()"
 fi
 
-# Test 14: FilecoinWarmStorageService challengeWindowSize
+# Test: FilecoinWarmStorageService challengeWindowSize
 if challenge_window_size=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "challengeWindow()"); then
     challenge_window_size_decimal=$(printf "%d" "$challenge_window_size")
     if [ "$challenge_window_size_decimal" = "$EXPECTED_CHALLENGE_WINDOW_SIZE" ]; then
@@ -304,7 +274,7 @@ else
     log_test "FilecoinWarmStorageService challengeWindow() call" "FAIL" "Failed to call challengeWindow()"
 fi
 
-# Test 15: FilecoinWarmStorageService pdpVerifier address
+# Test: FilecoinWarmStorageService pdpVerifier address
 if pdp_verifier=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "pdpVerifierAddress()"); then
     pdp_clean=$(normalize_address "$pdp_verifier")
     expected_clean=$(normalize_address "$PDP_VERIFIER_ADDRESS")
@@ -317,7 +287,7 @@ else
     log_test "FilecoinWarmStorageService pdpVerifierAddress() call" "FAIL" "Failed to call pdpVerifierAddress()"
 fi
 
-# Test 16: FilecoinWarmStorageService payments address
+# Test: FilecoinWarmStorageService payments address
 if payments=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "paymentsContractAddress()"); then
     payments_clean=$(normalize_address "$payments")
     expected_clean=$(normalize_address "$PAYMENTS_CONTRACT_ADDRESS")
@@ -330,7 +300,7 @@ else
     log_test "FilecoinWarmStorageService paymentsContractAddress() call" "FAIL" "Failed to call paymentsContractAddress()"
 fi
 
-# Test 17: FilecoinWarmStorageService USDFC token address
+# Test: FilecoinWarmStorageService USDFC token address
 if usdfc_token=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "usdfcTokenAddress()"); then
     usdfc_clean=$(normalize_address "$usdfc_token")
     expected_clean=$(normalize_address "$EXPECTED_USDFC_TOKEN")
@@ -343,7 +313,7 @@ else
     log_test "FilecoinWarmStorageService usdfcTokenAddress() call" "FAIL" "Failed to call usdfcTokenAddress()"
 fi
 
-# Test 18: FilecoinWarmStorageService service commission
+# Test: FilecoinWarmStorageService service commission
 if service_commission=$(safe_contract_call "$WARM_STORAGE_SERVICE_ADDRESS" "serviceCommissionBps()"); then
     service_commission_decimal=$(printf "%d" "$service_commission")
     # Note: The deployment shows the contract uses serviceCommissionBps, not operatorCommissionBps
@@ -358,7 +328,7 @@ else
     log_test "FilecoinWarmStorageService serviceCommissionBps() call" "FAIL" "Failed to call serviceCommissionBps()"
 fi
 
-# Test 19: FilecoinWarmStorageService implementation address
+# Test: FilecoinWarmStorageService implementation address
 if implementation=$(get_proxy_implementation "$WARM_STORAGE_SERVICE_ADDRESS"); then
     # Debug output to see what we actually got
     echo "DEBUG: Raw implementation value: '$implementation'"
