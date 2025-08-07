@@ -182,9 +182,8 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)"
-    );
+    bytes32 private constant ADD_PIECES_TYPEHASH =
+        keccak256("AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)");
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
@@ -522,12 +521,10 @@ contract FilecoinWarmStorageService is
      * @param pieceData Array of piece data objects
      * @param extraData Encoded metadata, and signature
      */
-    function piecesAdded(
-        uint256 dataSetId,
-        uint256 firstAdded,
-        Cids.Cid[] memory pieceData,
-        bytes calldata extraData
-    ) external onlyPDPVerifier {
+    function piecesAdded(uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes calldata extraData)
+        external
+        onlyPDPVerifier
+    {
         requirePaymentNotTerminated(dataSetId);
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];

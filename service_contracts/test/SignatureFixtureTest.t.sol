@@ -32,9 +32,8 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
 
     bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)"
-    );
+    bytes32 private constant ADD_PIECES_TYPEHASH =
+        keccak256("AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)");
 
     bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH =
         keccak256("ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)");
@@ -352,12 +351,12 @@ contract SignatureFixtureTest is Test {
         // Create Cid with full CID bytes (not just digest)
         // CID baga6ea4seaqpy7usqklokfx2vxuynmupslkeutzexe2uqurdg5vhtebhxqmpqmy
         rootDataArray[0] = Cids.Cid({
-                data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
-            });
+            data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
+        });
         // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
         rootDataArray[1] = Cids.Cid({
-                data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
-            });
+            data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
+        });
         return rootDataArray;
     }
 
