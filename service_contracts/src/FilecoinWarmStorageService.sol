@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
+import {Cids} from "@pdp/Cids.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -179,13 +180,10 @@ contract FilecoinWarmStorageService is
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
         keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)");
 
-    bytes32 private constant PIECE_CID_TYPEHASH = keccak256("PieceCid(bytes data)");
-
-    bytes32 private constant PIECE_DATA_TYPEHASH =
-        keccak256("PieceData(PieceCid piece,uint256 rawSize)PieceCid(bytes data)");
+    bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,PieceData[] pieceData)PieceCid(bytes data)PieceData(PieceCid piece,uint256 rawSize)"
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)"
     );
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
@@ -527,7 +525,7 @@ contract FilecoinWarmStorageService is
     function piecesAdded(
         uint256 dataSetId,
         uint256 firstAdded,
-        IPDPTypes.PieceData[] memory pieceData,
+        Cids.Cid[] memory pieceData,
         bytes calldata extraData
     ) external onlyPDPVerifier {
         requirePaymentNotTerminated(dataSetId);
@@ -1038,21 +1036,19 @@ contract FilecoinWarmStorageService is
     function verifyAddPiecesSignature(
         address payer,
         uint256 clientDataSetId,
-        IPDPTypes.PieceData[] memory pieceDataArray,
+        Cids.Cid[] memory pieceDataArray,
         uint256 firstAdded,
         bytes memory signature
     ) internal view {
         // Hash each PieceData struct
-        bytes32[] memory pieceDataHashes = new bytes32[](pieceDataArray.length);
+        bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
         for (uint256 i = 0; i < pieceDataArray.length; i++) {
             // Hash the PieceCid struct
-            bytes32 cidHash = keccak256(abi.encode(PIECE_CID_TYPEHASH, keccak256(pieceDataArray[i].piece.data)));
-            // Hash the PieceData struct
-            pieceDataHashes[i] = keccak256(abi.encode(PIECE_DATA_TYPEHASH, cidHash, pieceDataArray[i].rawSize));
+            cidHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceDataArray[i].data)));
         }
 
         bytes32 structHash = keccak256(
-            abi.encode(ADD_PIECES_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(pieceDataHashes)))
+            abi.encode(ADD_PIECES_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(cidHashes)))
         );
 
         // Create the message hash
