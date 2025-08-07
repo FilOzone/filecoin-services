@@ -119,8 +119,8 @@ echo ""
 echo -e "${YELLOW}Step 3: Running validation script...${NC}"
 
 # Add delay to allow blockchain state to propagate
-echo "Waiting 10 seconds for blockchain state to propagate..."
-sleep 10
+echo "Waiting 30 seconds (blocktime) for state to propagate..."
+sleep 30
 
 # Export environment variables for validation script
 export RPC_URL
