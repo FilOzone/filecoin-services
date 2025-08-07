@@ -9,14 +9,14 @@ on:
   workflow_dispatch:
     inputs:
       custom_challenge_finality:
-        description: 'Custom challenge finality (default: 900)'
+        description: 'Custom challenge finality (default: 10)'
         required: false
-        default: '900'
+        default: '10'
         type: string
       custom_max_proving_period:
-        description: 'Custom max proving period (default: 30)'
+        description: 'Custom max proving period (default: 60)'
         required: false
-        default: '30'
+        default: '60'
         type: string
       custom_challenge_window_size:
         description: 'Custom challenge window size (default: 15)'
@@ -31,8 +31,13 @@ on:
 
 env:
   # Default deployment parameters
-  DEFAULT_CHALLENGE_FINALITY: '900'
-  DEFAULT_MAX_PROVING_PERIOD: '30'
+  # Challenge finality must be lower than proving period for PDP to work
+  # Using conservative parameters: 10 epochs finality, 60 epochs proving period
+  # 
+  # SECURITY NOTE: We are operating outside recommended security parameters.
+  # Researchers recommend challenge finality of 150 epochs, but we use 10 for fast proofs in testing.
+  DEFAULT_CHALLENGE_FINALITY: '10'
+  DEFAULT_MAX_PROVING_PERIOD: '60'
   DEFAULT_CHALLENGE_WINDOW_SIZE: '15'
 
 jobs:
