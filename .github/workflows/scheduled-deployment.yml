@@ -69,7 +69,7 @@ jobs:
       - name: Prepare keystore
         run: |
           # Create keystore file from base64-encoded secret
-          echo "${{ secrets.CALIBNET_KEYSTORE_JSON }}" | base64 -d > /tmp/keystore.json
+          echo "${{ secrets.CALIBNET_KEYSTORE_B64 }}" | base64 -d > /tmp/keystore.json
           chmod 600 /tmp/keystore.json
       
       - name: Install dependencies
@@ -243,7 +243,7 @@ jobs:
             
             ### Required Secrets
             Make sure these secrets are configured in the repository:
-            - \`CALIBNET_KEYSTORE_JSON\` - Base64-encoded keystore file
+            - \`CALIBNET_KEYSTORE_B64\` - Base64-encoded keystore file
             - \`CALIBNET_KEYSTORE_PASSWORD\` - Keystore password
             - \`CALIBNET_RPC_URL\` - RPC endpoint for Calibnet
             
