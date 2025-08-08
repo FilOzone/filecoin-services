@@ -34,6 +34,12 @@ enum RailType {
   CDN
 }
 
+enum RailType {
+  PDP
+  CACHE_MISS
+  CDN
+}
+
 type Rail @entity(immutable: false) {
   id: Bytes!
   railId: BigInt!
