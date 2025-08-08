@@ -989,9 +989,8 @@ contract FilecoinWarmStorageService is
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals)),
-            pricePerTiBPerMonthWithCDN: (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH)
-                * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
+            pricePerTiBPerMonthWithCDN: STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH,
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -1003,7 +1002,7 @@ contract FilecoinWarmStorageService is
      * @return spPayment SP payment (per TiB per month)
      */
     function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
-        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
+        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
 
         serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
         spPayment = total - serviceFee;
