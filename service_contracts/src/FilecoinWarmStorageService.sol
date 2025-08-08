@@ -48,6 +48,14 @@ contract FilecoinWarmStorageService is
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
 
+    event ServiceTerminated(
+        address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
+    );
+
+    event PaymentTerminated(
+        uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
+    );
+
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant CHALLENGES_PER_PROOF = 5;
@@ -729,7 +737,7 @@ contract FilecoinWarmStorageService is
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
     }
 
-    function terminateDataSetPayment(uint256 dataSetId) external {
+    function terminateService(uint256 dataSetId, bytes calldata /*extraData*/ ) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
@@ -750,6 +758,8 @@ contract FilecoinWarmStorageService is
             payments.terminateRail(info.cacheMissRailId);
             payments.terminateRail(info.cdnRailId);
         }
+
+        emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
@@ -1402,6 +1412,7 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.paymentEndEpoch == 0) {
             info.paymentEndEpoch = endEpoch;
+            emit PaymentTerminated(dataSetId, endEpoch, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         }
     }
 }

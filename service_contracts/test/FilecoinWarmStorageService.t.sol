@@ -1478,7 +1478,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     // ============= Data Set Payment Termination Tests =============
 
-    function testTerminateDataSetPaymentLifecycle() public {
+    function testTerminateServiceLifecycle() public {
         console.log("=== Test: Data Set Payment Termination Lifecycle ===");
 
         // 1. Setup: Create a dataset with CDN enabled.
@@ -1545,7 +1545,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n3. Terminating payment rails");
         console.log("Current block:", block.number);
         vm.prank(client); // client terminates
-        pdpServiceWithPayments.terminateDataSetPayment(dataSetId);
+        pdpServiceWithPayments.terminateService(dataSetId, "");
 
         // 4. Assertions
         // Check paymentEndEpoch is set
