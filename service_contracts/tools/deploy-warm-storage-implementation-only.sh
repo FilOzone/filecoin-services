@@ -51,7 +51,7 @@ echo "  Payments: $PAYMENTS_CONTRACT_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
 echo "  FilCDN: $FILCDN_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
@@ -66,17 +66,17 @@ echo ""
 # If proxy address is provided, perform the upgrade
 if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
     echo "Proxy address provided: $WARM_STORAGE_PROXY_ADDRESS"
-    
+
     # First check if we're the owner
     echo "Checking proxy ownership..."
     PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
-    
+
     if [ -z "$PROXY_OWNER" ]; then
         echo "Warning: Could not determine proxy owner. Attempting upgrade anyway..."
     else
         echo "Proxy owner: $PROXY_OWNER"
         echo "Your address: $ADDR"
-        
+
         if [ "$PROXY_OWNER" != "$ADDR" ]; then
             echo ""
             echo "⚠️  WARNING: You are not the owner of this proxy!"
@@ -92,12 +92,12 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
             exit 1
         fi
     fi
-    
+
     echo "Performing proxy upgrade..."
-    
+
     # Increment nonce for next transaction
     NONCE=$(expr $NONCE + "1")
-    
+
     # Call upgradeToAndCall on the proxy (works better on Filecoin)
     TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" 0x \
         --rpc-url "$RPC_URL" \
@@ -106,7 +106,7 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
         --nonce "$NONCE" \
         --chain-id 314159 \
         --json | jq -r '.transactionHash')
-    
+
     if [ -z "$TX_HASH" ]; then
         echo "Error: Failed to send upgrade transaction"
         echo "The transaction may have failed due to:"
@@ -115,18 +115,18 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
         echo "- Implementation address is invalid"
         exit 1
     fi
-    
+
     echo "Upgrade transaction sent: $TX_HASH"
     echo "Waiting for confirmation..."
-    
+
     # Wait for transaction receipt
     cast receipt --rpc-url "$RPC_URL" "$TX_HASH" --confirmations 1 > /dev/null
-    
+
     # Verify the upgrade by checking the implementation address
     echo "Verifying upgrade (waiting for Filecoin 30s block time)..."
     sleep 35
     NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
-    
+
     if [ "$NEW_IMPL" = "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
         echo "✅ Upgrade successful! Proxy now points to: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
     else

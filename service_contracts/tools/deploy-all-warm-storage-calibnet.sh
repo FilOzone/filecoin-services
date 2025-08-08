@@ -33,14 +33,30 @@ USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC toke
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
 CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}"                # Default 15 epochs
 
+# Validate that the configuration will work with PDPVerifier's challengeFinality
+# The calculation: (MAX_PROVING_PERIOD - CHALLENGE_WINDOW_SIZE) + (CHALLENGE_WINDOW_SIZE/2) must be >= CHALLENGE_FINALITY
+# This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
+MIN_REQUIRED=$((CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE / 2))
+if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
+    echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for CHALLENGE_FINALITY ($CHALLENGE_FINALITY)"
+    echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
+    echo "       Either increase MAX_PROVING_PERIOD or decrease CHALLENGE_FINALITY"
+    exit 1
+fi
+
+echo "Configuration validation passed:"
+echo "  CHALLENGE_FINALITY=$CHALLENGE_FINALITY"
+echo "  MAX_PROVING_PERIOD=$MAX_PROVING_PERIOD"
+echo "  CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE"
+
 ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
 echo "Deploying contracts from address $ADDR"
- 
+
 NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Step 1: Deploy PDPVerifier implementation
 echo "Deploying PDPVerifier implementation..."
-VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/PDPVerifier.sol:PDPVerifier --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
 if [ -z "$VERIFIER_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract PDPVerifier contract address"
     exit 1
@@ -51,7 +67,7 @@ NONCE=$(expr $NONCE + "1")
 # Step 2: Deploy PDPVerifier proxy
 echo "Deploying PDPVerifier proxy..."
 INIT_DATA=$(cast calldata "initialize(uint256)" $CHALLENGE_FINALITY)
-PDP_VERIFIER_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+PDP_VERIFIER_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
     echo "Error: Failed to extract PDPVerifier proxy address"
     exit 1
@@ -61,7 +77,7 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 3: Deploy Payments implementation
 echo "Deploying Payments implementation..."
-PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/fws-payments/src/Payments.sol:Payments --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
 if [ -z "$PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract Payments contract address"
     exit 1
@@ -72,7 +88,7 @@ NONCE=$(expr $NONCE + "1")
 # Step 4: Deploy Payments proxy
 echo "Deploying Payments proxy..."
 PAYMENTS_INIT_DATA=$(cast calldata "initialize()")
-PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $PAYMENTS_IMPLEMENTATION_ADDRESS $PAYMENTS_INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $PAYMENTS_IMPLEMENTATION_ADDRESS $PAYMENTS_INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
     echo "Error: Failed to extract Payments proxy address"
     exit 1
@@ -82,7 +98,7 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 5: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET --optimizer-runs 1 --via-ir  | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -94,7 +110,7 @@ NONCE=$(expr $NONCE + "1")
 echo "Deploying FilecoinWarmStorageService proxy..."
 # Initialize with PDPVerifier address, payments contract address, USDFC token address, commission rate, max proving period, and challenge window size
 INIT_DATA=$(cast calldata "initialize(uint64,uint256)"  $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE)
-WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
     exit 1
@@ -108,7 +124,7 @@ echo "PDPVerifier Implementation: $VERIFIER_IMPLEMENTATION_ADDRESS"
 echo "PDPVerifier Proxy: $PDP_VERIFIER_ADDRESS"
 echo "Payments Implementation: $PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "Payments Proxy: $PAYMENTS_CONTRACT_ADDRESS"
-echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" 
+echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo "=========================="
 echo ""
