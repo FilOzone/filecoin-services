@@ -701,6 +701,12 @@ contract FilecoinWarmStorageService is
     /**
      * @notice Handles data set service provider changes by updating internal state only
      * @dev Called by the PDPVerifier contract when data set service provider is transferred.
+     * NOTE: The PDPVerifier contract emits events and exposes methods in terms of "storage providers",
+     * because its scope is specifically the Proof-of-Data-Possession for storage services.
+     * In FilecoinWarmStorageService (and the broader service registry architecture), we use the term
+     * "service provider" to support a future where multiple types of services may exist (not just storage).
+     * As a result, some parameters and events reflect this terminology shift and this method represents
+     * a transition point in the language, from PDPVerifier to FilecoinWarmStorageService.
      * @param dataSetId The ID of the data set whose service provider is changing
      * @param oldServiceProvider The previous service provider address
      * @param newServiceProvider The new service provider address (must be an approved provider)
