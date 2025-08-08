@@ -32,11 +32,8 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
 
     bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant ROOTDATA_TYPEHASH = keccak256("PieceData(Cid piece,uint256 rawSize)Cid(bytes data)");
-
-    bytes32 private constant ADD_ROOTS_TYPEHASH = keccak256(
-        "AddRoots(uint256 clientDataSetId,uint256 firstAdded,PieceData[] rootData)Cid(bytes data)PieceData(Cid piece,uint256 rawSize)"
-    );
+    bytes32 private constant ADD_PIECES_TYPEHASH =
+        keccak256("AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)");
 
     bytes32 private constant SCHEDULE_REMOVALS_TYPEHASH =
         keccak256("ScheduleRemovals(uint256 clientDataSetId,uint256[] rootIds)");
@@ -56,14 +53,14 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
         return signer == payer;
     }
 
-    function verifyAddRootsSignatureTest(
+    function verifyAddPiecesSignatureTest(
         address payer,
         uint256 clientDataSetId,
-        IPDPTypes.PieceData[] memory rootDataArray,
+        Cids.Cid[] memory rootDataArray,
         uint256 firstAdded,
         bytes memory signature
     ) public view returns (bool) {
-        bytes32 digest = getAddRootsDigest(clientDataSetId, firstAdded, rootDataArray);
+        bytes32 digest = getAddPiecesDigest(clientDataSetId, firstAdded, rootDataArray);
         address signer = ECDSA.recover(digest, signature);
         return signer == payer;
     }
@@ -99,22 +96,20 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
         return _hashTypedDataV4(structHash);
     }
 
-    function getAddRootsDigest(uint256 clientDataSetId, uint256 firstAdded, IPDPTypes.PieceData[] memory rootDataArray)
+    function getAddPiecesDigest(uint256 clientDataSetId, uint256 firstAdded, Cids.Cid[] memory piecesDataArray)
         public
         view
         returns (bytes32)
     {
         // Hash each PieceData struct
-        bytes32[] memory rootDataHashes = new bytes32[](rootDataArray.length);
-        for (uint256 i = 0; i < rootDataArray.length; i++) {
+        bytes32[] memory cidHashes = new bytes32[](piecesDataArray.length);
+        for (uint256 i = 0; i < piecesDataArray.length; i++) {
             // Hash the Cid struct
-            bytes32 cidHash = keccak256(abi.encode(CID_TYPEHASH, keccak256(rootDataArray[i].piece.data)));
-            // Hash the PieceData struct
-            rootDataHashes[i] = keccak256(abi.encode(ROOTDATA_TYPEHASH, cidHash, rootDataArray[i].rawSize));
+            cidHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(piecesDataArray[i].data)));
         }
 
         bytes32 structHash = keccak256(
-            abi.encode(ADD_ROOTS_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(rootDataHashes)))
+            abi.encode(ADD_PIECES_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(cidHashes)))
         );
         return _hashTypedDataV4(structHash);
     }
@@ -171,16 +166,16 @@ contract SignatureFixtureTest is Test {
 
         // Generate all signatures
         bytes memory createDataSetSig = generateCreateDataSetSignature();
-        bytes memory addRootsSig = generateAddRootsSignature();
+        bytes memory addPiecesSig = generateAddPiecesSignature();
         bytes memory scheduleRemovalsSig = generateScheduleRemovalsSignature();
         bytes memory deleteDataSetSig = generateDeleteDataSetSignature();
 
         // Get the message digests for verification
         bytes32 createDataSetDigest = testContract.getCreateDataSetDigest(CLIENT_DATA_SET_ID, WITH_CDN, PAYEE);
 
-        // Create PieceData for AddRoots digest
-        IPDPTypes.PieceData[] memory rootDataArray = createTestRootData();
-        bytes32 addRootsDigest = testContract.getAddRootsDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, rootDataArray);
+        // Create PieceData for AddPieces digest
+        Cids.Cid[] memory rootDataArray = createTestPiceData();
+        bytes32 addPiecesDigest = testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, rootDataArray);
 
         uint256[] memory testRootIds = new uint256[](3);
         testRootIds[0] = 1;
@@ -206,16 +201,15 @@ contract SignatureFixtureTest is Test {
         console.log('      "payee": "%s",', PAYEE);
         console.log('      "withCDN": %s', WITH_CDN ? "true" : "false");
         console.log("    },");
-        console.log('    "addRoots": {');
-        console.log('      "signature": "%s",', vm.toString(addRootsSig));
-        console.log('      "digest": "%s",', vm.toString(addRootsDigest));
+        console.log('    "addPieces": {');
+        console.log('      "signature": "%s",', vm.toString(addPiecesSig));
+        console.log('      "digest": "%s",', vm.toString(addPiecesDigest));
         console.log('      "clientDataSetId": %d,', CLIENT_DATA_SET_ID);
         console.log('      "firstAdded": %d,', FIRST_ADDED);
         console.log('      "rootCidBytes": [');
         console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
         console.log('        "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
-        console.log("      ],");
-        console.log('      "rootSizes": [2048, 4096]');
+        console.log("      ]");
         console.log("    },");
         console.log('    "scheduleRemovals": {');
         console.log('      "signature": "%s",', vm.toString(scheduleRemovalsSig));
@@ -240,10 +234,10 @@ contract SignatureFixtureTest is Test {
         );
 
         assertTrue(
-            testContract.verifyAddRootsSignatureTest(
-                TEST_SIGNER, CLIENT_DATA_SET_ID, rootDataArray, FIRST_ADDED, addRootsSig
+            testContract.verifyAddPiecesSignatureTest(
+                TEST_SIGNER, CLIENT_DATA_SET_ID, rootDataArray, FIRST_ADDED, addPiecesSig
             ),
-            "AddRoots signature verification failed"
+            "AddPieces signature verification failed"
         );
 
         assertTrue(
@@ -270,7 +264,7 @@ contract SignatureFixtureTest is Test {
 
         // Test all signature types
         testCreateDataSetSignature(json, signer);
-        testAddRootsSignature(json, signer);
+        testAddPiecesSignature(json, signer);
         testScheduleRemovalsSignature(json, signer);
         testDeleteDataSetSignature(json, signer);
 
@@ -300,15 +294,10 @@ contract SignatureFixtureTest is Test {
         console.log('    { name: "data", type: "bytes" }');
         console.log("  ]");
         console.log("");
-        console.log("  PieceData: [");
-        console.log('    { name: "piece", type: "Cid" },');
-        console.log('    { name: "rawSize", type: "uint256" }');
-        console.log("  ]");
-        console.log("");
-        console.log("  AddRoots: [");
+        console.log("  AddPieces: [");
         console.log('    { name: "clientDataSetId", type: "uint256" },');
         console.log('    { name: "firstAdded", type: "uint256" },');
-        console.log('    { name: "rootData", type: "PieceData[]" }');
+        console.log('    { name: "pieceData", type: "Cids[]" }');
         console.log("  ]");
         console.log("");
         console.log("  ScheduleRemovals: [");
@@ -329,9 +318,9 @@ contract SignatureFixtureTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function generateAddRootsSignature() internal view returns (bytes memory) {
-        IPDPTypes.PieceData[] memory rootDataArray = createTestRootData();
-        bytes32 digest = testContract.getAddRootsDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, rootDataArray);
+    function generateAddPiecesSignature() internal view returns (bytes memory) {
+        Cids.Cid[] memory rootDataArray = createTestPiceData();
+        bytes32 digest = testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, rootDataArray);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -355,26 +344,19 @@ contract SignatureFixtureTest is Test {
 
     // ============= HELPER FUNCTIONS =============
 
-    function createTestRootData() internal pure returns (IPDPTypes.PieceData[] memory) {
-        IPDPTypes.PieceData[] memory rootDataArray = new IPDPTypes.PieceData[](2);
+    function createTestPiceData() internal pure returns (Cids.Cid[] memory) {
+        Cids.Cid[] memory rootDataArray = new Cids.Cid[](2);
 
+        // TODO: CIDv2
         // Create Cid with full CID bytes (not just digest)
         // CID baga6ea4seaqpy7usqklokfx2vxuynmupslkeutzexe2uqurdg5vhtebhxqmpqmy
-        rootDataArray[0] = IPDPTypes.PieceData({
-            piece: Cids.Cid({
-                data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
-            }),
-            rawSize: 2048 // Piece size of 1024
+        rootDataArray[0] = Cids.Cid({
+            data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
         });
-
         // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
-        rootDataArray[1] = IPDPTypes.PieceData({
-            piece: Cids.Cid({
-                data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
-            }),
-            rawSize: 4096 // Piece size of 2048
+        rootDataArray[1] = Cids.Cid({
+            data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
         });
-
         return rootDataArray;
     }
 
@@ -394,29 +376,26 @@ contract SignatureFixtureTest is Test {
         console.log("  CreateDataSet: PASSED");
     }
 
-    function testAddRootsSignature(string memory json, address signer) internal view {
-        string memory signature = vm.parseJsonString(json, ".addRoots.signature");
-        uint256 clientDataSetId = vm.parseJsonUint(json, ".addRoots.clientDataSetId");
-        uint256 firstAdded = vm.parseJsonUint(json, ".addRoots.firstAdded");
+    function testAddPiecesSignature(string memory json, address signer) internal view {
+        string memory signature = vm.parseJsonString(json, ".addPieces.signature");
+        uint256 clientDataSetId = vm.parseJsonUint(json, ".addPieces.clientDataSetId");
+        uint256 firstAdded = vm.parseJsonUint(json, ".addPieces.firstAdded");
 
         // Parse piece data arrays
-        bytes[] memory rootCidBytes = vm.parseJsonBytesArray(json, ".addRoots.rootCidBytes");
-        uint256[] memory sizes = vm.parseJsonUintArray(json, ".addRoots.rootSizes");
-
-        require(rootCidBytes.length == sizes.length, "CID bytes and size arrays must be same length");
+        bytes[] memory rootCidBytes = vm.parseJsonBytesArray(json, ".addPieces.rootCidBytes");
 
         // Create PieceData array
-        IPDPTypes.PieceData[] memory rootData = new IPDPTypes.PieceData[](rootCidBytes.length);
+        Cids.Cid[] memory rootData = new Cids.Cid[](rootCidBytes.length);
         for (uint256 i = 0; i < rootCidBytes.length; i++) {
-            rootData[i] = IPDPTypes.PieceData({piece: Cids.Cid({data: rootCidBytes[i]}), rawSize: sizes[i]});
+            rootData[i] = Cids.Cid({data: rootCidBytes[i]});
         }
 
-        bool isValid = testContract.verifyAddRootsSignatureTest(
+        bool isValid = testContract.verifyAddPiecesSignatureTest(
             signer, clientDataSetId, rootData, firstAdded, vm.parseBytes(signature)
         );
 
-        assertTrue(isValid, "AddRoots signature verification failed");
-        console.log("  AddRoots: PASSED");
+        assertTrue(isValid, "AddPieces signature verification failed");
+        console.log("  AddPieces: PASSED");
     }
 
     function testScheduleRemovalsSignature(string memory json, address signer) internal view {
