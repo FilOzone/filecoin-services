@@ -27,8 +27,8 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: StorageProviderChanged(indexed uint256,indexed address,indexed address)
-          handler: handleStorageProviderChanged
+        - event: ServiceProviderChanged(indexed uint256,indexed address,indexed address)
+          handler: handleServiceProviderChanged
         - event: DataSetDeleted(indexed uint256,uint256)
           handler: handleDataSetDeleted
         - event: PiecesAdded(indexed uint256,uint256[])

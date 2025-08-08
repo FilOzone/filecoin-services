@@ -18,13 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
     - `proofSet` → `dataSet` (all functions, events, variables, mappings; "proof set" becomes "data set")
     - `root` → `piece` (all references to stored data units)
     - `rootId` → `pieceId`
-    - `owner` → `storageProvider` (in ApprovedProviderInfo struct)
+    - `owner` → `serviceProvider` (in ApprovedProviderInfo struct)
   - **Function Renames:**
     - `proofSetCreated()` → `dataSetCreated()`
     - `proofSetDeleted()` → `dataSetDeleted()`
     - `rootsAdded()` → `piecesAdded()`
     - `rootsScheduledRemove()` → `piecesScheduledRemove()`
-    - `ownerChanged()` → `storageProviderChanged()`
+    - `ownerChanged()` → `serviceProviderChanged()`
     - `getProofSetIdByRail()` → `getDataSetIdByRail()`
     - `getProofSetInfo()` → `getDataSetInfo()`
     - `isProofSetChargeable()` → `isDataSetChargeable()`
@@ -34,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - **Event Renames:**
     - `ProofSetCreated` → `DataSetCreated`
     - `ProofSetDeleted` → `DataSetDeleted`
-    - `ProofSetOwnershipChanged` → `DataSetStorageProviderChanged`
+    - `ProofSetOwnershipChanged` → `DataSetServiceProviderChanged`
     - `ProofSetRailCreated` → `DataSetRailCreated`
     - `RootMetadataAdded` → `PieceMetadataAdded`
   - **State Variable and Mapping Renames:**
@@ -50,7 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - **Struct Updates:**
     - `ProofSetInfo` → `DataSetInfo` (with field `proofSetId` → `dataSetId`, `rootMetadata` → `pieceMetadata`)
     - `ProofSetCreateData` → `DataSetCreateData`
-    - `ApprovedProviderInfo.owner` → `ApprovedProviderInfo.storageProvider`
+    - `ApprovedProviderInfo.owner` → `ApprovedProviderInfo.serviceProvider`
   - **EIP-712 Type Hash Updates:**
     - `CREATE_PROOFSET_TYPEHASH` → `CREATE_DATA_SET_TYPEHASH`
       - Type string: `"CreateProofSet(uint256 clientDataSetId,bool withCDN,address payee)"` → `"CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)"`
@@ -86,7 +86,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 This release contains breaking changes that rename core concepts throughout the codebase. Developers will need to update:
 - All function calls from `proofSet*` to `dataSet*` and `root*` to `piece*`
 - Event listeners for the renamed events
-- Struct field references (especially `owner` → `storageProvider`)
+- Struct field references (especially `owner` → `serviceProvider`)
 - EIP-712 signature generation code to use new type strings
 - Type imports from `PDPVerifier.RootData` to `IPDPTypes.PieceData`
 
