@@ -16,7 +16,7 @@ import {Errors} from "./Errors.sol";
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
-/// using the Payments contract. It creates payment rails for storage providers
+/// using the Payments contract. It creates payment rails for service providers
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
@@ -32,8 +32,8 @@ contract FilecoinWarmStorageService is
 
     // Events
     event ContractUpgraded(string version, address implementation);
-    event DataSetStorageProviderChanged(
-        uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider
+    event DataSetServiceProviderChanged(
+        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
@@ -139,7 +139,7 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 => uint256) public provingActivationEpoch;
 
-    // ========== Storage Provider Registry State ==========
+    // ========== Service Provider Registry State ==========
 
     uint256 private nextServiceProviderId = 1;
 
@@ -400,8 +400,8 @@ contract FilecoinWarmStorageService is
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
 
-        // Check if the storage provider is whitelisted
-        require(approvedProvidersMap[creator], Errors.StorageProviderNotApproved(creator));
+        // Check if the service provider is whitelisted
+        require(approvedProvidersMap[creator], Errors.ServiceProviderNotApproved(creator));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -699,34 +699,34 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set storage provider changes by updating internal state only
-     * @dev Called by the PDPVerifier contract when data set storage provider is transferred. This function is now fully decoupled from the provider registry.
-     * @param dataSetId The ID of the data set whose storage provider is changing
-     * @param oldStorageProvider The previous storage provider address
-     * @param newStorageProvider The new storage provider address (must be an approved provider)
+     * @notice Handles data set service provider changes by updating internal state only
+     * @dev Called by the PDPVerifier contract when data set service provider is transferred.
+     * @param dataSetId The ID of the data set whose service provider is changing
+     * @param oldServiceProvider The previous service provider address
+     * @param newServiceProvider The new service provider address (must be an approved provider)
      * @param extraData Additional data (not used)
      */
     function storageProviderChanged(
         uint256 dataSetId,
-        address oldStorageProvider,
-        address newStorageProvider,
+        address oldServiceProvider,
+        address newServiceProvider,
         bytes calldata extraData
     ) external override onlyPDPVerifier {
-        // Verify the data set exists and validate the old storage provider
+        // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.payee == oldStorageProvider,
-            Errors.OldStorageProviderMismatch(dataSetId, info.payee, oldStorageProvider)
+            info.payee == oldServiceProvider,
+            Errors.OldServiceProviderMismatch(dataSetId, info.payee, oldServiceProvider)
         );
-        require(newStorageProvider != address(0), Errors.ZeroAddress(Errors.AddressField.StorageProvider));
-        // New storage provider must be an approved provider
-        require(approvedProvidersMap[newStorageProvider], Errors.NewStorageProviderNotApproved(newStorageProvider));
+        require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
+        // New service provider must be an approved provider
+        require(approvedProvidersMap[newServiceProvider], Errors.NewServiceProviderNotApproved(newServiceProvider));
 
-        // Update the data set payee (storage provider)
-        info.payee = newStorageProvider;
+        // Update the data set payee (service provider)
+        info.payee = newServiceProvider;
 
         // Emit event for off-chain tracking
-        emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
+        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
     }
 
     function terminateDataSetPayment(uint256 dataSetId) external {
