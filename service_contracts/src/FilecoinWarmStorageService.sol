@@ -44,17 +44,18 @@ contract FilecoinWarmStorageService is
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
-    event DataSetRailsCreated(
+    event DataSetCreated(
         uint256 indexed dataSetId,
         uint256 pdpRailId,
         uint256 cacheMissRailId,
         uint256 cdnRailId,
         address payer,
         address payee,
-        bool withCDN
+        string[] metadataKeys,
+        bytes[] metadataValues
     );
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
-    event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
+    event PieceAdded(uint256 indexed dataSetId, uint256 indexed pieceId, string[] keys, bytes[] values);
 
     event ServiceTerminated(
         address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
@@ -71,6 +72,15 @@ contract FilecoinWarmStorageService is
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
+
+    // ID bits for composite IDs
+    uint256 private constant ID_BITS = 128;
+
+    // Metadata size and count limits
+    uint256 private constant MAX_KEY_LENGTH = 64;
+    uint256 private constant MAX_VALUE_LENGTH = 512;
+    uint256 private constant MAX_KEYS_PER_DATASET = 10;
+    uint256 private constant MAX_KEYS_PER_PIECE = 5;
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
@@ -97,8 +107,17 @@ contract FilecoinWarmStorageService is
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) private clientDataSetIds;
-    // Mapping from data set ID to piece ID to metadata
-    mapping(uint256 => mapping(uint256 => string)) private dataSetPieceMetadata;
+
+    // dataSetId => PieceId => (key => value)
+    mapping(uint256 => mapping(uint256 => mapping(string => string))) public dataSetPieceMetadata;
+    // dataSetId => PieceId => array of keys
+    mapping(uint256 => mapping(uint256 => string[])) internal dataSetPieceMetadataKeys;
+
+    // Mapping from data set ID to key value pair metadata
+    // dataSetId => (key => value)
+    mapping(uint256 => mapping(string => string)) public dataSetMetadata;
+    // dataSetId => array of keys
+    mapping(uint256 => string[]) internal dataSetMetadataKeys;
 
     // Storage for data set payment information
     struct DataSetInfo {
@@ -108,18 +127,15 @@ contract FilecoinWarmStorageService is
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
-        string metadata; // General metadata for the data set
-        string[] pieceMetadata; // Array of metadata for each piece
         uint256 clientDataSetId; // ClientDataSetID
-        bool withCDN; // Whether the data set is registered for CDN add-on
         uint256 paymentEndEpoch; // 0 if payment is not terminated
     }
 
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
-        string metadata;
         address payer;
-        bool withCDN;
+        string[] metadataKeys;
+        bytes[] metadataValues;
         bytes signature; // Authentication signature
     }
 
@@ -157,7 +173,7 @@ contract FilecoinWarmStorageService is
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
-        keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)");
+        keccak256("CreateDataSet(uint256 clientDataSetId,address payee)");
 
     bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
@@ -292,18 +308,45 @@ contract FilecoinWarmStorageService is
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
-        verifyCreateDataSetSignature(
-            createData.payer, clientDataSetId, creator, createData.withCDN, createData.signature
-        );
+        verifyCreateDataSetSignature(createData.payer, clientDataSetId, creator, createData.signature);
 
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
-        info.metadata = createData.metadata;
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
-        info.withCDN = createData.withCDN;
+
+        // Store each metadata key-value entry for this data set
+        require(
+            createData.metadataKeys.length == createData.metadataValues.length,
+            Errors.MetadataKeyAndValueLengthMismatch(createData.metadataKeys.length, createData.metadataValues.length)
+        );
+        require(
+            createData.metadataKeys.length <= MAX_KEYS_PER_DATASET,
+            Errors.TooManyMetadataKeys(MAX_KEYS_PER_DATASET, createData.metadataKeys.length)
+        );
+
+        for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
+            string memory key = createData.metadataKeys[i];
+            bytes memory value = createData.metadataValues[i];
+
+            require(dataSetMetadata[dataSetId][key].length == 0, Errors.DuplicateMetadataKey(dataSetId, key));
+            require(
+                bytes(key).length <= MAX_KEY_LENGTH,
+                Errors.MetadataKeyExceedsMaxLength(i, MAX_KEY_LENGTH, bytes(key).length)
+            );
+            require(
+                value.length <= MAX_VALUE_LENGTH,
+                Errors.MetadataValueExceedsMaxLength(i, MAX_VALUE_LENGTH, value.length)
+            );
+
+            // Store the metadata key in the array for this data set
+            dataSetMetadataKeys[dataSetId].push(key);
+
+            // Store the metadata value (convert bytes to string)
+            dataSetMetadata[dataSetId][key] = string(value);
+        }
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
 
@@ -343,7 +386,7 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
 
-        if (createData.withCDN == true) {
+        if (hasMetadataKeyEnabled(createData.metadataKeys, createData.metadataValues, "withCDN")) {
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -370,8 +413,15 @@ contract FilecoinWarmStorageService is
         }
 
         // Emit event for tracking
-        emit DataSetRailsCreated(
-            dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
+        emit DataSetCreated(
+            dataSetId,
+            pdpRailId,
+            cacheMissRailId,
+            cdnRailId,
+            createData.payer,
+            creator,
+            createData.metadataKeys,
+            createData.metadataValues
         );
     }
 
@@ -421,16 +471,47 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         require(extraData.length > 0, Errors.ExtraDataRequired());
         // Decode the extra data
-        (bytes memory signature, string memory metadata) = abi.decode(extraData, (bytes, string));
+        (bytes memory signature, string[] memory metadataKeys, bytes[] memory metadataValues) =
+            abi.decode(extraData, (bytes, string[], bytes[]));
+
+        // Check that number of metadata keys and values are equal
+        require(
+            metadataKeys.length == metadataValues.length,
+            Errors.MetadataKeyAndValueLengthMismatch(metadataKeys.length, metadataValues.length)
+        );
 
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature);
 
+        require(
+            metadataKeys.length <= MAX_KEYS_PER_PIECE,
+            Errors.TooManyMetadataKeys(MAX_KEYS_PER_PIECE, metadataKeys.length)
+        );
+
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
             uint256 pieceId = firstAdded + i;
-            dataSetPieceMetadata[dataSetId][pieceId] = metadata;
-            emit PieceMetadataAdded(dataSetId, pieceId, metadata);
+
+            for (uint256 k = 0; k < metadataKeys.length; k++) {
+                string memory key = metadataKeys[k];
+                bytes memory value = metadataValues[k];
+
+                require(
+                    dataSetPieceMetadata[dataSetId][pieceId][key].length == 0,
+                    Errors.DuplicateMetadataKey(dataSetId, key)
+                );
+                require(
+                    bytes(key).length <= MAX_KEY_LENGTH,
+                    Errors.MetadataKeyExceedsMaxLength(k, MAX_KEY_LENGTH, bytes(key).length)
+                );
+                require(
+                    value.length <= MAX_VALUE_LENGTH,
+                    Errors.MetadataValueExceedsMaxLength(k, MAX_VALUE_LENGTH, value.length)
+                );
+                dataSetPieceMetadata[dataSetId][pieceId][key] = string(value);
+                dataSetPieceMetadataKeys[dataSetId][pieceId].push(key);
+            }
+            emit PieceAdded(dataSetId, pieceId, metadataKeys, metadataValues);
         }
     }
 
@@ -632,7 +713,7 @@ contract FilecoinWarmStorageService is
 
         payments.terminateRail(info.pdpRailId);
 
-        if (info.withCDN) {
+        if (checkMetadataWithCDNEnabled(dataSetId)) {
             payments.terminateRail(info.cacheMissRailId);
             payments.terminateRail(info.cdnRailId);
         }
@@ -675,7 +756,7 @@ contract FilecoinWarmStorageService is
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
 
         // Update the CDN rail payment rates, if applicable
-        if (dataSetInfo[dataSetId].withCDN) {
+        if (checkMetadataWithCDNEnabled(dataSetId)) {
             (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
 
             uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
@@ -829,10 +910,82 @@ contract FilecoinWarmStorageService is
      * @return decoded The decoded DataSetCreateData struct
      */
     function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (string memory metadata, address payer, bool withCDN, bytes memory signature) =
-            abi.decode(extraData, (string, address, bool, bytes));
+        (address payer, string[] memory keys, bytes[] memory values, bytes memory signature) =
+            abi.decode(extraData, (address, string[], bytes[], bytes));
 
-        return DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+        return DataSetCreateData({payer: payer, metadataKeys: keys, metadataValues: values, signature: signature});
+    }
+
+    function checkMetadataWithCDNEnabled(uint256 dataSetId) internal view returns (bool) {
+        string[] memory keys = dataSetMetadataKeys[dataSetId];
+        bytes32 keyHash = keccak256(abi.encodePacked("withCDN"));
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            if (keccak256(abi.encodePacked(keys[i])) == keyHash) {
+                if (isEmptyOrTrue(dataSetMetadata[dataSetId][keys[i]])) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @notice Returns true if `key` exists in `metadataKeys` and its corresponding value is either empty or the ASCII string "true".
+     * @param metadataKeys The array of metadata keys
+     * @param metadataValues The array of metadata values
+     * @param key The metadata key to look up
+     * @return enabled True if a matching key exists and its value is empty or "true"; otherwise false.
+     */
+    function hasMetadataKeyEnabled(string[] memory metadataKeys, bytes[] memory metadataValues, string memory key)
+        internal
+        pure
+        returns (bool)
+    {
+        // Precompute the hash of the target key once to avoid repeated hashing.
+        bytes32 keyHash = keccak256(abi.encodePacked(key));
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            // compare keys
+            if (keccak256(abi.encodePacked(metadataKeys[i])) == keyHash) {
+                // if found, check if the value is empty or "true"
+                if (isEmptyOrTrue(metadataValues[i])) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * @notice Returns true if `value` is empty or equals the ASCII string "true".
+     * @dev Case-sensitive: matches exactly "true".
+     * @param value The bytes value to test.
+     * @return ok True if empty or exactly "true"; otherwise false.
+     */
+    function isEmptyOrTrue(bytes memory value) internal pure returns (bool) {
+        // Treat truly empty bytes as enabled
+        if (value.length == 0) {
+            return true;
+        }
+
+        bytes32 valueHash = keccak256(value);
+
+        if (valueHash == keccak256(abi.encode(""))) {
+            return true;
+        }
+        if (valueHash == keccak256(abi.encodePacked(""))) {
+            return true;
+        }
+
+        // Common encodings for the string "true"
+        if (valueHash == keccak256(abi.encodePacked("true"))) {
+            return true;
+        }
+        if (valueHash == keccak256(abi.encode("true"))) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -868,15 +1021,12 @@ contract FilecoinWarmStorageService is
      * @param clientDataSetId The unique ID for the client's data set
      * @param signature The signature bytes (v, r, s)
      */
-    function verifyCreateDataSetSignature(
-        address payer,
-        uint256 clientDataSetId,
-        address payee,
-        bool withCDN,
-        bytes memory signature
-    ) internal view {
+    function verifyCreateDataSetSignature(address payer, uint256 clientDataSetId, address payee, bytes memory signature)
+        internal
+        view
+    {
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, withCDN, payee));
+        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee));
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Recover signer address from the signature
@@ -995,6 +1145,28 @@ contract FilecoinWarmStorageService is
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
+    }
+
+    function getClientDataSets(address client) external view returns (DataSetInfo[] memory) {
+        uint256[] memory dataSetIds = clientDataSets[client];
+
+        DataSetInfo[] memory dataSets = new DataSetInfo[](dataSetIds.length);
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            uint256 dataSetId = dataSetIds[i];
+            DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
+            // Create a memory copy of the struct (excluding any mappings)
+            dataSets[i] = DataSetInfo({
+                pdpRailId: storageInfo.pdpRailId,
+                cacheMissRailId: storageInfo.cacheMissRailId,
+                cdnRailId: storageInfo.cdnRailId,
+                payer: storageInfo.payer,
+                payee: storageInfo.payee,
+                commissionBps: storageInfo.commissionBps,
+                clientDataSetId: storageInfo.clientDataSetId,
+                paymentEndEpoch: storageInfo.paymentEndEpoch
+            });
+        }
+        return dataSets;
     }
 
     /**
