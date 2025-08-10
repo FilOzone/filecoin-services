@@ -176,4 +176,37 @@ library Errors {
     /// @notice Data set does not exist for the given rail
     /// @param railId The rail ID
     error DataSetNotFoundForRail(uint256 railId);
+
+    /// @notice Metadata key and value length mismatch
+    /// @dev Thrown when metadataKeys and metadataValues arrays do not have the same length
+    /// @param keysLength The length of the provided metadata keys
+    /// @param valuesLength The length of the provided metadata values
+    error MetadataKeyAndValueLengthMismatch(uint256 keysLength, uint256 valuesLength);
+
+    /// @notice Metadata keys provided exceed the maximum allowed length
+    /// @dev Thrown when the number of metadata keys exceeds the allowed maximum
+    /// @param maxAllowed The maximum allowed length
+    /// @param keysLength The length of the provided metadata keys
+    error TooManyMetadataKeys(uint256 maxAllowed, uint256 keysLength);
+
+    /// @notice Metadata key is already registered for the data set
+    /// @dev Thrown when a duplicate metadata key is provided for the same data set
+    /// @dev This error is used to prevent overwriting existing metadata keys
+    /// @param dataSetId The ID of the data set where the duplicate key was found
+    /// @param key The duplicate metadata key
+    error DuplicateMetadataKey(uint256 dataSetId, string key);
+
+    /// @notice Metadata key exceeds the maximum allowed length
+    /// @dev Thrown when a metadata key is longer than the allowed maximum length
+    /// @param index The index of the metadata key in the array
+    /// @param maxAllowed The maximum allowed length for metadata keys
+    /// @param length The length of the provided metadata key
+    error MetadataKeyExceedsMaxLength(uint256 index, uint256 maxAllowed, uint256 length);
+
+    /// @notice Metadata value exceeds the maximum allowed length
+    /// @dev Thrown when a metadata value is longer than the allowed maximum length
+    /// @param index The index of the metadata value in the array
+    /// @param maxAllowed The maximum allowed length for metadata values
+    /// @param length The length of the provided metadata value
+    error MetadataValueExceedsMaxLength(uint256 index, uint256 maxAllowed, uint256 length);
 }
