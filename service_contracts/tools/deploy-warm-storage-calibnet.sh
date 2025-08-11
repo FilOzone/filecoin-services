@@ -34,20 +34,42 @@ fi
 
 # Fixed constants for initialization
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
-OPERATOR_COMMISSION_BPS="100"                                         # 1% commission in basis points
 
 # Proving period configuration - use defaults if not set
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
 CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}"                # Default 15 epochs
 
+# Query the actual challengeFinality from PDPVerifier
+echo "Querying PDPVerifier's challengeFinality..."
+CHALLENGE_FINALITY=$(cast call $PDP_VERIFIER_ADDRESS "getChallengeFinality()" --rpc-url "$RPC_URL" | cast --to-dec)
+echo "PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
+
+# Validate that the configuration will work with PDPVerifier's challengeFinality
+# The calculation: (MAX_PROVING_PERIOD - CHALLENGE_WINDOW_SIZE) + (CHALLENGE_WINDOW_SIZE/2) must be >= CHALLENGE_FINALITY
+# This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
+MIN_REQUIRED=$((CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE / 2))
+if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
+    echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for PDPVerifier's challengeFinality ($CHALLENGE_FINALITY)"
+    echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
+    echo "       To fix: Set MAX_PROVING_PERIOD to at least $MIN_REQUIRED"
+    echo ""
+    echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./deploy-warm-storage-calibnet.sh"
+    exit 1
+fi
+
+echo "Configuration validation passed:"
+echo "  PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
+echo "  MAX_PROVING_PERIOD: $MAX_PROVING_PERIOD epochs"
+echo "  CHALLENGE_WINDOW_SIZE: $CHALLENGE_WINDOW_SIZE epochs"
+
 ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
 echo "Deploying contracts from address $ADDR"
- 
+
 NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $OPERATOR_COMMISSION_BPS  --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -59,7 +81,7 @@ NONCE=$(expr $NONCE + "1")
 echo "Deploying FilecoinWarmStorageService proxy..."
 # Initialize with PDPVerifier address, payments contract address, USDFC token address, commission rate, max proving period, and challenge window size
 INIT_DATA=$(cast calldata "initialize(uint64,uint256)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE)
-WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
     exit 1
@@ -69,13 +91,13 @@ echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRES
 # Summary of deployed contracts
 echo ""
 echo "=== DEPLOYMENT SUMMARY ==="
-echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" 
+echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo "=========================="
 echo ""
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "PDPVerifier address: $PDP_VERIFIER_ADDRESS"
 echo "Payments contract address: $PAYMENTS_CONTRACT_ADDRESS"
-echo "Operator commission rate: $OPERATOR_COMMISSION_BPS basis points (${OPERATOR_COMMISSION_BPS})"
+echo "FilCDN wallet address: $FILCDN_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
