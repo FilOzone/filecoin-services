@@ -105,11 +105,11 @@ contract MockPDPVerifier {
     uint256 public nextDataSetId = 1;
 
     // Track data set storage providers for testing
-    mapping(uint256 => address) public dataSetStorageProviders;
+    mapping(uint256 => address) public dataSetServiceProviders;
 
     event DataSetCreated(uint256 indexed setId, address indexed owner);
-    event DataSetStorageProviderChanged(
-        uint256 indexed setId, address indexed oldStorageProvider, address indexed newStorageProvider
+    event DataSetServiceProviderChanged(
+        uint256 indexed setId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
 
     // Basic implementation to create data sets and call the listener
@@ -122,7 +122,7 @@ contract MockPDPVerifier {
         }
 
         // Track storage provider
-        dataSetStorageProviders[setId] = msg.sender;
+        dataSetServiceProviders[setId] = msg.sender;
 
         emit DataSetCreated(setId, msg.sender);
         return setId;
@@ -132,36 +132,36 @@ contract MockPDPVerifier {
      * @notice Simulates storage provider change for testing purposes
      * @dev This function mimics the PDPVerifier's claimDataSetOwnership functionality
      * @param dataSetId The ID of the data set
-     * @param newStorageProvider The new storage provider address
+     * @param newServiceProvider The new storage provider address
      * @param listenerAddr The listener contract address
      * @param extraData Additional data to pass to the listener
      */
-    function changeDataSetStorageProvider(
+    function changeDataSetServiceProvider(
         uint256 dataSetId,
-        address newStorageProvider,
+        address newServiceProvider,
         address listenerAddr,
         bytes calldata extraData
     ) external {
-        require(dataSetStorageProviders[dataSetId] != address(0), "Data set does not exist");
-        require(newStorageProvider != address(0), "New storage provider cannot be zero address");
+        require(dataSetServiceProviders[dataSetId] != address(0), "Data set does not exist");
+        require(newServiceProvider != address(0), "New storage provider cannot be zero address");
 
-        address oldStorageProvider = dataSetStorageProviders[dataSetId];
+        address oldServiceProvider = dataSetServiceProviders[dataSetId];
         require(
-            oldStorageProvider != newStorageProvider,
+            oldServiceProvider != newServiceProvider,
             "New storage provider must be different from current storage provider"
         );
 
         // Update storage provider
-        dataSetStorageProviders[dataSetId] = newStorageProvider;
+        dataSetServiceProviders[dataSetId] = newServiceProvider;
 
         // Call the listener's storageProviderChanged function
         if (listenerAddr != address(0)) {
             PDPListener(listenerAddr).storageProviderChanged(
-                dataSetId, oldStorageProvider, newStorageProvider, extraData
+                dataSetId, oldServiceProvider, newServiceProvider, extraData
             );
         }
 
-        emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
+        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
     }
 
     /**
@@ -169,8 +169,8 @@ contract MockPDPVerifier {
      * @param dataSetId The ID of the data set
      * @return The current storage provider address
      */
-    function getDataSetStorageProvider(uint256 dataSetId) external view returns (address) {
-        return dataSetStorageProviders[dataSetId];
+    function getDataSetServiceProvider(uint256 dataSetId) external view returns (address) {
+        return dataSetServiceProviders[dataSetId];
     }
 
     function piecesScheduledRemove(
@@ -202,7 +202,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     // Test accounts
     address public deployer;
     address public client;
-    address public storageProvider;
+    address public ServiceProvider;
     address public filCDN;
 
     // Additional test accounts for registry tests
@@ -238,15 +238,15 @@ contract FilecoinWarmStorageServiceTest is Test {
     event ProviderRemoved(address indexed provider, uint256 indexed providerId);
 
     // Storage provider change event to verify
-    event DataSetStorageProviderChanged(
-        uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider
+    event DataSetServiceProviderChanged(
+        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
 
     function setUp() public {
         // Setup test accounts
         deployer = address(this);
         client = address(0xf1);
-        storageProvider = address(0xf2);
+        ServiceProvider = address(0xf2);
         filCDN = address(0xf3);
 
         // Additional accounts for registry tests
@@ -257,7 +257,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Fund test accounts
         vm.deal(deployer, 100 ether);
         vm.deal(client, 100 ether);
-        vm.deal(storageProvider, 100 ether);
+        vm.deal(ServiceProvider, 100 ether);
         vm.deal(sp1, 100 ether);
         vm.deal(sp2, 100 ether);
         vm.deal(sp3, 100 ether);
@@ -339,18 +339,18 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testCreateDataSetCreatesRailAndChargesFee() public {
         // First approve the storage provider
-        vm.prank(storageProvider);
+        vm.prank(ServiceProvider);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp.example.com/pdp", "https://sp.example.com/retrieve"
         );
-        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        pdpServiceWithPayments.approveServiceProvider(ServiceProvider);
 
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
             withCDN: true,
-            beneficiary: storageProvider,
+            beneficiary: ServiceProvider,
             signature: FAKE_SIGNATURE
         });
 
@@ -379,15 +379,15 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get account balances before creating data set
         (uint256 clientFundsBefore,) = getAccountInfo(address(mockUSDFC), client);
-        (uint256 spFundsBefore,) = getAccountInfo(address(mockUSDFC), storageProvider);
+        (uint256 spFundsBefore,) = getAccountInfo(address(mockUSDFC), ServiceProvider);
 
         // Expect RailCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetRailsCreated(1, 1, 2, 3, client, storageProvider, true);
+        emit FilecoinWarmStorageService.DataSetRailsCreated(1, 1, 2, 3, client, ServiceProvider, true);
 
         // Create a data set as the storage provider
         makeSignaturePass(client);
-        vm.startPrank(storageProvider);
+        vm.startPrank(ServiceProvider);
         uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
@@ -404,7 +404,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify data set info was stored correctly
         assertEq(dataSet.payer, client, "Payer should be set to client");
-        assertEq(dataSet.controller, storageProvider, "Controller should be set to storage provider");
+        assertEq(dataSet.controller, ServiceProvider, "Controller should be set to storage provider");
 
         // Verify metadata was stored correctly
         assertEq(dataSet.metadata, "Test Data Set", "Metadata should be stored correctly");
@@ -415,7 +415,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertNotEq(dataSetInfo.cacheMissRailId, 0, "Cache miss rail ID should be set");
         assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
         assertEq(dataSetInfo.payer, client, "Payer should match");
-        assertEq(dataSetInfo.controller, storageProvider, "Controller should match");
+        assertEq(dataSetInfo.controller, ServiceProvider, "Controller should match");
         assertEq(dataSetInfo.withCDN, true, "withCDN should be true");
 
         // Verify withCDN was stored correctly
@@ -425,7 +425,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
         assertEq(pdpRail.token, address(mockUSDFC), "Token should be USDFC");
         assertEq(pdpRail.from, client, "From address should be client");
-        assertEq(pdpRail.to, storageProvider, "To address should be storage provider");
+        assertEq(pdpRail.to, ServiceProvider, "To address should be storage provider");
         assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(pdpRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(pdpRail.commissionRateBps, 0, "No commission");
@@ -435,7 +435,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
         assertEq(cacheMissRail.token, address(mockUSDFC), "Token should be USDFC");
         assertEq(cacheMissRail.from, client, "From address should be client");
-        assertEq(cacheMissRail.to, storageProvider, "To address should be storage provider");
+        assertEq(cacheMissRail.to, ServiceProvider, "To address should be storage provider");
         assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cacheMissRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(cacheMissRail.commissionRateBps, 0, "No commission");
@@ -454,7 +454,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get account balances after creating data set
         (uint256 clientFundsAfter,) = getAccountInfo(address(mockUSDFC), client);
-        (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), storageProvider);
+        (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), ServiceProvider);
 
         // Calculate expected client balance
         uint256 expectedClientFundsAfter = clientFundsBefore - 1e5;
@@ -468,18 +468,18 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testCreateDataSetNoCDN() public {
         // First approve the storage provider
-        vm.prank(storageProvider);
+        vm.prank(ServiceProvider);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp.example.com/pdp", "https://sp.example.com/retrieve"
         );
-        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        pdpServiceWithPayments.approveServiceProvider(ServiceProvider);
 
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
             withCDN: false,
-            beneficiary: storageProvider,
+            beneficiary: ServiceProvider,
             signature: FAKE_SIGNATURE
         });
 
@@ -508,11 +508,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect RailCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetRailsCreated(1, 1, 0, 0, client, storageProvider, false);
+        emit FilecoinWarmStorageService.DataSetRailsCreated(1, 1, 0, 0, client, ServiceProvider, false);
 
         // Create a data set as the storage provider
         makeSignaturePass(client);
-        vm.startPrank(storageProvider);
+        vm.startPrank(ServiceProvider);
         uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
         vm.stopPrank();
 
@@ -619,7 +619,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify SP info
         FilecoinWarmStorageService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
-        assertEq(info.storageProvider, sp1, "Storage provider should match");
+        assertEq(info.ServiceProvider, sp1, "Storage provider should match");
         assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
         assertEq(info.peerId, validPeerId, "Peer ID should match");
         assertEq(info.registeredAt, registrationBlock, "Registration epoch should match");
@@ -771,7 +771,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             metadata: "Test Data Set",
             payer: client,
             withCDN: false,
-            beneficiary: storageProvider,
+            beneficiary: ServiceProvider,
             signature: FAKE_SIGNATURE
         });
 
@@ -820,7 +820,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             metadata: "Test Data Set",
             payer: client,
             withCDN: false,
-            beneficiary: storageProvider,
+            beneficiary: ServiceProvider,
             signature: FAKE_SIGNATURE
         });
 
@@ -855,7 +855,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             metadata: "Test Data Set",
             payer: client,
             withCDN: false,
-            beneficiary: storageProvider,
+            beneficiary: ServiceProvider,
             signature: FAKE_SIGNATURE
         });
 
@@ -889,7 +889,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get provider info
         FilecoinWarmStorageService.ApprovedProviderInfo memory info = pdpServiceWithPayments.getApprovedProvider(1);
-        assertEq(info.storageProvider, sp1, "Storage provider should match");
+        assertEq(info.ServiceProvider, sp1, "Storage provider should match");
         assertEq(info.serviceURL, validServiceUrl, "Provider service URL should match");
     }
 
@@ -1066,9 +1066,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ApprovedProviderInfo[] memory providers =
             pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 3, "Should have three approved providers");
-        assertEq(providers[0].storageProvider, sp1, "First provider should be sp1");
-        assertEq(providers[1].storageProvider, sp2, "Second provider should be sp2");
-        assertEq(providers[2].storageProvider, sp3, "Third provider should be sp3");
+        assertEq(providers[0].ServiceProvider, sp1, "First provider should be sp1");
+        assertEq(providers[1].ServiceProvider, sp2, "Second provider should be sp2");
+        assertEq(providers[2].ServiceProvider, sp3, "Third provider should be sp3");
 
         // Remove the middle provider (sp2 with ID 2)
         pdpServiceWithPayments.removeServiceProvider(2);
@@ -1078,8 +1078,8 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should only have 2 elements now (removed provider filtered out)
         assertEq(providers.length, 2, "Array should only contain active providers");
-        assertEq(providers[0].storageProvider, sp1, "First provider should still be sp1");
-        assertEq(providers[1].storageProvider, sp3, "Second provider should be sp3 (sp2 filtered out)");
+        assertEq(providers[0].ServiceProvider, sp1, "First provider should still be sp1");
+        assertEq(providers[1].ServiceProvider, sp3, "Second provider should be sp3 (sp2 filtered out)");
 
         // Verify the URLs are correct for remaining providers
         assertEq(providers[0].serviceURL, validServiceUrl, "SP1 provider service URL should be correct");
@@ -1109,7 +1109,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ApprovedProviderInfo[] memory providers =
             pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 1, "Should have one approved provider");
-        assertEq(providers[0].storageProvider, sp1, "Provider should be sp1");
+        assertEq(providers[0].ServiceProvider, sp1, "Provider should be sp1");
         assertEq(providers[0].serviceURL, validServiceUrl, "Provider service URL should match");
 
         // Remove the single provider
@@ -1157,8 +1157,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Should only return providers 2 and 5
         providers = pdpServiceWithPayments.getAllApprovedProviders();
         assertEq(providers.length, 2, "Should only have two active providers");
-        assertEq(providers[0].storageProvider, sps[1], "First active provider should be sp2");
-        assertEq(providers[1].storageProvider, sps[4], "Second active provider should be sp5");
+        assertEq(providers[0].ServiceProvider, sps[1], "First active provider should be sp2");
+        assertEq(providers[1].ServiceProvider, sps[4], "Second active provider should be sp5");
         assertEq(providers[0].serviceURL, serviceUrls[1], "SP2 URL should match");
         assertEq(providers[1].serviceURL, serviceUrls[4], "SP5 URL should match");
     }
@@ -1264,7 +1264,7 @@ contract FilecoinWarmStorageServiceTest is Test {
      * @param metadata The data set metadata
      * @return The created data set ID
      */
-    function createDataSetForStorageProviderTest(address provider, address clientAddress, string memory metadata)
+    function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory metadata)
         internal
         returns (uint256)
     {
@@ -1309,7 +1309,7 @@ contract FilecoinWarmStorageServiceTest is Test {
      * @notice Test successful storage provider change between two approved providers (stable beneficiary)
      * @dev In the production model, controller changes while beneficiary remains as created
      */
-    function testStorageProviderChangedSuccessDecoupled() public {
+    function testServiceProviderChangedSuccessDecoupled() public {
         // Register and approve two providers
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
@@ -1353,9 +1353,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Change storage provider from sp1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
+        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
-        mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
+        mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
         // After changing the storage provider, check:
         FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
@@ -1375,7 +1375,7 @@ contract FilecoinWarmStorageServiceTest is Test {
      * @notice Test storage provider change with new format (separate beneficiary)
      * @dev Verifies that for new format, payee changes but beneficiary can remain separate
      */
-    function testStorageProviderChangedWithNewFormat() public {
+    function testServiceProviderChangedWithNewFormat() public {
         // Register and approve two providers
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
@@ -1432,9 +1432,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Change storage provider from sp1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
+        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
-        mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
+        mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
         // For new format: payee should change, but beneficiary remains the same
         (payer, payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
@@ -1447,7 +1447,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     /**
      * @notice Test storage provider change reverts if new storage provider is not an approved provider
      */
-    function testStorageProviderChangedRevertsIfNewStorageProviderNotApproved() public {
+    function testServiceProviderChangedRevertsIfNewServiceProviderNotApproved() public {
         // Register and approve sp1
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
@@ -1455,15 +1455,15 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
         // Create a data set with sp1 as the storage provider
-        uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         // Use an unapproved address for the new storage provider
         address unapproved = address(0x9999);
         assertTrue(pdpServiceWithPayments.getProviderIdByAddress(unapproved) == 0, "Unapproved should not be approved");
         // Attempt storage provider change
         bytes memory testExtraData = new bytes(0);
         vm.prank(unapproved);
-        vm.expectRevert(abi.encodeWithSelector(Errors.NewStorageProviderNotApproved.selector, unapproved));
-        mockPDPVerifier.changeDataSetStorageProvider(
+        vm.expectRevert(abi.encodeWithSelector(Errors.NewServiceProviderNotApproved.selector, unapproved));
+        mockPDPVerifier.changeDataSetServiceProvider(
             testDataSetId, unapproved, address(pdpServiceWithPayments), testExtraData
         );
         // Registry state is unchanged
@@ -1473,17 +1473,17 @@ contract FilecoinWarmStorageServiceTest is Test {
     /**
      * @notice Test storage provider change reverts if new storage provider is zero address
      */
-    function testStorageProviderChangedRevertsIfNewStorageProviderZeroAddress() public {
+    function testServiceProviderChangedRevertsIfNewServiceProviderZeroAddress() public {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp1);
-        uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
         vm.prank(sp1);
         vm.expectRevert("New storage provider cannot be zero address");
-        mockPDPVerifier.changeDataSetStorageProvider(
+        mockPDPVerifier.changeDataSetServiceProvider(
             testDataSetId, address(0), address(pdpServiceWithPayments), testExtraData
         );
     }
@@ -1491,7 +1491,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     /**
      * @notice Test storage provider change reverts if old storage provider mismatch
      */
-    function testStorageProviderChangedRevertsIfOldStorageProviderMismatch() public {
+    function testServiceProviderChangedRevertsIfOldServiceProviderMismatch() public {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
@@ -1502,18 +1502,18 @@ contract FilecoinWarmStorageServiceTest is Test {
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
         // Call directly as PDPVerifier with wrong old storage provider
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(abi.encodeWithSelector(Errors.OldStorageProviderMismatch.selector, 1, sp1, sp2));
+        vm.expectRevert(abi.encodeWithSelector(Errors.OldServiceProviderMismatch.selector, 1, sp1, sp2));
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp2, sp2, testExtraData);
     }
 
     /**
      * @notice Test storage provider change reverts if called by unauthorized address
      */
-    function testStorageProviderChangedRevertsIfUnauthorizedCaller() public {
+    function testServiceProviderChangedRevertsIfUnauthorizedCaller() public {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
@@ -1524,7 +1524,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
         // Call directly as sp2 (not PDPVerifier)
         vm.prank(sp2);
@@ -1535,7 +1535,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     /**
      * @notice Test multiple data sets per provider: only the targeted data set's payee is updated
      */
-    function testMultipleDataSetsPerProviderStorageProviderChange() public {
+    function testMultipleDataSetsPerProviderServiceProviderChange() public {
         // Register and approve two providers
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
@@ -1548,14 +1548,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
         // Create two data sets for sp1
-        uint256 ps1 = createDataSetForStorageProviderTest(sp1, client, "Data Set 1");
-        uint256 ps2 = createDataSetForStorageProviderTest(sp1, client, "Data Set 2");
+        uint256 ps1 = createDataSetForServiceProviderTest(sp1, client, "Data Set 1");
+        uint256 ps2 = createDataSetForServiceProviderTest(sp1, client, "Data Set 2");
         // Change storage provider of ps1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetStorageProviderChanged(ps1, sp1, sp2);
+        emit DataSetServiceProviderChanged(ps1, sp1, sp2);
         vm.prank(sp2);
-        mockPDPVerifier.changeDataSetStorageProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
+        mockPDPVerifier.changeDataSetServiceProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
         // If we have multiple datasets:
         FilecoinWarmStorageService.DataSetInfo memory info1 = pdpServiceWithPayments.getDataSet(ps1);
         FilecoinWarmStorageService.DataSetInfo memory info2 = pdpServiceWithPayments.getDataSet(ps2);
@@ -1577,7 +1577,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     /**
      * @notice Test storage provider change works with arbitrary extra data
      */
-    function testStorageProviderChangedWithArbitraryExtraData() public {
+    function testServiceProviderChangedWithArbitraryExtraData() public {
         vm.prank(sp1);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp1.example.com/pdp", "https://sp1.example.com/retrieve"
@@ -1588,13 +1588,13 @@ contract FilecoinWarmStorageServiceTest is Test {
             "https://sp2.example.com/pdp", "https://sp2.example.com/retrieve"
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
-        uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         // Use arbitrary extra data
         bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
-        emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
+        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
-        mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
+        mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
         FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
         assertEq(info.controller, sp2, "Controller should be updated to new storage provider");
         assertEq(info.beneficiary, sp1, "Beneficiary should remain original");
@@ -1612,18 +1612,18 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Registering and approving storage provider");
         // Register and approve storage provider
-        vm.prank(storageProvider);
+        vm.prank(ServiceProvider);
         pdpServiceWithPayments.registerServiceProvider{value: 1 ether}(
             "https://sp.example.com/pdp", "https://sp.example.com/retrieve"
         );
-        pdpServiceWithPayments.approveServiceProvider(storageProvider);
+        pdpServiceWithPayments.approveServiceProvider(ServiceProvider);
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set for Termination",
             payer: client,
             withCDN: true, // CDN enabled
-            beneficiary: storageProvider,
+            beneficiary: ServiceProvider,
             signature: FAKE_SIGNATURE
         });
 
@@ -1648,7 +1648,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Create data set
         makeSignaturePass(client);
-        vm.prank(storageProvider);
+        vm.prank(ServiceProvider);
         uint256 dataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
         console.log("Created data set with ID:", dataSetId);
 

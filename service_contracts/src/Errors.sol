@@ -19,8 +19,8 @@ library Errors {
         Creator,
         /// Payer address
         Payer,
-        /// Storage provider address
-        StorageProvider,
+        /// Service Provider address
+        ServiceProvider,
         /// Beneficiary address
         Beneficiary
     }
@@ -65,9 +65,9 @@ library Errors {
     /// @param dataSetId The ID of the data set whose proving period was not initialized
     error ProvingPeriodNotInitialized(uint256 dataSetId);
 
-    /// @notice Storage provider is not approved or whitelisted
-    /// @param provider The address of the unapproved storage provider
-    error StorageProviderNotApproved(address provider);
+    /// @notice ServiceProvider is not approved or whitelisted
+    /// @param provider The address of the unapproved ServiceProvider
+    error ServiceProviderNotApproved(address provider);
 
     /// @notice The signature is invalid (recovered signer did not match expected)
     /// @param expected The expected signer address
@@ -120,15 +120,15 @@ library Errors {
     /// @param nowBlock The current block number
     error NextProvingPeriodAlreadyCalled(uint256 dataSetId, uint256 periodDeadline, uint256 nowBlock);
 
-    /// @notice Old storage provider address does not match data set payee
+    /// @notice Old Service Provider address does not match data set payee
     /// @param dataSetId The data set ID
     /// @param expected The expected (current) payee address
-    /// @param actual The provided old storage provider address
-    error OldStorageProviderMismatch(uint256 dataSetId, address expected, address actual);
+    /// @param actual The provided old Service provider address
+    error OldServiceProviderMismatch(uint256 dataSetId, address expected, address actual);
 
-    /// @notice New storage provider is not approved
-    /// @param newProvider The new storage provider address
-    error NewStorageProviderNotApproved(address newProvider);
+    /// @notice New Service Provider is not approved
+    /// @param newProvider The new Service Provider address
+    error NewServiceProviderNotApproved(address newProvider);
 
     /// @notice Data set payment is already terminated
     /// @param dataSetId The data set ID
