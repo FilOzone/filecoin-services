@@ -211,7 +211,7 @@
     ],
     "outputs": [
       {
-        "name": "storageProvider",
+        "name": "serviceProvider",
         "type": "address",
         "internalType": "address"
       },
@@ -549,7 +549,7 @@
         "internalType": "struct FilecoinWarmStorageService.ApprovedProviderInfo[]",
         "components": [
           {
-            "name": "storageProvider",
+            "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
           },
@@ -595,7 +595,7 @@
         "internalType": "struct FilecoinWarmStorageService.ApprovedProviderInfo",
         "components": [
           {
-            "name": "storageProvider",
+            "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
           },
@@ -1594,7 +1594,7 @@
   },
   {
     "type": "function",
-    "name": "storageProviderChanged",
+    "name": "serviceProviderChanged",
     "inputs": [
       {
         "name": "dataSetId",
@@ -1602,12 +1602,12 @@
         "internalType": "uint256"
       },
       {
-        "name": "oldStorageProvider",
+        "name": "oldServiceProvider",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "newStorageProvider",
+        "name": "newServiceProvider",
         "type": "address",
         "internalType": "address"
       },
@@ -1828,7 +1828,7 @@
   },
   {
     "type": "event",
-    "name": "DataSetStorageProviderChanged",
+    "name": "DataSetServiceProviderChanged",
     "inputs": [
       {
         "name": "dataSetId",
@@ -1837,13 +1837,13 @@
         "internalType": "uint256"
       },
       {
-        "name": "oldStorageProvider",
+        "name": "oldServiceProvider",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "newStorageProvider",
+        "name": "newServiceProvider",
         "type": "address",
         "indexed": true,
         "internalType": "address"

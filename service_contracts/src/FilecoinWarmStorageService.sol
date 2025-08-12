@@ -16,7 +16,7 @@ import {Errors} from "./Errors.sol";
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
-/// using the Payments contract. It creates payment rails for storage providers
+/// using the Payments contract. It creates payment rails for service providers
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
@@ -32,8 +32,8 @@ contract FilecoinWarmStorageService is
 
     // Events
     event ContractUpgraded(string version, address implementation);
-    event DataSetServiceProviderChanged(
-        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
+    event DataSetserviceProviderChanged(
+        uint256 indexed dataSetId, address indexed oldserviceProvider, address indexed newserviceProvider
     );
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
@@ -144,12 +144,12 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 => uint256) public provingActivationEpoch;
 
-    // ========== Storage Provider Registry State ==========
+    // ========== Service Provider Registry State ==========
 
-    uint256 private nextServiceProviderId = 1;
+    uint256 private nextserviceProviderId = 1;
 
     struct ApprovedProviderInfo {
-        address ServiceProvider;
+        address serviceProvider;
         string serviceURL; // HTTP server URL for provider services; TODO: Standard API endpoints:{serviceURL}/api/upload / {serviceURL}/api/info
         bytes peerId; // libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt;
@@ -260,7 +260,7 @@ contract FilecoinWarmStorageService is
         // Set commission rate
         serviceCommissionBps = 0; // 0%
 
-        nextServiceProviderId = 1;
+        nextserviceProviderId = 1;
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -356,14 +356,14 @@ contract FilecoinWarmStorageService is
     // Getters
     function getAllApprovedProviders() external view returns (ApprovedProviderInfo[] memory) {
         // Handle edge case: no providers have been registered
-        if (nextServiceProviderId == 1) {
+        if (nextserviceProviderId == 1) {
             return new ApprovedProviderInfo[](0);
         }
 
-        // First pass: Count non-empty providers (those with non-zero storage provider address)
+        // First pass: Count non-empty providers (those with non-zero service provider address)
         uint256 activeCount = 0;
-        for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].ServiceProvider != address(0)) {
+        for (uint256 i = 1; i < nextserviceProviderId; i++) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
                 activeCount++;
             }
         }
@@ -378,8 +378,8 @@ contract FilecoinWarmStorageService is
 
         // Second pass: Fill array with only active providers
         uint256 currentIndex = 0;
-        for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].ServiceProvider != address(0)) {
+        for (uint256 i = 1; i < nextserviceProviderId; i++) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
                 providers[currentIndex] = approvedProviders[i];
                 currentIndex++;
             }
@@ -399,8 +399,6 @@ contract FilecoinWarmStorageService is
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, Errors.ExtraDataRequired());
-
-        // Decode new format only: metadata, payer, withCDN, beneficiary, signature
         (DataSetCreateData memory createData) = decodeDataSetCreateData(extraData);
         require(createData.beneficiary != address(0), Errors.ZeroAddress(Errors.AddressField.Beneficiary));
         address actualBeneficiary = createData.beneficiary;
@@ -409,8 +407,8 @@ contract FilecoinWarmStorageService is
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
 
-        // Check if the ServiceProvider is approved
-        require(approvedProvidersMap[creator], Errors.ServiceProviderNotApproved(creator));
+        // Check if the service provider is whitelisted
+        require(approvedProvidersMap[creator], Errors.serviceProviderNotApproved(creator));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -439,7 +437,7 @@ contract FilecoinWarmStorageService is
             actualBeneficiary, // to (beneficiary)
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
-            address(this) // terminator
+            address(this)
         );
 
         // Store the rail ID
@@ -474,7 +472,7 @@ contract FilecoinWarmStorageService is
                 actualBeneficiary,
                 address(this), // arbiter
                 0, // no service commission
-                address(this) // terminator
+                address(this)
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
@@ -498,7 +496,6 @@ contract FilecoinWarmStorageService is
             dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
         );
 
-        // Emit beneficiary resolution event
         emit DataSetBeneficiaryResolved(dataSetId, actualBeneficiary);
     }
 
@@ -719,34 +716,31 @@ contract FilecoinWarmStorageService is
      * As a result, some parameters and events reflect this terminology shift and this method represents
      * a transition point in the language, from PDPVerifier to FilecoinWarmStorageService.
      * @param dataSetId The ID of the data set whose service provider is changing
-     * @param oldServiceProvider The previous service provider address
-     * @param newServiceProvider The new service provider address (must be an approved provider)
+     * @param oldserviceProvider The previous service provider address
+     * @param newserviceProvider The new service provider address (must be an approved provider)
      * @param extraData Additional data (not used)
      */
     function storageProviderChanged(
         uint256 dataSetId,
-        address oldServiceProvider,
-        address newServiceProvider,
+        address oldserviceProvider,
+        address newserviceProvider,
         bytes calldata extraData
     ) external override onlyPDPVerifier {
-        // Verify the data set exists and validate the old storage provider
+        // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.controller == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.controller, oldServiceProvider)
+            info.controller == oldserviceProvider,
+            Errors.OldserviceProviderMismatch(dataSetId, info.controller, oldserviceProvider)
         );
-        require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
-        // New Service Provider must be an approved provider
-        require(approvedProvidersMap[newServiceProvider], Errors.NewServiceProviderNotApproved(newServiceProvider));
-
+        require(newserviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.serviceProvider));
+        // New service provider must be an approved provider
+        require(approvedProvidersMap[newserviceProvider], Errors.NewserviceProviderNotApproved(newserviceProvider));
+    
         // Update the data set controller (Service Provider)
-        info.controller = newServiceProvider;
-
         // Beneficiary is independent and should not auto-follow controller changes
-        // Beneficiary is independent in the new model, do not auto-update
-
-        // Emit event for off-chain tracking
-        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
+        info.controller = newserviceProvider;
+        
+        emit DataSetserviceProviderChanged(dataSetId, oldserviceProvider, newserviceProvider);
     }
 
     function terminateDataSetPayment(uint256 dataSetId) external {
@@ -956,34 +950,21 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Helper function to try decoding new format
-     * @dev This needs to be external for try/catch to work
-     */
-    // New-format decode helper
-    function tryDecodeNewFormat(bytes calldata extraData)
-        external
-        pure
-        returns (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature)
-    {
-        return abi.decode(extraData, (string, address, bool, address, bytes));
-    }
-
-    /**
      * @notice Decode extra data for data set creation with format detection
      * @param extraData The encoded extra data from PDPVerifier
      * @return createData The decoded DataSetCreateData struct
      */
     function decodeDataSetCreateData(bytes calldata extraData)
         internal
-        view
+        pure
         returns (DataSetCreateData memory createData)
     {
+        require(extraData.length > 0, Errors.ExtraDataRequired());
         (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature) =
-            this.tryDecodeNewFormat(extraData);
-
-        return DataSetCreateData({
-            metadata: metadata,
-            payer: payer,
+            abi.decode(extraData, (string, address, bool, address, bytes));
+            return DataSetCreateData({
+                metadata: metadata,
+                payer: payer,
             withCDN: withCDN,
             beneficiary: beneficiary,
             signature: signature
@@ -1072,9 +1053,8 @@ contract FilecoinWarmStorageService is
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals)),
-            pricePerTiBPerMonthWithCDN: (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH)
-                * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
+            pricePerTiBPerMonthWithCDN: STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH,
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -1086,7 +1066,7 @@ contract FilecoinWarmStorageService is
      * @return spPayment SP payment (per TiB per month)
      */
     function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
-        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
+        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
 
         serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
         spPayment = total - serviceFee;
@@ -1266,7 +1246,7 @@ contract FilecoinWarmStorageService is
      * @dev Only owner can approve providers
      * @param provider The address of the provider to approve
      */
-    function approveServiceProvider(address provider) external onlyOwner {
+    function approveserviceProvider(address provider) external onlyOwner {
         // Check if not already approved
         require(!approvedProvidersMap[provider], Errors.ProviderAlreadyApproved(provider));
         // Check if registration exists
@@ -1276,9 +1256,9 @@ contract FilecoinWarmStorageService is
         PendingProviderInfo memory pending = pendingProviders[provider];
 
         // Assign ID and store provider info
-        uint256 providerId = nextServiceProviderId++;
+        uint256 providerId = nextserviceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
-            ServiceProvider: provider,
+            serviceProvider: provider,
             serviceURL: pending.serviceURL,
             peerId: pending.peerId,
             registeredAt: pending.registeredAt,
@@ -1299,7 +1279,7 @@ contract FilecoinWarmStorageService is
      * @dev Only owner can reject providers
      * @param provider The address of the provider to reject
      */
-    function rejectServiceProvider(address provider) external onlyOwner {
+    function rejectserviceProvider(address provider) external onlyOwner {
         // Check if registration exists
         require(pendingProviders[provider].registeredAt > 0, Errors.NoPendingRegistrationFound(provider));
         require(!approvedProvidersMap[provider], Errors.ProviderAlreadyApproved(provider));
@@ -1319,16 +1299,16 @@ contract FilecoinWarmStorageService is
      * @dev Only owner can remove providers. This revokes their approved status.
      * @param providerId The ID of the provider to remove
      */
-    function removeServiceProvider(uint256 providerId) external onlyOwner {
+    function removeserviceProvider(uint256 providerId) external onlyOwner {
         // Validate provider ID
         require(
-            providerId > 0 && providerId < nextServiceProviderId,
-            Errors.InvalidProviderId(nextServiceProviderId, providerId)
+            providerId > 0 && providerId < nextserviceProviderId,
+            Errors.InvalidProviderId(nextserviceProviderId, providerId)
         );
 
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
-        address providerAddress = providerInfo.ServiceProvider;
+        address providerAddress = providerInfo.serviceProvider;
         require(providerAddress != address(0), Errors.ProviderNotFound(providerId));
 
         // Check if provider is currently approved
@@ -1354,11 +1334,11 @@ contract FilecoinWarmStorageService is
      */
     function getApprovedProvider(uint256 providerId) external view returns (ApprovedProviderInfo memory) {
         require(
-            providerId > 0 && providerId < nextServiceProviderId,
-            Errors.InvalidProviderId(nextServiceProviderId, providerId)
+            providerId > 0 && providerId < nextserviceProviderId,
+            Errors.InvalidProviderId(nextserviceProviderId, providerId)
         );
         ApprovedProviderInfo memory provider = approvedProviders[providerId];
-        require(provider.ServiceProvider != address(0), Errors.ProviderNotFound(providerId));
+        require(provider.serviceProvider != address(0), Errors.ProviderNotFound(providerId));
         return provider;
     }
 

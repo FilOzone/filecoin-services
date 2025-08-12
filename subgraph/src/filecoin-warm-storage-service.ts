@@ -194,7 +194,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 
   const challengeEpoch = dataSet.nextChallengeEpoch;
   const challengeRange = dataSet.challengeRange;
-  const storageProvider = dataSet.storageProvider;
+  const serviceProvider = dataSet.storageProvider;
   const nextPieceId = dataSet.totalPieces;
 
   let nextChallengeEpoch = BigInt.fromI32(0);
@@ -293,7 +293,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(storageProvider);
+  const provider = Provider.load(serviceProvider);
   if (provider) {
     provider.totalFaultedPeriods =
       provider.totalFaultedPeriods.plus(periodsFaultedParam);
@@ -305,7 +305,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     provider.save();
   } else {
     log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [
-      storageProvider.toHex(),
+      serviceProvider.toHex(),
       setId.toString(),
     ]);
   }
@@ -320,11 +320,11 @@ export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   const setId = event.params.dataSetId;
   const railId = event.params.railId;
   const clientAddr = event.params.payer;
-  const storageProvider = event.params.payee;
+  const serviceProvider = event.params.payee;
   const withCDN = event.params.withCDN;
   const dataSetEntityId = getDataSetEntityId(setId);
   const railEntityId = getRailEntityId(railId);
-  const providerEntityId = storageProvider; // Provider ID is the storageProvider address
+  const providerEntityId = serviceProvider; // Provider ID is the serviceProvider address
 
   let dataSet = new DataSet(dataSetEntityId);
 
@@ -344,7 +344,7 @@ export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   dataSet.metadata = metadata;
   dataSet.clientAddr = clientAddr;
   dataSet.withCDN = withCDN;
-  dataSet.storageProvider = providerEntityId; // Link to Provider via storageProvider address (which is Provider's ID)
+  dataSet.serviceProvider = providerEntityId; // Link to Provider via serviceProvider address (which is Provider's ID)
   dataSet.listener = listenerAddr;
   dataSet.isActive = true;
   dataSet.leafCount = BigInt.fromI32(0);
@@ -368,7 +368,7 @@ export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   rail.railId = railId;
   rail.token = Address.fromHexString(USDFCTokenAddress);
   rail.from = clientAddr;
-  rail.to = storageProvider;
+  rail.to = serviceProvider;
   rail.operator = listenerAddr;
   rail.arbiter = listenerAddr;
   rail.paymentRate = BigInt.fromI32(0);
@@ -384,7 +384,7 @@ export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   let provider = Provider.load(providerEntityId);
   if (provider == null) {
     provider = new Provider(providerEntityId);
-    provider.address = storageProvider;
+    provider.address = serviceProvider;
     provider.status = "Created";
     provider.totalPieces = BigInt.fromI32(0);
     provider.totalDataSets = BigInt.fromI32(1);
