@@ -182,9 +182,7 @@ contract FilecoinWarmStorageService is
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
-        keccak256(
-            "CreateDataSet(uint256 clientDataSetId,bool withCDN,address controller,address beneficiary)"
-        );
+        keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address controller,address beneficiary)");
 
     bytes32 private constant PIECE_CID_TYPEHASH = keccak256("PieceCid(bytes data)");
 
@@ -456,15 +454,15 @@ contract FilecoinWarmStorageService is
             pdpRailId,
             DEFAULT_LOCKUP_PERIOD,
             DATA_SET_CREATION_FEE // lockupFixed equal to the one-time payment amount
-            );
+        );
 
-            // Charge the one-time data set creation fee
-            // This is a payment from payer to data set creator of a fixed amount
+        // Charge the one-time data set creation fee
+        // This is a payment from payer to data set creator of a fixed amount
         payments.modifyRailPayment(
             pdpRailId,
             0, // Initial rate is 0, will be updated when roots are added
             DATA_SET_CREATION_FEE // One-time payment amount
-            );
+        );
 
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
@@ -974,15 +972,16 @@ contract FilecoinWarmStorageService is
         view
         returns (DataSetCreateData memory createData)
     {
-        (
-            string memory metadata,
-            address payer,
-            bool withCDN,
-            address beneficiary,
-            bytes memory signature
-        ) = this.tryDecodeNewFormat(extraData);
+        (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature) =
+            this.tryDecodeNewFormat(extraData);
 
-        return DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, beneficiary: beneficiary, signature: signature});
+        return DataSetCreateData({
+            metadata: metadata,
+            payer: payer,
+            withCDN: withCDN,
+            beneficiary: beneficiary,
+            signature: signature
+        });
     }
 
     /**

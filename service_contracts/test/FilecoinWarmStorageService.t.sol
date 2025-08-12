@@ -355,7 +355,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         });
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        extraData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -482,7 +484,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         });
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        extraData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -771,8 +775,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Setup client payment approval
         vm.startPrank(client);
@@ -819,8 +824,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Setup client payment approval
         vm.startPrank(client);
@@ -853,8 +859,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Setup client payment approval
         vm.startPrank(client);
@@ -1179,8 +1186,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1278,8 +1286,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1327,7 +1336,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         // Setup client approval and funds
         vm.startPrank(client);
-        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        payments.setOperatorApproval(
+            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
+        );
         mockUSDFC.approve(address(payments), 100e6);
         payments.deposit(address(mockUSDFC), client, 100e6);
         vm.stopPrank();
@@ -1350,7 +1361,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
         assertEq(info.controller, sp2, "Controller should be updated");
         assertEq(info.beneficiary, separateBeneficiary, "Beneficiary remains separate in new format test");
-        
 
         // resolveBeneficiary returns the beneficiary set at creation (stable)
         address resolved = pdpServiceWithPayments.resolveBeneficiary(testDataSetId);
@@ -1617,8 +1627,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
