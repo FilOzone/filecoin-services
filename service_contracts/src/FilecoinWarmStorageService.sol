@@ -735,11 +735,11 @@ contract FilecoinWarmStorageService is
         require(newserviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.serviceProvider));
         // New service provider must be an approved provider
         require(approvedProvidersMap[newserviceProvider], Errors.NewserviceProviderNotApproved(newserviceProvider));
-    
+
         // Update the data set controller (Service Provider)
         // Beneficiary is independent and should not auto-follow controller changes
         info.controller = newserviceProvider;
-        
+
         emit DataSetserviceProviderChanged(dataSetId, oldserviceProvider, newserviceProvider);
     }
 
@@ -962,9 +962,9 @@ contract FilecoinWarmStorageService is
         require(extraData.length > 0, Errors.ExtraDataRequired());
         (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature) =
             abi.decode(extraData, (string, address, bool, address, bytes));
-            return DataSetCreateData({
-                metadata: metadata,
-                payer: payer,
+        return DataSetCreateData({
+            metadata: metadata,
+            payer: payer,
             withCDN: withCDN,
             beneficiary: beneficiary,
             signature: signature
