@@ -703,7 +703,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create a data set with sp1 as the service provider
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         address newProvider = address(0x9999);
-        // Service provider change should succeed without approval
         bytes memory testExtraData = new bytes(0);
         vm.prank(newProvider);
         mockPDPVerifier.changeDataSetServiceProvider(
