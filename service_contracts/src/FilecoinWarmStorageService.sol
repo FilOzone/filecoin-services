@@ -46,7 +46,10 @@ contract FilecoinWarmStorageService is
         bool withCDN
     );
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
-    event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
+    event PieceMetadataAdded(uint256 indexed dataSetPieceId, string[] keys, bytes[] values);
+    event DataSetCreatedWithMetadata(
+        uint256 indexed dataSetId, address creator, address payer, string[] metadataKeys, bytes[] metadataValues
+    );
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
@@ -59,6 +62,15 @@ contract FilecoinWarmStorageService is
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
+
+    // ID bits for composite IDs
+    uint256 private constant ID_BITS = 128;
+
+    // Metadata size and count limits
+    uint256 private constant MAX_KEY_LENGTH = 64;
+    uint256 private constant MAX_VALUE_LENGTH = 512;
+    uint256 private constant MAX_KEYS_PER_DATASET = 10;
+    uint256 private constant MAX_KEYS_PER_PIECE = 5;
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
@@ -85,8 +97,17 @@ contract FilecoinWarmStorageService is
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
-    // Mapping from data set ID to piece ID to metadata
-    mapping(uint256 => mapping(uint256 => string)) private dataSetPieceMetadata;
+
+    // dataSetPieceId => (key => value)
+    mapping(uint256 => mapping(string => bytes)) public dataSetPieceMetadata;
+    // dataSetPieceId => array of keys
+    mapping(uint256 => string[]) internal dataSetPieceMetadataKeys;
+
+    // Mapping from data set ID to key value pair metadata
+    // dataSetId => (key => value)
+    mapping(uint256 => mapping(string => bytes)) public dataSetMetadata;
+    // dataSetId => array of keys
+    mapping(uint256 => string[]) internal dataSetMetadataKeys;
 
     // Storage for data set payment information
     struct DataSetInfo {
@@ -96,7 +117,6 @@ contract FilecoinWarmStorageService is
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
-        string metadata; // General metadata for the data set
         string[] pieceMetadata; // Array of metadata for each piece
         uint256 clientDataSetId; // ClientDataSetID
         bool withCDN; // Whether the data set is registered for CDN add-on
@@ -105,8 +125,9 @@ contract FilecoinWarmStorageService is
 
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
-        string metadata;
         address payer;
+        string[] metadataKeys;
+        bytes[] metadataValues;
         bool withCDN;
         bytes signature; // Authentication signature
     }
@@ -416,10 +437,44 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
         info.payee = creator; // Using creator as the payee
-        info.metadata = createData.metadata;
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.withCDN = createData.withCDN;
+
+        // Store each metadata key-value entry for this data set
+        require(
+            createData.metadataKeys.length == createData.metadataValues.length,
+            Errors.MetadataKeyAndValueLengthMismatch(createData.metadataKeys.length, createData.metadataValues.length)
+        );
+        require(
+            createData.metadataKeys.length <= MAX_KEYS_PER_DATASET,
+            Errors.TooManyMetadataKeys(MAX_KEYS_PER_DATASET, createData.metadataKeys.length)
+        );
+        require(createData.metadataKeys.length > 0, Errors.EmptyMetadataKeys(dataSetId));
+        require(createData.metadataValues.length > 0, Errors.EmptyMetadataValues(dataSetId));
+
+        for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
+            string memory key = createData.metadataKeys[i];
+            bytes memory value = createData.metadataValues[i];
+
+            require(dataSetMetadata[dataSetId][key].length == 0, Errors.DuplicateMetadataKey(dataSetId, key));
+            require(bytes(key).length > 0, Errors.EmptyMetadataKey(i));
+            require(value.length > 0, Errors.EmptyMetadataValue(i, key));
+            require(
+                bytes(key).length <= MAX_KEY_LENGTH,
+                Errors.MetadataKeyExceedsMaxLength(i, MAX_KEY_LENGTH, bytes(key).length)
+            );
+            require(
+                value.length <= MAX_VALUE_LENGTH,
+                Errors.MetadataValueExceedsMaxLength(i, MAX_VALUE_LENGTH, value.length)
+            );
+
+            // Store the metadata key in the array for this data set
+            dataSetMetadataKeys[dataSetId].push(key);
+
+            // Store the metadata value
+            dataSetMetadata[dataSetId][key] = value;
+        }
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
 
@@ -489,6 +544,11 @@ contract FilecoinWarmStorageService is
         emit DataSetRailsCreated(
             dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
         );
+
+        // Emit event for data set creation with metadata
+        emit DataSetCreatedWithMetadata(
+            dataSetId, creator, createData.payer, createData.metadataKeys, createData.metadataValues
+        );
     }
 
     /**
@@ -539,17 +599,80 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         require(extraData.length > 0, Errors.ExtraDataRequired());
         // Decode the extra data
-        (bytes memory signature, string memory metadata) = abi.decode(extraData, (bytes, string));
+        (bytes memory signature, string[] memory metadataKeys, bytes[] memory metadataValues) =
+            abi.decode(extraData, (bytes, string[], bytes[]));
+
+        // Check that number of metadata keys and values are equal
+        require(
+            metadataKeys.length == metadataValues.length,
+            Errors.MetadataKeyAndValueLengthMismatch(metadataKeys.length, metadataValues.length)
+        );
 
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature);
 
+        require(metadataKeys.length > 0, Errors.EmptyMetadataKeys(dataSetId));
+        require(metadataValues.length > 0, Errors.EmptyMetadataValues(dataSetId));
+        require(
+            metadataKeys.length <= MAX_KEYS_PER_PIECE,
+            Errors.TooManyMetadataKeys(MAX_KEYS_PER_PIECE, metadataKeys.length)
+        );
+
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
             uint256 pieceId = firstAdded + i;
-            dataSetPieceMetadata[dataSetId][pieceId] = metadata;
-            emit PieceMetadataAdded(dataSetId, pieceId, metadata);
+            uint256 dataSetPieceId = getDataSetPieceId(dataSetId, pieceId);
+
+            for (uint256 k = 0; k < metadataKeys.length; k++) {
+                string memory key = metadataKeys[k];
+                bytes memory value = metadataValues[k];
+
+                require(bytes(key).length > 0, Errors.EmptyMetadataKey(k));
+                require(value.length > 0, Errors.EmptyMetadataValue(k, key));
+                require(
+                    dataSetPieceMetadata[dataSetPieceId][key].length == 0, Errors.DuplicateMetadataKey(dataSetId, key)
+                );
+                require(
+                    bytes(key).length <= MAX_KEY_LENGTH,
+                    Errors.MetadataKeyExceedsMaxLength(k, MAX_KEY_LENGTH, bytes(key).length)
+                );
+                require(
+                    value.length <= MAX_VALUE_LENGTH,
+                    Errors.MetadataValueExceedsMaxLength(k, MAX_VALUE_LENGTH, value.length)
+                );
+                dataSetPieceMetadata[dataSetPieceId][key] = value;
+                dataSetPieceMetadataKeys[dataSetPieceId].push(key);
+            }
+            emit PieceMetadataAdded(dataSetPieceId, metadataKeys, metadataValues);
         }
+    }
+
+    /**
+     * @notice Combines dataSetId and pieceId into a composite dataSetPieceId.
+     * @dev Each ID must fit within `ID_BITS` bits (currently 128 bits).
+     * @param dataSetId The data set ID (must fit in ID_BITS bits)
+     * @param pieceId The piece ID (must fit in ID_BITS bits)
+     * @return dataSetPieceId The composite 256-bit ID
+     */
+    function getDataSetPieceId(uint256 dataSetId, uint256 pieceId) public pure returns (uint256) {
+        require(dataSetId < (1 << ID_BITS), "DataSetId overflow");
+        require(pieceId < (1 << ID_BITS), "PieceId overflow");
+        // Combine dataSetId and pieceId into a single 256-bit ID
+        return (dataSetId << ID_BITS) | pieceId;
+    }
+
+    /**
+     * @notice Splits a composite dataSetPieceId into its component dataSetId and pieceId.
+     * @param dataSetPieceId The composite ID to split
+     * @return dataSetId The extracted data set ID
+     * @return pieceId The extracted piece ID
+     */
+    function decomposeDataSetPieceId(uint256 dataSetPieceId) public pure returns (uint256 dataSetId, uint256 pieceId) {
+        // Extract the dataSetId and pieceId from the composite ID
+        dataSetId = dataSetPieceId >> ID_BITS; // Get the upper 128 bits
+        pieceId = dataSetPieceId & ((1 << ID_BITS) - 1); // Get the lower 128 bits
+        require(dataSetId < (1 << ID_BITS), "DataSetId overflow");
+        require(pieceId < (1 << ID_BITS), "PieceId overflow");
     }
 
     function piecesScheduledRemove(uint256 dataSetId, uint256[] memory pieceIds, bytes calldata extraData)
@@ -947,10 +1070,16 @@ contract FilecoinWarmStorageService is
      * @return decoded The decoded DataSetCreateData struct
      */
     function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (string memory metadata, address payer, bool withCDN, bytes memory signature) =
-            abi.decode(extraData, (string, address, bool, bytes));
+        (address payer, string[] memory keys, bytes[] memory values, bool withCDN, bytes memory signature) =
+            abi.decode(extraData, (address, string[], bytes[], bool, bytes));
 
-        return DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+        return DataSetCreateData({
+            payer: payer,
+            metadataKeys: keys,
+            metadataValues: values,
+            withCDN: withCDN,
+            signature: signature
+        });
     }
 
     /**
@@ -974,13 +1103,111 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Get the metadata for a specific piece
+     * @notice Get the metadata for a data set
      * @param dataSetId The ID of the data set
-     * @param pieceId The ID of the piece
-     * @return The metadata string for the piece
+     * @param key The metadata key to look up
+     * @return The metadata string
      */
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
-        return dataSetPieceMetadata[dataSetId][pieceId];
+    function getDataSetMetadata(uint256 dataSetId, string calldata key) external view returns (bytes memory) {
+        return dataSetMetadata[dataSetId][key];
+    }
+
+    /**
+     * @notice Get all metadata keys for a given data set
+     * @param dataSetId The ID of the data set
+     * @return keys Array of metadata keys stored for the data set
+     */
+    function getDataSetMetadataKeys(uint256 dataSetId) external view returns (string[] memory) {
+        return dataSetMetadataKeys[dataSetId];
+    }
+
+    /**
+     * @notice Get the metadata for a specific piece and key
+     * @param dataSetPieceId The composite ID for (dataSetId, pieceId)
+     *           (generated as: dataSetPieceId = (dataSetId << 128) | pieceId)
+     * @param key The metadata key (as string) to look up (e.g., "filename", "contentType", etc.)
+     * @return The metadata value as bytes
+     */
+    function getPieceMetadata(uint256 dataSetPieceId, string calldata key) external view returns (bytes memory) {
+        return _getPieceMetadata(dataSetPieceId, key);
+    }
+
+    /**
+     * @notice Get the metadata for a specific piece and key by dataSetId and pieceId
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece within the data set
+     * @param key The metadata key (as string) to look up (e.g., "filename", "contentType", etc.)
+     * @return The metadata value as bytes
+     */
+    function getPieceMetadataByIds(uint256 dataSetId, uint256 pieceId, string calldata key)
+        external
+        view
+        returns (bytes memory)
+    {
+        uint256 dataSetPieceId = getDataSetPieceId(dataSetId, pieceId);
+        return _getPieceMetadata(dataSetPieceId, key);
+    }
+
+    /**
+     * @notice Internal function to retrieve the metadata value for a specific piece and key.
+     * @param dataSetPieceId The composite ID for (dataSetId, pieceId).
+     * @param key The metadata key to look up.
+     * @return The metadata value as bytes.
+     */
+    function _getPieceMetadata(uint256 dataSetPieceId, string memory key) internal view returns (bytes memory) {
+        return dataSetPieceMetadata[dataSetPieceId][key];
+    }
+
+    /**
+     * @notice Get the list of metadata keys for a specific piece.
+     * @param dataSetPieceId The composite ID for (dataSetId, pieceId)
+     *        (generated as: dataSetPieceId = (dataSetId << 128) | pieceId)
+     * @return An array of metadata keys associated with the piece.
+     */
+    function getPieceMetadataKeys(uint256 dataSetPieceId) external view returns (string[] memory) {
+        return dataSetPieceMetadataKeys[dataSetPieceId];
+    }
+
+    /**
+     * @notice Get all metadata keys and values for a specific data set piece
+     * @param dataSetPieceId The composite ID for (dataSetId, pieceId)
+     * @return keys An array of metadata keys corresponding to the data set piece
+     * @return values An array of metadata values corresponding to the keys
+     */
+    function getPieceMetadataAllKeys(uint256 dataSetPieceId)
+        external
+        view
+        returns (string[] memory keys, bytes[] memory values)
+    {
+        (keys, values) = _getPieceMetadataAllKeys(dataSetPieceId);
+    }
+
+    /**
+     * @notice Get all metadata keys and values for a specific data set piece by dataSetId and pieceId
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece within the data set
+     * @return keys An array of metadata keys corresponding to the data set piece
+     * @return values An array of metadata values corresponding to the keys
+     */
+    function getPieceMetadataAllKeysByIds(uint256 dataSetId, uint256 pieceId)
+        external
+        view
+        returns (string[] memory keys, bytes[] memory values)
+    {
+        uint256 dataSetPieceId = getDataSetPieceId(dataSetId, pieceId);
+        (keys, values) = _getPieceMetadataAllKeys(dataSetPieceId);
+    }
+
+    function _getPieceMetadataAllKeys(uint256 dataSetPieceId)
+        internal
+        view
+        returns (string[] memory keys, bytes[] memory values)
+    {
+        keys = dataSetPieceMetadataKeys[dataSetPieceId];
+        values = new bytes[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = dataSetPieceMetadata[dataSetPieceId][keys[i]];
+        }
     }
 
     /**
@@ -1312,7 +1539,6 @@ contract FilecoinWarmStorageService is
                 payer: storageInfo.payer,
                 payee: storageInfo.payee,
                 commissionBps: storageInfo.commissionBps,
-                metadata: storageInfo.metadata,
                 pieceMetadata: storageInfo.pieceMetadata,
                 clientDataSetId: storageInfo.clientDataSetId,
                 withCDN: storageInfo.withCDN,
