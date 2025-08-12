@@ -16,7 +16,7 @@ import {Errors} from "./Errors.sol";
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
-/// using the Payments contract. It creates payment rails for storage providers
+/// using the Payments contract. It creates payment rails for service providers
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
@@ -32,8 +32,8 @@ contract FilecoinWarmStorageService is
 
     // Events
     event ContractUpgraded(string version, address implementation);
-    event DataSetStorageProviderChanged(
-        uint256 indexed dataSetId, address indexed oldStorageProvider, address indexed newStorageProvider
+    event DataSetServiceProviderChanged(
+        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
@@ -144,12 +144,12 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 => uint256) public provingActivationEpoch;
 
-    // ========== Storage Provider Registry State ==========
+    // ========== Service Provider Registry State ==========
 
     uint256 private nextServiceProviderId = 1;
 
     struct ApprovedProviderInfo {
-        address storageProvider;
+        address serviceProvider;
         string serviceURL; // HTTP server URL for provider services; TODO: Standard API endpoints:{serviceURL}/api/upload / {serviceURL}/api/info
         bytes peerId; // libp2p peer ID (optional - empty bytes if not provided)
         uint256 registeredAt;
@@ -360,10 +360,10 @@ contract FilecoinWarmStorageService is
             return new ApprovedProviderInfo[](0);
         }
 
-        // First pass: Count non-empty providers (those with non-zero storage provider address)
+        // First pass: Count non-empty providers (those with non-zero service provider address)
         uint256 activeCount = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].storageProvider != address(0)) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
                 activeCount++;
             }
         }
@@ -379,7 +379,7 @@ contract FilecoinWarmStorageService is
         // Second pass: Fill array with only active providers
         uint256 currentIndex = 0;
         for (uint256 i = 1; i < nextServiceProviderId; i++) {
-            if (approvedProviders[i].storageProvider != address(0)) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
                 providers[currentIndex] = approvedProviders[i];
                 currentIndex++;
             }
@@ -409,8 +409,8 @@ contract FilecoinWarmStorageService is
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
 
-        // Check if the storage provider is whitelisted
-        require(approvedProvidersMap[creator], Errors.StorageProviderNotApproved(creator));
+        // Check if the service provider is whitelisted
+        require(approvedProvidersMap[creator], Errors.ServiceProviderNotApproved(creator));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -710,28 +710,34 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set storage provider changes by updating internal state only
-     * @dev Called by the PDPVerifier contract when data set storage provider is transferred. This function is now fully decoupled from the provider registry.
-     * @param dataSetId The ID of the data set whose storage provider is changing
-     * @param oldStorageProvider The previous storage provider address
-     * @param newStorageProvider The new storage provider address (must be an approved provider)
+     * @notice Handles data set service provider changes by updating internal state only
+     * @dev Called by the PDPVerifier contract when data set service provider is transferred.
+     * NOTE: The PDPVerifier contract emits events and exposes methods in terms of "storage providers",
+     * because its scope is specifically the Proof-of-Data-Possession for storage services.
+     * In FilecoinWarmStorageService (and the broader service registry architecture), we use the term
+     * "service provider" to support a future where multiple types of services may exist (not just storage).
+     * As a result, some parameters and events reflect this terminology shift and this method represents
+     * a transition point in the language, from PDPVerifier to FilecoinWarmStorageService.
+     * @param dataSetId The ID of the data set whose service provider is changing
+     * @param oldServiceProvider The previous service provider address
+     * @param newServiceProvider The new service provider address (must be an approved provider)
      * @param extraData Additional data (not used)
      */
     function storageProviderChanged(
         uint256 dataSetId,
-        address oldStorageProvider,
-        address newStorageProvider,
+        address oldServiceProvider,
+        address newServiceProvider,
         bytes calldata extraData
     ) external override onlyPDPVerifier {
-        // Verify the data set exists and validate the old storage provider
+        // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
             info.controller == oldStorageProvider,
             Errors.OldStorageProviderMismatch(dataSetId, info.controller, oldStorageProvider)
         );
-        require(newStorageProvider != address(0), Errors.ZeroAddress(Errors.AddressField.StorageProvider));
-        // New storage provider must be an approved provider
-        require(approvedProvidersMap[newStorageProvider], Errors.NewStorageProviderNotApproved(newStorageProvider));
+        require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
+        // New service provider must be an approved provider
+        require(approvedProvidersMap[newServiceProvider], Errors.NewServiceProviderNotApproved(newServiceProvider));
 
         // Update the data set controller (storage provider)
         info.controller = newStorageProvider;
@@ -740,7 +746,7 @@ contract FilecoinWarmStorageService is
         // Beneficiary is independent in the new model, do not auto-update
 
         // Emit event for off-chain tracking
-        emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
+        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
     }
 
     function terminateDataSetPayment(uint256 dataSetId) external {
@@ -1066,9 +1072,8 @@ contract FilecoinWarmStorageService is
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals)),
-            pricePerTiBPerMonthWithCDN: (STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH)
-                * (10 ** uint256(tokenDecimals)),
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
+            pricePerTiBPerMonthWithCDN: STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH,
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -1080,7 +1085,7 @@ contract FilecoinWarmStorageService is
      * @return spPayment SP payment (per TiB per month)
      */
     function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
-        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH * (10 ** uint256(tokenDecimals));
+        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
 
         serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
         spPayment = total - serviceFee;
@@ -1272,7 +1277,7 @@ contract FilecoinWarmStorageService is
         // Assign ID and store provider info
         uint256 providerId = nextServiceProviderId++;
         approvedProviders[providerId] = ApprovedProviderInfo({
-            storageProvider: provider,
+            serviceProvider: provider,
             serviceURL: pending.serviceURL,
             peerId: pending.peerId,
             registeredAt: pending.registeredAt,
@@ -1322,7 +1327,7 @@ contract FilecoinWarmStorageService is
 
         // Get provider info
         ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
-        address providerAddress = providerInfo.storageProvider;
+        address providerAddress = providerInfo.serviceProvider;
         require(providerAddress != address(0), Errors.ProviderNotFound(providerId));
 
         // Check if provider is currently approved
@@ -1352,7 +1357,7 @@ contract FilecoinWarmStorageService is
             Errors.InvalidProviderId(nextServiceProviderId, providerId)
         );
         ApprovedProviderInfo memory provider = approvedProviders[providerId];
-        require(provider.storageProvider != address(0), Errors.ProviderNotFound(providerId));
+        require(provider.serviceProvider != address(0), Errors.ProviderNotFound(providerId));
         return provider;
     }
 
