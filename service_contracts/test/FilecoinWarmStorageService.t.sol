@@ -349,12 +349,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: true
+            withCDN: true,
+            beneficiary: storageProvider,
+            signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -401,7 +402,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify data set info was stored correctly
         assertEq(dataSet.payer, client, "Payer should be set to client");
-        assertEq(dataSet.payee, storageProvider, "Payee should be set to storage provider");
+        assertEq(dataSet.controller, storageProvider, "Controller should be set to storage provider");
 
         // Verify metadata was stored correctly
         assertEq(dataSet.metadata, "Test Data Set", "Metadata should be stored correctly");
@@ -412,7 +413,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertNotEq(dataSetInfo.cacheMissRailId, 0, "Cache miss rail ID should be set");
         assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
         assertEq(dataSetInfo.payer, client, "Payer should match");
-        assertEq(dataSetInfo.payee, storageProvider, "Payee should match");
+        assertEq(dataSetInfo.controller, storageProvider, "Controller should match");
         assertEq(dataSetInfo.withCDN, true, "withCDN should be true");
 
         // Verify withCDN was stored correctly
@@ -475,12 +476,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: false
+            withCDN: false,
+            beneficiary: storageProvider,
+            signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -764,12 +766,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: false
+            withCDN: false,
+            beneficiary: storageProvider,
+            signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Setup client payment approval
         vm.startPrank(client);
@@ -811,12 +814,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: false
+            withCDN: false,
+            beneficiary: storageProvider,
+            signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Setup client payment approval
         vm.startPrank(client);
@@ -844,12 +848,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: false
+            withCDN: false,
+            beneficiary: storageProvider,
+            signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Setup client payment approval
         vm.startPrank(client);
@@ -1170,11 +1175,12 @@ contract FilecoinWarmStorageServiceTest is Test {
             metadata: metadata,
             payer: clientAddress,
             withCDN: false,
+            beneficiary: provider,
             signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1210,7 +1216,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify results
         assertEq(dataSets.length, 1, "Should return one data set");
         assertEq(dataSets[0].payer, client, "Payer should match");
-        assertEq(dataSets[0].payee, sp1, "Payee should match");
+        assertEq(dataSets[0].controller, sp1, "Controller should match");
         assertEq(dataSets[0].metadata, metadata, "Metadata should match");
         assertEq(dataSets[0].clientDataSetId, 0, "First data set ID should be 0");
         assertGt(dataSets[0].pdpRailId, 0, "Rail ID should be set");
@@ -1229,13 +1235,13 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Check first data set
         assertEq(dataSets[0].payer, client, "First data set payer should match");
-        assertEq(dataSets[0].payee, sp1, "First data set payee should match");
+        assertEq(dataSets[0].controller, sp1, "Controller should match");
         assertEq(dataSets[0].metadata, "Metadata 1", "First data set metadata should match");
         assertEq(dataSets[0].clientDataSetId, 0, "First data set ID should be 0");
 
         // Check second data set
         assertEq(dataSets[1].payer, client, "Second data set payer should match");
-        assertEq(dataSets[1].payee, sp2, "Second data set payee should match");
+        assertEq(dataSets[1].controller, sp2, "Second data set controller should match");
         assertEq(dataSets[1].metadata, "Metadata 2", "Second data set metadata should match");
         assertEq(dataSets[1].clientDataSetId, 1, "Second data set ID should be 1");
     }
@@ -1268,11 +1274,12 @@ contract FilecoinWarmStorageServiceTest is Test {
             metadata: metadata,
             payer: clientAddress,
             withCDN: false,
+            beneficiary: provider,
             signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1290,8 +1297,8 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     /**
-     * @notice Test successful storage provider change between two approved providers (Legacy Format)
-     * @dev Verifies that for legacy format, both payee and beneficiary are updated since they're the same
+     * @notice Test successful storage provider change between two approved providers (stable beneficiary)
+     * @dev In the production model, controller changes while beneficiary remains as created
      */
     function testStorageProviderChangedSuccessDecoupled() public {
         // Register and approve two providers
@@ -1306,8 +1313,27 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         pdpServiceWithPayments.approveServiceProvider(sp2);
 
-        // Create a data set with sp1 as the storage provider (legacy format)
-        uint256 testDataSetId = createDataSetForStorageProviderTest(sp1, client, "Test Data Set");
+        // Create a data set with sp1 as the storage provider (beneficiary set separately)
+        address separateBeneficiary = address(0x1234);
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            metadata: "Test Data Set",
+            payer: client,
+            withCDN: false,
+            beneficiary: separateBeneficiary,
+            signature: FAKE_SIGNATURE
+        });
+        bytes memory encodedData = abi.encode(
+            createData.metadata, createData.payer, createData.withCDN, separateBeneficiary, createData.signature
+        );
+        // Setup client approval and funds
+        vm.startPrank(client);
+        payments.setOperatorApproval(address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        mockUSDFC.approve(address(payments), 100e6);
+        payments.deposit(address(mockUSDFC), client, 100e6);
+        vm.stopPrank();
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        uint256 testDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
 
         // Registry state before
         uint256 sp1IdBefore = pdpServiceWithPayments.getProviderIdByAddress(sp1);
@@ -1322,13 +1348,13 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // After changing the storage provider, check:
         FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
-        assertEq(info.payee, sp2, "Payee should be updated");
-        assertEq(info.beneficiary, sp2, "Beneficiary should follow payee for legacy format");
-        assertEq(info.isNewFormat, false, "Should be legacy format");
+        assertEq(info.controller, sp2, "Controller should be updated");
+        assertEq(info.beneficiary, separateBeneficiary, "Beneficiary remains separate in new format test");
+        
 
-        // resolveBeneficiary returns current payee for legacy (since beneficiary follows payee)
+        // resolveBeneficiary returns the beneficiary set at creation (stable)
         address resolved = pdpServiceWithPayments.resolveBeneficiary(testDataSetId);
-        assertEq(resolved, sp2, "Resolved beneficiary follows current payee for legacy");
+        assertEq(resolved, separateBeneficiary, "Resolved beneficiary remains unchanged");
 
         // Registry state is unchanged
         assertEq(pdpServiceWithPayments.getProviderIdByAddress(sp1), sp1IdBefore, "sp1 provider ID unchanged");
@@ -1360,6 +1386,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             metadata: "Test Data Set New Format",
             payer: client,
             withCDN: false,
+            beneficiary: beneficiary,
             signature: FAKE_SIGNATURE
         });
 
@@ -1389,8 +1416,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         (address payer, address payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, beneficiary, "Beneficiary should be the separate address");
 
-        (, address actualPayee,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
-        assertEq(actualPayee, sp1, "Payee should be sp1 initially");
+        (, address actualController,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
+        assertEq(actualController, sp1, "Controller should be sp1 initially");
 
         // Change storage provider from sp1 to sp2
         bytes memory testExtraData = new bytes(0);
@@ -1403,8 +1430,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         (payer, payee) = pdpServiceWithPayments.getDataSetParties(testDataSetId);
         assertEq(payee, beneficiary, "Beneficiary should remain unchanged (new format)");
 
-        (, actualPayee,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
-        assertEq(actualPayee, sp2, "Payee should be updated to new storage provider");
+        (, actualController,) = pdpServiceWithPayments.getDataSetPartiesExtended(testDataSetId);
+        assertEq(actualController, sp2, "Controller should be updated to new storage provider");
     }
 
     /**
@@ -1522,17 +1549,16 @@ contract FilecoinWarmStorageServiceTest is Test {
         // If we have multiple datasets:
         FilecoinWarmStorageService.DataSetInfo memory info1 = pdpServiceWithPayments.getDataSet(ps1);
         FilecoinWarmStorageService.DataSetInfo memory info2 = pdpServiceWithPayments.getDataSet(ps2);
-        assertEq(info1.payee, sp2, "ps1 payee should be sp2");
-        assertEq(info2.payee, sp1, "ps2 payee should remain sp1");
-        assertEq(info1.beneficiary, sp2, "ps1 beneficiary should follow payee for legacy format");
-        assertEq(info2.beneficiary, sp1, "ps2 beneficiary should remain original storage provider for legacy format");
-        assertEq(info1.isNewFormat, false, "ps1 should be legacy format");
-        assertEq(info2.isNewFormat, false, "ps2 should be legacy format");
+        assertEq(info1.controller, sp2, "ps1 controller should be sp2");
+        assertEq(info2.controller, sp1, "ps2 controller should remain sp1");
+        assertEq(info1.beneficiary, sp1, "ps1 beneficiary should remain original");
+        assertEq(info2.beneficiary, sp1, "ps2 beneficiary should remain original");
+        // isNewFormat removed in new format-only model
 
         address resolvedBeneficiary1 = pdpServiceWithPayments.resolveBeneficiary(ps1);
         address resolvedBeneficiary2 = pdpServiceWithPayments.resolveBeneficiary(ps2);
-        assertEq(resolvedBeneficiary1, sp2, "ps1 resolved beneficiary should be current payee");
-        assertEq(resolvedBeneficiary2, sp1, "ps2 resolved beneficiary should be current payee");
+        assertEq(resolvedBeneficiary1, sp1, "ps1 resolved beneficiary should remain original");
+        assertEq(resolvedBeneficiary2, sp1, "ps2 resolved beneficiary should remain original");
         // Registry state unchanged
         assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp1) != 0, "sp1 remains approved");
         assertTrue(pdpServiceWithPayments.getProviderIdByAddress(sp2) != 0, "sp2 remains approved");
@@ -1559,15 +1585,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit DataSetStorageProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetStorageProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        // For legacy format: payee should be updated, beneficiary should follow payee
         FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(testDataSetId);
-        assertEq(info.payee, sp2, "Payee should be updated to new storage provider");
-        assertEq(info.beneficiary, sp2, "Beneficiary should follow payee for legacy format");
-        assertEq(info.isNewFormat, false, "Should be legacy format");
+        assertEq(info.controller, sp2, "Controller should be updated to new storage provider");
+        assertEq(info.beneficiary, sp1, "Beneficiary should remain original");
 
-        // For legacy format: resolveBeneficiary returns current payee (since beneficiary follows payee)
+        //resolveBeneficiary returns current payee (since beneficiary follows payee)
         address resolvedBeneficiary = pdpServiceWithPayments.resolveBeneficiary(testDataSetId);
-        assertEq(resolvedBeneficiary, sp2, "Resolved beneficiary should be current payee for legacy format");
+        assertEq(resolvedBeneficiary, sp1, "Resolved beneficiary should remain original");
     }
 
     // ============= Data Set Payment Termination Tests =============
@@ -1588,12 +1612,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set for Termination",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: true // CDN enabled
+            withCDN: true, // CDN enabled
+            beneficiary: storageProvider,
+            signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.beneficiary, createData.signature);
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
