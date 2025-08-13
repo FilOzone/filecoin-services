@@ -23,7 +23,7 @@ LAYOUTS=src/lib/FilecoinWarmStorageServiceLayout.sol
 
 # Build target
 .PHONY: build
-build: $(LAYOUTS)
+build:
 	forge build --via-ir
 
 
