@@ -6,6 +6,17 @@ import "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol";
 
 library WarmStorageView {
+    // --- Public getter functions ---
+
+    /**
+     * @notice Get the total size of a data set in bytes
+     * @param leafCount Number of leaves in the data set
+     * @return totalBytes Total size in bytes
+     */
+    function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
+        return leafCount * BYTES_PER_LEAF;
+    }
+
     function provingDeadlines(FilecoinWarmStorageService service, uint256 setId) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(setId, PROVING_DEADLINES_SLOT))));
     }

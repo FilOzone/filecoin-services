@@ -16,6 +16,8 @@ import {Errors} from "./Errors.sol";
 import {Extsload} from "./Extsload.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
+uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
+uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -57,8 +59,6 @@ contract FilecoinWarmStorageService is
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant CHALLENGES_PER_PROOF = 5;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 private constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
-    uint256 private constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
     uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
@@ -824,17 +824,6 @@ contract FilecoinWarmStorageService is
 
         return DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
     }
-
-    /**
-     * @notice Get the total size of a data set in bytes
-     * @param leafCount Number of leaves in the data set
-     * @return totalBytes Total size in bytes
-     */
-    function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
-        return leafCount * BYTES_PER_LEAF;
-    }
-
-    // --- Public getter functions ---
 
     /**
      * @notice Get data set information by ID
