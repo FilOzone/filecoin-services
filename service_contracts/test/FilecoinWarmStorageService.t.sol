@@ -1545,7 +1545,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n3. Terminating payment rails");
         console.log("Current block:", block.number);
         vm.prank(client); // client terminates
-        pdpServiceWithPayments.terminateService(dataSetId, "");
+        pdpServiceWithPayments.terminateService(dataSetId);
 
         // 4. Assertions
         // Check paymentEndEpoch is set

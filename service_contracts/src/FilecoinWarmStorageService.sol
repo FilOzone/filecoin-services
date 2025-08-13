@@ -737,7 +737,7 @@ contract FilecoinWarmStorageService is
         emit DataSetStorageProviderChanged(dataSetId, oldStorageProvider, newStorageProvider);
     }
 
-    function terminateService(uint256 dataSetId, bytes calldata /*extraData*/ ) external {
+    function terminateService(uint256 dataSetId) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
