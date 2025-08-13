@@ -13,6 +13,9 @@ import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
+import {Extsload} from "./Extsload.sol";
+
+uint256 constant NO_PROVING_DEADLINE = 0;
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -26,6 +29,7 @@ contract FilecoinWarmStorageService is
     Initializable,
     UUPSUpgradeable,
     OwnableUpgradeable,
+    Extsload,
     EIP712Upgradeable
 {
     // Version tracking
@@ -52,7 +56,6 @@ contract FilecoinWarmStorageService is
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant CHALLENGES_PER_PROOF = 5;
-    uint256 private constant NO_PROVING_DEADLINE = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
     uint256 private constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
     uint256 private constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
@@ -121,7 +124,7 @@ contract FilecoinWarmStorageService is
     }
 
     // Mappings
-    mapping(uint256 => uint256) public provingDeadlines;
+    mapping(uint256 => uint256) private provingDeadlines;
     mapping(uint256 => bool) public provenThisPeriod;
     mapping(uint256 => DataSetInfo) public dataSetInfo;
     mapping(address => uint256[]) public clientDataSets;
@@ -257,55 +260,6 @@ contract FilecoinWarmStorageService is
             Errors.CommissionExceedsMaximum(Errors.CommissionType.Service, COMMISSION_MAX_BPS, newCommissionBps)
         );
         serviceCommissionBps = newCommissionBps;
-    }
-
-    // SLA specification functions setting values for PDP service providers
-    // Max number of epochs between two consecutive proofs
-    function getMaxProvingPeriod() public view returns (uint64) {
-        return maxProvingPeriod;
-    }
-
-    // Number of epochs at the end of a proving period during which a
-    // proof of possession can be submitted
-    function challengeWindow() public view returns (uint256) {
-        return challengeWindowSize;
-    }
-
-    // Initial value for challenge window start
-    // Can be used for first call to nextProvingPeriod
-    function initChallengeWindowStart() public view returns (uint256) {
-        return block.number + getMaxProvingPeriod() - challengeWindow();
-    }
-
-    // The start of the challenge window for the current proving period
-    function thisChallengeWindowStart(uint256 setId) public view returns (uint256) {
-        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-
-        uint256 periodsSkipped;
-        // Proving period is open 0 skipped periods
-        if (block.number <= provingDeadlines[setId]) {
-            periodsSkipped = 0;
-        } else {
-            // Proving period has closed possibly some skipped periods
-            periodsSkipped = 1 + (block.number - (provingDeadlines[setId] + 1)) / getMaxProvingPeriod();
-        }
-        return provingDeadlines[setId] + periodsSkipped * getMaxProvingPeriod() - challengeWindow();
-    }
-
-    // The start of the NEXT OPEN proving period's challenge window
-    // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
-    function nextChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-        // If the current period is open this is the next period's challenge window
-        if (block.number <= provingDeadlines[setId]) {
-            return thisChallengeWindowStart(setId) + getMaxProvingPeriod();
-        }
-        // If the current period is not yet open this is the current period's challenge window
-        return thisChallengeWindowStart(setId);
     }
 
     // Listener interface methods
@@ -522,7 +476,7 @@ contract FilecoinWarmStorageService is
             revert Errors.ProvingPeriodPassed(dataSetId, provingDeadlines[dataSetId], block.number);
         }
 
-        uint256 windowStart = provingDeadlines[dataSetId] - challengeWindow();
+        uint256 windowStart = provingDeadlines[dataSetId] - challengeWindowSize;
         if (windowStart > block.number) {
             revert Errors.ChallengeWindowTooEarly(dataSetId, windowStart, block.number);
         }
@@ -545,8 +499,8 @@ contract FilecoinWarmStorageService is
         requirePaymentNotBeyondEndEpoch(dataSetId);
         // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
-            uint256 firstDeadline = block.number + getMaxProvingPeriod();
-            uint256 minWindow = firstDeadline - challengeWindow();
+            uint256 firstDeadline = block.number + maxProvingPeriod;
+            uint256 minWindow = firstDeadline - challengeWindowSize;
             uint256 maxWindow = firstDeadline;
             if (challengeEpoch < minWindow || challengeEpoch > maxWindow) {
                 revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
@@ -566,7 +520,7 @@ contract FilecoinWarmStorageService is
 
         // Revert when proving period not yet open
         // Can only get here if calling nextProvingPeriod multiple times within the same proving period
-        uint256 prevDeadline = provingDeadlines[dataSetId] - getMaxProvingPeriod();
+        uint256 prevDeadline = provingDeadlines[dataSetId] - maxProvingPeriod;
         if (block.number <= prevDeadline) {
             revert Errors.NextProvingPeriodAlreadyCalled(dataSetId, prevDeadline, block.number);
         }
@@ -577,7 +531,7 @@ contract FilecoinWarmStorageService is
             periodsSkipped = 0;
         } else {
             // Proving period has closed possibly some skipped periods
-            periodsSkipped = (block.number - (provingDeadlines[dataSetId] + 1)) / getMaxProvingPeriod();
+            periodsSkipped = (block.number - (provingDeadlines[dataSetId] + 1)) / maxProvingPeriod;
         }
 
         uint256 nextDeadline;
@@ -585,8 +539,8 @@ contract FilecoinWarmStorageService is
         if (challengeEpoch == NO_CHALLENGE_SCHEDULED) {
             nextDeadline = NO_PROVING_DEADLINE;
         } else {
-            nextDeadline = provingDeadlines[dataSetId] + getMaxProvingPeriod() * (periodsSkipped + 1);
-            uint256 windowStart = nextDeadline - challengeWindow();
+            nextDeadline = provingDeadlines[dataSetId] + maxProvingPeriod * (periodsSkipped + 1);
+            uint256 windowStart = nextDeadline - challengeWindowSize;
             uint256 windowEnd = nextDeadline;
 
             if (challengeEpoch < windowStart || challengeEpoch > windowEnd) {
@@ -744,7 +698,7 @@ contract FilecoinWarmStorageService is
         // - Epoch 1000-3879 is period 0
         // - Epoch 3880-6759 is period 1
         // and so on
-        return (epoch - activationEpoch) / getMaxProvingPeriod();
+        return (epoch - activationEpoch) / maxProvingPeriod;
     }
 
     /**
