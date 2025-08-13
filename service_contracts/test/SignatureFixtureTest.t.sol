@@ -32,9 +32,8 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
 
     bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)"
-    );
+    bytes32 private constant ADD_PIECES_TYPEHASH =
+        keccak256("AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)");
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
@@ -97,11 +96,11 @@ contract TestableWarmStorageServiceEIP712 is EIP712 {
         return _hashTypedDataV4(structHash);
     }
 
-    function getAddPiecesDigest(
-        uint256 clientDataSetId,
-        uint256 firstAdded,
-        Cids.Cid[] memory pieceCidsArray
-    ) public view returns (bytes32) {
+    function getAddPiecesDigest(uint256 clientDataSetId, uint256 firstAdded, Cids.Cid[] memory pieceCidsArray)
+        public
+        view
+        returns (bytes32)
+    {
         // Hash each PieceData struct
         bytes32[] memory pieceCidsHashes = new bytes32[](pieceCidsArray.length);
         for (uint256 i = 0; i < pieceCidsArray.length; i++) {
@@ -192,48 +191,48 @@ contract SignatureFixtureTest is Test {
         console.log("Copy this JavaScript const to synapse-sdk src/test/pdp-auth.test.ts:");
         console.log("const FIXTURES = {");
         console.log("  // Test private key from Solidity (never use in production!)");
-        console.log('  privateKey: "0x%s",', vm.toString(TEST_PRIVATE_KEY));
-        console.log('  signerAddress: "%s",', TEST_SIGNER);
-        console.log('  contractAddress: "%s",', address(testContract));
+        console.log("  privateKey: '%x',", TEST_PRIVATE_KEY);
+        console.log("  signerAddress: '%s',", TEST_SIGNER);
+        console.log("  contractAddress: '%s',", address(testContract));
         console.log("  chainId: %d,", block.chainid);
-        console.log('  domainSeparator: "%s",', vm.toString(testContract.getDomainSeparator()));
+        console.log("  domainSeparator: '%s',", vm.toString(testContract.getDomainSeparator()));
         console.log("");
         console.log("  // EIP-712 domain separator components");
         console.log("  domain: {");
-        console.log('    name: "FilecoinWarmStorageService",');
-        console.log('    version: "1",');
+        console.log("    name: 'FilecoinWarmStorageService',");
+        console.log("    version: '1',");
         console.log("    chainId: %d,", block.chainid);
-        console.log('    verifyingContract: "%s"', address(testContract));
+        console.log("    verifyingContract: '%s'", address(testContract));
         console.log("  },");
         console.log("");
         console.log("  // Expected EIP-712 signatures");
         console.log("  signatures: {");
         console.log("    createDataSet: {");
-        console.log('      signature: "%s",', vm.toString(createDataSetSig));
-        console.log('      digest: "%s",', vm.toString(createDataSetDigest));
+        console.log("      signature: '%s',", vm.toString(createDataSetSig));
+        console.log("      digest: '%s',", vm.toString(createDataSetDigest));
         console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
-        console.log('      payee: "%s",', PAYEE);
+        console.log("      payee: '%s',", PAYEE);
         console.log("      withCDN: %s", WITH_CDN ? "true" : "false");
         console.log("    },");
         console.log("    addPieces: {");
-        console.log('      signature: "%s",', vm.toString(addPiecesSig));
-        console.log('      digest: "%s",', vm.toString(addPiecesDigest));
+        console.log("      signature: '%s',", vm.toString(addPiecesSig));
+        console.log("      digest: '%s',", vm.toString(addPiecesDigest));
         console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
         console.log("      firstAdded: %d,", FIRST_ADDED);
         console.log("      pieceCidBytes: [");
-        console.log('        "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",');
-        console.log('        "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"');
+        console.log("        '%s',", vm.toString(pieceCidsArray[0].data));
+        console.log("        '%s'", vm.toString(pieceCidsArray[1].data));
         console.log("      ]");
         console.log("    },");
         console.log("    schedulePieceRemovals: {");
-        console.log('      signature: "%s",', vm.toString(schedulePieceRemovalsSig));
-        console.log('      digest: "%s",', vm.toString(schedulePieceRemovalsDigest));
+        console.log("      signature: '%s',", vm.toString(schedulePieceRemovalsSig));
+        console.log("      digest: '%s',", vm.toString(schedulePieceRemovalsDigest));
         console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
         console.log("      pieceIds: [1, 3, 5]");
         console.log("    },");
         console.log("    deleteDataSet: {");
-        console.log('      signature: "%s",', vm.toString(deleteDataSetSig));
-        console.log('      digest: "%s",', vm.toString(deleteDataSetDigest));
+        console.log("      signature: '%s',", vm.toString(deleteDataSetSig));
+        console.log("      digest: '%s',", vm.toString(deleteDataSetDigest));
         console.log("      clientDataSetId: %d", CLIENT_DATA_SET_ID);
         console.log("    }");
         console.log("  }");
@@ -292,35 +291,35 @@ contract SignatureFixtureTest is Test {
         console.log("=== EIP-712 TYPE STRUCTURES ===");
         console.log("");
         console.log("Domain:");
-        console.log('  name: "FilecoinWarmStorageService"');
-        console.log('  version: "1"');
+        console.log("  name: 'FilecoinWarmStorageService'");
+        console.log("  version: '1'");
         console.log("  chainId: %d", block.chainid);
         console.log("  verifyingContract: %s", address(testContract));
         console.log("");
         console.log("Types:");
         console.log("  CreateDataSet: [");
-        console.log('    { name: "clientDataSetId", type: "uint256" },');
-        console.log('    { name: "withCDN", type: "bool" },');
-        console.log('    { name: "payee", type: "address" }');
+        console.log("    { name: 'clientDataSetId', type: 'uint256' },");
+        console.log("    { name: 'withCDN', type: 'bool' },");
+        console.log("    { name: 'payee', type: 'address' }");
         console.log("  ]");
         console.log("");
         console.log("  Cid: [");
-        console.log('    { name: "data", type: "bytes" }');
+        console.log("    { name: 'data', type: 'bytes' }");
         console.log("  ]");
         console.log("");
         console.log("  AddPieces: [");
-        console.log('    { name: "clientDataSetId", type: "uint256" },');
-        console.log('    { name: "firstAdded", type: "uint256" },');
-        console.log('    { name: "pieceData", type: "Cid[]" }');
+        console.log("    { name: 'clientDataSetId', type: 'uint256' },");
+        console.log("    { name: 'firstAdded', type: 'uint256' },");
+        console.log("    { name: 'pieceData', type: 'Cid[]' }");
         console.log("  ]");
         console.log("");
         console.log("  SchedulePieceRemovals: [");
-        console.log('    { name: "clientDataSetId", type: "uint256" },');
-        console.log('    { name: "pieceIds", type: "uint256[]" }');
+        console.log("    { name: 'clientDataSetId', type: 'uint256' },");
+        console.log("    { name: 'pieceIds', type: 'uint256[]' }");
         console.log("  ]");
         console.log("");
         console.log("  DeleteDataSet: [");
-        console.log('    { name: "clientDataSetId", type: "uint256" }');
+        console.log("    { name: 'clientDataSetId', type: 'uint256' }");
         console.log("  ]");
     }
 
@@ -362,14 +361,14 @@ contract SignatureFixtureTest is Test {
         Cids.Cid[] memory pieceCidsArray = new Cids.Cid[](2);
 
         // Create Cid with full CID bytes (not just digest)
-        // CID baga6ea4seaqpy7usqklokfx2vxuynmupslkeutzexe2uqurdg5vhtebhxqmpqmy
+        // CID bafkzcibcauan42av3szurbbscwuu3zjssvfwbpsvbjf6y3tukvlgl2nf5rha6pa
         pieceCidsArray[0] = Cids.Cid({
-                data: abi.encodePacked(hex"0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833")
-            });
-        // CID baga6ea4seaqkt24j5gbf2ye2wual5gn7a5yl2tqb52v2sk4nvur4bdy7lg76cdy
+            data: abi.encodePacked(hex"01559120220500de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c")
+        });
+        // CID bafkzcibcpybwiktap34inmaex4wbs6cghlq5i2j2yd2bb2zndn5ep7ralzphkdy
         pieceCidsArray[1] = Cids.Cid({
-                data: abi.encodePacked(hex"0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f")
-            });
+            data: abi.encodePacked(hex"01559120227e03642a607ef886b004bf2c1978463ae1d4693ac0f410eb2d1b7a47fe205e5e750f")
+        });
         return pieceCidsArray;
     }
 
