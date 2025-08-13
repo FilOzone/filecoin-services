@@ -7,16 +7,12 @@
     "withCDN": true
   },
   "addPieces": {
-    "signature": "0x95f1681cebc076f69893d83f00c97de7fd772d4ab98cdbc28b7a929d138cfde82b575c2e5a10673c217d831aa717e9d061232d6028f6ce6ccfdd7e52a8f5e0421b",
+    "signature": "0x11a84c9e14c95c8e6a8efc4ee72fb3bb4b596a398fc1c0ff9d1ddec24eab6ce239964f6c75144499e56f36c7e85559b74d5c03faf0cc9843846ff05a52d928f91b",
     "clientDataSetId": 12345,
     "firstAdded": 1,
     "pieceCidBytes": [
-      "0x0181e203922020fc7e928296e516faade986b28f92d44a4f24b935485223376a799027bc18f833",
-      "0x0181e203922020a9eb89e9825d609ab500be99bf0770bd4e01eeaba92b8dad23c08f1f59bfe10f"
-    ],
-    "pieceSizes": [
-      2048,
-      4096
+      "0x01559120220500de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c",
+      "0x01559120227e03642a607ef886b004bf2c1978463ae1d4693ac0f410eb2d1b7a47fe205e5e750f"
     ]
   },
   "schedulePieceRemovals": {

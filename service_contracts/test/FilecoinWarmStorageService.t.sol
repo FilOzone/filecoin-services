@@ -860,9 +860,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n4. Testing operations after termination");
         console.log("Testing piecesAdded - should revert (payment terminated)");
         vm.prank(address(mockPDPVerifier));
-        IPDPTypes.PieceData[] memory pieces = new IPDPTypes.PieceData[](1);
-        bytes memory pieceData = hex"010203";
-        pieces[0] = IPDPTypes.PieceData({piece: Cids.Cid({data: pieceData}), rawSize: 3});
+        Cids.Cid[] memory pieces = new Cids.Cid[](1);
+        bytes32 pieceData = hex"010203";
+        pieces[0] = Cids.CommPv2FromDigest(0, 4, pieceData);
         bytes memory addPiecesExtraData = abi.encode(FAKE_SIGNATURE, "some metadata");
         makeSignaturePass(client);
         vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentAlreadyTerminated.selector, dataSetId));
