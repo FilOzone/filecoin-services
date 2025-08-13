@@ -125,7 +125,7 @@ contract FilecoinWarmStorageService is
 
     // Mappings
     mapping(uint256 => uint256) private provingDeadlines;
-    mapping(uint256 => bool) public provenThisPeriod;
+    mapping(uint256 => bool) private provenThisPeriod;
     mapping(uint256 => DataSetInfo) public dataSetInfo;
     mapping(address => uint256[]) public clientDataSets;
 
