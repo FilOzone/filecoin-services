@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Errors} from "../Errors.sol";
 import "../FilecoinWarmStorageService.sol";
-import "./WarmStorageLayout.sol";
+import "./FilecoinWarmStorageServiceLayout.sol";
 
 library WarmStorageView {
     function provingDeadlines(FilecoinWarmStorageService service, uint256 setId) public view returns (uint256) {

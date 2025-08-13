@@ -19,10 +19,16 @@ all: install build test
 install:
 	forge install
 
+LAYOUTS=src/lib/FilecoinWarmStorageServiceLayout.sol
+
 # Build target
 .PHONY: build
-build:
+build: $(LAYOUTS)
 	forge build --via-ir
+
+
+src/lib/%Layout.sol: tools/generate_storage_layout.sh src/%.sol
+	$^:$* > $@
 
 # Test target
 .PHONY: test
