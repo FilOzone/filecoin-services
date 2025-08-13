@@ -7,4 +7,4 @@ echo // Generated with $0 $@
 echo
 
 forge inspect --json $1 storageLayout \
-    | jq -rM 'reduce .storage.[] as {$label,$slot} (null; . += $label + "_SLOT = " + $slot + "\n")'
+    | jq -rM 'reduce .storage.[] as {$label,$slot} (null; . += "bytes32 constant " + ($label | ascii_upcase) + "_SLOT = bytes32(uint256(" + $slot + "));\n")'
