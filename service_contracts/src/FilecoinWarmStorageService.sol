@@ -42,9 +42,12 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId,
         uint256 cdnRailId,
         address payer,
-        address payee,
+        address controller,
         bool withCDN
     );
+
+    // Emitted when a data set's beneficiary is set or resolved
+    event DataSetBeneficiaryResolved(uint256 indexed dataSetId, address indexed beneficiary);
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceMetadataAdded(uint256 indexed dataSetId, uint256 pieceId, string metadata);
 
@@ -94,7 +97,8 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
         uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
-        address payee; // SP's beneficiary address
+        address controller; // SP's control address (hot key)
+        address beneficiary; // SP's payment address (cold key)
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         string metadata; // General metadata for the data set
         string[] pieceMetadata; // Array of metadata for each piece
@@ -108,6 +112,7 @@ contract FilecoinWarmStorageService is
         string metadata;
         address payer;
         bool withCDN;
+        address beneficiary;
         bytes signature; // Authentication signature
     }
 
@@ -177,7 +182,7 @@ contract FilecoinWarmStorageService is
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
-        keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)");
+        keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address controller,address beneficiary)");
 
     bytes32 private constant PIECE_CID_TYPEHASH = keccak256("PieceCid(bytes data)");
 
@@ -394,7 +399,9 @@ contract FilecoinWarmStorageService is
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, Errors.ExtraDataRequired());
-        DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+        (DataSetCreateData memory createData) = decodeDataSetCreateData(extraData);
+        require(createData.beneficiary != address(0), Errors.ZeroAddress(Errors.AddressField.Beneficiary));
+        address actualBeneficiary = createData.beneficiary;
 
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
@@ -409,13 +416,14 @@ contract FilecoinWarmStorageService is
 
         // Verify the client's signature
         verifyCreateDataSetSignature(
-            createData.payer, clientDataSetId, creator, createData.withCDN, createData.signature
+            createData.payer, clientDataSetId, creator, createData.withCDN, actualBeneficiary, createData.signature
         );
 
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Using creator as the payee
+        info.controller = creator;
+        info.beneficiary = actualBeneficiary;
         info.metadata = createData.metadata;
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
@@ -428,7 +436,7 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // data set creator, SPs in  most cases
+            actualBeneficiary, // to (beneficiary)
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
             address(this)
@@ -463,8 +471,8 @@ contract FilecoinWarmStorageService is
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                creator, // data set creator, SPs in most cases
-                address(this), // this contract acts as the arbiter
+                actualBeneficiary,
+                address(this), // arbiter
                 0, // no service commission
                 address(this)
             );
@@ -476,7 +484,7 @@ contract FilecoinWarmStorageService is
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
                 filCDNAddress,
-                address(this), // this contract acts as the arbiter
+                address(this), // arbiter
                 0, // no service commission
                 address(this)
             );
@@ -485,10 +493,12 @@ contract FilecoinWarmStorageService is
             payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, 0);
         }
 
-        // Emit event for tracking
+        // Emit events for tracking
         emit DataSetRailsCreated(
             dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
         );
+
+        emit DataSetBeneficiaryResolved(dataSetId, actualBeneficiary);
     }
 
     /**
@@ -721,17 +731,17 @@ contract FilecoinWarmStorageService is
         // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.payee == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.payee, oldServiceProvider)
+            info.controller == oldServiceProvider,
+            Errors.OldServiceProviderMismatch(dataSetId, info.controller, oldServiceProvider)
         );
         require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
         // New service provider must be an approved provider
         require(approvedProvidersMap[newServiceProvider], Errors.NewServiceProviderNotApproved(newServiceProvider));
 
-        // Update the data set payee (service provider)
-        info.payee = newServiceProvider;
+        // Update the data set controller (Service Provider)
+        // Beneficiary is independent and should not auto-follow controller changes
+        info.controller = newServiceProvider;
 
-        // Emit event for off-chain tracking
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
     }
 
@@ -744,8 +754,8 @@ contract FilecoinWarmStorageService is
 
         // Check authorization
         require(
-            msg.sender == info.payer || msg.sender == info.payee,
-            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.payee, msg.sender)
+            msg.sender == info.payer || msg.sender == info.controller || msg.sender == info.beneficiary,
+            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.controller, msg.sender)
         );
 
         Payments payments = Payments(paymentsContractAddress);
@@ -942,15 +952,25 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Decode extra data for data set creation
+     * @notice Decode extra data for data set creation with format detection
      * @param extraData The encoded extra data from PDPVerifier
-     * @return decoded The decoded DataSetCreateData struct
+     * @return createData The decoded DataSetCreateData struct
      */
-    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (string memory metadata, address payer, bool withCDN, bytes memory signature) =
-            abi.decode(extraData, (string, address, bool, bytes));
-
-        return DataSetCreateData({metadata: metadata, payer: payer, withCDN: withCDN, signature: signature});
+    function decodeDataSetCreateData(bytes calldata extraData)
+        internal
+        pure
+        returns (DataSetCreateData memory createData)
+    {
+        require(extraData.length > 0, Errors.ExtraDataRequired());
+        (string memory metadata, address payer, bool withCDN, address beneficiary, bytes memory signature) =
+            abi.decode(extraData, (string, address, bool, address, bytes));
+        return DataSetCreateData({
+            metadata: metadata,
+            payer: payer,
+            withCDN: withCDN,
+            beneficiary: beneficiary,
+            signature: signature
+        });
     }
 
     /**
@@ -963,6 +983,22 @@ contract FilecoinWarmStorageService is
     }
 
     // --- Public getter functions ---
+    /**
+     * @notice Resolves the beneficiary address for a data set
+     * @dev Returns controller if beneficiary is not set (legacy data sets)
+     * @param dataSetId The ID of the data set
+     * @return The beneficiary address
+     */
+    function resolveBeneficiary(uint256 dataSetId) public view returns (address) {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+
+        address b = info.beneficiary;
+        if (b == address(0)) {
+            return info.controller; // Legacy fallback
+        }
+        return b;
+    }
 
     /**
      * @notice Get data set information by ID
@@ -971,6 +1007,36 @@ contract FilecoinWarmStorageService is
      */
     function getDataSet(uint256 dataSetId) external view returns (DataSetInfo memory) {
         return dataSetInfo[dataSetId];
+    }
+
+    /**
+     * @notice Get payer and payment recipient for a data set (backward compatible)
+     * @dev Returns the payment recipient which could be beneficiary or controller
+     * @param dataSetId The ID of the data set
+     * @return payer The address paying for storage
+     * @return payee The address receiving payments (beneficiary if set, otherwise payee)
+     */
+    function getDataSetParties(uint256 dataSetId) external view returns (address payer, address payee) {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        return (info.payer, resolveBeneficiary(dataSetId));
+    }
+
+    /**
+     * @notice Get all party addresses for a data set including beneficiary
+     * @dev New function that returns all three addresses
+     * @param dataSetId The ID of the data set
+     * @return payer The address paying for storage
+     * @return payee The SP's control address (hot key)
+     * @return beneficiary The SP's payment address (cold key)
+     */
+    function getDataSetPartiesExtended(uint256 dataSetId)
+        external
+        view
+        returns (address payer, address payee, address beneficiary)
+    {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+        return (info.payer, info.controller, resolveBeneficiary(dataSetId));
     }
 
     /**
@@ -1019,17 +1085,16 @@ contract FilecoinWarmStorageService is
     function verifyCreateDataSetSignature(
         address payer,
         uint256 clientDataSetId,
-        address payee,
+        address controller,
         bool withCDN,
+        address beneficiary,
         bytes memory signature
     ) internal view {
-        // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, withCDN, payee));
+        bytes32 structHash =
+            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, withCDN, controller, beneficiary));
         bytes32 digest = _hashTypedDataV4(structHash);
 
-        // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
-
         require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
     }
 
@@ -1310,7 +1375,8 @@ contract FilecoinWarmStorageService is
                 cacheMissRailId: storageInfo.cacheMissRailId,
                 cdnRailId: storageInfo.cdnRailId,
                 payer: storageInfo.payer,
-                payee: storageInfo.payee,
+                controller: storageInfo.controller,
+                beneficiary: storageInfo.beneficiary,
                 commissionBps: storageInfo.commissionBps,
                 metadata: storageInfo.metadata,
                 pieceMetadata: storageInfo.pieceMetadata,

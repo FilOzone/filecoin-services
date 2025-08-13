@@ -19,8 +19,10 @@ library Errors {
         Creator,
         /// Payer address
         Payer,
-        /// Service provider address
-        ServiceProvider
+        /// Service Provider address
+        ServiceProvider,
+        /// Beneficiary address
+        Beneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
