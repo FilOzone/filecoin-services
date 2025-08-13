@@ -63,10 +63,6 @@ library Errors {
     /// @param dataSetId The ID of the data set whose proving period was not initialized
     error ProvingPeriodNotInitialized(uint256 dataSetId);
 
-    /// @notice Service provider is not approved or whitelisted
-    /// @param provider The address of the unapproved service provider
-    error ServiceProviderNotApproved(address provider);
-
     /// @notice The signature is invalid (recovered signer did not match expected)
     /// @param expected The expected signer address
     /// @param actual The recovered address from the signature
@@ -124,10 +120,6 @@ library Errors {
     /// @param actual The provided old service provider address
     error OldServiceProviderMismatch(uint256 dataSetId, address expected, address actual);
 
-    /// @notice New service provider is not approved
-    /// @param newProvider The new service provider address
-    error NewServiceProviderNotApproved(address newProvider);
-
     /// @notice Data set payment is already terminated
     /// @param dataSetId The data set ID
     error DataSetPaymentAlreadyTerminated(uint256 dataSetId);
@@ -163,52 +155,6 @@ library Errors {
     /// @notice Signature uses an unsupported v value (should be 27 or 28)
     /// @param v The actual v value provided
     error UnsupportedSignatureV(uint8 v);
-
-    /// @notice The provider is already approved
-    /// @param provider The provider address
-    error ProviderAlreadyApproved(address provider);
-
-    /// @notice Service URL is empty
-    error ServiceURLEmpty();
-
-    /// @notice Service URL is too long
-    /// @param length The length of the provided service URL
-    /// @param maxAllowed The maximum allowed length
-    error ServiceURLTooLong(uint256 length, uint256 maxAllowed);
-
-    /// @notice Peer ID is too long
-    /// @param length The provided peerId length
-    /// @param maxAllowed The maximum allowed length
-    error PeerIdTooLong(uint256 length, uint256 maxAllowed);
-
-    /// @notice Registration is already pending for this provider
-    /// @param provider The provider address
-    error RegistrationAlreadyPending(address provider);
-
-    /// @notice Incorrect registration fee provided
-    /// @param expected The required registration fee
-    /// @param actual The fee sent with the transaction
-    error IncorrectRegistrationFee(uint256 expected, uint256 actual);
-
-    /// @notice Burn failed when sending registration fee to burn address
-    error BurnFailed();
-
-    /// @notice No pending registration found for the provider
-    /// @param provider The provider address
-    error NoPendingRegistrationFound(address provider);
-
-    /// @notice The provider ID is invalid (not in the valid range)
-    /// @param nextServiceProviderId The next available provider ID (for context)
-    /// @param providerId The invalid provider ID
-    error InvalidProviderId(uint256 nextServiceProviderId, uint256 providerId);
-
-    /// @notice No provider found for the given provider ID
-    /// @param providerId The provider ID that was looked up
-    error ProviderNotFound(uint256 providerId);
-
-    /// @notice Provider is not currently approved
-    /// @param provider The provider address
-    error ProviderNotApproved(address provider);
 
     /// @notice Payment rail is not associated with any data set
     /// @param railId The rail ID
