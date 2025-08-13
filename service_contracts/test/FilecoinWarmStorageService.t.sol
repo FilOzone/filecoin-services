@@ -389,6 +389,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify metadata was stored correctly
         assertEq(dataSet.metadata, "Test Data Set", "Metadata should be stored correctly");
 
+        // Verify client data set ids
+        uint256[] memory clientDataSetIds = pdpServiceWithPayments.clientDataSets(client);
+        assertEq(clientDataSetIds.length, 1);
+        assertEq(clientDataSetIds[0], newDataSetId);
+
         // Verify data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");
