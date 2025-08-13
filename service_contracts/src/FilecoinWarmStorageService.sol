@@ -88,7 +88,7 @@ contract FilecoinWarmStorageService is
     uint256 public serviceCommissionBps;
 
     // Mapping from client address to clientDataSetId
-    mapping(address => uint256) public clientDataSetIDs;
+    mapping(address => uint256) private clientDataSetIds;
     // Mapping from data set ID to piece ID to metadata
     mapping(uint256 => mapping(uint256 => string)) private dataSetPieceMetadata;
 
@@ -280,7 +280,7 @@ contract FilecoinWarmStorageService is
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
 
         // Update client state
-        uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
+        uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
