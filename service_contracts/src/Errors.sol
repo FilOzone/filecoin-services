@@ -20,7 +20,7 @@ library Errors {
         /// Payer address
         Payer,
         /// Service Provider address
-        serviceProvider,
+        ServiceProvider,
         /// Beneficiary address
         Beneficiary
     }
@@ -67,7 +67,7 @@ library Errors {
 
     /// @notice Service provider is not approved or whitelisted
     /// @param provider The address of the unapproved service provider
-    error serviceProviderNotApproved(address provider);
+    error ServiceProviderNotApproved(address provider);
 
     /// @notice The signature is invalid (recovered signer did not match expected)
     /// @param expected The expected signer address
@@ -124,11 +124,11 @@ library Errors {
     /// @param dataSetId The data set ID
     /// @param expected The expected (current) payee address
     /// @param actual The provided old service provider address
-    error OldserviceProviderMismatch(uint256 dataSetId, address expected, address actual);
+    error OldServiceProviderMismatch(uint256 dataSetId, address expected, address actual);
 
     /// @notice New service provider is not approved
     /// @param newProvider The new service provider address
-    error NewserviceProviderNotApproved(address newProvider);
+    error NewServiceProviderNotApproved(address newProvider);
 
     /// @notice Data set payment is already terminated
     /// @param dataSetId The data set ID
@@ -200,9 +200,9 @@ library Errors {
     error NoPendingRegistrationFound(address provider);
 
     /// @notice The provider ID is invalid (not in the valid range)
-    /// @param nextserviceProviderId The next available provider ID (for context)
+    /// @param nextServiceProviderId The next available provider ID (for context)
     /// @param providerId The invalid provider ID
-    error InvalidProviderId(uint256 nextserviceProviderId, uint256 providerId);
+    error InvalidProviderId(uint256 nextServiceProviderId, uint256 providerId);
 
     /// @notice No provider found for the given provider ID
     /// @param providerId The provider ID that was looked up
