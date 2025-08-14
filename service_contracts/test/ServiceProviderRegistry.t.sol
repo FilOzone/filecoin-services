@@ -30,7 +30,7 @@ contract ServiceProviderRegistryTest is Test {
 
     function testInitialState() public view {
         // Check version
-        assertEq(registry.version(), "1.0.0", "Version should be 1.0.0");
+        assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
 
         // Check owner
         assertEq(registry.owner(), owner, "Owner should be deployer");
@@ -56,10 +56,10 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 2 ether);
 
         // Prepare PDP data
-        ServiceProviderRegistry.PDPData memory pdpData = ServiceProviderRegistry.PDPData({
+        ServiceProviderRegistry.PDPOffering memory pdpData = ServiceProviderRegistry.PDPOffering({
             serviceURL: "https://example.com",
-            minPieceSize: 1024,
-            maxPieceSize: 1024 * 1024,
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
             withCDN: true
@@ -74,7 +74,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 1 ether}(
-            ServiceProviderRegistry.ProductType.PDP, encodedData, emptyKeys, emptyValues
+            "Test provider description", ServiceProviderRegistry.ProductType.PDP, encodedData, emptyKeys, emptyValues
         );
         assertEq(providerId, 1, "Should register with ID 1");
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
@@ -91,10 +91,10 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 2 ether);
 
         // Prepare PDP data
-        ServiceProviderRegistry.PDPData memory pdpData = ServiceProviderRegistry.PDPData({
+        ServiceProviderRegistry.PDPOffering memory pdpData = ServiceProviderRegistry.PDPOffering({
             serviceURL: "https://example.com",
-            minPieceSize: 1024,
-            maxPieceSize: 1024 * 1024,
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
             withCDN: true
@@ -116,7 +116,11 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 1 ether}(
-            ServiceProviderRegistry.ProductType.PDP, encodedData, capabilityKeys, capabilityValues
+            "Test provider description",
+            ServiceProviderRegistry.ProductType.PDP,
+            encodedData,
+            capabilityKeys,
+            capabilityValues
         );
         assertEq(providerId, 1, "Should register with ID 1");
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
@@ -142,10 +146,10 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 2 ether);
 
         // Register a provider first
-        ServiceProviderRegistry.PDPData memory pdpData = ServiceProviderRegistry.PDPData({
+        ServiceProviderRegistry.PDPOffering memory pdpData = ServiceProviderRegistry.PDPOffering({
             serviceURL: "https://example.com",
-            minPieceSize: 1024,
-            maxPieceSize: 1024 * 1024,
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
             withCDN: true
@@ -159,7 +163,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         registry.registerProvider{value: 1 ether}(
-            ServiceProviderRegistry.ProductType.PDP, encodedData, emptyKeys, emptyValues
+            "Test provider description", ServiceProviderRegistry.ProductType.PDP, encodedData, emptyKeys, emptyValues
         );
 
         // Now get provider should work

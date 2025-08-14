@@ -18,8 +18,6 @@ contract ServiceProviderRegistry is
     EIP712Upgradeable,
     ReentrancyGuardUpgradeable
 {
-    // ========== Types ==========
-
     /// @notice Enum representing different service types
     enum ProductType {
         PDP
@@ -28,6 +26,7 @@ contract ServiceProviderRegistry is
     /// @notice Main provider information
     struct ServiceProviderInfo {
         address owner;
+        string description;
         uint256 registeredAt;
         uint256 updatedAt;
         bool isActive;
@@ -44,22 +43,23 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice PDP-specific service data
-    struct PDPData {
+    struct PDPOffering {
         string serviceURL; // HTTP API endpoint
-        uint256 minPieceSize; // Minimum piece size accepted
-        uint256 maxPieceSize; // Maximum piece size accepted
+        uint256 minPieceSizeInBytes; // Minimum piece size accepted in bytes
+        uint256 maxPieceSizeInBytes; // Maximum piece size accepted in bytes
         bool ipniPiece; // Supports IPNI piece CID indexing
         bool ipniIpfs; // Supports IPNI IPFS CID indexing
         bool withCDN; // CDN support available
     }
 
-    // ========== Constants ==========
-
     /// @notice Version of the contract implementation
-    string private constant VERSION = "1.0.0";
+    string public constant VERSION = "0.0.1";
 
     /// @notice Maximum length for service URL
     uint256 private constant MAX_SERVICE_URL_LENGTH = 256;
+
+    /// @notice Maximum length for provider description
+    uint256 private constant MAX_DESCRIPTION_LENGTH = 256;
 
     /// @notice Burn actor address for burning FIL
     address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
@@ -85,8 +85,6 @@ contract ServiceProviderRegistry is
     /// @notice Storage gap for upgradeability
     uint256[47] private __gap;
 
-    // ========== Events ==========
-
     /// @notice Emitted when a new provider registers
     event ProviderRegistered(uint256 indexed providerId, address indexed owner);
 
@@ -111,8 +109,6 @@ contract ServiceProviderRegistry is
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
 
-    // ========== Modifiers ==========
-
     /// @notice Ensures the caller is the owner of the provider
     modifier onlyProviderOwner(uint256 providerId) {
         require(providers[providerId].owner == msg.sender, "Only provider owner can call this function");
@@ -132,16 +128,12 @@ contract ServiceProviderRegistry is
         _;
     }
 
-    // ========== Constructor ==========
-
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @notice Constructor that disables initializers for the implementation contract
     /// @dev This ensures the implementation contract cannot be initialized directly
     constructor() {
         _disableInitializers();
     }
-
-    // ========== Initializer ==========
 
     /// @notice Initializes the registry contract
     /// @dev Can only be called once during proxy deployment
@@ -155,21 +147,20 @@ contract ServiceProviderRegistry is
         nextProviderId = 1;
     }
 
-    // ========== Registration Functions ==========
-
     /// @notice Register as a new service provider with a specific product type
+    /// @param description Provider description (max 256 chars)
     /// @param productType The type of product to register
     /// @param productData The encoded product configuration data
     /// @param capabilityKeys Array of capability keys (max 12 chars each)
     /// @param capabilityValues Array of capability values (max 64 chars each)
     /// @return providerId The unique ID assigned to the provider
     function registerProvider(
+        string calldata description,
         ProductType productType,
         bytes calldata productData,
         string[] calldata capabilityKeys,
         string[] calldata capabilityValues
     ) external payable nonReentrant returns (uint256 providerId) {
-        // ===== CHECKS =====
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
@@ -179,19 +170,22 @@ contract ServiceProviderRegistry is
         // Check payment amount
         require(msg.value >= REGISTRATION_FEE, "Incorrect fee amount");
 
+        // Validate description
+        require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
+
         // Validate product data
         _validateProductData(productType, productData);
 
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
 
-        // ===== EFFECTS =====
         // Assign provider ID
         providerId = nextProviderId++;
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({
             owner: msg.sender,
+            description: description,
             registeredAt: block.number,
             updatedAt: block.number,
             isActive: true
@@ -214,7 +208,6 @@ contract ServiceProviderRegistry is
         emit ProviderRegistered(providerId, msg.sender);
         emit ServiceUpdated(providerId, productType, block.number);
 
-        // ===== INTERACTIONS =====
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
         require(burnSuccess, "Burn failed");
@@ -225,8 +218,6 @@ contract ServiceProviderRegistry is
             require(refundSuccess, "Failed to refund excess payment");
         }
     }
-
-    // ========== Product Management Functions ==========
 
     /// @notice Add a new product to an existing provider
     /// @param productType The type of product to add
@@ -380,30 +371,30 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Update PDP service configuration (legacy compatibility)
-    /// @param pdpData The new PDP service configuration
-    function updatePDPService(PDPData memory pdpData) external {
+    /// @param pdpOffering The new PDP service configuration
+    function updatePDPService(PDPOffering memory pdpOffering) external {
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        bytes memory encodedData = _encodePDPData(pdpData);
+        bytes memory encodedData = _encodePDPOffering(pdpOffering);
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
         _updateProduct(providerId, ProductType.PDP, encodedData, emptyKeys, emptyValues);
     }
 
     /// @notice Update PDP service configuration with capabilities
-    /// @param pdpData The new PDP service configuration
+    /// @param pdpOffering The new PDP service configuration
     /// @param capabilityKeys Array of capability keys (max 12 chars each)
     /// @param capabilityValues Array of capability values (max 64 chars each)
     function updatePDPServiceWithCapabilities(
-        PDPData memory pdpData,
+        PDPOffering memory pdpOffering,
         string[] memory capabilityKeys,
         string[] memory capabilityValues
     ) external {
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        bytes memory encodedData = _encodePDPData(pdpData);
+        bytes memory encodedData = _encodePDPOffering(pdpOffering);
         _updateProduct(providerId, ProductType.PDP, encodedData, capabilityKeys, capabilityValues);
     }
 
@@ -465,8 +456,6 @@ contract ServiceProviderRegistry is
         emit OwnershipTransferred(providerId, previousOwner, newOwner);
     }
 
-    // ========== Removal Functions ==========
-
     /// @notice Remove provider registration (soft delete)
     function removeProvider() external {
         uint256 providerId = addressToProviderId[msg.sender];
@@ -498,8 +487,6 @@ contract ServiceProviderRegistry is
         // Emit event
         emit ProviderRemoved(providerId, block.number);
     }
-
-    // ========== Getter Functions ==========
 
     /// @notice Get complete provider information
     /// @param providerId The ID of the provider
@@ -537,7 +524,7 @@ contract ServiceProviderRegistry is
 
     /// @notice Get PDP service configuration for a provider (convenience function)
     /// @param providerId The ID of the provider
-    /// @return pdpData The decoded PDP service data
+    /// @return pdpOffering The decoded PDP service data
     /// @return capabilityKeys Array of capability keys
     /// @return capabilityValues Array of capability values
     /// @return isActive Whether the PDP service is active
@@ -546,7 +533,7 @@ contract ServiceProviderRegistry is
         view
         providerExists(providerId)
         returns (
-            PDPData memory pdpData,
+            PDPOffering memory pdpOffering,
             string[] memory capabilityKeys,
             string[] memory capabilityValues,
             bool isActive
@@ -555,7 +542,7 @@ contract ServiceProviderRegistry is
         ServiceProduct memory product = providerProducts[providerId][ProductType.PDP];
 
         if (product.productData.length > 0) {
-            pdpData = _decodePDPData(product.productData);
+            pdpOffering = _decodePDPOffering(product.productData);
             capabilityKeys = product.capabilityKeys;
             capabilityValues = product.capabilityValues;
             isActive = product.isActive;
@@ -678,12 +665,6 @@ contract ServiceProviderRegistry is
         return providerId != 0 && providers[providerId].isActive;
     }
 
-    /// @notice Returns the current version of the contract
-    /// @return The version string
-    function version() external pure returns (string memory) {
-        return VERSION;
-    }
-
     /// @notice Returns the next available provider ID
     /// @return The next provider ID that will be assigned
     function getNextProviderId() external view returns (uint256) {
@@ -696,26 +677,27 @@ contract ServiceProviderRegistry is
         return REGISTRATION_FEE;
     }
 
-    // ========== Helper Functions ==========
-
     /// @notice Validate product data based on product type
     /// @param productType The type of product
     /// @param productData The encoded product data
     function _validateProductData(ProductType productType, bytes memory productData) private pure {
         if (productType == ProductType.PDP) {
-            PDPData memory pdpData = abi.decode(productData, (PDPData));
-            _validatePDPData(pdpData);
+            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            _validatePDPOffering(pdpOffering);
         } else {
             revert("Unsupported product type");
         }
     }
 
-    /// @notice Validate PDP data
-    function _validatePDPData(PDPData memory pdpData) private pure {
-        require(bytes(pdpData.serviceURL).length > 0, "Service URL cannot be empty");
-        require(bytes(pdpData.serviceURL).length <= MAX_SERVICE_URL_LENGTH, "Service URL too long");
-        require(pdpData.minPieceSize > 0, "Min piece size must be greater than 0");
-        require(pdpData.maxPieceSize >= pdpData.minPieceSize, "Max piece size must be >= min piece size");
+    /// @notice Validate PDP offering
+    function _validatePDPOffering(PDPOffering memory pdpOffering) private pure {
+        require(bytes(pdpOffering.serviceURL).length > 0, "Service URL cannot be empty");
+        require(bytes(pdpOffering.serviceURL).length <= MAX_SERVICE_URL_LENGTH, "Service URL too long");
+        require(pdpOffering.minPieceSizeInBytes > 0, "Min piece size must be greater than 0");
+        require(
+            pdpOffering.maxPieceSizeInBytes >= pdpOffering.minPieceSizeInBytes,
+            "Max piece size must be >= min piece size"
+        );
     }
 
     /// @notice Validate capability key-value pairs
@@ -731,17 +713,15 @@ contract ServiceProviderRegistry is
         }
     }
 
-    /// @notice Encode PDP data to bytes
-    function _encodePDPData(PDPData memory pdpData) private pure returns (bytes memory) {
-        return abi.encode(pdpData);
+    /// @notice Encode PDP offering to bytes
+    function _encodePDPOffering(PDPOffering memory pdpOffering) private pure returns (bytes memory) {
+        return abi.encode(pdpOffering);
     }
 
-    /// @notice Decode PDP data from bytes
-    function _decodePDPData(bytes memory data) private pure returns (PDPData memory) {
-        return abi.decode(data, (PDPData));
+    /// @notice Decode PDP offering from bytes
+    function _decodePDPOffering(bytes memory data) private pure returns (PDPOffering memory) {
+        return abi.decode(data, (PDPOffering));
     }
-
-    // ========== Upgrade Functions ==========
 
     /// @notice Authorizes an upgrade to a new implementation
     /// @dev Can only be called by the contract owner
