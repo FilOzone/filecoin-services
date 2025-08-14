@@ -61,8 +61,7 @@ contract ServiceProviderRegistryTest is Test {
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: false,
-            withCDN: true
+            ipniIpfs: false
         });
 
         // Encode PDP data
@@ -96,8 +95,7 @@ contract ServiceProviderRegistryTest is Test {
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: false,
-            withCDN: true
+            ipniIpfs: false
         });
 
         // Encode PDP data
@@ -151,8 +149,7 @@ contract ServiceProviderRegistryTest is Test {
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: false,
-            withCDN: true
+            ipniIpfs: false
         });
 
         bytes memory encodedData = abi.encode(pdpData);

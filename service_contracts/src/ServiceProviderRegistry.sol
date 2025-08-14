@@ -49,7 +49,6 @@ contract ServiceProviderRegistry is
         uint256 maxPieceSizeInBytes; // Maximum piece size accepted in bytes
         bool ipniPiece; // Supports IPNI piece CID indexing
         bool ipniIpfs; // Supports IPNI IPFS CID indexing
-        bool withCDN; // CDN support available
     }
 
     /// @notice Version of the contract implementation

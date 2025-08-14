@@ -68,8 +68,7 @@ contract ServiceProviderRegistryFullTest is Test {
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: false,
-            withCDN: true
+            ipniIpfs: false
         });
 
         updatedPDPData = ServiceProviderRegistry.PDPOffering({
@@ -77,8 +76,7 @@ contract ServiceProviderRegistryFullTest is Test {
             minPieceSizeInBytes: 512,
             maxPieceSizeInBytes: 2 * 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: true,
-            withCDN: false
+            ipniIpfs: true
         });
 
         // Encode PDP data
@@ -162,7 +160,6 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(pdpData.maxPieceSizeInBytes, defaultPDPData.maxPieceSizeInBytes, "Max piece size should match");
         assertEq(pdpData.ipniPiece, defaultPDPData.ipniPiece, "IPNI piece should match");
         assertEq(pdpData.ipniIpfs, defaultPDPData.ipniIpfs, "IPNI IPFS should match");
-        assertEq(pdpData.withCDN, defaultPDPData.withCDN, "CDN flag should match");
         assertTrue(isActive, "PDP service should be active");
 
         // Verify capabilities
@@ -445,7 +442,6 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(pdpData.maxPieceSizeInBytes, updatedPDPData.maxPieceSizeInBytes, "Max piece size should be updated");
         assertEq(pdpData.ipniPiece, updatedPDPData.ipniPiece, "IPNI piece should be updated");
         assertEq(pdpData.ipniIpfs, updatedPDPData.ipniIpfs, "IPNI IPFS should be updated");
-        assertEq(pdpData.withCDN, updatedPDPData.withCDN, "CDN flag should be updated");
         assertTrue(isActive, "PDP service should still be active");
     }
 
