@@ -846,6 +846,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
+
         // Warp to challenge window
         uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));

@@ -141,7 +141,7 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => mapping(uint256 periodId => bool)) private provenPeriods;
 
     // Track when proving was first activated for each data set
-    mapping(uint256 => uint256) public provingActivationEpoch;
+    mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
     uint64 private maxProvingPeriod;

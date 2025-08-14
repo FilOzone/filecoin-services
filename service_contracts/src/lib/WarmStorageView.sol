@@ -42,6 +42,10 @@ library WarmStorageView {
         return service.extsload(keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, PROVEN_PERIODS_SLOT))))) != bytes32(0);
     }
 
+    function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (uint256) {
+        return uint256(service.extsload(keccak256(abi.encode(dataSetId, PROVING_ACTIVATION_EPOCH_SLOT))));
+    }
+
     function provingDeadlines(FilecoinWarmStorageService service, uint256 setId) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(setId, PROVING_DEADLINES_SLOT))));
     }
