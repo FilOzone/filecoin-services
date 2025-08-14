@@ -137,8 +137,8 @@ contract FilecoinWarmStorageService is
         uint256 railId, uint256 dataSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
     );
 
-    // Track which proving periods have valid proofs (dataSetId => periodId => isProven)
-    mapping(uint256 => mapping(uint256 => bool)) public provenPeriods;
+    // Track which proving periods have valid proofs
+    mapping(uint256 dataSetId => mapping(uint256 periodId => bool)) private provenPeriods;
 
     // Track when proving was first activated for each data set
     mapping(uint256 => uint256) public provingActivationEpoch;

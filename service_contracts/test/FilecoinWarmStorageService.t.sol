@@ -850,9 +850,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
+        assertFalse(pdpServiceWithPayments.provenPeriods(dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)));
+
         // Submit proof
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)));
         console.log("Proof submitted successfully");
 
         // 3. Terminate payment
