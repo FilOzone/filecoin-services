@@ -394,6 +394,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(clientDataSetIds.length, 1);
         assertEq(clientDataSetIds[0], newDataSetId);
 
+        assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), newDataSetId);
+        assertEq(pdpServiceWithPayments.railToDataSet(cdnRailId), newDataSetId);
+
         // Verify data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");

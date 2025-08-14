@@ -34,6 +34,10 @@ library WarmStorageView {
         }
     }
 
+    function railToDataSet(FilecoinWarmStorageService service, uint256 railId) public view returns (uint256) {
+        return uint256(service.extsload(keccak256(abi.encode(railId, RAIL_TO_DATA_SET_SLOT))));
+    }
+
     function provingDeadlines(FilecoinWarmStorageService service, uint256 setId) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(setId, PROVING_DEADLINES_SLOT))));
     }

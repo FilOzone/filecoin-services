@@ -130,7 +130,7 @@ contract FilecoinWarmStorageService is
     mapping(address => uint256[]) private clientDataSets;
 
     // Mapping from rail ID to data set ID for validation
-    mapping(uint256 => uint256) public railToDataSet;
+    mapping(uint256 => uint256) private railToDataSet;
 
     // Event for validation
     event PaymentArbitrated(
