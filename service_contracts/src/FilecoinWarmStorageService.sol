@@ -598,7 +598,24 @@ contract FilecoinWarmStorageService is
         // Verify the client's signature
         verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
-        // TODO Data set deletion logic
+        // Mark the data set as deleted
+        info.deleted = true;
+
+        // Clean up all the state we track for this dataset
+        // Note: We keep dataSetInfo[dataSetId], clientDataSets[payer], and clientDataSetIDs[payer]
+        // to maintain dataSetInfo and the deleted and terminated flags for filtering
+
+        // Clean up proving-related state
+        delete provingDeadlines[dataSetId];
+        delete provenThisPeriod[dataSetId];
+        delete provingActivationEpoch[dataSetId];
+
+        // Clean up rail mappings
+        delete railToDataSet[info.pdpRailId];
+        if (info.withCDN) {
+            delete railToDataSet[info.cacheMissRailId];
+            delete railToDataSet[info.cdnRailId];
+        }
     }
 
     /**
@@ -880,6 +897,9 @@ contract FilecoinWarmStorageService is
             payments.terminateRail(info.cacheMissRailId);
             payments.terminateRail(info.cdnRailId);
         }
+
+        require(info.paymentEndEpoch != 0, Errors.DataSetPaymentNotTerminated(dataSetId));
+        info.terminated = true;
 
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
@@ -1433,6 +1453,63 @@ contract FilecoinWarmStorageService is
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
+    }
+
+    function getClientDataSets(address client) external view returns (DataSetInfo[] memory) {
+        uint256[] memory dataSetIds = clientDataSets[client];
+
+        // First pass: count non-deleted datasets
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            uint256 dataSetId = dataSetIds[i];
+            DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
+            if (!storageInfo.deleted) {
+                activeCount++;
+            }
+        }
+
+        // Create array with only active datasets
+        DataSetInfo[] memory dataSets = new DataSetInfo[](activeCount);
+        uint256 activeIndex = 0;
+
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            uint256 dataSetId = dataSetIds[i];
+            DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
+
+            // Skip deleted datasets
+            if (storageInfo.deleted) {
+                continue;
+            }
+
+            // Create a memory copy of the struct (excluding any mappings)
+            dataSets[activeIndex] = DataSetInfo({
+                pdpRailId: storageInfo.pdpRailId,
+                cacheMissRailId: storageInfo.cacheMissRailId,
+                cdnRailId: storageInfo.cdnRailId,
+                payer: storageInfo.payer,
+                payee: storageInfo.payee,
+                commissionBps: storageInfo.commissionBps,
+                metadata: storageInfo.metadata,
+                pieceMetadata: storageInfo.pieceMetadata,
+                clientDataSetId: storageInfo.clientDataSetId,
+                withCDN: storageInfo.withCDN,
+                paymentEndEpoch: storageInfo.paymentEndEpoch,
+                deleted: storageInfo.deleted,
+                terminated: storageInfo.terminated
+            });
+            activeIndex++;
+        }
+
+        return dataSets;
+    }
+
+    function getAllClientDataSets(address client) external view returns (DataSetInfo[] memory) {
+        uint256[] memory dataSetIds = clientDataSets[client];
+        DataSetInfo[] memory dataSets = new DataSetInfo[](dataSetIds.length);
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            dataSets[i] = dataSetInfo[dataSetIds[i]];
+        }
+        return dataSets;
     }
 
     /**
