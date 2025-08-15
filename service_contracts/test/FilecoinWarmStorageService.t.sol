@@ -523,7 +523,6 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testCreateDataSetAddPieces() public {
         bool withCDN = false;
-        uint256 clientDataSetId = 0;
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadata: "Test Data Set",
             payer: client,

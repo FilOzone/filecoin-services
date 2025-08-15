@@ -835,16 +835,6 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Get the metadata for a specific piece
-     * @param dataSetId The ID of the data set
-     * @param pieceId The ID of the piece
-     * @return The metadata string for the piece
-     */
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
-        return dataSetPieceMetadata[dataSetId][pieceId];
-    }
-
-    /**
      * @notice Get the service pricing information
      * @return pricing A struct containing pricing details for both CDN and non-CDN storage
      */

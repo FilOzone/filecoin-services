@@ -6,6 +6,31 @@ import "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol";
 
 library WarmStorageView {
+    function getString(FilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
+        uint256 compressed = uint256(service.extsload(loc));
+        if (compressed & 1 != 0) {
+            uint256 length = compressed >> 1;
+            str = new string(length);
+            assembly ("memory-safe") {
+                let fmp := mload(0x40)
+                mstore(0, loc)
+                loc := keccak256(0, 32)
+                mstore(0, 0x5379a43500000000000000000000000000000000000000000000000000000000)
+                mstore(4, loc)
+                mstore(36, shr(5, add(31, length)))
+                pop(staticcall(gas(), service, 0, 68, 0, 0))
+                returndatacopy(add(32, str), 64, length)
+                mstore(0x40, fmp)
+            }
+        } else {
+            str = new string(compressed >> 1 & 31);
+            // len < 32
+            assembly ("memory-safe") {
+                mstore(add(32, str), compressed)
+            }
+        }
+    }
+
     // --- Public getter functions ---
 
     /**
@@ -19,6 +44,16 @@ library WarmStorageView {
 
     function clientDataSetIDs(FilecoinWarmStorageService service, address payer) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(payer, CLIENT_DATA_SET_IDS_SLOT))));
+    }
+
+    function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId)
+        public
+        view
+        returns (string memory)
+    {
+        return getString(
+            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT))))
+        );
     }
 
     function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
