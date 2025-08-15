@@ -128,7 +128,14 @@ contract MockPDPVerifier {
         return setId;
     }
 
-    function addPieces(PDPListener listenerAddr, uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes memory signature, string memory metadata) public {
+    function addPieces(
+        PDPListener listenerAddr,
+        uint256 dataSetId,
+        uint256 firstAdded,
+        Cids.Cid[] memory pieceData,
+        bytes memory signature,
+        string memory metadata
+    ) public {
         bytes memory extraData = abi.encode(signature, metadata);
 
         listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
@@ -544,9 +551,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
         pieceData2[0].data = bytes("2_0:22222222222222222222");
         pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, metadataShort);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, metadataShort
+        );
         firstAdded += pieceData1.length;
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong
+        );
         firstAdded += pieceData2.length;
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), metadataShort);
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), metadataShort);
