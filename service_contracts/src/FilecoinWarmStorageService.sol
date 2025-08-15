@@ -126,7 +126,7 @@ contract FilecoinWarmStorageService is
     // Mappings
     mapping(uint256 => uint256) private provingDeadlines;
     mapping(uint256 => bool) private provenThisPeriod;
-    mapping(uint256 => DataSetInfo) public dataSetInfo;
+    mapping(uint256 => DataSetInfo) private dataSetInfo;
     mapping(address => uint256[]) private clientDataSets;
 
     // Mapping from rail ID to data set ID for validation
