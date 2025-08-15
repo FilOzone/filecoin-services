@@ -13,18 +13,22 @@ library WarmStorageView {
             str = new string(length);
             assembly ("memory-safe") {
                 let fmp := mload(0x40)
+
                 mstore(0, loc)
                 loc := keccak256(0, 32)
+
+                // extsloadStruct
                 mstore(0, 0x5379a43500000000000000000000000000000000000000000000000000000000)
                 mstore(4, loc)
                 mstore(36, shr(5, add(31, length)))
                 pop(staticcall(gas(), service, 0, 68, 0, 0))
                 returndatacopy(add(32, str), 64, length)
+
                 mstore(0x40, fmp)
             }
         } else {
-            str = new string(compressed >> 1 & 31);
             // len < 32
+            str = new string(compressed >> 1 & 31);
             assembly ("memory-safe") {
                 mstore(add(32, str), compressed)
             }
