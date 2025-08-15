@@ -27,8 +27,6 @@ contract ServiceProviderRegistry is
     struct ServiceProviderInfo {
         address owner;
         string description;
-        uint256 registeredAt;
-        uint256 updatedAt;
         bool isActive;
     }
 
@@ -38,7 +36,6 @@ contract ServiceProviderRegistry is
         bytes productData; // ABI-encoded service-specific data
         string[] capabilityKeys; // Max MAX_CAPABILITY_KEY_LENGTH chars each
         string[] capabilityValues; // Max MAX_CAPABILITY_VALUE_LENGTH chars each
-        uint256 updatedAt;
         bool isActive;
     }
 
@@ -92,25 +89,27 @@ contract ServiceProviderRegistry is
     uint256[47] private __gap;
 
     /// @notice Emitted when a new provider registers
-    event ProviderRegistered(uint256 indexed providerId, address indexed owner);
+    event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
 
     /// @notice Emitted when a service is updated or added
-    event ServiceUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 timestamp);
+    event ServiceUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 updatedAt);
 
     /// @notice Emitted when a product is added to an existing provider
-    event ProductAdded(uint256 indexed providerId, ProductType indexed productType, uint256 timestamp);
+    event ProductAdded(uint256 indexed providerId, ProductType indexed productType, uint256 addedAt);
 
     /// @notice Emitted when a product is removed from a provider
-    event ProductRemoved(uint256 indexed providerId, ProductType indexed productType, uint256 timestamp);
+    event ProductRemoved(uint256 indexed providerId, ProductType indexed productType, uint256 removedAt);
 
     /// @notice Emitted when provider info is updated
-    event ProviderInfoUpdated(uint256 indexed providerId, uint256 timestamp);
+    event ProviderInfoUpdated(uint256 indexed providerId, uint256 updatedAt);
 
     /// @notice Emitted when ownership is transferred
-    event OwnershipTransferred(uint256 indexed providerId, address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(
+        uint256 indexed providerId, address indexed previousOwner, address indexed newOwner, uint256 transferredAt
+    );
 
     /// @notice Emitted when a provider is removed
-    event ProviderRemoved(uint256 indexed providerId, uint256 timestamp);
+    event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
 
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
@@ -124,7 +123,7 @@ contract ServiceProviderRegistry is
     /// @notice Ensures the provider exists
     modifier providerExists(uint256 providerId) {
         require(providerId > 0 && providerId < nextProviderId, "Provider does not exist");
-        require(providers[providerId].registeredAt > 0, "Provider not found");
+        require(providers[providerId].owner != address(0), "Provider not found");
         _;
     }
 
@@ -189,13 +188,7 @@ contract ServiceProviderRegistry is
         providerId = nextProviderId++;
 
         // Store provider info
-        providers[providerId] = ServiceProviderInfo({
-            owner: msg.sender,
-            description: description,
-            registeredAt: block.number,
-            updatedAt: block.number,
-            isActive: true
-        });
+        providers[providerId] = ServiceProviderInfo({owner: msg.sender, description: description, isActive: true});
 
         // Store product
         providerProducts[providerId][productType] = ServiceProduct({
@@ -203,7 +196,6 @@ contract ServiceProviderRegistry is
             productData: productData,
             capabilityKeys: capabilityKeys,
             capabilityValues: capabilityValues,
-            updatedAt: block.number,
             isActive: true
         });
 
@@ -211,7 +203,7 @@ contract ServiceProviderRegistry is
         addressToProviderId[msg.sender] = providerId;
 
         // Emit events
-        emit ProviderRegistered(providerId, msg.sender);
+        emit ProviderRegistered(providerId, msg.sender, block.number);
         emit ServiceUpdated(providerId, productType, block.number);
 
         // Burn the registration fee
@@ -268,12 +260,8 @@ contract ServiceProviderRegistry is
             productData: productData,
             capabilityKeys: capabilityKeys,
             capabilityValues: capabilityValues,
-            updatedAt: block.number,
             isActive: true
         });
-
-        // Update provider timestamp
-        providers[providerId].updatedAt = block.number;
 
         // Emit event
         emit ProductAdded(providerId, productType, block.number);
@@ -322,12 +310,8 @@ contract ServiceProviderRegistry is
             productData: productData,
             capabilityKeys: capabilityKeys,
             capabilityValues: capabilityValues,
-            updatedAt: block.number,
             isActive: true
         });
-
-        // Update provider timestamp
-        providers[providerId].updatedAt = block.number;
 
         // Emit event
         emit ServiceUpdated(providerId, productType, block.number);
@@ -367,10 +351,6 @@ contract ServiceProviderRegistry is
 
         // Mark product as inactive
         providerProducts[providerId][productType].isActive = false;
-        providerProducts[providerId][productType].updatedAt = block.number;
-
-        // Update provider timestamp
-        providers[providerId].updatedAt = block.number;
 
         // Emit event
         emit ProductRemoved(providerId, productType, block.number);
@@ -419,10 +399,6 @@ contract ServiceProviderRegistry is
         providerActive(providerId)
         onlyProviderOwner(providerId)
     {
-        // Update provider info
-        ServiceProviderInfo storage provider = providers[providerId];
-        provider.updatedAt = block.number;
-
         // Emit event
         emit ProviderInfoUpdated(providerId, block.number);
     }
@@ -452,14 +428,13 @@ contract ServiceProviderRegistry is
 
         // Update owner
         providers[providerId].owner = newOwner;
-        providers[providerId].updatedAt = block.number;
 
         // Update address mappings
         delete addressToProviderId[previousOwner];
         addressToProviderId[newOwner] = providerId;
 
         // Emit event
-        emit OwnershipTransferred(providerId, previousOwner, newOwner);
+        emit OwnershipTransferred(providerId, previousOwner, newOwner, block.number);
     }
 
     /// @notice Remove provider registration (soft delete)
@@ -479,7 +454,6 @@ contract ServiceProviderRegistry is
     {
         // Soft delete - mark as inactive
         providers[providerId].isActive = false;
-        providers[providerId].updatedAt = block.number;
 
         // Mark all products as inactive
         // For now just PDP, but this is extensible

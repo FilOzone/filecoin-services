@@ -26,18 +26,20 @@ contract ServiceProviderRegistryFullTest is Test {
     bytes public encodedDefaultPDPData;
     bytes public encodedUpdatedPDPData;
 
-    event ProviderRegistered(uint256 indexed providerId, address indexed owner);
+    event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
     event ServiceUpdated(
-        uint256 indexed providerId, ServiceProviderRegistry.ProductType indexed productType, uint256 timestamp
+        uint256 indexed providerId, ServiceProviderRegistry.ProductType indexed productType, uint256 updatedAt
     );
     event ProductAdded(
-        uint256 indexed providerId, ServiceProviderRegistry.ProductType indexed productType, uint256 timestamp
+        uint256 indexed providerId, ServiceProviderRegistry.ProductType indexed productType, uint256 addedAt
     );
     event ProductRemoved(
-        uint256 indexed providerId, ServiceProviderRegistry.ProductType indexed productType, uint256 timestamp
+        uint256 indexed providerId, ServiceProviderRegistry.ProductType indexed productType, uint256 removedAt
     );
-    event OwnershipTransferred(uint256 indexed providerId, address indexed previousOwner, address indexed newOwner);
-    event ProviderRemoved(uint256 indexed providerId, uint256 timestamp);
+    event OwnershipTransferred(
+        uint256 indexed providerId, address indexed previousOwner, address indexed newOwner, uint256 transferredAt
+    );
+    event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
 
     function setUp() public {
         owner = address(this);
@@ -111,8 +113,8 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.startPrank(provider1);
 
         // Expect events
-        vm.expectEmit(true, true, false, true);
-        emit ProviderRegistered(1, provider1);
+        vm.expectEmit(true, true, true, true);
+        emit ProviderRegistered(1, provider1, block.number);
 
         vm.expectEmit(true, true, false, true);
         emit ServiceUpdated(1, ServiceProviderRegistry.ProductType.PDP, block.number);
@@ -151,7 +153,6 @@ contract ServiceProviderRegistryFullTest is Test {
         ServiceProviderRegistry.ServiceProviderInfo memory info = registry.getProvider(1);
         assertEq(info.owner, provider1, "Owner should be provider1");
         assertEq(info.description, "Test provider description", "Description should match");
-        assertEq(info.registeredAt, block.number, "Registration block should match");
         assertTrue(info.isActive, "Provider should be active");
 
         // Verify PDP service using getPDPService (including capabilities)
@@ -573,8 +574,8 @@ contract ServiceProviderRegistryFullTest is Test {
         // Transfer ownership
         vm.startPrank(provider1);
 
-        vm.expectEmit(true, true, true, false);
-        emit OwnershipTransferred(1, provider1, provider2);
+        vm.expectEmit(true, true, true, true);
+        emit OwnershipTransferred(1, provider1, provider2, block.number);
 
         registry.transferProviderOwnership(provider2);
 
@@ -713,7 +714,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Remove provider
         vm.startPrank(provider1);
 
-        vm.expectEmit(true, false, false, true);
+        vm.expectEmit(true, true, false, true);
         emit ProviderRemoved(1, block.number);
 
         registry.removeProvider();
@@ -1114,11 +1115,17 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         vm.startPrank(provider1);
+
+        // Expect the update event with timestamp
+        vm.expectEmit(true, true, true, true);
+        emit ServiceUpdated(1, ServiceProviderRegistry.ProductType.PDP, block.number);
+
         registry.updateProduct(ServiceProviderRegistry.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues);
         vm.stopPrank();
 
-        ServiceProviderRegistry.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.updatedAt, block.number, "Updated timestamp should match");
+        // Verify the product was updated (check the actual data)
+        (ServiceProviderRegistry.PDPOffering memory pdpData,,,) = registry.getPDPService(1);
+        assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
     }
 
     // ========== Reentrancy Tests ==========
@@ -1127,6 +1134,47 @@ contract ServiceProviderRegistryFullTest is Test {
         // This would require a malicious contract to test properly
         // For now, just verify the modifiers are in place
         assertTrue(true, "Reentrancy modifiers are implemented");
+    }
+
+    // ========== Event Timestamp Tests ==========
+
+    function testEventTimestampsEmittedCorrectly() public {
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Test ProviderRegistered event
+        vm.prank(provider1);
+        vm.expectEmit(true, true, true, true);
+        emit ProviderRegistered(1, provider1, block.number);
+        vm.expectEmit(true, true, true, true);
+        emit ServiceUpdated(1, ServiceProviderRegistry.ProductType.PDP, block.number);
+
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistry.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Test ServiceUpdated event
+        vm.prank(provider1);
+        vm.expectEmit(true, true, true, true);
+        emit ServiceUpdated(1, ServiceProviderRegistry.ProductType.PDP, block.number);
+        registry.updateProduct(ServiceProviderRegistry.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues);
+
+        // Test OwnershipTransferred event
+        vm.prank(provider1);
+        vm.expectEmit(true, true, true, true);
+        emit OwnershipTransferred(1, provider1, provider2, block.number);
+        registry.transferProviderOwnership(provider2);
+
+        // Test ProviderRemoved event
+        vm.prank(provider2);
+        vm.expectEmit(true, true, false, true);
+        emit ProviderRemoved(1, block.number);
+        registry.removeProvider();
     }
 
     // ========== Capability K/V Tests ==========
