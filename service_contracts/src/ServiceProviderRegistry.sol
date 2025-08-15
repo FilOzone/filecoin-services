@@ -77,13 +77,13 @@ contract ServiceProviderRegistry is
     uint256 private nextProviderId;
 
     /// @notice Main registry of providers
-    mapping(uint256 => ServiceProviderInfo) public providers;
+    mapping(uint256 providerId => ServiceProviderInfo) public providers;
 
     /// @notice Provider products mapping (extensible for multiple product types)
-    mapping(uint256 => mapping(ProductType => ServiceProduct)) public providerProducts;
+    mapping(uint256 providerId => mapping(ProductType productType => ServiceProduct)) public providerProducts;
 
     /// @notice Address to provider ID lookup
-    mapping(address => uint256) public addressToProviderId;
+    mapping(address providerAddress => uint256 providerId) public addressToProviderId;
 
     /// @notice Storage gap for upgradeability
     uint256[47] private __gap;
