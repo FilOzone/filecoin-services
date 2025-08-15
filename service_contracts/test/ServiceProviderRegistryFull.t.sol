@@ -68,7 +68,8 @@ contract ServiceProviderRegistryFullTest is Test {
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: false
+            ipniIpfs: false,
+            storagePricePerTibPerMonth: 1000000000000000000 // 1 FIL per TiB per month
         });
 
         updatedPDPData = ServiceProviderRegistry.PDPOffering({
@@ -76,7 +77,8 @@ contract ServiceProviderRegistryFullTest is Test {
             minPieceSizeInBytes: 512,
             maxPieceSizeInBytes: 2 * 1024 * 1024,
             ipniPiece: true,
-            ipniIpfs: true
+            ipniIpfs: true,
+            storagePricePerTibPerMonth: 2000000000000000000 // 2 FIL per TiB per month
         });
 
         // Encode PDP data
@@ -164,6 +166,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(pdpData.maxPieceSizeInBytes, defaultPDPData.maxPieceSizeInBytes, "Max piece size should match");
         assertEq(pdpData.ipniPiece, defaultPDPData.ipniPiece, "IPNI piece should match");
         assertEq(pdpData.ipniIpfs, defaultPDPData.ipniIpfs, "IPNI IPFS should match");
+        assertEq(
+            pdpData.storagePricePerTibPerMonth, defaultPDPData.storagePricePerTibPerMonth, "Storage price should match"
+        );
         assertTrue(isActive, "PDP service should be active");
 
         // Verify capabilities
@@ -446,6 +451,11 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(pdpData.maxPieceSizeInBytes, updatedPDPData.maxPieceSizeInBytes, "Max piece size should be updated");
         assertEq(pdpData.ipniPiece, updatedPDPData.ipniPiece, "IPNI piece should be updated");
         assertEq(pdpData.ipniIpfs, updatedPDPData.ipniIpfs, "IPNI IPFS should be updated");
+        assertEq(
+            pdpData.storagePricePerTibPerMonth,
+            updatedPDPData.storagePricePerTibPerMonth,
+            "Storage price should be updated"
+        );
         assertTrue(isActive, "PDP service should still be active");
     }
 

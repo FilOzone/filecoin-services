@@ -49,6 +49,7 @@ contract ServiceProviderRegistry is
         uint256 maxPieceSizeInBytes; // Maximum piece size accepted in bytes
         bool ipniPiece; // Supports IPNI piece CID indexing
         bool ipniIpfs; // Supports IPNI IPFS CID indexing
+        uint256 storagePricePerTibPerMonth; // Storage price per TiB per month in attoFIL
     }
 
     /// @notice Version of the contract implementation
