@@ -15,4 +15,3 @@ bytes32 constant PROVEN_PERIODS_SLOT = bytes32(uint256(8));
 bytes32 constant PROVING_ACTIVATION_EPOCH_SLOT = bytes32(uint256(9));
 bytes32 constant MAX_PROVING_PERIOD_SLOT = bytes32(uint256(10));
 bytes32 constant CHALLENGE_WINDOW_SIZE_SLOT = bytes32(uint256(11));
-

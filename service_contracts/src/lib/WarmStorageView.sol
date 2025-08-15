@@ -25,11 +25,15 @@ library WarmStorageView {
         return service.extsload(keccak256(abi.encode(dataSetId, PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
 
-    function clientDataSets(FilecoinWarmStorageService service, address payer) public view returns (uint256[] memory dataSetIds) {
+    function clientDataSets(FilecoinWarmStorageService service, address payer)
+        public
+        view
+        returns (uint256[] memory dataSetIds)
+    {
         bytes32 slot = keccak256(abi.encode(payer, CLIENT_DATA_SETS_SLOT));
         uint256 length = uint256(service.extsload(slot));
         bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
-        assembly("memory-safe") {
+        assembly ("memory-safe") {
             dataSetIds := result
         }
     }
@@ -38,11 +42,20 @@ library WarmStorageView {
         return uint256(service.extsload(keccak256(abi.encode(railId, RAIL_TO_DATA_SET_SLOT))));
     }
 
-    function provenPeriods(FilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId) public view returns (bool) {
-        return service.extsload(keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, PROVEN_PERIODS_SLOT))))) != bytes32(0);
+    function provenPeriods(FilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId)
+        public
+        view
+        returns (bool)
+    {
+        return service.extsload(keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, PROVEN_PERIODS_SLOT)))))
+            != bytes32(0);
     }
 
-    function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (uint256) {
+    function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
+        public
+        view
+        returns (uint256)
+    {
         return uint256(service.extsload(keccak256(abi.encode(dataSetId, PROVING_ACTIVATION_EPOCH_SLOT))));
     }
 
