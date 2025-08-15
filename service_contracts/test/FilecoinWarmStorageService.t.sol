@@ -562,10 +562,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
         pieceData2[0].data = bytes("2_0:22222222222222222222");
         pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, metadataShort
         );
         firstAdded += pieceData1.length;
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong
         );
