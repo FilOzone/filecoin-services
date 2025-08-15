@@ -36,8 +36,8 @@ contract ServiceProviderRegistry is
     struct ServiceProduct {
         ProductType productType;
         bytes productData; // ABI-encoded service-specific data
-        string[] capabilityKeys; // Max 12 chars each
-        string[] capabilityValues; // Max 64 chars each
+        string[] capabilityKeys; // Max MAX_CAPABILITY_KEY_LENGTH chars each
+        string[] capabilityValues; // Max MAX_CAPABILITY_VALUE_LENGTH chars each
         uint256 updatedAt;
         bool isActive;
     }
@@ -60,6 +60,12 @@ contract ServiceProviderRegistry is
     /// @notice Maximum length for provider description
     uint256 private constant MAX_DESCRIPTION_LENGTH = 256;
 
+    /// @notice Maximum length for capability keys
+    uint256 public constant MAX_CAPABILITY_KEY_LENGTH = 12;
+
+    /// @notice Maximum length for capability values
+    uint256 public constant MAX_CAPABILITY_VALUE_LENGTH = 64;
+
     /// @notice Burn actor address for burning FIL
     address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
 
@@ -73,13 +79,13 @@ contract ServiceProviderRegistry is
     uint256 private nextProviderId;
 
     /// @notice Main registry of providers
-    mapping(uint256 => ServiceProviderInfo) private providers;
+    mapping(uint256 => ServiceProviderInfo) public providers;
 
     /// @notice Provider products mapping (extensible for multiple product types)
-    mapping(uint256 => mapping(ProductType => ServiceProduct)) private providerProducts;
+    mapping(uint256 => mapping(ProductType => ServiceProduct)) public providerProducts;
 
     /// @notice Address to provider ID lookup
-    mapping(address => uint256) private addressToProviderId;
+    mapping(address => uint256) public addressToProviderId;
 
     /// @notice Storage gap for upgradeability
     uint256[47] private __gap;
@@ -150,8 +156,8 @@ contract ServiceProviderRegistry is
     /// @param description Provider description (max 256 chars)
     /// @param productType The type of product to register
     /// @param productData The encoded product configuration data
-    /// @param capabilityKeys Array of capability keys (max 12 chars each)
-    /// @param capabilityValues Array of capability values (max 64 chars each)
+    /// @param capabilityKeys Array of capability keys
+    /// @param capabilityValues Array of capability values
     /// @return providerId The unique ID assigned to the provider
     function registerProvider(
         string calldata description,
@@ -221,8 +227,8 @@ contract ServiceProviderRegistry is
     /// @notice Add a new product to an existing provider
     /// @param productType The type of product to add
     /// @param productData The encoded product configuration data
-    /// @param capabilityKeys Array of capability keys (max 12 chars each)
-    /// @param capabilityValues Array of capability values (max 64 chars each)
+    /// @param capabilityKeys Array of capability keys (max MAX_CAPABILITY_KEY_LENGTH chars each)
+    /// @param capabilityValues Array of capability values (max MAX_CAPABILITY_VALUE_LENGTH chars each)
     function addProduct(
         ProductType productType,
         bytes calldata productData,
@@ -275,8 +281,8 @@ contract ServiceProviderRegistry is
     /// @notice Update an existing product configuration
     /// @param productType The type of product to update
     /// @param productData The new encoded product configuration data
-    /// @param capabilityKeys Array of capability keys (max 12 chars each)
-    /// @param capabilityValues Array of capability values (max 64 chars each)
+    /// @param capabilityKeys Array of capability keys (max MAX_CAPABILITY_KEY_LENGTH chars each)
+    /// @param capabilityValues Array of capability values (max MAX_CAPABILITY_VALUE_LENGTH chars each)
     function updateProduct(
         ProductType productType,
         bytes calldata productData,
@@ -383,8 +389,8 @@ contract ServiceProviderRegistry is
 
     /// @notice Update PDP service configuration with capabilities
     /// @param pdpOffering The new PDP service configuration
-    /// @param capabilityKeys Array of capability keys (max 12 chars each)
-    /// @param capabilityValues Array of capability values (max 64 chars each)
+    /// @param capabilityKeys Array of capability keys (max MAX_CAPABILITY_KEY_LENGTH chars each)
+    /// @param capabilityValues Array of capability values (max MAX_CAPABILITY_VALUE_LENGTH chars each)
     function updatePDPServiceWithCapabilities(
         PDPOffering memory pdpOffering,
         string[] memory capabilityKeys,
@@ -707,8 +713,8 @@ contract ServiceProviderRegistry is
 
         for (uint256 i = 0; i < keys.length; i++) {
             require(bytes(keys[i]).length > 0, "Capability key cannot be empty");
-            require(bytes(keys[i]).length <= 12, "Capability key exceeds 12 characters");
-            require(bytes(values[i]).length <= 64, "Capability value exceeds 64 characters");
+            require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key exceeds 12 characters");
+            require(bytes(values[i]).length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value exceeds 64 characters");
         }
     }
 

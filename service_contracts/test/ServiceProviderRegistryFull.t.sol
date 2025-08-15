@@ -94,6 +94,10 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(registry.getRegistrationFee(), 1 ether, "Registration fee should be 1 FIL");
         assertEq(registry.REGISTRATION_FEE(), 1 ether, "Registration fee constant should be 1 FIL");
         assertEq(registry.getProviderCount(), 0, "Provider count should be 0");
+
+        // Verify capability constants
+        assertEq(registry.MAX_CAPABILITY_KEY_LENGTH(), 12, "Max capability key length should be 12");
+        assertEq(registry.MAX_CAPABILITY_VALUE_LENGTH(), 64, "Max capability value length should be 64");
     }
 
     // ========== Registration Tests ==========
@@ -1191,7 +1195,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
     function testInvalidCapabilityKeyTooLong() public {
         string[] memory capKeys = new string[](1);
-        capKeys[0] = "thisKeyIsTooLong"; // 16 chars, max is 12
+        capKeys[0] = "thisKeyIsTooLong"; // 16 chars, max is MAX_CAPABILITY_KEY_LENGTH (12)
 
         string[] memory capValues = new string[](1);
         capValues[0] = "value";
@@ -1213,7 +1217,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         string[] memory capValues = new string[](1);
         capValues[0] =
-            "This value is way too long and exceeds the maximum of 64 characters allowed for capability values"; // > 64 chars
+            "This value is way too long and exceeds the maximum of 64 characters allowed for capability values"; // > MAX_CAPABILITY_VALUE_LENGTH (64) chars
 
         vm.prank(provider1);
         vm.expectRevert("Capability value exceeds 64 characters");
