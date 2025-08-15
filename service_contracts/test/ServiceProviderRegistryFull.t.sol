@@ -324,15 +324,13 @@ contract ServiceProviderRegistryFullTest is Test {
     }
 
     function testRegisterWithExcessFee() public {
-        uint256 initialBalance = provider1.balance;
-        uint256 burnActorBalanceBefore = registry.BURN_ACTOR().balance;
-
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
 
-        // Register with 2 FIL (1 FIL extra)
+        // Try to register with 2 FIL (1 FIL extra) - should fail
         vm.prank(provider1);
+        vm.expectRevert("Incorrect fee amount");
         registry.registerProvider{value: 2 ether}(
             "Test provider description",
             ServiceProviderRegistry.ProductType.PDP,
@@ -341,14 +339,8 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        // Verify only 1 FIL was burned
-        uint256 burnActorBalanceAfter = registry.BURN_ACTOR().balance;
-        assertEq(
-            burnActorBalanceAfter - burnActorBalanceBefore, REGISTRATION_FEE, "Only registration fee should be burned"
-        );
-
-        // Verify excess was refunded
-        assertEq(initialBalance - provider1.balance, REGISTRATION_FEE, "Should only pay registration fee");
+        // Verify provider was not registered
+        assertEq(registry.getProviderByAddress(provider1), 0, "Provider should not be registered");
     }
 
     function testRegisterWithInvalidData() public {
@@ -1126,14 +1118,6 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify the product was updated (check the actual data)
         (ServiceProviderRegistry.PDPOffering memory pdpData,,,) = registry.getPDPService(1);
         assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
-    }
-
-    // ========== Reentrancy Tests ==========
-
-    function testReentrancyProtection() public {
-        // This would require a malicious contract to test properly
-        // For now, just verify the modifiers are in place
-        assertTrue(true, "Reentrancy modifiers are implemented");
     }
 
     // ========== Event Timestamp Tests ==========

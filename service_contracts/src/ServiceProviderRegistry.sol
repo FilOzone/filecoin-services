@@ -5,19 +5,12 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Errors} from "./Errors.sol";
 
 /// @title ServiceProviderRegistry
 /// @notice A registry contract for managing service providers across the Filecoin Services ecosystem
-contract ServiceProviderRegistry is
-    Initializable,
-    UUPSUpgradeable,
-    OwnableUpgradeable,
-    EIP712Upgradeable,
-    ReentrancyGuardUpgradeable
-{
+contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
     /// @notice Enum representing different service types
     enum ProductType {
         PDP
@@ -146,7 +139,6 @@ contract ServiceProviderRegistry is
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("ServiceProviderRegistry", "1");
-        __ReentrancyGuard_init();
 
         // Initialize the provider ID counter
         nextProviderId = 1;
@@ -165,15 +157,15 @@ contract ServiceProviderRegistry is
         bytes calldata productData,
         string[] calldata capabilityKeys,
         string[] calldata capabilityValues
-    ) external payable nonReentrant returns (uint256 providerId) {
+    ) external payable returns (uint256 providerId) {
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         // Check if address is already registered
         require(addressToProviderId[msg.sender] == 0, "Address already registered");
 
-        // Check payment amount
-        require(msg.value >= REGISTRATION_FEE, "Incorrect fee amount");
+        // Check payment amount is exactly the registration fee
+        require(msg.value == REGISTRATION_FEE, "Incorrect fee amount");
 
         // Validate description
         require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
@@ -209,12 +201,6 @@ contract ServiceProviderRegistry is
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
         require(burnSuccess, "Burn failed");
-
-        // Refund excess payment if any
-        if (msg.value > REGISTRATION_FEE) {
-            (bool refundSuccess,) = msg.sender.call{value: msg.value - REGISTRATION_FEE}("");
-            require(refundSuccess, "Failed to refund excess payment");
-        }
     }
 
     /// @notice Add a new product to an existing provider
