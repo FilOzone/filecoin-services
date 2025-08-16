@@ -826,15 +826,6 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Get data set information by ID
-     * @param dataSetId The ID of the data set
-     * @return The data set information struct
-     */
-    function getDataSet(uint256 dataSetId) external view returns (DataSetInfo memory) {
-        return dataSetInfo[dataSetId];
-    }
-
-    /**
      * @notice Get the service pricing information
      * @return pricing A struct containing pricing details for both CDN and non-CDN storage
      */

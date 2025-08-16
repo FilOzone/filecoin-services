@@ -35,6 +35,22 @@ library WarmStorageView {
         }
     }
 
+    function getStringArray(FilecoinWarmStorageService service, bytes32 loc)
+        internal
+        view
+        returns (string[] memory strings)
+    {
+        uint256 length = uint256(service.extsload(loc));
+        loc = keccak256(abi.encode(loc));
+        strings = new string[](length);
+        for (uint256 i = 0; i < length; i++) {
+            strings[i] = getString(service, loc);
+            assembly ("memory-safe") {
+                loc := add(1, loc)
+            }
+        }
+    }
+
     // --- Public getter functions ---
 
     /**
@@ -62,6 +78,46 @@ library WarmStorageView {
 
     function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
         return service.extsload(keccak256(abi.encode(dataSetId, PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
+    }
+
+    /**
+     * @notice Get data set information by ID
+     * @param dataSetId The ID of the data set
+     * @return info The data set information struct
+     */
+    function getDataSet(FilecoinWarmStorageService service, uint256 dataSetId)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetInfo memory info)
+    {
+        bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
+        bytes32[] memory info6 = service.extsloadStruct(slot, 6);
+        info.pdpRailId = uint256(info6[0]);
+        info.cacheMissRailId = uint256(info6[1]);
+        info.cdnRailId = uint256(info6[2]);
+        info.payer = address(uint160(uint256(info6[3])));
+        info.payee = address(uint160(uint256(info6[4])));
+        info.commissionBps = uint256(info6[5]);
+
+        assembly ("memory-safe") {
+            slot := add(6, slot)
+        }
+        info.metadata = getString(service, slot);
+
+        assembly ("memory-safe") {
+            slot := add(1, slot)
+        }
+
+        info.pieceMetadata = getStringArray(service, slot);
+
+        assembly ("memory-safe") {
+            slot := add(1, slot)
+        }
+
+        bytes32[] memory info3 = service.extsloadStruct(slot, 3);
+        info.clientDataSetId = uint256(info3[0]);
+        info.withCDN = info3[1] != bytes32(0);
+        info.paymentEndEpoch = uint256(info3[2]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
