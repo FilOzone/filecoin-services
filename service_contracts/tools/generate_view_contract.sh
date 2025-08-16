@@ -31,22 +31,24 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs} (
         ") external view returns (" +
             ( reduce $outputs.[] as {$type,$name,$internalType} (
                 []; 
-                if $name == ""
-                then
-                    if $type == "tuple" or $type == "tuple[]"
-                    then
-                        . += [( $internalType | .[7:] )]
-                    else
-                        . += [$type]
-                    end
-                else
-                    if $type == "tuple" or $type == "tuple[]"
-                    then
-                        . += [($internalType | .[7:]) + " " + $name]
-                    else
-                        . += [$type + " " + $name]
-                    end
-                end
+                . += [
+                    (
+                        if ( $type | .[:5] ) == "tuple"
+                        then
+                            ( $internalType | .[7:] )
+                        else
+                            $type
+                        end
+                    )
+                    + (
+                        if $name != ""
+                        then
+                            " " + $name
+                        else
+                            ""
+                        end
+                    )
+                ]
             ) | join(", ") ) +
         ") {\n        return service." + $name + "(" +
             ( reduce $inputs.[] as {$name,$type} (
