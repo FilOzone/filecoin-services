@@ -58,7 +58,7 @@ library WarmStorageView {
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(uint256 leafCount) public pure returns (uint256) {
+    function getDataSetSizeInBytes(FilecoinWarmStorageService, uint256 leafCount) public pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
     }
 
