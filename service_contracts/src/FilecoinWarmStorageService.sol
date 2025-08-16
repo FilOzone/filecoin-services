@@ -987,31 +987,6 @@ contract FilecoinWarmStorageService is
         return ecrecover(messageHash, v, r, s);
     }
 
-    function getClientDataSets(address client) external view returns (DataSetInfo[] memory) {
-        uint256[] memory dataSetIds = clientDataSets[client];
-
-        DataSetInfo[] memory dataSets = new DataSetInfo[](dataSetIds.length);
-        for (uint256 i = 0; i < dataSetIds.length; i++) {
-            uint256 dataSetId = dataSetIds[i];
-            DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
-            // Create a memory copy of the struct (excluding any mappings)
-            dataSets[i] = DataSetInfo({
-                pdpRailId: storageInfo.pdpRailId,
-                cacheMissRailId: storageInfo.cacheMissRailId,
-                cdnRailId: storageInfo.cdnRailId,
-                payer: storageInfo.payer,
-                payee: storageInfo.payee,
-                commissionBps: storageInfo.commissionBps,
-                metadata: storageInfo.metadata,
-                pieceMetadata: storageInfo.pieceMetadata,
-                clientDataSetId: storageInfo.clientDataSetId,
-                withCDN: storageInfo.withCDN,
-                paymentEndEpoch: storageInfo.paymentEndEpoch
-            });
-        }
-        return dataSets;
-    }
-
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
      * @dev Implements the IValidator interface function

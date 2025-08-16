@@ -58,7 +58,7 @@ library WarmStorageView {
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
+    function getDataSetSizeInBytes(uint256 leafCount) public pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
     }
 
@@ -86,7 +86,7 @@ library WarmStorageView {
      * @return info The data set information struct
      */
     function getDataSet(FilecoinWarmStorageService service, uint256 dataSetId)
-        external
+        public
         view
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
@@ -199,7 +199,7 @@ library WarmStorageView {
     // The start of the NEXT OPEN proving period's challenge window
     // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
     function nextChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
-        external
+        public
         view
         returns (uint256)
     {
@@ -212,5 +212,18 @@ library WarmStorageView {
         }
         // If the current period is not yet open this is the current period's challenge window
         return thisChallengeWindowStart(service, setId);
+    }
+
+    function getClientDataSets(FilecoinWarmStorageService service, address client)
+        public
+        view
+        returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
+    {
+        uint256[] memory dataSetIds = clientDataSets(service, client);
+
+        infos = new FilecoinWarmStorageService.DataSetInfo[](dataSetIds.length);
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            infos[i] = getDataSet(service, dataSetIds[i]);
+        }
     }
 }
