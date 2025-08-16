@@ -23,15 +23,19 @@ contract FilecoinWarmStorageServiceView {
         return service.clientDataSetIDs(payer);
     }
 
-    function clientDataSets(address payer) external view returns (uint256[] dataSetIds) {
+    function clientDataSets(address payer) external view returns (uint256[] memory dataSetIds) {
         return service.clientDataSets(payer);
     }
 
-    function getClientDataSets(address client) external view returns (FilecoinWarmStorageService.DataSetInfo[] infos) {
+    function getClientDataSets(address client)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
+    {
         return service.getClientDataSets(client);
     }
 
-    function getDataSet(uint256 dataSetId) external view returns (FilecoinWarmStorageService.DataSetInfo info) {
+    function getDataSet(uint256 dataSetId) external view returns (FilecoinWarmStorageService.DataSetInfo memory info) {
         return service.getDataSet(dataSetId);
     }
 
@@ -43,7 +47,7 @@ contract FilecoinWarmStorageServiceView {
         return service.getMaxProvingPeriod();
     }
 
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string) {
+    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
         return service.getPieceMetadata(dataSetId, pieceId);
     }
 

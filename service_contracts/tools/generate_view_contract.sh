@@ -41,6 +41,14 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs} (
                         end
                     )
                     + (
+                        if ($type | .[-2:] ) == "[]" or $type == "string" or $type == "bytes" or $type == "tuple"
+                        then
+                            " memory"
+                        else
+                            ""
+                        end
+                    )
+                    + (
                         if $name != ""
                         then
                             " " + $name
