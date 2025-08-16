@@ -68,6 +68,6 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs} (
             ) | join(", ") ) +
         ");\n    }\n"
     end
-    )' $1
+)' $1
 
 echo }
