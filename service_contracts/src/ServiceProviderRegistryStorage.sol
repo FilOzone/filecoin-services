@@ -55,10 +55,4 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Address to provider ID lookup
     mapping(address providerAddress => uint256 providerId) public addressToProviderId;
-
-    // ========== Storage Gap ==========
-
-    /// @notice Storage gap for upgradeability
-    /// @dev Reserves space for future storage variables to prevent collisions
-    uint256[45] private __gap;
 }

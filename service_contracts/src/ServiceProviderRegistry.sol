@@ -125,31 +125,22 @@ contract ServiceProviderRegistry is
         // Validate description
         require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
 
-        // Validate product data
-        _validateProductData(productType, productData);
-
-        // Validate capability k/v pairs
-        _validateCapabilities(capabilityKeys, capabilityValues);
-
+        // Assign provider ID
         providerId = ++numProviders;
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({owner: msg.sender, description: description, isActive: true});
 
-        // Store product
-        providerProducts[providerId][productType] = ServiceProduct({
-            productType: productType,
-            productData: productData,
-            capabilityKeys: capabilityKeys,
-            capabilityValues: capabilityValues,
-            isActive: true
-        });
-
         // Update address mapping
         addressToProviderId[msg.sender] = providerId;
 
-        // Emit events
+        // Emit provider registration event
         emit ProviderRegistered(providerId, msg.sender, block.number);
+
+        // Add the initial product using shared logic
+        _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
+
+        // Emit product added event (using ServiceUpdated for initial product to maintain backward compatibility)
         emit ServiceUpdated(providerId, productType, block.number);
 
         // Burn the registration fee
@@ -177,7 +168,7 @@ contract ServiceProviderRegistry is
         _addProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
     }
 
-    /// @notice Internal function to add a product
+    /// @notice Internal function to add a product with validation
     function _addProduct(
         uint256 providerId,
         ProductType productType,
@@ -188,13 +179,28 @@ contract ServiceProviderRegistry is
         // Check product doesn't already exist
         require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
 
+        // Validate and store product
+        _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
+
+        // Emit event
+        emit ProductAdded(providerId, productType, block.number);
+    }
+
+    /// @notice Internal function to validate and store a product (used by both register and add)
+    function _validateAndStoreProduct(
+        uint256 providerId,
+        ProductType productType,
+        bytes memory productData,
+        string[] memory capabilityKeys,
+        string[] memory capabilityValues
+    ) private {
         // Validate product data
         _validateProductData(productType, productData);
 
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
 
-        // Add product
+        // Store product
         providerProducts[providerId][productType] = ServiceProduct({
             productType: productType,
             productData: productData,
@@ -202,9 +208,6 @@ contract ServiceProviderRegistry is
             capabilityValues: capabilityValues,
             isActive: true
         });
-
-        // Emit event
-        emit ProductAdded(providerId, productType, block.number);
     }
 
     /// @notice Update an existing product configuration
