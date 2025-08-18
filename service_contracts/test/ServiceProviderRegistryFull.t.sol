@@ -40,6 +40,7 @@ contract ServiceProviderRegistryFullTest is Test {
         uint256 indexed providerId, address indexed previousOwner, address indexed newOwner, uint256 transferredAt
     );
     event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
+    event ProviderInfoUpdated(uint256 indexed providerId, uint256 updatedAt);
 
     function setUp() public {
         owner = address(this);
@@ -1118,6 +1119,83 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify the product was updated (check the actual data)
         (ServiceProviderRegistry.PDPOffering memory pdpData,,,) = registry.getPDPService(1);
         assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
+    }
+
+    // ========== Provider Info Update Tests ==========
+
+    function testUpdateProviderDescription() public {
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Register provider
+        vm.prank(provider1);
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Initial description",
+            ServiceProviderRegistry.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Verify initial description
+        ServiceProviderRegistry.ServiceProviderInfo memory info = registry.getProvider(1);
+        assertEq(info.description, "Initial description", "Initial description should match");
+
+        // Update description
+        vm.prank(provider1);
+        vm.expectEmit(true, true, false, true);
+        emit ProviderInfoUpdated(1, block.number);
+        registry.updateProviderInfo("Updated description");
+
+        // Verify updated description
+        info = registry.getProvider(1);
+        assertEq(info.description, "Updated description", "Description should be updated");
+    }
+
+    function testCannotUpdateProviderDescriptionIfNotOwner() public {
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Register provider
+        vm.prank(provider1);
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Initial description",
+            ServiceProviderRegistry.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Try to update as non-owner
+        vm.prank(provider2);
+        vm.expectRevert("Provider not registered");
+        registry.updateProviderInfo("Unauthorized update");
+    }
+
+    function testCannotUpdateProviderDescriptionTooLong() public {
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Register provider
+        vm.prank(provider1);
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Initial description",
+            ServiceProviderRegistry.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Try to update with description that's too long
+        string memory longDescription =
+            "This is a very long description that exceeds the maximum allowed length of 256 characters. It just keeps going and going and going and going and going and going and going and going and going and going and going and going and going and going and going and characters limit!";
+
+        vm.prank(provider1);
+        vm.expectRevert("Description too long");
+        registry.updateProviderInfo(longDescription);
     }
 
     // ========== Event Timestamp Tests ==========

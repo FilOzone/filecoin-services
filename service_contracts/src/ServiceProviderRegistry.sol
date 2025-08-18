@@ -371,20 +371,20 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     }
 
     /// @notice Update provider information
-    function updateProviderInfo() external {
+    /// @param description New provider description (max 256 chars)
+    function updateProviderInfo(string calldata description) external {
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
+        require(providerId > 0 && providerId < nextProviderId, "Provider does not exist");
+        require(providers[providerId].owner != address(0), "Provider not found");
+        require(providers[providerId].isActive, "Provider is not active");
 
-        _updateProviderInfo(providerId);
-    }
+        // Validate description
+        require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
 
-    /// @notice Internal function to update provider info
-    function _updateProviderInfo(uint256 providerId)
-        private
-        providerExists(providerId)
-        providerActive(providerId)
-        onlyProviderOwner(providerId)
-    {
+        // Update description
+        providers[providerId].description = description;
+
         // Emit event
         emit ProviderInfoUpdated(providerId, block.number);
     }
