@@ -6,7 +6,7 @@ import "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol";
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
-bytes32 constant extsloadStruct = 0x5379a43500000000000000000000000000000000000000000000000000000000;
+bytes32 constant EXTSLOAD_STRUCT_SELECTOR = 0x5379a43500000000000000000000000000000000000000000000000000000000;
 
 library FilecoinWarmStorageView {
     function getString(FilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
@@ -21,7 +21,7 @@ library FilecoinWarmStorageView {
                 loc := keccak256(0, 32)
 
                 // extsloadStruct
-                mstore(0, extsloadStruct)
+                mstore(0, EXTSLOAD_STRUCT_SELECTOR)
                 mstore(4, loc)
                 mstore(36, shr(5, add(31, length)))
                 pop(staticcall(gas(), service, 0, 68, 0, 0))
