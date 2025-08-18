@@ -30,7 +30,7 @@ build:
 src/lib/%Layout.sol: tools/generate_storage_layout.sh src/%.sol
 	$^:$* > $@
 
-src/FilecoinWarmStorageServiceView.sol: tools/generate_view_contract.sh out/WarmStorageView.sol/WarmStorageView.json
+src/FilecoinWarmStorageServiceView.sol: tools/generate_view_contract.sh out/FilecoinWarmStorageView.sol/FilecoinWarmStorageView.json
 	$^ | forge fmt -r - > $@
 
 # Test target

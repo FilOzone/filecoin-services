@@ -7,10 +7,10 @@ echo // Generated with $0 $@
 echo
 
 echo 'import "./FilecoinWarmStorageService.sol";'
-echo 'import "./lib/WarmStorageView.sol";'
+echo 'import "./lib/FilecoinWarmStorageView.sol";'
 
 echo contract FilecoinWarmStorageServiceView {
-echo "    using WarmStorageView for FilecoinWarmStorageService;"
+echo "    using FilecoinWarmStorageView for FilecoinWarmStorageService;"
 echo "    FilecoinWarmStorageService public immutable service;"
 echo "    constructor(FilecoinWarmStorageService _service) {"
 echo "        service = _service;"

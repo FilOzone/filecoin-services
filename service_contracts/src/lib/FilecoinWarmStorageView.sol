@@ -5,7 +5,7 @@ import {Errors} from "../Errors.sol";
 import "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol";
 
-library WarmStorageView {
+library FilecoinWarmStorageView {
     function getString(FilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
         uint256 compressed = uint256(service.extsload(loc));
         if (compressed & 1 != 0) {
