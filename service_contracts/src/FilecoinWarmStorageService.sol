@@ -140,9 +140,41 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 => uint256) public provingActivationEpoch;
 
+    // ========== Service Provider Registry State ==========
+
+    uint256 private nextServiceProviderId = 1;
+
+    struct ApprovedProviderInfo {
+        address serviceProvider;
+        string serviceURL; // HTTP server URL for provider services; TODO: Standard API endpoints:{serviceURL}/api/upload / {serviceURL}/api/info
+        bytes peerId; // libp2p peer ID (optional - empty bytes if not provided)
+        uint256 registeredAt;
+        uint256 approvedAt;
+    }
+
+    struct PendingProviderInfo {
+        string serviceURL; // HTTP server URL for provider services; TODO: Standard API endpoints:{serviceURL}/api/upload / {serviceURL}/api/info
+        bytes peerId; //libp2p peer ID (optional - empty bytes if not provided)
+        uint256 registeredAt;
+    }
+
+    mapping(uint256 => ApprovedProviderInfo) public approvedProviders;
+
+    mapping(address => bool) public approvedProvidersMap;
+
+    mapping(address => PendingProviderInfo) public pendingProviders;
+
+    mapping(address => uint256) public providerToId;
+
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
+
+    // Events for SP registry
+    event ProviderRegistered(address indexed provider, string serviceURL, bytes peerId);
+    event ProviderApproved(address indexed provider, uint256 indexed providerId);
+    event ProviderRejected(address indexed provider);
+    event ProviderRemoved(address indexed provider, uint256 indexed providerId);
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
@@ -158,6 +190,9 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    /// @notice Registration fee required for service providers (1 FIL)
+    /// @dev This fee is burned to prevent spam registrations
+    uint256 private constant SP_REGISTRATION_FEE = 1 ether;
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
@@ -216,6 +251,8 @@ contract FilecoinWarmStorageService is
 
         // Set commission rate
         serviceCommissionBps = 0; // 0%
+
+        nextServiceProviderId = 1;
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -308,6 +345,40 @@ contract FilecoinWarmStorageService is
         return thisChallengeWindowStart(setId);
     }
 
+    // Getters
+    function getAllApprovedProviders() external view returns (ApprovedProviderInfo[] memory) {
+        // Handle edge case: no providers have been registered
+        if (nextServiceProviderId == 1) {
+            return new ApprovedProviderInfo[](0);
+        }
+
+        // First pass: Count non-empty providers (those with non-zero service provider address)
+        uint256 activeCount = 0;
+        for (uint256 i = 1; i < nextServiceProviderId; i++) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
+                activeCount++;
+            }
+        }
+
+        // Handle edge case: all providers have been removed
+        if (activeCount == 0) {
+            return new ApprovedProviderInfo[](0);
+        }
+
+        // Create correctly-sized array
+        ApprovedProviderInfo[] memory providers = new ApprovedProviderInfo[](activeCount);
+
+        // Second pass: Fill array with only active providers
+        uint256 currentIndex = 0;
+        for (uint256 i = 1; i < nextServiceProviderId; i++) {
+            if (approvedProviders[i].serviceProvider != address(0)) {
+                providers[currentIndex] = approvedProviders[i];
+                currentIndex++;
+            }
+        }
+
+        return providers;
+    }
     // Listener interface methods
     /**
      * @notice Handles data set creation by creating a payment rail
@@ -316,6 +387,7 @@ contract FilecoinWarmStorageService is
      * @param creator The address that created the data set and will receive payments
      * @param extraData Encoded data containing metadata, payer information, and signature
      */
+
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, Errors.ExtraDataRequired());
@@ -324,6 +396,9 @@ contract FilecoinWarmStorageService is
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
+
+        // Check if the service provider is whitelisted
+        require(approvedProvidersMap[creator], Errors.ServiceProviderNotApproved(creator));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -645,6 +720,8 @@ contract FilecoinWarmStorageService is
             Errors.OldServiceProviderMismatch(dataSetId, info.payee, oldServiceProvider)
         );
         require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
+        // New service provider must be an approved provider
+        require(approvedProvidersMap[newServiceProvider], Errors.NewServiceProviderNotApproved(newServiceProvider));
 
         // Update the data set payee (service provider)
         info.payee = newServiceProvider;
@@ -1061,6 +1138,156 @@ contract FilecoinWarmStorageService is
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
+    }
+
+    /**
+     * @notice Register as a service provider
+     * @dev SPs call this to register their service URL and optionally peer ID before approval
+     * @param serviceURL The HTTP server URL for provider services
+     * @param peerId The IPFS/libp2p peer ID for the provider (optional - pass empty bytes if not available)
+     * @dev Requires exact payment of SP_REGISTRATION_FEE which is burned to f099
+     */
+    function registerServiceProvider(string calldata serviceURL, bytes calldata peerId) external payable {
+        require(!approvedProvidersMap[msg.sender], Errors.ProviderAlreadyApproved(msg.sender));
+        require(bytes(serviceURL).length > 0, Errors.ServiceURLEmpty());
+        require(bytes(serviceURL).length <= 256, Errors.ServiceURLTooLong(bytes(serviceURL).length, 256));
+        require(peerId.length <= 64, Errors.PeerIdTooLong(peerId.length, 64));
+
+        // Check if registration is already pending
+        require(pendingProviders[msg.sender].registeredAt == 0, Errors.RegistrationAlreadyPending(msg.sender));
+
+        // Burn one-time fee to register
+        require(msg.value == SP_REGISTRATION_FEE, Errors.IncorrectRegistrationFee(SP_REGISTRATION_FEE, msg.value));
+        (bool sent,) = BURN_ADDRESS.call{value: msg.value}("");
+        require(sent, Errors.BurnFailed());
+
+        // Store pending registration
+        pendingProviders[msg.sender] = PendingProviderInfo({
+            serviceURL: serviceURL,
+            peerId: peerId, // Can be empty bytes
+            registeredAt: block.number
+        });
+
+        emit ProviderRegistered(msg.sender, serviceURL, peerId);
+    }
+
+    /**
+     * @notice Approve a pending service provider
+     * @dev Only owner can approve providers
+     * @param provider The address of the provider to approve
+     */
+    function approveServiceProvider(address provider) external onlyOwner {
+        // Check if not already approved
+        require(!approvedProvidersMap[provider], Errors.ProviderAlreadyApproved(provider));
+        // Check if registration exists
+        require(pendingProviders[provider].registeredAt > 0, Errors.NoPendingRegistrationFound(provider));
+
+        // Get pending registration data
+        PendingProviderInfo memory pending = pendingProviders[provider];
+
+        // Assign ID and store provider info
+        uint256 providerId = nextServiceProviderId++;
+        approvedProviders[providerId] = ApprovedProviderInfo({
+            serviceProvider: provider,
+            serviceURL: pending.serviceURL,
+            peerId: pending.peerId,
+            registeredAt: pending.registeredAt,
+            approvedAt: block.number
+        });
+
+        approvedProvidersMap[provider] = true;
+        providerToId[provider] = providerId;
+
+        // Clear pending registration
+        delete pendingProviders[provider];
+
+        emit ProviderApproved(provider, providerId);
+    }
+
+    /**
+     * @notice Reject a pending service provider
+     * @dev Only owner can reject providers
+     * @param provider The address of the provider to reject
+     */
+    function rejectServiceProvider(address provider) external onlyOwner {
+        // Check if registration exists
+        require(pendingProviders[provider].registeredAt > 0, Errors.NoPendingRegistrationFound(provider));
+        require(!approvedProvidersMap[provider], Errors.ProviderAlreadyApproved(provider));
+
+        // Update mappings
+        approvedProvidersMap[provider] = false;
+        providerToId[provider] = 0;
+
+        // Clear pending registration
+        delete pendingProviders[provider];
+
+        emit ProviderRejected(provider);
+    }
+
+    /**
+     * @notice Remove an already approved service provider by ID
+     * @dev Only owner can remove providers. This revokes their approved status.
+     * @param providerId The ID of the provider to remove
+     */
+    function removeServiceProvider(uint256 providerId) external onlyOwner {
+        // Validate provider ID
+        require(
+            providerId > 0 && providerId < nextServiceProviderId,
+            Errors.InvalidProviderId(nextServiceProviderId, providerId)
+        );
+
+        // Get provider info
+        ApprovedProviderInfo memory providerInfo = approvedProviders[providerId];
+        address providerAddress = providerInfo.serviceProvider;
+        require(providerAddress != address(0), Errors.ProviderNotFound(providerId));
+
+        // Check if provider is currently approved
+        require(approvedProvidersMap[providerAddress], Errors.ProviderNotApproved(providerAddress));
+
+        // Remove from approved mapping
+        approvedProvidersMap[providerAddress] = false;
+
+        // Remove the provider ID mapping
+        delete providerToId[providerAddress];
+
+        // Delete the provider info
+        delete approvedProviders[providerId];
+
+        emit ProviderRemoved(providerAddress, providerId);
+    }
+
+    /**
+     * @notice Get service provider information by ID
+     * @dev Only returns info for approved providers
+     * @param providerId The ID of the service provider
+     * @return The service provider information
+     */
+    function getApprovedProvider(uint256 providerId) external view returns (ApprovedProviderInfo memory) {
+        require(
+            providerId > 0 && providerId < nextServiceProviderId,
+            Errors.InvalidProviderId(nextServiceProviderId, providerId)
+        );
+        ApprovedProviderInfo memory provider = approvedProviders[providerId];
+        require(provider.serviceProvider != address(0), Errors.ProviderNotFound(providerId));
+        return provider;
+    }
+
+    /**
+     * @notice Get pending registration information
+     * @param provider The address of the provider
+     * @return The pending registration info
+     */
+    function getPendingProvider(address provider) external view returns (PendingProviderInfo memory) {
+        return pendingProviders[provider];
+    }
+
+    /**
+     * @notice Get the provider ID for a given address
+     * @param provider The address of the provider
+     * @return The provider ID (0 if not approved)
+     */
+    function getProviderIdByAddress(address provider) external view returns (uint256) {
+        return providerToId[provider];
     }
 
     function getClientDataSets(address client) external view returns (DataSetInfo[] memory) {
