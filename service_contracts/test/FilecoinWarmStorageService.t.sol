@@ -893,7 +893,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(client);
         vm.prank(sp1);
         vm.expectRevert();
-        mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
     function testCanReregisterAfterRemoval() public {
@@ -940,7 +940,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(client);
         vm.prank(sp1);
         vm.expectRevert();
-        mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
     function testWhitelistedProviderCanCreateDataSet() public {
@@ -972,7 +972,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create data set as approved SP
         makeSignaturePass(client);
         vm.prank(sp1);
-        uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
 
         // Verify data set was created
         assertTrue(newDataSetId > 0, "Data set should be created");
