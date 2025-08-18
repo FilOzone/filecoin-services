@@ -78,9 +78,6 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     /// @notice Address to provider ID lookup
     mapping(address providerAddress => uint256 providerId) public addressToProviderId;
 
-    /// @notice Storage gap for upgradeability
-    uint256[47] private __gap;
-
     /// @notice Emitted when a new provider registers
     event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
 
