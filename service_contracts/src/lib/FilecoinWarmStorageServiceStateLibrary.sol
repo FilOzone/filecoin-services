@@ -8,7 +8,7 @@ import "./FilecoinWarmStorageServiceLayout.sol";
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
 bytes32 constant EXTSLOAD_STRUCT_SELECTOR = 0x5379a43500000000000000000000000000000000000000000000000000000000;
 
-library FilecoinWarmStorageView {
+library FilecoinWarmStorageServiceStateLibrary {
     function getString(FilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
         uint256 compressed = uint256(service.extsload(loc));
         if (compressed & 1 != 0) {

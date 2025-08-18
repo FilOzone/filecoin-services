@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-// Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageView.sol/FilecoinWarmStorageView.json
+// Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
 import "./FilecoinWarmStorageService.sol";
-import "./lib/FilecoinWarmStorageView.sol";
+import "./lib/FilecoinWarmStorageServiceStateLibrary.sol";
 
-contract FilecoinWarmStorageServiceView {
-    using FilecoinWarmStorageView for FilecoinWarmStorageService;
+contract FilecoinWarmStorageServiceStateView {
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public immutable service;
 

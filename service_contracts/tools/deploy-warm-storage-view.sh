@@ -41,6 +41,6 @@ echo "Deploying contracts from address $ADDR"
 
 NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
-export WARM_STORAGE_VIEW_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageServiceView.sol --constructor-args $WARM_STORAGE_SERVICE_ADDRESS | grep "Deployed to" | awk '{print $3}')
+export WARM_STORAGE_VIEW_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageServiceStateView.sol --constructor-args $WARM_STORAGE_SERVICE_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
-echo FilecoinWarmStorageServiceView deployed at $WARM_STORAGE_VIEW_ADDRESS
+echo FilecoinWarmStorageServiceStateView deployed at $WARM_STORAGE_VIEW_ADDRESS

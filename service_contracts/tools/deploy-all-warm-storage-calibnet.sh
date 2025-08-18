@@ -119,7 +119,7 @@ if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
-# Step 7: Deploy FilecoinWarmStorageServiceView
+# Step 7: Deploy FilecoinWarmStorageServiceStateView
 source tools/deploy-warm-storage-view.sh
 
 # Summary of deployed contracts
@@ -131,7 +131,7 @@ echo "Payments Implementation: $PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "Payments Proxy: $PAYMENTS_CONTRACT_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
-echo "FilecoinWarmStorageServiceView: $WARM_STORAGE_VIEW_ADDRESS"
+echo "FilecoinWarmStorageServiceStateView: $WARM_STORAGE_VIEW_ADDRESS"
 echo "=========================="
 echo ""
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
