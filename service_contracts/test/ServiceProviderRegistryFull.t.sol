@@ -862,12 +862,14 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        // Get providers by product type
-        uint256[] memory providers = registry.getProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP);
-        assertEq(providers.length, 3, "Should have 3 providers with PDP");
-        assertEq(providers[0], 1, "First provider should be ID 1");
-        assertEq(providers[1], 2, "Second provider should be ID 2");
-        assertEq(providers[2], 3, "Third provider should be ID 3");
+        // Get providers by product type with pagination
+        ServiceProviderRegistryStorage.PaginatedProviders memory result =
+            registry.getProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, 0, 10);
+        assertEq(result.providers.length, 3, "Should have 3 providers with PDP");
+        assertEq(result.providers[0].providerId, 1, "First provider should be ID 1");
+        assertEq(result.providers[1].providerId, 2, "Second provider should be ID 2");
+        assertEq(result.providers[2].providerId, 3, "Third provider should be ID 3");
+        assertFalse(result.hasMore, "Should not have more results");
     }
 
     function testGetActiveProvidersByProductType() public {
@@ -913,12 +915,13 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider2);
         registry.removeProvider();
 
-        // Get active providers by product type
-        uint256[] memory activeProviders =
-            registry.getActiveProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP);
-        assertEq(activeProviders.length, 2, "Should have 2 active providers with PDP");
-        assertEq(activeProviders[0], 1, "First active should be ID 1");
-        assertEq(activeProviders[1], 3, "Second active should be ID 3");
+        // Get active providers by product type with pagination
+        ServiceProviderRegistryStorage.PaginatedProviders memory activeResult =
+            registry.getActiveProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, 0, 10);
+        assertEq(activeResult.providers.length, 2, "Should have 2 active providers with PDP");
+        assertEq(activeResult.providers[0].providerId, 1, "First active should be ID 1");
+        assertEq(activeResult.providers[1].providerId, 3, "Second active should be ID 3");
+        assertFalse(activeResult.hasMore, "Should not have more results");
     }
 
     function testProviderHasProduct() public {

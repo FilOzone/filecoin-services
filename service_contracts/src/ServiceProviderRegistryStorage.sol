@@ -41,6 +41,19 @@ contract ServiceProviderRegistryStorage {
         uint256 storagePricePerTibPerMonth; // Storage price per TiB per month in attoFIL
     }
 
+    /// @notice Combined provider and product information for detailed queries
+    struct ProviderWithProduct {
+        uint256 providerId;
+        ServiceProviderInfo providerInfo;
+        ServiceProduct product;
+    }
+
+    /// @notice Paginated result for provider queries
+    struct PaginatedProviders {
+        ProviderWithProduct[] providers;
+        bool hasMore;
+    }
+
     // ========== Storage Variables ==========
 
     /// @notice Number of registered providers

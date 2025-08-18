@@ -304,7 +304,7 @@ contract ServiceProviderRegistry is
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        bytes memory encodedData = _encodePDPOffering(pdpOffering);
+        bytes memory encodedData = encodePDPOffering(pdpOffering);
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
         _updateProduct(providerId, ProductType.PDP, encodedData, emptyKeys, emptyValues);
@@ -322,7 +322,7 @@ contract ServiceProviderRegistry is
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        bytes memory encodedData = _encodePDPOffering(pdpOffering);
+        bytes memory encodedData = encodePDPOffering(pdpOffering);
         _updateProduct(providerId, ProductType.PDP, encodedData, capabilityKeys, capabilityValues);
     }
 
@@ -464,63 +464,121 @@ contract ServiceProviderRegistry is
         ServiceProduct memory product = providerProducts[providerId][ProductType.PDP];
 
         if (product.productData.length > 0) {
-            pdpOffering = _decodePDPOffering(product.productData);
+            pdpOffering = decodePDPOffering(product.productData);
             capabilityKeys = product.capabilityKeys;
             capabilityValues = product.capabilityValues;
             isActive = product.isActive;
         }
     }
 
-    /// @notice Get all providers that offer a specific product type
+    /// @notice Get all providers that offer a specific product type with pagination
     /// @param productType The product type to filter by
-    /// @return providerIds Array of provider IDs offering this product
-    function getProvidersByProductType(ProductType productType) external view returns (uint256[] memory providerIds) {
-        // Count providers with this product
-        uint256 count = 0;
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return
+    /// @return result Paginated result containing provider details and hasMore flag
+    function getProvidersByProductType(ProductType productType, uint256 offset, uint256 limit)
+        external
+        view
+        returns (PaginatedProviders memory result)
+    {
+        // First, count total providers with this product
+        uint256 totalCount = 0;
         for (uint256 i = 1; i <= numProviders; i++) {
             if (providerProducts[i][productType].productData.length > 0) {
-                count++;
+                totalCount++;
             }
         }
 
-        // Collect provider IDs
-        providerIds = new uint256[](count);
-        uint256 index = 0;
-        for (uint256 i = 1; i <= numProviders; i++) {
+        // Handle edge cases
+        if (offset >= totalCount || limit == 0) {
+            result.providers = new ProviderWithProduct[](0);
+            result.hasMore = false;
+            return result;
+        }
+
+        // Calculate actual items to return
+        uint256 itemsToReturn = limit;
+        if (offset + limit > totalCount) {
+            itemsToReturn = totalCount - offset;
+        }
+
+        result.providers = new ProviderWithProduct[](itemsToReturn);
+        result.hasMore = (offset + itemsToReturn) < totalCount;
+
+        // Collect providers
+        uint256 currentIndex = 0;
+        uint256 resultIndex = 0;
+
+        for (uint256 i = 1; i <= numProviders && resultIndex < itemsToReturn; i++) {
             if (providerProducts[i][productType].productData.length > 0) {
-                providerIds[index++] = i;
+                if (currentIndex >= offset && currentIndex < offset + limit) {
+                    result.providers[resultIndex] = ProviderWithProduct({
+                        providerId: i,
+                        providerInfo: providers[i],
+                        product: providerProducts[i][productType]
+                    });
+                    resultIndex++;
+                }
+                currentIndex++;
             }
         }
     }
 
-    /// @notice Get all active providers that offer a specific product type
+    /// @notice Get all active providers that offer a specific product type with pagination
     /// @param productType The product type to filter by
-    /// @return providerIds Array of active provider IDs offering this product
-    function getActiveProvidersByProductType(ProductType productType)
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return
+    /// @return result Paginated result containing provider details and hasMore flag
+    function getActiveProvidersByProductType(ProductType productType, uint256 offset, uint256 limit)
         external
         view
-        returns (uint256[] memory providerIds)
+        returns (PaginatedProviders memory result)
     {
-        // Count active providers with this product
-        uint256 count = 0;
+        // First, count total active providers with this product
+        uint256 totalCount = 0;
         for (uint256 i = 1; i <= numProviders; i++) {
             if (
                 providers[i].isActive && providerProducts[i][productType].isActive
                     && providerProducts[i][productType].productData.length > 0
             ) {
-                count++;
+                totalCount++;
             }
         }
 
-        // Collect provider IDs
-        providerIds = new uint256[](count);
-        uint256 index = 0;
-        for (uint256 i = 1; i <= numProviders; i++) {
+        // Handle edge cases
+        if (offset >= totalCount || limit == 0) {
+            result.providers = new ProviderWithProduct[](0);
+            result.hasMore = false;
+            return result;
+        }
+
+        // Calculate actual items to return
+        uint256 itemsToReturn = limit;
+        if (offset + limit > totalCount) {
+            itemsToReturn = totalCount - offset;
+        }
+
+        result.providers = new ProviderWithProduct[](itemsToReturn);
+        result.hasMore = (offset + itemsToReturn) < totalCount;
+
+        // Collect active providers
+        uint256 currentIndex = 0;
+        uint256 resultIndex = 0;
+
+        for (uint256 i = 1; i <= numProviders && resultIndex < itemsToReturn; i++) {
             if (
                 providers[i].isActive && providerProducts[i][productType].isActive
                     && providerProducts[i][productType].productData.length > 0
             ) {
-                providerIds[index++] = i;
+                if (currentIndex >= offset && currentIndex < offset + limit) {
+                    result.providers[resultIndex] = ProviderWithProduct({
+                        providerId: i,
+                        providerInfo: providers[i],
+                        product: providerProducts[i][productType]
+                    });
+                    resultIndex++;
+                }
+                currentIndex++;
             }
         }
     }
@@ -636,12 +694,12 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Encode PDP offering to bytes
-    function _encodePDPOffering(PDPOffering memory pdpOffering) private pure returns (bytes memory) {
+    function encodePDPOffering(PDPOffering memory pdpOffering) public pure returns (bytes memory) {
         return abi.encode(pdpOffering);
     }
 
     /// @notice Decode PDP offering from bytes
-    function _decodePDPOffering(bytes memory data) private pure returns (PDPOffering memory) {
+    function decodePDPOffering(bytes memory data) public pure returns (PDPOffering memory) {
         return abi.decode(data, (PDPOffering));
     }
 
