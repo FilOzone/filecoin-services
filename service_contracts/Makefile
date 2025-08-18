@@ -28,7 +28,7 @@ build:
 
 
 src/lib/%Layout.sol: tools/generate_storage_layout.sh src/%.sol
-	$^:$* > $@
+	$^:$* | forge fmt -r - > $@
 
 src/FilecoinWarmStorageServiceStateView.sol: tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 	$^ | forge fmt -r - > $@
