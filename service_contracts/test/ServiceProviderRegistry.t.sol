@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../src/ServiceProviderRegistry.sol";
+import "../src/ServiceProviderRegistryStorage.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract ServiceProviderRegistryTest is Test {
@@ -56,7 +57,7 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 2 ether);
 
         // Prepare PDP data
-        ServiceProviderRegistry.PDPOffering memory pdpData = ServiceProviderRegistry.PDPOffering({
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
@@ -74,14 +75,18 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 1 ether}(
-            "Test provider description", ServiceProviderRegistry.ProductType.PDP, encodedData, emptyKeys, emptyValues
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
         );
         assertEq(providerId, 1, "Should register with ID 1");
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
 
         // Verify empty capabilities
         (, string[] memory returnedKeys, string[] memory returnedValues,) =
-            registry.getProduct(providerId, ServiceProviderRegistry.ProductType.PDP);
+            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         assertEq(returnedKeys.length, 0, "Should have no capability keys");
         assertEq(returnedValues.length, 0, "Should have no capability values");
     }
@@ -91,7 +96,7 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 2 ether);
 
         // Prepare PDP data
-        ServiceProviderRegistry.PDPOffering memory pdpData = ServiceProviderRegistry.PDPOffering({
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
@@ -117,7 +122,7 @@ contract ServiceProviderRegistryTest is Test {
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 1 ether}(
             "Test provider description",
-            ServiceProviderRegistry.ProductType.PDP,
+            ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
             capabilityKeys,
             capabilityValues
@@ -127,7 +132,7 @@ contract ServiceProviderRegistryTest is Test {
 
         // Verify capabilities were stored correctly
         (, string[] memory returnedKeys, string[] memory returnedValues,) =
-            registry.getProduct(providerId, ServiceProviderRegistry.ProductType.PDP);
+            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
         assertEq(returnedKeys.length, 3, "Should have 3 capability keys");
         assertEq(returnedValues.length, 3, "Should have 3 capability values");
@@ -146,7 +151,7 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 2 ether);
 
         // Register a provider first
-        ServiceProviderRegistry.PDPOffering memory pdpData = ServiceProviderRegistry.PDPOffering({
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
@@ -163,11 +168,15 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         registry.registerProvider{value: 1 ether}(
-            "Test provider description", ServiceProviderRegistry.ProductType.PDP, encodedData, emptyKeys, emptyValues
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
         );
 
         // Now get provider should work
-        ServiceProviderRegistry.ServiceProviderInfo memory info = registry.getProvider(1);
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertEq(info.owner, user1, "Owner should be user1");
     }
 

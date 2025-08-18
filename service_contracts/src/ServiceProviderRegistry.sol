@@ -7,41 +7,17 @@ import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Errors} from "./Errors.sol";
+import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
 
 /// @title ServiceProviderRegistry
 /// @notice A registry contract for managing service providers across the Filecoin Services ecosystem
-contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgradeable, EIP712Upgradeable {
-    /// @notice Enum representing different service types
-    enum ProductType {
-        PDP
-    }
-
-    /// @notice Main provider information
-    struct ServiceProviderInfo {
-        address owner;
-        string description;
-        bool isActive;
-    }
-
-    /// @notice Product offering of the Service Provider
-    struct ServiceProduct {
-        ProductType productType;
-        bytes productData; // ABI-encoded service-specific data
-        string[] capabilityKeys; // Max MAX_CAPABILITY_KEY_LENGTH chars each
-        string[] capabilityValues; // Max MAX_CAPABILITY_VALUE_LENGTH chars each
-        bool isActive;
-    }
-
-    /// @notice PDP-specific service data
-    struct PDPOffering {
-        string serviceURL; // HTTP API endpoint
-        uint256 minPieceSizeInBytes; // Minimum piece size accepted in bytes
-        uint256 maxPieceSizeInBytes; // Maximum piece size accepted in bytes
-        bool ipniPiece; // Supports IPNI piece CID indexing
-        bool ipniIpfs; // Supports IPNI IPFS CID indexing
-        uint256 storagePricePerTibPerMonth; // Storage price per TiB per month in attoFIL
-    }
-
+contract ServiceProviderRegistry is
+    Initializable,
+    UUPSUpgradeable,
+    OwnableUpgradeable,
+    EIP712Upgradeable,
+    ServiceProviderRegistryStorage
+{
     /// @notice Version of the contract implementation
     string public constant VERSION = "0.0.1";
 
@@ -62,21 +38,6 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
 
     /// @notice Registration fee in attoFIL (1 FIL = 10^18 attoFIL)
     uint256 public constant REGISTRATION_FEE = 1e18;
-
-    // ========== State Variables ==========
-
-    /// @notice Counter for generating unique provider IDs
-    /// @dev Starts at 1, ID 0 is reserved to indicate "not registered"
-    uint256 private nextProviderId;
-
-    /// @notice Main registry of providers
-    mapping(uint256 providerId => ServiceProviderInfo) public providers;
-
-    /// @notice Provider products mapping (extensible for multiple product types)
-    mapping(uint256 providerId => mapping(ProductType productType => ServiceProduct)) public providerProducts;
-
-    /// @notice Address to provider ID lookup
-    mapping(address providerAddress => uint256 providerId) public addressToProviderId;
 
     /// @notice Emitted when a new provider registers
     event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
@@ -112,7 +73,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
 
     /// @notice Ensures the provider exists
     modifier providerExists(uint256 providerId) {
-        require(providerId > 0 && providerId < nextProviderId, "Provider does not exist");
+        require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
         require(providers[providerId].owner != address(0), "Provider not found");
         _;
     }
@@ -136,9 +97,6 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("ServiceProviderRegistry", "1");
-
-        // Initialize the provider ID counter
-        nextProviderId = 1;
     }
 
     /// @notice Register as a new service provider with a specific product type
@@ -173,8 +131,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
 
-        // Assign provider ID
-        providerId = nextProviderId++;
+        providerId = ++numProviders;
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({owner: msg.sender, description: description, isActive: true});
@@ -372,7 +329,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     function updateProviderInfo(string calldata description) external {
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
-        require(providerId > 0 && providerId < nextProviderId, "Provider does not exist");
+        require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
         require(providers[providerId].owner != address(0), "Provider not found");
         require(providers[providerId].isActive, "Provider is not active");
 
@@ -518,7 +475,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     function getProvidersByProductType(ProductType productType) external view returns (uint256[] memory providerIds) {
         // Count providers with this product
         uint256 count = 0;
-        for (uint256 i = 1; i < nextProviderId; i++) {
+        for (uint256 i = 1; i <= numProviders; i++) {
             if (providerProducts[i][productType].productData.length > 0) {
                 count++;
             }
@@ -527,7 +484,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
         // Collect provider IDs
         providerIds = new uint256[](count);
         uint256 index = 0;
-        for (uint256 i = 1; i < nextProviderId; i++) {
+        for (uint256 i = 1; i <= numProviders; i++) {
             if (providerProducts[i][productType].productData.length > 0) {
                 providerIds[index++] = i;
             }
@@ -544,7 +501,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     {
         // Count active providers with this product
         uint256 count = 0;
-        for (uint256 i = 1; i < nextProviderId; i++) {
+        for (uint256 i = 1; i <= numProviders; i++) {
             if (
                 providers[i].isActive && providerProducts[i][productType].isActive
                     && providerProducts[i][productType].productData.length > 0
@@ -556,7 +513,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
         // Collect provider IDs
         providerIds = new uint256[](count);
         uint256 index = 0;
-        for (uint256 i = 1; i < nextProviderId; i++) {
+        for (uint256 i = 1; i <= numProviders; i++) {
             if (
                 providers[i].isActive && providerProducts[i][productType].isActive
                     && providerProducts[i][productType].productData.length > 0
@@ -598,7 +555,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     function getAllActiveProviders() external view returns (uint256[] memory activeProviderIds) {
         // Count active providers
         uint256 activeCount = 0;
-        for (uint256 i = 1; i < nextProviderId; i++) {
+        for (uint256 i = 1; i <= numProviders; i++) {
             if (providers[i].isActive) {
                 activeCount++;
             }
@@ -607,7 +564,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
         // Collect active provider IDs
         activeProviderIds = new uint256[](activeCount);
         uint256 index = 0;
-        for (uint256 i = 1; i < nextProviderId; i++) {
+        for (uint256 i = 1; i <= numProviders; i++) {
             if (providers[i].isActive) {
                 activeProviderIds[index++] = i;
             }
@@ -617,7 +574,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     /// @notice Get total number of registered providers (including inactive)
     /// @return The total count of providers
     function getProviderCount() external view returns (uint256) {
-        return nextProviderId - 1;
+        return numProviders;
     }
 
     /// @notice Check if an address is a registered provider
@@ -631,7 +588,7 @@ contract ServiceProviderRegistry is Initializable, UUPSUpgradeable, OwnableUpgra
     /// @notice Returns the next available provider ID
     /// @return The next provider ID that will be assigned
     function getNextProviderId() external view returns (uint256) {
-        return nextProviderId;
+        return numProviders + 1;
     }
 
     /// @notice Returns the registration fee amount
