@@ -140,8 +140,7 @@ contract ServiceProviderRegistry is
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        // Emit product added event (using ServiceUpdated for initial product to maintain backward compatibility)
-        emit ServiceUpdated(providerId, productType, block.number);
+        emit ProductAdded(providerId, productType, block.number);
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");

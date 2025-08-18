@@ -119,7 +119,7 @@ contract ServiceProviderRegistryFullTest is Test {
         emit ProviderRegistered(1, provider1, block.number);
 
         vm.expectEmit(true, true, false, true);
-        emit ServiceUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
 
         // Non-empty capability arrays
         string[] memory capKeys = new string[](4);
@@ -1223,12 +1223,12 @@ contract ServiceProviderRegistryFullTest is Test {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
 
-        // Test ProviderRegistered event
+        // Test ProviderRegistered and ProductAdded events
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
         emit ProviderRegistered(1, provider1, block.number);
         vm.expectEmit(true, true, true, true);
-        emit ServiceUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
 
         registry.registerProvider{value: REGISTRATION_FEE}(
             "Test provider description",
