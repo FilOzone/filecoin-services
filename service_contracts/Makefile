@@ -33,6 +33,9 @@ src/lib/%Layout.sol: tools/generate_storage_layout.sh src/%.sol
 src/FilecoinWarmStorageServiceStateView.sol: tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 	$^ | forge fmt -r - > $@
 
+src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol: src/lib/FilecoinWarmStorageServiceStateLibrary.sol
+	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e "4i\/\/ Generated with 'make $@'\n" $< | forge fmt -r - > $@
+
 # Test target
 .PHONY: test
 test:

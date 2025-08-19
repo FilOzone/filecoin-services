@@ -4,10 +4,10 @@ pragma solidity ^0.8.20;
 // Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
 import "./FilecoinWarmStorageService.sol";
-import "./lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
 contract FilecoinWarmStorageServiceStateView {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public immutable service;
 

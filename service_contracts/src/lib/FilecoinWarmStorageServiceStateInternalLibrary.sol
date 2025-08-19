@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+// Generated with 'make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol'
+
 import {Errors} from "../Errors.sol";
 import "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol";

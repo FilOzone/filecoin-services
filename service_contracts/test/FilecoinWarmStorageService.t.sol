@@ -12,7 +12,8 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Errors} from "../src/Errors.sol";
-import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {FilecoinWarmStorageServiceStateInternalLibrary} from
+    "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -207,7 +208,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint8(27) // v
     );
 
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     // Contracts
     FilecoinWarmStorageService public pdpServiceWithPayments;
@@ -1140,7 +1141,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 
 // Test contract for upgrade scenarios
 contract FilecoinWarmStorageServiceUpgradeTest is Test {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
