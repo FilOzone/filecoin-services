@@ -8,7 +8,7 @@ import "./FilecoinWarmStorageServiceLayout.sol";
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
 bytes32 constant EXTSLOAD_STRUCT_SELECTOR = 0x5379a43500000000000000000000000000000000000000000000000000000000;
 
-library FilecoinWarmStorageServiceStateInternalLibrary {
+library FilecoinWarmStorageServiceStateLibrary {
     function getString(FilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
         uint256 compressed = uint256(service.extsload(loc));
         if (compressed & 1 != 0) {
@@ -61,16 +61,16 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(FilecoinWarmStorageService, uint256 leafCount) internal pure returns (uint256) {
+    function getDataSetSizeInBytes(FilecoinWarmStorageService, uint256 leafCount) public pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
     }
 
-    function clientDataSetIDs(FilecoinWarmStorageService service, address payer) internal view returns (uint256) {
+    function clientDataSetIDs(FilecoinWarmStorageService service, address payer) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(payer, CLIENT_DATA_SET_IDS_SLOT))));
     }
 
     function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId)
-        internal
+        public
         view
         returns (string memory)
     {
@@ -79,7 +79,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         );
     }
 
-    function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
+    function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
         return service.extsload(keccak256(abi.encode(dataSetId, PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
 
@@ -89,7 +89,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @return info The data set information struct
      */
     function getDataSet(FilecoinWarmStorageService service, uint256 dataSetId)
-        internal
+        public
         view
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
@@ -124,7 +124,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
-        internal
+        public
         view
         returns (uint256[] memory dataSetIds)
     {
@@ -136,12 +136,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         }
     }
 
-    function railToDataSet(FilecoinWarmStorageService service, uint256 railId) internal view returns (uint256) {
+    function railToDataSet(FilecoinWarmStorageService service, uint256 railId) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(railId, RAIL_TO_DATA_SET_SLOT))));
     }
 
     function provenPeriods(FilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId)
-        internal
+        public
         view
         returns (bool)
     {
@@ -150,36 +150,36 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
-        internal
+        public
         view
         returns (uint256)
     {
         return uint256(service.extsload(keccak256(abi.encode(dataSetId, PROVING_ACTIVATION_EPOCH_SLOT))));
     }
 
-    function provingDeadlines(FilecoinWarmStorageService service, uint256 setId) internal view returns (uint256) {
+    function provingDeadlines(FilecoinWarmStorageService service, uint256 setId) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(setId, PROVING_DEADLINES_SLOT))));
     }
 
-    function getMaxProvingPeriod(FilecoinWarmStorageService service) internal view returns (uint64) {
+    function getMaxProvingPeriod(FilecoinWarmStorageService service) public view returns (uint64) {
         return uint64(uint256(service.extsload(MAX_PROVING_PERIOD_SLOT)));
     }
 
     // Number of epochs at the end of a proving period during which a
     // proof of possession can be submitted
-    function challengeWindow(FilecoinWarmStorageService service) internal view returns (uint256) {
+    function challengeWindow(FilecoinWarmStorageService service) public view returns (uint256) {
         return uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
     // Initial value for challenge window start
     // Can be used for first call to nextProvingPeriod
-    function initChallengeWindowStart(FilecoinWarmStorageService service) internal view returns (uint256) {
+    function initChallengeWindowStart(FilecoinWarmStorageService service) public view returns (uint256) {
         return block.number + getMaxProvingPeriod(service) - challengeWindow(service);
     }
 
     // The start of the challenge window for the current proving period
     function thisChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
-        internal
+        public
         view
         returns (uint256)
     {
@@ -202,7 +202,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     // The start of the NEXT OPEN proving period's challenge window
     // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
     function nextChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
-        internal
+        public
         view
         returns (uint256)
     {
@@ -218,7 +218,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     }
 
     function getClientDataSets(FilecoinWarmStorageService service, address client)
-        internal
+        public
         view
         returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
     {
