@@ -40,78 +40,7 @@
   },
   {
     "type": "function",
-    "name": "approveServiceProvider",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "approvedProviders",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "serviceProvider",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "serviceURL",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "peerId",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "registeredAt",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "approvedAt",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "approvedProvidersMap",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "calculateCDNRatePerEpoch",
+    "name": "calculateRatesPerEpoch",
     "inputs": [
       {
         "name": "totalBytes",
@@ -121,45 +50,17 @@
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "storageRate",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "calculateCacheMissRatePerEpoch",
-    "inputs": [
+      },
       {
-        "name": "totalBytes",
+        "name": "cacheMissRate",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "outputs": [
+      },
       {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "calculateStorageRatePerEpoch",
-    "inputs": [
-      {
-        "name": "totalBytes",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
+        "name": "cdnRate",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -408,92 +309,6 @@
   },
   {
     "type": "function",
-    "name": "getAllApprovedProviders",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageService.ApprovedProviderInfo[]",
-        "components": [
-          {
-            "name": "serviceProvider",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "serviceURL",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "peerId",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "registeredAt",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "approvedAt",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getApprovedProvider",
-    "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct FilecoinWarmStorageService.ApprovedProviderInfo",
-        "components": [
-          {
-            "name": "serviceProvider",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "serviceURL",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "peerId",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "registeredAt",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "approvedAt",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getClientDataSets",
     "inputs": [
       {
@@ -646,106 +461,6 @@
   },
   {
     "type": "function",
-    "name": "getDataSetCDNRailId",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDataSetCacheMissRailId",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDataSetMetadata",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDataSetParties",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "payee",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getDataSetPdpRailId",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getDataSetSizeInBytes",
     "inputs": [
       {
@@ -762,25 +477,6 @@
       }
     ],
     "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "getDataSetWithCDN",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -815,42 +511,6 @@
   },
   {
     "type": "function",
-    "name": "getPendingProvider",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct FilecoinWarmStorageService.PendingProviderInfo",
-        "components": [
-          {
-            "name": "serviceURL",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "peerId",
-            "type": "bytes",
-            "internalType": "bytes"
-          },
-          {
-            "name": "registeredAt",
-            "type": "uint256",
-            "internalType": "uint256"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getPieceMetadata",
     "inputs": [
       {
@@ -869,25 +529,6 @@
         "name": "",
         "type": "string",
         "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getProviderIdByAddress",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1008,25 +649,6 @@
   },
   {
     "type": "function",
-    "name": "isProviderApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "migrate",
     "inputs": [],
     "outputs": [],
@@ -1120,35 +742,6 @@
   },
   {
     "type": "function",
-    "name": "pendingProviders",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "serviceURL",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "peerId",
-        "type": "bytes",
-        "internalType": "bytes"
-      },
-      {
-        "name": "registeredAt",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "piecesAdded",
     "inputs": [
       {
@@ -1164,24 +757,12 @@
       {
         "name": "pieceData",
         "type": "tuple[]",
-        "internalType": "struct IPDPTypes.PieceData[]",
+        "internalType": "struct Cids.Cid[]",
         "components": [
           {
-            "name": "piece",
-            "type": "tuple",
-            "internalType": "struct Cids.Cid",
-            "components": [
-              {
-                "name": "data",
-                "type": "bytes",
-                "internalType": "bytes"
-              }
-            ]
-          },
-          {
-            "name": "rawSize",
-            "type": "uint256",
-            "internalType": "uint256"
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
           }
         ]
       },
@@ -1290,25 +871,6 @@
   },
   {
     "type": "function",
-    "name": "providerToId",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "provingActivationEpoch",
     "inputs": [
       {
@@ -1402,50 +964,6 @@
   },
   {
     "type": "function",
-    "name": "registerServiceProvider",
-    "inputs": [
-      {
-        "name": "serviceURL",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "peerId",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "payable"
-  },
-  {
-    "type": "function",
-    "name": "rejectServiceProvider",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "removeServiceProvider",
-    "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
@@ -1453,9 +971,6 @@
   },
   {
     "type": "function",
-<<<<<<< HEAD
-    "name": "serviceProviderChanged",
-=======
     "name": "serviceCommissionBps",
     "inputs": [],
     "outputs": [
@@ -1470,7 +985,6 @@
   {
     "type": "function",
     "name": "storageProviderChanged",
->>>>>>> 20eaa46 (updated abi)
     "inputs": [
       {
         "name": "dataSetId",
@@ -1498,7 +1012,7 @@
   },
   {
     "type": "function",
-    "name": "terminateDataSetPayment",
+    "name": "terminateService",
     "inputs": [
       {
         "name": "dataSetId",
@@ -1836,6 +1350,43 @@
   },
   {
     "type": "event",
+    "name": "PaymentTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "endEpoch",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pdpRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PieceMetadataAdded",
     "inputs": [
       {
@@ -1855,82 +1406,6 @@
         "type": "string",
         "indexed": false,
         "internalType": "string"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProviderApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProviderRegistered",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "serviceURL",
-        "type": "string",
-        "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "peerId",
-        "type": "bytes",
-        "indexed": false,
-        "internalType": "bytes"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProviderRejected",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ProviderRemoved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1962,6 +1437,43 @@
   },
   {
     "type": "event",
+    "name": "ServiceTerminated",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pdpRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Upgraded",
     "inputs": [
       {
@@ -1983,11 +1495,6 @@
         "internalType": "address"
       }
     ]
-  },
-  {
-    "type": "error",
-    "name": "BurnFailed",
-    "inputs": []
   },
   {
     "type": "error",
@@ -2160,22 +1667,6 @@
   },
   {
     "type": "error",
-    "name": "IncorrectRegistrationFee",
-    "inputs": [
-      {
-        "name": "expected",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "actual",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InvalidChallengeCount",
     "inputs": [
       {
@@ -2271,22 +1762,6 @@
   },
   {
     "type": "error",
-    "name": "InvalidProviderId",
-    "inputs": [
-      {
-        "name": "nextServiceProviderId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InvalidSignature",
     "inputs": [
       {
@@ -2324,17 +1799,6 @@
   },
   {
     "type": "error",
-    "name": "NewStorageProviderNotApproved",
-    "inputs": [
-      {
-        "name": "newProvider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "NextProvingPeriodAlreadyCalled",
     "inputs": [
       {
@@ -2367,23 +1831,12 @@
   },
   {
     "type": "error",
-    "name": "NoPendingRegistrationFound",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "NotInitializing",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "OldStorageProviderMismatch",
+    "name": "OldServiceProviderMismatch",
     "inputs": [
       {
         "name": "dataSetId",
@@ -2458,59 +1911,10 @@
   },
   {
     "type": "error",
-    "name": "PeerIdTooLong",
-    "inputs": [
-      {
-        "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxAllowed",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "ProofAlreadySubmitted",
     "inputs": [
       {
         "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ProviderAlreadyApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ProviderNotApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ProviderNotFound",
-    "inputs": [
-      {
-        "name": "providerId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -2572,51 +1976,8 @@
   },
   {
     "type": "error",
-    "name": "RegistrationAlreadyPending",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "ServiceContractMustTerminateRail",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ServiceURLEmpty",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "ServiceURLTooLong",
-    "inputs": [
-      {
-        "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "maxAllowed",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "StorageProviderNotApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
   },
   {
     "type": "error",
