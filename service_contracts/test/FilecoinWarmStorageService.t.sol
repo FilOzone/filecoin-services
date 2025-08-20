@@ -140,8 +140,15 @@ contract MockPDPVerifier {
         string[] memory metadataKeys,
         string[] memory metadataValues
     ) public {
-        bytes memory extraData = abi.encode(signature, metadataKeys, metadataValues);
+        // Convert to per-piece format: each piece gets same metadata
+        string[][] memory allKeys = new string[][](pieceData.length);
+        string[][] memory allValues = new string[][](pieceData.length);
+        for (uint256 i = 0; i < pieceData.length; i++) {
+            allKeys[i] = metadataKeys;
+            allValues[i] = metadataValues;
+        }
 
+        bytes memory extraData = abi.encode(signature, allKeys, allValues);
         listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
     }
 
@@ -1375,8 +1382,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
         pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
 
+        // Convert to per-piece format: each piece gets same metadata
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+
         // Encode extraData: (signature, metadataKeys, metadataValues)
-        extraData = abi.encode(signature, keys, values);
+        extraData = abi.encode(signature, allKeys, allValues);
 
         if (caller == address(mockPDPVerifier)) {
             vm.expectEmit(true, false, false, true);
@@ -1442,7 +1455,12 @@ contract FilecoinWarmStorageServiceTest is Test {
             Cids.Cid[] memory pieceData = new Cids.Cid[](1);
             pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
 
-            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, keys, values);
+            // Convert to per-piece format
+            string[][] memory allKeys = new string[][](1);
+            string[][] memory allValues = new string[][](1);
+            allKeys[0] = keys;
+            allValues[0] = values;
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
             if (keyLength <= 32) {
                 // Should succeed for valid lengths
@@ -1500,7 +1518,12 @@ contract FilecoinWarmStorageServiceTest is Test {
             Cids.Cid[] memory pieceData = new Cids.Cid[](1);
             pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
 
-            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, keys, values);
+            // Convert to per-piece format
+            string[][] memory allKeys = new string[][](1);
+            string[][] memory allValues = new string[][](1);
+            allKeys[0] = keys;
+            allValues[0] = values;
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
             if (valueLength <= 128) {
                 // Should succeed for valid lengths
@@ -1559,7 +1582,12 @@ contract FilecoinWarmStorageServiceTest is Test {
             Cids.Cid[] memory pieceData = new Cids.Cid[](1);
             pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
 
-            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, keys, values);
+            // Convert to per-piece format
+            string[][] memory allKeys = new string[][](1);
+            string[][] memory allValues = new string[][](1);
+            allKeys[0] = keys;
+            allValues[0] = values;
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
             if (keyCount <= MAX_KEYS_PER_PIECE) {
                 // Should succeed for valid counts
@@ -1649,8 +1677,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
         pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
 
+        // Convert to per-piece format with mismatched arrays
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+
         // Encode extraData with mismatched keys/values
-        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, keys, values);
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
         // Expect revert due to key/value mismatch
         vm.expectRevert(
@@ -1681,8 +1715,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
         pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
 
+        // Convert to per-piece format with mismatched arrays
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+
         // Encode extraData with mismatched keys/values
-        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, keys, values);
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
         // Expect revert due to key/value mismatch
         vm.expectRevert(
@@ -1773,6 +1813,204 @@ contract FilecoinWarmStorageServiceTest is Test {
             pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
         assertTrue(bytes(nonExistentMetadata).length == 0, "Non-existent key should not exist");
         assertEq(bytes(nonExistentMetadata).length, 0, "Should return empty string for non-existent key");
+    }
+
+    function testPieceMetadataPerPieceDifferentMetadata() public {
+        // Test different metadata for multiple pieces
+        uint256 firstPieceId = 100;
+        uint256 numPieces = 3;
+
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Create multiple pieces with different metadata
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        for (uint256 i = 0; i < numPieces; i++) {
+            pieceData[i] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file", i)));
+        }
+
+        // Prepare different metadata for each piece
+        string[][] memory allKeys = new string[][](numPieces);
+        string[][] memory allValues = new string[][](numPieces);
+
+        // Piece 0: filename and contentType
+        allKeys[0] = new string[](2);
+        allValues[0] = new string[](2);
+        allKeys[0][0] = "filename";
+        allValues[0][0] = "document.pdf";
+        allKeys[0][1] = "contentType";
+        allValues[0][1] = "application/pdf";
+
+        // Piece 1: filename, size, and compression
+        allKeys[1] = new string[](3);
+        allValues[1] = new string[](3);
+        allKeys[1][0] = "filename";
+        allValues[1][0] = "image.jpg";
+        allKeys[1][1] = "size";
+        allValues[1][1] = "1024000";
+        allKeys[1][2] = "compression";
+        allValues[1][2] = "jpeg";
+
+        // Piece 2: just filename
+        allKeys[2] = new string[](1);
+        allValues[2] = new string[](1);
+        allKeys[2][0] = "filename";
+        allValues[2][0] = "data.json";
+
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+        // Expect events for each piece with their specific metadata
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, allKeys[0], allValues[0]);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, allKeys[1], allValues[1]);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 2, allKeys[2], allValues[2]);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+
+        // Verify metadata for piece 0
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "filename"),
+            "document.pdf",
+            "Piece 0 filename should match"
+        );
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "contentType"),
+            "application/pdf",
+            "Piece 0 contentType should match"
+        );
+
+        // Verify metadata for piece 1
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "filename"),
+            "image.jpg",
+            "Piece 1 filename should match"
+        );
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "size"),
+            "1024000",
+            "Piece 1 size should match"
+        );
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "compression"),
+            "jpeg",
+            "Piece 1 compression should match"
+        );
+
+        // Verify metadata for piece 2
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 2, "filename"),
+            "data.json",
+            "Piece 2 filename should match"
+        );
+
+        // Verify getAllPieceMetadata returns correct data for each piece
+        (string[] memory keys0, string[] memory values0) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId);
+        assertEq(keys0.length, 2, "Piece 0 should have 2 metadata keys");
+
+        (string[] memory keys1, string[] memory values1) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        assertEq(keys1.length, 3, "Piece 1 should have 3 metadata keys");
+
+        (string[] memory keys2, string[] memory values2) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 2);
+        assertEq(keys2.length, 1, "Piece 2 should have 1 metadata key");
+    }
+
+    function testPieceMetadataArrayMismatchErrors() public {
+        uint256 pieceId = 42;
+
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Create 2 pieces
+        Cids.Cid[] memory pieceData = new Cids.Cid[](2);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file1")));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file2")));
+
+        // Test case 1: Wrong number of key arrays (only 1 for 2 pieces)
+        string[][] memory wrongKeys = new string[][](1);
+        string[][] memory correctValues = new string[][](2);
+        wrongKeys[0] = new string[](1);
+        wrongKeys[0][0] = "filename";
+        correctValues[0] = new string[](1);
+        correctValues[0][0] = "file1.txt";
+        correctValues[1] = new string[](1);
+        correctValues[1][0] = "file2.txt";
+
+        bytes memory encodedData1 = abi.encode(FAKE_SIGNATURE, wrongKeys, correctValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData1);
+
+        // Test case 2: Wrong number of value arrays (only 1 for 2 pieces)
+        string[][] memory correctKeys = new string[][](2);
+        string[][] memory wrongValues = new string[][](1);
+        correctKeys[0] = new string[](1);
+        correctKeys[0][0] = "filename";
+        correctKeys[1] = new string[](1);
+        correctKeys[1][0] = "filename";
+        wrongValues[0] = new string[](1);
+        wrongValues[0][0] = "file1.txt";
+
+        bytes memory encodedData2 = abi.encode(FAKE_SIGNATURE, correctKeys, wrongValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData2);
+    }
+
+    function testPieceMetadataEmptyMetadataForAllPieces() public {
+        uint256 firstPieceId = 200;
+        uint256 numPieces = 2;
+
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Create multiple pieces with no metadata
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file1")));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file2")));
+
+        // Create empty metadata arrays for each piece
+        string[][] memory allKeys = new string[][](numPieces); // Empty arrays
+        string[][] memory allValues = new string[][](numPieces); // Empty arrays
+
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+        // Expect events with empty metadata arrays
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, allKeys[0], allValues[0]);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, allKeys[1], allValues[1]);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+
+        // Verify no metadata is stored
+        (string[] memory keys0, string[] memory values0) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId);
+        assertEq(keys0.length, 0, "Piece 0 should have no metadata keys");
+        assertEq(values0.length, 0, "Piece 0 should have no metadata values");
+
+        (string[] memory keys1, string[] memory values1) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        assertEq(keys1.length, 0, "Piece 1 should have no metadata keys");
+        assertEq(values1.length, 0, "Piece 1 should have no metadata values");
+
+        // Verify getting non-existent keys returns empty strings
+        string memory nonExistentValue = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "anykey");
+        assertEq(bytes(nonExistentValue).length, 0, "Non-existent key should return empty string");
     }
 
     // Utility
