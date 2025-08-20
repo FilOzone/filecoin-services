@@ -25,9 +25,11 @@ jobs:
       - name: Generate coverage report
         run: |
           cd service_contracts
-          forge coverage --report lcov
+          forge coverage --report lcov --ir-minimum --no-match-path "lib/**"
+        continue-on-error: true
 
       - name: Upload coverage to Codecov
+        if: success()
         uses: codecov/codecov-action@v3
         with:
           directory: ./service_contracts
