@@ -209,4 +209,10 @@ library Errors {
     /// @param maxAllowed The maximum allowed length for metadata values
     /// @param length The length of the provided metadata value
     error MetadataValueExceedsMaxLength(uint256 index, uint256 maxAllowed, uint256 length);
+
+    /// @notice Metadata arrays do not match the number of pieces
+    /// @dev Thrown when the number of metadata arrays does not equal the number of pieces being added
+    /// @param metadataArrayCount The number of metadata arrays provided
+    /// @param pieceCount The number of pieces being added
+    error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
 }

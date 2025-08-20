@@ -471,30 +471,41 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         require(extraData.length > 0, Errors.ExtraDataRequired());
         // Decode the extra data
-        (bytes memory signature, string[] memory metadataKeys, string[] memory metadataValues) =
-            abi.decode(extraData, (bytes, string[], string[]));
+        (bytes memory signature, string[][] memory metadataKeys, string[][] memory metadataValues) =
+            abi.decode(extraData, (bytes, string[][], string[][]));
 
-        // Check that number of metadata keys and values are equal
+        // Check that we have metadata arrays for each piece
         require(
-            metadataKeys.length == metadataValues.length,
-            Errors.MetadataKeyAndValueLengthMismatch(metadataKeys.length, metadataValues.length)
+            metadataKeys.length == pieceData.length,
+            Errors.MetadataArrayCountMismatch(metadataKeys.length, pieceData.length)
+        );
+        require(
+            metadataValues.length == pieceData.length,
+            Errors.MetadataArrayCountMismatch(metadataValues.length, pieceData.length)
         );
 
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature);
 
-        require(
-            metadataKeys.length <= MAX_KEYS_PER_PIECE,
-            Errors.TooManyMetadataKeys(MAX_KEYS_PER_PIECE, metadataKeys.length)
-        );
-
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
             uint256 pieceId = firstAdded + i;
+            string[] memory pieceKeys = metadataKeys[i];
+            string[] memory pieceValues = metadataValues[i];
 
-            for (uint256 k = 0; k < metadataKeys.length; k++) {
-                string memory key = metadataKeys[k];
-                string memory value = metadataValues[k];
+            // Check that number of metadata keys and values are equal for this piece
+            require(
+                pieceKeys.length == pieceValues.length,
+                Errors.MetadataKeyAndValueLengthMismatch(pieceKeys.length, pieceValues.length)
+            );
+
+            require(
+                pieceKeys.length <= MAX_KEYS_PER_PIECE, Errors.TooManyMetadataKeys(MAX_KEYS_PER_PIECE, pieceKeys.length)
+            );
+
+            for (uint256 k = 0; k < pieceKeys.length; k++) {
+                string memory key = pieceKeys[k];
+                string memory value = pieceValues[k];
 
                 require(
                     bytes(dataSetPieceMetadata[dataSetId][pieceId][key]).length == 0,
@@ -511,7 +522,7 @@ contract FilecoinWarmStorageService is
                 dataSetPieceMetadata[dataSetId][pieceId][key] = string(value);
                 dataSetPieceMetadataKeys[dataSetId][pieceId].push(key);
             }
-            emit PieceAdded(dataSetId, pieceId, metadataKeys, metadataValues);
+            emit PieceAdded(dataSetId, pieceId, pieceKeys, pieceValues);
         }
     }
 
