@@ -75,16 +75,6 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(keccak256(abi.encode(payer, CLIENT_DATA_SET_IDS_SLOT))));
     }
 
-    function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId)
-        internal
-        view
-        returns (string memory)
-    {
-        return getString(
-            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT))))
-        );
-    }
-
     function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
         return service.extsload(keccak256(abi.encode(dataSetId, PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
@@ -233,6 +223,81 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         infos = new FilecoinWarmStorageService.DataSetInfo[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
+        }
+    }
+
+    /**
+     * @notice Get metadata value for a specific key in a data set
+     * @param dataSetId The ID of the data set
+     * @param key The metadata key
+     * @return value The metadata value
+     */
+    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+        internal
+        view
+        returns (string memory)
+    {
+        return getString(service, keccak256(abi.encode(key, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT)))));
+    }
+
+    /**
+     * @notice Get all metadata key-value pairs for a data set
+     * @param dataSetId The ID of the data set
+     * @return keys Array of metadata keys
+     * @return values Array of metadata values
+     */
+    function getAllDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+        values = new string[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = getDataSetMetadata(service, dataSetId, keys[i]);
+        }
+    }
+
+    /**
+     * @notice Get metadata value for a specific key in a piece
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece
+     * @param key The metadata key
+     * @return value The metadata value
+     */
+    function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId, string memory key)
+        internal
+        view
+        returns (string memory)
+    {
+        return getString(
+            service,
+            keccak256(
+                abi.encode(
+                    key, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT))))
+                )
+            )
+        );
+    }
+
+    /**
+     * @notice Get all metadata key-value pairs for a piece
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece
+     * @return keys Array of metadata keys
+     * @return values Array of metadata values
+     */
+    function getAllPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId)
+        internal
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        keys = getStringArray(
+            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
+        );
+        values = new string[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = getPieceMetadata(service, dataSetId, pieceId, keys[i]);
         }
     }
 }
