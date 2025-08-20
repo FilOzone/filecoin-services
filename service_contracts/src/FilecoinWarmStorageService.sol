@@ -598,8 +598,20 @@ contract FilecoinWarmStorageService is
         // Verify the client's signature
         verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
-        // Mark the data set as deleted
+        // Mark the data set as deleted and terminated
         info.deleted = true;
+
+        // Terminate all payment rails
+        if(!info.terminated) {
+            Payments payments = Payments(paymentsContractAddress);
+            payments.terminateRail(info.pdpRailId);
+            
+            if (info.withCDN) {
+                payments.terminateRail(info.cacheMissRailId);
+                payments.terminateRail(info.cdnRailId);
+            }
+            info.terminated = true;
+        }
 
         // Clean up all the state we track for this dataset
         // Note: We keep dataSetInfo[dataSetId], clientDataSets[payer], and clientDataSetIDs[payer]
@@ -1507,7 +1519,24 @@ contract FilecoinWarmStorageService is
         uint256[] memory dataSetIds = clientDataSets[client];
         DataSetInfo[] memory dataSets = new DataSetInfo[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
-            dataSets[i] = dataSetInfo[dataSetIds[i]];
+            uint256 dataSetId = dataSetIds[i];
+            DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
+            
+            dataSets[i] = DataSetInfo({
+                pdpRailId: storageInfo.pdpRailId,
+                cacheMissRailId: storageInfo.cacheMissRailId,
+                cdnRailId: storageInfo.cdnRailId,
+                payer: storageInfo.payer,
+                payee: storageInfo.payee,
+                commissionBps: storageInfo.commissionBps,
+                metadata: storageInfo.metadata,
+                pieceMetadata: storageInfo.pieceMetadata,
+                clientDataSetId: storageInfo.clientDataSetId,
+                withCDN: storageInfo.withCDN,
+                paymentEndEpoch: storageInfo.paymentEndEpoch,
+                deleted: storageInfo.deleted,
+                terminated: storageInfo.terminated
+            });
         }
         return dataSets;
     }
