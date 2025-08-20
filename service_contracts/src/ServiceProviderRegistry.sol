@@ -298,18 +298,6 @@ contract ServiceProviderRegistry is
         emit ProductRemoved(providerId, productType, block.number);
     }
 
-    /// @notice Update PDP service configuration (legacy compatibility)
-    /// @param pdpOffering The new PDP service configuration
-    function updatePDPService(PDPOffering memory pdpOffering) external {
-        uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
-
-        bytes memory encodedData = encodePDPOffering(pdpOffering);
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
-        _updateProduct(providerId, ProductType.PDP, encodedData, emptyKeys, emptyValues);
-    }
-
     /// @notice Update PDP service configuration with capabilities
     /// @param pdpOffering The new PDP service configuration
     /// @param capabilityKeys Array of capability keys (max MAX_CAPABILITY_KEY_LENGTH chars each)
