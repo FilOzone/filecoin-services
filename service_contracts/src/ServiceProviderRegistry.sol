@@ -43,7 +43,7 @@ contract ServiceProviderRegistry is
     event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
 
     /// @notice Emitted when a service is updated or added
-    event ServiceUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 updatedAt);
+    event ProductUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 updatedAt);
 
     /// @notice Emitted when a product is added to an existing provider
     event ProductAdded(uint256 indexed providerId, ProductType indexed productType, uint256 addedAt);
@@ -256,7 +256,7 @@ contract ServiceProviderRegistry is
         });
 
         // Emit event
-        emit ServiceUpdated(providerId, productType, block.number);
+        emit ProductUpdated(providerId, productType, block.number);
     }
 
     /// @notice Remove a product from a provider

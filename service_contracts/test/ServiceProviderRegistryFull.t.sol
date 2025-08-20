@@ -28,7 +28,7 @@ contract ServiceProviderRegistryFullTest is Test {
     bytes public encodedUpdatedPDPData;
 
     event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
-    event ServiceUpdated(
+    event ProductUpdated(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 updatedAt
     );
     event ProductAdded(
@@ -432,7 +432,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, false, true);
-        emit ServiceUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
 
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
@@ -457,42 +457,6 @@ contract ServiceProviderRegistryFullTest is Test {
             updatedPDPData.storagePricePerTibPerMonth,
             "Storage price should be updated"
         );
-        assertTrue(isActive, "PDP service should still be active");
-    }
-
-    function testUpdatePDPService() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
-
-        // Register provider
-        vm.prank(provider1);
-        registry.registerProvider{value: REGISTRATION_FEE}(
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
-        );
-
-        // Update PDP service using legacy updatePDPService function
-        vm.startPrank(provider1);
-
-        vm.expectEmit(true, true, false, true);
-        emit ServiceUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
-
-        registry.updatePDPService(updatedPDPData);
-
-        vm.stopPrank();
-
-        // Verify update
-        (
-            ServiceProviderRegistryStorage.PDPOffering memory pdpData,
-            string[] memory keys,
-            string[] memory values,
-            bool isActive
-        ) = registry.getPDPService(1);
-        assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
         assertTrue(isActive, "PDP service should still be active");
     }
 
@@ -622,11 +586,6 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(updatedKeys.length, 2, "Should have 2 capability keys after update");
         assertEq(updatedKeys[0], "support", "First updated key should be support");
         assertEq(updatedValues[0], "24/7", "First updated value should be 24/7");
-
-        // Verify old owner cannot update
-        vm.prank(provider1);
-        vm.expectRevert("Provider not registered");
-        registry.updatePDPService(defaultPDPData);
     }
 
     function testCannotTransferToZeroAddress() public {
@@ -1130,7 +1089,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
-        emit ServiceUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
 
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
@@ -1241,10 +1200,10 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        // Test ServiceUpdated event
+        // Test ProductUpdated event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit ServiceUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
