@@ -17,7 +17,7 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Main provider information
     struct ServiceProviderInfo {
-        address owner;
+        address beneficiary;
         string description;
         bool isActive;
     }

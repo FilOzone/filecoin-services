@@ -67,14 +67,14 @@ contract ServiceProviderRegistry is
 
     /// @notice Ensures the caller is the owner of the provider
     modifier onlyProviderOwner(uint256 providerId) {
-        require(providers[providerId].owner == msg.sender, "Only provider owner can call this function");
+        require(providers[providerId].beneficiary == msg.sender, "Only provider owner can call this function");
         _;
     }
 
     /// @notice Ensures the provider exists
     modifier providerExists(uint256 providerId) {
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
-        require(providers[providerId].owner != address(0), "Provider not found");
+        require(providers[providerId].beneficiary != address(0), "Provider not found");
         _;
     }
 
@@ -129,7 +129,7 @@ contract ServiceProviderRegistry is
         providerId = ++numProviders;
 
         // Store provider info
-        providers[providerId] = ServiceProviderInfo({owner: msg.sender, description: description, isActive: true});
+        providers[providerId] = ServiceProviderInfo({beneficiary: msg.sender, description: description, isActive: true});
 
         // Update address mapping
         addressToProviderId[msg.sender] = providerId;
@@ -340,7 +340,7 @@ contract ServiceProviderRegistry is
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
-        require(providers[providerId].owner != address(0), "Provider not found");
+        require(providers[providerId].beneficiary != address(0), "Provider not found");
         require(providers[providerId].isActive, "Provider is not active");
 
         // Validate description
@@ -374,10 +374,10 @@ contract ServiceProviderRegistry is
         // Check new owner doesn't already have a provider
         require(addressToProviderId[newOwner] == 0, "New owner already has a provider");
 
-        address previousOwner = providers[providerId].owner;
+        address previousOwner = providers[providerId].beneficiary;
 
         // Update owner
-        providers[providerId].owner = newOwner;
+        providers[providerId].beneficiary = newOwner;
 
         // Update address mappings
         delete addressToProviderId[previousOwner];
@@ -417,7 +417,7 @@ contract ServiceProviderRegistry is
         }
 
         // Clear address mapping
-        delete addressToProviderId[providers[providerId].owner];
+        delete addressToProviderId[providers[providerId].beneficiary];
 
         // Emit event
         emit ProviderRemoved(providerId, block.number);

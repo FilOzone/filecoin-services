@@ -153,7 +153,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.owner, provider1, "Owner should be provider1");
+        assertEq(info.beneficiary, provider1, "Owner should be provider1");
         assertEq(info.description, "Test provider description", "Description should match");
         assertTrue(info.isActive, "Provider should be active");
 
@@ -568,7 +568,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify transfer
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.owner, provider2, "Owner should be updated");
+        assertEq(info.beneficiary, provider2, "Owner should be updated");
         assertEq(registry.getProviderByAddress(provider2), 1, "New owner lookup should work");
         assertEq(registry.getProviderByAddress(provider1), 0, "Old owner lookup should return 0");
         assertTrue(registry.isRegisteredProvider(provider2), "New owner should be registered");
@@ -719,7 +719,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify provider info still exists (soft delete)
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertFalse(info.isActive, "Provider should be marked inactive");
-        assertEq(info.owner, provider1, "Owner should still be recorded");
+        assertEq(info.beneficiary, provider1, "Owner should still be recorded");
 
         // Verify PDP service is inactive
         (,, bool isActive) = registry.getPDPService(1);
