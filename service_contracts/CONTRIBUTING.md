@@ -3,7 +3,7 @@
 ## Setup
 After [installing forge](https://getfoundry.sh/introduction/installation/),
 ```sh
-git@github.com:FilOzone/filecoin-services.git
+git clone git@github.com:FilOzone/filecoin-services.git
 cd filecoin-services/service_contracts
 make
 ```
@@ -41,6 +41,7 @@ make src/FilecoinWarmStorageServiceStateView.sol
 ```
 
 ### Updating `FilecoinWarmStorageServiceLayout`
+If you update the storage layout of FilecoinWarmStorageService you should regenerate the storage layout solidity file.
 ```sh
 forge build
 make src/lib/FilecoinWarmStorageServiceLayout.sol
