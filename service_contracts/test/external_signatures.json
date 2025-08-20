@@ -1,18 +1,27 @@
 {
   "signer": "0x2e988A386a799F506693793c6A5AF6B54dfAaBfB",
   "createDataSet": {
-    "signature": "0x2ade4cae25767d913085f43ce05de4d5b4b3e1f19e87c8a35f184bcf69ccbed83636027a360676212407c0b5cc5d7e33a67919d5d450e3e12644a375c38b78b01c",
+    "signature": "0xc77965e2b6efd594629c44eb61127bc3133b65d08c25f8aa33e3021e7f46435845ab67ffbac96afc4b4671ecbd32d4869ca7fe1c0eaa5affa942d0abbfd98d601b",
     "clientDataSetId": 12345,
     "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-    "withCDN": true
+    "metadata": [
+      {
+        "key": "title",
+        "value": "TestDataSet"
+      }
+    ]
   },
   "addPieces": {
-    "signature": "0x11a84c9e14c95c8e6a8efc4ee72fb3bb4b596a398fc1c0ff9d1ddec24eab6ce239964f6c75144499e56f36c7e85559b74d5c03faf0cc9843846ff05a52d928f91b",
+    "signature": "0x6a44a94b3965ce8948b7e5975f1978dbaf5e975a4ccadd837ca7da9539ebe89c0b0cbfd2775d29a60e473197c84940280dac1b7e6a7e1e1bdbf4bd0f7d4a9a1a1b",
     "clientDataSetId": 12345,
     "firstAdded": 1,
     "pieceCidBytes": [
       "0x01559120220500de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c",
       "0x01559120227e03642a607ef886b004bf2c1978463ae1d4693ac0f410eb2d1b7a47fe205e5e750f"
+    ],
+    "metadata": [
+      [],
+      []
     ]
   },
   "schedulePieceRemovals": {

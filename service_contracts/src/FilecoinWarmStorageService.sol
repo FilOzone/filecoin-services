@@ -172,13 +172,21 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // EIP-712 Type hashes
-    bytes32 private constant CREATE_DATA_SET_TYPEHASH =
-        keccak256("CreateDataSet(uint256 clientDataSetId,address payee)");
+    // EIP-712 type definitions with metadata support
+    bytes32 private constant METADATA_ENTRY_TYPEHASH = keccak256("MetadataEntry(string key,string value)");
+
+    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
+        "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+    );
 
     bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant ADD_PIECES_TYPEHASH =
-        keccak256("AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData)Cid(bytes data)");
+    bytes32 private constant PIECE_METADATA_TYPEHASH =
+        keccak256("PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)");
+
+    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+    );
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
@@ -308,7 +316,14 @@ contract FilecoinWarmStorageService is
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
-        verifyCreateDataSetSignature(createData.payer, clientDataSetId, creator, createData.signature);
+        verifyCreateDataSetSignature(
+            createData.payer,
+            clientDataSetId,
+            creator,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -485,7 +500,9 @@ contract FilecoinWarmStorageService is
         );
 
         // Verify the signature
-        verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, firstAdded, signature);
+        verifyAddPiecesSignature(
+            payer, info.clientDataSetId, pieceData, firstAdded, metadataKeys, metadataValues, signature
+        );
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -974,18 +991,94 @@ contract FilecoinWarmStorageService is
         return (serviceFee, spPayment);
     }
 
+    // ============ Metadata Hashing Functions ============
+
+    /**
+     * @notice Hashes a single metadata entry for EIP-712 signing
+     * @param key The metadata key
+     * @param value The metadata value
+     * @return Hash of the metadata entry struct
+     */
+    function hashMetadataEntry(string memory key, string memory value) internal pure returns (bytes32) {
+        return keccak256(abi.encode(METADATA_ENTRY_TYPEHASH, keccak256(bytes(key)), keccak256(bytes(value))));
+    }
+
+    /**
+     * @notice Hashes an array of metadata entries
+     * @param keys Array of metadata keys
+     * @param values Array of metadata values
+     * @return Hash of all metadata entries
+     */
+    function hashMetadataEntries(string[] memory keys, string[] memory values) internal pure returns (bytes32) {
+        require(keys.length == values.length, Errors.MetadataKeyAndValueLengthMismatch(keys.length, values.length));
+
+        bytes32[] memory entryHashes = new bytes32[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            entryHashes[i] = hashMetadataEntry(keys[i], values[i]);
+        }
+        return keccak256(abi.encodePacked(entryHashes));
+    }
+
+    /**
+     * @notice Hashes piece metadata for a specific piece index
+     * @param pieceIndex The index of the piece
+     * @param keys Array of metadata keys for this piece
+     * @param values Array of metadata values for this piece
+     * @return Hash of the piece metadata struct
+     */
+    function hashPieceMetadata(uint256 pieceIndex, string[] memory keys, string[] memory values)
+        internal
+        pure
+        returns (bytes32)
+    {
+        bytes32 metadataHash = hashMetadataEntries(keys, values);
+        return keccak256(abi.encode(PIECE_METADATA_TYPEHASH, pieceIndex, metadataHash));
+    }
+
+    /**
+     * @notice Hashes all piece metadata for multiple pieces
+     * @param allKeys 2D array where allKeys[i] contains keys for piece i
+     * @param allValues 2D array where allValues[i] contains values for piece i
+     * @return Hash of all piece metadata
+     */
+    function hashAllPieceMetadata(string[][] memory allKeys, string[][] memory allValues)
+        internal
+        pure
+        returns (bytes32)
+    {
+        require(allKeys.length == allValues.length, "Keys/values array length mismatch");
+
+        bytes32[] memory pieceHashes = new bytes32[](allKeys.length);
+        for (uint256 i = 0; i < allKeys.length; i++) {
+            pieceHashes[i] = hashPieceMetadata(i, allKeys[i], allValues[i]);
+        }
+        return keccak256(abi.encodePacked(pieceHashes));
+    }
+
+    // ============ Signature Verification Functions ============
+
     /**
      * @notice Verifies a signature for the CreateDataSet operation
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The unique ID for the client's data set
+     * @param payee The service provider address
+     * @param metadataKeys Array of metadata keys
+     * @param metadataValues Array of metadata values
      * @param signature The signature bytes (v, r, s)
      */
-    function verifyCreateDataSetSignature(address payer, uint256 clientDataSetId, address payee, bytes memory signature)
-        internal
-        view
-    {
+    function verifyCreateDataSetSignature(
+        address payer,
+        uint256 clientDataSetId,
+        address payee,
+        string[] memory metadataKeys,
+        string[] memory metadataValues,
+        bytes memory signature
+    ) internal view {
+        // Hash the metadata entries
+        bytes32 metadataHash = hashMetadataEntries(metadataKeys, metadataValues);
+
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee));
+        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, metadataHash));
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Recover signer address from the signature
@@ -998,7 +1091,10 @@ contract FilecoinWarmStorageService is
      * @notice Verifies a signature for the AddPieces operation
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
-     * @param pieceDataArray Array of PieceSignatureData structures
+     * @param pieceDataArray Array of piece CID structures
+     * @param firstAdded The first piece ID being added
+     * @param allKeys 2D array where allKeys[i] contains metadata keys for piece i
+     * @param allValues 2D array where allValues[i] contains metadata values for piece i
      * @param signature The signature bytes (v, r, s)
      */
     function verifyAddPiecesSignature(
@@ -1006,6 +1102,8 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId,
         Cids.Cid[] memory pieceDataArray,
         uint256 firstAdded,
+        string[][] memory allKeys,
+        string[][] memory allValues,
         bytes memory signature
     ) internal view {
         // Hash each PieceData struct
@@ -1015,8 +1113,17 @@ contract FilecoinWarmStorageService is
             cidHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceDataArray[i].data)));
         }
 
+        // Hash all piece metadata
+        bytes32 pieceMetadataHash = hashAllPieceMetadata(allKeys, allValues);
+
         bytes32 structHash = keccak256(
-            abi.encode(ADD_PIECES_TYPEHASH, clientDataSetId, firstAdded, keccak256(abi.encodePacked(cidHashes)))
+            abi.encode(
+                ADD_PIECES_TYPEHASH,
+                clientDataSetId,
+                firstAdded,
+                keccak256(abi.encodePacked(cidHashes)),
+                pieceMetadataHash
+            )
         );
 
         // Create the message hash
