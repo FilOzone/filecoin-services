@@ -1019,47 +1019,28 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testGetClientDataSets_TerminatedDataSets() public {
         // Create multiple data sets for the client
-        uint256 dataSet1 = createDataSetForClient(sp1, client, "Metadata 1");
+        createDataSetForClient(sp1, client, "Metadata 1");
         uint256 dataSet2 = createDataSetForClient(sp2, client, "Metadata 2");
-        uint256 dataSet3 = createDataSetForClient(sp1, client, "Metadata 3");
+        createDataSetForClient(sp1, client, "Metadata 3");
 
         // Verify we have 3 datasets initially
         FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return three data sets initially");
 
-        // Verify the datasets are not terminated initially
-        FilecoinWarmStorageService.DataSetInfo memory info1 = pdpServiceWithPayments.getDataSet(dataSet1);
-        FilecoinWarmStorageService.DataSetInfo memory info2 = pdpServiceWithPayments.getDataSet(dataSet2);
-        FilecoinWarmStorageService.DataSetInfo memory info3 = pdpServiceWithPayments.getDataSet(dataSet3);
-
-        assertFalse(info1.terminated, "Dataset 1 should not be terminated initially");
-        assertFalse(info2.terminated, "Dataset 2 should not be terminated initially");
-        assertFalse(info3.terminated, "Dataset 3 should not be terminated initially");
-
         // Terminate the second dataset (dataSet2) - client terminates
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSet2);
 
-        // Verify the dataset is now marked as terminated
+        // Verify the dataset is now terminated (paymentEndEpoch > 0)
         FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
-        assertTrue(terminatedInfo.terminated, "Dataset 2 should be marked as terminated");
-        assertTrue(terminatedInfo.paymentEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set");
+        assertTrue(terminatedInfo.paymentEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set after termination");
 
         // Verify getClientDataSets still returns all 3 datasets (termination doesn't exclude from list)
         dataSets = pdpServiceWithPayments.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return all three data sets after termination");
 
-        // Verify the terminated dataset is marked as terminated in the returned array
-        bool foundTerminated = false;
-        for (uint256 i = 0; i < dataSets.length; i++) {
-            if (dataSets[i].clientDataSetId == 1) {
-                assertTrue(dataSets[i].terminated, "Dataset 2 should be marked as terminated in returned array");
-                assertTrue(dataSets[i].paymentEndEpoch > 0, "Dataset 2 should have paymentEndEpoch > 0");
-                foundTerminated = true;
-                break;
-            }
-        }
-        assertTrue(foundTerminated, "Terminated dataset should be found in returned array");
+        // Verify the terminated dataset has correct status
+        assertTrue(dataSets[1].paymentEndEpoch > 0, "Dataset 2 should have paymentEndEpoch > 0");
     }
 
     function testGetClientDataSets_ExcludesDeletedDataSets() public {
@@ -1078,49 +1059,19 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify termination status
         FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
-        assertTrue(terminatedInfo.paymentEndEpoch > 0 && terminatedInfo.terminated, "Dataset 2 should be terminated");
-        assertFalse(terminatedInfo.deleted, "Dataset 2 should not be deleted yet");
+        assertTrue(terminatedInfo.paymentEndEpoch > 0, "Dataset 2 should be terminated");
 
-        // Delete the second dataset (dataSet2) - this should mark it as both terminated and deleted
+        // Delete the second dataset (dataSet2) - this should completely remove it
         deleteDataSetForClient(sp2, client, dataSet2);
 
-        // Verify the dataset is now marked as both terminated and deleted
-        FilecoinWarmStorageService.DataSetInfo memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
-        assertTrue(deletedInfo.deleted, "Dataset 2 should be marked as deleted");
-        assertTrue(
-            deletedInfo.paymentEndEpoch > 0 && deletedInfo.terminated, "Dataset 2 should still be marked as terminated"
-        );
-
-        // Verify getClientDataSets now only returns 2 datasets (excluding the deleted one)
+        // Verify getClientDataSets now only returns 2 datasets (the deleted one is completely gone)
         dataSets = pdpServiceWithPayments.getClientDataSets(client);
-        assertEq(dataSets.length, 2, "Should return only two data sets after deletion");
+        assertEq(dataSets.length, 2, "Should return only 2 data sets after deletion");
 
-        // Verify the remaining datasets are still active
-        assertEq(dataSets[0].clientDataSetId, 0, "First remaining dataset should have clientDataSetId 0");
-        assertEq(dataSets[1].clientDataSetId, 2, "Second remaining dataset should have clientDataSetId 2");
-
-        // Verify the deleted dataset is not in the returned array
+        // Verify the deleted dataset is completely gone
         for (uint256 i = 0; i < dataSets.length; i++) {
             assertTrue(dataSets[i].clientDataSetId != 1, "Deleted dataset should not be in returned array");
         }
-
-        // Verify that getAllClientDataSets returns all 3 datasets with correct status
-        FilecoinWarmStorageService.DataSetInfo[] memory allDataSets =
-            pdpServiceWithPayments.getAllClientDataSets(client);
-        assertEq(allDataSets.length, 3, "getAllClientDataSets should return all three datasets");
-
-        // Verify the deleted dataset has correct status in getAllClientDataSets
-        assertTrue(allDataSets[1].deleted, "Dataset 2 should be marked as deleted in getAllClientDataSets");
-        assertTrue(
-            allDataSets[1].paymentEndEpoch > 0 && allDataSets[1].terminated,
-            "Dataset 2 should be marked as terminated in getAllClientDataSets"
-        );
-
-        // Verify other datasets are not deleted or terminated
-        assertFalse(allDataSets[0].deleted, "Dataset 1 should not be deleted in getAllClientDataSets");
-        assertFalse(allDataSets[0].terminated, "Dataset 1 should not be terminated in getAllClientDataSets");
-        assertFalse(allDataSets[2].deleted, "Dataset 3 should not be deleted in getAllClientDataSets");
-        assertFalse(allDataSets[2].terminated, "Dataset 3 should not be terminated in getAllClientDataSets");
     }
 
     // ===== Data Set Service Provider Change Tests =====
