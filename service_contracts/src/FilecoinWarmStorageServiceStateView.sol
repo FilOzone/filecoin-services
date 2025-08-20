@@ -52,8 +52,32 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getMaxProvingPeriod();
     }
 
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
-        return service.getPieceMetadata(dataSetId, pieceId);
+    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
+        return service.getDataSetMetadata(dataSetId, key);
+    }
+
+    function getAllDataSetMetadata(uint256 dataSetId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllDataSetMetadata(dataSetId);
+    }
+
+    function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
+        external
+        view
+        returns (string memory)
+    {
+        return service.getPieceMetadata(dataSetId, pieceId, key);
+    }
+
+    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllPieceMetadata(dataSetId, pieceId);
     }
 
     function initChallengeWindowStart() external view returns (uint256) {

@@ -90,33 +90,15 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
-        bytes32[] memory info6 = service.extsloadStruct(slot, 6);
-        info.pdpRailId = uint256(info6[0]);
-        info.cacheMissRailId = uint256(info6[1]);
-        info.cdnRailId = uint256(info6[2]);
-        info.payer = address(uint160(uint256(info6[3])));
-        info.payee = address(uint160(uint256(info6[4])));
-        info.commissionBps = uint256(info6[5]);
-
-        assembly ("memory-safe") {
-            slot := add(6, slot)
-        }
-        info.metadata = getString(service, slot);
-
-        assembly ("memory-safe") {
-            slot := add(1, slot)
-        }
-
-        info.pieceMetadata = getStringArray(service, slot);
-
-        assembly ("memory-safe") {
-            slot := add(1, slot)
-        }
-
-        bytes32[] memory info3 = service.extsloadStruct(slot, 3);
-        info.clientDataSetId = uint256(info3[0]);
-        info.withCDN = info3[1] != bytes32(0);
-        info.paymentEndEpoch = uint256(info3[2]);
+        bytes32[] memory info8 = service.extsloadStruct(slot, 8);
+        info.pdpRailId = uint256(info8[0]);
+        info.cacheMissRailId = uint256(info8[1]);
+        info.cdnRailId = uint256(info8[2]);
+        info.payer = address(uint160(uint256(info8[3])));
+        info.payee = address(uint160(uint256(info8[4])));
+        info.commissionBps = uint256(info8[5]);
+        info.clientDataSetId = uint256(info8[6]);
+        info.paymentEndEpoch = uint256(info8[7]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -237,7 +219,13 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         view
         returns (string memory)
     {
-        return getString(service, keccak256(abi.encode(key, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT)))));
+        // Direct access to mapping(uint256 => mapping(string => string))
+        // Solidity storage layout for nested mappings:
+        // - First level: keccak256(abi.encode(dataSetId, slot))
+        // - Second level with string key: keccak256(bytes(key) . firstLevel)
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT));
+        bytes32 slot = keccak256(abi.encodePacked(bytes(key), firstLevel));
+        return getString(service, slot);
     }
 
     /**
@@ -270,14 +258,15 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         view
         returns (string memory)
     {
-        return getString(
-            service,
-            keccak256(
-                abi.encode(
-                    key, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT))))
-                )
-            )
-        );
+        // Direct access to mapping(uint256 => mapping(uint256 => mapping(string => string)))
+        // Solidity storage layout for triple nested mappings:
+        // - First level: keccak256(abi.encode(dataSetId, slot))
+        // - Second level: keccak256(abi.encode(pieceId, firstLevel))
+        // - Third level with string key: keccak256(bytes(key) . secondLevel)
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
+        bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
+        bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
+        return getString(service, slot);
     }
 
     /**

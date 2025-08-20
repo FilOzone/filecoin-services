@@ -88,33 +88,15 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
-        bytes32[] memory info6 = service.extsloadStruct(slot, 6);
-        info.pdpRailId = uint256(info6[0]);
-        info.cacheMissRailId = uint256(info6[1]);
-        info.cdnRailId = uint256(info6[2]);
-        info.payer = address(uint160(uint256(info6[3])));
-        info.payee = address(uint160(uint256(info6[4])));
-        info.commissionBps = uint256(info6[5]);
-
-        assembly ("memory-safe") {
-            slot := add(6, slot)
-        }
-        info.metadata = getString(service, slot);
-
-        assembly ("memory-safe") {
-            slot := add(1, slot)
-        }
-
-        info.pieceMetadata = getStringArray(service, slot);
-
-        assembly ("memory-safe") {
-            slot := add(1, slot)
-        }
-
-        bytes32[] memory info3 = service.extsloadStruct(slot, 3);
-        info.clientDataSetId = uint256(info3[0]);
-        info.withCDN = info3[1] != bytes32(0);
-        info.paymentEndEpoch = uint256(info3[2]);
+        bytes32[] memory info8 = service.extsloadStruct(slot, 8);
+        info.pdpRailId = uint256(info8[0]);
+        info.cacheMissRailId = uint256(info8[1]);
+        info.cdnRailId = uint256(info8[2]);
+        info.payer = address(uint160(uint256(info8[3])));
+        info.payee = address(uint160(uint256(info8[4])));
+        info.commissionBps = uint256(info8[5]);
+        info.clientDataSetId = uint256(info8[6]);
+        info.paymentEndEpoch = uint256(info8[7]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -271,7 +253,9 @@ library FilecoinWarmStorageServiceStateLibrary {
         return getString(
             service,
             keccak256(
-                abi.encode(key, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT)))))
+                abi.encode(
+                    key, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT))))
+                )
             )
         );
     }
