@@ -344,8 +344,8 @@ contract FilecoinWarmStorageService is
             // Store the metadata key in the array for this data set
             dataSetMetadataKeys[dataSetId].push(key);
 
-            // Store the metadata value (convert bytes to string)
-            dataSetMetadata[dataSetId][key] = string(value);
+            // Store the metadata value directly
+            dataSetMetadata[dataSetId][key] = value;
         }
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
@@ -1093,28 +1093,6 @@ contract FilecoinWarmStorageService is
 
         // Recover and return the address
         return ecrecover(messageHash, v, r, s);
-    }
-
-    function getClientDataSets(address client) external view returns (DataSetInfo[] memory) {
-        uint256[] memory dataSetIds = clientDataSets[client];
-
-        DataSetInfo[] memory dataSets = new DataSetInfo[](dataSetIds.length);
-        for (uint256 i = 0; i < dataSetIds.length; i++) {
-            uint256 dataSetId = dataSetIds[i];
-            DataSetInfo storage storageInfo = dataSetInfo[dataSetId];
-            // Create a memory copy of the struct (excluding any mappings)
-            dataSets[i] = DataSetInfo({
-                pdpRailId: storageInfo.pdpRailId,
-                cacheMissRailId: storageInfo.cacheMissRailId,
-                cdnRailId: storageInfo.cdnRailId,
-                payer: storageInfo.payer,
-                payee: storageInfo.payee,
-                commissionBps: storageInfo.commissionBps,
-                clientDataSetId: storageInfo.clientDataSetId,
-                paymentEndEpoch: storageInfo.paymentEndEpoch
-            });
-        }
-        return dataSets;
     }
 
     /**
