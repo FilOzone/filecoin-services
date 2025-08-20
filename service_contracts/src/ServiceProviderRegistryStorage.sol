@@ -27,7 +27,6 @@ contract ServiceProviderRegistryStorage {
         ProductType productType;
         bytes productData; // ABI-encoded service-specific data
         string[] capabilityKeys; // Max MAX_CAPABILITY_KEY_LENGTH chars each
-        string[] capabilityValues; // Max MAX_CAPABILITY_VALUE_LENGTH chars each
         bool isActive;
     }
 
@@ -68,4 +67,8 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Address to provider ID lookup
     mapping(address providerAddress => uint256 providerId) public addressToProviderId;
+
+    /// @notice Capability values mapping for efficient lookups
+    mapping(uint256 providerId => mapping(ProductType productType => mapping(string key => string value))) public
+        productCapabilities;
 }

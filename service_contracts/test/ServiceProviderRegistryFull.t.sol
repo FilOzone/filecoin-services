@@ -158,12 +158,8 @@ contract ServiceProviderRegistryFullTest is Test {
         assertTrue(info.isActive, "Provider should be active");
 
         // Verify PDP service using getPDPService (including capabilities)
-        (
-            ServiceProviderRegistryStorage.PDPOffering memory pdpData,
-            string[] memory keys,
-            string[] memory values,
-            bool isActive
-        ) = registry.getPDPService(1);
+        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
+            registry.getPDPService(1);
         assertEq(pdpData.serviceURL, SERVICE_URL, "Service URL should match");
         assertEq(pdpData.minPieceSizeInBytes, defaultPDPData.minPieceSizeInBytes, "Min piece size should match");
         assertEq(pdpData.maxPieceSizeInBytes, defaultPDPData.maxPieceSizeInBytes, "Max piece size should match");
@@ -176,23 +172,36 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify capabilities
         assertEq(keys.length, 4, "Should have 4 capability keys");
-        assertEq(values.length, 4, "Should have 4 capability values");
         assertEq(keys[0], "datacenter", "First key should be datacenter");
-        assertEq(values[0], "EU-WEST", "First value should be EU-WEST");
         assertEq(keys[1], "redundancy", "Second key should be redundancy");
-        assertEq(values[1], "3x", "Second value should be 3x");
         assertEq(keys[2], "latency", "Third key should be latency");
-        assertEq(values[2], "low", "Third value should be low");
         assertEq(keys[3], "cert", "Fourth key should be cert");
+
+        // Query values using new methods
+        string[] memory queryKeys = new string[](4);
+        queryKeys[0] = "datacenter";
+        queryKeys[1] = "redundancy";
+        queryKeys[2] = "latency";
+        queryKeys[3] = "cert";
+
+        string[] memory values =
+            registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, queryKeys);
+        assertEq(values[0], "EU-WEST", "First value should be EU-WEST");
+        assertEq(values[1], "3x", "Second value should be 3x");
+        assertEq(values[2], "low", "Third value should be low");
         assertEq(values[3], "ISO27001", "Fourth value should be ISO27001");
 
         // Also verify using getProduct
-        (bytes memory productData, string[] memory productKeys, string[] memory productValues, bool productActive) =
+        (bytes memory productData, string[] memory productKeys, bool productActive) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         assertTrue(productActive, "Product should be active");
         assertEq(productKeys.length, 4, "Product should have 4 capability keys");
         assertEq(productKeys[0], "datacenter", "Product first key should be datacenter");
-        assertEq(productValues[0], "EU-WEST", "Product first value should be EU-WEST");
+
+        // Verify value using direct mapping access
+        string memory datacenterValue =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "datacenter");
+        assertEq(datacenterValue, "EU-WEST", "Product first value should be EU-WEST");
 
         // Verify fee was burned
         uint256 burnActorBalanceAfter = registry.BURN_ACTOR().balance;
@@ -283,21 +292,29 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(activeProviders[1], 2, "Second active provider should be ID 2");
 
         // Verify provider 1 capabilities
-        (, string[] memory keys1, string[] memory values1,) = registry.getPDPService(1);
+        (, string[] memory keys1,) = registry.getPDPService(1);
         assertEq(keys1.length, 2, "Provider 1 should have 2 capability keys");
         assertEq(keys1[0], "region", "Provider 1 first key should be region");
-        assertEq(values1[0], "US-EAST", "Provider 1 first value should be US-EAST");
         assertEq(keys1[1], "performance", "Provider 1 second key should be performance");
+
+        // Query values for provider 1
+        string[] memory values1 =
+            registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, keys1);
+        assertEq(values1[0], "US-EAST", "Provider 1 first value should be US-EAST");
         assertEq(values1[1], "high", "Provider 1 second value should be high");
 
         // Verify provider 2 capabilities
-        (, string[] memory keys2, string[] memory values2,) = registry.getPDPService(2);
+        (, string[] memory keys2,) = registry.getPDPService(2);
         assertEq(keys2.length, 3, "Provider 2 should have 3 capability keys");
         assertEq(keys2[0], "region", "Provider 2 first key should be region");
-        assertEq(values2[0], "ASIA-PAC", "Provider 2 first value should be ASIA-PAC");
         assertEq(keys2[1], "storage", "Provider 2 second key should be storage");
-        assertEq(values2[1], "100TB", "Provider 2 second value should be 100TB");
         assertEq(keys2[2], "availability", "Provider 2 third key should be availability");
+
+        // Query values for provider 2
+        string[] memory values2 =
+            registry.getProductCapabilities(2, ServiceProviderRegistryStorage.ProductType.PDP, keys2);
+        assertEq(values2[0], "ASIA-PAC", "Provider 2 first value should be ASIA-PAC");
+        assertEq(values2[1], "100TB", "Provider 2 second value should be 100TB");
         assertEq(values2[2], "99.999%", "Provider 2 third value should be 99.999%");
     }
 
@@ -441,12 +458,8 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.stopPrank();
 
         // Verify update
-        (
-            ServiceProviderRegistryStorage.PDPOffering memory pdpData,
-            string[] memory keys,
-            string[] memory values,
-            bool isActive
-        ) = registry.getPDPService(1);
+        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
+            registry.getPDPService(1);
         assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
         assertEq(pdpData.minPieceSizeInBytes, updatedPDPData.minPieceSizeInBytes, "Min piece size should be updated");
         assertEq(pdpData.maxPieceSizeInBytes, updatedPDPData.maxPieceSizeInBytes, "Max piece size should be updated");
@@ -534,10 +547,14 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify capabilities before transfer
-        (, string[] memory keysBefore, string[] memory valuesBefore,) = registry.getPDPService(1);
+        (, string[] memory keysBefore,) = registry.getPDPService(1);
         assertEq(keysBefore.length, 3, "Should have 3 capability keys before transfer");
         assertEq(keysBefore[0], "tier", "First key should be tier");
-        assertEq(valuesBefore[0], "premium", "First value should be premium");
+
+        // Verify value before transfer
+        string memory tierBefore =
+            registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertEq(tierBefore, "premium", "First value should be premium");
 
         // Transfer ownership
         vm.startPrank(provider1);
@@ -558,13 +575,17 @@ contract ServiceProviderRegistryFullTest is Test {
         assertFalse(registry.isRegisteredProvider(provider1), "Old owner should not be registered");
 
         // Verify capabilities persist after transfer
-        (, string[] memory keysAfter, string[] memory valuesAfter,) = registry.getPDPService(1);
+        (, string[] memory keysAfter,) = registry.getPDPService(1);
         assertEq(keysAfter.length, 3, "Should still have 3 capability keys after transfer");
         assertEq(keysAfter[0], "tier", "First key should still be tier");
-        assertEq(valuesAfter[0], "premium", "First value should still be premium");
         assertEq(keysAfter[1], "backup", "Second key should still be backup");
-        assertEq(valuesAfter[1], "daily", "Second value should still be daily");
         assertEq(keysAfter[2], "encryption", "Third key should still be encryption");
+
+        // Verify values persist after transfer
+        string[] memory valuesAfter =
+            registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, keysAfter);
+        assertEq(valuesAfter[0], "premium", "First value should still be premium");
+        assertEq(valuesAfter[1], "daily", "Second value should still be daily");
         assertEq(valuesAfter[2], "AES-256", "Third value should still be AES-256");
 
         // Verify new owner can update with new capabilities
@@ -582,10 +603,14 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify capabilities were updated
-        (, string[] memory updatedKeys, string[] memory updatedValues,) = registry.getPDPService(1);
+        (, string[] memory updatedKeys,) = registry.getPDPService(1);
         assertEq(updatedKeys.length, 2, "Should have 2 capability keys after update");
         assertEq(updatedKeys[0], "support", "First updated key should be support");
-        assertEq(updatedValues[0], "24/7", "First updated value should be 24/7");
+
+        // Verify value was updated
+        string memory supportValue =
+            registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "support");
+        assertEq(supportValue, "24/7", "First updated value should be 24/7");
     }
 
     function testCannotTransferToZeroAddress() public {
@@ -697,7 +722,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(info.owner, provider1, "Owner should still be recorded");
 
         // Verify PDP service is inactive
-        (,,, bool isActive) = registry.getPDPService(1);
+        (,, bool isActive) = registry.getPDPService(1);
         assertFalse(isActive, "PDP service should be inactive");
 
         // Verify not in active list
@@ -917,7 +942,7 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        (bytes memory productData, string[] memory keys, string[] memory values, bool isActive) =
+        (bytes memory productData, string[] memory keys, bool isActive) =
             registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
         assertTrue(productData.length > 0, "Product data should exist");
         assertTrue(isActive, "Product should be active");
@@ -1097,7 +1122,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.stopPrank();
 
         // Verify the product was updated (check the actual data)
-        (ServiceProviderRegistryStorage.PDPOffering memory pdpData,,,) = registry.getPDPService(1);
+        (ServiceProviderRegistryStorage.PDPOffering memory pdpData,,) = registry.getPDPService(1);
         assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
     }
 
@@ -1245,16 +1270,19 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Get the product and verify capabilities
-        (bytes memory productData, string[] memory returnedKeys, string[] memory returnedValues, bool isActive) =
+        (bytes memory productData, string[] memory returnedKeys, bool isActive) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
         assertEq(returnedKeys.length, 3, "Should have 3 capability keys");
-        assertEq(returnedValues.length, 3, "Should have 3 capability values");
         assertEq(returnedKeys[0], "region", "First key should be region");
-        assertEq(returnedValues[0], "us-west-2", "First value should be us-west-2");
         assertEq(returnedKeys[1], "bandwidth", "Second key should be bandwidth");
-        assertEq(returnedValues[1], "10Gbps", "Second value should be 10Gbps");
         assertEq(returnedKeys[2], "encryption", "Third key should be encryption");
+
+        // Query values using new methods
+        string[] memory returnedValues =
+            registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, returnedKeys);
+        assertEq(returnedValues[0], "us-west-2", "First value should be us-west-2");
+        assertEq(returnedValues[1], "10Gbps", "Second value should be 10Gbps");
         assertEq(returnedValues[2], "AES256", "Third value should be AES256");
         assertTrue(isActive, "Product should be active");
     }
@@ -1289,12 +1317,15 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify capabilities updated
-        (, string[] memory returnedKeys, string[] memory returnedValues,) =
-            registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
+        (, string[] memory returnedKeys,) = registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
 
         assertEq(returnedKeys.length, 2, "Should have 2 capability keys");
         assertEq(returnedKeys[0], "support", "First key should be support");
-        assertEq(returnedValues[0], "24/7", "First value should be 24/7");
+
+        // Verify value using new method
+        string memory supportVal =
+            registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "support");
+        assertEq(supportVal, "24/7", "First value should be 24/7");
     }
 
     function testInvalidCapabilityKeyTooLong() public {
@@ -1389,5 +1420,178 @@ contract ServiceProviderRegistryFullTest is Test {
             capKeys,
             capValues
         );
+    }
+
+    // ========== New Capability Query Methods Tests ==========
+
+    function testGetProductCapability() public {
+        // Register provider with capabilities
+        string[] memory capKeys = new string[](3);
+        capKeys[0] = "region";
+        capKeys[1] = "tier";
+        capKeys[2] = "storage";
+
+        string[] memory capValues = new string[](3);
+        capValues[0] = "us-west-2";
+        capValues[1] = "premium";
+        capValues[2] = "100TB";
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider", ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+        );
+
+        // Test single capability queries
+        string memory region =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertEq(region, "us-west-2", "Region capability should match");
+
+        string memory tier =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertEq(tier, "premium", "Tier capability should match");
+
+        string memory storageVal =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "storage");
+        assertEq(storageVal, "100TB", "Storage capability should match");
+
+        // Test querying non-existent capability
+        string memory nonExistent =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "nonexistent");
+        assertEq(nonExistent, "", "Non-existent capability should return empty string");
+    }
+
+    function testGetProductCapabilities() public {
+        // Register provider with capabilities
+        string[] memory capKeys = new string[](4);
+        capKeys[0] = "region";
+        capKeys[1] = "tier";
+        capKeys[2] = "storage";
+        capKeys[3] = "compliance";
+
+        string[] memory capValues = new string[](4);
+        capValues[0] = "eu-west-1";
+        capValues[1] = "standard";
+        capValues[2] = "50TB";
+        capValues[3] = "GDPR";
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider", ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+        );
+
+        // Query multiple capabilities
+        string[] memory queryKeys = new string[](3);
+        queryKeys[0] = "tier";
+        queryKeys[1] = "compliance";
+        queryKeys[2] = "region";
+
+        string[] memory results =
+            registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, queryKeys);
+
+        assertEq(results.length, 3, "Should return 3 values");
+        assertEq(results[0], "standard", "First result should be tier value");
+        assertEq(results[1], "GDPR", "Second result should be compliance value");
+        assertEq(results[2], "eu-west-1", "Third result should be region value");
+
+        // Test with some non-existent keys
+        string[] memory mixedKeys = new string[](4);
+        mixedKeys[0] = "region";
+        mixedKeys[1] = "nonexistent1";
+        mixedKeys[2] = "storage";
+        mixedKeys[3] = "nonexistent2";
+
+        string[] memory mixedResults =
+            registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, mixedKeys);
+
+        assertEq(mixedResults.length, 4, "Should return 4 values");
+        assertEq(mixedResults[0], "eu-west-1", "First result should be region");
+        assertEq(mixedResults[1], "", "Second result should be empty");
+        assertEq(mixedResults[2], "50TB", "Third result should be storage");
+        assertEq(mixedResults[3], "", "Fourth result should be empty");
+    }
+
+    function testDirectMappingAccess() public {
+        // Register provider with capabilities
+        string[] memory capKeys = new string[](2);
+        capKeys[0] = "datacenter";
+        capKeys[1] = "bandwidth";
+
+        string[] memory capValues = new string[](2);
+        capValues[0] = "NYC-01";
+        capValues[1] = "10Gbps";
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider", ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+        );
+
+        // Test direct public mapping access
+        string memory datacenter =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "datacenter");
+        assertEq(datacenter, "NYC-01", "Direct mapping access should work");
+
+        string memory bandwidth =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "bandwidth");
+        assertEq(bandwidth, "10Gbps", "Direct mapping access should work for bandwidth");
+    }
+
+    function testCapabilityUpdateClearsOldValues() public {
+        // Register provider with initial capabilities
+        string[] memory initialKeys = new string[](3);
+        initialKeys[0] = "region";
+        initialKeys[1] = "tier";
+        initialKeys[2] = "oldkey";
+
+        string[] memory initialValues = new string[](3);
+        initialValues[0] = "us-east-1";
+        initialValues[1] = "basic";
+        initialValues[2] = "oldvalue";
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            initialKeys,
+            initialValues
+        );
+
+        // Verify initial values
+        string memory oldValue =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "oldkey");
+        assertEq(oldValue, "oldvalue", "Old key should have value initially");
+
+        // Update with new capabilities (without oldkey)
+        string[] memory newKeys = new string[](2);
+        newKeys[0] = "region";
+        newKeys[1] = "newkey";
+
+        string[] memory newValues = new string[](2);
+        newValues[0] = "eu-central-1";
+        newValues[1] = "newvalue";
+
+        vm.prank(provider1);
+        registry.updateProduct(
+            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, newKeys, newValues
+        );
+
+        // Verify old key is cleared
+        string memory clearedValue =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "oldkey");
+        assertEq(clearedValue, "", "Old key should be cleared after update");
+
+        // Verify new values are set
+        string memory newRegion =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertEq(newRegion, "eu-central-1", "Region should be updated");
+
+        string memory newKey =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "newkey");
+        assertEq(newKey, "newvalue", "New key should have value");
+
+        // Verify tier key is also cleared (was in initial but not in update)
+        string memory clearedTier =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertEq(clearedTier, "", "Tier key should be cleared after update");
     }
 }

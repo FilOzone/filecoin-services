@@ -85,10 +85,9 @@ contract ServiceProviderRegistryTest is Test {
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
 
         // Verify empty capabilities
-        (, string[] memory returnedKeys, string[] memory returnedValues,) =
+        (, string[] memory returnedKeys,) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         assertEq(returnedKeys.length, 0, "Should have no capability keys");
-        assertEq(returnedValues.length, 0, "Should have no capability values");
     }
 
     function testRegisterProviderWithCapabilities() public {
@@ -131,19 +130,27 @@ contract ServiceProviderRegistryTest is Test {
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
 
         // Verify capabilities were stored correctly
-        (, string[] memory returnedKeys, string[] memory returnedValues,) =
+        (, string[] memory returnedKeys,) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
         assertEq(returnedKeys.length, 3, "Should have 3 capability keys");
-        assertEq(returnedValues.length, 3, "Should have 3 capability values");
 
         assertEq(returnedKeys[0], "region", "First key should be region");
         assertEq(returnedKeys[1], "tier", "Second key should be tier");
         assertEq(returnedKeys[2], "compliance", "Third key should be compliance");
 
-        assertEq(returnedValues[0], "us-east-1", "First value should be us-east-1");
-        assertEq(returnedValues[1], "premium", "Second value should be premium");
-        assertEq(returnedValues[2], "SOC2", "Third value should be SOC2");
+        // Use the new query methods to verify values
+        string memory region =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertEq(region, "us-east-1", "First value should be us-east-1");
+
+        string memory tier =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertEq(tier, "premium", "Second value should be premium");
+
+        string memory compliance =
+            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "compliance");
+        assertEq(compliance, "SOC2", "Third value should be SOC2");
     }
 
     function testGetProviderWorks() public {

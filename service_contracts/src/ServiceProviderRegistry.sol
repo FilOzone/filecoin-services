@@ -204,9 +204,13 @@ contract ServiceProviderRegistry is
             productType: productType,
             productData: productData,
             capabilityKeys: capabilityKeys,
-            capabilityValues: capabilityValues,
             isActive: true
         });
+
+        // Store capability values in mapping
+        for (uint256 i = 0; i < capabilityKeys.length; i++) {
+            productCapabilities[providerId][productType][capabilityKeys[i]] = capabilityValues[i];
+        }
     }
 
     /// @notice Update an existing product configuration
@@ -246,14 +250,24 @@ contract ServiceProviderRegistry is
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
 
+        // Clear old capabilities from mapping
+        ServiceProduct storage existingProduct = providerProducts[providerId][productType];
+        for (uint256 i = 0; i < existingProduct.capabilityKeys.length; i++) {
+            delete productCapabilities[providerId][productType][existingProduct.capabilityKeys[i]];
+        }
+
         // Update product
         providerProducts[providerId][productType] = ServiceProduct({
             productType: productType,
             productData: productData,
             capabilityKeys: capabilityKeys,
-            capabilityValues: capabilityValues,
             isActive: true
         });
+
+        // Store new capability values in mapping
+        for (uint256 i = 0; i < capabilityKeys.length; i++) {
+            productCapabilities[providerId][productType][capabilityKeys[i]] = capabilityValues[i];
+        }
 
         // Emit event
         emit ProductUpdated(providerId, productType, block.number);
@@ -290,6 +304,12 @@ contract ServiceProviderRegistry is
 
         // Don't allow removing the last product
         require(activeProductCount > 1, "Cannot remove last product");
+
+        // Clear capabilities from mapping
+        ServiceProduct storage product = providerProducts[providerId][productType];
+        for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
+            delete productCapabilities[providerId][productType][product.capabilityKeys[i]];
+        }
 
         // Mark product as inactive
         providerProducts[providerId][productType].isActive = false;
@@ -385,10 +405,15 @@ contract ServiceProviderRegistry is
         // Soft delete - mark as inactive
         providers[providerId].isActive = false;
 
-        // Mark all products as inactive
+        // Mark all products as inactive and clear capabilities
         // For now just PDP, but this is extensible
         if (providerProducts[providerId][ProductType.PDP].productData.length > 0) {
-            providerProducts[providerId][ProductType.PDP].isActive = false;
+            ServiceProduct storage product = providerProducts[providerId][ProductType.PDP];
+            // Clear capabilities from mapping
+            for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
+                delete productCapabilities[providerId][ProductType.PDP][product.capabilityKeys[i]];
+            }
+            product.isActive = false;
         }
 
         // Clear address mapping
@@ -415,46 +440,33 @@ contract ServiceProviderRegistry is
     /// @param productType The type of product to retrieve
     /// @return productData The encoded product data
     /// @return capabilityKeys Array of capability keys
-    /// @return capabilityValues Array of capability values
     /// @return isActive Whether the product is active
     function getProduct(uint256 providerId, ProductType productType)
         external
         view
         providerExists(providerId)
-        returns (
-            bytes memory productData,
-            string[] memory capabilityKeys,
-            string[] memory capabilityValues,
-            bool isActive
-        )
+        returns (bytes memory productData, string[] memory capabilityKeys, bool isActive)
     {
         ServiceProduct memory product = providerProducts[providerId][productType];
-        return (product.productData, product.capabilityKeys, product.capabilityValues, product.isActive);
+        return (product.productData, product.capabilityKeys, product.isActive);
     }
 
     /// @notice Get PDP service configuration for a provider (convenience function)
     /// @param providerId The ID of the provider
     /// @return pdpOffering The decoded PDP service data
     /// @return capabilityKeys Array of capability keys
-    /// @return capabilityValues Array of capability values
     /// @return isActive Whether the PDP service is active
     function getPDPService(uint256 providerId)
         external
         view
         providerExists(providerId)
-        returns (
-            PDPOffering memory pdpOffering,
-            string[] memory capabilityKeys,
-            string[] memory capabilityValues,
-            bool isActive
-        )
+        returns (PDPOffering memory pdpOffering, string[] memory capabilityKeys, bool isActive)
     {
         ServiceProduct memory product = providerProducts[providerId][ProductType.PDP];
 
         if (product.productData.length > 0) {
             pdpOffering = decodePDPOffering(product.productData);
             capabilityKeys = product.capabilityKeys;
-            capabilityValues = product.capabilityValues;
             isActive = product.isActive;
         }
     }
@@ -643,6 +655,37 @@ contract ServiceProviderRegistry is
     /// @return The registration fee in attoFIL
     function getRegistrationFee() external pure returns (uint256) {
         return REGISTRATION_FEE;
+    }
+
+    /// @notice Get multiple capability values for a product
+    /// @param providerId The ID of the provider
+    /// @param productType The type of product
+    /// @param keys Array of capability keys to query
+    /// @return values Array of capability values corresponding to the keys
+    function getProductCapabilities(uint256 providerId, ProductType productType, string[] calldata keys)
+        external
+        view
+        providerExists(providerId)
+        returns (string[] memory values)
+    {
+        values = new string[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = productCapabilities[providerId][productType][keys[i]];
+        }
+    }
+
+    /// @notice Get a single capability value for a product
+    /// @param providerId The ID of the provider
+    /// @param productType The type of product
+    /// @param key The capability key to query
+    /// @return value The capability value
+    function getProductCapability(uint256 providerId, ProductType productType, string calldata key)
+        external
+        view
+        providerExists(providerId)
+        returns (string memory value)
+    {
+        return productCapabilities[providerId][productType][key];
     }
 
     /// @notice Validate product data based on product type
