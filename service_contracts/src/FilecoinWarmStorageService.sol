@@ -20,6 +20,10 @@ uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint256 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 
+// Proving period constants
+uint64 constant MAX_PROVING_PERIOD = 360; // FIXME
+uint256 constant CHALLENGE_WINDOW_SIZE = 120; // FIXME
+
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -151,10 +155,6 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
-    // Proving period constants - set during initialization (added at end for upgrade compatibility)
-    uint64 private maxProvingPeriod;
-    uint256 private challengeWindowSize;
-
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
         keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)");
@@ -215,12 +215,6 @@ contract FilecoinWarmStorageService is
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
-
-        require(_maxProvingPeriod > 0, Errors.MaxProvingPeriodZero());
-        require(
-            _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
-            Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
-        );
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;

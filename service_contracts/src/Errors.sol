@@ -49,11 +49,6 @@ library Errors {
     /// @notice The maximum proving period must be greater than zero
     error MaxProvingPeriodZero();
 
-    /// @notice The challenge window size must be > 0 and less than the max proving period
-    /// @param maxProvingPeriod The maximum allowed proving period
-    /// @param challengeWindowSize The provided challenge window size
-    error InvalidChallengeWindowSize(uint256 maxProvingPeriod, uint256 challengeWindowSize);
-
     /// @notice This function can only be called by the contract itself during upgrade
     /// @param expected The expected caller (the contract address)
     /// @param actual The actual caller address
