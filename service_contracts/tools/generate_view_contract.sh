@@ -26,7 +26,18 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
                 [];
                 if $type != "FilecoinWarmStorageService"
                 then
-                    . += [$type + " " + $name]
+                    . += [
+                        $type +
+                        (
+                            if ($type | .[-2:] ) == "[]" or $type == "string" or $type == "bytes"
+                            then
+                                " memory"
+                            else
+                                ""
+                            end
+                        ) +
+                        " " + $name
+                    ]
                 end
             ) | join(", ") ) +
         ") external " +  $stateMutability + " returns (" +

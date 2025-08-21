@@ -32,6 +32,22 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
     }
 
+    function getAllDataSetMetadata(uint256 dataSetId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllDataSetMetadata(dataSetId);
+    }
+
+    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllPieceMetadata(dataSetId, pieceId);
+    }
+
     function getClientDataSets(address client)
         external
         view
@@ -48,20 +64,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
-    function getMaxProvingPeriod() external view returns (uint64) {
-        return service.getMaxProvingPeriod();
-    }
-
     function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
         return service.getDataSetMetadata(dataSetId, key);
-    }
-
-    function getAllDataSetMetadata(uint256 dataSetId)
-        external
-        view
-        returns (string[] memory keys, string[] memory values)
-    {
-        return service.getAllDataSetMetadata(dataSetId);
     }
 
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
@@ -72,12 +76,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getPieceMetadata(dataSetId, pieceId, key);
     }
 
-    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
-        external
-        view
-        returns (string[] memory keys, string[] memory values)
-    {
-        return service.getAllPieceMetadata(dataSetId, pieceId);
+    function getMaxProvingPeriod() external view returns (uint64) {
+        return service.getMaxProvingPeriod();
     }
 
     function initChallengeWindowStart() external view returns (uint256) {

@@ -219,10 +219,9 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         view
         returns (string memory)
     {
-        // Direct access to mapping(uint256 => mapping(string => string))
-        // Solidity storage layout for nested mappings:
-        // - First level: keccak256(abi.encode(dataSetId, slot))
-        // - Second level with string key: keccak256(bytes(key) . firstLevel)
+        // For nested mapping with string key: mapping(uint256 => mapping(string => string))
+        // First level: keccak256(abi.encode(dataSetId, slot))
+        // Second level: keccak256(abi.encodePacked(bytes(key), firstLevel))
         bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT));
         bytes32 slot = keccak256(abi.encodePacked(bytes(key), firstLevel));
         return getString(service, slot);
@@ -258,11 +257,10 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         view
         returns (string memory)
     {
-        // Direct access to mapping(uint256 => mapping(uint256 => mapping(string => string)))
-        // Solidity storage layout for triple nested mappings:
-        // - First level: keccak256(abi.encode(dataSetId, slot))
-        // - Second level: keccak256(abi.encode(pieceId, firstLevel))
-        // - Third level with string key: keccak256(bytes(key) . secondLevel)
+        // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
+        // First level: keccak256(abi.encode(dataSetId, slot))
+        // Second level: keccak256(abi.encode(pieceId, firstLevel))
+        // Third level: keccak256(abi.encodePacked(bytes(key), secondLevel))
         bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
         bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
         bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
