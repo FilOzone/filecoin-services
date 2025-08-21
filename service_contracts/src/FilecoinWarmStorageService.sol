@@ -397,7 +397,44 @@ contract FilecoinWarmStorageService is
         // Verify the client's signature
         verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
-        // TODO Data set deletion logic
+        // Mark the data set as deleted and terminated
+
+        // Terminate all payment rails
+        if (info.paymentEndEpoch == 0) {
+            Payments payments = Payments(paymentsContractAddress);
+            payments.terminateRail(info.pdpRailId);
+
+            if (info.withCDN) {
+                payments.terminateRail(info.cacheMissRailId);
+                payments.terminateRail(info.cdnRailId);
+            }
+        }
+
+        // Complete cleanup - remove the dataset from all mappings
+        delete dataSetInfo[dataSetId];
+
+        // Remove from client's dataset list
+        uint256[] storage clientDataSetList = clientDataSets[payer];
+        for (uint256 i = 0; i < clientDataSetList.length; i++) {
+            if (clientDataSetList[i] == dataSetId) {
+                // Remove this dataset from the array
+                clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
+                clientDataSetList.pop();
+                break;
+            }
+        }
+
+        // Clean up proving-related state
+        delete provingDeadlines[dataSetId];
+        delete provenThisPeriod[dataSetId];
+        delete provingActivationEpoch[dataSetId];
+
+        // Clean up rail mappings
+        delete railToDataSet[info.pdpRailId];
+        if (info.withCDN) {
+            delete railToDataSet[info.cacheMissRailId];
+            delete railToDataSet[info.cdnRailId];
+        }
     }
 
     /**
