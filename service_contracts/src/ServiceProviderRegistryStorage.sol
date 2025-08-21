@@ -9,8 +9,7 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Product types that can be offered by service providers
     enum ProductType {
-        PDP // Perpetual Data Preservation
-
+        PDP
     }
 
     // ========== Structs ==========
