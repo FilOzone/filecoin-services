@@ -59,6 +59,10 @@ contract FilecoinWarmStorageService is
         address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
 
+    event CDNServiceTerminated(
+        address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
+    );
+
     event PaymentTerminated(
         uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
@@ -638,6 +642,33 @@ contract FilecoinWarmStorageService is
         }
 
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+    }
+
+    function terminateCDNService(uint256 dataSetId) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.withCDN, Errors.FilecoinCDNServiceNotConfigured(dataSetId));
+        require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        // Check if already terminated
+        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+
+        // Check authorization
+        require(
+            msg.sender == filCDNAddress,
+            Errors.OnlyFilecoinCDNAllowed(filCDNAddress, msg.sender)
+        );
+
+        Payments payments = Payments(paymentsContractAddress);
+        payments.terminateRail(info.cacheMissRailId);
+        payments.terminateRail(info.cdnRailId);
+
+        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
+
+        // Clear all CDN-related fields in the data set info
+        info.withCDN = false;
+        info.cacheMissRailId = 0;
+        info.cdnRailId = 0;
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
