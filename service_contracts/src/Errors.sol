@@ -20,7 +20,9 @@ library Errors {
         /// Payer address
         Payer,
         /// Service provider address
-        ServiceProvider
+        ServiceProvider,
+        /// FilecoinCDN treasury address
+        FilecoinCDNTreasury
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
