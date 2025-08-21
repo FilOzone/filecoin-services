@@ -13,6 +13,8 @@ import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
+import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
+import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -39,6 +41,7 @@ contract FilecoinWarmStorageService is
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
         uint256 indexed dataSetId,
+        uint256 indexed providerId,
         uint256 pdpRailId,
         uint256 cacheMissRailId,
         uint256 cdnRailId,
@@ -80,9 +83,17 @@ contract FilecoinWarmStorageService is
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
+    address public immutable serviceProviderRegistryAddress;
 
     // Commission rates
     uint256 public serviceCommissionBps;
+
+    // Approved provider list
+    mapping(uint256 => bool) public approvedProviders;
+
+    // Events for provider management
+    event ProviderApproved(uint256 indexed providerId);
+    event ProviderRemoved(uint256 indexed providerId);
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) public clientDataSetIDs;
@@ -170,7 +181,8 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
+        address _filCDNAddress,
+        address _serviceProviderRegistryAddress
     ) {
         _disableInitializers();
 
@@ -184,11 +196,16 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
+        require(
+            _serviceProviderRegistryAddress != address(0),
+            Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
+        );
 
         pdpVerifierAddress = _pdpVerifierAddress;
 
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         paymentsContractAddress = _paymentsContractAddress;
+        serviceProviderRegistryAddress = _serviceProviderRegistryAddress;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -259,6 +276,30 @@ contract FilecoinWarmStorageService is
         serviceCommissionBps = newCommissionBps;
     }
 
+    /**
+     * @notice Adds a provider ID to the approved list
+     * @dev Only callable by the contract owner. Does not revert if already approved.
+     * @param providerId The provider ID to approve
+     */
+    function addApprovedProvider(uint256 providerId) external onlyOwner {
+        if (!approvedProviders[providerId]) {
+            approvedProviders[providerId] = true;
+            emit ProviderApproved(providerId);
+        }
+    }
+
+    /**
+     * @notice Removes a provider ID from the approved list
+     * @dev Only callable by the contract owner. Does not revert if not in list.
+     * @param providerId The provider ID to remove
+     */
+    function removeApprovedProvider(uint256 providerId) external onlyOwner {
+        if (approvedProviders[providerId]) {
+            approvedProviders[providerId] = false;
+            emit ProviderRemoved(providerId);
+        }
+    }
+
     // SLA specification functions setting values for PDP service providers
     // Max number of epochs between two consecutive proofs
     function getMaxProvingPeriod() public view returns (uint64) {
@@ -324,6 +365,16 @@ contract FilecoinWarmStorageService is
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
+
+        // Validate provider is registered and approved
+        ServiceProviderRegistry registry = ServiceProviderRegistry(serviceProviderRegistryAddress);
+        uint256 providerId = registry.getProviderIdByAddress(creator);
+
+        // Check if provider is registered
+        require(providerId != 0, Errors.ProviderNotRegistered(creator));
+
+        // Check if provider is approved
+        require(approvedProviders[providerId], Errors.ProviderNotApproved(creator, providerId));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIDs[createData.payer]++;
@@ -409,7 +460,7 @@ contract FilecoinWarmStorageService is
 
         // Emit event for tracking
         emit DataSetRailsCreated(
-            dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
+            dataSetId, providerId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
         );
     }
 
