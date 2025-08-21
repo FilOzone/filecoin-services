@@ -13,8 +13,8 @@ library Errors {
         Payments,
         /// USDFC contract address
         USDFC,
-        /// FilecoinCDN service contract address
-        FilecoinCDN,
+        /// FilecoinCDN controller address
+        FilecoinCDNController,
         /// Creator address
         Creator,
         /// Payer address
@@ -22,7 +22,9 @@ library Errors {
         /// Service provider address
         ServiceProvider,
         /// ServiceProviderRegistry contract address
-        ServiceProviderRegistry
+        ServiceProviderRegistry,
+        /// FilecoinCDN treasury address
+        FilecoinCDNTreasury
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
