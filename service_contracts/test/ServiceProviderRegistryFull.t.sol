@@ -147,7 +147,10 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify registration
         assertEq(providerId, 1, "Provider ID should be 1");
-        assertEq(registry.getProviderByAddress(provider1), 1, "Provider ID lookup should work");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
+            registry.getProviderByAddress(provider1);
+        assertEq(providerInfo.beneficiary, provider1, "Provider address should match");
+        assertTrue(providerInfo.isActive, "Provider should be active");
         assertTrue(registry.isRegisteredProvider(provider1), "Provider should be registered");
         assertTrue(registry.isProviderActive(1), "Provider should be active");
 
@@ -363,7 +366,9 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify provider was not registered
-        assertEq(registry.getProviderByAddress(provider1), 0, "Provider should not be registered");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory notRegisteredInfo =
+            registry.getProviderByAddress(provider1);
+        assertEq(notRegisteredInfo.beneficiary, address(0), "Provider should not be registered");
     }
 
     function testRegisterWithInvalidData() public {
@@ -569,8 +574,12 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify transfer
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertEq(info.beneficiary, provider2, "Owner should be updated");
-        assertEq(registry.getProviderByAddress(provider2), 1, "New owner lookup should work");
-        assertEq(registry.getProviderByAddress(provider1), 0, "Old owner lookup should return 0");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory newOwnerInfo =
+            registry.getProviderByAddress(provider2);
+        assertEq(newOwnerInfo.beneficiary, provider2, "New owner lookup should work");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory oldOwnerInfo =
+            registry.getProviderByAddress(provider1);
+        assertEq(oldOwnerInfo.beneficiary, address(0), "Old owner lookup should return empty");
         assertTrue(registry.isRegisteredProvider(provider2), "New owner should be registered");
         assertFalse(registry.isRegisteredProvider(provider1), "Old owner should not be registered");
 
@@ -714,7 +723,8 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify removal
         assertFalse(registry.isProviderActive(1), "Provider should be inactive");
         assertFalse(registry.isRegisteredProvider(provider1), "Provider should not be registered");
-        assertEq(registry.getProviderByAddress(provider1), 0, "Address lookup should return 0");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory removedInfo = registry.getProviderByAddress(provider1);
+        assertEq(removedInfo.beneficiary, address(0), "Address lookup should return empty");
 
         // Verify provider info still exists (soft delete)
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
