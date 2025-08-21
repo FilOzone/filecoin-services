@@ -61,8 +61,12 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(FilecoinWarmStorageService, uint256 leafCount) public pure returns (uint256) {
+    function getDataSetSizeInBytes(uint256 leafCount) public pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
+    }
+
+    function getChallengesPerProof() public pure returns (uint64) {
+        return CHALLENGES_PER_PROOF;
     }
 
     function clientDataSetIDs(FilecoinWarmStorageService service, address payer) public view returns (uint256) {

@@ -3,10 +3,11 @@ pragma solidity ^0.8.20;
 
 // Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
-contract FilecoinWarmStorageServiceStateView {
+contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public immutable service;
@@ -27,6 +28,10 @@ contract FilecoinWarmStorageServiceStateView {
         return service.clientDataSets(payer);
     }
 
+    function getChallengesPerProof() external pure returns (uint64) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
+    }
+
     function getClientDataSets(address client)
         external
         view
@@ -39,8 +44,8 @@ contract FilecoinWarmStorageServiceStateView {
         return service.getDataSet(dataSetId);
     }
 
-    function getDataSetSizeInBytes(uint256 leafCount) external view returns (uint256) {
-        return service.getDataSetSizeInBytes(leafCount);
+    function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
     function getMaxProvingPeriod() external view returns (uint64) {

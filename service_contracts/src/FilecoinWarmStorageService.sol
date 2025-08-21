@@ -17,6 +17,7 @@ import {Extsload} from "./Extsload.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
+uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 
 /// @title FilecoinWarmStorageService
@@ -65,7 +66,6 @@ contract FilecoinWarmStorageService is
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
-    uint256 private constant CHALLENGES_PER_PROOF = 5;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
     uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
