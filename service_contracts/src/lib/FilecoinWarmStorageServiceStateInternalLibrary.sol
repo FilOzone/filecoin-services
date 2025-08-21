@@ -67,7 +67,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return leafCount * BYTES_PER_LEAF;
     }
 
-    function getChallengesPerProof() internal pure returns (uint256) {
+    function getChallengesPerProof(FilecoinWarmStorageService) internal pure returns (uint256) {
         return CHALLENGES_PER_PROOF;
     }
 

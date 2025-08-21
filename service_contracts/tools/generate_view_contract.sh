@@ -6,17 +6,18 @@ echo
 echo // Generated with $0 $@
 echo
 
+echo 'import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";'
 echo 'import "./FilecoinWarmStorageService.sol";'
 echo 'import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
 
-echo contract FilecoinWarmStorageServiceStateView {
+echo contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 echo "    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;"
 echo "    FilecoinWarmStorageService public immutable service;"
 echo "    constructor(FilecoinWarmStorageService _service) {"
 echo "        service = _service;"
 echo "    }"
 
-jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs} (
+jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
     null;
     if $type == "function"
     then
@@ -28,7 +29,14 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs} (
                     . += [$type + " " + $name]
                 end
             ) | join(", ") ) +
-        ") external view returns (" +
+        ") external" +  (
+            if $stateMutability == "view"
+            then
+                " view "
+            else
+                " pure "
+            end
+        ) + "returns (" +
             ( reduce $outputs.[] as {$type,$name,$internalType} (
                 []; 
                 . += [
