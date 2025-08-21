@@ -65,6 +65,10 @@ library FilecoinWarmStorageServiceStateLibrary {
         return leafCount * BYTES_PER_LEAF;
     }
 
+    function getChallengesPerProof() public pure returns (uint256) {
+        return CHALLENGES_PER_PROOF;
+    }
+
     function clientDataSetIDs(FilecoinWarmStorageService service, address payer) public view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(payer, CLIENT_DATA_SET_IDS_SLOT))));
     }

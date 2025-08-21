@@ -27,6 +27,10 @@ contract FilecoinWarmStorageServiceStateView {
         return service.clientDataSets(payer);
     }
 
+    function getChallengesPerProof() external view returns (uint256) {
+        return service.getChallengesPerProof();
+    }
+
     function getClientDataSets(address client)
         external
         view
