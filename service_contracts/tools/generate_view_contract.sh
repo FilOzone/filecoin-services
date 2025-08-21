@@ -66,7 +66,14 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
                     )
                 ]
             ) | join(", ") ) +
-        ") {\n        return service." + $name + "(" +
+            ") {\n        return " + (
+                if $inputs.[0].type == "FilecoinWarmStorageService"
+                then
+                    "service"
+                else
+                    "FilecoinWarmStorageServiceStateInternalLibrary"
+                end
+            ) +"." + $name + "(" +
             ( reduce $inputs.[] as {$name,$type} (
                 [];
                 if $type != "FilecoinWarmStorageService"

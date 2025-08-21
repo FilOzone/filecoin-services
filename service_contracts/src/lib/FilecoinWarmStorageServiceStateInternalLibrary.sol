@@ -63,11 +63,11 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(FilecoinWarmStorageService, uint256 leafCount) internal pure returns (uint256) {
+    function getDataSetSizeInBytes(uint256 leafCount) internal pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
     }
 
-    function getChallengesPerProof(FilecoinWarmStorageService) internal pure returns (uint256) {
+    function getChallengesPerProof() internal pure returns (uint64) {
         return CHALLENGES_PER_PROOF;
     }
 

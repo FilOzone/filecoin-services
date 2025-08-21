@@ -28,8 +28,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.clientDataSets(payer);
     }
 
-    function getChallengesPerProof() external pure returns (uint256) {
-        return service.getChallengesPerProof();
+    function getChallengesPerProof() external pure returns (uint64) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
     }
 
     function getClientDataSets(address client)
@@ -45,7 +45,7 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     }
 
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
-        return service.getDataSetSizeInBytes(leafCount);
+        return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
     function getMaxProvingPeriod() external view returns (uint64) {
