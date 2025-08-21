@@ -27,6 +27,22 @@ contract FilecoinWarmStorageServiceStateView {
         return service.clientDataSets(payer);
     }
 
+    function getAllDataSetMetadata(uint256 dataSetId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllDataSetMetadata(dataSetId);
+    }
+
+    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllPieceMetadata(dataSetId, pieceId);
+    }
+
     function getClientDataSets(address client)
         external
         view
@@ -39,6 +55,10 @@ contract FilecoinWarmStorageServiceStateView {
         return service.getDataSet(dataSetId);
     }
 
+    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
+        return service.getDataSetMetadata(dataSetId, key);
+    }
+
     function getDataSetSizeInBytes(uint256 leafCount) external view returns (uint256) {
         return service.getDataSetSizeInBytes(leafCount);
     }
@@ -47,32 +67,12 @@ contract FilecoinWarmStorageServiceStateView {
         return service.getMaxProvingPeriod();
     }
 
-    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
-        return service.getDataSetMetadata(dataSetId, key);
-    }
-
-    function getAllDataSetMetadata(uint256 dataSetId)
-        external
-        view
-        returns (string[] memory keys, string[] memory values)
-    {
-        return service.getAllDataSetMetadata(dataSetId);
-    }
-
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
         external
         view
         returns (string memory)
     {
         return service.getPieceMetadata(dataSetId, pieceId, key);
-    }
-
-    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
-        external
-        view
-        returns (string[] memory keys, string[] memory values)
-    {
-        return service.getAllPieceMetadata(dataSetId, pieceId);
     }
 
     function initChallengeWindowStart() external view returns (uint256) {
