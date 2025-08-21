@@ -1020,7 +1020,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n=== Test completed successfully! ===");
     }
 
-
     // ============= CDN Service Termination Tests =============
 
     function testTerminateCDNServiceLifecycle() public {
@@ -1066,7 +1065,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n2. Terminating CDN payment rails from client address -- should revert");
         console.log("Current block:", block.number);
         vm.prank(client); // client terminates
-        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilecoinCDNAllowed.selector, address(filCDN), address(client)));
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.OnlyFilecoinCDNAllowed.selector, address(filCDN), address(client))
+        );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 3. Try to terminate payment from FilCDN address
