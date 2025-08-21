@@ -1,0 +1,35 @@
+name: Test Coverage
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+
+      - name: Install dependencies
+        run: |
+          cd service_contracts
+          forge install
+
+      - name: Generate coverage report
+        run: |
+          cd service_contracts
+          forge coverage --report lcov --ir-minimum
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./service_contracts
+          files: ./lcov.info
+          fail_ci_if_error: false
