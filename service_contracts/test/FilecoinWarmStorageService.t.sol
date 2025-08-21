@@ -2210,6 +2210,82 @@ contract FilecoinWarmStorageServiceTest is Test {
             b[i] = "a";
         }
     }
+
+    // ============= CDN Service Termination Tests =============
+
+    function testTerminateCDNServiceLifecycle() public {
+        console.log("=== Test: CDN Service Termination Lifecycle ===");
+
+        // 1. Setup: Create a dataset with CDN enabled.
+        console.log("1. Setting up: Creating dataset with service provider");
+
+        // Prepare data set creation data
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            metadata: "Test Data Set for Termination",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: true // CDN enabled
+        });
+
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
+        // Setup client payment approval and deposit
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6, // rate allowance
+            1000e6, // lockup allowance
+            365 days // max lockup period
+        );
+        uint256 depositAmount = 100e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(address(mockUSDFC), client, depositAmount);
+        vm.stopPrank();
+
+        // Create data set
+        makeSignaturePass(client);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        console.log("Created data set with ID:", dataSetId);
+
+        // 2. Try to terminate payment from client address
+        console.log("\n2. Terminating CDN payment rails from client address -- should revert");
+        console.log("Current block:", block.number);
+        vm.prank(client); // client terminates
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.OnlyFilecoinCDNAllowed.selector, address(filCDN), address(client))
+        );
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // 3. Try to terminate payment from FilCDN address
+        console.log("\n3. Terminating CDN payment rails from FilCDN address -- should pass");
+        console.log("Current block:", block.number);
+        vm.prank(pdpServiceWithPayments.filCDNAddress()); // FilCDN terminates
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNServiceTerminated(filCDN, dataSetId, info.cacheMissRailId, info.cdnRailId);
+
+        // emit ServiceTerminated(msg.sender, dataSetId, 0, info.cacheMissRailId, info.cdnRailId);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // 4. Assertions
+        // Check if CDN data is cleared
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
+        assertFalse(info.withCDN, "withCDN should be cleared after termination");
+        assertEq(info.cdnRailId, 0, "cdnRailid should be cleared after termination");
+        assertEq(info.cacheMissRailId, 0, "cacheMissRailid should be cleared after termination");
+        console.log("Payment termination successful. Flag `withCDN` is cleared");
+
+        // Ensure future CDN service termination reverts
+        vm.prank(filCDN);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilecoinCDNServiceNotConfigured.selector, dataSetId));
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        console.log("\n=== Test completed successfully! ===");
+    }
 }
 
 contract SignatureCheckingService is FilecoinWarmStorageService {

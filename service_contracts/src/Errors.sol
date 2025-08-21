@@ -234,4 +234,13 @@ library Errors {
     /// @param metadataArrayCount The number of metadata arrays provided
     /// @param pieceCount The number of pieces being added
     error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
+
+    /// @notice FilecoinCDN service is not configured for the given data set
+    /// @param dataSetId The data set ID
+    error CDNServiceNotConfigured(uint256 dataSetId);
+
+    /// @notice Only the FilecoinCDN address can call this function
+    /// @param expected The expected CDN address
+    /// @param actual The caller address
+    error OnlyFilecoinCDNAllowed(address expected, address actual);
 }
