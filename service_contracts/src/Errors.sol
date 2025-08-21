@@ -184,5 +184,5 @@ library Errors {
     /// @notice Only the FilecoinCDN address can call this function
     /// @param expected The expected CDN address
     /// @param actual The caller address
-    error OnlyFilecoinCDNAllowed(address expected, address actual);
+    error OnlyCDNAllowed(address expected, address actual);
 }
