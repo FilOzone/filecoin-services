@@ -866,7 +866,7 @@ contract FilecoinWarmStorageService is
 
     function terminateCDNService(uint256 dataSetId) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.withCDN, Errors.FilecoinCDNServiceNotConfigured(dataSetId));
+        require(info.withCDN, Errors.CDNServiceNotConfigured(dataSetId));
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
@@ -874,7 +874,7 @@ contract FilecoinWarmStorageService is
         require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
-        require(msg.sender == filCDNAddress, Errors.OnlyFilecoinCDNAllowed(filCDNAddress, msg.sender));
+        require(msg.sender == filCDNAddress, Errors.OnlyCDNAllowed(filCDNAddress, msg.sender));
 
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);
