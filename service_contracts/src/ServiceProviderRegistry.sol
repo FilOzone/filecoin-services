@@ -596,11 +596,16 @@ contract ServiceProviderRegistry is
         return providerProducts[providerId][productType].isActive;
     }
 
-    /// @notice Get provider ID by address
+    /// @notice Get provider info by address
     /// @param providerAddress The address of the provider
-    /// @return providerId The provider ID (0 if not registered)
-    function getProviderByAddress(address providerAddress) external view returns (uint256) {
-        return addressToProviderId[providerAddress];
+    /// @return info The provider information (empty struct if not registered)
+    function getProviderByAddress(address providerAddress) external view returns (ServiceProviderInfo memory info) {
+        uint256 providerId = addressToProviderId[providerAddress];
+        if (providerId != 0 && providerId <= numProviders && providers[providerId].beneficiary != address(0)) {
+            return providers[providerId];
+        }
+        // Return empty struct if not found
+        return info;
     }
 
     /// @notice Check if a provider is active
