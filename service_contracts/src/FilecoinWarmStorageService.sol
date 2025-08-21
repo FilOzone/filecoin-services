@@ -654,10 +654,7 @@ contract FilecoinWarmStorageService is
         require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
-        require(
-            msg.sender == filCDNAddress,
-            Errors.OnlyFilecoinCDNAllowed(filCDNAddress, msg.sender)
-        );
+        require(msg.sender == filCDNAddress, Errors.OnlyFilecoinCDNAllowed(filCDNAddress, msg.sender));
 
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);
