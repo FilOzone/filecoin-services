@@ -29,14 +29,7 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
                     . += [$type + " " + $name]
                 end
             ) | join(", ") ) +
-        ") external" +  (
-            if $stateMutability == "view"
-            then
-                " view "
-            else
-                " pure "
-            end
-        ) + "returns (" +
+        ") external " +  $stateMutability + " returns (" +
             ( reduce $outputs.[] as {$type,$name,$internalType} (
                 []; 
                 . += [
