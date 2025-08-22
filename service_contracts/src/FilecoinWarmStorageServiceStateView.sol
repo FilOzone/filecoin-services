@@ -3,21 +3,16 @@ pragma solidity ^0.8.20;
 
 // Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
-import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
-contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
+contract FilecoinWarmStorageServiceStateView {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public immutable service;
 
     constructor(FilecoinWarmStorageService _service) {
         service = _service;
-    }
-
-    function challengeWindow() external view returns (uint256) {
-        return service.challengeWindow();
     }
 
     function clientDataSetIDs(address payer) external view returns (uint256) {
@@ -44,10 +39,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getAllPieceMetadata(dataSetId, pieceId);
     }
 
-    function getChallengesPerProof() external pure returns (uint64) {
-        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
-    }
-
     function getClientDataSets(address client)
         external
         view
@@ -72,24 +63,12 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
-    function getMaxProvingPeriod() external view returns (uint64) {
-        return service.getMaxProvingPeriod();
-    }
-
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
         external
         view
         returns (bool exists, string memory value)
     {
         return service.getPieceMetadata(dataSetId, pieceId, key);
-    }
-
-    function initChallengeWindowStart() external view returns (uint256) {
-        return service.initChallengeWindowStart();
-    }
-
-    function nextChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.nextChallengeWindowStart(setId);
     }
 
     function provenPeriods(uint256 dataSetId, uint256 periodId) external view returns (bool) {
@@ -110,9 +89,5 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 
     function railToDataSet(uint256 railId) external view returns (uint256) {
         return service.railToDataSet(railId);
-    }
-
-    function thisChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.thisChallengeWindowStart(setId);
     }
 }
