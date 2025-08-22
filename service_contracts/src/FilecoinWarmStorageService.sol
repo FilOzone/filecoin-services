@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -29,7 +28,6 @@ uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
     PDPListener,
-    IPDPProvingSchedule,
     IValidator,
     Initializable,
     UUPSUpgradeable,
@@ -65,6 +63,8 @@ contract FilecoinWarmStorageService is
     event PaymentTerminated(
         uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
+
+    event ViewContractSet(address indexed viewContract);
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
@@ -153,9 +153,12 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
-    // Proving period constants - set during initialization (added at end for upgrade compatibility)
+    // Proving period constants - set during initialization
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
+
+    // View contract for read-only operations
+    address public viewContractAddress;
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
@@ -258,10 +261,33 @@ contract FilecoinWarmStorageService is
      * @notice Migration function for contract upgrades
      * @dev This function should be called during upgrades to emit version tracking events
      * Only callable during proxy upgrade process
+     * @param _viewContract Address of the view contract (optional, can be address(0))
      */
-    function migrate() public onlyProxy reinitializer(3) {
+    function migrate(address _viewContract) public onlyProxy reinitializer(4) {
         require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
+
+        // Set view contract if provided
+        if (_viewContract != address(0)) {
+            viewContractAddress = _viewContract;
+            emit ViewContractSet(_viewContract);
+        }
+
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+    }
+
+    /**
+     * @notice Sets the view contract address (one-time setup)
+     * @dev Only callable by the contract owner. This is intended to be called once after deployment
+     * or during migration. The view contract should not be changed after initial setup as external
+     * systems may cache this address. If a view contract upgrade is needed, deploy a new main
+     * contract with the updated view contract reference.
+     * @param _viewContract Address of the view contract
+     */
+    function setViewContract(address _viewContract) external onlyOwner {
+        require(_viewContract != address(0), "Invalid view contract address");
+        require(viewContractAddress == address(0), "View contract already set");
+        viewContractAddress = _viewContract;
+        emit ViewContractSet(_viewContract);
     }
 
     /**
@@ -1091,54 +1117,5 @@ contract FilecoinWarmStorageService is
             info.paymentEndEpoch = endEpoch;
             emit PaymentTerminated(dataSetId, endEpoch, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         }
-    }
-
-    /* IPDPProvingSchedule */
-
-    /**
-     * @notice Returns PDP configuration values
-     * @return maxProvingPeriod Maximum number of epochs between proofs
-     * @return challengeWindow Number of epochs for the challenge window
-     * @return challengesPerProof Number of challenges required per proof
-     * @return initChallengeWindowStart Initial challenge window start for new data sets
-     */
-    function getPDPConfig() external view returns (uint64, uint256, uint256, uint256) {
-        uint64 m = maxProvingPeriod;
-        uint256 c = challengeWindowSize;
-        return (m, c, CHALLENGES_PER_PROOF, block.number + m - c);
-    }
-
-    /**
-     * @notice Returns the start of the next challenge window for a data set
-     * @param setId The ID of the data set
-     * @return The block number when the next challenge window starts
-     */
-    function nextPDPChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-        // If the current period is open this is the next period's challenge window
-        if (block.number <= provingDeadlines[setId]) {
-            return _thisChallengeWindowStart(setId) + maxProvingPeriod;
-        }
-        // Otherwise return the current period's challenge window
-        return _thisChallengeWindowStart(setId);
-    }
-
-    // The start of the challenge window for the current proving period
-    function _thisChallengeWindowStart(uint256 setId) internal view returns (uint256) {
-        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-
-        uint256 periodsSkipped;
-        // Proving period is open 0 skipped periods
-        if (block.number <= provingDeadlines[setId]) {
-            periodsSkipped = 0;
-        } else {
-            // Proving period has closed possibly some skipped periods
-            periodsSkipped = 1 + (block.number - (provingDeadlines[setId] + 1)) / maxProvingPeriod;
-        }
-        return provingDeadlines[setId] + periodsSkipped * maxProvingPeriod - challengeWindowSize;
     }
 }

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-// Generated with 'make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol'
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any changes will be lost.
 
 import {Errors} from "../Errors.sol";
 import "../FilecoinWarmStorageService.sol";
@@ -65,6 +66,10 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      */
     function getDataSetSizeInBytes(uint256 leafCount) internal pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
+    }
+
+    function getChallengesPerProof() internal pure returns (uint64) {
+        return CHALLENGES_PER_PROOF;
     }
 
     function clientDataSetIDs(FilecoinWarmStorageService service, address payer) internal view returns (uint256) {
@@ -163,6 +168,44 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(keccak256(abi.encode(setId, PROVING_DEADLINES_SLOT))));
     }
 
+    function getMaxProvingPeriod(FilecoinWarmStorageService service) internal view returns (uint64) {
+        return uint64(uint256(service.extsload(MAX_PROVING_PERIOD_SLOT)));
+    }
+
+    // Number of epochs at the end of a proving period during which a
+    // proof of possession can be submitted
+    function challengeWindow(FilecoinWarmStorageService service) internal view returns (uint256) {
+        return uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
+    }
+
+    // Initial value for challenge window start
+    // Can be used for first call to nextProvingPeriod
+    function initChallengeWindowStart(FilecoinWarmStorageService service) internal view returns (uint256) {
+        return block.number + getMaxProvingPeriod(service) - challengeWindow(service);
+    }
+
+    // The start of the challenge window for the current proving period
+    function thisChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
+        internal
+        view
+        returns (uint256)
+    {
+        if (provingDeadlines(service, setId) == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingPeriodNotInitialized(setId);
+        }
+
+        uint256 periodsSkipped;
+        // Proving period is open 0 skipped periods
+        if (block.number <= provingDeadlines(service, setId)) {
+            periodsSkipped = 0;
+        } else {
+            // Proving period has closed possibly some skipped periods
+            periodsSkipped = 1 + (block.number - (provingDeadlines(service, setId) + 1)) / getMaxProvingPeriod(service);
+        }
+        return
+            provingDeadlines(service, setId) + periodsSkipped * getMaxProvingPeriod(service) - challengeWindow(service);
+    }
+
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         internal
         view
@@ -174,5 +217,51 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
         }
+    }
+
+    /**
+     * @notice Returns PDP configuration values (for IPDPProvingSchedule interface)
+     * @return maxProvingPeriod Maximum number of epochs between proofs
+     * @return challengeWindow_ Number of epochs for the challenge window
+     * @return challengesPerProof Number of challenges required per proof
+     * @return initChallengeWindowStart_ Initial challenge window start for new data sets
+     */
+    function getPDPConfig(FilecoinWarmStorageService service)
+        internal
+        view
+        returns (
+            uint64 maxProvingPeriod,
+            uint256 challengeWindow_,
+            uint256 challengesPerProof,
+            uint256 initChallengeWindowStart_
+        )
+    {
+        maxProvingPeriod = uint64(uint256(service.extsload(MAX_PROVING_PERIOD_SLOT)));
+        challengeWindow_ = uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
+        challengesPerProof = CHALLENGES_PER_PROOF;
+        initChallengeWindowStart_ = block.number + maxProvingPeriod - challengeWindow_;
+    }
+
+    /**
+     * @notice Returns the start of the next challenge window for a data set (for IPDPProvingSchedule interface)
+     * @param service The service contract
+     * @param setId The ID of the data set
+     * @return The block number when the next challenge window starts
+     */
+    function nextPDPChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
+        internal
+        view
+        returns (uint256)
+    {
+        if (provingDeadlines(service, setId) == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingPeriodNotInitialized(setId);
+        }
+
+        // If the current period is open this is the next period's challenge window
+        if (block.number <= provingDeadlines(service, setId)) {
+            return thisChallengeWindowStart(service, setId) + getMaxProvingPeriod(service);
+        }
+        // If the current period is not yet open this is the current period's challenge window
+        return thisChallengeWindowStart(service, setId);
     }
 }

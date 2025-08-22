@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
@@ -212,6 +213,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     // Contracts
     FilecoinWarmStorageService public pdpServiceWithPayments;
+    FilecoinWarmStorageServiceStateView public viewContract;
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
@@ -295,6 +297,10 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
         pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
+
+        // Deploy view contract and set it on the main contract
+        viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
+        pdpServiceWithPayments.setViewContract(address(viewContract));
     }
 
     function makeSignaturePass(address signer) public {
@@ -327,8 +333,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             0, // 0%
             "Service commission should be set correctly"
         );
-        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) =
-            pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) = viewContract.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be set correctly");
         assertEq(challengeWindow, 60, "Challenge window size should be set correctly");
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
@@ -595,8 +600,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testGlobalParameters() public view {
         // These parameters should be the same as in SimplePDPService
-        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) =
-            pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) = viewContract.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be 2880 epochs");
         assertEq(challengeWindow, 60, "Challenge window should be 60 epochs");
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
@@ -914,7 +918,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         vm.prank(address(mockPDPVerifier));
@@ -1182,10 +1186,70 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // This should work since we're using reinitializer(2)
         warmStorageService.configureProvingPeriod(newMaxProvingPeriod, newChallengeWindowSize);
 
-        // Verify the values were set correctly
-        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = warmStorageService.getPDPConfig();
+        // Deploy view contract and verify values through it
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+        warmStorageService.setViewContract(address(viewContract));
+
+        // Verify the values were set correctly through the view contract
+        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = viewContract.getPDPConfig();
         assertEq(updatedMaxProvingPeriod, newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(updatedChallengeWindow, newChallengeWindowSize, "Challenge window size should be updated");
+    }
+
+    function testSetViewContract() public {
+        // Deploy view contract
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+
+        // Set view contract
+        warmStorageService.setViewContract(address(viewContract));
+
+        // Verify it was set
+        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
+
+        // Test that non-owner cannot set view contract
+        vm.prank(address(0x123));
+        vm.expectRevert();
+        warmStorageService.setViewContract(address(0x456));
+
+        // Test that it cannot be set again (one-time only)
+        FilecoinWarmStorageServiceStateView newViewContract =
+            new FilecoinWarmStorageServiceStateView(warmStorageService);
+        vm.expectRevert("View contract already set");
+        warmStorageService.setViewContract(address(newViewContract));
+
+        // Test that zero address is rejected (would need a new contract to test this properly)
+        // This is now unreachable in this test since view contract is already set
+    }
+
+    function testMigrateWithViewContract() public {
+        // First, deploy a view contract
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+
+        // Simulate migration being called during upgrade (must be called by proxy itself)
+        vm.prank(address(warmStorageService));
+        warmStorageService.migrate(address(viewContract));
+
+        // Verify view contract was set
+        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
+
+        // Verify we can call PDP functions through view contract
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        assertEq(maxProvingPeriod, 2880, "Max proving period should be accessible through view");
+        assertEq(challengeWindow, 60, "Challenge window should be accessible through view");
+    }
+
+    function testNextPDPChallengeWindowStartThroughView() public {
+        // Deploy and set view contract
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+        warmStorageService.setViewContract(address(viewContract));
+
+        // This should revert since no data set exists with proving period initialized
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProvingPeriodNotInitialized.selector, 999));
+        viewContract.nextPDPChallengeWindowStart(999);
+
+        // Note: We can't fully test nextPDPChallengeWindowStart without creating a data set
+        // and initializing its proving period, which requires the full PDP system setup.
+        // The function is tested indirectly through the PDP system integration tests.
     }
 
     function testConfigureProvingPeriodWithInvalidParameters() public {
@@ -1217,7 +1281,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Simulate calling migrate during upgrade (called by proxy)
         vm.prank(address(warmStorageService));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
 
         // Get recorded logs
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -1243,18 +1307,18 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     function testMigrateOnlyCallableDuringUpgrade() public {
         // Test that migrate can only be called by the contract itself
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlySelf.selector, address(warmStorageService), address(this)));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
     }
 
     function testMigrateOnlyOnce() public {
         // Test that migrate can only be called once per reinitializer version
         vm.prank(address(warmStorageService));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
 
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         vm.prank(address(warmStorageService));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
     }
 
     // Event declaration for testing (must match the contract's event)

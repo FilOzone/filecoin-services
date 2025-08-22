@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-// Generated with tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any changes will be lost.
 
 bytes32 constant SERVICE_COMMISSION_BPS_SLOT = bytes32(uint256(0));
 bytes32 constant CLIENT_DATA_SET_IDS_SLOT = bytes32(uint256(1));
@@ -15,3 +16,4 @@ bytes32 constant PROVEN_PERIODS_SLOT = bytes32(uint256(8));
 bytes32 constant PROVING_ACTIVATION_EPOCH_SLOT = bytes32(uint256(9));
 bytes32 constant MAX_PROVING_PERIOD_SLOT = bytes32(uint256(10));
 bytes32 constant CHALLENGE_WINDOW_SIZE_SLOT = bytes32(uint256(11));
+bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(12));
