@@ -350,10 +350,11 @@ contract FilecoinWarmStorageServiceTest is Test {
             0, // 0%
             "Service commission should be set correctly"
         );
-        (uint64 maxProvingPeriod,,, ) = pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) =
+            pdpServiceWithPayments.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be set correctly");
-        (, uint256 challengeWindow,, ) = pdpServiceWithPayments.getPDPConfig();
         assertEq(challengeWindow, 60, "Challenge window size should be set correctly");
+        assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)
@@ -651,9 +652,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testGlobalParameters() public view {
         // These parameters should be the same as in SimplePDPService
-        (uint64 maxProvingPeriod, uint256 challengeWindow,, ) = pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) =
+            pdpServiceWithPayments.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be 2880 epochs");
         assertEq(challengeWindow, 60, "Challenge window should be 60 epochs");
+        assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
     }
 
     // ===== Pricing Tests =====
@@ -984,9 +987,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        (uint64 maxProvingPeriodConfig, uint256 challengeWindowConfig,, ) = pdpServiceWithPayments.getPDPConfig();
-        uint256 maxProvingPeriod = maxProvingPeriodConfig;
-        uint256 challengeWindow = challengeWindowConfig;
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         vm.prank(address(mockPDPVerifier));
@@ -2281,7 +2282,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.configureProvingPeriod(newMaxProvingPeriod, newChallengeWindowSize);
 
         // Verify the values were set correctly
-        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,, ) = warmStorageService.getPDPConfig();
+        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = warmStorageService.getPDPConfig();
         assertEq(updatedMaxProvingPeriod, newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(updatedChallengeWindow, newChallengeWindowSize, "Challenge window size should be updated");
     }
