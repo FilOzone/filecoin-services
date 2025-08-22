@@ -9,9 +9,11 @@ import {
   StorageProviderChanged as StorageProviderChangedEvent,
 } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, Piece, Provider } from "../generated/schema";
-import { LeafSize } from "../utils";
+import { LeafSize } from "./constants";
 import { decodeBytesString } from "./decode";
 import { SumTree } from "./sumTree";
+import { unpaddedSize, validateCommPv2 } from "./utils/cid";
+import { ProviderStatus } from "./constants";
 
 // --- Helper Functions for ID Generation ---
 function getDataSetEntityId(setId: BigInt): Bytes {
@@ -118,7 +120,7 @@ export function handleStorageProviderChanged(
   if (newProvider == null) {
     newProvider = new Provider(newStorageProvider);
     newProvider.address = newStorageProvider;
-    newProvider.status = "Created";
+    newProvider.status = ProviderStatus.Created;
     newProvider.totalPieces = BigInt.fromI32(0);
     newProvider.totalFaultedPeriods = BigInt.fromI32(0);
     newProvider.totalFaultedPieces = BigInt.fromI32(0);
@@ -397,8 +399,11 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
 
     // Decode piece tuple (bytes stored within the struct)
     const pieceBytes = readBytes(encodedData, structDataAbsOffset); // Reads dynamic bytes
-    // Decode rawSize (uint256 stored after piece bytes offset)
-    const rawSize = readUint256(encodedData, structDataAbsOffset + 32);
+    const commpData = validateCommPv2(pieceBytes);
+
+    const rawSize = commpData.isValid
+      ? unpaddedSize(commpData.padding, commpData.height)
+      : BigInt.zero();
 
     const pieceEntityId = getPieceEntityId(setId, pieceId);
 
@@ -415,10 +420,10 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
     piece.pieceId = pieceId;
     piece.setId = setId;
     piece.metadata = metadata;
-    piece.rawSize = rawSize; // Use correct field name
+    piece.rawSize = rawSize;
     piece.leafCount = rawSize.div(BigInt.fromI32(LeafSize));
-    piece.cid = pieceBytes.length > 0 ? pieceBytes : Bytes.empty(); // Use correct field name
-    piece.removed = false; // Explicitly set removed to false
+    piece.cid = pieceBytes.length > 0 ? pieceBytes : Bytes.empty();
+    piece.removed = false;
     piece.lastProvenEpoch = BigInt.fromI32(0);
     piece.lastProvenAt = BigInt.fromI32(0);
     piece.lastFaultedEpoch = BigInt.fromI32(0);
@@ -428,7 +433,7 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
     piece.createdAt = event.block.timestamp;
     piece.updatedAt = event.block.timestamp;
     piece.blockNumber = event.block.number;
-    piece.dataSet = dataSetEntityId; // Link to DataSet
+    piece.dataSet = dataSetEntityId;
 
     piece.save();
 
@@ -447,7 +452,7 @@ export function handlePiecesAdded(event: PiecesAddedEvent): void {
   // Update DataSet stats
   dataSet.totalPieces = dataSet.totalPieces.plus(
     BigInt.fromI32(addedPieceCount)
-  ); // Use correct field name
+  );
   dataSet.nextPieceId = dataSet.nextPieceId.plus(
     BigInt.fromI32(addedPieceCount)
   );
@@ -502,7 +507,7 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
     const piece = Piece.load(pieceEntityId);
     if (piece) {
       removedPieceCount += 1;
-      removedDataSize = removedDataSize.plus(piece.rawSize); // Use correct field name
+      removedDataSize = removedDataSize.plus(piece.rawSize);
 
       // Mark the Piece entity as removed instead of deleting
       piece.removed = true;
@@ -530,7 +535,7 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   // Update DataSet stats
   dataSet.totalPieces = dataSet.totalPieces.minus(
     BigInt.fromI32(removedPieceCount)
-  ); // Use correct field name
+  );
   dataSet.totalDataSize = dataSet.totalDataSize.minus(removedDataSize);
   dataSet.leafCount = dataSet.leafCount.minus(
     removedDataSize.div(BigInt.fromI32(LeafSize))
@@ -538,12 +543,11 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
 
   // Ensure stats don't go negative
   if (dataSet.totalPieces.lt(BigInt.fromI32(0))) {
-    // Use correct field name
     log.warning(
       "handlePiecesRemoved: DataSet {} pieceCount went negative. Setting to 0.",
       [setId.toString()]
     );
-    dataSet.totalPieces = BigInt.fromI32(0); // Use correct field name
+    dataSet.totalPieces = BigInt.fromI32(0);
   }
   if (dataSet.totalDataSize.lt(BigInt.fromI32(0))) {
     log.warning(
@@ -618,20 +622,18 @@ function readUint256(data: Bytes, offset: i32): BigInt {
 // Helper function to read dynamic Bytes from ABI-encoded data
 function readBytes(data: Bytes, offset: i32): Bytes {
   // First, read the offset to the actual bytes data (uint256)
-  const bytesTupleOffset = readUint256(data, offset).toI32();
+  const bytesRelOffset = readUint256(data, offset).toI32();
+  const bytesAbsOffset = offset + bytesRelOffset;
 
   // Check if the bytes offset is valid
-  if (bytesTupleOffset < 0 || data.length < offset + bytesTupleOffset + 32) {
+  if (bytesRelOffset < 0 || data.length < bytesAbsOffset + 32) {
     log.error(
       "readBytes: Invalid offset {} or data length {} for reading bytes length",
-      [bytesTupleOffset.toString(), data.length.toString()]
+      [bytesRelOffset.toString(), data.length.toString()]
     );
     return Bytes.empty();
   }
 
-  const bytesOffset = readUint256(data, offset + bytesTupleOffset).toI32();
-  const bytesAbsOffset = offset + bytesTupleOffset + bytesOffset;
-  // Read the length of the bytes (uint256)
   const bytesLength = readUint256(data, bytesAbsOffset).toI32();
 
   // Check if the length is valid

@@ -8,9 +8,9 @@ dataSources:
     name: PDPVerifier
     network: filecoin-testnet
     source:
-      address: "0x5A23b7df87f59A291C26A2A1d684AD03Ce9B68DC"
+      address: "0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9"
       abi: PDPVerifier
-      startBlock: 2730790
+      startBlock: 2942565
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -27,8 +27,8 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: ServiceProviderChanged(indexed uint256,indexed address,indexed address)
-          handler: handleServiceProviderChanged
+        - event: StorageProviderChanged(indexed uint256,indexed address,indexed address)
+          handler: handleStorageProviderChanged
         - event: DataSetDeleted(indexed uint256,uint256)
           handler: handleDataSetDeleted
         - event: PiecesAdded(indexed uint256,uint256[])
@@ -46,9 +46,9 @@ dataSources:
     name: FilecoinWarmStorageService
     network: filecoin-testnet
     source:
-      address: "0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5"
+      address: "0x7A605Ad01F7812F5C5e78aa16D795fc0be75974E"
       abi: FilecoinWarmStorageService
-      startBlock: 2730790
+      startBlock: 2942574
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

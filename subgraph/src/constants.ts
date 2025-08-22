@@ -1,15 +1,12 @@
-import { ByteArray } from "@graphprotocol/graph-ts";
+export const PDPVerifierAddress = "0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9";
 
-/**
- * Function selectors as Bytes for efficient comparison
- */
-export class FunctionSelectors {
-  static readonly EXEC_TRANSACTION: ByteArray =
-    ByteArray.fromHexString("0x6a761202");
-  static readonly ADD_SERVICE_PROVIDER: ByteArray =
-    ByteArray.fromHexString("0x5f6840ec");
-  static readonly MULTI_SEND: ByteArray = ByteArray.fromHexString("0x8d80ff0a");
-}
+export const USDFCTokenAddress = "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0";
+
+export const NumChallenges = 5;
+
+export const LeafSize = 32;
+
+export const DefaultLockupPeriod = 2880 * 10; // 10 days
 
 /**
  * Constants for transaction parsing
@@ -22,9 +19,21 @@ export class TransactionConstants {
 }
 
 /**
- * Contract Address
+ * Type of rail provider
  */
-export class ContractAddresses {
-  static readonly WARM_STORAGE: string =
-    "0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5";
+export class RailType {
+  static readonly PDP: string = "PDP";
+  static readonly CACHE_MISS: string = "CACHE_MISS";
+  static readonly CDN: string = "CDN";
+}
+
+/**
+ * Status of provider
+ */
+export class ProviderStatus {
+  static readonly Created: string = "Created";
+  static readonly Registered: string = "Registered";
+  static readonly Approved: string = "Approved";
+  static readonly Rejected: string = "Rejected";
+  static readonly Removed: string = "Removed";
 }
