@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-// Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any changes will be lost.
 
-import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 
 contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
@@ -52,6 +53,19 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getMaxProvingPeriod();
     }
 
+    function getPDPConfig()
+        external
+        view
+        returns (
+            uint64 maxProvingPeriod,
+            uint256 challengeWindow_,
+            uint256 challengesPerProof,
+            uint256 initChallengeWindowStart_
+        )
+    {
+        return service.getPDPConfig();
+    }
+
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
         return service.getPieceMetadata(dataSetId, pieceId);
     }
@@ -60,8 +74,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.initChallengeWindowStart();
     }
 
-    function nextChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.nextChallengeWindowStart(setId);
+    function nextPDPChallengeWindowStart(uint256 setId) external view returns (uint256) {
+        return service.nextPDPChallengeWindowStart(setId);
     }
 
     function provenPeriods(uint256 dataSetId, uint256 periodId) external view returns (bool) {

@@ -34,7 +34,12 @@ src/FilecoinWarmStorageServiceStateView.sol: tools/generate_view_contract.sh out
 	$^ | forge fmt -r - > $@
 
 src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol: src/lib/FilecoinWarmStorageServiceStateLibrary.sol
-	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e "4i\/\/ Generated with 'make $@'\n" $< | forge fmt -r - > $@
+	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e '3a\\n// Code generated - DO NOT EDIT.\n// This file is a generated binding and any changes will be lost.\n' $< | forge fmt -r - > $@
+
+# Code generation target
+.PHONY: gen
+gen: $(LAYOUTS) src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol src/FilecoinWarmStorageServiceStateView.sol
+	@echo "Code generation complete"
 
 # Test target
 .PHONY: test
