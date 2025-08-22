@@ -33,12 +33,16 @@ src/lib/%Layout.sol: tools/generate_storage_layout.sh src/%.sol
 src/FilecoinWarmStorageServiceStateView.sol: tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 	$^ | forge fmt -r - > $@
 
+
+src/interfaces/IFilecoinWarmStorageServiceStateView.sol: tools/generate_view_interface.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
+	$^ | forge fmt -r - > $@
+
 src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol: src/lib/FilecoinWarmStorageServiceStateLibrary.sol
 	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e '3a\\n// Code generated - DO NOT EDIT.\n// This file is a generated binding and any changes will be lost.\n' $< | forge fmt -r - > $@
 
 # Code generation target
 .PHONY: gen
-gen: $(LAYOUTS) src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol src/FilecoinWarmStorageServiceStateView.sol
+gen: $(LAYOUTS) src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol src/FilecoinWarmStorageServiceStateView.sol src/interfaces/IFilecoinWarmStorageServiceStateView.sol
 	@echo "Code generation complete"
 
 # Test target

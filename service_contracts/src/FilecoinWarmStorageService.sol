@@ -14,6 +14,7 @@ import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
 import {Extsload} from "./Extsload.sol";
+import {IFilecoinWarmStorageServiceStateView} from "./interfaces/IFilecoinWarmStorageServiceStateView.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
@@ -158,7 +159,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // View contract for read-only operations
-    address public viewContractAddress;
+    IFilecoinWarmStorageServiceStateView public viewContractAddress;
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
