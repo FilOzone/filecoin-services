@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -28,6 +29,7 @@ uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
     PDPListener,
+    IPDPProvingSchedule,
     IValidator,
     Initializable,
     UUPSUpgradeable,
@@ -1084,5 +1086,58 @@ contract FilecoinWarmStorageService is
             info.paymentEndEpoch = endEpoch;
             emit PaymentTerminated(dataSetId, endEpoch, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         }
+    }
+
+    /* IPDPProvingSchedule */
+
+    function getMaxProvingPeriod() public view returns (uint64) {
+        return maxProvingPeriod;
+    }
+
+    // Number of epochs at the end of a proving period during which a
+    // proof of possession can be submitted
+    function challengeWindow() public view returns (uint256) {
+        return challengeWindowSize;
+    }
+
+    // Initial value for challenge window start
+    // Can be used for first call to nextProvingPeriod
+    function initChallengeWindowStart() public view returns (uint256) {
+        return block.number + maxProvingPeriod - challengeWindowSize;
+    }
+
+    // The start of the challenge window for the current proving period
+    function thisChallengeWindowStart(uint256 setId) internal view returns (uint256) {
+        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingPeriodNotInitialized(setId);
+        }
+
+        uint256 periodsSkipped;
+        // Proving period is open 0 skipped periods
+        if (block.number <= provingDeadlines[setId]) {
+            periodsSkipped = 0;
+        } else {
+            // Proving period has closed possibly some skipped periods
+            periodsSkipped = 1 + (block.number - (provingDeadlines[setId] + 1)) / maxProvingPeriod;
+        }
+        return provingDeadlines[setId] + periodsSkipped * maxProvingPeriod - challengeWindowSize;
+    }
+
+    // The start of the NEXT OPEN proving period's challenge window
+    // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
+    function nextChallengeWindowStart(uint256 setId) public view returns (uint256) {
+        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingPeriodNotInitialized(setId);
+        }
+        // If the current period is open this is the next period's challenge window
+        if (block.number <= provingDeadlines[setId]) {
+            return thisChallengeWindowStart(setId) + maxProvingPeriod;
+        }
+        // If the current period is not yet open this is the current period's challenge window
+        return thisChallengeWindowStart(setId);
+    }
+
+    function getChallengesPerProof() public pure returns (uint64) {
+        return CHALLENGES_PER_PROOF;
     }
 }
