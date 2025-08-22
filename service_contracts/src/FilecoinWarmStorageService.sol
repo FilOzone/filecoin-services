@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
@@ -67,6 +66,8 @@ contract FilecoinWarmStorageService is
     event PaymentTerminated(
         uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
+
+    event ViewContractSet(address indexed viewContract);
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
@@ -172,9 +173,14 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
-    // Proving period constants - set during initialization (added at end for upgrade compatibility)
+    // Proving period constants - set during initialization
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
+
+    // View contract for read-only operations
+    // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
+    // directly instead of going through the view contract for more efficient gas usage.
+    address public viewContractAddress;
 
     // EIP-712 Type hashes
     // EIP-712 type definitions with metadata support
@@ -285,10 +291,33 @@ contract FilecoinWarmStorageService is
      * @notice Migration function for contract upgrades
      * @dev This function should be called during upgrades to emit version tracking events
      * Only callable during proxy upgrade process
+     * @param _viewContract Address of the view contract (optional, can be address(0))
      */
-    function migrate() public onlyProxy reinitializer(3) {
+    function migrate(address _viewContract) public onlyProxy reinitializer(4) {
         require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
+
+        // Set view contract if provided
+        if (_viewContract != address(0)) {
+            viewContractAddress = _viewContract;
+            emit ViewContractSet(_viewContract);
+        }
+
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+    }
+
+    /**
+     * @notice Sets the view contract address (one-time setup)
+     * @dev Only callable by the contract owner. This is intended to be called once after deployment
+     * or during migration. The view contract should not be changed after initial setup as external
+     * systems may cache this address. If a view contract upgrade is needed, deploy a new main
+     * contract with the updated view contract reference.
+     * @param _viewContract Address of the view contract
+     */
+    function setViewContract(address _viewContract) external onlyOwner {
+        require(_viewContract != address(0), "Invalid view contract address");
+        require(viewContractAddress == address(0), "View contract already set");
+        viewContractAddress = _viewContract;
+        emit ViewContractSet(_viewContract);
     }
 
     /**
