@@ -213,6 +213,11 @@ contract FilecoinWarmStorageService is
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
     }
 
+    /**
+     * @notice Initialize the contract with PDP proving period parameters
+     * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
+     * @param _challengeWindowSize Number of epochs for the challenge window
+     */
     function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -1090,24 +1095,38 @@ contract FilecoinWarmStorageService is
 
     /* IPDPProvingSchedule */
 
-    function getMaxProvingPeriod() public view returns (uint64) {
-        return maxProvingPeriod;
+    /**
+     * @notice Returns PDP configuration values
+     * @return maxProvingPeriod Maximum number of epochs between proofs
+     * @return challengeWindow Number of epochs for the challenge window
+     * @return challengesPerProof Number of challenges required per proof
+     * @return initChallengeWindowStart Initial challenge window start for new data sets
+     */
+    function getPDPConfig() external view returns (uint64, uint256, uint256, uint256) {
+        uint64 m = maxProvingPeriod;
+        uint256 c = challengeWindowSize;
+        return (m, c, CHALLENGES_PER_PROOF, block.number + m - c);
     }
 
-    // Number of epochs at the end of a proving period during which a
-    // proof of possession can be submitted
-    function challengeWindow() public view returns (uint256) {
-        return challengeWindowSize;
-    }
-
-    // Initial value for challenge window start
-    // Can be used for first call to nextProvingPeriod
-    function initChallengeWindowStart() public view returns (uint256) {
-        return block.number + maxProvingPeriod - challengeWindowSize;
+    /**
+     * @notice Returns the start of the next challenge window for a data set
+     * @param setId The ID of the data set
+     * @return The block number when the next challenge window starts
+     */
+    function nextPDPChallengeWindowStart(uint256 setId) external view returns (uint256) {
+        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingPeriodNotInitialized(setId);
+        }
+        // If the current period is open this is the next period's challenge window
+        if (block.number <= provingDeadlines[setId]) {
+            return _thisChallengeWindowStart(setId) + maxProvingPeriod;
+        }
+        // Otherwise return the current period's challenge window
+        return _thisChallengeWindowStart(setId);
     }
 
     // The start of the challenge window for the current proving period
-    function thisChallengeWindowStart(uint256 setId) internal view returns (uint256) {
+    function _thisChallengeWindowStart(uint256 setId) internal view returns (uint256) {
         if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
             revert Errors.ProvingPeriodNotInitialized(setId);
         }
@@ -1121,23 +1140,5 @@ contract FilecoinWarmStorageService is
             periodsSkipped = 1 + (block.number - (provingDeadlines[setId] + 1)) / maxProvingPeriod;
         }
         return provingDeadlines[setId] + periodsSkipped * maxProvingPeriod - challengeWindowSize;
-    }
-
-    // The start of the NEXT OPEN proving period's challenge window
-    // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
-    function nextChallengeWindowStart(uint256 setId) public view returns (uint256) {
-        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-        // If the current period is open this is the next period's challenge window
-        if (block.number <= provingDeadlines[setId]) {
-            return thisChallengeWindowStart(setId) + maxProvingPeriod;
-        }
-        // If the current period is not yet open this is the current period's challenge window
-        return thisChallengeWindowStart(setId);
-    }
-
-    function getChallengesPerProof() public pure returns (uint64) {
-        return CHALLENGES_PER_PROOF;
     }
 }
