@@ -4,6 +4,7 @@ pragma solidity ^0.8.13;
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
@@ -217,10 +218,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint8(27) // v
     );
 
-    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
-
     // Contracts
     FilecoinWarmStorageService public pdpServiceWithPayments;
+    FilecoinWarmStorageServiceStateView public viewContract;
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
@@ -318,6 +318,10 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
         pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
+
+        // Deploy view contract and set it on the main contract
+        viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
+        pdpServiceWithPayments.setViewContract(address(viewContract));
     }
 
     function makeSignaturePass(address signer) public {
@@ -420,7 +424,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.stopPrank();
 
         // Get data set info
-        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(newDataSetId);
         uint256 pdpRailId = dataSet.pdpRailId;
         uint256 cacheMissRailId = dataSet.cacheMissRailId;
         uint256 cdnRailId = dataSet.cdnRailId;
@@ -440,15 +444,15 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(metadata, "true", "Metadata should be stored correctly");
 
         // Verify client data set ids
-        uint256[] memory clientDataSetIds = pdpServiceWithPayments.clientDataSets(client);
+        uint256[] memory clientDataSetIds = viewContract.clientDataSets(client);
         assertEq(clientDataSetIds.length, 1);
         assertEq(clientDataSetIds[0], newDataSetId);
 
-        assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), newDataSetId);
-        assertEq(pdpServiceWithPayments.railToDataSet(cdnRailId), newDataSetId);
+        assertEq(viewContract.railToDataSet(pdpRailId), newDataSetId);
+        assertEq(viewContract.railToDataSet(cdnRailId), newDataSetId);
 
         // Verify data set info
-        FilecoinWarmStorageService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory dataSetInfo = viewContract.getDataSet(newDataSetId);
         assertEq(dataSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");
         assertNotEq(dataSetInfo.cacheMissRailId, 0, "Cache miss rail ID should be set");
         assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
@@ -547,7 +551,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.stopPrank();
 
         // Get data set info
-        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(newDataSetId);
         // Verify the commission rate was set correctly for basic service (no CDN)
         Payments.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
         assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
@@ -745,7 +749,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testGetClientDataSets_EmptyClient() public view {
         // Test with a client that has no data sets
-        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
 
         assertEq(dataSets.length, 0, "Should return empty array for client with no data sets");
     }
@@ -757,7 +761,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Get data sets
-        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
 
         // Verify results
         assertEq(dataSets.length, 1, "Should return one data set");
@@ -776,7 +780,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
 
         // Get data sets
-        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
 
         // Verify results
         assertEq(dataSets.length, 2, "Should return two data sets");
@@ -849,7 +853,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
         // Only the data set's payee is updated
-        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(testDataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(testDataSetId);
         assertEq(dataSet.payee, sp2, "Payee should be updated to new service provider");
     }
 
@@ -866,7 +870,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             testDataSetId, newProvider, address(pdpServiceWithPayments), testExtraData
         );
         // Verify the change succeeded
-        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(testDataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(testDataSetId);
         assertEq(dataSet.payee, newProvider, "Payee should be updated to new service provider");
     }
 
@@ -921,8 +925,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
         // ps1 payee updated, ps2 payee unchanged
-        FilecoinWarmStorageService.DataSetInfo memory dataSet1 = pdpServiceWithPayments.getDataSet(ps1);
-        FilecoinWarmStorageService.DataSetInfo memory dataSet2 = pdpServiceWithPayments.getDataSet(ps2);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet1 = viewContract.getDataSet(ps1);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet2 = viewContract.getDataSet(ps2);
         assertEq(dataSet1.payee, sp2, "ps1 payee should be sp2");
         assertEq(dataSet2.payee, sp1, "ps2 payee should remain sp1");
     }
@@ -938,7 +942,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(testDataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(testDataSetId);
         assertEq(dataSet.payee, sp2, "Payee should be updated to new service provider");
     }
 
@@ -993,14 +997,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
-        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
+        assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
         // Warp to challenge window
-        uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
+        uint256 provingDeadline = viewContract.provingDeadlines(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(
-            pdpServiceWithPayments.provenPeriods(
+            viewContract.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -1009,7 +1013,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         assertTrue(
-            pdpServiceWithPayments.provenPeriods(
+            viewContract.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -1023,7 +1027,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // 4. Assertions
         // Check paymentEndEpoch is set
-        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
         assertTrue(info.paymentEndEpoch > 0, "paymentEndEpoch should be set after termination");
         console.log("Payment termination successful. Payment end epoch:", info.paymentEndEpoch);
 
@@ -1113,7 +1117,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Verify no metadata is stored
-        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+        (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
         assertEq(storedKeys.length, 0, "Should have no metadata keys");
     }
 
@@ -1144,7 +1148,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                 string(abi.encodePacked("Stored metadata for ", metadataKeys[i], " should match"))
             );
         }
-        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+        (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
         assertEq(storedKeys.length, metadataKeys.length, "Should have correct number of metadata keys");
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bool found = false;
@@ -1208,12 +1212,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(value, "", "withCDN key should not exist in dataset 1");
 
         // Test getAllDataSetMetadata with no metadata
-        (string[] memory keys, string[] memory values) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId1);
+        (string[] memory keys, string[] memory values) = viewContract.getAllDataSetMetadata(dataSetId1);
         assertEq(keys.length, 0, "Should return empty arrays for no metadata");
         assertEq(values.length, 0, "Should return empty arrays for no metadata");
 
         // Test getAllDataSetMetadata with metadata
-        (keys, values) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId3);
+        (keys, values) = viewContract.getAllDataSetMetadata(dataSetId3);
         assertEq(keys.length, 1, "Should have one key");
         assertEq(keys[0], "label", "Key should be label");
         assertEq(values[0], "test", "Value should be test");
@@ -1267,7 +1271,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                 );
 
                 // Verify the metadata key is stored
-                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+                (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
                 assertEq(storedKeys.length, 1, "Should have one metadata key");
                 assertEq(
                     storedKeys[0],
@@ -1313,7 +1317,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                 );
 
                 // Verify the metadata key is stored
-                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+                (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
                 assertEq(storedKeys.length, 1, "Should have one metadata key");
                 assertEq(
                     storedKeys[0],
@@ -1365,7 +1369,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     );
                 }
 
-                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+                (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
                 assertEq(
                     storedKeys.length,
                     metadataKeys.length,
@@ -1451,7 +1455,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify piece metadata storage
 
         (string[] memory storedKeys, string[] memory storedValues) =
-            pdpServiceWithPayments.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+            viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
         for (uint256 i = 0; i < values.length; i++) {
             assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
             assertEq(storedValues[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
@@ -1507,7 +1511,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     string.concat("Stored metadata should match for key length ", Strings.toString(keyLength))
                 );
 
-                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllPieceMetadata(dataSetId, pieceId + i);
+                (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, pieceId + i);
                 assertEq(storedKeys.length, 1, "Should have one metadata key");
                 assertEq(
                     storedKeys[0],
@@ -1572,7 +1576,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     string.concat("Stored metadata should match for value length ", Strings.toString(valueLength))
                 );
 
-                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllPieceMetadata(dataSetId, pieceId + i);
+                (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, pieceId + i);
                 assertEq(storedKeys.length, 1, "Should have one metadata key");
                 assertEq(storedKeys[0], keys[0], "Stored key should match 'filename'");
             } else {
@@ -1638,7 +1642,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     );
                 }
 
-                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllPieceMetadata(dataSetId, pieceId + testIdx);
+                (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, pieceId + testIdx);
                 assertEq(
                     storedKeys.length,
                     keys.length,
@@ -1812,7 +1816,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Test getPieceMetadataKeys
         (string[] memory storedKeys, string[] memory storedValues) =
-            pdpServiceWithPayments.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+            viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
         assertEq(storedKeys.length, keys.length, "Should return correct number of metadata keys");
         for (uint256 i = 0; i < keys.length; i++) {
             assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
@@ -1938,16 +1942,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(v5, "data.json", "Piece 2 filename should match");
 
         // Verify getAllPieceMetadata returns correct data for each piece
-        (string[] memory keys0, string[] memory values0) =
-            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId);
+        (string[] memory keys0, string[] memory values0) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId);
         assertEq(keys0.length, 2, "Piece 0 should have 2 metadata keys");
 
-        (string[] memory keys1, string[] memory values1) =
-            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        (string[] memory keys1, string[] memory values1) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 1);
         assertEq(keys1.length, 3, "Piece 1 should have 3 metadata keys");
 
-        (string[] memory keys2, string[] memory values2) =
-            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 2);
+        (string[] memory keys2, string[] memory values2) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 2);
         assertEq(keys2.length, 1, "Piece 2 should have 1 metadata key");
     }
 
@@ -2085,13 +2086,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
 
         // Verify no metadata is stored
-        (string[] memory keys0, string[] memory values0) =
-            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId);
+        (string[] memory keys0, string[] memory values0) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId);
         assertEq(keys0.length, 0, "Piece 0 should have no metadata keys");
         assertEq(values0.length, 0, "Piece 0 should have no metadata values");
 
-        (string[] memory keys1, string[] memory values1) =
-            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        (string[] memory keys1, string[] memory values1) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 1);
         assertEq(keys1.length, 0, "Piece 1 should have no metadata keys");
         assertEq(values1.length, 0, "Piece 1 should have no metadata values");
 
@@ -2235,8 +2234,6 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 
 // Test contract for upgrade scenarios
 contract FilecoinWarmStorageServiceUpgradeTest is Test {
-    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
-
     FilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
@@ -2281,10 +2278,70 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // This should work since we're using reinitializer(2)
         warmStorageService.configureProvingPeriod(newMaxProvingPeriod, newChallengeWindowSize);
 
-        // Verify the values were set correctly
+        // Deploy view contract and verify values through it
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+        warmStorageService.setViewContract(address(viewContract));
+
+        // Verify the values were set correctly through the view contract
         (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = warmStorageService.getPDPConfig();
         assertEq(updatedMaxProvingPeriod, newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(updatedChallengeWindow, newChallengeWindowSize, "Challenge window size should be updated");
+    }
+
+    function testSetViewContract() public {
+        // Deploy view contract
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+
+        // Set view contract
+        warmStorageService.setViewContract(address(viewContract));
+
+        // Verify it was set
+        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
+
+        // Test that non-owner cannot set view contract
+        vm.prank(address(0x123));
+        vm.expectRevert();
+        warmStorageService.setViewContract(address(0x456));
+
+        // Test that it cannot be set again (one-time only)
+        FilecoinWarmStorageServiceStateView newViewContract =
+            new FilecoinWarmStorageServiceStateView(warmStorageService);
+        vm.expectRevert("View contract already set");
+        warmStorageService.setViewContract(address(newViewContract));
+
+        // Test that zero address is rejected (would need a new contract to test this properly)
+        // This is now unreachable in this test since view contract is already set
+    }
+
+    function testMigrateWithViewContract() public {
+        // First, deploy a view contract
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+
+        // Simulate migration being called during upgrade (must be called by proxy itself)
+        vm.prank(address(warmStorageService));
+        warmStorageService.migrate(address(viewContract));
+
+        // Verify view contract was set
+        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
+
+        // Verify we can call PDP functions through view contract
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = warmStorageService.getPDPConfig();
+        assertEq(maxProvingPeriod, 2880, "Max proving period should be accessible through view");
+        assertEq(challengeWindow, 60, "Challenge window should be accessible through view");
+    }
+
+    function testNextPDPChallengeWindowStartThroughView() public {
+        // Deploy and set view contract
+        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
+        warmStorageService.setViewContract(address(viewContract));
+
+        // This should revert since no data set exists with proving period initialized
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProvingPeriodNotInitialized.selector, 999));
+        warmStorageService.nextPDPChallengeWindowStart(999);
+
+        // Note: We can't fully test nextPDPChallengeWindowStart without creating a data set
+        // and initializing its proving period, which requires the full PDP system setup.
+        // The function is tested indirectly through the PDP system integration tests.
     }
 
     function testConfigureProvingPeriodWithInvalidParameters() public {
@@ -2316,7 +2373,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Simulate calling migrate during upgrade (called by proxy)
         vm.prank(address(warmStorageService));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
 
         // Get recorded logs
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -2342,18 +2399,18 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     function testMigrateOnlyCallableDuringUpgrade() public {
         // Test that migrate can only be called by the contract itself
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlySelf.selector, address(warmStorageService), address(this)));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
     }
 
     function testMigrateOnlyOnce() public {
         // Test that migrate can only be called once per reinitializer version
         vm.prank(address(warmStorageService));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
 
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         vm.prank(address(warmStorageService));
-        warmStorageService.migrate();
+        warmStorageService.migrate(address(0));
     }
 
     // Event declaration for testing (must match the contract's event)
