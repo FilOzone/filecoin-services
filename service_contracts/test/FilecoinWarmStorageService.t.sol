@@ -221,7 +221,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public client;
     address public serviceProvider;
     address public filCDN;
-    address public filCDNTreasury;
+    address public filCDNBeneficiary;
 
     address public sp1;
     address public sp2;
@@ -253,7 +253,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         client = address(0xf1);
         serviceProvider = address(0xf2);
         filCDN = address(0xf3);
-        filCDNTreasury = address(0xf4);
+        filCDNBeneficiary = address(0xf4);
 
         // Additional accounts for registry tests
         sp1 = address(0xf5);
@@ -288,7 +288,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNTreasury
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNBeneficiary
         );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
@@ -450,7 +450,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(cdnRail.token, address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
-        assertEq(cdnRail.to, filCDNTreasury, "To address should be FilCDNTreasury");
+        assertEq(cdnRail.to, filCDNBeneficiary, "To address should be FilCDNBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cdnRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
@@ -1104,14 +1104,14 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
         address _filCDNAddress,
-        address _filCDNTreasuryAddress
+        address _filCDNBeneficiaryAddress
     )
         FilecoinWarmStorageService(
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
             _filCDNAddress,
-            _filCDNTreasuryAddress
+            _filCDNBeneficiaryAddress
         )
     {}
 
@@ -1135,8 +1135,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     uint256 public wrongSignerPrivateKey;
     uint256 public filCDNPrivateKey;
     address public filCDN;
-    uint256 public filCDNTreasuryPrivateKey;
-    address public filCDNTreasury;
+    uint256 public filCDNBeneficiaryPrivateKey;
+    address public filCDNBeneficiary;
 
     function setUp() public {
         // Set up test accounts with known private keys
@@ -1149,8 +1149,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         filCDNPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
         filCDN = vm.addr(filCDNPrivateKey);
 
-        filCDNTreasuryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
-        filCDNTreasury = vm.addr(filCDNTreasuryPrivateKey);
+        filCDNBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
+        filCDNBeneficiary = vm.addr(filCDNBeneficiaryPrivateKey);
 
         creator = address(0xf2);
 
@@ -1166,7 +1166,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService(
-            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNTreasury
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNBeneficiary
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
@@ -1242,12 +1242,12 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
     address public deployer;
     address public filCDN;
-    address public filCDNTreasury;
+    address public filCDNBeneficiary;
 
     function setUp() public {
         deployer = address(this);
         filCDN = address(0xf2);
-        filCDNTreasury = address(0xf3);
+        filCDNBeneficiary = address(0xf3);
 
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -1262,7 +1262,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNTreasury
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNBeneficiary
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,

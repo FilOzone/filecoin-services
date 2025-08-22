@@ -95,7 +95,7 @@ contract FilecoinWarmStorageService is
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
-    address public immutable filCDNTreasuryAddress;
+    address public immutable filCDNBeneficiaryAddress;
 
     // Commission rates
     uint256 public serviceCommissionBps;
@@ -187,7 +187,7 @@ contract FilecoinWarmStorageService is
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
         address _filCDNAddress,
-        address _filCDNTreasuryAddress
+        address _filCDNBeneficiaryAddress
     ) {
         _disableInitializers();
 
@@ -201,10 +201,10 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
-        require(_filCDNTreasuryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDNTreasury));
+        require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDNTreasury));
 
         pdpVerifierAddress = _pdpVerifierAddress;
-        filCDNTreasuryAddress = _filCDNTreasuryAddress;
+        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
 
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         paymentsContractAddress = _paymentsContractAddress;
@@ -367,7 +367,7 @@ contract FilecoinWarmStorageService is
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                filCDNTreasuryAddress,
+                filCDNBeneficiaryAddress,
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
