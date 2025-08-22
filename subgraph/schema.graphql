@@ -25,7 +25,7 @@ type DataSet @entity(immutable: false) {
   # Derived relationships
   pieces: [Piece!]! @derivedFrom(field: "dataSet")
   faultRecords: [FaultRecord!]! @derivedFrom(field: "dataSet")
-  rail: Rail @derivedFrom(field: "dataSet")
+  rails: [Rail!]! @derivedFrom(field: "dataSet")
 }
 
 enum RailType {

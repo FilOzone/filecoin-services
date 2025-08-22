@@ -1,9 +1,9 @@
 import { Bytes, BigInt, Address } from "@graphprotocol/graph-ts";
 import { Rail } from "../../generated/schema";
-import { DefaultLockupPeriod, USDFCTokenAddress } from "../../utils";
+import { DefaultLockupPeriod, USDFCTokenAddress } from "../constants";
 
 export function createRails(
-  railId: BigInt,
+  railIds: BigInt[],
   type: string[],
   from: Address,
   to: Address,
@@ -11,8 +11,12 @@ export function createRails(
   dataSetId: Bytes
 ): void {
   for (let i = 0; i < type.length; i++) {
-    let rail = new Rail(Bytes.fromByteArray(Bytes.fromBigInt(railId)));
-    rail.railId = railId;
+    if (railIds[i].isZero()) {
+      continue;
+    }
+
+    let rail = new Rail(Bytes.fromByteArray(Bytes.fromBigInt(railIds[i])));
+    rail.railId = railIds[i];
     rail.token = Address.fromHexString(USDFCTokenAddress);
     rail.type = type[i];
     rail.from = from;
@@ -22,7 +26,7 @@ export function createRails(
     rail.dataSet = dataSetId;
     rail.paymentRate = BigInt.fromI32(0);
     rail.lockupPeriod = BigInt.fromI32(DefaultLockupPeriod);
-    rail.lockupFixed = BigInt.fromI32(0); // lockupFixed - oneTimePayment
+    rail.lockupFixed = BigInt.fromI32(0);
     rail.settledUpto = BigInt.fromI32(0);
     rail.endEpoch = BigInt.fromI32(0);
     rail.queueLength = BigInt.fromI32(0);
