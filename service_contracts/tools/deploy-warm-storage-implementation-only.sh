@@ -41,6 +41,11 @@ if [ -z "$FILCDN_ADDRESS" ]; then
   FILCDN_ADDRESS="0xff0000000000000000000000000000000002870c"
 fi
 
+if [ -z "$REGISTRY_PROXY_ADDRESS" ]; then
+  echo "Error: REGISTRY_PROXY_ADDRESS is not set"
+  exit 1
+fi
+
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address on calibnet
 
 # Deploy FilecoinWarmStorageService implementation
@@ -50,8 +55,9 @@ echo "  PDPVerifier: $PDP_VERIFIER_ADDRESS"
 echo "  Payments: $PAYMENTS_CONTRACT_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
 echo "  FilCDN: $FILCDN_ADDRESS"
+echo "  ServiceProviderRegistry: $REGISTRY_PROXY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to deploy FilecoinWarmStorageService implementation"

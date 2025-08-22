@@ -96,9 +96,30 @@ fi
 echo "Payments proxy deployed at: $PAYMENTS_CONTRACT_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 5: Deploy FilecoinWarmStorageService implementation
+# Step 5: Deploy ServiceProviderRegistry implementation
+echo "Deploying ServiceProviderRegistry implementation..."
+REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
+if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
+    echo "Error: Failed to extract ServiceProviderRegistry implementation address"
+    exit 1
+fi
+echo "ServiceProviderRegistry implementation deployed at: $REGISTRY_IMPLEMENTATION_ADDRESS"
+NONCE=$(expr $NONCE + "1")
+
+# Step 6: Deploy ServiceProviderRegistry proxy
+echo "Deploying ServiceProviderRegistry proxy..."
+REGISTRY_INIT_DATA=$(cast calldata "initialize()")
+REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
+if [ -z "$REGISTRY_PROXY_ADDRESS" ]; then
+    echo "Error: Failed to extract ServiceProviderRegistry proxy address"
+    exit 1
+fi
+echo "ServiceProviderRegistry proxy deployed at: $REGISTRY_PROXY_ADDRESS"
+NONCE=$(expr $NONCE + "1")
+
+# Step 7: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -106,7 +127,7 @@ fi
 echo "FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 6: Deploy FilecoinWarmStorageService proxy
+# Step 8: Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
 # Initialize with PDPVerifier address, payments contract address, USDFC token address, commission rate, max proving period, and challenge window size
 INIT_DATA=$(cast calldata "initialize(uint64,uint256)"  $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE)
@@ -124,6 +145,8 @@ echo "PDPVerifier Implementation: $VERIFIER_IMPLEMENTATION_ADDRESS"
 echo "PDPVerifier Proxy: $PDP_VERIFIER_ADDRESS"
 echo "Payments Implementation: $PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "Payments Proxy: $PAYMENTS_CONTRACT_ADDRESS"
+echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
+echo "ServiceProviderRegistry Proxy: $REGISTRY_PROXY_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo "=========================="
