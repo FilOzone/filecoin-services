@@ -611,6 +611,13 @@ contract ServiceProviderRegistry is
         return info;
     }
 
+    /// @notice Get provider ID by address
+    /// @param providerAddress The address of the provider
+    /// @return providerId The provider ID (0 if not registered)
+    function getProviderIdByAddress(address providerAddress) external view returns (uint256) {
+        return addressToProviderId[providerAddress];
+    }
+
     /// @notice Check if a provider is active
     /// @param providerId The ID of the provider
     /// @return Whether the provider is active
