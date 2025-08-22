@@ -40,7 +40,7 @@ contract ServiceProviderRegistry is
     uint256 public constant REGISTRATION_FEE = 1e18;
 
     /// @notice Emitted when a new provider registers
-    event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
+    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
 
     /// @notice Emitted when a service is updated or added
     event ProductUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 updatedAt);
@@ -54,9 +54,12 @@ contract ServiceProviderRegistry is
     /// @notice Emitted when provider info is updated
     event ProviderInfoUpdated(uint256 indexed providerId, uint256 updatedAt);
 
-    /// @notice Emitted when ownership is transferred
-    event OwnershipTransferred(
-        uint256 indexed providerId, address indexed previousOwner, address indexed newOwner, uint256 transferredAt
+    /// @notice Emitted when beneficiary is transferred
+    event BeneficiaryTransferred(
+        uint256 indexed providerId,
+        address indexed previousBeneficiary,
+        address indexed newBeneficiary,
+        uint256 transferredAt
     );
 
     /// @notice Emitted when a provider is removed
@@ -65,9 +68,9 @@ contract ServiceProviderRegistry is
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
 
-    /// @notice Ensures the caller is the owner of the provider
-    modifier onlyProviderOwner(uint256 providerId) {
-        require(providers[providerId].beneficiary == msg.sender, "Only provider owner can call this function");
+    /// @notice Ensures the caller is the beneficiary of the provider
+    modifier onlyProviderBeneficiary(uint256 providerId) {
+        require(providers[providerId].beneficiary == msg.sender, "Only provider beneficiary can call this function");
         _;
     }
 
@@ -174,7 +177,7 @@ contract ServiceProviderRegistry is
         bytes memory productData,
         string[] memory capabilityKeys,
         string[] memory capabilityValues
-    ) private providerExists(providerId) providerActive(providerId) onlyProviderOwner(providerId) {
+    ) private providerExists(providerId) providerActive(providerId) onlyProviderBeneficiary(providerId) {
         // Check product doesn't already exist
         require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
 
@@ -240,7 +243,7 @@ contract ServiceProviderRegistry is
         bytes memory productData,
         string[] memory capabilityKeys,
         string[] memory capabilityValues
-    ) private providerExists(providerId) providerActive(providerId) onlyProviderOwner(providerId) {
+    ) private providerExists(providerId) providerActive(providerId) onlyProviderBeneficiary(providerId) {
         // Check product exists
         require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
 
@@ -290,7 +293,7 @@ contract ServiceProviderRegistry is
         private
         providerExists(providerId)
         providerActive(providerId)
-        onlyProviderOwner(providerId)
+        onlyProviderBeneficiary(providerId)
     {
         // Check product exists
         require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
@@ -353,38 +356,38 @@ contract ServiceProviderRegistry is
         emit ProviderInfoUpdated(providerId, block.number);
     }
 
-    /// @notice Transfer provider ownership to a new address
-    /// @param newOwner The address of the new owner
-    function transferProviderOwnership(address newOwner) external {
-        require(newOwner != address(0), "New owner cannot be zero address");
+    /// @notice Transfer provider beneficiary to a new address
+    /// @param newBeneficiary The address of the new beneficiary
+    function transferProviderBeneficiary(address newBeneficiary) external {
+        require(newBeneficiary != address(0), "New beneficiary cannot be zero address");
 
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        _transferProviderOwnership(providerId, newOwner);
+        _transferProviderBeneficiary(providerId, newBeneficiary);
     }
 
-    /// @notice Internal function to transfer ownership
-    function _transferProviderOwnership(uint256 providerId, address newOwner)
+    /// @notice Internal function to transfer beneficiary
+    function _transferProviderBeneficiary(uint256 providerId, address newBeneficiary)
         private
         providerExists(providerId)
         providerActive(providerId)
-        onlyProviderOwner(providerId)
+        onlyProviderBeneficiary(providerId)
     {
-        // Check new owner doesn't already have a provider
-        require(addressToProviderId[newOwner] == 0, "New owner already has a provider");
+        // Check new beneficiary doesn't already have a provider
+        require(addressToProviderId[newBeneficiary] == 0, "New beneficiary already has a provider");
 
-        address previousOwner = providers[providerId].beneficiary;
+        address previousBeneficiary = providers[providerId].beneficiary;
 
-        // Update owner
-        providers[providerId].beneficiary = newOwner;
+        // Update beneficiary
+        providers[providerId].beneficiary = newBeneficiary;
 
         // Update address mappings
-        delete addressToProviderId[previousOwner];
-        addressToProviderId[newOwner] = providerId;
+        delete addressToProviderId[previousBeneficiary];
+        addressToProviderId[newBeneficiary] = providerId;
 
         // Emit event
-        emit OwnershipTransferred(providerId, previousOwner, newOwner, block.number);
+        emit BeneficiaryTransferred(providerId, previousBeneficiary, newBeneficiary, block.number);
     }
 
     /// @notice Remove provider registration (soft delete)
@@ -400,7 +403,7 @@ contract ServiceProviderRegistry is
         private
         providerExists(providerId)
         providerActive(providerId)
-        onlyProviderOwner(providerId)
+        onlyProviderBeneficiary(providerId)
     {
         // Soft delete - mark as inactive
         providers[providerId].isActive = false;

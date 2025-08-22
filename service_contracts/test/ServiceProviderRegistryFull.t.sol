@@ -27,7 +27,7 @@ contract ServiceProviderRegistryFullTest is Test {
     bytes public encodedDefaultPDPData;
     bytes public encodedUpdatedPDPData;
 
-    event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
+    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
     event ProductUpdated(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 updatedAt
     );
@@ -37,8 +37,11 @@ contract ServiceProviderRegistryFullTest is Test {
     event ProductRemoved(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 removedAt
     );
-    event OwnershipTransferred(
-        uint256 indexed providerId, address indexed previousOwner, address indexed newOwner, uint256 transferredAt
+    event BeneficiaryTransferred(
+        uint256 indexed providerId,
+        address indexed previousBeneficiary,
+        address indexed newBeneficiary,
+        uint256 transferredAt
     );
     event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
     event ProviderInfoUpdated(uint256 indexed providerId, uint256 updatedAt);
@@ -156,7 +159,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.beneficiary, provider1, "Owner should be provider1");
+        assertEq(info.beneficiary, provider1, "Beneficiary should be provider1");
         assertEq(info.description, "Test provider description", "Description should match");
         assertTrue(info.isActive, "Provider should be active");
 
@@ -478,7 +481,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertTrue(isActive, "PDP service should still be active");
     }
 
-    function testOnlyOwnerCanUpdate() public {
+    function testOnlyBeneficiaryCanUpdate() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -493,7 +496,7 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        // Try to update as non-owner
+        // Try to update as non-beneficiary
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
         registry.updateProduct(
@@ -527,9 +530,9 @@ contract ServiceProviderRegistryFullTest is Test {
         );
     }
 
-    // ========== Ownership Transfer Tests ==========
+    // ========== Beneficiary Transfer Tests ==========
 
-    function testTransferProviderOwnership() public {
+    function testTransferProviderBeneficiary() public {
         // Register with capabilities
         string[] memory capKeys = new string[](3);
         capKeys[0] = "tier";
@@ -561,27 +564,27 @@ contract ServiceProviderRegistryFullTest is Test {
             registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
         assertEq(tierBefore, "premium", "First value should be premium");
 
-        // Transfer ownership
+        // Transfer beneficiary
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, true, true);
-        emit OwnershipTransferred(1, provider1, provider2, block.number);
+        emit BeneficiaryTransferred(1, provider1, provider2, block.number);
 
-        registry.transferProviderOwnership(provider2);
+        registry.transferProviderBeneficiary(provider2);
 
         vm.stopPrank();
 
         // Verify transfer
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.beneficiary, provider2, "Owner should be updated");
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory newOwnerInfo =
+        assertEq(info.beneficiary, provider2, "Beneficiary should be updated");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory newBeneficiaryInfo =
             registry.getProviderByAddress(provider2);
-        assertEq(newOwnerInfo.beneficiary, provider2, "New owner lookup should work");
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory oldOwnerInfo =
+        assertEq(newBeneficiaryInfo.beneficiary, provider2, "New beneficiary lookup should work");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory oldBeneficiaryInfo =
             registry.getProviderByAddress(provider1);
-        assertEq(oldOwnerInfo.beneficiary, address(0), "Old owner lookup should return empty");
-        assertTrue(registry.isRegisteredProvider(provider2), "New owner should be registered");
-        assertFalse(registry.isRegisteredProvider(provider1), "Old owner should not be registered");
+        assertEq(oldBeneficiaryInfo.beneficiary, address(0), "Old beneficiary lookup should return empty");
+        assertTrue(registry.isRegisteredProvider(provider2), "New beneficiary should be registered");
+        assertFalse(registry.isRegisteredProvider(provider1), "Old beneficiary should not be registered");
 
         // Verify capabilities persist after transfer
         (, string[] memory keysAfter,) = registry.getPDPService(1);
@@ -597,7 +600,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(valuesAfter[1], "daily", "Second value should still be daily");
         assertEq(valuesAfter[2], "AES-256", "Third value should still be AES-256");
 
-        // Verify new owner can update with new capabilities
+        // Verify new beneficiary can update with new capabilities
         string[] memory newCapKeys = new string[](2);
         newCapKeys[0] = "support";
         newCapKeys[1] = "sla";
@@ -637,8 +640,8 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         vm.prank(provider1);
-        vm.expectRevert("New owner cannot be zero address");
-        registry.transferProviderOwnership(address(0));
+        vm.expectRevert("New beneficiary cannot be zero address");
+        registry.transferProviderBeneficiary(address(0));
     }
 
     function testCannotTransferToExistingProvider() public {
@@ -670,11 +673,11 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Try to transfer to existing provider
         vm.prank(provider1);
-        vm.expectRevert("New owner already has a provider");
-        registry.transferProviderOwnership(provider2);
+        vm.expectRevert("New beneficiary already has a provider");
+        registry.transferProviderBeneficiary(provider2);
     }
 
-    function testOnlyOwnerCanTransfer() public {
+    function testOnlyBeneficiaryCanTransfer() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -690,7 +693,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
-        registry.transferProviderOwnership(provider3);
+        registry.transferProviderBeneficiary(provider3);
     }
 
     // ========== Removal Tests ==========
@@ -729,7 +732,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify provider info still exists (soft delete)
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertFalse(info.isActive, "Provider should be marked inactive");
-        assertEq(info.beneficiary, provider1, "Owner should still be recorded");
+        assertEq(info.beneficiary, provider1, "Beneficiary should still be recorded");
 
         // Verify PDP service is inactive
         (,, bool isActive) = registry.getPDPService(1);
@@ -762,7 +765,7 @@ contract ServiceProviderRegistryFullTest is Test {
         registry.removeProvider();
     }
 
-    function testOnlyOwnerCanRemove() public {
+    function testOnlyBeneficiaryCanRemove() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -1168,7 +1171,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(info.description, "Updated description", "Description should be updated");
     }
 
-    function testCannotUpdateProviderDescriptionIfNotOwner() public {
+    function testCannotUpdateProviderDescriptionIfNotBeneficiary() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -1183,7 +1186,7 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        // Try to update as non-owner
+        // Try to update as non-beneficiary
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
         registry.updateProviderInfo("Unauthorized update");
@@ -1243,11 +1246,11 @@ contract ServiceProviderRegistryFullTest is Test {
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
-        // Test OwnershipTransferred event
+        // Test BeneficiaryTransferred event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit OwnershipTransferred(1, provider1, provider2, block.number);
-        registry.transferProviderOwnership(provider2);
+        emit BeneficiaryTransferred(1, provider1, provider2, block.number);
+        registry.transferProviderBeneficiary(provider2);
 
         // Test ProviderRemoved event
         vm.prank(provider2);
