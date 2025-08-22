@@ -17,10 +17,11 @@ import {
   Rail,
   RateChangeQueue,
 } from "../generated/schema";
-import { NumChallenges, PDPVerifierAddress } from "../utils";
+import { NumChallenges, PDPVerifierAddress } from "./constants";
 import { decodeStringAddressBoolBytes } from "./decode";
 import { SumTree } from "./sumTree";
 import { createRails } from "./utils/entity";
+import { ProviderStatus, RailType } from "./constants";
 
 // --- Helper Functions
 function getDataSetEntityId(setId: BigInt): Bytes {
@@ -364,8 +365,8 @@ export function handleDataSetRailsCreated(
 
   // Create Rails
   createRails(
-    pdpRailId,
-    ["PDP", "CacheMiss", "CDN"],
+    [pdpRailId, cacheMissRailId, cdnRailId],
+    [RailType.PDP, RailType.CACHE_MISS, RailType.CDN],
     clientAddr,
     storageProviderId,
     listenerAddr,
@@ -377,7 +378,7 @@ export function handleDataSetRailsCreated(
   if (provider == null) {
     provider = new Provider(providerEntityId);
     provider.address = storageProviderId;
-    provider.status = "Created";
+    provider.status = ProviderStatus.Created;
     provider.totalPieces = BigInt.fromI32(0);
     provider.totalDataSets = BigInt.fromI32(1);
     provider.totalFaultedPeriods = BigInt.fromI32(0);
@@ -449,7 +450,7 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
   provider.serviceUrl = serviceUrl;
   provider.peerId = peerId;
   provider.registeredAt = event.block.number;
-  provider.status = "Registered";
+  provider.status = ProviderStatus.Registered;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -475,7 +476,7 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
 
   provider.providerId = providerId;
   provider.approvedAt = event.block.number;
-  provider.status = "Approved";
+  provider.status = ProviderStatus.Approved;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -492,7 +493,7 @@ export function handleProviderRejected(event: ProviderRejectedEvent): void {
   let provider = Provider.load(providerAddress);
   if (!provider) return;
 
-  provider.status = "Rejected";
+  provider.status = ProviderStatus.Rejected;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -509,7 +510,7 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   let provider = Provider.load(providerAddress);
   if (!provider) return;
 
-  provider.status = "Removed";
+  provider.status = ProviderStatus.Removed;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 

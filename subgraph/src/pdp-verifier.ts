@@ -9,10 +9,11 @@ import {
   StorageProviderChanged as StorageProviderChangedEvent,
 } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, Piece, Provider } from "../generated/schema";
-import { LeafSize } from "../utils";
+import { LeafSize } from "./constants";
 import { decodeBytesString } from "./decode";
 import { SumTree } from "./sumTree";
 import { unpaddedSize, validateCommPv2 } from "./utils/cid";
+import { ProviderStatus } from "./constants";
 
 // --- Helper Functions for ID Generation ---
 function getDataSetEntityId(setId: BigInt): Bytes {
@@ -119,7 +120,7 @@ export function handleStorageProviderChanged(
   if (newProvider == null) {
     newProvider = new Provider(newStorageProvider);
     newProvider.address = newStorageProvider;
-    newProvider.status = "Created";
+    newProvider.status = ProviderStatus.Created;
     newProvider.totalPieces = BigInt.fromI32(0);
     newProvider.totalFaultedPeriods = BigInt.fromI32(0);
     newProvider.totalFaultedPieces = BigInt.fromI32(0);
@@ -621,19 +622,19 @@ function readUint256(data: Bytes, offset: i32): BigInt {
 // Helper function to read dynamic Bytes from ABI-encoded data
 function readBytes(data: Bytes, offset: i32): Bytes {
   // First, read the offset to the actual bytes data (uint256)
-  const bytesOffset = readUint256(data, offset).toI32();
+  const bytesRelOffset = readUint256(data, offset).toI32();
+  const bytesAbsOffset = offset + bytesRelOffset;
 
   // Check if the bytes offset is valid
-  if (bytesOffset < 0 || data.length < offset + bytesOffset + 32) {
+  if (bytesRelOffset < 0 || data.length < bytesAbsOffset + 32) {
     log.error(
       "readBytes: Invalid offset {} or data length {} for reading bytes length",
-      [bytesOffset.toString(), data.length.toString()]
+      [bytesRelOffset.toString(), data.length.toString()]
     );
     return Bytes.empty();
   }
 
-  const bytesLength = readUint256(data, offset + bytesOffset).toI32();
-  const bytesAbsOffset = offset + bytesOffset;
+  const bytesLength = readUint256(data, bytesAbsOffset).toI32();
 
   // Check if the length is valid
   if (bytesLength < 0 || data.length < bytesAbsOffset + 32 + bytesLength) {
