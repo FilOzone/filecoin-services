@@ -240,6 +240,11 @@ contract FilecoinWarmStorageService is
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
     }
 
+    /**
+     * @notice Initialize the contract with PDP proving period parameters
+     * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
+     * @param _challengeWindowSize Number of epochs for the challenge window
+     */
     function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -1312,50 +1317,36 @@ contract FilecoinWarmStorageService is
     /* IPDPProvingSchedule */
 
     /**
-     * @notice Get all PDP configuration parameters in a single call
-     * @return maxProvingPeriod_ Maximum number of blocks in a proving period
-     * @return challengeWindow_ Number of blocks in the challenge window
-     * @return challengesPerProof_ Number of challenges per proof
-     * @return initChallengeWindowStart_ Initial challenge window start block
+     * @notice Returns PDP configuration values
+     * @return maxProvingPeriod Maximum number of epochs between proofs
+     * @return challengeWindow Number of epochs for the challenge window
+     * @return challengesPerProof Number of challenges required per proof
+     * @return initChallengeWindowStart Initial challenge window start for new data sets
      */
-    function getPDPConfig()
-        external
-        view
-        returns (
-            uint64 maxProvingPeriod_,
-            uint256 challengeWindow_,
-            uint256 challengesPerProof_,
-            uint256 initChallengeWindowStart_
-        )
-    {
-        maxProvingPeriod_ = maxProvingPeriod;
-        challengeWindow_ = challengeWindowSize;
-        challengesPerProof_ = CHALLENGES_PER_PROOF;
-        initChallengeWindowStart_ = block.number + maxProvingPeriod - challengeWindowSize;
+    function getPDPConfig() external view returns (uint64, uint256, uint256, uint256) {
+        uint64 m = maxProvingPeriod;
+        uint256 c = challengeWindowSize;
+        return (m, c, CHALLENGES_PER_PROOF, block.number + m - c);
     }
 
     /**
-     * @notice Get the start block of the next proving period's challenge window
-     * @param setId The data set ID to query
+     * @notice Returns the start of the next challenge window for a data set
+     * @param setId The ID of the data set
      * @return The block number when the next challenge window starts
      */
     function nextPDPChallengeWindowStart(uint256 setId) external view returns (uint256) {
         if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
             revert Errors.ProvingPeriodNotInitialized(setId);
         }
-        
-        // Calculate the current challenge window start
-        uint256 currentChallengeStart = _thisChallengeWindowStart(setId);
-        
-        // If the current period is open, return the next period's challenge window
+        // If the current period is open this is the next period's challenge window
         if (block.number <= provingDeadlines[setId]) {
-            return currentChallengeStart + maxProvingPeriod;
+            return _thisChallengeWindowStart(setId) + maxProvingPeriod;
         }
-        // If the current period is not yet open, this is the current period's challenge window
-        return currentChallengeStart;
+        // Otherwise return the current period's challenge window
+        return _thisChallengeWindowStart(setId);
     }
 
-    // Internal helper for calculating the start of the current challenge window
+    // The start of the challenge window for the current proving period
     function _thisChallengeWindowStart(uint256 setId) internal view returns (uint256) {
         uint256 periodsSkipped;
         // Proving period is open 0 skipped periods
