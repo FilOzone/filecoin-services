@@ -3,29 +3,31 @@ pragma solidity ^0.8.20;
 
 // Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
-import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
+import {IPDPProvingSchedule, PDPListener} from "@pdp/IPDPProvingSchedule.sol";
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
 contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
-    FilecoinWarmStorageService public immutable service;
+    PDPListener public immutable service;
+    FilecoinWarmStorageService private immutable warmStorageService;
 
     constructor(FilecoinWarmStorageService _service) {
         service = _service;
+        warmStorageService = _service;
     }
 
     function challengeWindow() external view returns (uint256) {
-        return service.challengeWindow();
+        return warmStorageService.challengeWindow();
     }
 
     function clientDataSetIDs(address payer) external view returns (uint256) {
-        return service.clientDataSetIDs(payer);
+        return warmStorageService.clientDataSetIDs(payer);
     }
 
     function clientDataSets(address payer) external view returns (uint256[] memory dataSetIds) {
-        return service.clientDataSets(payer);
+        return warmStorageService.clientDataSets(payer);
     }
 
     function getChallengesPerProof() external pure returns (uint64) {
@@ -37,11 +39,11 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         view
         returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
     {
-        return service.getClientDataSets(client);
+        return warmStorageService.getClientDataSets(client);
     }
 
     function getDataSet(uint256 dataSetId) external view returns (FilecoinWarmStorageService.DataSetInfo memory info) {
-        return service.getDataSet(dataSetId);
+        return warmStorageService.getDataSet(dataSetId);
     }
 
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
@@ -49,42 +51,42 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     }
 
     function getMaxProvingPeriod() external view returns (uint64) {
-        return service.getMaxProvingPeriod();
+        return warmStorageService.getMaxProvingPeriod();
     }
 
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
-        return service.getPieceMetadata(dataSetId, pieceId);
+        return warmStorageService.getPieceMetadata(dataSetId, pieceId);
     }
 
     function initChallengeWindowStart() external view returns (uint256) {
-        return service.initChallengeWindowStart();
+        return warmStorageService.initChallengeWindowStart();
     }
 
     function nextChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.nextChallengeWindowStart(setId);
+        return warmStorageService.nextChallengeWindowStart(setId);
     }
 
     function provenPeriods(uint256 dataSetId, uint256 periodId) external view returns (bool) {
-        return service.provenPeriods(dataSetId, periodId);
+        return warmStorageService.provenPeriods(dataSetId, periodId);
     }
 
     function provenThisPeriod(uint256 dataSetId) external view returns (bool) {
-        return service.provenThisPeriod(dataSetId);
+        return warmStorageService.provenThisPeriod(dataSetId);
     }
 
     function provingActivationEpoch(uint256 dataSetId) external view returns (uint256) {
-        return service.provingActivationEpoch(dataSetId);
+        return warmStorageService.provingActivationEpoch(dataSetId);
     }
 
     function provingDeadlines(uint256 setId) external view returns (uint256) {
-        return service.provingDeadlines(setId);
+        return warmStorageService.provingDeadlines(setId);
     }
 
     function railToDataSet(uint256 railId) external view returns (uint256) {
-        return service.railToDataSet(railId);
+        return warmStorageService.railToDataSet(railId);
     }
 
     function thisChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.thisChallengeWindowStart(setId);
+        return warmStorageService.thisChallengeWindowStart(setId);
     }
 }

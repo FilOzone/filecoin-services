@@ -6,15 +6,17 @@ echo
 echo // Generated with $0 $@
 echo
 
-echo 'import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";'
+echo 'import {IPDPProvingSchedule, PDPListener} from "@pdp/IPDPProvingSchedule.sol";'
 echo 'import "./FilecoinWarmStorageService.sol";'
 echo 'import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
 
 echo contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 echo "    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;"
-echo "    FilecoinWarmStorageService public immutable service;"
+echo "    PDPListener public immutable service;"
+echo "    FilecoinWarmStorageService private immutable warmStorageService;"
 echo "    constructor(FilecoinWarmStorageService _service) {"
 echo "        service = _service;"
+echo "        warmStorageService = _service;"
 echo "    }"
 
 jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
@@ -62,7 +64,7 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
             ") {\n        return " + (
                 if $inputs.[0].type == "FilecoinWarmStorageService"
                 then
-                    "service"
+                    "warmStorageService"
                 else
                     "FilecoinWarmStorageServiceStateInternalLibrary"
                 end
