@@ -37,9 +37,10 @@ contract ServiceProviderRegistryStorage {
         uint256 maxPieceSizeInBytes; // Maximum piece size accepted in bytes
         bool ipniPiece; // Supports IPNI piece CID indexing
         bool ipniIpfs; // Supports IPNI IPFS CID indexing
-        uint256 storagePricePerTibPerMonth; // Storage price per TiB per month in attoFIL
+        uint256 storagePricePerTibPerMonth; // Storage price per TiB per month (in token's smallest unit)
         uint256 minProvingPeriodInEpochs; // Minimum proving period in epochs
         string location; // Geographic location of the service provider
+        address paymentTokenAddress; // Token address for payment (address(0) for FIL)
     }
 
     /// @notice Combined provider and product information for detailed queries

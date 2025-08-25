@@ -86,7 +86,8 @@ contract ServiceProviderRegistryFullTest is Test {
             ipniIpfs: false,
             storagePricePerTibPerMonth: 1000000000000000000, // 1 FIL per TiB per month
             minProvingPeriodInEpochs: 2880, // 1 day in epochs (30 second blocks)
-            location: "North America"
+            location: "North America",
+            paymentTokenAddress: address(0) // Payment in FIL
         });
 
         updatedPDPData = ServiceProviderRegistryStorage.PDPOffering({
@@ -97,7 +98,8 @@ contract ServiceProviderRegistryFullTest is Test {
             ipniIpfs: true,
             storagePricePerTibPerMonth: 2000000000000000000, // 2 FIL per TiB per month
             minProvingPeriodInEpochs: 1440, // 12 hours in epochs
-            location: "Europe"
+            location: "Europe",
+            paymentTokenAddress: address(0) // Payment in FIL
         });
 
         // Encode PDP data

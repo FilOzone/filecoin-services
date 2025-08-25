@@ -65,7 +65,8 @@ contract ServiceProviderRegistryTest is Test {
             ipniIpfs: false,
             storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
-            location: "US-East"
+            location: "US-East",
+            paymentTokenAddress: address(0) // Payment in FIL
         });
 
         // Encode PDP data
@@ -106,7 +107,8 @@ contract ServiceProviderRegistryTest is Test {
             ipniIpfs: false,
             storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
-            location: "US-East"
+            location: "US-East",
+            paymentTokenAddress: address(0) // Payment in FIL
         });
 
         // Encode PDP data
@@ -172,7 +174,8 @@ contract ServiceProviderRegistryTest is Test {
             ipniIpfs: false,
             storagePricePerTibPerMonth: 750000000000000000, // 0.75 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
-            location: "US-East"
+            location: "US-East",
+            paymentTokenAddress: address(0) // Payment in FIL
         });
 
         bytes memory encodedData = abi.encode(pdpData);

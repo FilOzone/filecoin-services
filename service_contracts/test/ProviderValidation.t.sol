@@ -167,7 +167,8 @@ contract ProviderValidationTest is Test {
                     ipniIpfs: false,
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
-                    location: "US-West"
+                    location: "US-West",
+                    paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
             new string[](0),
@@ -201,7 +202,8 @@ contract ProviderValidationTest is Test {
                     ipniIpfs: false,
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
-                    location: "US-West"
+                    location: "US-West",
+                    paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
             new string[](0),
