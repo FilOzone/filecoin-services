@@ -165,7 +165,7 @@ contract FilecoinWarmStorageService is
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
 
-    // Approved provider list - added at slot 12 for upgrade compatibility
+    // Approved provider list
     mapping(uint256 => bool) public approvedProviders;
 
     // EIP-712 Type hashes

@@ -27,6 +27,9 @@ contract ServiceProviderRegistry is
     /// @notice Maximum length for provider description
     uint256 private constant MAX_DESCRIPTION_LENGTH = 256;
 
+    /// @notice Maximum length for provider name
+    uint256 private constant MAX_NAME_LENGTH = 128;
+
     /// @notice Maximum length for capability keys
     uint256 public constant MAX_CAPABILITY_KEY_LENGTH = 32;
 
@@ -109,6 +112,7 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Register as a new service provider with a specific product type
+    /// @param name Provider name (optional, max 128 chars)
     /// @param description Provider description (max 256 chars)
     /// @param productType The type of product to register
     /// @param productData The encoded product configuration data
@@ -116,6 +120,7 @@ contract ServiceProviderRegistry is
     /// @param capabilityValues Array of capability values
     /// @return providerId The unique ID assigned to the provider
     function registerProvider(
+        string calldata name,
         string calldata description,
         ProductType productType,
         bytes calldata productData,
@@ -131,6 +136,9 @@ contract ServiceProviderRegistry is
         // Check payment amount is exactly the registration fee
         require(msg.value == REGISTRATION_FEE, "Incorrect fee amount");
 
+        // Validate name (optional, so empty is allowed)
+        require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
+
         // Validate description
         require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
 
@@ -138,7 +146,8 @@ contract ServiceProviderRegistry is
         providerId = ++numProviders;
 
         // Store provider info
-        providers[providerId] = ServiceProviderInfo({beneficiary: msg.sender, description: description, isActive: true});
+        providers[providerId] =
+            ServiceProviderInfo({beneficiary: msg.sender, name: name, description: description, isActive: true});
 
         // Update address mapping
         addressToProviderId[msg.sender] = providerId;
@@ -344,18 +353,23 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Update provider information
+    /// @param name New provider name (optional, max 128 chars)
     /// @param description New provider description (max 256 chars)
-    function updateProviderInfo(string calldata description) external {
+    function updateProviderInfo(string calldata name, string calldata description) external {
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
         require(providers[providerId].beneficiary != address(0), "Provider not found");
         require(providers[providerId].isActive, "Provider is not active");
 
+        // Validate name (optional, so empty is allowed)
+        require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
+
         // Validate description
         require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
 
-        // Update description
+        // Update name and description
+        providers[providerId].name = name;
         providers[providerId].description = description;
 
         // Emit event

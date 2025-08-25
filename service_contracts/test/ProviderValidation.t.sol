@@ -156,6 +156,7 @@ contract ProviderValidationTest is Test {
         vm.prank(provider1);
         registry.registerProvider{value: 5 ether}(
             "Provider 1",
+            "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
                 ServiceProviderRegistryStorage.PDPOffering({
@@ -189,6 +190,7 @@ contract ProviderValidationTest is Test {
         vm.prank(provider1);
         registry.registerProvider{value: 5 ether}(
             "Provider 1",
+            "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
                 ServiceProviderRegistryStorage.PDPOffering({

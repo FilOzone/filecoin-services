@@ -290,6 +290,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(serviceProvider);
         registry.registerProvider{value: 5 ether}(
             "Service Provider",
+            "Service Provider Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
                 ServiceProviderRegistryStorage.PDPOffering({
@@ -310,6 +311,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp1);
         registry.registerProvider{value: 5 ether}(
             "SP1",
+            "Storage Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
                 ServiceProviderRegistryStorage.PDPOffering({
@@ -330,6 +332,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp2);
         registry.registerProvider{value: 5 ether}(
             "SP2",
+            "Storage Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
                 ServiceProviderRegistryStorage.PDPOffering({
@@ -350,6 +353,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp3);
         registry.registerProvider{value: 5 ether}(
             "SP3",
+            "Storage Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
                 ServiceProviderRegistryStorage.PDPOffering({

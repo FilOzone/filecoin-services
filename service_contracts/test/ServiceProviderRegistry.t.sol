@@ -77,6 +77,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
+            "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
@@ -124,6 +125,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
+            "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
@@ -181,6 +183,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         registry.registerProvider{value: 5 ether}(
+            "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,

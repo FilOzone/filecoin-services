@@ -144,6 +144,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Register provider
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -165,6 +166,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertEq(info.beneficiary, provider1, "Beneficiary should be provider1");
+        assertEq(info.name, "", "Name should be empty");
         assertEq(info.description, "Test provider description", "Description should match");
         assertTrue(info.isActive, "Provider should be active");
 
@@ -231,6 +233,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // First registration
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -242,6 +245,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Address already registered");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -263,6 +267,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider 1
         vm.prank(provider1);
         uint256 id1 = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Provider 1 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -288,6 +293,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider2);
         uint256 id2 = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Provider 2 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
@@ -342,6 +348,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
         registry.registerProvider{value: 1 ether}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -353,6 +360,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
         registry.registerProvider{value: 0}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -370,6 +378,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
         registry.registerProvider{value: 2 ether}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -395,6 +404,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Service URL cannot be empty");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -409,6 +419,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Service URL too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -423,6 +434,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Min piece size must be greater than 0");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -437,6 +449,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Max piece size must be >= min piece size");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -451,6 +464,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Min proving period must be greater than 0");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -465,6 +479,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Location cannot be empty");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -483,6 +498,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Location too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
@@ -501,6 +517,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -550,6 +567,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -573,6 +591,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register and remove provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -608,6 +627,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -693,6 +713,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -713,6 +734,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register two providers
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -725,6 +747,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
@@ -745,6 +768,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -767,6 +791,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -811,6 +836,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -833,6 +859,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -853,6 +880,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register, remove, then register again
         vm.prank(provider1);
         uint256 id1 = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Provider 1 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -865,6 +893,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 id2 = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Provider 2 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedUpdatedPDPData,
@@ -889,6 +918,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register 3 providers with PDP
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -901,6 +931,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
@@ -913,6 +944,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData3 = abi.encode(pdpData3);
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData3,
@@ -938,6 +970,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register 3 providers with PDP
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -950,6 +983,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
@@ -962,6 +996,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData3 = abi.encode(pdpData3);
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData3,
@@ -989,6 +1024,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1009,6 +1045,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1034,6 +1071,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1056,6 +1094,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1079,6 +1118,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register 3 providers
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1091,6 +1131,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
@@ -1103,6 +1144,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData3 = abi.encode(pdpData3);
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData3,
@@ -1130,6 +1172,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1143,6 +1186,7 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
@@ -1177,6 +1221,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1210,6 +1255,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1225,7 +1271,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
         emit ProviderInfoUpdated(1, block.number);
-        registry.updateProviderInfo("Updated description");
+        registry.updateProviderInfo("Updated Name", "Updated description");
 
         // Verify updated description
         info = registry.getProvider(1);
@@ -1240,6 +1286,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1250,7 +1297,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Try to update as non-beneficiary
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
-        registry.updateProviderInfo("Unauthorized update");
+        registry.updateProviderInfo("", "Unauthorized update");
     }
 
     function testCannotUpdateProviderDescriptionTooLong() public {
@@ -1261,6 +1308,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1274,7 +1322,56 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         vm.expectRevert("Description too long");
-        registry.updateProviderInfo(longDescription);
+        registry.updateProviderInfo("", longDescription);
+    }
+
+    function testNameTooLongOnRegister() public {
+        // Create a name that's too long (129 chars, max is 128)
+        bytes memory longName = new bytes(129);
+        for (uint256 i = 0; i < 129; i++) {
+            longName[i] = "a";
+        }
+
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        vm.expectRevert("Name too long");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            string(longName),
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+    }
+
+    function testNameTooLongOnUpdate() public {
+        // Register provider first
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Initial Name",
+            "Initial description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Create a name that's too long (129 chars, max is 128)
+        bytes memory longName = new bytes(129);
+        for (uint256 i = 0; i < 129; i++) {
+            longName[i] = "b";
+        }
+
+        vm.prank(provider1);
+        vm.expectRevert("Name too long");
+        registry.updateProviderInfo(string(longName), "Updated description");
     }
 
     // ========== Event Timestamp Tests ==========
@@ -1292,6 +1389,7 @@ contract ServiceProviderRegistryFullTest is Test {
         emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
 
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1336,6 +1434,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1369,6 +1468,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Register with empty capabilities
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1412,6 +1512,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Capability key too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1431,6 +1532,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Capability value too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1450,6 +1552,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Keys and values arrays must have same length");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1470,6 +1573,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Description too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             longDescription,
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1488,6 +1592,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Capability key cannot be empty");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1509,6 +1614,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectRevert("Too many capabilities");
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1529,6 +1635,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1560,7 +1667,12 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
-            "Test provider", ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            capKeys,
+            capValues
         );
 
         // Test single capability queries
@@ -1598,7 +1710,12 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
-            "Test provider", ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            capKeys,
+            capValues
         );
 
         // Query multiple capabilities
@@ -1644,7 +1761,12 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
-            "Test provider", ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            capKeys,
+            capValues
         );
 
         // Test direct public mapping access
@@ -1664,6 +1786,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -1701,6 +1824,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "",
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
