@@ -63,7 +63,9 @@ contract ServiceProviderRegistryTest is Test {
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000 // 0.5 FIL per TiB per month
+            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East"
         });
 
         // Encode PDP data
@@ -101,7 +103,9 @@ contract ServiceProviderRegistryTest is Test {
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000 // 0.5 FIL per TiB per month
+            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East"
         });
 
         // Encode PDP data
@@ -164,7 +168,9 @@ contract ServiceProviderRegistryTest is Test {
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 750000000000000000 // 0.75 FIL per TiB per month
+            storagePricePerTibPerMonth: 750000000000000000, // 0.75 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East"
         });
 
         bytes memory encodedData = abi.encode(pdpData);

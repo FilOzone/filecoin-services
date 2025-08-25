@@ -76,7 +76,9 @@ contract ServiceProviderRegistryFullTest is Test {
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 1000000000000000000 // 1 FIL per TiB per month
+            storagePricePerTibPerMonth: 1000000000000000000, // 1 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880, // 1 day in epochs (30 second blocks)
+            location: "North America"
         });
 
         updatedPDPData = ServiceProviderRegistryStorage.PDPOffering({
@@ -85,7 +87,9 @@ contract ServiceProviderRegistryFullTest is Test {
             maxPieceSizeInBytes: 2 * 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: true,
-            storagePricePerTibPerMonth: 2000000000000000000 // 2 FIL per TiB per month
+            storagePricePerTibPerMonth: 2000000000000000000, // 2 FIL per TiB per month
+            minProvingPeriodInEpochs: 1440, // 12 hours in epochs
+            location: "Europe"
         });
 
         // Encode PDP data
@@ -175,6 +179,10 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(
             pdpData.storagePricePerTibPerMonth, defaultPDPData.storagePricePerTibPerMonth, "Storage price should match"
         );
+        assertEq(
+            pdpData.minProvingPeriodInEpochs, defaultPDPData.minProvingPeriodInEpochs, "Min proving period should match"
+        );
+        assertEq(pdpData.location, defaultPDPData.location, "Location should match");
         assertTrue(isActive, "PDP service should be active");
 
         // Verify capabilities
@@ -435,6 +443,52 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyKeys,
             emptyValues
         );
+
+        // Test invalid PDP data - min proving period 0
+        invalidPDP = defaultPDPData;
+        invalidPDP.minProvingPeriodInEpochs = 0;
+        encodedInvalidPDP = abi.encode(invalidPDP);
+        vm.prank(provider1);
+        vm.expectRevert("Min proving period must be greater than 0");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedInvalidPDP,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Test invalid PDP data - empty location
+        invalidPDP = defaultPDPData;
+        invalidPDP.location = "";
+        encodedInvalidPDP = abi.encode(invalidPDP);
+        vm.prank(provider1);
+        vm.expectRevert("Location cannot be empty");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedInvalidPDP,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Test invalid PDP data - location too long
+        invalidPDP = defaultPDPData;
+        bytes memory longLocation = new bytes(129);
+        for (uint256 i = 0; i < 129; i++) {
+            longLocation[i] = "a";
+        }
+        invalidPDP.location = string(longLocation);
+        encodedInvalidPDP = abi.encode(invalidPDP);
+        vm.prank(provider1);
+        vm.expectRevert("Location too long");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedInvalidPDP,
+            emptyKeys,
+            emptyValues
+        );
     }
 
     // ========== Update Tests ==========
@@ -479,6 +533,12 @@ contract ServiceProviderRegistryFullTest is Test {
             updatedPDPData.storagePricePerTibPerMonth,
             "Storage price should be updated"
         );
+        assertEq(
+            pdpData.minProvingPeriodInEpochs,
+            updatedPDPData.minProvingPeriodInEpochs,
+            "Min proving period should be updated"
+        );
+        assertEq(pdpData.location, updatedPDPData.location, "Location should be updated");
         assertTrue(isActive, "PDP service should still be active");
     }
 

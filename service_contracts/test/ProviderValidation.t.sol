@@ -164,7 +164,9 @@ contract ProviderValidationTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: true,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-West"
                 })
             ),
             new string[](0),
@@ -195,7 +197,9 @@ contract ProviderValidationTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: true,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-West"
                 })
             ),
             new string[](0),

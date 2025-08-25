@@ -36,6 +36,9 @@ contract ServiceProviderRegistry is
     /// @notice Maximum number of capability key-value pairs per product
     uint256 public constant MAX_CAPABILITIES = 10;
 
+    /// @notice Maximum length for location field
+    uint256 private constant MAX_LOCATION_LENGTH = 128;
+
     /// @notice Burn actor address for burning FIL
     address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
 
@@ -727,6 +730,10 @@ contract ServiceProviderRegistry is
             pdpOffering.maxPieceSizeInBytes >= pdpOffering.minPieceSizeInBytes,
             "Max piece size must be >= min piece size"
         );
+        // Validate new fields
+        require(pdpOffering.minProvingPeriodInEpochs > 0, "Min proving period must be greater than 0");
+        require(bytes(pdpOffering.location).length > 0, "Location cannot be empty");
+        require(bytes(pdpOffering.location).length <= MAX_LOCATION_LENGTH, "Location too long");
     }
 
     /// @notice Validate capability key-value pairs

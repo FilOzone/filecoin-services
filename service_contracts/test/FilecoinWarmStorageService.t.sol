@@ -298,7 +298,9 @@ contract FilecoinWarmStorageServiceTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: true,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central"
                 })
             ),
             new string[](0),
@@ -316,7 +318,9 @@ contract FilecoinWarmStorageServiceTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: true,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central"
                 })
             ),
             new string[](0),
@@ -334,7 +338,9 @@ contract FilecoinWarmStorageServiceTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: true,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central"
                 })
             ),
             new string[](0),
@@ -352,7 +358,9 @@ contract FilecoinWarmStorageServiceTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: true,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central"
                 })
             ),
             new string[](0),
