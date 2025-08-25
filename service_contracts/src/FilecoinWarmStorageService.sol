@@ -24,7 +24,6 @@ uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 
-
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -102,9 +101,6 @@ contract FilecoinWarmStorageService is
     // Commission rates
     uint256 public serviceCommissionBps;
 
-    // Approved provider list
-    mapping(uint256 => bool) public approvedProviders;
-
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
     event ProviderRemoved(uint256 indexed providerId);
@@ -168,6 +164,9 @@ contract FilecoinWarmStorageService is
     // Proving period constants - set during initialization (added at end for upgrade compatibility)
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
+
+    // Approved provider list - added at slot 12 for upgrade compatibility
+    mapping(uint256 => bool) public approvedProviders;
 
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
@@ -314,7 +313,6 @@ contract FilecoinWarmStorageService is
         }
     }
 
-   
     // Listener interface methods
     /**
      * @notice Handles data set creation by creating a payment rail

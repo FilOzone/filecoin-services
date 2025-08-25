@@ -54,7 +54,7 @@ contract ServiceProviderRegistryTest is Test {
 
     function testRegisterProviderWithEmptyCapabilities() public {
         // Give user1 some ETH for registration fee
-        vm.deal(user1, 2 ether);
+        vm.deal(user1, 10 ether);
 
         // Prepare PDP data
         ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
@@ -74,7 +74,7 @@ contract ServiceProviderRegistryTest is Test {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{value: 1 ether}(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
@@ -92,7 +92,7 @@ contract ServiceProviderRegistryTest is Test {
 
     function testRegisterProviderWithCapabilities() public {
         // Give user1 some ETH for registration fee
-        vm.deal(user1, 2 ether);
+        vm.deal(user1, 10 ether);
 
         // Prepare PDP data
         ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
@@ -119,7 +119,7 @@ contract ServiceProviderRegistryTest is Test {
         capabilityValues[2] = "SOC2";
 
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{value: 1 ether}(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
@@ -155,7 +155,7 @@ contract ServiceProviderRegistryTest is Test {
 
     function testGetProviderWorks() public {
         // Give user1 some ETH for registration fee
-        vm.deal(user1, 2 ether);
+        vm.deal(user1, 10 ether);
 
         // Register a provider first
         ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
@@ -174,7 +174,7 @@ contract ServiceProviderRegistryTest is Test {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(user1);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,

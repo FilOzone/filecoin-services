@@ -20,7 +20,7 @@ contract ServiceProviderRegistryFullTest is Test {
     string constant SERVICE_URL_2 = "https://provider2.example.com";
     string constant UPDATED_SERVICE_URL = "https://provider1-updated.example.com";
 
-    uint256 constant REGISTRATION_FEE = 1 ether; // 1 FIL in attoFIL
+    uint256 constant REGISTRATION_FEE = 5 ether; // 5 FIL in attoFIL
 
     ServiceProviderRegistryStorage.PDPOffering public defaultPDPData;
     ServiceProviderRegistryStorage.PDPOffering public updatedPDPData;
@@ -100,13 +100,14 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
         assertEq(registry.owner(), owner, "Owner should be deployer");
         assertEq(registry.getNextProviderId(), 1, "Next provider ID should start at 1");
-        assertEq(registry.getRegistrationFee(), 1 ether, "Registration fee should be 1 FIL");
-        assertEq(registry.REGISTRATION_FEE(), 1 ether, "Registration fee constant should be 1 FIL");
+        assertEq(registry.getRegistrationFee(), 5 ether, "Registration fee should be 5 FIL");
+        assertEq(registry.REGISTRATION_FEE(), 5 ether, "Registration fee constant should be 5 FIL");
         assertEq(registry.getProviderCount(), 0, "Provider count should be 0");
 
         // Verify capability constants
-        assertEq(registry.MAX_CAPABILITY_KEY_LENGTH(), 12, "Max capability key length should be 12");
-        assertEq(registry.MAX_CAPABILITY_VALUE_LENGTH(), 64, "Max capability value length should be 64");
+        assertEq(registry.MAX_CAPABILITY_KEY_LENGTH(), 32, "Max capability key length should be 32");
+        assertEq(registry.MAX_CAPABILITY_VALUE_LENGTH(), 128, "Max capability value length should be 128");
+        assertEq(registry.MAX_CAPABILITIES(), 10, "Max capabilities should be 10");
     }
 
     // ========== Registration Tests ==========
@@ -329,10 +330,10 @@ contract ServiceProviderRegistryFullTest is Test {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
 
-        // Try to register with less than 1 FIL
+        // Try to register with less than 5 FIL
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
-        registry.registerProvider{value: 0.5 ether}(
+        registry.registerProvider{value: 1 ether}(
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -357,7 +358,7 @@ contract ServiceProviderRegistryFullTest is Test {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
 
-        // Try to register with 2 FIL (1 FIL extra) - should fail
+        // Try to register with 2 FIL (less than 5 FIL) - should fail
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
         registry.registerProvider{value: 2 ether}(
@@ -1343,13 +1344,13 @@ contract ServiceProviderRegistryFullTest is Test {
 
     function testInvalidCapabilityKeyTooLong() public {
         string[] memory capKeys = new string[](1);
-        capKeys[0] = "thisKeyIsTooLong"; // 16 chars, max is MAX_CAPABILITY_KEY_LENGTH (12)
+        capKeys[0] = "thisKeyIsWayTooLongAndExceedsLimit"; // 35 chars, max is MAX_CAPABILITY_KEY_LENGTH (32)
 
         string[] memory capValues = new string[](1);
         capValues[0] = "value";
 
         vm.prank(provider1);
-        vm.expectRevert("Capability key exceeds 12 characters");
+        vm.expectRevert("Capability key too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -1365,10 +1366,10 @@ contract ServiceProviderRegistryFullTest is Test {
 
         string[] memory capValues = new string[](1);
         capValues[0] =
-            "This value is way too long and exceeds the maximum of 64 characters allowed for capability values"; // > MAX_CAPABILITY_VALUE_LENGTH (64) chars
+            "This value is way too long and exceeds the maximum allowed length. It is specifically designed to be longer than 128 characters to test the validation of capability values"; // > MAX_CAPABILITY_VALUE_LENGTH (128) chars
 
         vm.prank(provider1);
-        vm.expectRevert("Capability value exceeds 64 characters");
+        vm.expectRevert("Capability value too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -1433,6 +1434,54 @@ contract ServiceProviderRegistryFullTest is Test {
             capKeys,
             capValues
         );
+    }
+
+    function testTooManyCapabilities() public {
+        // Create 11 capabilities (exceeds MAX_CAPABILITIES of 10)
+        string[] memory capKeys = new string[](11);
+        string[] memory capValues = new string[](11);
+
+        for (uint256 i = 0; i < 11; i++) {
+            capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
+            capValues[i] = string(abi.encodePacked("value", vm.toString(i)));
+        }
+
+        vm.prank(provider1);
+        vm.expectRevert("Too many capabilities");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            capKeys,
+            capValues
+        );
+    }
+
+    function testMaxCapabilitiesAllowed() public {
+        // Create exactly 10 capabilities (should succeed)
+        string[] memory capKeys = new string[](10);
+        string[] memory capValues = new string[](10);
+
+        for (uint256 i = 0; i < 10; i++) {
+            capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
+            capValues[i] = string(abi.encodePacked("value", vm.toString(i)));
+        }
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            capKeys,
+            capValues
+        );
+
+        assertEq(providerId, 1, "Should register successfully with 10 capabilities");
+
+        // Verify all 10 capabilities were stored
+        (, string[] memory returnedKeys,) =
+            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        assertEq(returnedKeys.length, 10, "Should have exactly 10 capability keys");
     }
 
     // ========== New Capability Query Methods Tests ==========
@@ -1546,6 +1595,36 @@ contract ServiceProviderRegistryFullTest is Test {
         string memory bandwidth =
             registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "bandwidth");
         assertEq(bandwidth, "10Gbps", "Direct mapping access should work for bandwidth");
+    }
+
+    function testUpdateWithTooManyCapabilities() public {
+        // Register provider with empty capabilities first
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Try to update with 11 capabilities (exceeds MAX_CAPABILITIES of 10)
+        string[] memory capKeys = new string[](11);
+        string[] memory capValues = new string[](11);
+
+        for (uint256 i = 0; i < 11; i++) {
+            capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
+            capValues[i] = string(abi.encodePacked("value", vm.toString(i)));
+        }
+
+        vm.prank(provider1);
+        vm.expectRevert("Too many capabilities");
+        registry.updateProduct(
+            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, capKeys, capValues
+        );
     }
 
     function testCapabilityUpdateClearsOldValues() public {

@@ -19,7 +19,6 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from
     "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
-
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
     string private _name = "USD Filecoin";
@@ -289,7 +288,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Register service providers in the registry
         vm.prank(serviceProvider);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "Service Provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
@@ -307,7 +306,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         vm.prank(sp1);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "SP1",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
@@ -325,7 +324,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         vm.prank(sp2);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "SP2",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
@@ -343,7 +342,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         vm.prank(sp3);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "SP3",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
@@ -642,6 +641,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.stopPrank();
 
         makeSignaturePass(client);
+        vm.prank(serviceProvider); // Create dataset as service provider
         uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
 
         uint256 firstAdded = 0;
@@ -659,6 +659,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), "");
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
+
+        // Make signature pass for client before adding pieces
+        makeSignaturePass(client);
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, metadataShort
         );
@@ -668,6 +671,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), metadataShort);
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
+
+        // Make signature pass for client again before adding more pieces
+        makeSignaturePass(client);
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong
         );

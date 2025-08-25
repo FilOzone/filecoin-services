@@ -154,7 +154,7 @@ contract ProviderValidationTest is Test {
     function testProviderRegisteredButNotApproved() public {
         // Register provider1 in registry
         vm.prank(provider1);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
@@ -185,7 +185,7 @@ contract ProviderValidationTest is Test {
     function testProviderApprovedCanCreateDataset() public {
         // Register provider1 in registry
         vm.prank(provider1);
-        registry.registerProvider{value: 1 ether}(
+        registry.registerProvider{value: 5 ether}(
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
             abi.encode(
