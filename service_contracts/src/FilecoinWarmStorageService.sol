@@ -291,26 +291,28 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Adds a provider ID to the approved list
-     * @dev Only callable by the contract owner. Does not revert if already approved.
+     * @dev Only callable by the contract owner. Reverts if already approved.
      * @param providerId The provider ID to approve
      */
     function addApprovedProvider(uint256 providerId) external onlyOwner {
-        if (!approvedProviders[providerId]) {
-            approvedProviders[providerId] = true;
-            emit ProviderApproved(providerId);
+        if (approvedProviders[providerId]) {
+            revert Errors.ProviderAlreadyApproved(providerId);
         }
+        approvedProviders[providerId] = true;
+        emit ProviderApproved(providerId);
     }
 
     /**
      * @notice Removes a provider ID from the approved list
-     * @dev Only callable by the contract owner. Does not revert if not in list.
+     * @dev Only callable by the contract owner. Reverts if not in list.
      * @param providerId The provider ID to remove
      */
     function removeApprovedProvider(uint256 providerId) external onlyOwner {
-        if (approvedProviders[providerId]) {
-            approvedProviders[providerId] = false;
-            emit ProviderUnapproved(providerId);
+        if (!approvedProviders[providerId]) {
+            revert Errors.ProviderNotInApprovedList(providerId);
         }
+        approvedProviders[providerId] = false;
+        emit ProviderUnapproved(providerId);
     }
 
     // Listener interface methods

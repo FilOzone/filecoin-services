@@ -241,21 +241,21 @@ contract ProviderValidationTest is Test {
         warmStorage.addApprovedProvider(1);
         assertTrue(warmStorage.approvedProviders(1), "Provider 1 should be approved");
 
-        // Test adding already approved provider (should not revert)
+        // Test adding already approved provider (should revert)
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 1));
         warmStorage.addApprovedProvider(1);
-        assertTrue(warmStorage.approvedProviders(1), "Provider 1 should still be approved");
 
         // Test removing provider
         warmStorage.removeApprovedProvider(1);
         assertFalse(warmStorage.approvedProviders(1), "Provider 1 should not be approved");
 
-        // Test removing non-approved provider (should not revert)
+        // Test removing non-approved provider (should revert)
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 2));
         warmStorage.removeApprovedProvider(2);
-        assertFalse(warmStorage.approvedProviders(2), "Provider 2 should not be approved");
 
-        // Test removing already removed provider (should not revert)
+        // Test removing already removed provider (should revert)
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 1));
         warmStorage.removeApprovedProvider(1);
-        assertFalse(warmStorage.approvedProviders(1), "Provider 1 should still not be approved");
     }
 
     function testOnlyOwnerCanManageApprovedProviders() public {
@@ -269,5 +269,29 @@ contract ProviderValidationTest is Test {
         vm.prank(provider1);
         vm.expectRevert();
         warmStorage.removeApprovedProvider(1);
+    }
+
+    function testAddApprovedProviderAlreadyApproved() public {
+        // First add should succeed
+        warmStorage.addApprovedProvider(5);
+        assertTrue(warmStorage.approvedProviders(5), "Provider 5 should be approved");
+
+        // Second add should revert with ProviderAlreadyApproved error
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 5));
+        warmStorage.addApprovedProvider(5);
+    }
+
+    function testRemoveApprovedProviderNotInList() public {
+        // Trying to remove a provider that was never approved should revert
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 10));
+        warmStorage.removeApprovedProvider(10);
+
+        // Add and then remove a provider
+        warmStorage.addApprovedProvider(6);
+        warmStorage.removeApprovedProvider(6);
+
+        // Trying to remove the same provider again should revert
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 6));
+        warmStorage.removeApprovedProvider(6);
     }
 }
