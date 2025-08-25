@@ -7,6 +7,8 @@ import {
   ProviderRejected as ProviderRejectedEvent,
   ProviderRemoved as ProviderRemovedEvent,
   RailRateUpdated as RailRateUpdatedEvent,
+  ServiceTerminated as ServiceTerminatedEvent,
+  CDNServiceTerminated as CDNServiceTerminatedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import {
@@ -528,4 +530,39 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   provider.blockNumber = event.block.number;
 
   provider.save();
+}
+
+
+/**
+ * Handler for ServiceTerminated event
+ * Sets `withCDN` and `isActive` to `false`
+ */
+export function handleServiceTerminated(event: ServiceTerminatedEvent): void {
+  const dataSetId = event.params.dataSetId;
+
+  let dataSet = DataSet.load(dataSetId);
+  if (!dataSet) return;
+
+  dataSet.isActive = false;
+  dataSet.withCDN = false;
+  dataSet.updatedAt = event.block.timestamp;
+
+  dataSet.save();
+}
+
+
+/**
+ * Handler for CDNServiceTerminated event
+ * Sets `withCDN` `false`
+ */
+export function handleCDNServiceTerminated(event: CDNServiceTerminatedEvent): void {
+  const dataSetId = event.params.dataSetId;
+
+  let dataSet = DataSet.load(dataSetId);
+  if (!dataSet) return;
+
+  dataSet.withCDN = false;
+  dataSet.updatedAt = event.block.timestamp;
+
+  dataSet.save();
 }

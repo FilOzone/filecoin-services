@@ -78,6 +78,8 @@ dataSources:
           handler: handleProviderApproved
         - event: "ProviderRejected(indexed address)"
           handler: handleProviderRejected
-        - event: "ProviderRemoved(indexed address,indexed uint256)"
-          handler: handleProviderRemoved
+        - event: "ServiceTerminated(indexed address,indexed uint256,uint256,uint256,uint256)"
+          handler: handleServiceTerminated
+        - event: "CDNServiceTerminated(indexed address,indexed uint256,uint256,uint256)"
+          handler: handleCDNServiceTerminated
       file: ./src/filecoin-warm-storage-service.ts
