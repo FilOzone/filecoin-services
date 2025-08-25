@@ -29,10 +29,18 @@ contract ServiceProviderRegistryFullTest is Test {
 
     event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
     event ProductUpdated(
-        uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 updatedAt
+        uint256 indexed providerId,
+        ServiceProviderRegistryStorage.ProductType indexed productType,
+        uint256 updatedAt,
+        string serviceUrl,
+        address beneficiary
     );
     event ProductAdded(
-        uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 addedAt
+        uint256 indexed providerId,
+        ServiceProviderRegistryStorage.ProductType indexed productType,
+        uint256 addedAt,
+        string serviceUrl,
+        address beneficiary
     );
     event ProductRemoved(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 removedAt
@@ -127,7 +135,7 @@ contract ServiceProviderRegistryFullTest is Test {
         emit ProviderRegistered(1, provider1, block.number);
 
         vm.expectEmit(true, true, false, true);
-        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, SERVICE_URL, provider1);
 
         // Non-empty capability arrays
         string[] memory capKeys = new string[](4);
@@ -529,7 +537,9 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, false, true);
-        emit ProductUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductUpdated(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, UPDATED_SERVICE_URL, provider1
+        );
 
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
@@ -1233,7 +1243,9 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
-        emit ProductUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductUpdated(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, UPDATED_SERVICE_URL, provider1
+        );
 
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
@@ -1386,7 +1398,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.expectEmit(true, true, true, true);
         emit ProviderRegistered(1, provider1, block.number);
         vm.expectEmit(true, true, true, true);
-        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, SERVICE_URL, provider1);
 
         registry.registerProvider{value: REGISTRATION_FEE}(
             "",
@@ -1400,7 +1412,9 @@ contract ServiceProviderRegistryFullTest is Test {
         // Test ProductUpdated event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit ProductUpdated(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductUpdated(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, UPDATED_SERVICE_URL, provider1
+        );
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
         );

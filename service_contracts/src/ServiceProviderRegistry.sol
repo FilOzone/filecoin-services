@@ -52,10 +52,22 @@ contract ServiceProviderRegistry is
     event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
 
     /// @notice Emitted when a product is updated or added
-    event ProductUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 updatedAt);
+    event ProductUpdated(
+        uint256 indexed providerId,
+        ProductType indexed productType,
+        uint256 updatedAt,
+        string serviceUrl,
+        address beneficiary
+    );
 
     /// @notice Emitted when a product is added to an existing provider
-    event ProductAdded(uint256 indexed providerId, ProductType indexed productType, uint256 addedAt);
+    event ProductAdded(
+        uint256 indexed providerId,
+        ProductType indexed productType,
+        uint256 addedAt,
+        string serviceUrl,
+        address beneficiary
+    );
 
     /// @notice Emitted when a product is removed from a provider
     event ProductRemoved(uint256 indexed providerId, ProductType indexed productType, uint256 removedAt);
@@ -158,7 +170,14 @@ contract ServiceProviderRegistry is
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        emit ProductAdded(providerId, productType, block.number);
+        // Extract serviceUrl for event
+        string memory serviceUrl = "";
+        if (productType == ProductType.PDP) {
+            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            serviceUrl = pdpOffering.serviceURL;
+        }
+
+        emit ProductAdded(providerId, productType, block.number, serviceUrl, msg.sender);
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
@@ -199,8 +218,15 @@ contract ServiceProviderRegistry is
         // Validate and store product
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
+        // Extract serviceUrl for event
+        string memory serviceUrl = "";
+        if (productType == ProductType.PDP) {
+            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            serviceUrl = pdpOffering.serviceURL;
+        }
+
         // Emit event
-        emit ProductAdded(providerId, productType, block.number);
+        emit ProductAdded(providerId, productType, block.number, serviceUrl, providers[providerId].beneficiary);
     }
 
     /// @notice Internal function to validate and store a product (used by both register and add)
@@ -287,8 +313,15 @@ contract ServiceProviderRegistry is
             productCapabilities[providerId][productType][capabilityKeys[i]] = capabilityValues[i];
         }
 
+        // Extract serviceUrl for event
+        string memory serviceUrl = "";
+        if (productType == ProductType.PDP) {
+            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            serviceUrl = pdpOffering.serviceURL;
+        }
+
         // Emit event
-        emit ProductUpdated(providerId, productType, block.number);
+        emit ProductUpdated(providerId, productType, block.number, serviceUrl, providers[providerId].beneficiary);
     }
 
     /// @notice Remove a product from a provider
