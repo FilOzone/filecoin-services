@@ -37,7 +37,7 @@ contract ServiceProviderRegistry is
     address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
 
     /// @notice Registration fee in attoFIL (1 FIL = 10^18 attoFIL)
-    uint256 public constant REGISTRATION_FEE = 1e18;
+    uint256 public constant REGISTRATION_FEE = 5e18;
 
     /// @notice Emitted when a new provider registers
     event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
