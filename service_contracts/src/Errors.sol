@@ -13,14 +13,16 @@ library Errors {
         Payments,
         /// USDFC contract address
         USDFC,
-        /// FilecoinCDN service contract address
-        FilecoinCDN,
+        /// FilecoinCDN controller address
+        FilecoinCDNController,
         /// Creator address
         Creator,
         /// Payer address
         Payer,
         /// Service provider address
-        ServiceProvider
+        ServiceProvider,
+        /// FilecoinCDN treasury address
+        FilecoinCDNTreasury
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -176,4 +178,13 @@ library Errors {
     /// @notice Data set does not exist for the given rail
     /// @param railId The rail ID
     error DataSetNotFoundForRail(uint256 railId);
+
+    /// @notice CDN service is not configured for the given data set
+    /// @param dataSetId The data set ID
+    error CDNServiceNotConfigured(uint256 dataSetId);
+
+    /// @notice Only the FilecoinCDN address can call this function
+    /// @param expected The expected CDN address
+    /// @param actual The caller address
+    error OnlyCDNAllowed(address expected, address actual);
 }

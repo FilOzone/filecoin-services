@@ -221,6 +221,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public client;
     address public serviceProvider;
     address public filCDN;
+    address public filCDNBeneficiary;
 
     address public sp1;
     address public sp2;
@@ -252,11 +253,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         client = address(0xf1);
         serviceProvider = address(0xf2);
         filCDN = address(0xf3);
+        filCDNBeneficiary = address(0xf4);
 
         // Additional accounts for registry tests
-        sp1 = address(0xf4);
-        sp2 = address(0xf5);
-        sp3 = address(0xf6);
+        sp1 = address(0xf5);
+        sp2 = address(0xf6);
+        sp3 = address(0xf7);
 
         // Fund test accounts
         vm.deal(deployer, 100 ether);
@@ -285,8 +287,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNBeneficiary
+        );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -321,7 +324,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(pdpServiceWithPayments.filCDNAddress(), filCDN, "FilCDN address should be set correctly");
+        assertEq(pdpServiceWithPayments.filCDNControllerAddress(), filCDN, "FilCDN address should be set correctly");
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -447,7 +450,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(cdnRail.token, address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
-        assertEq(cdnRail.to, filCDN, "To address should be FilCDN");
+        assertEq(cdnRail.to, filCDNBeneficiary, "To address should be FilCDNBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cdnRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
@@ -1019,6 +1022,109 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         console.log("\n=== Test completed successfully! ===");
     }
+
+    // ============= CDN Service Termination Tests =============
+
+    function testTerminateCDNServiceLifecycle() public {
+        console.log("=== Test: Data CDN Service Termination Lifecycle ===");
+
+        // 1. Setup: Create a dataset with CDN enabled.
+        console.log("1. Setting up: Creating dataset with service provider");
+
+        // Prepare data set creation data
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            metadata: "Test Data Set for Termination",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: true // CDN enabled
+        });
+
+        bytes memory encodedData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
+        // Setup client payment approval and deposit
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6, // rate allowance
+            1000e6, // lockup allowance
+            365 days // max lockup period
+        );
+        uint256 depositAmount = 100e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(address(mockUSDFC), client, depositAmount);
+        vm.stopPrank();
+
+        // Create data set
+        makeSignaturePass(client);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+        console.log("Created data set with ID:", dataSetId);
+
+        // 2. Submit a valid proof.
+        console.log("\n2. Starting proving period and submitting proof");
+        // Start proving period
+        uint256 maxProvingPeriod = pdpServiceWithPayments.getMaxProvingPeriod();
+        uint256 challengeWindow = pdpServiceWithPayments.challengeWindow();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
+
+        // Warp to challenge window
+        uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
+        vm.roll(provingDeadline - (challengeWindow / 2));
+
+        assertFalse(
+            pdpServiceWithPayments.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+
+        // Submit proof
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        assertTrue(
+            pdpServiceWithPayments.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+        console.log("Proof submitted successfully");
+
+        // 3. Try to terminate payment from client address
+        console.log("\n3. Terminating CDN payment rails from client address -- should revert");
+        console.log("Current block:", block.number);
+        vm.prank(client); // client terminates
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyCDNAllowed.selector, address(filCDN), address(client)));
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // 4. Try to terminate payment from FilCDN address
+        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
+        console.log("Current block:", block.number);
+        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNServiceTerminated(filCDN, dataSetId, info.cacheMissRailId, info.cdnRailId);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // 5. Assertions
+        // Check if CDN data is cleared
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
+        assertFalse(info.withCDN, "withCDN should be cleared after termination");
+        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
+        console.log("CDN service termination successful. Flag `withCDN` is cleared");
+
+        // Ensure future CDN service termination reverts
+        vm.prank(filCDN);
+        vm.expectRevert(abi.encodeWithSelector(Errors.CDNServiceNotConfigured.selector, dataSetId));
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        console.log("\n=== Test completed successfully! ===");
+    }
 }
 
 contract SignatureCheckingService is FilecoinWarmStorageService {
@@ -1026,8 +1132,17 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
-    ) FilecoinWarmStorageService(_pdpVerifierAddress, _paymentsContractAddress, _usdfcTokenAddress, _filCDNAddress) {}
+        address _filCDNControllerAddress,
+        address _filCDNBeneficiaryAddress
+    )
+        FilecoinWarmStorageService(
+            _pdpVerifierAddress,
+            _paymentsContractAddress,
+            _usdfcTokenAddress,
+            _filCDNControllerAddress,
+            _filCDNBeneficiaryAddress
+        )
+    {}
 
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
@@ -1047,8 +1162,10 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
-    uint256 public filCDNPrivateKey;
-    address public filCDN;
+    uint256 public filCDNControllerPrivateKey;
+    address public filCDNController;
+    uint256 public filCDNBeneficiaryPrivateKey;
+    address public filCDNBeneficiary;
 
     function setUp() public {
         // Set up test accounts with known private keys
@@ -1058,8 +1175,11 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
 
-        filCDNPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
-        filCDN = vm.addr(filCDNPrivateKey);
+        filCDNControllerPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
+        filCDNController = vm.addr(filCDNControllerPrivateKey);
+
+        filCDNBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
+        filCDNBeneficiary = vm.addr(filCDNBeneficiaryPrivateKey);
 
         creator = address(0xf2);
 
@@ -1074,8 +1194,9 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         payments = Payments(address(paymentsProxy));
 
         // Deploy and initialize the service
-        SignatureCheckingService serviceImpl =
-            new SignatureCheckingService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        SignatureCheckingService serviceImpl = new SignatureCheckingService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDNController, filCDNBeneficiary
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -1150,10 +1271,12 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
     address public deployer;
     address public filCDN;
+    address public filCDNBeneficiary;
 
     function setUp() public {
         deployer = address(this);
         filCDN = address(0xf2);
+        filCDNBeneficiary = address(0xf3);
 
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -1167,8 +1290,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
-        FilecoinWarmStorageService warmStorageImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNBeneficiary
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
