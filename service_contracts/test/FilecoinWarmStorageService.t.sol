@@ -2221,7 +2221,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     // ============= CDN Service Termination Tests =============
 
     function testTerminateCDNServiceLifecycle() public {
-        console.log("=== Test: CDN Service Termination Lifecycle ===");
+        console.log("=== Test: Data CDN Service Termination Lifecycle ===");
 
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
@@ -2256,33 +2256,62 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(client);
         vm.prank(serviceProvider);
         uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
-        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         console.log("Created data set with ID:", dataSetId);
 
-        // 2. Try to terminate payment from client address
-        console.log("\n2. Terminating CDN payment rails from client address -- should revert");
+        // 2. Submit a valid proof.
+        console.log("\n2. Starting proving period and submitting proof");
+        // Start proving period
+        uint256 maxProvingPeriod = pdpServiceWithPayments.getMaxProvingPeriod();
+        uint256 challengeWindow = pdpServiceWithPayments.challengeWindow();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
+
+        // Warp to challenge window
+        uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
+        vm.roll(provingDeadline - (challengeWindow / 2));
+
+        assertFalse(
+            pdpServiceWithPayments.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+
+        // Submit proof
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        assertTrue(
+            pdpServiceWithPayments.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+        console.log("Proof submitted successfully");
+
+        // 3. Try to terminate payment from client address
+        console.log("\n3. Terminating CDN payment rails from client address -- should revert");
         console.log("Current block:", block.number);
         vm.prank(client); // client terminates
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlyCDNAllowed.selector, address(filCDN), address(client)));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
-        // 3. Try to terminate payment from FilCDN address
-        console.log("\n3. Terminating CDN payment rails from FilCDN address -- should pass");
+        // 4. Try to terminate payment from FilCDN address
+        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
+        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(filCDN, dataSetId, info.cacheMissRailId, info.cdnRailId);
-
-        // emit ServiceTerminated(msg.sender, dataSetId, 0, info.cacheMissRailId, info.cdnRailId);
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
-        // 4. Assertions
+        // 5. Assertions
         // Check if CDN data is cleared
         info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertFalse(info.withCDN, "withCDN should be cleared after termination");
-        assertEq(info.cdnRailId, 0, "cdnRailid should be cleared after termination");
-        assertEq(info.cacheMissRailId, 0, "cacheMissRailid should be cleared after termination");
-        console.log("Payment termination successful. Flag `withCDN` is cleared");
+        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
+        console.log("CDN service termination successful. Flag `withCDN` is cleared");
 
         // Ensure future CDN service termination reverts
         vm.prank(filCDN);

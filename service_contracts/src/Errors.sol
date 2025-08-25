@@ -245,4 +245,8 @@ library Errors {
     /// @param expected The expected CDN address
     /// @param actual The caller address
     error OnlyCDNAllowed(address expected, address actual);
+
+    /// @notice CDN payment is already terminated
+    /// @param dataSetId The data set ID
+    error CDNPaymentAlreadyTerminated(uint256 dataSetId);
 }

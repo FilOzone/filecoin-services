@@ -76,6 +76,8 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
+    event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
+
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
@@ -149,6 +151,7 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 paymentEndEpoch; // 0 if payment is not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint256 cdnEndEpoch; // 0 if CDN is not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -875,7 +878,7 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.cdnEndEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
         require(msg.sender == filCDNControllerAddress, Errors.OnlyCDNAllowed(filCDNControllerAddress, msg.sender));
@@ -884,12 +887,10 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.cacheMissRailId);
         payments.terminateRail(info.cdnRailId);
 
-        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
-
-        // Clear all CDN-related fields in the data set info
+        // Set withCDN to false to prevent further CDN operations
         info.withCDN = false;
-        info.cacheMissRailId = 0;
-        info.cdnRailId = 0;
+
+        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
@@ -1441,9 +1442,12 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch == 0) {
+        if (info.paymentEndEpoch == 0 && info.pdpRailId == railId) {
             info.paymentEndEpoch = endEpoch;
             emit PaymentTerminated(dataSetId, endEpoch, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+        } else if (info.cdnEndEpoch == 0 && (railId == info.cdnRailId || railId == info.cacheMissRailId)) {
+            info.cdnEndEpoch = endEpoch;
+            emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
     }
 }
