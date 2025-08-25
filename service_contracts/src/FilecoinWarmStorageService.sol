@@ -103,7 +103,7 @@ contract FilecoinWarmStorageService is
 
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
-    event ProviderRemoved(uint256 indexed providerId);
+    event ProviderUnapproved(uint256 indexed providerId);
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) private clientDataSetIds;
@@ -309,7 +309,7 @@ contract FilecoinWarmStorageService is
     function removeApprovedProvider(uint256 providerId) external onlyOwner {
         if (approvedProviders[providerId]) {
             approvedProviders[providerId] = false;
-            emit ProviderRemoved(providerId);
+            emit ProviderUnapproved(providerId);
         }
     }
 
