@@ -13,6 +13,10 @@ import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
+
+import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
+import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
+
 import {Extsload} from "./Extsload.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
@@ -46,6 +50,7 @@ contract FilecoinWarmStorageService is
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event DataSetRailsCreated(
         uint256 indexed dataSetId,
+        uint256 indexed providerId,
         uint256 pdpRailId,
         uint256 cacheMissRailId,
         uint256 cdnRailId,
@@ -91,9 +96,14 @@ contract FilecoinWarmStorageService is
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
+    address public immutable serviceProviderRegistryAddress;
 
     // Commission rates
     uint256 public serviceCommissionBps;
+
+    // Events for provider management
+    event ProviderApproved(uint256 indexed providerId);
+    event ProviderUnapproved(uint256 indexed providerId);
 
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) private clientDataSetIds;
@@ -155,6 +165,9 @@ contract FilecoinWarmStorageService is
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
 
+    // Approved provider list
+    mapping(uint256 => bool) public approvedProviders;
+
     // EIP-712 Type hashes
     bytes32 private constant CREATE_DATA_SET_TYPEHASH =
         keccak256("CreateDataSet(uint256 clientDataSetId,bool withCDN,address payee)");
@@ -181,7 +194,8 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
+        address _filCDNAddress,
+        address _serviceProviderRegistryAddress
     ) {
         _disableInitializers();
 
@@ -195,11 +209,16 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
+        require(
+            _serviceProviderRegistryAddress != address(0),
+            Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
+        );
 
         pdpVerifierAddress = _pdpVerifierAddress;
 
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         paymentsContractAddress = _paymentsContractAddress;
+        serviceProviderRegistryAddress = _serviceProviderRegistryAddress;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -270,6 +289,32 @@ contract FilecoinWarmStorageService is
         serviceCommissionBps = newCommissionBps;
     }
 
+    /**
+     * @notice Adds a provider ID to the approved list
+     * @dev Only callable by the contract owner. Reverts if already approved.
+     * @param providerId The provider ID to approve
+     */
+    function addApprovedProvider(uint256 providerId) external onlyOwner {
+        if (approvedProviders[providerId]) {
+            revert Errors.ProviderAlreadyApproved(providerId);
+        }
+        approvedProviders[providerId] = true;
+        emit ProviderApproved(providerId);
+    }
+
+    /**
+     * @notice Removes a provider ID from the approved list
+     * @dev Only callable by the contract owner. Reverts if not in list.
+     * @param providerId The provider ID to remove
+     */
+    function removeApprovedProvider(uint256 providerId) external onlyOwner {
+        if (!approvedProviders[providerId]) {
+            revert Errors.ProviderNotInApprovedList(providerId);
+        }
+        approvedProviders[providerId] = false;
+        emit ProviderUnapproved(providerId);
+    }
+
     // Listener interface methods
     /**
      * @notice Handles data set creation by creating a payment rail
@@ -286,6 +331,16 @@ contract FilecoinWarmStorageService is
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
+
+        // Validate provider is registered and approved
+        ServiceProviderRegistry registry = ServiceProviderRegistry(serviceProviderRegistryAddress);
+        uint256 providerId = registry.getProviderIdByAddress(creator);
+
+        // Check if provider is registered
+        require(providerId != 0, Errors.ProviderNotRegistered(creator));
+
+        // Check if provider is approved
+        require(approvedProviders[providerId], Errors.ProviderNotApproved(creator, providerId));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
@@ -371,7 +426,7 @@ contract FilecoinWarmStorageService is
 
         // Emit event for tracking
         emit DataSetRailsCreated(
-            dataSetId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
+            dataSetId, providerId, pdpRailId, cacheMissRailId, cdnRailId, createData.payer, creator, createData.withCDN
         );
     }
 
