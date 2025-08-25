@@ -94,7 +94,7 @@ contract FilecoinWarmStorageService is
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
-    address public immutable filCDNAddress;
+    address public immutable filCDNControllerAddress;
     address public immutable filCDNBeneficiaryAddress;
 
     // Commission rates
@@ -186,7 +186,7 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress,
+        address _filCDNControllerAddress,
         address _filCDNBeneficiaryAddress
     ) {
         _disableInitializers();
@@ -194,13 +194,13 @@ contract FilecoinWarmStorageService is
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
         usdfcTokenAddress = _usdfcTokenAddress;
 
-        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
-        filCDNAddress = _filCDNAddress;
+        require(_filCDNControllerAddress != address(0), "Filecoin CDN address cannot be zero");
+        filCDNControllerAddress = _filCDNControllerAddress;
 
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
+        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDNController));
         require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDNTreasury));
 
         pdpVerifierAddress = _pdpVerifierAddress;
@@ -367,7 +367,7 @@ contract FilecoinWarmStorageService is
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                filCDNBeneficiaryAddress,
+                filCDNBeneficiaryAddress, // to FilCDN beneficiary
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -658,7 +658,7 @@ contract FilecoinWarmStorageService is
         require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
-        require(msg.sender == filCDNAddress, Errors.OnlyCDNAllowed(filCDNAddress, msg.sender));
+        require(msg.sender == filCDNControllerAddress, Errors.OnlyCDNAllowed(filCDNControllerAddress, msg.sender));
 
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);

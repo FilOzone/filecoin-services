@@ -324,7 +324,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(pdpServiceWithPayments.filCDNAddress(), filCDN, "FilCDN address should be set correctly");
+        assertEq(pdpServiceWithPayments.filCDNControllerAddress(), filCDN, "FilCDN address should be set correctly");
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -1074,7 +1074,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 3. Try to terminate payment from FilCDN address
         console.log("\n3. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
-        vm.prank(pdpServiceWithPayments.filCDNAddress()); // FilCDN terminates
+        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(filCDN, dataSetId, info.cacheMissRailId, info.cdnRailId);
 
@@ -1103,14 +1103,14 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress,
+        address _filCDNControllerAddress,
         address _filCDNBeneficiaryAddress
     )
         FilecoinWarmStorageService(
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
-            _filCDNAddress,
+            _filCDNControllerAddress,
             _filCDNBeneficiaryAddress
         )
     {}
@@ -1133,8 +1133,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
-    uint256 public filCDNPrivateKey;
-    address public filCDN;
+    uint256 public filCDNControllerPrivateKey;
+    address public filCDNController;
     uint256 public filCDNBeneficiaryPrivateKey;
     address public filCDNBeneficiary;
 
@@ -1146,8 +1146,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
 
-        filCDNPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
-        filCDN = vm.addr(filCDNPrivateKey);
+        filCDNControllerPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
+        filCDNController = vm.addr(filCDNControllerPrivateKey);
 
         filCDNBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
         filCDNBeneficiary = vm.addr(filCDNBeneficiaryPrivateKey);
@@ -1166,7 +1166,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService(
-            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, filCDNBeneficiary
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDNController, filCDNBeneficiary
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
