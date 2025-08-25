@@ -45,7 +45,7 @@ contract ServiceProviderRegistry is
     /// @notice Emitted when a new provider registers
     event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
 
-    /// @notice Emitted when a service is updated or added
+    /// @notice Emitted when a product is updated or added
     event ProductUpdated(uint256 indexed providerId, ProductType indexed productType, uint256 updatedAt);
 
     /// @notice Emitted when a product is added to an existing provider
