@@ -19,10 +19,22 @@ all: install build test
 install:
 	forge install
 
+LAYOUTS=src/lib/FilecoinWarmStorageServiceLayout.sol
+
 # Build target
 .PHONY: build
 build:
 	forge build --via-ir
+
+
+src/lib/%Layout.sol: tools/generate_storage_layout.sh src/%.sol
+	$^:$* | forge fmt -r - > $@
+
+src/FilecoinWarmStorageServiceStateView.sol: tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
+	$^ | forge fmt -r - > $@
+
+src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol: src/lib/FilecoinWarmStorageServiceStateLibrary.sol
+	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e "4i\/\/ Generated with 'make $@'\n" $< | forge fmt -r - > $@
 
 # Test target
 .PHONY: test

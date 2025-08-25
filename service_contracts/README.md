@@ -6,6 +6,11 @@ This directory contains the smart contracts for different Filecoin services usin
 
 - `src/` - Contract source files
   - `FilecoinWarmStorageService.sol` - A service contract with [PDP](https://github.com/FilOzone/pdp) (Proof of Data Possession) and payment integration
+  - `FilecoinWarmStorageServiceStateView.sol` - View contract for reading `FilecoinWarmStorageService` with `eth_call`.
+  - `src/lib` - Library source files
+    - `FilecoinWarmStorageServiceLayout.sol` - Constants conveying the storage layout of `FilecoinWarmStorageService`
+    - `FilecoinWarmStorageServiceStateInternalLibrary.sol` - `internal` library for embedding logic to read `FilecoinWarmStorageService`
+    - `FilecoinWarmStorageServiceStateLibrary.sol` - `public` library for using `delegatecall` to read `FilecoinWarmStorageService`
 - `test/` - Test files  
   - `FilecoinWarmStorageService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
@@ -19,19 +24,68 @@ This directory contains the smart contracts for different Filecoin services usin
   - `fws-payments` - Filecoin Services payments contract
   - `pdp` - PDP verifier contract (from main branch)
 
-## Building
+
+### Extsload
+The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.
+There are three recommended ways to access `view` methods.
+
+#### View Contract
+To call the view methods off-chain, for example with `eth_call`, use the `FilecoinWarmStorageServiceStateView`:
+```sh
+forge build
+jq .abi out/FilecoinWarmStorageServiceStateView.sol/FilecoinWarmStorageServiceStateView.json
+```
+
+For example to call `paymentsContractAddress()` on `$WARM_STORAGE_VIEW_ADDRESS`:
+```json
+{
+    "id": 1,
+    "method": "eth_call",
+    "params": [
+        {
+            "to": $WARM_STORAGE_VIEW_ADDRESS,
+            "data": "0xbc471469"
+        },
+        "latest"
+    ]
+}
+```
+
+`FilecoinWarmStorageServiceStateView` is best for off-chain queries but the following `library` approaches are better for smart contracts.
+
+#### Internal Library
+To embed the view methods you use into your smart contract, use the `FilecoinWarmStorageServiceStateInternalLibrary`:
+```solidity
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
+```
+
+Compared to other approaches this will use the least gas.
+
+#### Public Library
+For your smart contract to call the view methods with a `delegatecall` into a shared library, use the `FilecoinWarmStorageServiceStateLibrary`:
+```solidity
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+```
+
+Compared to other approaches this will have the least codesize.
+
+
+## Contributing
+See [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+### Building
 
 ```bash
 forge build
 ```
 
-## Testing
+### Testing
 
 ```bash
 forge test
 ```
 
-## Dependencies
+### Dependencies
 
 The project depends on:
 - PDP contracts from https://github.com/FilOzone/pdp.git (main branch)

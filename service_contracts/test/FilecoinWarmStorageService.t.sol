@@ -12,8 +12,13 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Errors} from "../src/Errors.sol";
+
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
+
+import {FilecoinWarmStorageServiceStateInternalLibrary} from
+    "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -115,12 +120,12 @@ contract MockPDPVerifier {
     );
 
     // Basic implementation to create data sets and call the listener
-    function createDataSet(address listenerAddr, bytes calldata extraData) public payable returns (uint256) {
+    function createDataSet(PDPListener listenerAddr, bytes calldata extraData) public payable returns (uint256) {
         uint256 setId = nextDataSetId++;
 
         // Call the listener if specified
-        if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).dataSetCreated(setId, msg.sender, extraData);
+        if (listenerAddr != PDPListener(address(0))) {
+            listenerAddr.dataSetCreated(setId, msg.sender, extraData);
         }
 
         // Track service provider
@@ -128,6 +133,19 @@ contract MockPDPVerifier {
 
         emit DataSetCreated(setId, msg.sender);
         return setId;
+    }
+
+    function addPieces(
+        PDPListener listenerAddr,
+        uint256 dataSetId,
+        uint256 firstAdded,
+        Cids.Cid[] memory pieceData,
+        bytes memory signature,
+        string memory metadata
+    ) public {
+        bytes memory extraData = abi.encode(signature, metadata);
+
+        listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
     }
 
     /**
@@ -194,6 +212,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes32(0x9999997890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // s
         uint8(27) // v
     );
+
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     // Contracts
     FilecoinWarmStorageService public pdpServiceWithPayments;
@@ -454,7 +474,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create a data set as the service provider
         makeSignaturePass(client);
         vm.startPrank(serviceProvider);
-        uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
         vm.stopPrank();
 
         // Get data set info
@@ -474,6 +494,14 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify metadata was stored correctly
         assertEq(dataSet.metadata, "Test Data Set", "Metadata should be stored correctly");
+
+        // Verify client data set ids
+        uint256[] memory clientDataSetIds = pdpServiceWithPayments.clientDataSets(client);
+        assertEq(clientDataSetIds.length, 1);
+        assertEq(clientDataSetIds[0], newDataSetId);
+
+        assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), newDataSetId);
+        assertEq(pdpServiceWithPayments.railToDataSet(cdnRailId), newDataSetId);
 
         // Verify data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
@@ -569,7 +597,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create a data set as the service provider
         makeSignaturePass(client);
         vm.startPrank(serviceProvider);
-        uint256 newDataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), extraData);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
         vm.stopPrank();
 
         // Get data set info
@@ -584,6 +612,71 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         assertEq(dataSet.cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
         assertEq(dataSet.cdnRailId, 0, "CDN rail ID should be 0 for basic service (no CDN)");
+    }
+
+    function testCreateDataSetAddPieces() public {
+        bool withCDN = false;
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            metadata: "Test Data Set",
+            payer: client,
+            signature: FAKE_SIGNATURE,
+            withCDN: withCDN
+        });
+        bytes memory encodedCreateData =
+            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+
+        vm.startPrank(client);
+        // Set operator approval for the PDP service in the Payments contract
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true, // approved
+            1000e6, // rate allowance (1000 USDFC)
+            1000e6, // lockup allowance (1000 USDFC)
+            365 days // max lockup period
+        );
+
+        uint256 depositAmount = 1e6; // 10x the required fee
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(address(mockUSDFC), client, depositAmount);
+        vm.stopPrank();
+
+        makeSignaturePass(client);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        uint256 firstAdded = 0;
+        string memory metadataShort = "metadata";
+        string memory metadataLong = "metadatAmetadaTametadAtametaDatametAdatameTadatamEtadataMetadata";
+        Cids.Cid[] memory pieceData1 = new Cids.Cid[](3);
+        pieceData1[0].data = bytes("1_0:1111");
+        pieceData1[1].data = bytes("1_1:111100000");
+        pieceData1[2].data = bytes("1_2:11110000000000");
+        Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
+        pieceData2[0].data = bytes("2_0:22222222222222222222");
+        pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, metadataShort
+        );
+        firstAdded += pieceData1.length;
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong
+        );
+        firstAdded += pieceData2.length;
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), metadataLong);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), metadataLong);
     }
 
     // Helper function to get account info from the Payments contract
@@ -673,7 +766,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create data set as approved provider
         makeSignaturePass(clientAddress);
         vm.prank(provider);
-        return mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
     function testGetClientDataSets_EmptyClient() public view {
@@ -762,7 +855,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create data set as approved provider
         makeSignaturePass(clientAddress);
         vm.prank(provider);
-        return mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
     /**
@@ -876,7 +969,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     // ============= Data Set Payment Termination Tests =============
 
-    function testTerminateDataSetPaymentLifecycle() public {
+    function testTerminateServiceLifecycle() public {
         console.log("=== Test: Data Set Payment Termination Lifecycle ===");
 
         // 1. Setup: Create a dataset with CDN enabled.
@@ -911,7 +1004,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Create data set
         makeSignaturePass(client);
         vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(address(pdpServiceWithPayments), encodedData);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
         console.log("Created data set with ID:", dataSetId);
 
         // 2. Submit a valid proof.
@@ -924,20 +1017,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
+
         // Warp to challenge window
         uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
+        assertFalse(
+            pdpServiceWithPayments.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+
         // Submit proof
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        assertTrue(
+            pdpServiceWithPayments.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
         console.log("Proof submitted successfully");
 
         // 3. Terminate payment
         console.log("\n3. Terminating payment rails");
         console.log("Current block:", block.number);
         vm.prank(client); // client terminates
-        pdpServiceWithPayments.terminateDataSetPayment(dataSetId);
+        pdpServiceWithPayments.terminateService(dataSetId);
 
         // 4. Assertions
         // Check paymentEndEpoch is set
@@ -1144,6 +1250,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 
 // Test contract for upgrade scenarios
 contract FilecoinWarmStorageServiceUpgradeTest is Test {
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
+
     FilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
