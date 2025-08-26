@@ -25,6 +25,7 @@ This repository contains smart contracts and services for the Filecoin ecosystem
 ### Prerequisites
 
 - [Foundry](https://getfoundry.sh/) - Ethereum development toolchain
+- [jq](https://jqlang.github.io/jq/) - Command-line JSON processor (v1.7+ recommended)
 - Git with submodule support
 
 ### Installation
@@ -145,6 +146,8 @@ This project builds on several key components:
 - **OpenZeppelin**: Industry-standard smart contract libraries for security and upgradeability
 
 ## 🤝 Contributing
+
+See [service_contracts/CONTRIBUTING.md](./service_contracts/CONTRIBUTING.md) for development guidelines and code generation details.
 
 1. Fork the repository
 2. Create a feature branch
