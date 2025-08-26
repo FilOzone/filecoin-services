@@ -764,10 +764,12 @@ contract FilecoinWarmStorageService is
 
     function terminateCDNService(uint256 dataSetId) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
+        string memory withCDN = dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
         require(
             hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
             Errors.CDNServiceNotConfigured(dataSetId)
         );
+        require(keccak256(bytes(withCDN)) == keccak256("true"), Errors.CDNServiceNotConfigured(dataSetId));
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
