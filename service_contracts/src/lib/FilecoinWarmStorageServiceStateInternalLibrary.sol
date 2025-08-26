@@ -119,10 +119,11 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
             slot := add(1, slot)
         }
 
-        bytes32[] memory info3 = service.extsloadStruct(slot, 3);
+        bytes32[] memory info3 = service.extsloadStruct(slot, 4);
         info.clientDataSetId = uint256(info3[0]);
         info.withCDN = info3[1] != bytes32(0);
         info.paymentEndEpoch = uint256(info3[2]);
+        info.cdnEndEpoch = uint256(info3[3]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)

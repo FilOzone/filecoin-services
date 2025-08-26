@@ -658,7 +658,7 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.cdnEndEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
         require(msg.sender == filCDNControllerAddress, Errors.OnlyCDNAllowed(filCDNControllerAddress, msg.sender));
