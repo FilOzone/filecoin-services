@@ -1008,9 +1008,9 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Returns true if `key` exists in `metadataKeys`.
-     * @param key The metadata key to look up
-     * @return Modified metadata keys
+     * @notice Deletes `key` if it exists in `metadataKeys`.
+     * @param key The array of metadata keys
+     * @return Modified array of metadata keys
      */
     function deleteMetadataKey(string[] memory metadataKeys, string memory key)
         internal
