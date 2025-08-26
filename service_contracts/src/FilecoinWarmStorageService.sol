@@ -184,7 +184,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // Approved provider list
-    mapping(uint256 => bool) public approvedProviders;
+    mapping(uint256 => bool) internal approvedProviders;
 
     // EIP-712 Type hashes
     // EIP-712 type definitions with metadata support
