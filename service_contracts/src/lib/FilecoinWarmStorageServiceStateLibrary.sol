@@ -238,8 +238,14 @@ library FilecoinWarmStorageServiceStateLibrary {
     {
         // Check if key exists in the keys array
         string[] memory keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
         for (uint256 i = 0; i < keys.length; i++) {
-            if (keccak256(bytes(keys[i])) == keccak256(bytes(key))) {
+            bytes memory currentKeyBytes = bytes(keys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
                 exists = true;
                 value = _getDataSetMetadataValue(service, dataSetId, key);
                 break;
@@ -303,8 +309,14 @@ library FilecoinWarmStorageServiceStateLibrary {
         string[] memory keys = getStringArray(
             service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
         );
+
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
         for (uint256 i = 0; i < keys.length; i++) {
-            if (keccak256(bytes(keys[i])) == keccak256(bytes(key))) {
+            bytes memory currentKeyBytes = bytes(keys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
                 exists = true;
                 value = _getPieceMetadataValue(service, dataSetId, pieceId, key);
                 break;
