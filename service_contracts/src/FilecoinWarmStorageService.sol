@@ -108,16 +108,18 @@ contract FilecoinWarmStorageService is
     // Mapping from client address to clientDataSetId
     mapping(address => uint256) private clientDataSetIds;
 
-    // dataSetId => PieceId => (key => value)
-    mapping(uint256 => mapping(uint256 => mapping(string => string))) public dataSetPieceMetadata;
-    // dataSetId => PieceId => array of keys
-    mapping(uint256 => mapping(uint256 => string[])) internal dataSetPieceMetadataKeys;
-
     // Mapping from data set ID to key value pair metadata
     // dataSetId => (key => value)
-    mapping(uint256 => mapping(string => string)) public dataSetMetadata;
+    mapping(uint256 dataSetId => mapping(string key => string value)) internal dataSetMetadata;
     // dataSetId => array of keys
-    mapping(uint256 => string[]) internal dataSetMetadataKeys;
+    mapping(uint256 dataSetId => string[] keys) internal dataSetMetadataKeys;
+
+    // Mapping from data set ID and piece ID to key value pair metadata
+    // dataSetId => PieceId => (key => value)
+    mapping(uint256 dataSetId => mapping(uint256 pieceId => mapping(string key => string value))) internal
+        dataSetPieceMetadata;
+    // dataSetId => PieceId => array of keys
+    mapping(uint256 dataSetId => mapping(uint256 pieceId => string[] keys)) internal dataSetPieceMetadataKeys;
 
     // Storage for data set payment information
     struct DataSetInfo {
@@ -951,15 +953,17 @@ contract FilecoinWarmStorageService is
      * @return True if key exists; false otherwise.
      */
     function hasMetadataKey(string[] memory metadataKeys, string memory key) internal pure returns (bool) {
-        require(bytes(key).length <= MAX_KEY_LENGTH, "Key exceeds max length");
-        bytes32 keyHash = keccak256(abi.encodePacked(key));
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
 
         for (uint256 i = 0; i < metadataKeys.length; i++) {
-            // compare keys using hash
-            if (keccak256(abi.encodePacked(metadataKeys[i])) == keyHash) {
+            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
                 return true;
             }
         }
+
         // Key absence means disabled
         return false;
     }

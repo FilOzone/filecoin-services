@@ -5,10 +5,10 @@ pragma solidity ^0.8.20;
 
 bytes32 constant SERVICE_COMMISSION_BPS_SLOT = bytes32(uint256(0));
 bytes32 constant CLIENT_DATA_SET_IDS_SLOT = bytes32(uint256(1));
-bytes32 constant DATA_SET_PIECE_METADATA_SLOT = bytes32(uint256(2));
-bytes32 constant DATA_SET_PIECE_METADATA_KEYS_SLOT = bytes32(uint256(3));
-bytes32 constant DATA_SET_METADATA_SLOT = bytes32(uint256(4));
-bytes32 constant DATA_SET_METADATA_KEYS_SLOT = bytes32(uint256(5));
+bytes32 constant DATA_SET_METADATA_SLOT = bytes32(uint256(2));
+bytes32 constant DATA_SET_METADATA_KEYS_SLOT = bytes32(uint256(3));
+bytes32 constant DATA_SET_PIECE_METADATA_SLOT = bytes32(uint256(4));
+bytes32 constant DATA_SET_PIECE_METADATA_KEYS_SLOT = bytes32(uint256(5));
 bytes32 constant PROVING_DEADLINES_SLOT = bytes32(uint256(6));
 bytes32 constant PROVEN_THIS_PERIOD_SLOT = bytes32(uint256(7));
 bytes32 constant DATA_SET_INFO_SLOT = bytes32(uint256(8));

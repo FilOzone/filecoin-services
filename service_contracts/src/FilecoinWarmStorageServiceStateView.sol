@@ -28,10 +28,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.clientDataSets(payer);
     }
 
-    function getChallengesPerProof() external pure returns (uint64) {
-        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
-    }
-
     function getAllDataSetMetadata(uint256 dataSetId)
         external
         view
@@ -48,6 +44,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getAllPieceMetadata(dataSetId, pieceId);
     }
 
+    function getChallengesPerProof() external pure returns (uint64) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
+    }
+
     function getClientDataSets(address client)
         external
         view
@@ -60,12 +60,16 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getDataSet(dataSetId);
     }
 
+    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
+        return service.getDataSetMetadata(dataSetId, key);
+    }
+
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
-    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
-        return service.getDataSetMetadata(dataSetId, key);
+    function getMaxProvingPeriod() external view returns (uint64) {
+        return service.getMaxProvingPeriod();
     }
 
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
@@ -74,10 +78,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         returns (string memory)
     {
         return service.getPieceMetadata(dataSetId, pieceId, key);
-    }
-
-    function getMaxProvingPeriod() external view returns (uint64) {
-        return service.getMaxProvingPeriod();
     }
 
     function initChallengeWindowStart() external view returns (uint256) {
