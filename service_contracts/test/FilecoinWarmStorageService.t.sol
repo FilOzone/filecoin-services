@@ -1205,8 +1205,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n=== Test completed successfully! ===");
     }
 
-<<<<<<< HEAD
-=======
     // ============= CDN Service Termination Tests =============
     function testTerminateCDNServiceLifecycle() public {
         console.log("=== Test: CDN Payment Termination Lifecycle ===");
@@ -1251,21 +1249,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        uint256 maxProvingPeriod = pdpServiceWithPayments.getMaxProvingPeriod();
-        uint256 challengeWindow = pdpServiceWithPayments.challengeWindow();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
-        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
+        assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
         // Warp to challenge window
-        uint256 provingDeadline = pdpServiceWithPayments.provingDeadlines(dataSetId);
+        uint256 provingDeadline = viewContract.provingDeadlines(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(
-            pdpServiceWithPayments.provenPeriods(
+            viewContract.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -1274,7 +1271,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         assertTrue(
-            pdpServiceWithPayments.provenPeriods(
+            viewContract.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -1290,7 +1287,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 4. Try to terminate payment from FilCDN address
         console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
-        FilecoinWarmStorageService.DataSetInfo memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
         vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(filCDN, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1298,9 +1295,10 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // 5. Assertions
         // Check if CDN data is cleared
-        info = pdpServiceWithPayments.getDataSet(dataSetId);
-        string memory withCDN = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
-        assertEq(withCDN, "", "withCDN value should be 'false' for dataset");
+        info = viewContract.getDataSet(dataSetId);
+        (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should not exist after termination");
+        assertEq(withCDN, "", "withCDN value should be cleared for dataset");
         assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
 
@@ -1312,7 +1310,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n=== Test completed successfully! ===");
     }
 
->>>>>>> f38baf6 (Check for withCDN flag inside metadata keys)
     // ==== Data Set Metadata Storage Tests ====
     function testDataSetMetadataStorage() public {
         // Create a data set with metadata

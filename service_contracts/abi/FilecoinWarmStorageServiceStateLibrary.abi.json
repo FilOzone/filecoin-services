@@ -223,7 +223,11 @@
             "internalType": "uint256"
           },
           {
+<<<<<<< HEAD
             "name": "providerId",
+=======
+            "name": "cdnEndEpoch",
+>>>>>>> f522017 (Generate ABI)
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -294,7 +298,11 @@
             "internalType": "uint256"
           },
           {
+<<<<<<< HEAD
             "name": "providerId",
+=======
+            "name": "cdnEndEpoch",
+>>>>>>> f522017 (Generate ABI)
             "type": "uint256",
             "internalType": "uint256"
           }
