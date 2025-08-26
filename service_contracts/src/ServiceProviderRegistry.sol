@@ -751,16 +751,27 @@ contract ServiceProviderRegistry is
     /// @param providerId The ID of the provider
     /// @param productType The type of product
     /// @param keys Array of capability keys to query
-    /// @return values Array of capability values corresponding to the keys
+    /// @return exists Array of booleans indicating whether each key exists
+    /// @return values Array of capability values corresponding to the keys (empty string for non-existent keys)
     function getProductCapabilities(uint256 providerId, ProductType productType, string[] calldata keys)
         external
         view
         providerExists(providerId)
-        returns (string[] memory values)
+        returns (bool[] memory exists, string[] memory values)
     {
+        ServiceProduct memory product = providerProducts[providerId][productType];
+        exists = new bool[](keys.length);
         values = new string[](keys.length);
+
         for (uint256 i = 0; i < keys.length; i++) {
-            values[i] = productCapabilities[providerId][productType][keys[i]];
+            // Check if the key exists in the capability keys array
+            for (uint256 j = 0; j < product.capabilityKeys.length; j++) {
+                if (keccak256(bytes(product.capabilityKeys[j])) == keccak256(bytes(keys[i]))) {
+                    exists[i] = true;
+                    values[i] = productCapabilities[providerId][productType][keys[i]];
+                    break;
+                }
+            }
         }
     }
 
@@ -768,14 +779,22 @@ contract ServiceProviderRegistry is
     /// @param providerId The ID of the provider
     /// @param productType The type of product
     /// @param key The capability key to query
-    /// @return value The capability value
+    /// @return exists Whether the capability key exists
+    /// @return value The capability value (empty string if key doesn't exist)
     function getProductCapability(uint256 providerId, ProductType productType, string calldata key)
         external
         view
         providerExists(providerId)
-        returns (string memory value)
+        returns (bool exists, string memory value)
     {
-        return productCapabilities[providerId][productType][key];
+        // Check if the key exists in the capability keys array
+        ServiceProduct memory product = providerProducts[providerId][productType];
+        for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
+            if (keccak256(bytes(product.capabilityKeys[i])) == keccak256(bytes(key))) {
+                return (true, productCapabilities[providerId][productType][key]);
+            }
+        }
+        return (false, "");
     }
 
     /// @notice Validate product data based on product type

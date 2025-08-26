@@ -148,16 +148,19 @@ contract ServiceProviderRegistryTest is Test {
         assertEq(returnedKeys[2], "compliance", "Third key should be compliance");
 
         // Use the new query methods to verify values
-        string memory region =
+        (bool existsRegion, string memory region) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertTrue(existsRegion, "region capability should exist");
         assertEq(region, "us-east-1", "First value should be us-east-1");
 
-        string memory tier =
+        (bool existsTier, string memory tier) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertTrue(existsTier, "tier capability should exist");
         assertEq(tier, "premium", "Second value should be premium");
 
-        string memory compliance =
+        (bool existsCompliance, string memory compliance) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "compliance");
+        assertTrue(existsCompliance, "compliance capability should exist");
         assertEq(compliance, "SOC2", "Third value should be SOC2");
     }
 

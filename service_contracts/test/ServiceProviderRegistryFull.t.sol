@@ -217,11 +217,15 @@ contract ServiceProviderRegistryFullTest is Test {
         queryKeys[2] = "latency";
         queryKeys[3] = "cert";
 
-        string[] memory values =
+        (bool[] memory exists, string[] memory values) =
             registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, queryKeys);
+        assertTrue(exists[0], "First key should exist");
         assertEq(values[0], "EU-WEST", "First value should be EU-WEST");
+        assertTrue(exists[1], "Second key should exist");
         assertEq(values[1], "3x", "Second value should be 3x");
+        assertTrue(exists[2], "Third key should exist");
         assertEq(values[2], "low", "Third value should be low");
+        assertTrue(exists[3], "Fourth key should exist");
         assertEq(values[3], "ISO27001", "Fourth value should be ISO27001");
 
         // Also verify using getProduct
@@ -335,8 +339,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(keys1[1], "performance", "Provider 1 second key should be performance");
 
         // Query values for provider 1
-        string[] memory values1 =
+        (bool[] memory exists1, string[] memory values1) =
             registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, keys1);
+        assertTrue(exists1[0] && exists1[1], "All keys should exist for provider 1");
         assertEq(values1[0], "US-EAST", "Provider 1 first value should be US-EAST");
         assertEq(values1[1], "high", "Provider 1 second value should be high");
 
@@ -348,8 +353,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(keys2[2], "availability", "Provider 2 third key should be availability");
 
         // Query values for provider 2
-        string[] memory values2 =
+        (bool[] memory exists2, string[] memory values2) =
             registry.getProductCapabilities(2, ServiceProviderRegistryStorage.ProductType.PDP, keys2);
+        assertTrue(exists2[0] && exists2[1], "All keys should exist for provider 2");
         assertEq(values2[0], "ASIA-PAC", "Provider 2 first value should be ASIA-PAC");
         assertEq(values2[1], "100TB", "Provider 2 second value should be 100TB");
         assertEq(values2[2], "99.999%", "Provider 2 third value should be 99.999%");
@@ -665,8 +671,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(keysBefore[0], "tier", "First key should be tier");
 
         // Verify value before transfer
-        string memory tierBefore =
+        (bool tierExists, string memory tierBefore) =
             registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertTrue(tierExists, "tier capability should exist");
         assertEq(tierBefore, "premium", "First value should be premium");
 
         // Transfer beneficiary
@@ -699,8 +706,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(keysAfter[2], "encryption", "Third key should still be encryption");
 
         // Verify values persist after transfer
-        string[] memory valuesAfter =
+        (bool[] memory existsAfter, string[] memory valuesAfter) =
             registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, keysAfter);
+        assertTrue(existsAfter[0] && existsAfter[1], "All keys should still exist after transfer");
         assertEq(valuesAfter[0], "premium", "First value should still be premium");
         assertEq(valuesAfter[1], "daily", "Second value should still be daily");
         assertEq(valuesAfter[2], "AES-256", "Third value should still be AES-256");
@@ -725,8 +733,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(updatedKeys[0], "support", "First updated key should be support");
 
         // Verify value was updated
-        string memory supportValue =
+        (bool supportExists, string memory supportValue) =
             registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "support");
+        assertTrue(supportExists, "support capability should exist");
         assertEq(supportValue, "24/7", "First updated value should be 24/7");
     }
 
@@ -1500,8 +1509,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(returnedKeys[2], "encryption", "Third key should be encryption");
 
         // Query values using new methods
-        string[] memory returnedValues =
+        (bool[] memory existsReturned, string[] memory returnedValues) =
             registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, returnedKeys);
+        assertTrue(existsReturned[0] && existsReturned[1] && existsReturned[2], "All keys should exist");
         assertEq(returnedValues[0], "us-west-2", "First value should be us-west-2");
         assertEq(returnedValues[1], "10Gbps", "Second value should be 10Gbps");
         assertEq(returnedValues[2], "AES256", "Third value should be AES256");
@@ -1545,8 +1555,9 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(returnedKeys[0], "support", "First key should be support");
 
         // Verify value using new method
-        string memory supportVal =
+        (bool supExists, string memory supportVal) =
             registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "support");
+        assertTrue(supExists, "support capability should exist");
         assertEq(supportVal, "24/7", "First value should be 24/7");
     }
 
@@ -1724,21 +1735,25 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Test single capability queries
-        string memory region =
+        (bool regionExists, string memory region) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertTrue(regionExists, "region capability should exist");
         assertEq(region, "us-west-2", "Region capability should match");
 
-        string memory tier =
+        (bool tierExists, string memory tier) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertTrue(tierExists, "tier capability should exist");
         assertEq(tier, "premium", "Tier capability should match");
 
-        string memory storageVal =
+        (bool storageExists, string memory storageVal) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "storage");
+        assertTrue(storageExists, "storage capability should exist");
         assertEq(storageVal, "100TB", "Storage capability should match");
 
         // Test querying non-existent capability
-        string memory nonExistent =
+        (bool nonExists, string memory nonExistent) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "nonexistent");
+        assertFalse(nonExists, "Non-existent capability should not exist");
         assertEq(nonExistent, "", "Non-existent capability should return empty string");
     }
 
@@ -1772,10 +1787,11 @@ contract ServiceProviderRegistryFullTest is Test {
         queryKeys[1] = "compliance";
         queryKeys[2] = "region";
 
-        string[] memory results =
+        (bool[] memory resultsExist, string[] memory results) =
             registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, queryKeys);
 
         assertEq(results.length, 3, "Should return 3 values");
+        assertTrue(resultsExist[0] && resultsExist[1] && resultsExist[2], "All queried keys should exist");
         assertEq(results[0], "standard", "First result should be tier value");
         assertEq(results[1], "GDPR", "Second result should be compliance value");
         assertEq(results[2], "eu-west-1", "Third result should be region value");
@@ -1787,10 +1803,14 @@ contract ServiceProviderRegistryFullTest is Test {
         mixedKeys[2] = "storage";
         mixedKeys[3] = "nonexistent2";
 
-        string[] memory mixedResults =
+        (bool[] memory mixedExist, string[] memory mixedResults) =
             registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, mixedKeys);
 
         assertEq(mixedResults.length, 4, "Should return 4 values");
+        assertTrue(mixedExist[0], "First key should exist");
+        assertFalse(mixedExist[1], "Second key should not exist");
+        assertTrue(mixedExist[2], "Third key should exist");
+        assertFalse(mixedExist[3], "Fourth key should not exist");
         assertEq(mixedResults[0], "eu-west-1", "First result should be region");
         assertEq(mixedResults[1], "", "Second result should be empty");
         assertEq(mixedResults[2], "50TB", "Third result should be storage");
@@ -1881,8 +1901,9 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify initial values
-        string memory oldValue =
+        (bool oldExists, string memory oldValue) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "oldkey");
+        assertTrue(oldExists, "Old key should exist initially");
         assertEq(oldValue, "oldvalue", "Old key should have value initially");
 
         // Update with new capabilities (without oldkey)
@@ -1900,22 +1921,26 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify old key is cleared
-        string memory clearedValue =
+        (bool clearedExists, string memory clearedValue) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "oldkey");
+        assertFalse(clearedExists, "Old key should not exist after update");
         assertEq(clearedValue, "", "Old key should be cleared after update");
 
         // Verify new values are set
-        string memory newRegion =
+        (bool regionExists, string memory newRegion) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertTrue(regionExists, "Region key should exist");
         assertEq(newRegion, "eu-central-1", "Region should be updated");
 
-        string memory newKey =
+        (bool newKeyExists, string memory newKey) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "newkey");
+        assertTrue(newKeyExists, "New key should exist");
         assertEq(newKey, "newvalue", "New key should have value");
 
         // Verify tier key is also cleared (was in initial but not in update)
-        string memory clearedTier =
+        (bool tierCleared, string memory clearedTier) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertFalse(tierCleared, "Tier key should not exist after update");
         assertEq(clearedTier, "", "Tier key should be cleared after update");
     }
 }
