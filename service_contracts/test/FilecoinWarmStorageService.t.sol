@@ -18,6 +18,7 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
 import {FilecoinWarmStorageServiceStateInternalLibrary} from
     "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
@@ -140,10 +141,18 @@ contract MockPDPVerifier {
         uint256 firstAdded,
         Cids.Cid[] memory pieceData,
         bytes memory signature,
-        string memory metadata
+        string[] memory metadataKeys,
+        string[] memory metadataValues
     ) public {
-        bytes memory extraData = abi.encode(signature, metadata);
+        // Convert to per-piece format: each piece gets same metadata
+        string[][] memory allKeys = new string[][](pieceData.length);
+        string[][] memory allValues = new string[][](pieceData.length);
+        for (uint256 i = 0; i < pieceData.length; i++) {
+            allKeys[i] = metadataKeys;
+            allValues[i] = metadataValues;
+        }
 
+        bytes memory extraData = abi.encode(signature, allKeys, allValues);
         listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
     }
 
@@ -233,6 +242,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     // Test parameters
     bytes public extraData;
+
+    // Metadata size and count limits
+    uint256 private constant MAX_KEY_LENGTH = 32;
+    uint256 private constant MAX_VALUE_LENGTH = 128;
+    uint256 private constant MAX_KEYS_PER_DATASET = 10;
+    uint256 private constant MAX_KEYS_PER_PIECE = 5;
+
+    // Structs
+    struct PieceMetadataSetup {
+        uint256 dataSetId;
+        uint256 pieceId;
+        Cids.Cid[] pieceData;
+        bytes extraData;
+    }
 
     // Events from Payments contract to verify
     event RailCreated(
@@ -448,17 +471,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
     }
 
+    function _getSingleMetadataKV(string memory key, string memory value)
+        internal
+        pure
+        returns (string[] memory, string[] memory)
+    {
+        string[] memory keys = new string[](1);
+        string[] memory values = new string[](1);
+        keys[0] = key;
+        values[0] = value;
+        return (keys, values);
+    }
+
     function testCreateDataSetCreatesRailAndChargesFee() public {
+        // Prepare ExtraData - withCDN key presence means CDN is enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: true
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -482,9 +521,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         (uint256 clientFundsBefore,) = getAccountInfo(address(mockUSDFC), client);
         (uint256 spFundsBefore,) = getAccountInfo(address(mockUSDFC), serviceProvider);
 
-        // Expect RailCreated event when creating the data set
+        // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetRailsCreated(1, 1, 1, 2, 3, client, serviceProvider, true);
+        emit FilecoinWarmStorageService.DataSetCreated(
+            1, 1, 1, 2, 3, client, serviceProvider, createData.metadataKeys, createData.metadataValues
+        );
 
         // Create a data set as the service provider
         makeSignaturePass(client);
@@ -508,7 +549,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet.payee, serviceProvider, "Payee should be set to service provider");
 
         // Verify metadata was stored correctly
-        assertEq(dataSet.metadata, "Test Data Set", "Metadata should be stored correctly");
+        string memory metadata = pdpServiceWithPayments.getDataSetMetadata(newDataSetId, metadataKeys[0]);
+        assertEq(metadata, "true", "Metadata should be stored correctly");
 
         // Verify client data set ids
         uint256[] memory clientDataSetIds = pdpServiceWithPayments.clientDataSets(client);
@@ -525,10 +567,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
         assertEq(dataSetInfo.payer, client, "Payer should match");
         assertEq(dataSetInfo.payee, serviceProvider, "Payee should match");
-        assertEq(dataSetInfo.withCDN, true, "withCDN should be true");
-
-        // Verify withCDN was stored correctly
-        assertTrue(dataSet.withCDN, "withCDN should be true");
 
         // Verify the rails in the actual Payments contract
         Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
@@ -576,16 +614,20 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testCreateDataSetNoCDN() public {
-        // Prepare ExtraData
+        // Prepare ExtraData - no withCDN key means CDN is disabled
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: false
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData = abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -605,9 +647,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
 
-        // Expect RailCreated event when creating the data set
+        // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetRailsCreated(1, 1, 1, 0, 0, client, serviceProvider, false);
+        emit FilecoinWarmStorageService.DataSetCreated(
+            1, 1, 1, 0, 0, client, serviceProvider, createData.metadataKeys, createData.metadataValues
+        );
 
         // Create a data set as the service provider
         makeSignaturePass(client);
@@ -617,10 +661,6 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
-
-        // Verify withCDN was stored correctly
-        assertFalse(dataSet.withCDN, "withCDN should be false");
-
         // Verify the commission rate was set correctly for basic service (no CDN)
         Payments.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
         assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
@@ -630,18 +670,19 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testCreateDataSetAddPieces() public {
-        bool withCDN = false;
+        // Create dataset with metadataKeys/metadataValues
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: "Test Data Set",
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: withCDN
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
+        // Approvals and deposit
         vm.startPrank(client);
-        // Set operator approval for the PDP service in the Payments contract
         payments.setOperatorApproval(
             address(mockUSDFC),
             address(pdpServiceWithPayments),
@@ -650,26 +691,40 @@ contract FilecoinWarmStorageServiceTest is Test {
             1000e6, // lockup allowance (1000 USDFC)
             365 days // max lockup period
         );
-
         uint256 depositAmount = 1e6; // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(address(mockUSDFC), client, depositAmount);
         vm.stopPrank();
 
+        // Create dataset
         makeSignaturePass(client);
         vm.prank(serviceProvider); // Create dataset as service provider
         uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
 
+        // Prepare piece batches
         uint256 firstAdded = 0;
         string memory metadataShort = "metadata";
         string memory metadataLong = "metadatAmetadaTametadAtametaDatametAdatameTadatamEtadataMetadata";
+
+        // First batch (3 pieces) with key "meta" => metadataShort
         Cids.Cid[] memory pieceData1 = new Cids.Cid[](3);
         pieceData1[0].data = bytes("1_0:1111");
         pieceData1[1].data = bytes("1_1:111100000");
         pieceData1[2].data = bytes("1_2:11110000000000");
+        string[] memory keys1 = new string[](1);
+        string[] memory values1 = new string[](1);
+        keys1[0] = "meta";
+        values1[0] = metadataShort;
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, keys1, values1
+        );
+        firstAdded += pieceData1.length;
+
+        // Second batch (2 pieces) with key "meta" => metadataLong
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
         pieceData2[0].data = bytes("2_0:22222222222222222222");
         pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+<<<<<<< HEAD
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), "");
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), "");
         assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), "");
@@ -692,13 +747,23 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(client);
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong
+=======
+        string[] memory keys2 = new string[](1);
+        string[] memory values2 = new string[](1);
+        keys2[0] = "meta";
+        values2[0] = metadataLong;
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+>>>>>>> origin/main
         );
         firstAdded += pieceData2.length;
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), metadataShort);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), metadataShort);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), metadataShort);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), metadataLong);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), metadataLong);
+
+        // Assert per-piece metadata
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0, "meta"), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1, "meta"), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2, "meta"), metadataShort);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3, "meta"), metadataLong);
+        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4, "meta"), metadataLong);
     }
 
     // Helper function to get account info from the Payments contract
@@ -761,20 +826,22 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     // ===== Client-Data Set Tracking Tests =====
-    function createDataSetForClient(address provider, address clientAddress, string memory metadata)
-        internal
-        returns (uint256)
-    {
+    function prepareDataSetForClient(
+        address, /*provider*/
+        address clientAddress,
+        string[] memory metadataKeys,
+        string[] memory metadataValues
+    ) internal returns (bytes memory) {
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: metadata,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
             payer: clientAddress,
-            withCDN: false,
             signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -787,6 +854,17 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Create data set as approved provider
         makeSignaturePass(clientAddress);
+
+        return encodedData;
+    }
+
+    function createDataSetForClient(
+        address provider,
+        address clientAddress,
+        string[] memory metadataKeys,
+        string[] memory metadataValues
+    ) internal returns (uint256) {
+        bytes memory encodedData = prepareDataSetForClient(provider, clientAddress, metadataKeys, metadataValues);
         vm.prank(provider);
         return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
@@ -800,9 +878,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testGetClientDataSets_SingleDataSet() public {
         // Create a single data set for the client
-        string memory metadata = "Test metadata";
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Data Set");
 
-        createDataSetForClient(sp1, client, metadata);
+        createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Get data sets
         FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
@@ -811,15 +889,17 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSets.length, 1, "Should return one data set");
         assertEq(dataSets[0].payer, client, "Payer should match");
         assertEq(dataSets[0].payee, sp1, "Payee should match");
-        assertEq(dataSets[0].metadata, metadata, "Metadata should match");
         assertEq(dataSets[0].clientDataSetId, 0, "First data set ID should be 0");
         assertGt(dataSets[0].pdpRailId, 0, "Rail ID should be set");
     }
 
     function testGetClientDataSets_MultipleDataSets() public {
         // Create multiple data sets for the client
-        createDataSetForClient(sp1, client, "Metadata 1");
-        createDataSetForClient(sp2, client, "Metadata 2");
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
 
         // Get data sets
         FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
@@ -830,13 +910,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Check first data set
         assertEq(dataSets[0].payer, client, "First data set payer should match");
         assertEq(dataSets[0].payee, sp1, "First data set payee should match");
-        assertEq(dataSets[0].metadata, "Metadata 1", "First data set metadata should match");
         assertEq(dataSets[0].clientDataSetId, 0, "First data set ID should be 0");
 
         // Check second data set
         assertEq(dataSets[1].payer, client, "Second data set payer should match");
         assertEq(dataSets[1].payee, sp2, "Second data set payee should match");
-        assertEq(dataSets[1].metadata, "Metadata 2", "Second data set metadata should match");
         assertEq(dataSets[1].clientDataSetId, 1, "Second data set ID should be 1");
     }
 
@@ -847,23 +925,24 @@ contract FilecoinWarmStorageServiceTest is Test {
      * @dev This function sets up the necessary state for service provider change testing
      * @param provider The service provider address
      * @param clientAddress The client address
-     * @param metadata The data set metadata
      * @return The created data set ID
      */
-    function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory metadata)
+    function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory /*metadata*/ )
         internal
         returns (uint256)
     {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Data Set");
+
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: metadata,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
             payer: clientAddress,
-            withCDN: false,
             signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -997,16 +1076,18 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: "Test Data Set for Termination",
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: true // CDN enabled
+            signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -1080,7 +1161,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieces = new Cids.Cid[](1);
         bytes32 pieceData = hex"010203";
         pieces[0] = Cids.CommPv2FromDigest(0, 4, pieceData);
-        bytes memory addPiecesExtraData = abi.encode(FAKE_SIGNATURE, "some metadata");
+
+        bytes memory addPiecesExtraData = abi.encode(FAKE_SIGNATURE, metadataKeys, metadataValues);
         makeSignaturePass(client);
         vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentAlreadyTerminated.selector, dataSetId));
         pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieces, addPiecesExtraData);
@@ -1132,6 +1214,948 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("[OK] nextProvingPeriod correctly reverted");
 
         console.log("\n=== Test completed successfully! ===");
+    }
+
+    // ==== Data Set Metadata Storage Tests ====
+    function testDataSetMetadataStorage() public {
+        // Create a data set with metadata
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // read metadata key and value from contract
+        string memory storedMetadata = pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
+        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+
+        // Verify the stored metadata matches what we set
+        assertEq(storedMetadata, string(metadataValues[0]), "Stored metadata value should match");
+        assertEq(storedKeys.length, 1, "Should have one metadata key");
+        assertEq(storedKeys[0], metadataKeys[0], "Stored metadata key should match");
+    }
+
+    function testDataSetMetadataEmpty() public {
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Verify no metadata is stored
+        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+        assertEq(storedKeys.length, 0, "Should have no metadata keys");
+    }
+
+    function testDataSetMetadataStorageMultipleKeys() public {
+        // Create a data set with multiple metadata entries
+        string[] memory metadataKeys = new string[](3);
+        string[] memory metadataValues = new string[](3);
+
+        metadataKeys[0] = "label";
+        metadataValues[0] = "Test Metadata 1";
+
+        metadataKeys[1] = "description";
+        metadataValues[1] = "Test Description";
+
+        metadataKeys[2] = "version";
+        metadataValues[2] = "1.0.0";
+
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Verify all metadata keys and values
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            string memory storedMetadata = pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
+            assertEq(
+                storedMetadata,
+                metadataValues[i],
+                string(abi.encodePacked("Stored metadata for ", metadataKeys[i], " should match"))
+            );
+        }
+        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+        assertEq(storedKeys.length, metadataKeys.length, "Should have correct number of metadata keys");
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < storedKeys.length; j++) {
+                if (keccak256(abi.encodePacked(storedKeys[j])) == keccak256(abi.encodePacked(metadataKeys[i]))) {
+                    found = true;
+                    break;
+                }
+            }
+            assertTrue(found, string(abi.encodePacked("Metadata key ", metadataKeys[i], " should be stored")));
+        }
+    }
+
+    function testMetadataQueries() public {
+        // Test 1: Dataset with no metadata
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+        uint256 dataSetId1 = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
+
+        // Test 2: Dataset with CDN metadata
+        string[] memory cdnKeys = new string[](1);
+        string[] memory cdnValues = new string[](1);
+        cdnKeys[0] = "withCDN";
+        cdnValues[0] = "true";
+        uint256 dataSetId2 = createDataSetForClient(sp1, client, cdnKeys, cdnValues);
+
+        // Test 3: Dataset with regular metadata
+        string[] memory metaKeys = new string[](1);
+        string[] memory metaValues = new string[](1);
+        metaKeys[0] = "label";
+        metaValues[0] = "test";
+        uint256 dataSetId3 = createDataSetForClient(sp1, client, metaKeys, metaValues);
+
+        // Test 4: Dataset with multiple metadata including CDN
+        string[] memory bothKeys = new string[](2);
+        string[] memory bothValues = new string[](2);
+        bothKeys[0] = "label";
+        bothValues[0] = "test";
+        bothKeys[1] = "withCDN";
+        bothValues[1] = "true";
+        uint256 dataSetId4 = createDataSetForClient(sp1, client, bothKeys, bothValues);
+
+        // Verify dataset with multiple metadata keys
+        string memory value = pdpServiceWithPayments.getDataSetMetadata(dataSetId4, "label");
+        assertEq(value, "test", "label value should be 'test' for dataset 4");
+        value = pdpServiceWithPayments.getDataSetMetadata(dataSetId4, "withCDN");
+        assertEq(value, "true", "withCDN value should be 'true' for dataset 4");
+
+        // Verify CDN metadata queries work correctly
+        value = pdpServiceWithPayments.getDataSetMetadata(dataSetId2, "withCDN");
+        assertEq(value, "true", "withCDN value should be 'true' for dataset 2");
+
+        value = pdpServiceWithPayments.getDataSetMetadata(dataSetId1, "withCDN");
+        assertEq(value, "", "withCDN key should not exist in dataset 1");
+
+        // Test getAllDataSetMetadata with no metadata
+        (string[] memory keys, string[] memory values) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId1);
+        assertEq(keys.length, 0, "Should return empty arrays for no metadata");
+        assertEq(values.length, 0, "Should return empty arrays for no metadata");
+
+        // Test getAllDataSetMetadata with metadata
+        (keys, values) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId3);
+        assertEq(keys.length, 1, "Should have one key");
+        assertEq(keys[0], "label", "Key should be label");
+        assertEq(values[0], "test", "Value should be test");
+    }
+
+    function testDataSetMetadataStorageMultipleDataSets() public {
+        // Create multiple proof sets with metadata
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Data Set 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Data Set 2");
+
+        uint256 dataSetId1 = createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSetId2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+
+        // Verify metadata for first data set
+        string memory storedMetadata1 = pdpServiceWithPayments.getDataSetMetadata(dataSetId1, metadataKeys1[0]);
+        assertEq(storedMetadata1, string(metadataValues1[0]), "Stored metadata for first data set should match");
+
+        // Verify metadata for second data set
+        string memory storedMetadata2 = pdpServiceWithPayments.getDataSetMetadata(dataSetId2, metadataKeys2[0]);
+        assertEq(storedMetadata2, string(metadataValues2[0]), "Stored metadata for second data set should match");
+    }
+
+    function testDataSetMetadataKeyLengthBoundaries() public {
+        // Test key lengths: just below max (31), at max (32), and exceeding max (33)
+        uint256[] memory keyLengths = new uint256[](3);
+        keyLengths[0] = 31; // Just below max
+        keyLengths[1] = 32; // At max
+        keyLengths[2] = 33; // Exceeds max
+
+        for (uint256 i = 0; i < keyLengths.length; i++) {
+            uint256 keyLength = keyLengths[i];
+            (string[] memory metadataKeys, string[] memory metadataValues) =
+                _getSingleMetadataKV(_makeStringOfLength(keyLength), "Test Metadata");
+
+            if (keyLength <= 32) {
+                // Should succeed for valid lengths
+                uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+                // Verify the metadata is stored correctly
+                string memory storedMetadata = pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
+                assertEq(
+                    storedMetadata,
+                    string(metadataValues[0]),
+                    string.concat("Stored metadata value should match for key length ", Strings.toString(keyLength))
+                );
+
+                // Verify the metadata key is stored
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+                assertEq(storedKeys.length, 1, "Should have one metadata key");
+                assertEq(
+                    storedKeys[0],
+                    metadataKeys[0],
+                    string.concat("Stored metadata key should match for key length ", Strings.toString(keyLength))
+                );
+            } else {
+                // Should fail for exceeding max
+                bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
+                vm.prank(sp1);
+                vm.expectRevert(abi.encodeWithSelector(Errors.MetadataKeyExceedsMaxLength.selector, 0, 32, keyLength));
+                mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+            }
+        }
+    }
+
+    function testDataSetMetadataValueLengthBoundaries() public {
+        // Test value lengths: just below max (127), at max (128), and exceeding max (129)
+        uint256[] memory valueLengths = new uint256[](3);
+        valueLengths[0] = 127; // Just below max
+        valueLengths[1] = 128; // At max
+        valueLengths[2] = 129; // Exceeds max
+
+        for (uint256 i = 0; i < valueLengths.length; i++) {
+            uint256 valueLength = valueLengths[i];
+            string[] memory metadataKeys = new string[](1);
+            string[] memory metadataValues = new string[](1);
+            metadataKeys[0] = "key";
+            metadataValues[0] = _makeStringOfLength(valueLength);
+
+            if (valueLength <= 128) {
+                // Should succeed for valid lengths
+                uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+                // Verify the metadata is stored correctly
+                string memory storedMetadata = pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
+                assertEq(
+                    storedMetadata,
+                    metadataValues[0],
+                    string.concat("Stored metadata value should match for value length ", Strings.toString(valueLength))
+                );
+
+                // Verify the metadata key is stored
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+                assertEq(storedKeys.length, 1, "Should have one metadata key");
+                assertEq(
+                    storedKeys[0],
+                    metadataKeys[0],
+                    string.concat("Stored metadata key should match for value length ", Strings.toString(valueLength))
+                );
+            } else {
+                // Should fail for exceeding max
+                bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
+                vm.prank(sp1);
+                vm.expectRevert(
+                    abi.encodeWithSelector(Errors.MetadataValueExceedsMaxLength.selector, 0, 128, valueLength)
+                );
+                mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+            }
+        }
+    }
+
+    function testDataSetMetadataKeyCountBoundaries() public {
+        // Test key counts: just below max (MAX_KEYS_PER_DATASET - 1), at max, and exceeding max
+        uint256[] memory keyCounts = new uint256[](3);
+        keyCounts[0] = MAX_KEYS_PER_DATASET - 1; // Just below max
+        keyCounts[1] = MAX_KEYS_PER_DATASET; // At max
+        keyCounts[2] = MAX_KEYS_PER_DATASET + 1; // Exceeds max
+
+        for (uint256 testIdx = 0; testIdx < keyCounts.length; testIdx++) {
+            uint256 keyCount = keyCounts[testIdx];
+            string[] memory metadataKeys = new string[](keyCount);
+            string[] memory metadataValues = new string[](keyCount);
+
+            for (uint256 i = 0; i < keyCount; i++) {
+                metadataKeys[i] = string.concat("key", Strings.toString(i));
+                metadataValues[i] = _makeStringOfLength(32);
+            }
+
+            if (keyCount <= MAX_KEYS_PER_DATASET) {
+                // Should succeed for valid counts
+                uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+                // Verify all metadata keys and values
+                for (uint256 i = 0; i < metadataKeys.length; i++) {
+                    string memory storedMetadata = pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
+                    assertEq(
+                        storedMetadata,
+                        metadataValues[i],
+                        string.concat("Stored metadata for ", metadataKeys[i], " should match")
+                    );
+                }
+
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+                assertEq(
+                    storedKeys.length,
+                    metadataKeys.length,
+                    string.concat("Should have ", Strings.toString(keyCount), " metadata keys")
+                );
+
+                // Verify all keys are stored
+                for (uint256 i = 0; i < metadataKeys.length; i++) {
+                    bool found = false;
+                    for (uint256 j = 0; j < storedKeys.length; j++) {
+                        if (keccak256(bytes(storedKeys[j])) == keccak256(bytes(metadataKeys[i]))) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    assertTrue(found, string.concat("Metadata key ", metadataKeys[i], " should be stored"));
+                }
+            } else {
+                // Should fail for exceeding max
+                bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
+                vm.prank(sp1);
+                vm.expectRevert(
+                    abi.encodeWithSelector(Errors.TooManyMetadataKeys.selector, MAX_KEYS_PER_DATASET, keyCount)
+                );
+                mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+            }
+        }
+    }
+
+    function setupDataSetWithPieceMetadata(
+        uint256 pieceId,
+        string[] memory keys,
+        string[] memory values,
+        bytes memory signature,
+        address caller
+    ) internal returns (PieceMetadataSetup memory setup) {
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+        // Convert to per-piece format: each piece gets same metadata
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+
+        // Encode extraData: (signature, metadataKeys, metadataValues)
+        extraData = abi.encode(signature, allKeys, allValues);
+
+        if (caller == address(mockPDPVerifier)) {
+            vm.expectEmit(true, false, false, true);
+            emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, keys, values);
+        } else {
+            // Handle case where caller is not the PDP verifier
+            vm.expectRevert(
+                abi.encodeWithSelector(Errors.OnlyPDPVerifierAllowed.selector, address(mockPDPVerifier), caller)
+            );
+        }
+        vm.prank(caller);
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, extraData);
+
+        setup = PieceMetadataSetup({dataSetId: dataSetId, pieceId: pieceId, pieceData: pieceData, extraData: extraData});
+    }
+
+    function testPieceMetadataStorageAndRetrieval() public {
+        // Test storing and retrieving piece metadata
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+
+        PieceMetadataSetup memory setup =
+            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify piece metadata storage
+
+        (string[] memory storedKeys, string[] memory storedValues) =
+            pdpServiceWithPayments.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+        for (uint256 i = 0; i < values.length; i++) {
+            assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
+            assertEq(storedValues[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
+        }
+    }
+
+    function testPieceMetadataKeyLengthBoundaries() public {
+        uint256 pieceId = 42;
+
+        // Test key lengths: just below max (31), at max (32), and exceeding max (33)
+        uint256[] memory keyLengths = new uint256[](3);
+        keyLengths[0] = 31; // Just below max
+        keyLengths[1] = 32; // At max
+        keyLengths[2] = 33; // Exceeds max
+
+        for (uint256 i = 0; i < keyLengths.length; i++) {
+            uint256 keyLength = keyLengths[i];
+            string[] memory keys = new string[](1);
+            string[] memory values = new string[](1);
+            keys[0] = _makeStringOfLength(keyLength);
+            values[0] = "dog.jpg";
+
+            // Create dataset
+            (string[] memory metadataKeys, string[] memory metadataValues) =
+                _getSingleMetadataKV("label", "Test Root Metadata");
+            uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+            Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+            pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+            // Convert to per-piece format
+            string[][] memory allKeys = new string[][](1);
+            string[][] memory allValues = new string[][](1);
+            allKeys[0] = keys;
+            allValues[0] = values;
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+            if (keyLength <= 32) {
+                // Should succeed for valid lengths
+                vm.expectEmit(true, false, false, true);
+                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, keys, values);
+
+                vm.prank(address(mockPDPVerifier));
+                pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
+
+                // Verify piece metadata storage
+                string memory storedMetadata = pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
+                assertEq(
+                    storedMetadata,
+                    string(values[0]),
+                    string.concat("Stored metadata should match for key length ", Strings.toString(keyLength))
+                );
+
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllPieceMetadata(dataSetId, pieceId + i);
+                assertEq(storedKeys.length, 1, "Should have one metadata key");
+                assertEq(
+                    storedKeys[0],
+                    keys[0],
+                    string.concat("Stored key should match for key length ", Strings.toString(keyLength))
+                );
+            } else {
+                // Should fail for exceeding max
+                vm.expectRevert(abi.encodeWithSelector(Errors.MetadataKeyExceedsMaxLength.selector, 0, 32, keyLength));
+                vm.prank(address(mockPDPVerifier));
+                pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
+            }
+        }
+    }
+
+    function testPieceMetadataValueLengthBoundaries() public {
+        uint256 pieceId = 42;
+
+        // Test value lengths: just below max (127), at max (128), and exceeding max (129)
+        uint256[] memory valueLengths = new uint256[](3);
+        valueLengths[0] = 127; // Just below max
+        valueLengths[1] = 128; // At max
+        valueLengths[2] = 129; // Exceeds max
+
+        for (uint256 i = 0; i < valueLengths.length; i++) {
+            uint256 valueLength = valueLengths[i];
+            string[] memory keys = new string[](1);
+            string[] memory values = new string[](1);
+            keys[0] = "filename";
+            values[0] = _makeStringOfLength(valueLength);
+
+            // Create dataset
+            (string[] memory metadataKeys, string[] memory metadataValues) =
+                _getSingleMetadataKV("label", "Test Root Metadata");
+            uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+            Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+            pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+            // Convert to per-piece format
+            string[][] memory allKeys = new string[][](1);
+            string[][] memory allValues = new string[][](1);
+            allKeys[0] = keys;
+            allValues[0] = values;
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+            if (valueLength <= 128) {
+                // Should succeed for valid lengths
+                vm.expectEmit(true, false, false, true);
+                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, keys, values);
+
+                vm.prank(address(mockPDPVerifier));
+                pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
+
+                // Verify piece metadata storage
+                string memory storedMetadata = pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
+                assertEq(
+                    storedMetadata,
+                    string(values[0]),
+                    string.concat("Stored metadata should match for value length ", Strings.toString(valueLength))
+                );
+
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllPieceMetadata(dataSetId, pieceId + i);
+                assertEq(storedKeys.length, 1, "Should have one metadata key");
+                assertEq(storedKeys[0], keys[0], "Stored key should match 'filename'");
+            } else {
+                // Should fail for exceeding max
+                vm.expectRevert(
+                    abi.encodeWithSelector(Errors.MetadataValueExceedsMaxLength.selector, 0, 128, valueLength)
+                );
+                vm.prank(address(mockPDPVerifier));
+                pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
+            }
+        }
+    }
+
+    function testPieceMetadataKeyCountBoundaries() public {
+        uint256 pieceId = 42;
+
+        // Test key counts: just below max, at max, and exceeding max
+        uint256[] memory keyCounts = new uint256[](3);
+        keyCounts[0] = MAX_KEYS_PER_PIECE - 1; // Just below max (4)
+        keyCounts[1] = MAX_KEYS_PER_PIECE; // At max (5)
+        keyCounts[2] = MAX_KEYS_PER_PIECE + 1; // Exceeds max (6)
+
+        for (uint256 testIdx = 0; testIdx < keyCounts.length; testIdx++) {
+            uint256 keyCount = keyCounts[testIdx];
+            string[] memory keys = new string[](keyCount);
+            string[] memory values = new string[](keyCount);
+
+            for (uint256 i = 0; i < keyCount; i++) {
+                keys[i] = string.concat("key", Strings.toString(i));
+                values[i] = string.concat("value", Strings.toString(i));
+            }
+
+            // Create dataset
+            (string[] memory metadataKeys, string[] memory metadataValues) =
+                _getSingleMetadataKV("label", "Test Root Metadata");
+            uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+            Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+            pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+            // Convert to per-piece format
+            string[][] memory allKeys = new string[][](1);
+            string[][] memory allValues = new string[][](1);
+            allKeys[0] = keys;
+            allValues[0] = values;
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+            if (keyCount <= MAX_KEYS_PER_PIECE) {
+                // Should succeed for valid counts
+                vm.expectEmit(true, false, false, true);
+                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + testIdx, keys, values);
+
+                vm.prank(address(mockPDPVerifier));
+                pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
+
+                // Verify piece metadata storage
+                for (uint256 i = 0; i < keys.length; i++) {
+                    string memory storedMetadata =
+                        pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId + testIdx, keys[i]);
+                    assertEq(
+                        storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i])
+                    );
+                }
+
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllPieceMetadata(dataSetId, pieceId + testIdx);
+                assertEq(
+                    storedKeys.length,
+                    keys.length,
+                    string.concat("Should have ", Strings.toString(keyCount), " metadata keys")
+                );
+            } else {
+                // Should fail for exceeding max
+                vm.expectRevert(
+                    abi.encodeWithSelector(Errors.TooManyMetadataKeys.selector, MAX_KEYS_PER_PIECE, keyCount)
+                );
+                vm.prank(address(mockPDPVerifier));
+                pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
+            }
+        }
+    }
+
+    function testPieceMetadataForSameKeyCannotRewrite() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+
+        PieceMetadataSetup memory setup =
+            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.DuplicateMetadataKey.selector, setup.dataSetId, keys[0]));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(setup.dataSetId, setup.pieceId, setup.pieceData, setup.extraData);
+    }
+
+    function testPieceMetadataCannotBeAddedByNonPDPVerifier() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+
+        setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(this));
+    }
+
+    function testPieceMetadataCannotBeCalledWithMoreValues() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece with more values than keys
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](3); // One extra value
+
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+        values[2] = "extraValue"; // Extra value
+
+        // Create dataset first
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+        // Convert to per-piece format with mismatched arrays
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+
+        // Encode extraData with mismatched keys/values
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+        // Expect revert due to key/value mismatch
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.MetadataKeyAndValueLengthMismatch.selector, keys.length, values.length)
+        );
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+    }
+
+    function testPieceMetadataCannotBeCalledWithMoreKeys() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece with more keys than values
+        string[] memory keys = new string[](3); // One extra key
+        string[] memory values = new string[](2);
+
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+        keys[2] = "extraKey"; // Extra key
+
+        // Create dataset first
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+        // Convert to per-piece format with mismatched arrays
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+
+        // Encode extraData with mismatched keys/values
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+        // Expect revert due to key/value mismatch
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.MetadataKeyAndValueLengthMismatch.selector, keys.length, values.length)
+        );
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+    }
+
+    function testGetPieceMetadata() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+
+        PieceMetadataSetup memory setup =
+            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Test getPieceMetadata for existing keys
+        string memory filename = pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "filename");
+        assertEq(filename, "dog.jpg", "Filename metadata should match");
+
+        string memory contentType =
+            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "contentType");
+        assertEq(contentType, "image/jpeg", "Content type metadata should match");
+
+        // Test getPieceMetadata for non-existent key - this is the important false case!
+        string memory nonExistentKey =
+            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
+        assertTrue(bytes(nonExistentKey).length == 0, "Non-existent key should not exist");
+        assertEq(bytes(nonExistentKey).length, 0, "Should return empty string for non-existent key");
+    }
+
+    function testGetPieceMetdataAllKeys() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "contentType";
+        values[1] = "image/jpeg";
+
+        PieceMetadataSetup memory setup =
+            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Test getPieceMetadataKeys
+        (string[] memory storedKeys, string[] memory storedValues) =
+            pdpServiceWithPayments.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+        assertEq(storedKeys.length, keys.length, "Should return correct number of metadata keys");
+        for (uint256 i = 0; i < keys.length; i++) {
+            assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
+            assertEq(storedValues[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
+        }
+    }
+
+    function testGetPieceMetadata_NonExistentDataSet() public view {
+        uint256 nonExistentDataSetId = 999;
+        uint256 nonExistentPieceId = 43;
+
+        // Attempt to get metadata for a non-existent proof set
+        string memory filename =
+            pdpServiceWithPayments.getPieceMetadata(nonExistentDataSetId, nonExistentPieceId, "filename");
+        assertTrue(bytes(filename).length == 0, "Key should not exist for non-existent data set");
+        assertEq(bytes(filename).length, 0, "Should return empty string for non-existent proof set");
+    }
+
+    function testGetPieceMetadata_NonExistentKey() public {
+        uint256 pieceId = 42;
+
+        // Set metadata for the piece
+        string[] memory keys = new string[](1);
+        string[] memory values = new string[](1);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+
+        PieceMetadataSetup memory setup =
+            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Attempt to get metadata for a non-existent key
+        string memory nonExistentMetadata =
+            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
+        assertTrue(bytes(nonExistentMetadata).length == 0, "Non-existent key should not exist");
+        assertEq(bytes(nonExistentMetadata).length, 0, "Should return empty string for non-existent key");
+    }
+
+    function testPieceMetadataPerPieceDifferentMetadata() public {
+        // Test different metadata for multiple pieces
+        uint256 firstPieceId = 100;
+        uint256 numPieces = 3;
+
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Create multiple pieces with different metadata
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        for (uint256 i = 0; i < numPieces; i++) {
+            pieceData[i] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file", i)));
+        }
+
+        // Prepare different metadata for each piece
+        string[][] memory allKeys = new string[][](numPieces);
+        string[][] memory allValues = new string[][](numPieces);
+
+        // Piece 0: filename and contentType
+        allKeys[0] = new string[](2);
+        allValues[0] = new string[](2);
+        allKeys[0][0] = "filename";
+        allValues[0][0] = "document.pdf";
+        allKeys[0][1] = "contentType";
+        allValues[0][1] = "application/pdf";
+
+        // Piece 1: filename, size, and compression
+        allKeys[1] = new string[](3);
+        allValues[1] = new string[](3);
+        allKeys[1][0] = "filename";
+        allValues[1][0] = "image.jpg";
+        allKeys[1][1] = "size";
+        allValues[1][1] = "1024000";
+        allKeys[1][2] = "compression";
+        allValues[1][2] = "jpeg";
+
+        // Piece 2: just filename
+        allKeys[2] = new string[](1);
+        allValues[2] = new string[](1);
+        allKeys[2][0] = "filename";
+        allValues[2][0] = "data.json";
+
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+        // Expect events for each piece with their specific metadata
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, allKeys[0], allValues[0]);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, allKeys[1], allValues[1]);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 2, allKeys[2], allValues[2]);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+
+        // Verify metadata for piece 0
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "filename"),
+            "document.pdf",
+            "Piece 0 filename should match"
+        );
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "contentType"),
+            "application/pdf",
+            "Piece 0 contentType should match"
+        );
+
+        // Verify metadata for piece 1
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "filename"),
+            "image.jpg",
+            "Piece 1 filename should match"
+        );
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "size"),
+            "1024000",
+            "Piece 1 size should match"
+        );
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "compression"),
+            "jpeg",
+            "Piece 1 compression should match"
+        );
+
+        // Verify metadata for piece 2
+        assertEq(
+            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 2, "filename"),
+            "data.json",
+            "Piece 2 filename should match"
+        );
+
+        // Verify getAllPieceMetadata returns correct data for each piece
+        (string[] memory keys0, string[] memory values0) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId);
+        assertEq(keys0.length, 2, "Piece 0 should have 2 metadata keys");
+
+        (string[] memory keys1, string[] memory values1) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        assertEq(keys1.length, 3, "Piece 1 should have 3 metadata keys");
+
+        (string[] memory keys2, string[] memory values2) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 2);
+        assertEq(keys2.length, 1, "Piece 2 should have 1 metadata key");
+    }
+
+    function testPieceMetadataArrayMismatchErrors() public {
+        uint256 pieceId = 42;
+
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Create 2 pieces
+        Cids.Cid[] memory pieceData = new Cids.Cid[](2);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file1")));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file2")));
+
+        // Test case 1: Wrong number of key arrays (only 1 for 2 pieces)
+        string[][] memory wrongKeys = new string[][](1);
+        string[][] memory correctValues = new string[][](2);
+        wrongKeys[0] = new string[](1);
+        wrongKeys[0][0] = "filename";
+        correctValues[0] = new string[](1);
+        correctValues[0][0] = "file1.txt";
+        correctValues[1] = new string[](1);
+        correctValues[1][0] = "file2.txt";
+
+        bytes memory encodedData1 = abi.encode(FAKE_SIGNATURE, wrongKeys, correctValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData1);
+
+        // Test case 2: Wrong number of value arrays (only 1 for 2 pieces)
+        string[][] memory correctKeys = new string[][](2);
+        string[][] memory wrongValues = new string[][](1);
+        correctKeys[0] = new string[](1);
+        correctKeys[0][0] = "filename";
+        correctKeys[1] = new string[](1);
+        correctKeys[1][0] = "filename";
+        wrongValues[0] = new string[](1);
+        wrongValues[0][0] = "file1.txt";
+
+        bytes memory encodedData2 = abi.encode(FAKE_SIGNATURE, correctKeys, wrongValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData2);
+    }
+
+    function testPieceMetadataEmptyMetadataForAllPieces() public {
+        uint256 firstPieceId = 200;
+        uint256 numPieces = 2;
+
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Create multiple pieces with no metadata
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file1")));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file2")));
+
+        // Create empty metadata arrays for each piece
+        string[][] memory allKeys = new string[][](numPieces); // Empty arrays
+        string[][] memory allValues = new string[][](numPieces); // Empty arrays
+
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+        // Expect events with empty metadata arrays
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, allKeys[0], allValues[0]);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, allKeys[1], allValues[1]);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+
+        // Verify no metadata is stored
+        (string[] memory keys0, string[] memory values0) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId);
+        assertEq(keys0.length, 0, "Piece 0 should have no metadata keys");
+        assertEq(values0.length, 0, "Piece 0 should have no metadata values");
+
+        (string[] memory keys1, string[] memory values1) =
+            pdpServiceWithPayments.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        assertEq(keys1.length, 0, "Piece 1 should have no metadata keys");
+        assertEq(values1.length, 0, "Piece 1 should have no metadata values");
+
+        // Verify getting non-existent keys returns empty strings
+        string memory nonExistentValue = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "anykey");
+        assertEq(bytes(nonExistentValue).length, 0, "Non-existent key should return empty string");
+    }
+
+    // Utility
+    function _makeStringOfLength(uint256 len) internal pure returns (string memory s) {
+        s = string(_makeBytesOfLength(len));
+    }
+
+    function _makeBytesOfLength(uint256 len) internal pure returns (bytes memory b) {
+        b = new bytes(len);
+        for (uint256 i = 0; i < len; i++) {
+            b[i] = "a";
+        }
     }
 }
 

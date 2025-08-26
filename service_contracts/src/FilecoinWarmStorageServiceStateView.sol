@@ -28,6 +28,22 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.clientDataSets(payer);
     }
 
+    function getAllDataSetMetadata(uint256 dataSetId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllDataSetMetadata(dataSetId);
+    }
+
+    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllPieceMetadata(dataSetId, pieceId);
+    }
+
     function getChallengesPerProof() external pure returns (uint64) {
         return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
     }
@@ -44,6 +60,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getDataSet(dataSetId);
     }
 
+    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
+        return service.getDataSetMetadata(dataSetId, key);
+    }
+
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
@@ -52,8 +72,12 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getMaxProvingPeriod();
     }
 
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
-        return service.getPieceMetadata(dataSetId, pieceId);
+    function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
+        external
+        view
+        returns (string memory)
+    {
+        return service.getPieceMetadata(dataSetId, pieceId, key);
     }
 
     function initChallengeWindowStart() external view returns (uint256) {
