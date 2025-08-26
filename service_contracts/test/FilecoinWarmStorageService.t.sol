@@ -724,37 +724,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
         pieceData2[0].data = bytes("2_0:22222222222222222222");
         pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
-<<<<<<< HEAD
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), "");
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), "");
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), "");
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
-
-        // Make signature pass for client before adding pieces
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, metadataShort
-        );
-        firstAdded += pieceData1.length;
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 0), metadataShort);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 1), metadataShort);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 2), metadataShort);
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 3), "");
-        assertEq(pdpServiceWithPayments.getPieceMetadata(dataSetId, 4), "");
-
-        // Make signature pass for client again before adding more pieces
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, metadataLong
-=======
         string[] memory keys2 = new string[](1);
         string[] memory values2 = new string[](1);
         keys2[0] = "meta";
         values2[0] = metadataLong;
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
->>>>>>> origin/main
         );
         firstAdded += pieceData2.length;
 

@@ -141,7 +141,9 @@ contract ProviderValidationTest is Test {
 
     function testProviderNotRegistered() public {
         // Try to create dataset with unregistered provider
-        bytes memory extraData = abi.encode("metadata", client, false, FAKE_SIGNATURE);
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        bytes memory extraData = abi.encode(client, metadataKeys, metadataValues, FAKE_SIGNATURE);
 
         // Mock signature validation to pass
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
@@ -176,7 +178,9 @@ contract ProviderValidationTest is Test {
         );
 
         // Try to create dataset without approval
-        bytes memory extraData = abi.encode("metadata", client, false, FAKE_SIGNATURE);
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        bytes memory extraData = abi.encode(client, metadataKeys, metadataValues, FAKE_SIGNATURE);
 
         // Mock signature validation to pass
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
@@ -228,7 +232,11 @@ contract ProviderValidationTest is Test {
         vm.stopPrank();
 
         // Create dataset should succeed
-        bytes memory extraData = abi.encode("metadata", client, false, FAKE_SIGNATURE);
+        string[] memory metadataKeys = new string[](1);
+        string[] memory metadataValues = new string[](1);
+        metadataKeys[0] = "description";
+        metadataValues[0] = "Test dataset";
+        bytes memory extraData = abi.encode(client, metadataKeys, metadataValues, FAKE_SIGNATURE);
 
         // Mock signature validation to pass
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
