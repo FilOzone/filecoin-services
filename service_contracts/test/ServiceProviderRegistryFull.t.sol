@@ -33,14 +33,18 @@ contract ServiceProviderRegistryFullTest is Test {
         ServiceProviderRegistryStorage.ProductType indexed productType,
         uint256 updatedAt,
         string serviceUrl,
-        address beneficiary
+        address beneficiary,
+        string[] capabilityKeys,
+        string[] capabilityValues
     );
     event ProductAdded(
         uint256 indexed providerId,
         ServiceProviderRegistryStorage.ProductType indexed productType,
         uint256 addedAt,
         string serviceUrl,
-        address beneficiary
+        address beneficiary,
+        string[] capabilityKeys,
+        string[] capabilityValues
     );
     event ProductRemoved(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 removedAt
@@ -136,9 +140,6 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.expectEmit(true, true, true, true);
         emit ProviderRegistered(1, provider1, block.number);
 
-        vm.expectEmit(true, true, false, true);
-        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, SERVICE_URL, provider1);
-
         // Non-empty capability arrays
         string[] memory capKeys = new string[](4);
         capKeys[0] = "datacenter";
@@ -151,6 +152,11 @@ contract ServiceProviderRegistryFullTest is Test {
         capValues[1] = "3x";
         capValues[2] = "low";
         capValues[3] = "ISO27001";
+
+        vm.expectEmit(true, true, false, true);
+        emit ProductAdded(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, SERVICE_URL, provider1, capKeys, capValues
+        );
 
         // Register provider
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
@@ -540,7 +546,13 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.expectEmit(true, true, false, true);
         emit ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, UPDATED_SERVICE_URL, provider1
+            1,
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            block.number,
+            UPDATED_SERVICE_URL,
+            provider1,
+            emptyKeys,
+            emptyValues
         );
 
         registry.updateProduct(
@@ -1246,7 +1258,13 @@ contract ServiceProviderRegistryFullTest is Test {
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
         emit ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, UPDATED_SERVICE_URL, provider1
+            1,
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            block.number,
+            UPDATED_SERVICE_URL,
+            provider1,
+            emptyKeys,
+            emptyValues
         );
 
         registry.updateProduct(
@@ -1400,7 +1418,15 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.expectEmit(true, true, true, true);
         emit ProviderRegistered(1, provider1, block.number);
         vm.expectEmit(true, true, true, true);
-        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, SERVICE_URL, provider1);
+        emit ProductAdded(
+            1,
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            block.number,
+            SERVICE_URL,
+            provider1,
+            emptyKeys,
+            emptyValues
+        );
 
         registry.registerProvider{value: REGISTRATION_FEE}(
             "",
@@ -1415,7 +1441,13 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
         emit ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, UPDATED_SERVICE_URL, provider1
+            1,
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            block.number,
+            UPDATED_SERVICE_URL,
+            provider1,
+            emptyKeys,
+            emptyValues
         );
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues

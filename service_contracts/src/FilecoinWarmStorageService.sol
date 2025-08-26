@@ -341,6 +341,15 @@ contract FilecoinWarmStorageService is
         emit ProviderUnapproved(providerId);
     }
 
+    /**
+     * @notice Check if a provider is approved
+     * @param providerId The ID of the provider to check
+     * @return Whether the provider is approved
+     */
+    function isProviderApproved(uint256 providerId) external view returns (bool) {
+        return approvedProviders[providerId];
+    }
+
     // Listener interface methods
     /**
      * @notice Handles data set creation by creating a payment rail

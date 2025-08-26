@@ -249,7 +249,7 @@ contract ProviderValidationTest is Test {
     function testAddAndRemoveApprovedProvider() public {
         // Test adding provider
         warmStorage.addApprovedProvider(1);
-        assertTrue(warmStorage.approvedProviders(1), "Provider 1 should be approved");
+        assertTrue(warmStorage.isProviderApproved(1), "Provider 1 should be approved");
 
         // Test adding already approved provider (should revert)
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 1));
@@ -257,7 +257,7 @@ contract ProviderValidationTest is Test {
 
         // Test removing provider
         warmStorage.removeApprovedProvider(1);
-        assertFalse(warmStorage.approvedProviders(1), "Provider 1 should not be approved");
+        assertFalse(warmStorage.isProviderApproved(1), "Provider 1 should not be approved");
 
         // Test removing non-approved provider (should revert)
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 2));
@@ -284,7 +284,7 @@ contract ProviderValidationTest is Test {
     function testAddApprovedProviderAlreadyApproved() public {
         // First add should succeed
         warmStorage.addApprovedProvider(5);
-        assertTrue(warmStorage.approvedProviders(5), "Provider 5 should be approved");
+        assertTrue(warmStorage.isProviderApproved(5), "Provider 5 should be approved");
 
         // Second add should revert with ProviderAlreadyApproved error
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 5));

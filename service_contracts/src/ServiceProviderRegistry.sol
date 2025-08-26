@@ -57,7 +57,9 @@ contract ServiceProviderRegistry is
         ProductType indexed productType,
         uint256 updatedAt,
         string serviceUrl,
-        address beneficiary
+        address beneficiary,
+        string[] capabilityKeys,
+        string[] capabilityValues
     );
 
     /// @notice Emitted when a product is added to an existing provider
@@ -66,7 +68,9 @@ contract ServiceProviderRegistry is
         ProductType indexed productType,
         uint256 addedAt,
         string serviceUrl,
-        address beneficiary
+        address beneficiary,
+        string[] capabilityKeys,
+        string[] capabilityValues
     );
 
     /// @notice Emitted when a product is removed from a provider
@@ -177,7 +181,9 @@ contract ServiceProviderRegistry is
             serviceUrl = pdpOffering.serviceURL;
         }
 
-        emit ProductAdded(providerId, productType, block.number, serviceUrl, msg.sender);
+        emit ProductAdded(
+            providerId, productType, block.number, serviceUrl, msg.sender, capabilityKeys, capabilityValues
+        );
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
@@ -226,7 +232,15 @@ contract ServiceProviderRegistry is
         }
 
         // Emit event
-        emit ProductAdded(providerId, productType, block.number, serviceUrl, providers[providerId].beneficiary);
+        emit ProductAdded(
+            providerId,
+            productType,
+            block.number,
+            serviceUrl,
+            providers[providerId].beneficiary,
+            capabilityKeys,
+            capabilityValues
+        );
     }
 
     /// @notice Internal function to validate and store a product (used by both register and add)
@@ -321,7 +335,15 @@ contract ServiceProviderRegistry is
         }
 
         // Emit event
-        emit ProductUpdated(providerId, productType, block.number, serviceUrl, providers[providerId].beneficiary);
+        emit ProductUpdated(
+            providerId,
+            productType,
+            block.number,
+            serviceUrl,
+            providers[providerId].beneficiary,
+            capabilityKeys,
+            capabilityValues
+        );
     }
 
     /// @notice Remove a product from a provider
