@@ -209,20 +209,44 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     }
 
     /**
-     * @notice Get metadata value for a specific key in a data set
+     * @notice Internal helper to get metadata value without existence check
+     * @param service The service contract
      * @param dataSetId The ID of the data set
      * @param key The metadata key
      * @return value The metadata value
      */
-    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+    function _getDataSetMetadataValue(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
         internal
         view
-        returns (string memory)
+        returns (string memory value)
     {
         // For nested mapping with string key: mapping(uint256 => mapping(string => string))
         bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT));
         bytes32 slot = keccak256(abi.encodePacked(bytes(key), firstLevel));
         return getString(service, slot);
+    }
+
+    /**
+     * @notice Get metadata value for a specific key in a data set
+     * @param dataSetId The ID of the data set
+     * @param key The metadata key
+     * @return exists True if the key exists
+     * @return value The metadata value
+     */
+    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+        internal
+        view
+        returns (bool exists, string memory value)
+    {
+        // Check if key exists in the keys array
+        string[] memory keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+        for (uint256 i = 0; i < keys.length; i++) {
+            if (keccak256(bytes(keys[i])) == keccak256(bytes(key))) {
+                exists = true;
+                value = _getDataSetMetadataValue(service, dataSetId, key);
+                break;
+            }
+        }
     }
 
     /**
@@ -239,8 +263,29 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
-            values[i] = getDataSetMetadata(service, dataSetId, keys[i]);
+            values[i] = _getDataSetMetadataValue(service, dataSetId, keys[i]);
         }
+    }
+
+    /**
+     * @notice Internal helper to get piece metadata value without existence check
+     * @param service The service contract
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece
+     * @param key The metadata key
+     * @return value The metadata value
+     */
+    function _getPieceMetadataValue(
+        FilecoinWarmStorageService service,
+        uint256 dataSetId,
+        uint256 pieceId,
+        string memory key
+    ) internal view returns (string memory value) {
+        // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
+        bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
+        bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
+        return getString(service, slot);
     }
 
     /**
@@ -248,18 +293,25 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param dataSetId The ID of the data set
      * @param pieceId The ID of the piece
      * @param key The metadata key
+     * @return exists True if the key exists
      * @return value The metadata value
      */
     function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId, string memory key)
         internal
         view
-        returns (string memory)
+        returns (bool exists, string memory value)
     {
-        // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
-        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
-        bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
-        bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
-        return getString(service, slot);
+        // Check if key exists in the keys array
+        string[] memory keys = getStringArray(
+            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
+        );
+        for (uint256 i = 0; i < keys.length; i++) {
+            if (keccak256(bytes(keys[i])) == keccak256(bytes(key))) {
+                exists = true;
+                value = _getPieceMetadataValue(service, dataSetId, pieceId, key);
+                break;
+            }
+        }
     }
 
     /**
@@ -279,7 +331,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         );
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
-            values[i] = getPieceMetadata(service, dataSetId, pieceId, keys[i]);
+            values[i] = _getPieceMetadataValue(service, dataSetId, pieceId, keys[i]);
         }
     }
 }
