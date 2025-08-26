@@ -76,13 +76,33 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md)
 ### Building
 
 ```bash
-forge build
+make build
+# or simply:
+make
 ```
 
 ### Testing
 
 ```bash
-forge test
+make test
+```
+
+### Code Generation
+
+The project includes several auto-generated files. To regenerate them:
+
+```bash
+# Generate all files (layout, internal library, view contract)
+make gen
+
+# Force regeneration if files are corrupted
+make force-gen
+
+# Clean all generated files
+make clean-gen
+
+# Safe regeneration with automatic rollback on failure
+make safe-gen
 ```
 
 ### Dependencies
