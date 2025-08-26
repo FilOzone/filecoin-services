@@ -120,6 +120,7 @@ fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
 # Step 7: Deploy FilecoinWarmStorageServiceStateView
+NONCE=$(expr $NONCE + "1")
 source tools/deploy-warm-storage-view.sh
 
 # Summary of deployed contracts

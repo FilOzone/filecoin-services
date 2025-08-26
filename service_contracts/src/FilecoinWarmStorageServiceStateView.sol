@@ -3,10 +3,11 @@ pragma solidity ^0.8.20;
 
 // Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
-contract FilecoinWarmStorageServiceStateView {
+contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public immutable service;
@@ -27,6 +28,26 @@ contract FilecoinWarmStorageServiceStateView {
         return service.clientDataSets(payer);
     }
 
+    function getAllDataSetMetadata(uint256 dataSetId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllDataSetMetadata(dataSetId);
+    }
+
+    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
+        external
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        return service.getAllPieceMetadata(dataSetId, pieceId);
+    }
+
+    function getChallengesPerProof() external pure returns (uint64) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
+    }
+
     function getClientDataSets(address client)
         external
         view
@@ -39,16 +60,24 @@ contract FilecoinWarmStorageServiceStateView {
         return service.getDataSet(dataSetId);
     }
 
-    function getDataSetSizeInBytes(uint256 leafCount) external view returns (uint256) {
-        return service.getDataSetSizeInBytes(leafCount);
+    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
+        return service.getDataSetMetadata(dataSetId, key);
+    }
+
+    function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
     function getMaxProvingPeriod() external view returns (uint64) {
         return service.getMaxProvingPeriod();
     }
 
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId) external view returns (string memory) {
-        return service.getPieceMetadata(dataSetId, pieceId);
+    function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
+        external
+        view
+        returns (string memory)
+    {
+        return service.getPieceMetadata(dataSetId, pieceId, key);
     }
 
     function initChallengeWindowStart() external view returns (uint256) {

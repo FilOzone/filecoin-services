@@ -63,22 +63,16 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param leafCount Number of leaves in the data set
      * @return totalBytes Total size in bytes
      */
-    function getDataSetSizeInBytes(FilecoinWarmStorageService, uint256 leafCount) internal pure returns (uint256) {
+    function getDataSetSizeInBytes(uint256 leafCount) internal pure returns (uint256) {
         return leafCount * BYTES_PER_LEAF;
+    }
+
+    function getChallengesPerProof() internal pure returns (uint64) {
+        return CHALLENGES_PER_PROOF;
     }
 
     function clientDataSetIDs(FilecoinWarmStorageService service, address payer) internal view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(payer, CLIENT_DATA_SET_IDS_SLOT))));
-    }
-
-    function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId)
-        internal
-        view
-        returns (string memory)
-    {
-        return getString(
-            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT))))
-        );
     }
 
     function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
@@ -96,34 +90,16 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
-        bytes32[] memory info6 = service.extsloadStruct(slot, 6);
-        info.pdpRailId = uint256(info6[0]);
-        info.cacheMissRailId = uint256(info6[1]);
-        info.cdnRailId = uint256(info6[2]);
-        info.payer = address(uint160(uint256(info6[3])));
-        info.payee = address(uint160(uint256(info6[4])));
-        info.commissionBps = uint256(info6[5]);
-
-        assembly ("memory-safe") {
-            slot := add(6, slot)
-        }
-        info.metadata = getString(service, slot);
-
-        assembly ("memory-safe") {
-            slot := add(1, slot)
-        }
-
-        info.pieceMetadata = getStringArray(service, slot);
-
-        assembly ("memory-safe") {
-            slot := add(1, slot)
-        }
-
-        bytes32[] memory info3 = service.extsloadStruct(slot, 4);
-        info.clientDataSetId = uint256(info3[0]);
-        info.withCDN = info3[1] != bytes32(0);
-        info.paymentEndEpoch = uint256(info3[2]);
-        info.cdnEndEpoch = uint256(info3[3]);
+        bytes32[] memory info8 = service.extsloadStruct(slot, 9);
+        info.pdpRailId = uint256(info8[0]);
+        info.cacheMissRailId = uint256(info8[1]);
+        info.cdnRailId = uint256(info8[2]);
+        info.payer = address(uint160(uint256(info8[3])));
+        info.payee = address(uint160(uint256(info8[4])));
+        info.commissionBps = uint256(info8[5]);
+        info.clientDataSetId = uint256(info8[6]);
+        info.paymentEndEpoch = uint256(info8[7]);
+        info.cdnEndEpoch = uint256(info8[8]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -230,6 +206,81 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         infos = new FilecoinWarmStorageService.DataSetInfo[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
+        }
+    }
+
+    /**
+     * @notice Get metadata value for a specific key in a data set
+     * @param dataSetId The ID of the data set
+     * @param key The metadata key
+     * @return value The metadata value
+     */
+    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+        internal
+        view
+        returns (string memory)
+    {
+        // For nested mapping with string key: mapping(uint256 => mapping(string => string))
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT));
+        bytes32 slot = keccak256(abi.encodePacked(bytes(key), firstLevel));
+        return getString(service, slot);
+    }
+
+    /**
+     * @notice Get all metadata key-value pairs for a data set
+     * @param dataSetId The ID of the data set
+     * @return keys Array of metadata keys
+     * @return values Array of metadata values
+     */
+    function getAllDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+        values = new string[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = getDataSetMetadata(service, dataSetId, keys[i]);
+        }
+    }
+
+    /**
+     * @notice Get metadata value for a specific key in a piece
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece
+     * @param key The metadata key
+     * @return value The metadata value
+     */
+    function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId, string memory key)
+        internal
+        view
+        returns (string memory)
+    {
+        // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
+        bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
+        bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
+        return getString(service, slot);
+    }
+
+    /**
+     * @notice Get all metadata key-value pairs for a piece
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece
+     * @return keys Array of metadata keys
+     * @return values Array of metadata values
+     */
+    function getAllPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId)
+        internal
+        view
+        returns (string[] memory keys, string[] memory values)
+    {
+        keys = getStringArray(
+            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
+        );
+        values = new string[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = getPieceMetadata(service, dataSetId, pieceId, keys[i]);
         }
     }
 }
