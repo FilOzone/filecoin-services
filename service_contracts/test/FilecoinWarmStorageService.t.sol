@@ -1086,24 +1086,25 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n=== Test completed successfully! ===");
     }
 
-
     // ============= CDN Service Termination Tests =============
     function testTerminateCDNServiceLifecycle() public {
-        console.log("=== Test: Data CDN Service Termination Lifecycle ===");
+        console.log("=== Test: CDN Payment Termination Lifecycle ===");
 
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadata: "Test Data Set for Termination",
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
             payer: client,
-            signature: FAKE_SIGNATURE,
-            withCDN: true // CDN enabled
+            signature: FAKE_SIGNATURE
         });
 
         bytes memory encodedData =
-            abi.encode(createData.metadata, createData.payer, createData.withCDN, createData.signature);
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -1177,7 +1178,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 5. Assertions
         // Check if CDN data is cleared
         info = pdpServiceWithPayments.getDataSet(dataSetId);
-        assertFalse(info.withCDN, "withCDN should be cleared after termination");
+        string memory withCDN = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
+        assertEq(withCDN, "", "withCDN value should be 'false' for dataset");
         assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
 

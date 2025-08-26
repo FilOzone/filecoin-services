@@ -764,7 +764,10 @@ contract FilecoinWarmStorageService is
 
     function terminateCDNService(uint256 dataSetId) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.withCDN, Errors.CDNServiceNotConfigured(dataSetId));
+        require(
+            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
+            Errors.CDNServiceNotConfigured(dataSetId)
+        );
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
@@ -779,7 +782,8 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.cdnRailId);
 
         // Set withCDN to false to prevent further CDN operations
-        info.withCDN = false;
+        dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
+        delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
     }
@@ -999,6 +1003,30 @@ contract FilecoinWarmStorageService is
 
         // Key absence means disabled
         return false;
+    }
+
+    /**
+     * @notice Returns true if `key` exists in `metadataKeys`.
+     * @param key The metadata key to look up
+     * @return Modified metadata keys
+     */
+    function deleteMetadataKey(string[] memory metadataKeys, string memory key)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+                delete metadataKeys[i];
+            }
+        }
+
+        return metadataKeys;
     }
 
     /**
