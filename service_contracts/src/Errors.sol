@@ -22,7 +22,9 @@ library Errors {
         /// Service provider address
         ServiceProvider,
         /// ServiceProviderRegistry contract address
-        ServiceProviderRegistry
+        ServiceProviderRegistry,
+        /// Service Provider Beneficiary address
+        Beneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -136,6 +138,13 @@ library Errors {
     /// @param expectedPayee The payee address
     /// @param caller The actual caller
     error CallerNotPayerOrPayee(uint256 dataSetId, address expectedPayer, address expectedPayee, address caller);
+
+    /// @notice Only payer or owner can terminate data set service
+    /// @param dataSetId The data set ID
+    /// @param expectedPayer The payer address
+    /// @param expectedOwner The owner address
+    /// @param caller The actual caller
+    error CallerNotPayerOrOwner(uint256 dataSetId, address expectedPayer, address expectedOwner, address caller);
 
     /// @notice Data set is beyond its payment end epoch
     /// @param dataSetId The data set ID
