@@ -670,11 +670,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
 
         uint256 decimals = 6; // MockUSDFC uses 6 decimals in tests
-        uint256 expectedNoCDN = 2 * 10 ** decimals; // 2 USDFC with 6 decimals
-        uint256 expectedWithCDN = 25 * 10 ** (decimals - 1); // 2.5 USDFC with 6 decimals
+        uint256 expectedNoCDN = 5 * 10 ** decimals; // 5 USDFC with 6 decimals
+        uint256 expectedWithCDN = 55 * 10 ** (decimals - 1); // 5.5 USDFC with 6 decimals
 
-        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 2 * 10^decimals");
-        assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 2.5 * 10^decimals");
+        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 5 * 10^decimals");
+        assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 5.5 * 10^decimals");
         assertEq(pricing.tokenAddress, address(mockUSDFC), "Token address should match USDFC");
         assertEq(pricing.epochsPerMonth, 86400, "Epochs per month should be 86400");
 
@@ -688,16 +688,16 @@ contract FilecoinWarmStorageServiceTest is Test {
         (uint256 serviceFee, uint256 spPayment) = pdpServiceWithPayments.getEffectiveRates();
 
         uint256 decimals = 6; // MockUSDFC uses 6 decimals in tests
-        // Total is 2 USDFC with 6 decimals
-        uint256 expectedTotal = 2 * 10 ** decimals;
+        // Total is 5 USDFC with 6 decimals
+        uint256 expectedTotal = 5 * 10 ** decimals;
 
         // Test setup uses 0% commission
         uint256 expectedServiceFee = 0; // 0% commission
         uint256 expectedSpPayment = expectedTotal; // 100% goes to SP
 
         assertEq(serviceFee, expectedServiceFee, "Service fee should be 0 with 0% commission");
-        assertEq(spPayment, expectedSpPayment, "SP payment should be 2 * 10^6");
-        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 2 * 10^6");
+        assertEq(spPayment, expectedSpPayment, "SP payment should be 5 * 10^6");
+        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 5 * 10^6");
 
         // Verify the values are in expected range
         assert(serviceFee + spPayment < 10 ** 8); // Less than 10^8
