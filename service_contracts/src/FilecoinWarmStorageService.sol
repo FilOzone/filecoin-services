@@ -55,6 +55,7 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId,
         uint256 cdnRailId,
         address payer,
+        address owner,
         address payee,
         string[] metadataKeys,
         string[] metadataValues
@@ -137,7 +138,8 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
         uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
-        address payee; // SP's beneficiary address
+        address owner; // SP's owner address that owns and manages the dataset
+        address payee; // SP's beneficiary address that receives payments
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
         uint256 paymentEndEpoch; // 0 if payment is not terminated
@@ -346,17 +348,18 @@ contract FilecoinWarmStorageService is
      * @notice Handles data set creation by creating a payment rail
      * @dev Called by the PDPVerifier contract when a new data set is created
      * @param dataSetId The ID of the newly created data set
-     * @param creator The address that created the data set and will receive payments
-     * @param extraData Encoded data containing metadata, payer information, and signature
+     * @param creator The address that created the data set (owner address)
+     * @param extraData Encoded data containing metadata, payer information, signature, and beneficiary address
      */
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
-        // Decode the extra data to get the metadata, payer address, and signature
+        // Decode the extra data to get the metadata, payer address, signature, and beneficiary
         require(extraData.length > 0, Errors.ExtraDataRequired());
-        DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+        (DataSetCreateData memory createData, address beneficiary) = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
+        require(beneficiary != address(0), Errors.ZeroAddress(Errors.AddressField.Beneficiary));
 
         // Validate provider is registered and approved
         ServiceProviderRegistry registry = ServiceProviderRegistry(serviceProviderRegistryAddress);
@@ -385,7 +388,8 @@ contract FilecoinWarmStorageService is
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Using creator as the payee
+        info.owner = creator; // Store creator as owner
+        info.payee = beneficiary; // Store beneficiary as payee
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
 
@@ -427,7 +431,7 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // data set creator, SPs in  most cases
+            beneficiary, // to (beneficiary) - SP's payment recipient address
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
             address(this)
@@ -462,7 +466,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                creator, // data set creator, SPs in most cases
+                beneficiary, // to (beneficiary) - SP's payment recipient address
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -493,6 +497,7 @@ contract FilecoinWarmStorageService is
             cdnRailId,
             createData.payer,
             creator,
+            beneficiary,
             createData.metadataKeys,
             createData.metadataValues
         );
@@ -770,13 +775,14 @@ contract FilecoinWarmStorageService is
         // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.payee == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.payee, oldServiceProvider)
+            info.owner == oldServiceProvider,
+            Errors.OldServiceProviderMismatch(dataSetId, info.owner, oldServiceProvider)
         );
         require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
-        // Update the data set payee (service provider)
-        info.payee = newServiceProvider;
+        // Update the data set owner
+        // Note: payee (beneficiary) remains unchanged - only owner address is transferred
+        info.owner = newServiceProvider;
 
         // Emit event for off-chain tracking
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
@@ -789,10 +795,10 @@ contract FilecoinWarmStorageService is
         // Check if already terminated
         require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
-        // Check authorization
+        // Check authorization - allow payer or owner to terminate
         require(
-            msg.sender == info.payer || msg.sender == info.payee,
-            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.payee, msg.sender)
+            msg.sender == info.payer || msg.sender == info.owner,
+            Errors.CallerNotPayerOrOwner(dataSetId, info.payer, info.owner, msg.sender)
         );
 
         Payments payments = Payments(paymentsContractAddress);
@@ -993,13 +999,21 @@ contract FilecoinWarmStorageService is
     /**
      * @notice Decode extra data for data set creation
      * @param extraData The encoded extra data from PDPVerifier
-     * @return decoded The decoded DataSetCreateData struct
+     * @return createData The decoded DataSetCreateData struct
+     * @return beneficiary The beneficiary address that will receive payments
      */
-    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (address payer, string[] memory keys, string[] memory values, bytes memory signature) =
-            abi.decode(extraData, (address, string[], string[], bytes));
+    function decodeDataSetCreateData(bytes calldata extraData)
+        internal
+        pure
+        returns (DataSetCreateData memory createData, address beneficiary)
+    {
+        // Parse with beneficiary as additional field outside signature
+        (address payer, string[] memory keys, string[] memory values, bytes memory signature, address beneficiaryAddr) =
+            abi.decode(extraData, (address, string[], string[], bytes, address));
 
-        return DataSetCreateData({payer: payer, metadataKeys: keys, metadataValues: values, signature: signature});
+        createData = DataSetCreateData({payer: payer, metadataKeys: keys, metadataValues: values, signature: signature});
+
+        beneficiary = beneficiaryAddr;
     }
 
     /**
