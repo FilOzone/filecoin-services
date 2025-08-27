@@ -238,8 +238,8 @@ contract FilecoinWarmStorageService is
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDNController));
-        require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDNTreasury));
+        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
 
         pdpVerifierAddress = _pdpVerifierAddress;
         filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
