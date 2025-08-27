@@ -1,0 +1,51 @@
+name: Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+
+      - name: Install Dependencies
+        run: |
+          cd service_contracts
+          make install
+
+      - name: Run build
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          make build
+
+      - name: Run tests
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          make test
+
+      - name: Generate coverage report
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          # Using --ir-minimum due to stack depth issues in Payments.sol
+          make coverage-lcov
+          make coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./service_contracts
+          files: ./lcov.info
+          fail_ci_if_error: false
