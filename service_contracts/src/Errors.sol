@@ -13,8 +13,8 @@ library Errors {
         Payments,
         /// USDFC contract address
         USDFC,
-        /// FilecoinCDN controller address
-        FilecoinCDNController,
+        /// FilCDN controller address
+        FilCDNController,
         /// Creator address
         Creator,
         /// Payer address
