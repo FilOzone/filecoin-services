@@ -151,34 +151,6 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
-    // Initial value for challenge window start
-    // Can be used for first call to nextProvingPeriod
-    function initChallengeWindowStart(FilecoinWarmStorageService service) internal view returns (uint256) {
-        return block.number + getMaxProvingPeriod(service) - challengeWindow(service);
-    }
-
-    // The start of the challenge window for the current proving period
-    function thisChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
-        internal
-        view
-        returns (uint256)
-    {
-        if (provingDeadlines(service, setId) == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-
-        uint256 periodsSkipped;
-        // Proving period is open 0 skipped periods
-        if (block.number <= provingDeadlines(service, setId)) {
-            periodsSkipped = 0;
-        } else {
-            // Proving period has closed possibly some skipped periods
-            periodsSkipped = 1 + (block.number - (provingDeadlines(service, setId) + 1)) / getMaxProvingPeriod(service);
-        }
-        return
-            provingDeadlines(service, setId) + periodsSkipped * getMaxProvingPeriod(service) - challengeWindow(service);
-    }
-
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         internal
         view

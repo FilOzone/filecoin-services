@@ -17,6 +17,10 @@ contract FilecoinWarmStorageServiceStateView {
         service = _service;
     }
 
+    function challengeWindow() external view returns (uint256) {
+        return service.challengeWindow();
+    }
+
     function clientDataSetIDs(address payer) external view returns (uint256) {
         return service.clientDataSetIDs(payer);
     }
@@ -41,6 +45,10 @@ contract FilecoinWarmStorageServiceStateView {
         return service.getAllPieceMetadata(dataSetId, pieceId);
     }
 
+    function getChallengesPerProof() external pure returns (uint64) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
+    }
+
     function getClientDataSets(address client)
         external
         view
@@ -63,6 +71,10 @@ contract FilecoinWarmStorageServiceStateView {
 
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
+    }
+
+    function getMaxProvingPeriod() external view returns (uint64) {
+        return service.getMaxProvingPeriod();
     }
 
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
