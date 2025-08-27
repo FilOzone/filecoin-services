@@ -36,7 +36,7 @@ $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
 
 # JSON compilation for library (depends on the source library)
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol
-	forge build --via-ir src/lib/FilecoinWarmStorageServiceStateLibrary.sol
+	forge build --via-ir $^
 
 # View contract generation (depends on JSON)
 $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
