@@ -21,8 +21,8 @@ library Errors {
         Payer,
         /// Service provider address
         ServiceProvider,
-        /// FilecoinCDN treasury address
-        FilecoinCDNTreasury
+        /// FilCDN beneficiary address
+        FilCDNBeneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
