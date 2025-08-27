@@ -387,49 +387,6 @@
   },
   {
     "type": "function",
-    "name": "initChallengeWindowStart",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "nextChallengeWindowStart",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "setId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "provenPeriods",
     "inputs": [
       {
@@ -552,40 +509,5 @@
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "thisChallengeWindowStart",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "setId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "error",
-    "name": "ProvingPeriodNotInitialized",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
   }
 ]

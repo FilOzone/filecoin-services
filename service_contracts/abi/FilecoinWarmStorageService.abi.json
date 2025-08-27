@@ -250,6 +250,34 @@
   },
   {
     "type": "function",
+    "name": "getPDPConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getProvingPeriodForEpoch",
     "inputs": [
       {
@@ -352,9 +380,34 @@
   {
     "type": "function",
     "name": "migrate",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "_viewContract",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "nextPDPChallengeWindowStart",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -567,6 +620,19 @@
   },
   {
     "type": "function",
+    "name": "setViewContract",
+    "inputs": [
+      {
+        "name": "_viewContract",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "storageProviderChanged",
     "inputs": [
       {
@@ -718,6 +784,19 @@
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "viewContractAddress",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "event",
@@ -1054,6 +1133,19 @@
     "inputs": [
       {
         "name": "implementation",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ViewContractSet",
+    "inputs": [
+      {
+        "name": "viewContract",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -1589,6 +1681,17 @@
   {
     "type": "error",
     "name": "ProvingNotStarted",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProvingPeriodNotInitialized",
     "inputs": [
       {
         "name": "dataSetId",

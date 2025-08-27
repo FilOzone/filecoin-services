@@ -346,38 +346,6 @@
   },
   {
     "type": "function",
-    "name": "initChallengeWindowStart",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "nextChallengeWindowStart",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "provenPeriods",
     "inputs": [
       {
@@ -488,35 +456,5 @@
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "thisChallengeWindowStart",
-    "inputs": [
-      {
-        "name": "setId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "error",
-    "name": "ProvingPeriodNotInitialized",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
   }
 ]
