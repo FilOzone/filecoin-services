@@ -116,14 +116,36 @@ fmt-check:
 	forge fmt --check
 
 # Coverage
+# Note: Using --ir-minimum due to "stack too deep" errors in Payments.sol
+# This may result in less accurate source mappings but is necessary for coverage to run
 .PHONY: coverage
 coverage:
-	forge coverage --via-ir
+	@echo "Running coverage with --ir-minimum (required due to stack depth issues)..."
+	forge coverage --ir-minimum --report summary
+
+# Coverage with LCOV report (for CI)
+.PHONY: coverage-lcov
+coverage-lcov:
+	@echo "Generating LCOV coverage report with --ir-minimum..."
+	forge coverage --ir-minimum --report lcov
 
 .PHONY: contract-size-check
 contract-size-check:
 	@echo "Checking contract sizes..."
 	bash tools/check-contract-size.sh src/
+
+# Update checked-in ABIs
+.PHONY: update-abi
+update-abi: build
+	@echo "Updating checked-in ABIs..."
+	@mkdir -p abi
+	@echo "  Extracting FilecoinWarmStorageService ABI..."
+	@forge inspect FilecoinWarmStorageService abi --json > abi/FilecoinWarmStorageService.abi.json
+	@echo "  Extracting FilecoinWarmStorageServiceStateView ABI..."
+	@forge inspect FilecoinWarmStorageServiceStateView abi --json > abi/FilecoinWarmStorageServiceStateView.abi.json
+	@echo "  Extracting FilecoinWarmStorageServiceStateLibrary ABI..."
+	@forge inspect src/lib/FilecoinWarmStorageServiceStateLibrary.sol:FilecoinWarmStorageServiceStateLibrary abi --json > abi/FilecoinWarmStorageServiceStateLibrary.abi.json
+	@echo "ABIs updated in abi/ directory"
 
 # Help target
 .PHONY: help
@@ -135,7 +157,8 @@ help:
 	@echo "  clean      - Clean build artifacts"
 	@echo "  fmt        - Format code"
 	@echo "  fmt-check  - Check code formatting"
-	@echo "  coverage   - Generate test coverage"
+	@echo "  coverage   - Generate test coverage summary (uses --ir-minimum)"
+	@echo "  coverage-lcov - Generate LCOV coverage report for CI"
 	@echo ""
 	@echo "Code generation targets:"
 	@echo "  gen        - Generate code (layout, internal lib, view contract)"
@@ -145,3 +168,4 @@ help:
 	@echo ""
 	@echo "  help       - Show this help message"
 	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
+	@echo "  update-abi - Update checked-in ABIs in abi/ directory"

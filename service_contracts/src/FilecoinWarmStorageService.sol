@@ -740,13 +740,12 @@ contract FilecoinWarmStorageService is
      * @param dataSetId The ID of the data set whose service provider is changing
      * @param oldServiceProvider The previous service provider address
      * @param newServiceProvider The new service provider address (must be an approved provider)
-     * @param extraData Additional data (not used)
      */
     function storageProviderChanged(
         uint256 dataSetId,
         address oldServiceProvider,
         address newServiceProvider,
-        bytes calldata extraData
+        bytes calldata // extraData - not used
     ) external override onlyPDPVerifier {
         // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];

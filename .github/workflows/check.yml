@@ -1,0 +1,76 @@
+name: Check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  check-gen:
+    name: Check Generated Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Check generated files
+        run: |
+          cd service_contracts
+          make clean-gen
+          make gen
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Error: Generated files are not up to date!"
+            echo "Uncommitted changes detected:"
+            git status --porcelain
+            echo ""
+            echo "Please run 'make gen' in service_contracts/ and commit the changes."
+            exit 1
+          fi
+          echo "Generated files are up to date ✓"
+
+  check-abi:
+    name: Check ABI Changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+
+      - name: Check for ABI changes
+        run: |
+          cd service_contracts
+          if [ ! -d "abi" ]; then
+            echo "Error: No ABI directory found!"
+            echo "ABIs must be checked into the repository to track interface changes."
+            echo "Please run 'make update-abi' in service_contracts/ and commit the ABIs."
+            exit 1
+          fi
+          make update-abi
+          if [ -n "$(git status --porcelain abi/)" ]; then
+            echo "Error: Contract ABIs have changed!"
+            echo "Uncommitted changes detected:"
+            git status --porcelain abi/
+            echo ""
+            echo "Diff:"
+            git diff abi/
+            echo ""
+            echo "Please run 'make update-abi' in service_contracts/ and commit the changes."
+            exit 1
+          fi
+          echo "All ABIs are up to date ✓"
