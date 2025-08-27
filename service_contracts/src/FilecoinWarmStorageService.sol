@@ -72,7 +72,7 @@ contract FilecoinWarmStorageService is
     );
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
-    
+
     event ViewContractSet(address indexed viewContract);
 
     // Constants
