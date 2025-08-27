@@ -183,7 +183,7 @@ library Errors {
     /// @param dataSetId The data set ID
     error CDNServiceNotConfigured(uint256 dataSetId);
 
-    /// @notice Only the FilecoinCDN address can call this function
+    /// @notice Only the FilCDN controller can call this function
     /// @param expected The expected CDN address
     /// @param actual The caller address
     error OnlyCDNAllowed(address expected, address actual);
