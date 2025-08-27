@@ -3,6 +3,8 @@
 echo // SPDX-License-Identifier: Apache-2.0 OR MIT
 echo pragma solidity ^0.8.20\;
 echo
+echo // Code generated - DO NOT EDIT.
+echo // This file is a generated binding and any changes will be lost.
 echo // Generated with $0 $@
 echo
 

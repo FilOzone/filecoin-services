@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -28,6 +29,7 @@ uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
     PDPListener,
+    IPDPProvingSchedule,
     IValidator,
     Initializable,
     UUPSUpgradeable,
@@ -70,6 +72,8 @@ contract FilecoinWarmStorageService is
     );
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
+    
+    event ViewContractSet(address indexed viewContract);
 
     // Constants
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
@@ -89,7 +93,7 @@ contract FilecoinWarmStorageService is
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
 
     // Pricing constants
-    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
     uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
@@ -151,7 +155,7 @@ contract FilecoinWarmStorageService is
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
         address tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
@@ -177,9 +181,14 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
-    // Proving period constants - set during initialization (added at end for upgrade compatibility)
+    // Proving period constants - set during initialization
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
+
+    // View contract for read-only operations
+    // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
+    // directly instead of going through the view contract for more efficient gas usage.
+    address public viewContractAddress;
 
     // EIP-712 Type hashes
     // EIP-712 type definitions with metadata support
@@ -242,12 +251,17 @@ contract FilecoinWarmStorageService is
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        STORAGE_PRICE_PER_TIB_PER_MONTH = (2 * 10 ** tokenDecimals); // 2 USDFC
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** tokenDecimals); // 5 USDFC
         DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
     }
 
+    /**
+     * @notice Initialize the contract with PDP proving period parameters
+     * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
+     * @param _challengeWindowSize Number of epochs for the challenge window
+     */
     function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
@@ -288,10 +302,33 @@ contract FilecoinWarmStorageService is
      * @notice Migration function for contract upgrades
      * @dev This function should be called during upgrades to emit version tracking events
      * Only callable during proxy upgrade process
+     * @param _viewContract Address of the view contract (optional, can be address(0))
      */
-    function migrate() public onlyProxy reinitializer(3) {
+    function migrate(address _viewContract) public onlyProxy reinitializer(4) {
         require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
+
+        // Set view contract if provided
+        if (_viewContract != address(0)) {
+            viewContractAddress = _viewContract;
+            emit ViewContractSet(_viewContract);
+        }
+
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+    }
+
+    /**
+     * @notice Sets the view contract address (one-time setup)
+     * @dev Only callable by the contract owner. This is intended to be called once after deployment
+     * or during migration. The view contract should not be changed after initial setup as external
+     * systems may cache this address. If a view contract upgrade is needed, deploy a new main
+     * contract with the updated view contract reference.
+     * @param _viewContract Address of the view contract
+     */
+    function setViewContract(address _viewContract) external onlyOwner {
+        require(_viewContract != address(0), "Invalid view contract address");
+        require(viewContractAddress == address(0), "View contract already set");
+        viewContractAddress = _viewContract;
+        emit ViewContractSet(_viewContract);
     }
 
     /**
@@ -1370,5 +1407,50 @@ contract FilecoinWarmStorageService is
             info.cdnEndEpoch = endEpoch;
             emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
+    }
+
+    /* IPDPProvingSchedule */
+
+    /**
+     * @notice Returns PDP configuration values
+     * @return maxProvingPeriod Maximum number of epochs between proofs
+     * @return challengeWindow Number of epochs for the challenge window
+     * @return challengesPerProof Number of challenges required per proof
+     * @return initChallengeWindowStart Initial challenge window start for new data sets
+     */
+    function getPDPConfig() external view returns (uint64, uint256, uint256, uint256) {
+        uint64 m = maxProvingPeriod;
+        uint256 c = challengeWindowSize;
+        return (m, c, CHALLENGES_PER_PROOF, block.number + m - c);
+    }
+
+    /**
+     * @notice Returns the start of the next challenge window for a data set
+     * @param setId The ID of the data set
+     * @return The block number when the next challenge window starts
+     */
+    function nextPDPChallengeWindowStart(uint256 setId) external view returns (uint256) {
+        if (provingDeadlines[setId] == NO_PROVING_DEADLINE) {
+            revert Errors.ProvingPeriodNotInitialized(setId);
+        }
+        // If the current period is open this is the next period's challenge window
+        if (block.number <= provingDeadlines[setId]) {
+            return _thisChallengeWindowStart(setId) + maxProvingPeriod;
+        }
+        // Otherwise return the current period's challenge window
+        return _thisChallengeWindowStart(setId);
+    }
+
+    // The start of the challenge window for the current proving period
+    function _thisChallengeWindowStart(uint256 setId) internal view returns (uint256) {
+        uint256 periodsSkipped;
+        // Proving period is open 0 skipped periods
+        if (block.number <= provingDeadlines[setId]) {
+            periodsSkipped = 0;
+        } else {
+            // Proving period has closed possibly some skipped periods
+            periodsSkipped = 1 + (block.number - (provingDeadlines[setId] + 1)) / maxProvingPeriod;
+        }
+        return provingDeadlines[setId] + periodsSkipped * maxProvingPeriod - challengeWindowSize;
     }
 }
