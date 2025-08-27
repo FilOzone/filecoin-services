@@ -439,7 +439,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet.payee, serviceProvider, "Payee should be set to service provider");
 
         // Verify metadata was stored correctly
-        (bool exists, string memory metadata) = pdpServiceWithPayments.getDataSetMetadata(newDataSetId, metadataKeys[0]);
+        (bool exists, string memory metadata) = viewContract.getDataSetMetadata(newDataSetId, metadataKeys[0]);
         assertTrue(exists, "Metadata key should exist");
         assertEq(metadata, "true", "Metadata should be stored correctly");
 
@@ -624,19 +624,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         firstAdded += pieceData2.length;
 
         // Assert per-piece metadata
-        (bool e0, string memory v0) = pdpServiceWithPayments.getPieceMetadata(dataSetId, 0, "meta");
+        (bool e0, string memory v0) = viewContract.getPieceMetadata(dataSetId, 0, "meta");
         assertTrue(e0);
         assertEq(v0, metadataShort);
-        (bool e1, string memory v1) = pdpServiceWithPayments.getPieceMetadata(dataSetId, 1, "meta");
+        (bool e1, string memory v1) = viewContract.getPieceMetadata(dataSetId, 1, "meta");
         assertTrue(e1);
         assertEq(v1, metadataShort);
-        (bool e2, string memory v2) = pdpServiceWithPayments.getPieceMetadata(dataSetId, 2, "meta");
+        (bool e2, string memory v2) = viewContract.getPieceMetadata(dataSetId, 2, "meta");
         assertTrue(e2);
         assertEq(v2, metadataShort);
-        (bool e3, string memory v3) = pdpServiceWithPayments.getPieceMetadata(dataSetId, 3, "meta");
+        (bool e3, string memory v3) = viewContract.getPieceMetadata(dataSetId, 3, "meta");
         assertTrue(e3);
         assertEq(v3, metadataLong);
-        (bool e4, string memory v4) = pdpServiceWithPayments.getPieceMetadata(dataSetId, 4, "meta");
+        (bool e4, string memory v4) = viewContract.getPieceMetadata(dataSetId, 4, "meta");
         assertTrue(e4);
         assertEq(v4, metadataLong);
     }
@@ -1100,9 +1100,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // read metadata key and value from contract
-        (bool exists, string memory storedMetadata) =
-            pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
-        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
+        (bool exists, string memory storedMetadata) = viewContract.getDataSetMetadata(dataSetId, metadataKeys[0]);
+        (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
 
         // Verify the stored metadata matches what we set
         assertTrue(exists, "Metadata key should exist");
@@ -1139,8 +1138,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify all metadata keys and values
         for (uint256 i = 0; i < metadataKeys.length; i++) {
-            (bool exists, string memory storedMetadata) =
-                pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
+            (bool exists, string memory storedMetadata) = viewContract.getDataSetMetadata(dataSetId, metadataKeys[i]);
             assertTrue(exists, "Metadata key should exist");
             assertEq(
                 storedMetadata,
@@ -1192,22 +1190,22 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId4 = createDataSetForClient(sp1, client, bothKeys, bothValues);
 
         // Verify dataset with multiple metadata keys
-        (bool exists1, string memory value) = pdpServiceWithPayments.getDataSetMetadata(dataSetId4, "label");
+        (bool exists1, string memory value) = viewContract.getDataSetMetadata(dataSetId4, "label");
         assertTrue(exists1, "label key should exist");
         assertEq(value, "test", "label value should be 'test' for dataset 4");
-        (bool exists2,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId4, "withCDN");
-        (, value) = pdpServiceWithPayments.getDataSetMetadata(dataSetId4, "withCDN");
+        (bool exists2,) = viewContract.getDataSetMetadata(dataSetId4, "withCDN");
+        (, value) = viewContract.getDataSetMetadata(dataSetId4, "withCDN");
         assertTrue(exists2, "withCDN key should exist");
         assertEq(value, "true", "withCDN value should be 'true' for dataset 4");
 
         // Verify CDN metadata queries work correctly
-        (bool exists3,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId2, "withCDN");
-        (, value) = pdpServiceWithPayments.getDataSetMetadata(dataSetId2, "withCDN");
+        (bool exists3,) = viewContract.getDataSetMetadata(dataSetId2, "withCDN");
+        (, value) = viewContract.getDataSetMetadata(dataSetId2, "withCDN");
         assertTrue(exists3, "withCDN key should exist");
         assertEq(value, "true", "withCDN value should be 'true' for dataset 2");
 
-        (bool exists4,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId1, "withCDN");
-        (, value) = pdpServiceWithPayments.getDataSetMetadata(dataSetId1, "withCDN");
+        (bool exists4,) = viewContract.getDataSetMetadata(dataSetId1, "withCDN");
+        (, value) = viewContract.getDataSetMetadata(dataSetId1, "withCDN");
         assertFalse(exists4, "withCDN key should not exist");
         assertEq(value, "", "withCDN key should not exist in dataset 1");
 
@@ -1232,14 +1230,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
 
         // Verify metadata for first data set
-        (bool exists1, string memory storedMetadata1) =
-            pdpServiceWithPayments.getDataSetMetadata(dataSetId1, metadataKeys1[0]);
+        (bool exists1, string memory storedMetadata1) = viewContract.getDataSetMetadata(dataSetId1, metadataKeys1[0]);
         assertTrue(exists1, "First dataset metadata key should exist");
         assertEq(storedMetadata1, string(metadataValues1[0]), "Stored metadata for first data set should match");
 
         // Verify metadata for second data set
-        (bool exists2, string memory storedMetadata2) =
-            pdpServiceWithPayments.getDataSetMetadata(dataSetId2, metadataKeys2[0]);
+        (bool exists2, string memory storedMetadata2) = viewContract.getDataSetMetadata(dataSetId2, metadataKeys2[0]);
         assertTrue(exists2, "Second dataset metadata key should exist");
         assertEq(storedMetadata2, string(metadataValues2[0]), "Stored metadata for second data set should match");
     }
@@ -1262,7 +1258,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
                 // Verify the metadata is stored correctly
                 (bool exists, string memory storedMetadata) =
-                    pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
+                    viewContract.getDataSetMetadata(dataSetId, metadataKeys[0]);
                 assertTrue(exists, "Metadata key should exist");
                 assertEq(
                     storedMetadata,
@@ -1308,7 +1304,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
                 // Verify the metadata is stored correctly
                 (bool exists, string memory storedMetadata) =
-                    pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
+                    viewContract.getDataSetMetadata(dataSetId, metadataKeys[0]);
                 assertTrue(exists, "Metadata key should exist");
                 assertEq(
                     storedMetadata,
@@ -1360,7 +1356,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                 // Verify all metadata keys and values
                 for (uint256 i = 0; i < metadataKeys.length; i++) {
                     (bool exists, string memory storedMetadata) =
-                        pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
+                        viewContract.getDataSetMetadata(dataSetId, metadataKeys[i]);
                     assertTrue(exists, string.concat("Key ", metadataKeys[i], " should exist"));
                     assertEq(
                         storedMetadata,
@@ -1503,7 +1499,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
                 // Verify piece metadata storage
                 (bool exists, string memory storedMetadata) =
-                    pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
+                    viewContract.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
                 assertTrue(exists, "Piece metadata key should exist");
                 assertEq(
                     storedMetadata,
@@ -1568,7 +1564,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
                 // Verify piece metadata storage
                 (bool exists, string memory storedMetadata) =
-                    pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
+                    viewContract.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
                 assertTrue(exists, "Piece metadata key should exist");
                 assertEq(
                     storedMetadata,
@@ -1635,7 +1631,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                 // Verify piece metadata storage
                 for (uint256 i = 0; i < keys.length; i++) {
                     (bool exists, string memory storedMetadata) =
-                        pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId + testIdx, keys[i]);
+                        viewContract.getPieceMetadata(dataSetId, pieceId + testIdx, keys[i]);
                     assertTrue(exists, string.concat("Key ", keys[i], " should exist"));
                     assertEq(
                         storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i])
@@ -1784,18 +1780,18 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Test getPieceMetadata for existing keys
         (bool exists1, string memory filename) =
-            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "filename");
+            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "filename");
         assertTrue(exists1, "filename key should exist");
         assertEq(filename, "dog.jpg", "Filename metadata should match");
 
         (bool exists2, string memory contentType) =
-            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "contentType");
+            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "contentType");
         assertTrue(exists2, "contentType key should exist");
         assertEq(contentType, "image/jpeg", "Content type metadata should match");
 
         // Test getPieceMetadata for non-existent key - this is the important false case!
         (bool exists3, string memory nonExistentKey) =
-            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
+            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
         assertFalse(exists3, "Non-existent key should not exist");
         assertEq(bytes(nonExistentKey).length, 0, "Should return empty string for non-existent key");
     }
@@ -1830,7 +1826,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Attempt to get metadata for a non-existent proof set
         (bool exists, string memory filename) =
-            pdpServiceWithPayments.getPieceMetadata(nonExistentDataSetId, nonExistentPieceId, "filename");
+            viewContract.getPieceMetadata(nonExistentDataSetId, nonExistentPieceId, "filename");
         assertFalse(exists, "Key should not exist for non-existent data set");
         assertTrue(bytes(filename).length == 0, "Should return empty string");
         assertEq(bytes(filename).length, 0, "Should return empty string for non-existent proof set");
@@ -1850,7 +1846,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Attempt to get metadata for a non-existent key
         (bool exists, string memory nonExistentMetadata) =
-            pdpServiceWithPayments.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
+            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
         assertFalse(exists, "Non-existent key should not exist");
         assertTrue(bytes(nonExistentMetadata).length == 0, "Should return empty string");
         assertEq(bytes(nonExistentMetadata).length, 0, "Should return empty string for non-existent key");
@@ -1914,30 +1910,29 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
 
         // Verify metadata for piece 0
-        (bool e0, string memory v0) = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "filename");
+        (bool e0, string memory v0) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "filename");
         assertTrue(e0, "filename key should exist");
         assertEq(v0, "document.pdf", "Piece 0 filename should match");
 
-        (bool e1, string memory v1) = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "contentType");
+        (bool e1, string memory v1) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "contentType");
         assertTrue(e1, "contentType key should exist");
         assertEq(v1, "application/pdf", "Piece 0 contentType should match");
 
         // Verify metadata for piece 1
-        (bool e2, string memory v2) = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "filename");
+        (bool e2, string memory v2) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 1, "filename");
         assertTrue(e2, "filename key should exist");
         assertEq(v2, "image.jpg", "Piece 1 filename should match");
 
-        (bool e3, string memory v3) = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "size");
+        (bool e3, string memory v3) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 1, "size");
         assertTrue(e3, "size key should exist");
         assertEq(v3, "1024000", "Piece 1 size should match");
 
-        (bool e4, string memory v4) =
-            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 1, "compression");
+        (bool e4, string memory v4) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 1, "compression");
         assertTrue(e4, "compression key should exist");
         assertEq(v4, "jpeg", "Piece 1 compression should match");
 
         // Verify metadata for piece 2
-        (bool e5, string memory v5) = pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId + 2, "filename");
+        (bool e5, string memory v5) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 2, "filename");
         assertTrue(e5, "filename key should exist");
         assertEq(v5, "data.json", "Piece 2 filename should match");
 
@@ -1966,13 +1961,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Test that empty string is stored and retrievable
-        (bool existsCDN, string memory withCDN) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
+        (bool existsCDN, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
         assertTrue(existsCDN, "withCDN key should exist");
         assertEq(withCDN, "", "Empty string should be stored and retrievable");
 
         // Test that non-existent key returns false
         (bool existsNonExistent, string memory nonExistent) =
-            pdpServiceWithPayments.getDataSetMetadata(dataSetId, "nonExistentKey");
+            viewContract.getDataSetMetadata(dataSetId, "nonExistentKey");
         assertFalse(existsNonExistent, "Non-existent key should not exist");
         assertEq(nonExistent, "", "Non-existent key returns empty string");
 
@@ -1999,13 +1994,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         // Test empty string in piece metadata
-        (bool existsFilename, string memory filename) =
-            pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId, "filename");
+        (bool existsFilename, string memory filename) = viewContract.getPieceMetadata(dataSetId, pieceId, "filename");
         assertTrue(existsFilename, "filename key should exist");
         assertEq(filename, "", "Empty filename should be stored");
 
         (bool existsSize, string memory nonExistentPieceMeta) =
-            pdpServiceWithPayments.getPieceMetadata(dataSetId, pieceId, "size");
+            viewContract.getPieceMetadata(dataSetId, pieceId, "size");
         assertFalse(existsSize, "size key should not exist");
         assertEq(nonExistentPieceMeta, "", "Non-existent piece metadata key returns empty string");
     }
@@ -2095,8 +2089,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(values1.length, 0, "Piece 1 should have no metadata values");
 
         // Verify getting non-existent keys returns empty strings
-        (bool exists, string memory nonExistentValue) =
-            pdpServiceWithPayments.getPieceMetadata(dataSetId, firstPieceId, "anykey");
+        (bool exists, string memory nonExistentValue) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "anykey");
         assertFalse(exists, "Non-existent key should return false");
         assertEq(bytes(nonExistentValue).length, 0, "Non-existent key should return empty string");
     }
