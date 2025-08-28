@@ -187,16 +187,16 @@ contract FilecoinWarmStorageService is
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
 
+    // View contract for read-only operations
+    // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
+    // directly instead of going through the view contract for more efficient gas usage.
+    address public viewContractAddress;
+
     // Approved provider list
     mapping(uint256 => bool) internal approvedProviders;
 
     // Array to track all approved provider IDs for enumeration
     uint256[] internal approvedProviderIds;
-
-    // View contract for read-only operations
-    // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
-    // directly instead of going through the view contract for more efficient gas usage.
-    address public viewContractAddress;
 
     // EIP-712 Type hashes
     // EIP-712 type definitions with metadata support
