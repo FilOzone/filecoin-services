@@ -406,6 +406,13 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("    { name: 'firstAdded', type: 'uint256' },");
         console.log("    { name: 'pieceData', type: 'Cid[]' },");
         console.log("    { name: 'pieceMetadata', type: 'PieceMetadata[]' }");
+        console.log("  ],");
+        console.log("  SchedulePieceRemovals: [");
+        console.log("    { name: 'clientDataSetId', type: 'uint256' },");
+        console.log("    { name: 'pieceIds', type: 'uint256[]' }");
+        console.log("  ],");
+        console.log("  DeleteDataSet: [");
+        console.log("    { name: 'clientDataSetId', type: 'uint256' }");
         console.log("  ]");
     }
 
