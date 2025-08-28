@@ -64,13 +64,11 @@ contract MetadataSignatureTestContract is EIP712 {
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
     // Metadata hashing functions
-    function hashMetadataEntry(string memory key, string memory value) internal pure returns (bytes32) {
+    function hashMetadataEntry(string memory key, string memory value) public pure returns (bytes32) {
         return keccak256(abi.encode(METADATA_ENTRY_TYPEHASH, keccak256(bytes(key)), keccak256(bytes(value))));
     }
 
-    function hashMetadataEntries(string[] memory keys, string[] memory values) internal pure returns (bytes32) {
-        if (keys.length == 0) return keccak256("");
-
+    function hashMetadataEntries(string[] memory keys, string[] memory values) public pure returns (bytes32) {
         bytes32[] memory hashes = new bytes32[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
             hashes[i] = hashMetadataEntry(keys[i], values[i]);
@@ -79,7 +77,7 @@ contract MetadataSignatureTestContract is EIP712 {
     }
 
     function hashPieceMetadata(uint256 pieceIndex, string[] memory keys, string[] memory values)
-        internal
+        public
         pure
         returns (bytes32)
     {
@@ -88,12 +86,10 @@ contract MetadataSignatureTestContract is EIP712 {
     }
 
     function hashAllPieceMetadata(string[][] memory allKeys, string[][] memory allValues)
-        internal
+        public
         pure
         returns (bytes32)
     {
-        if (allKeys.length == 0) return keccak256("");
-
         bytes32[] memory pieceHashes = new bytes32[](allKeys.length);
         for (uint256 i = 0; i < allKeys.length; i++) {
             pieceHashes[i] = hashPieceMetadata(i, allKeys[i], allValues[i]);
@@ -521,7 +517,13 @@ contract MetadataSignatureFixturesTest is Test {
             keys[i] = new string[](0);
             values[i] = new string[](0);
         }
-
+        console.log("pieceMetadata0 %s",vm.toString((testContract.hashPieceMetadata(0, keys[0], values[0]))));
+        console.log("pieceMetadata1: %s",vm.toString((testContract.hashPieceMetadata(1, keys[1], values[1]))));
+        console.log("metadataEntries: %s",vm.toString(testContract.hashMetadataEntries(keys[0], values[0])));
+        // console.log("metadataEntry: %s",vm.toString(testContract.hashMetadataEntry(keys[0][0], values[0][0])));
+        bytes32 CID_TYPEHASH = keccak256("Cid(bytes data)");
+        console.log("piecedata[1]", vm.toString(
+            keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceData[1].data)))));
         bool isValid = testContract.verifyAddPiecesSignature(
             signer, clientDataSetId, pieceData, firstAdded, keys, values, vm.parseBytes(signature)
         );
