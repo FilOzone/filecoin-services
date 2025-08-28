@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any changes will be lost.
-// Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
+// Generated with tools/generate_view_contract.sh
 
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
