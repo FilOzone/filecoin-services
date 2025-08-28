@@ -1219,7 +1219,8 @@ contract FilecoinWarmStorageService is
             return;
         }
         require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH) >= block.timestamp,
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH)
+                >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
     }
