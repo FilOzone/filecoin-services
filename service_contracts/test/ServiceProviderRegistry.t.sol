@@ -82,6 +82,7 @@ contract ServiceProviderRegistryTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -131,6 +132,7 @@ contract ServiceProviderRegistryTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
+            address(0),
             capabilityKeys,
             capabilityValues
         );
@@ -190,6 +192,7 @@ contract ServiceProviderRegistryTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedData,
+            address(0),
             emptyKeys,
             emptyValues
         );

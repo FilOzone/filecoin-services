@@ -352,24 +352,21 @@ contract FilecoinWarmStorageService is
      * @param extraData Encoded data containing metadata, payer information, signature, and beneficiary address
      */
     function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
-        // Decode the extra data to get the metadata, payer address, signature, and beneficiary
-        require(extraData.length > 0, Errors.ExtraDataRequired());
-        (DataSetCreateData memory createData, address beneficiary) = decodeDataSetCreateData(extraData);
-
-        // Validate the addresses
-        require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
-        require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
-        require(beneficiary != address(0), Errors.ZeroAddress(Errors.AddressField.Beneficiary));
-
         // Validate provider is registered and approved
+        require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
         ServiceProviderRegistry registry = ServiceProviderRegistry(serviceProviderRegistryAddress);
         uint256 providerId = registry.getProviderIdByAddress(creator);
-
-        // Check if provider is registered
-        require(providerId != 0, Errors.ProviderNotRegistered(creator));
-
-        // Check if provider is approved
+        require(providerId != 0, Errors.ProviderNotRegistered(creator));  
         require(approvedProviders[providerId], Errors.ProviderNotApproved(creator, providerId));
+        address beneficiary = registry.getProvider(providerId).beneficiary;
+        if (beneficiary == address(0)) {
+            beneficiary = creator;
+        }
+
+        // Decode the extra data to get the metadata, payer address, signature, and beneficiary
+        require(extraData.length > 0, Errors.ExtraDataRequired());
+        (DataSetCreateData memory createData) = decodeDataSetCreateData(extraData);
+        require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
 
         // Update client state
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
@@ -1000,20 +997,17 @@ contract FilecoinWarmStorageService is
      * @notice Decode extra data for data set creation
      * @param extraData The encoded extra data from PDPVerifier
      * @return createData The decoded DataSetCreateData struct
-     * @return beneficiary The beneficiary address that will receive payments
      */
     function decodeDataSetCreateData(bytes calldata extraData)
         internal
         pure
-        returns (DataSetCreateData memory createData, address beneficiary)
+        returns (DataSetCreateData memory createData)
     {
         // Parse with beneficiary as additional field outside signature
-        (address payer, string[] memory keys, string[] memory values, bytes memory signature, address beneficiaryAddr) =
-            abi.decode(extraData, (address, string[], string[], bytes, address));
+        (address payer, string[] memory keys, string[] memory values, bytes memory signature) =
+            abi.decode(extraData, (address, string[], string[], bytes));
 
         createData = DataSetCreateData({payer: payer, metadataKeys: keys, metadataValues: values, signature: signature});
-
-        beneficiary = beneficiaryAddr;
     }
 
     /**

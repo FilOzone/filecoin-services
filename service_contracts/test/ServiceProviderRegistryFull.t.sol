@@ -27,28 +27,28 @@ contract ServiceProviderRegistryFullTest is Test {
     bytes public encodedDefaultPDPData;
     bytes public encodedUpdatedPDPData;
 
-    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
+    event ProviderRegistered(uint256 indexed providerId, address indexed owner, uint256 registeredAt);
     event ProductUpdated(
         uint256 indexed providerId,
         ServiceProviderRegistryStorage.ProductType indexed productType,
         uint256 updatedAt,
         string serviceUrl,
-        address beneficiary
+        address owner
     );
     event ProductAdded(
         uint256 indexed providerId,
         ServiceProviderRegistryStorage.ProductType indexed productType,
         uint256 addedAt,
         string serviceUrl,
-        address beneficiary
+        address owner
     );
     event ProductRemoved(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 removedAt
     );
-    event BeneficiaryTransferred(
+    event OwnershipTransferred(
         uint256 indexed providerId,
-        address indexed previousBeneficiary,
-        address indexed newBeneficiary,
+        address indexed previousOwner,
+        address indexed newOwner,
         uint256 transferredAt
     );
     event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
@@ -158,6 +158,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -168,14 +169,14 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(providerId, 1, "Provider ID should be 1");
         ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
             registry.getProviderByAddress(provider1);
-        assertEq(providerInfo.beneficiary, provider1, "Provider address should match");
+        assertEq(providerInfo.owner, provider1, "Provider address should match");
         assertTrue(providerInfo.isActive, "Provider should be active");
         assertTrue(registry.isRegisteredProvider(provider1), "Provider should be registered");
         assertTrue(registry.isProviderActive(1), "Provider should be active");
 
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.beneficiary, provider1, "Beneficiary should be provider1");
+        assertEq(info.owner, provider1, "Owner should be provider1");
         assertEq(info.name, "", "Name should be empty");
         assertEq(info.description, "Test provider description", "Description should match");
         assertTrue(info.isActive, "Provider should be active");
@@ -247,6 +248,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -259,6 +261,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -281,6 +284,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Provider 1 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys1,
             capValues1
         );
@@ -307,6 +311,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Provider 2 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
+            address(0),
             capKeys2,
             capValues2
         );
@@ -362,6 +367,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -374,6 +380,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -392,6 +399,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -399,7 +407,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify provider was not registered
         ServiceProviderRegistryStorage.ServiceProviderInfo memory notRegisteredInfo =
             registry.getProviderByAddress(provider1);
-        assertEq(notRegisteredInfo.beneficiary, address(0), "Provider should not be registered");
+        assertEq(notRegisteredInfo.owner, address(0), "Provider should not be registered");
     }
 
     function testRegisterWithInvalidData() public {
@@ -418,6 +426,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -433,6 +442,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -448,6 +458,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -463,6 +474,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -478,6 +490,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -493,6 +506,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -512,6 +526,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedInvalidPDP,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -531,6 +546,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -571,7 +587,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertTrue(isActive, "PDP service should still be active");
     }
 
-    function testOnlyBeneficiaryCanUpdate() public {
+    function testOnlyOwnerCanUpdate() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -583,11 +599,12 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
 
-        // Try to update as non-beneficiary
+        // Try to update as non-owner
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
         registry.updateProduct(
@@ -607,6 +624,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -622,9 +640,9 @@ contract ServiceProviderRegistryFullTest is Test {
         );
     }
 
-    // ========== Beneficiary Transfer Tests ==========
+    // ========== Owner Transfer Tests ==========
 
-    function testTransferProviderBeneficiary() public {
+    function testTransferProviderOwner() public {
         // Register with capabilities
         string[] memory capKeys = new string[](3);
         capKeys[0] = "tier";
@@ -643,6 +661,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -657,27 +676,27 @@ contract ServiceProviderRegistryFullTest is Test {
             registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
         assertEq(tierBefore, "premium", "First value should be premium");
 
-        // Transfer beneficiary
+        // Transfer owner
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, true, true);
-        emit BeneficiaryTransferred(1, provider1, provider2, block.number);
+        emit OwnershipTransferred(1, provider1, provider2, block.number);
 
-        registry.transferProviderBeneficiary(provider2);
+        registry.transferProviderOwner(provider2);
 
         vm.stopPrank();
 
         // Verify transfer
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.beneficiary, provider2, "Beneficiary should be updated");
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory newBeneficiaryInfo =
+        assertEq(info.owner, provider2, "Owner should be updated");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory newOwnerInfo =
             registry.getProviderByAddress(provider2);
-        assertEq(newBeneficiaryInfo.beneficiary, provider2, "New beneficiary lookup should work");
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory oldBeneficiaryInfo =
+        assertEq(newOwnerInfo.owner, provider2, "New owner lookup should work");
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory oldOwnerInfo =
             registry.getProviderByAddress(provider1);
-        assertEq(oldBeneficiaryInfo.beneficiary, address(0), "Old beneficiary lookup should return empty");
-        assertTrue(registry.isRegisteredProvider(provider2), "New beneficiary should be registered");
-        assertFalse(registry.isRegisteredProvider(provider1), "Old beneficiary should not be registered");
+        assertEq(oldOwnerInfo.owner, address(0), "Old owner lookup should return empty");
+        assertTrue(registry.isRegisteredProvider(provider2), "New owner should be registered");
+        assertFalse(registry.isRegisteredProvider(provider1), "Old owner should not be registered");
 
         // Verify capabilities persist after transfer
         (, string[] memory keysAfter,) = registry.getPDPService(1);
@@ -693,7 +712,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(valuesAfter[1], "daily", "Second value should still be daily");
         assertEq(valuesAfter[2], "AES-256", "Third value should still be AES-256");
 
-        // Verify new beneficiary can update with new capabilities
+        // Verify new owner can update with new capabilities
         string[] memory newCapKeys = new string[](2);
         newCapKeys[0] = "support";
         newCapKeys[1] = "sla";
@@ -729,13 +748,14 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
 
         vm.prank(provider1);
-        vm.expectRevert("New beneficiary cannot be zero address");
-        registry.transferProviderBeneficiary(address(0));
+        vm.expectRevert("New owner cannot be zero address");
+        registry.transferProviderOwner(address(0));
     }
 
     function testCannotTransferToExistingProvider() public {
@@ -750,6 +770,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -763,17 +784,18 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
+            address(0),
             emptyKeys,
             emptyValues
         );
 
         // Try to transfer to existing provider
         vm.prank(provider1);
-        vm.expectRevert("New beneficiary already has a provider");
-        registry.transferProviderBeneficiary(provider2);
+        vm.expectRevert("New owner already has a provider");
+        registry.transferProviderOwner(provider2);
     }
 
-    function testOnlyBeneficiaryCanTransfer() public {
+    function testOnlyOwnerCanTransfer() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -784,13 +806,14 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
 
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
-        registry.transferProviderBeneficiary(provider3);
+        registry.transferProviderOwner(provider3);
     }
 
     // ========== Removal Tests ==========
@@ -807,6 +830,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -825,12 +849,12 @@ contract ServiceProviderRegistryFullTest is Test {
         assertFalse(registry.isProviderActive(1), "Provider should be inactive");
         assertFalse(registry.isRegisteredProvider(provider1), "Provider should not be registered");
         ServiceProviderRegistryStorage.ServiceProviderInfo memory removedInfo = registry.getProviderByAddress(provider1);
-        assertEq(removedInfo.beneficiary, address(0), "Address lookup should return empty");
+        assertEq(removedInfo.owner, address(0), "Address lookup should return empty");
 
         // Verify provider info still exists (soft delete)
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertFalse(info.isActive, "Provider should be marked inactive");
-        assertEq(info.beneficiary, provider1, "Beneficiary should still be recorded");
+        assertEq(info.owner, provider1, "owner should still be recorded");
 
         // Verify PDP service is inactive
         (,, bool isActive) = registry.getPDPService(1);
@@ -852,6 +876,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -864,7 +889,7 @@ contract ServiceProviderRegistryFullTest is Test {
         registry.removeProvider();
     }
 
-    function testOnlyBeneficiaryCanRemove() public {
+    function testOnlyOwnerCanRemove() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -875,6 +900,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -896,6 +922,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Provider 1 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -909,6 +936,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Provider 2 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedUpdatedPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -934,6 +962,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -947,6 +976,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -960,6 +990,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData3,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -986,6 +1017,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -999,6 +1031,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1012,6 +1045,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData3,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1040,6 +1074,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1061,6 +1096,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1087,6 +1123,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1110,6 +1147,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1134,6 +1172,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1147,6 +1186,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1160,6 +1200,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData3,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1188,6 +1229,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1202,6 +1244,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedPDPData2,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1237,6 +1280,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1273,6 +1317,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1285,14 +1330,14 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
         emit ProviderInfoUpdated(1, block.number);
-        registry.updateProviderInfo("Updated Name", "Updated description");
+        registry.updateProviderInfo("Updated Name", "Updated description", address(0));
 
         // Verify updated description
         info = registry.getProvider(1);
         assertEq(info.description, "Updated description", "Description should be updated");
     }
 
-    function testCannotUpdateProviderDescriptionIfNotBeneficiary() public {
+    function testCannotUpdateProviderDescriptionIfNotOwner() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -1304,14 +1349,15 @@ contract ServiceProviderRegistryFullTest is Test {
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
 
-        // Try to update as non-beneficiary
+        // Try to update as non-owner
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
-        registry.updateProviderInfo("", "Unauthorized update");
+        registry.updateProviderInfo("", "Unauthorized update", address(0));
     }
 
     function testCannotUpdateProviderDescriptionTooLong() public {
@@ -1326,6 +1372,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1336,7 +1383,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         vm.expectRevert("Description too long");
-        registry.updateProviderInfo("", longDescription);
+        registry.updateProviderInfo("", longDescription, address(0));
     }
 
     function testNameTooLongOnRegister() public {
@@ -1357,6 +1404,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1373,6 +1421,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1385,7 +1434,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         vm.expectRevert("Name too long");
-        registry.updateProviderInfo(string(longName), "Updated description");
+        registry.updateProviderInfo(string(longName), "Updated description", address(0));
     }
 
     // ========== Event Timestamp Tests ==========
@@ -1407,6 +1456,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1421,11 +1471,11 @@ contract ServiceProviderRegistryFullTest is Test {
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
-        // Test BeneficiaryTransferred event
+        // Test OwnershipTransferred event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit BeneficiaryTransferred(1, provider1, provider2, block.number);
-        registry.transferProviderBeneficiary(provider2);
+        emit OwnershipTransferred(1, provider1, provider2, block.number);
+        registry.transferProviderOwner(provider2);
 
         // Test ProviderRemoved event
         vm.prank(provider2);
@@ -1454,6 +1504,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1488,6 +1539,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1532,6 +1584,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1552,6 +1605,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1572,6 +1626,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1593,6 +1648,7 @@ contract ServiceProviderRegistryFullTest is Test {
             longDescription,
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1612,6 +1668,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1634,6 +1691,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1655,6 +1713,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1687,6 +1746,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1730,6 +1790,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1781,6 +1842,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             capKeys,
             capValues
         );
@@ -1806,6 +1868,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             emptyKeys,
             emptyValues
         );
@@ -1844,6 +1907,7 @@ contract ServiceProviderRegistryFullTest is Test {
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
+            address(0),
             initialKeys,
             initialValues
         );

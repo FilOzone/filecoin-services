@@ -16,6 +16,7 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Main provider information
     struct ServiceProviderInfo {
+        address owner;
         address beneficiary;
         string name; // Optional provider name (max 128 chars)
         string description; //Service description, ToC, contract info, website..

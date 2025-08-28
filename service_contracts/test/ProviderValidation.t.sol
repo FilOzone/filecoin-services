@@ -173,6 +173,7 @@ contract ProviderValidationTest is Test {
                     paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
+            address(0),
             new string[](0),
             new string[](0)
         );
@@ -210,6 +211,7 @@ contract ProviderValidationTest is Test {
                     paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
+            address(0),
             new string[](0),
             new string[](0)
         );
