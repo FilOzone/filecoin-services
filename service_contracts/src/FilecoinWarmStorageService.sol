@@ -1183,7 +1183,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, ADD_PIECES_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1209,7 +1215,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1229,7 +1241,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, DELETE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
