@@ -134,6 +134,10 @@ library Errors {
     /// @param dataSetId The data set ID
     error DataSetPaymentNotTerminated(uint256 dataSetId);
 
+    /// @notice CDN payment is not terminated
+    /// @param dataSetId The data set ID
+    error CDNPaymentNotTerminated(uint256 dataSetId);
+
     /// @notice The specified data set does not exist or is not valid
     /// @param dataSetId The data set ID that was invalid or unregistered
     error InvalidDataSetId(uint256 dataSetId);
