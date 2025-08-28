@@ -1299,6 +1299,17 @@
   },
   {
     "type": "error",
+    "name": "CDNPaymentNotTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "CallerNotPayerOrPayee",
     "inputs": [
       {
@@ -1430,6 +1441,17 @@
       },
       {
         "name": "currentBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DataSetPaymentNotTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
       }

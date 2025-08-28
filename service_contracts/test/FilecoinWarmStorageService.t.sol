@@ -1018,13 +1018,17 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testGetClientDataSets_TerminatedDataSets() public {
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        (string[] memory metadataKeys3, string[] memory metadataValues3) = _getSingleMetadataKV("label", "Metadata 3");
+
         // Create multiple data sets for the client
-        createDataSetForClient(sp1, client, "Metadata 1");
-        uint256 dataSet2 = createDataSetForClient(sp2, client, "Metadata 2");
-        createDataSetForClient(sp1, client, "Metadata 3");
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSet2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+        createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
 
         // Verify we have 3 datasets initially
-        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return three data sets initially");
 
         // Terminate the second dataset (dataSet2) - client terminates
@@ -1032,25 +1036,29 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.terminateService(dataSet2);
 
         // Verify the dataset is now terminated (paymentEndEpoch > 0)
-        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
-        assertTrue(terminatedInfo.paymentEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set after termination");
+        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set after termination");
 
         // Verify getClientDataSets still returns all 3 datasets (termination doesn't exclude from list)
-        dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        dataSets = viewContract.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return all three data sets after termination");
 
         // Verify the terminated dataset has correct status
-        assertTrue(dataSets[1].paymentEndEpoch > 0, "Dataset 2 should have paymentEndEpoch > 0");
+        assertTrue(dataSets[1].pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch > 0");
     }
 
     function testGetClientDataSets_ExcludesDeletedDataSets() public {
         // Create multiple data sets for the client
-        createDataSetForClient(sp1, client, "Metadata 1");
-        uint256 dataSet2 = createDataSetForClient(sp2, client, "Metadata 2");
-        createDataSetForClient(sp1, client, "Metadata 3");
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        (string[] memory metadataKeys3, string[] memory metadataValues3) = _getSingleMetadataKV("label", "Metadata 3");
+
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSet2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+        createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
 
         // Verify we have 3 datasets initially
-        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return three data sets initially");
 
         // Terminate the second dataset (dataSet2)
@@ -1058,14 +1066,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.terminateService(dataSet2);
 
         // Verify termination status
-        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
-        assertTrue(terminatedInfo.paymentEndEpoch > 0, "Dataset 2 should be terminated");
+        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
 
         // Delete the second dataset (dataSet2) - this should completely remove it
         deleteDataSetForClient(sp2, client, dataSet2);
 
         // Verify getClientDataSets now only returns 2 datasets (the deleted one is completely gone)
-        dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        dataSets = viewContract.getClientDataSets(client);
         assertEq(dataSets.length, 2, "Should return only 2 data sets after deletion");
 
         // Verify the deleted dataset is completely gone
