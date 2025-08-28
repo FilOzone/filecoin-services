@@ -232,10 +232,14 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public client;
     address public serviceProvider;
     address public filCDN;
+    address public session;
 
     address public sp1;
     address public sp2;
     address public sp3;
+
+    address public sessionKey1;
+    address public sessionKey2;
 
     // Test parameters
     bytes public extraData;
@@ -245,6 +249,17 @@ contract FilecoinWarmStorageServiceTest is Test {
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
+
+    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
+        "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+    );
+    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+    );
+    bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
+        keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
+
+    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
     // Structs
     struct PieceMetadataSetup {
@@ -282,6 +297,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         sp1 = address(0xf4);
         sp2 = address(0xf5);
         sp3 = address(0xf6);
+
+        // Session keys
+        sessionKey1 = address(0xa1);
+        sessionKey2 = address(0xa2);
 
         // Fund test accounts
         vm.deal(deployer, 100 ether);
@@ -555,12 +574,35 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertEq(dataSet.payer, client);
+        assertEq(dataSet.payee, serviceProvider);
         // Verify the commission rate was set correctly for basic service (no CDN)
         Payments.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
         assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
 
         assertEq(dataSet.cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
         assertEq(dataSet.cdnRailId, 0, "CDN rail ID should be 0 for basic service (no CDN)");
+
+        // now with session key
+        vm.prank(client);
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = CREATE_DATA_SET_TYPEHASH;
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        makeSignaturePass(sessionKey1);
+
+        vm.startPrank(serviceProvider);
+        uint256 newDataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+        vm.stopPrank();
+
+        FilecoinWarmStorageService.DataSetInfo memory dataSet2 = viewContract.getDataSet(newDataSetId2);
+        assertEq(dataSet2.payer, client);
+        assertEq(dataSet2.payee, serviceProvider);
+
+        // ensure another session key would be denied
+        makeSignaturePass(sessionKey2);
+        vm.startPrank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
 
     function testCreateDataSetAddPieces() public {
