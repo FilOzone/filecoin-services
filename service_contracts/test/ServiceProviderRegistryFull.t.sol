@@ -45,7 +45,7 @@ contract ServiceProviderRegistryFullTest is Test {
     event ProductRemoved(
         uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 removedAt
     );
-    event OwnershipTransferred(
+    event OwnerTransferred(
         uint256 indexed providerId,
         address indexed previousOwner,
         address indexed newOwner,
@@ -680,7 +680,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, true, true);
-        emit OwnershipTransferred(1, provider1, provider2, block.number);
+        emit OwnerTransferred(1, provider1, provider2, block.number);
 
         registry.transferProviderOwner(provider2);
 
@@ -1471,10 +1471,10 @@ contract ServiceProviderRegistryFullTest is Test {
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
-        // Test OwnershipTransferred event
+        // Test OwnerTransferred event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit OwnershipTransferred(1, provider1, provider2, block.number);
+        emit OwnerTransferred(1, provider1, provider2, block.number);
         registry.transferProviderOwner(provider2);
 
         // Test ProviderRemoved event

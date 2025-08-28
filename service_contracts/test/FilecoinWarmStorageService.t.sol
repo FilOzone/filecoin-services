@@ -331,7 +331,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
-            address(0),
+            beneficiary,
             new string[](0),
             new string[](0)
         );
@@ -354,7 +354,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
-            address(0),
+            beneficiary,
             new string[](0),
             new string[](0)
         );
@@ -377,7 +377,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
-            address(0),
+            beneficiary,
             new string[](0),
             new string[](0)
         );
@@ -400,7 +400,7 @@ contract FilecoinWarmStorageServiceTest is Test {
                     paymentTokenAddress: address(0) // Payment in FIL
                 })
             ),
-            address(0),
+            beneficiary,
             new string[](0),
             new string[](0)
         );
@@ -502,9 +502,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        // Encode the extra data with beneficiary
+        // Encode the extra data
         extraData = abi.encode(
-            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature, beneficiary
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature
         );
 
         // Client needs to approve the PDP Service to create a payment rail
@@ -635,9 +635,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
 
-        // Encode the extra data with beneficiary
+        // Encode the extra data
         extraData = abi.encode(
-            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature, beneficiary
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature
         );
 
         // Client needs to approve the PDP Service to create a payment rail
@@ -690,7 +690,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData = abi.encode(
-            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature, beneficiary
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature
         );
 
         // Approvals and deposit
@@ -828,7 +828,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         });
 
         bytes memory encodedData = abi.encode(
-            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature, beneficiary
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature
         );
 
         // Setup client payment approval if not already done
@@ -933,7 +933,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         });
 
         bytes memory encodedData = abi.encode(
-            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature, beneficiary
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature
         );
 
         // Setup client payment approval if not already done
@@ -1083,7 +1083,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         });
 
         bytes memory encodedData = abi.encode(
-            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature, beneficiary
+            createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature
         );
 
         // Setup client payment approval and deposit

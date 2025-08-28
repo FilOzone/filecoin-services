@@ -199,7 +199,7 @@ contract ServiceProviderRegistryTest is Test {
 
         // Now get provider should work
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.beneficiary, user1, "Beneficiary should be user1");
+        assertEq(info.owner, user1, "Beneficiary should be user1");
     }
 
     // Note: We can't test non-PDP product types since Solidity doesn't allow
