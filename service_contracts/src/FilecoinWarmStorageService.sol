@@ -67,9 +67,7 @@ contract FilecoinWarmStorageService is
         address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
     );
 
-    event PaymentTerminated(
-        uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
-    );
+    event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
 
@@ -1401,7 +1399,7 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.paymentEndEpoch == 0 && info.pdpRailId == railId) {
             info.paymentEndEpoch = endEpoch;
-            emit PaymentTerminated(dataSetId, endEpoch, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+            emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
         } else if (info.cdnEndEpoch == 0 && (railId == info.cdnRailId || railId == info.cacheMissRailId)) {
             info.cdnEndEpoch = endEpoch;
             emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
