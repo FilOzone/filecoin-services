@@ -45,7 +45,7 @@ contract ServiceProviderRegistry is
     /// @notice Burn actor address for burning FIL
     address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
 
-    /// @notice Registration fee in attoFIL (1 FIL = 10^18 attoFIL)
+    /// @notice Registration fee in attoFIL (5 FIL = 5 * 10^18 attoFIL)
     uint256 public constant REGISTRATION_FEE = 5e18;
 
     /// @notice Emitted when a new provider registers

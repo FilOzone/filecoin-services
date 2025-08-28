@@ -105,12 +105,7 @@ contract FilecoinWarmStorageServiceStateView {
         return service.railToDataSet(railId);
     }
 
-    function thisChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.thisChallengeWindowStart(setId);
-    }
-
     function isProviderApproved(uint256 providerId) external view returns (bool) {
         return service.isProviderApproved(providerId);
     }
-
 }

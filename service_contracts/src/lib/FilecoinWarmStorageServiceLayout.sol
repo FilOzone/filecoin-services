@@ -22,4 +22,3 @@ bytes32 constant MAX_PROVING_PERIOD_SLOT = bytes32(uint256(13));
 bytes32 constant CHALLENGE_WINDOW_SIZE_SLOT = bytes32(uint256(14));
 bytes32 constant APPROVED_PROVIDERS_SLOT = bytes32(uint256(15));
 bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(16));
-

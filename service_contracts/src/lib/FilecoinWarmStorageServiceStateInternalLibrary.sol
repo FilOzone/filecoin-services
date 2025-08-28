@@ -302,4 +302,14 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
             values[i] = _getPieceMetadataValue(service, dataSetId, pieceId, keys[i]);
         }
     }
+
+    /**
+     * @notice Check if a provider is approved
+     * @param service The service contract
+     * @param providerId The ID of the provider to check
+     * @return Whether the provider is approved
+     */
+    function isProviderApproved(FilecoinWarmStorageService service, uint256 providerId) internal view returns (bool) {
+        return service.extsload(keccak256(abi.encode(providerId, APPROVED_PROVIDERS_SLOT))) != bytes32(0);
+    }
 }

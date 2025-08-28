@@ -187,7 +187,6 @@ contract FilecoinWarmStorageService is
     uint64 private maxProvingPeriod;
     uint256 private challengeWindowSize;
 
-
     // Approved provider list
     mapping(uint256 => bool) internal approvedProviders;
 
@@ -195,7 +194,6 @@ contract FilecoinWarmStorageService is
     // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
     // directly instead of going through the view contract for more efficient gas usage.
     address public viewContractAddress;
-
 
     // EIP-712 Type hashes
     // EIP-712 type definitions with metadata support
@@ -378,15 +376,6 @@ contract FilecoinWarmStorageService is
         }
         approvedProviders[providerId] = false;
         emit ProviderUnapproved(providerId);
-    }
-
-    /**
-     * @notice Check if a provider is approved
-     * @param providerId The ID of the provider to check
-     * @return Whether the provider is approved
-     */
-    function isProviderApproved(uint256 providerId) external view returns (bool) {
-        return approvedProviders[providerId];
     }
 
     // Listener interface methods

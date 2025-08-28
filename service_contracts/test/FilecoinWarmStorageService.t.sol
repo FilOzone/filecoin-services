@@ -428,7 +428,6 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
         pdpServiceWithPayments.setViewContract(address(viewContract));
-
     }
 
     function makeSignaturePass(address signer) public {

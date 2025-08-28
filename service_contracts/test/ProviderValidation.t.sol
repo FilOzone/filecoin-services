@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -82,6 +83,7 @@ contract MockPDPVerifier {
 
 contract ProviderValidationTest is Test {
     FilecoinWarmStorageService public warmStorage;
+    FilecoinWarmStorageServiceStateView public viewContract;
     ServiceProviderRegistry public registry;
     MockPDPVerifier public pdpVerifier;
     Payments public payments;
@@ -134,6 +136,9 @@ contract ProviderValidationTest is Test {
             abi.encodeWithSelector(FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60));
         MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), warmStorageInitData);
         warmStorage = FilecoinWarmStorageService(address(warmStorageProxy));
+
+        // Deploy view contract
+        viewContract = new FilecoinWarmStorageServiceStateView(warmStorage);
 
         // Transfer tokens to client
         usdfc.transfer(client, 10000 * 10 ** 6);
@@ -249,7 +254,7 @@ contract ProviderValidationTest is Test {
     function testAddAndRemoveApprovedProvider() public {
         // Test adding provider
         warmStorage.addApprovedProvider(1);
-        assertTrue(warmStorage.isProviderApproved(1), "Provider 1 should be approved");
+        assertTrue(viewContract.isProviderApproved(1), "Provider 1 should be approved");
 
         // Test adding already approved provider (should revert)
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 1));
@@ -257,7 +262,7 @@ contract ProviderValidationTest is Test {
 
         // Test removing provider
         warmStorage.removeApprovedProvider(1);
-        assertFalse(warmStorage.isProviderApproved(1), "Provider 1 should not be approved");
+        assertFalse(viewContract.isProviderApproved(1), "Provider 1 should not be approved");
 
         // Test removing non-approved provider (should revert)
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 2));
@@ -284,7 +289,7 @@ contract ProviderValidationTest is Test {
     function testAddApprovedProviderAlreadyApproved() public {
         // First add should succeed
         warmStorage.addApprovedProvider(5);
-        assertTrue(warmStorage.isProviderApproved(5), "Provider 5 should be approved");
+        assertTrue(viewContract.isProviderApproved(5), "Provider 5 should be approved");
 
         // Second add should revert with ProviderAlreadyApproved error
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 5));
