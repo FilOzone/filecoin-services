@@ -354,8 +354,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             0, // 0%
             "Service commission should be set correctly"
         );
-        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) =
-            pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) = viewContract.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be set correctly");
         assertEq(challengeWindow, 60, "Challenge window size should be set correctly");
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
@@ -656,8 +655,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testGlobalParameters() public view {
         // These parameters should be the same as in SimplePDPService
-        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) =
-            pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow, uint256 challengesPerProof,) = viewContract.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be 2880 epochs");
         assertEq(challengeWindow, 60, "Challenge window should be 60 epochs");
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
@@ -991,7 +989,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         vm.prank(address(mockPDPVerifier));
@@ -1000,7 +998,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
         // Warp to challenge window
-        uint256 provingDeadline = viewContract.provingDeadlines(dataSetId);
+        uint256 provingDeadline = viewContract.provingDeadline(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(
@@ -2276,7 +2274,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.setViewContract(address(viewContract));
 
         // Verify the values were set correctly through the view contract
-        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = warmStorageService.getPDPConfig();
+        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = viewContract.getPDPConfig();
         assertEq(updatedMaxProvingPeriod, newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(updatedChallengeWindow, newChallengeWindowSize, "Challenge window size should be updated");
     }
@@ -2318,7 +2316,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
 
         // Verify we can call PDP functions through view contract
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = warmStorageService.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         assertEq(maxProvingPeriod, 2880, "Max proving period should be accessible through view");
         assertEq(challengeWindow, 60, "Challenge window should be accessible through view");
     }
@@ -2330,7 +2328,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // This should revert since no data set exists with proving period initialized
         vm.expectRevert(abi.encodeWithSelector(Errors.ProvingPeriodNotInitialized.selector, 999));
-        warmStorageService.nextPDPChallengeWindowStart(999);
+        viewContract.nextPDPChallengeWindowStart(999);
 
         // Note: We can't fully test nextPDPChallengeWindowStart without creating a data set
         // and initializing its proving period, which requires the full PDP system setup.
