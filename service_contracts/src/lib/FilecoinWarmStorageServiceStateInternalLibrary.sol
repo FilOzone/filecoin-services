@@ -3,8 +3,7 @@ pragma solidity ^0.8.20;
 
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any changes will be lost.
-// Generated with make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
-
+// Generated with 'make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol'
 import {Errors} from "../Errors.sol";
 import "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol";
