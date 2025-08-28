@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console} from "forge-std/Test.sol";
+import {Test, console, Vm} from "forge-std/Test.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
@@ -294,6 +294,105 @@ contract ProviderValidationTest is Test {
         // Second add should revert with ProviderAlreadyApproved error
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderAlreadyApproved.selector, 5));
         warmStorage.addApprovedProvider(5);
+    }
+
+    function testGetApprovedProviders() public {
+        // Test empty list initially
+        uint256[] memory providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 0, "Should have no approved providers initially");
+
+        // Add some providers
+        warmStorage.addApprovedProvider(1);
+        warmStorage.addApprovedProvider(5);
+        warmStorage.addApprovedProvider(10);
+
+        // Test retrieval
+        providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 3, "Should have 3 approved providers");
+        assertEq(providers[0], 1, "First provider should be 1");
+        assertEq(providers[1], 5, "Second provider should be 5");
+        assertEq(providers[2], 10, "Third provider should be 10");
+
+        // Remove one provider
+        warmStorage.removeApprovedProvider(5);
+
+        // Test after removal (should have provider 10 in place of 5 due to swap-and-pop)
+        providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 2, "Should have 2 approved providers after removal");
+        assertEq(providers[0], 1, "First provider should still be 1");
+        assertEq(providers[1], 10, "Second provider should be 10 (moved from last position)");
+
+        // Remove another
+        warmStorage.removeApprovedProvider(1);
+        providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 1, "Should have 1 approved provider");
+        assertEq(providers[0], 10, "Remaining provider should be 10");
+
+        // Remove last one
+        warmStorage.removeApprovedProvider(10);
+        providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 0, "Should have no approved providers after removing all");
+    }
+
+    function testGetApprovedProvidersWithSingleProvider() public {
+        // Add single provider and verify
+        warmStorage.addApprovedProvider(42);
+        uint256[] memory providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 1, "Should have 1 approved provider");
+        assertEq(providers[0], 42, "Provider should be 42");
+
+        // Remove and verify empty
+        warmStorage.removeApprovedProvider(42);
+        providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 0, "Should have no approved providers");
+    }
+
+    function testConsistencyBetweenIsApprovedAndGetAll() public {
+        // Add multiple providers
+        uint256[] memory idsToAdd = new uint256[](5);
+        idsToAdd[0] = 1;
+        idsToAdd[1] = 3;
+        idsToAdd[2] = 7;
+        idsToAdd[3] = 15;
+        idsToAdd[4] = 100;
+
+        for (uint256 i = 0; i < idsToAdd.length; i++) {
+            warmStorage.addApprovedProvider(idsToAdd[i]);
+        }
+
+        // Verify consistency - all providers in the array should return true for isProviderApproved
+        uint256[] memory providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 5, "Should have 5 approved providers");
+
+        for (uint256 i = 0; i < providers.length; i++) {
+            assertTrue(
+                viewContract.isProviderApproved(providers[i]),
+                string.concat("Provider ", vm.toString(providers[i]), " should be approved")
+            );
+        }
+
+        // Verify that non-approved providers return false
+        assertFalse(viewContract.isProviderApproved(2), "Provider 2 should not be approved");
+        assertFalse(viewContract.isProviderApproved(50), "Provider 50 should not be approved");
+
+        // Remove some providers and verify consistency
+        warmStorage.removeApprovedProvider(3);
+        warmStorage.removeApprovedProvider(15);
+
+        providers = viewContract.getApprovedProviders();
+        assertEq(providers.length, 3, "Should have 3 approved providers after removal");
+
+        // Verify all remaining are still approved
+        for (uint256 i = 0; i < providers.length; i++) {
+            assertTrue(
+                viewContract.isProviderApproved(providers[i]),
+                string.concat("Remaining provider ", vm.toString(providers[i]), " should be approved")
+            );
+        }
+
+        // Verify removed ones are not approved
+        assertFalse(viewContract.isProviderApproved(3), "Provider 3 should not be approved after removal");
+        assertFalse(viewContract.isProviderApproved(15), "Provider 15 should not be approved after removal");
     }
 
     function testRemoveApprovedProviderNotInList() public {

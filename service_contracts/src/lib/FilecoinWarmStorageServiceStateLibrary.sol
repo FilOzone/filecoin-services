@@ -308,4 +308,27 @@ library FilecoinWarmStorageServiceStateLibrary {
     function isProviderApproved(FilecoinWarmStorageService service, uint256 providerId) public view returns (bool) {
         return service.extsload(keccak256(abi.encode(providerId, APPROVED_PROVIDERS_SLOT))) != bytes32(0);
     }
+
+    /**
+     * @notice Get all approved provider IDs
+     * @param service The service contract
+     * @return providerIds Array of all approved provider IDs
+     */
+    function getApprovedProviders(FilecoinWarmStorageService service)
+        public
+        view
+        returns (uint256[] memory providerIds)
+    {
+        bytes32 slot = APPROVED_PROVIDER_IDS_SLOT;
+        uint256 length = uint256(service.extsload(slot));
+
+        if (length == 0) {
+            return new uint256[](0);
+        }
+
+        bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
+        assembly ("memory-safe") {
+            providerIds := result
+        }
+    }
 }

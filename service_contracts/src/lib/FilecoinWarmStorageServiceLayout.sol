@@ -21,4 +21,5 @@ bytes32 constant PROVING_ACTIVATION_EPOCH_SLOT = bytes32(uint256(12));
 bytes32 constant MAX_PROVING_PERIOD_SLOT = bytes32(uint256(13));
 bytes32 constant CHALLENGE_WINDOW_SIZE_SLOT = bytes32(uint256(14));
 bytes32 constant APPROVED_PROVIDERS_SLOT = bytes32(uint256(15));
-bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(16));
+bytes32 constant APPROVED_PROVIDER_IDS_SLOT = bytes32(uint256(16));
+bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(17));

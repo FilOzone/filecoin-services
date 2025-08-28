@@ -190,6 +190,9 @@ contract FilecoinWarmStorageService is
     // Approved provider list
     mapping(uint256 => bool) internal approvedProviders;
 
+    // Array to track all approved provider IDs for enumeration
+    uint256[] internal approvedProviderIds;
+
     // View contract for read-only operations
     // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
     // directly instead of going through the view contract for more efficient gas usage.
@@ -362,6 +365,7 @@ contract FilecoinWarmStorageService is
             revert Errors.ProviderAlreadyApproved(providerId);
         }
         approvedProviders[providerId] = true;
+        approvedProviderIds.push(providerId);
         emit ProviderApproved(providerId);
     }
 
@@ -375,6 +379,20 @@ contract FilecoinWarmStorageService is
             revert Errors.ProviderNotInApprovedList(providerId);
         }
         approvedProviders[providerId] = false;
+
+        // Remove from array using swap-and-pop pattern
+        uint256 length = approvedProviderIds.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (approvedProviderIds[i] == providerId) {
+                // Move the last element to this position and pop
+                if (i != length - 1) {
+                    approvedProviderIds[i] = approvedProviderIds[length - 1];
+                }
+                approvedProviderIds.pop();
+                break;
+            }
+        }
+
         emit ProviderUnapproved(providerId);
     }
 
