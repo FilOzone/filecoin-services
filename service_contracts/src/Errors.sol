@@ -15,6 +15,8 @@ library Errors {
         USDFC,
         /// FilecoinCDN service contract address
         FilecoinCDN,
+        /// Session Key Registry contract address
+        SessionKeyRegistry,
         /// Creator address
         Creator,
         /// Payer address

@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -224,6 +225,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
+    SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
 
     // Test accounts
     address public deployer;
@@ -308,8 +310,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, sessionKeyRegistry
+        );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -2112,8 +2115,17 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
-    ) FilecoinWarmStorageService(_pdpVerifierAddress, _paymentsContractAddress, _usdfcTokenAddress, _filCDNAddress) {}
+        address _filCDNAddress,
+        SessionKeyRegistry _sessionKeyRegistry
+    )
+        FilecoinWarmStorageService(
+            _pdpVerifierAddress,
+            _paymentsContractAddress,
+            _usdfcTokenAddress,
+            _filCDNAddress,
+            _sessionKeyRegistry
+        )
+    {}
 
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
@@ -2135,6 +2147,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     uint256 public wrongSignerPrivateKey;
     uint256 public filCDNPrivateKey;
     address public filCDN;
+
+    SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
 
     function setUp() public {
         // Set up test accounts with known private keys
@@ -2160,8 +2174,9 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         payments = Payments(address(paymentsProxy));
 
         // Deploy and initialize the service
-        SignatureCheckingService serviceImpl =
-            new SignatureCheckingService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        SignatureCheckingService serviceImpl = new SignatureCheckingService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, sessionKeyRegistry
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -2235,6 +2250,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     address public deployer;
     address public filCDN;
 
+    SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
+
     function setUp() public {
         deployer = address(this);
         filCDN = address(0xf2);
@@ -2251,8 +2268,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
-        FilecoinWarmStorageService warmStorageImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, sessionKeyRegistry
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod

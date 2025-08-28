@@ -5,6 +5,7 @@ import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -105,6 +106,7 @@ contract FilecoinWarmStorageService is
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
+    SessionKeyRegistry public immutable sessionKeyRegistry;
 
     // Commission rates
     uint256 public serviceCommissionBps;
@@ -216,25 +218,28 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
+        address _filCDNAddress,
+        SessionKeyRegistry _sessionKeyRegistry
     ) {
         _disableInitializers();
 
-        require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
-        usdfcTokenAddress = _usdfcTokenAddress;
-
-        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
-        filCDNAddress = _filCDNAddress;
-
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
-        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
-        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
-
         pdpVerifierAddress = _pdpVerifierAddress;
 
-        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         paymentsContractAddress = _paymentsContractAddress;
+
+        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfcTokenAddress;
+
+        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
+        filCDNAddress = _filCDNAddress;
+
+        require(
+            _sessionKeyRegistry != SessionKeyRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
+        );
+        sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -1124,7 +1129,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
