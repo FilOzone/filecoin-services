@@ -54,8 +54,7 @@ contract MetadataSignatureTestContract is EIP712 {
 
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
         "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
-        "Cid(bytes data)"
-        "MetadataEntry(string key,string value)"
+        "Cid(bytes data)" "MetadataEntry(string key,string value)"
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
 
