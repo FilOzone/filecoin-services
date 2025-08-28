@@ -152,6 +152,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
+    /**
+     * @dev To determine termination status: check if paymentEndEpoch != 0.
+     * If paymentEndEpoch > 0, the rails have already been terminated.
+     * @dev To determine deletion status: deleted datasets don't appear in
+     * getClientDataSets() anymore - they are completely removed.
+     */
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         internal
         view

@@ -512,7 +512,9 @@ contract FilecoinWarmStorageService is
 
         // Check if the data set is terminated
         require(info.paymentEndEpoch != 0, Errors.DataSetPaymentNotTerminated(dataSetId));
-        require(info.cdnEndEpoch != 0, Errors.CDNPaymentNotTerminated(dataSetId));
+        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+            require(info.cdnEndEpoch != 0, Errors.CDNPaymentNotTerminated(dataSetId));
+        }
 
         // Complete cleanup - remove the dataset from all mappings
         delete dataSetInfo[dataSetId];
@@ -532,7 +534,7 @@ contract FilecoinWarmStorageService is
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
         delete provingActivationEpoch[dataSetId];
-        
+
         // Clean up metadata mappings
         string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
         for (uint256 i = 0; i < metadataKeys.length; i++) {
