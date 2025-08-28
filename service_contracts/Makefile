@@ -44,7 +44,7 @@ $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
 
 # Internal library generation (simple sed transform)
 $(INTERNAL_LIB): src/lib/FilecoinWarmStorageServiceStateLibrary.sol
-	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e '3a\\n// Code generated - DO NOT EDIT.\n// This file is a generated binding and any changes will be lost.\n// Generated with '"'"'make $@'"'"'\n' $< | forge fmt -r - > $@
+	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' -e '3a\\n// Code generated - DO NOT EDIT.\n// This file is a generated binding and any changes will be lost.\n// Generated with make $(INTERNAL_LIB)\n' $< | forge fmt -r - > $@
 
 # Main code generation target with proper dependencies
 .PHONY: gen
