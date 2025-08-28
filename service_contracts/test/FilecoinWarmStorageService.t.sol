@@ -590,9 +590,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
         makeSignaturePass(sessionKey1);
 
-        vm.startPrank(serviceProvider);
+        vm.prank(serviceProvider);
         uint256 newDataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
-        vm.stopPrank();
 
         FilecoinWarmStorageService.DataSetInfo memory dataSet2 = viewContract.getDataSet(newDataSetId2);
         assertEq(dataSet2.payer, client);
@@ -602,6 +601,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(sessionKey2);
         vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        // session key expires
+        vm.warp(block.timestamp + 1);
+        makeSignaturePass(sessionKey1);
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
 
@@ -684,6 +690,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         (bool e4, string memory v4) = viewContract.getPieceMetadata(dataSetId, 4, "meta");
         assertTrue(e4);
         assertEq(v4, metadataLong);
+
+        // now with session keys
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = ADD_PIECES_TYPEHASH;
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+
+        makeSignaturePass(sessionKey1);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+        );
+        firstAdded += pieceData2.length;
+
+        // unauthorized session key reverts
+        makeSignaturePass(sessionKey2);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+        );
+
+        // expired session key reverts
+        vm.warp(block.timestamp + 1);
+        makeSignaturePass(sessionKey1);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+        );
     }
 
     // Helper function to get account info from the Payments contract
