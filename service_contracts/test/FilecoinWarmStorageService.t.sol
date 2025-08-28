@@ -600,7 +600,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // ensure another session key would be denied
         makeSignaturePass(sessionKey2);
-        vm.startPrank(serviceProvider);
+        vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
