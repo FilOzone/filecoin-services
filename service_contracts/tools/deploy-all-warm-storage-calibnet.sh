@@ -54,6 +54,11 @@ echo "  CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE"
 ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
 echo "Deploying contracts from address $ADDR"
 
+if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
+    # If existing session key registry not supplied, deploy another one
+    source tools/deploy-session-key-registry.sh
+fi
+
 NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Step 1: Deploy PDPVerifier implementation
@@ -100,7 +105,7 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 5: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
