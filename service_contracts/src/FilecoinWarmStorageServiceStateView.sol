@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any changes will be lost.
 // Generated with tools/generate_view_contract.sh out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
-import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import "./FilecoinWarmStorageService.sol";
 import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 
-contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
+contract FilecoinWarmStorageServiceStateView {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     FilecoinWarmStorageService public immutable service;
@@ -60,7 +61,11 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getDataSet(dataSetId);
     }
 
-    function getDataSetMetadata(uint256 dataSetId, string memory key) external view returns (string memory) {
+    function getDataSetMetadata(uint256 dataSetId, string memory key)
+        external
+        view
+        returns (bool exists, string memory value)
+    {
         return service.getDataSetMetadata(dataSetId, key);
     }
 
@@ -75,17 +80,9 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
         external
         view
-        returns (string memory)
+        returns (bool exists, string memory value)
     {
         return service.getPieceMetadata(dataSetId, pieceId, key);
-    }
-
-    function initChallengeWindowStart() external view returns (uint256) {
-        return service.initChallengeWindowStart();
-    }
-
-    function nextChallengeWindowStart(uint256 setId) external view returns (uint256) {
-        return service.nextChallengeWindowStart(setId);
     }
 
     function provenPeriods(uint256 dataSetId, uint256 periodId) external view returns (bool) {
@@ -115,4 +112,5 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     function isProviderApproved(uint256 providerId) external view returns (bool) {
         return service.isProviderApproved(providerId);
     }
+
 }

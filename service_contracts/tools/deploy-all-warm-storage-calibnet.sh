@@ -146,6 +146,17 @@ echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRES
 NONCE=$(expr $NONCE + "1")
 source tools/deploy-warm-storage-view.sh
 
+# Step 8: Set the view contract address on the main contract
+echo "Setting view contract address on FilecoinWarmStorageService..."
+NONCE=$(expr $NONCE + "1")
+cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --nonce $NONCE --chain-id $CHAIN_ID $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS
+if [ $? -eq 0 ]; then
+    echo "View contract address set successfully"
+else
+    echo "Error: Failed to set view contract address"
+    exit 1
+fi
+
 # Summary of deployed contracts
 echo ""
 echo "=== DEPLOYMENT SUMMARY ==="

@@ -76,14 +76,49 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md)
 ### Building
 
 ```bash
-forge build
+make build
+# or simply:
+make
 ```
 
 ### Testing
 
 ```bash
-forge test
+make test
 ```
+
+### Code Generation
+
+The project includes several auto-generated files. To regenerate them:
+
+```bash
+# Generate all files (layout, internal library, view contract)
+make gen
+
+# Force regeneration if files are corrupted
+make force-gen
+
+# Clean all generated files
+make clean-gen
+
+# Safe regeneration with automatic rollback on failure
+make safe-gen
+```
+
+### ABI Management
+
+The project maintains checked-in ABI files in the `abi/` directory for use by scripts and external tools:
+
+```bash
+# Update checked-in ABIs after contract changes
+make update-abi
+```
+
+This extracts the ABIs from the compiled contracts and saves them as JSON files:
+- `abi/FilecoinWarmStorageService.abi.json` - Main service contract ABI
+- `abi/FilecoinWarmStorageServiceStateView.abi.json` - View contract ABI
+
+These ABIs are used by the code generation scripts in the `gen` target and should be updated whenever contract interfaces change.
 
 ### Dependencies
 

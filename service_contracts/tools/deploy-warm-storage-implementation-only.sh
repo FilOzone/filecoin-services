@@ -3,6 +3,8 @@
 # This allows updating an existing proxy to point to the new implementation
 # Assumption: KEYSTORE, PASSWORD, RPC_URL env vars are set
 # Optional: WARM_STORAGE_PROXY_ADDRESS to automatically upgrade the proxy
+# Optional: DEPLOY_VIEW_CONTRACT=true to deploy a new view contract during upgrade
+# Optional: VIEW_CONTRACT_ADDRESS=0x... to use an existing view contract during upgrade
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
@@ -101,11 +103,33 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
 
     echo "Performing proxy upgrade..."
 
+    # Check if we should deploy and set a new view contract
+    if [ -n "$DEPLOY_VIEW_CONTRACT" ] && [ "$DEPLOY_VIEW_CONTRACT" = "true" ]; then
+        echo "Deploying new view contract for upgraded proxy..."
+        NONCE=$(expr $NONCE + "1")
+        export WARM_STORAGE_SERVICE_ADDRESS=$WARM_STORAGE_PROXY_ADDRESS
+        source tools/deploy-warm-storage-view.sh
+        echo "New view contract deployed at: $WARM_STORAGE_VIEW_ADDRESS"
+
+        # Prepare migrate call with view contract address
+        MIGRATE_DATA=$(cast calldata "migrate(address)" "$WARM_STORAGE_VIEW_ADDRESS")
+    else
+        # Check if a view contract address was provided
+        if [ -n "$VIEW_CONTRACT_ADDRESS" ]; then
+            echo "Using provided view contract address: $VIEW_CONTRACT_ADDRESS"
+            MIGRATE_DATA=$(cast calldata "migrate(address)" "$VIEW_CONTRACT_ADDRESS")
+        else
+            echo "No view contract address provided, using address(0) in migrate"
+            MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
+        fi
+    fi
+
     # Increment nonce for next transaction
     NONCE=$(expr $NONCE + "1")
 
-    # Call upgradeToAndCall on the proxy (works better on Filecoin)
-    TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" 0x \
+    # Call upgradeToAndCall on the proxy with migrate function
+    echo "Upgrading proxy and calling migrate..."
+    TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
         --rpc-url "$RPC_URL" \
         --keystore "$KEYSTORE" \
         --password "$PASSWORD" \

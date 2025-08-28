@@ -1,0 +1,57 @@
+name: Test
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+
+      - name: Install Dependencies
+        run: |
+          cd service_contracts
+          make install
+
+      - name: Run build
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          make build
+
+      - name: Run tests
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          make test
+
+      - name: Generate coverage report
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          echo "::warning::Coverage is currently disabled due to Solidity stack depth limitations"
+          echo "The combination of complex nested mappings, Payments contract interactions, and coverage"
+          echo "instrumentation exceeds Solidity's stack depth limits even with --ir-minimum flag."
+          echo "See: https://github.com/foundry-rs/foundry/issues/3357"
+          echo ""
+          echo "Attempting coverage generation (expected to fail)..."
+          make coverage-lcov || echo "Coverage generation failed as expected due to stack depth issues"
+          make coverage || true
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./service_contracts
+          files: ./lcov.info
+          fail_ci_if_error: false

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any changes will be lost.
 // Generated with 'make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol'
 
 import {Errors} from "../Errors.sol";
@@ -149,52 +151,6 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
-    // Initial value for challenge window start
-    // Can be used for first call to nextProvingPeriod
-    function initChallengeWindowStart(FilecoinWarmStorageService service) internal view returns (uint256) {
-        return block.number + getMaxProvingPeriod(service) - challengeWindow(service);
-    }
-
-    // The start of the challenge window for the current proving period
-    function thisChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
-        internal
-        view
-        returns (uint256)
-    {
-        if (provingDeadlines(service, setId) == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-
-        uint256 periodsSkipped;
-        // Proving period is open 0 skipped periods
-        if (block.number <= provingDeadlines(service, setId)) {
-            periodsSkipped = 0;
-        } else {
-            // Proving period has closed possibly some skipped periods
-            periodsSkipped = 1 + (block.number - (provingDeadlines(service, setId) + 1)) / getMaxProvingPeriod(service);
-        }
-        return
-            provingDeadlines(service, setId) + periodsSkipped * getMaxProvingPeriod(service) - challengeWindow(service);
-    }
-
-    // The start of the NEXT OPEN proving period's challenge window
-    // Useful for querying before nextProvingPeriod to determine challengeEpoch to submit for nextProvingPeriod
-    function nextChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
-        internal
-        view
-        returns (uint256)
-    {
-        if (provingDeadlines(service, setId) == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
-        // If the current period is open this is the next period's challenge window
-        if (block.number <= provingDeadlines(service, setId)) {
-            return thisChallengeWindowStart(service, setId) + getMaxProvingPeriod(service);
-        }
-        // If the current period is not yet open this is the current period's challenge window
-        return thisChallengeWindowStart(service, setId);
-    }
-
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         internal
         view
@@ -209,20 +165,50 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     }
 
     /**
-     * @notice Get metadata value for a specific key in a data set
+     * @notice Internal helper to get metadata value without existence check
+     * @param service The service contract
      * @param dataSetId The ID of the data set
      * @param key The metadata key
      * @return value The metadata value
      */
-    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+    function _getDataSetMetadataValue(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
         internal
         view
-        returns (string memory)
+        returns (string memory value)
     {
         // For nested mapping with string key: mapping(uint256 => mapping(string => string))
         bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT));
         bytes32 slot = keccak256(abi.encodePacked(bytes(key), firstLevel));
         return getString(service, slot);
+    }
+
+    /**
+     * @notice Get metadata value for a specific key in a data set
+     * @param dataSetId The ID of the data set
+     * @param key The metadata key
+     * @return exists True if the key exists
+     * @return value The metadata value
+     */
+    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+        internal
+        view
+        returns (bool exists, string memory value)
+    {
+        // Check if key exists in the keys array
+        string[] memory keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory currentKeyBytes = bytes(keys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+                exists = true;
+                value = _getDataSetMetadataValue(service, dataSetId, key);
+                break;
+            }
+        }
     }
 
     /**
@@ -239,8 +225,29 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
-            values[i] = getDataSetMetadata(service, dataSetId, keys[i]);
+            values[i] = _getDataSetMetadataValue(service, dataSetId, keys[i]);
         }
+    }
+
+    /**
+     * @notice Internal helper to get piece metadata value without existence check
+     * @param service The service contract
+     * @param dataSetId The ID of the data set
+     * @param pieceId The ID of the piece
+     * @param key The metadata key
+     * @return value The metadata value
+     */
+    function _getPieceMetadataValue(
+        FilecoinWarmStorageService service,
+        uint256 dataSetId,
+        uint256 pieceId,
+        string memory key
+    ) internal view returns (string memory value) {
+        // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
+        bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
+        bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
+        return getString(service, slot);
     }
 
     /**
@@ -248,18 +255,31 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param dataSetId The ID of the data set
      * @param pieceId The ID of the piece
      * @param key The metadata key
+     * @return exists True if the key exists
      * @return value The metadata value
      */
     function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId, string memory key)
         internal
         view
-        returns (string memory)
+        returns (bool exists, string memory value)
     {
-        // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
-        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
-        bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
-        bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
-        return getString(service, slot);
+        // Check if key exists in the keys array
+        string[] memory keys = getStringArray(
+            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
+        );
+
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory currentKeyBytes = bytes(keys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+                exists = true;
+                value = _getPieceMetadataValue(service, dataSetId, pieceId, key);
+                break;
+            }
+        }
     }
 
     /**
@@ -279,7 +299,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         );
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
-            values[i] = getPieceMetadata(service, dataSetId, pieceId, keys[i]);
+            values[i] = _getPieceMetadataValue(service, dataSetId, pieceId, keys[i]);
         }
     }
 }
