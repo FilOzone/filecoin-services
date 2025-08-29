@@ -110,7 +110,7 @@ contract FilecoinWarmStorageService is
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
-    address public immutable serviceProviderRegistryAddress;
+    ServiceProviderRegistry public immutable serviceProviderRegistry;
 
     // Commission rates
     uint256 public serviceCommissionBps;
@@ -145,6 +145,7 @@ contract FilecoinWarmStorageService is
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
         uint256 paymentEndEpoch; // 0 if payment is not terminated
+        uint256 providerId; // Provider ID from the ServiceProviderRegistry
     }
 
     // Decode structure for data set creation extra data
@@ -256,7 +257,7 @@ contract FilecoinWarmStorageService is
 
         require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         paymentsContractAddress = _paymentsContractAddress;
-        serviceProviderRegistryAddress = _serviceProviderRegistryAddress;
+        serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistryAddress);
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -373,25 +374,25 @@ contract FilecoinWarmStorageService is
      * @notice Removes a provider ID from the approved list
      * @dev Only callable by the contract owner. Reverts if not in list.
      * @param providerId The provider ID to remove
+     * @param index The index of the provider ID in the approvedProviderIds array
      */
-    function removeApprovedProvider(uint256 providerId) external onlyOwner {
+    function removeApprovedProvider(uint256 providerId, uint256 index) external onlyOwner {
         if (!approvedProviders[providerId]) {
             revert Errors.ProviderNotInApprovedList(providerId);
         }
+
+        // Verify the index is correct
+        require(index < approvedProviderIds.length, "Index out of bounds");
+        require(approvedProviderIds[index] == providerId, "Provider ID mismatch at index");
+
         approvedProviders[providerId] = false;
 
         // Remove from array using swap-and-pop pattern
         uint256 length = approvedProviderIds.length;
-        for (uint256 i = 0; i < length; i++) {
-            if (approvedProviderIds[i] == providerId) {
-                // Move the last element to this position and pop
-                if (i != length - 1) {
-                    approvedProviderIds[i] = approvedProviderIds[length - 1];
-                }
-                approvedProviderIds.pop();
-                break;
-            }
+        if (index != length - 1) {
+            approvedProviderIds[index] = approvedProviderIds[length - 1];
         }
+        approvedProviderIds.pop();
 
         emit ProviderUnapproved(providerId);
     }
@@ -414,8 +415,7 @@ contract FilecoinWarmStorageService is
         require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
 
         // Validate provider is registered and approved
-        ServiceProviderRegistry registry = ServiceProviderRegistry(serviceProviderRegistryAddress);
-        uint256 providerId = registry.getProviderIdByAddress(creator);
+        uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(creator);
 
         // Check if provider is registered
         require(providerId != 0, Errors.ProviderNotRegistered(creator));
@@ -443,6 +443,7 @@ contract FilecoinWarmStorageService is
         info.payee = creator; // Using creator as the payee
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
+        info.providerId = providerId;
 
         // Store each metadata key-value entry for this data set
         require(

@@ -261,16 +261,16 @@ contract ProviderValidationTest is Test {
         warmStorage.addApprovedProvider(1);
 
         // Test removing provider
-        warmStorage.removeApprovedProvider(1);
+        warmStorage.removeApprovedProvider(1, 0); // Provider 1 is at index 0
         assertFalse(viewContract.isProviderApproved(1), "Provider 1 should not be approved");
 
         // Test removing non-approved provider (should revert)
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 2));
-        warmStorage.removeApprovedProvider(2);
+        warmStorage.removeApprovedProvider(2, 0);
 
         // Test removing already removed provider (should revert)
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 1));
-        warmStorage.removeApprovedProvider(1);
+        warmStorage.removeApprovedProvider(1, 0);
     }
 
     function testOnlyOwnerCanManageApprovedProviders() public {
@@ -283,7 +283,7 @@ contract ProviderValidationTest is Test {
         warmStorage.addApprovedProvider(1);
         vm.prank(provider1);
         vm.expectRevert();
-        warmStorage.removeApprovedProvider(1);
+        warmStorage.removeApprovedProvider(1, 0);
     }
 
     function testAddApprovedProviderAlreadyApproved() public {
@@ -313,8 +313,8 @@ contract ProviderValidationTest is Test {
         assertEq(providers[1], 5, "Second provider should be 5");
         assertEq(providers[2], 10, "Third provider should be 10");
 
-        // Remove one provider
-        warmStorage.removeApprovedProvider(5);
+        // Remove one provider (provider 5 is at index 1)
+        warmStorage.removeApprovedProvider(5, 1);
 
         // Test after removal (should have provider 10 in place of 5 due to swap-and-pop)
         providers = viewContract.getApprovedProviders();
@@ -322,14 +322,14 @@ contract ProviderValidationTest is Test {
         assertEq(providers[0], 1, "First provider should still be 1");
         assertEq(providers[1], 10, "Second provider should be 10 (moved from last position)");
 
-        // Remove another
-        warmStorage.removeApprovedProvider(1);
+        // Remove another (provider 1 is at index 0)
+        warmStorage.removeApprovedProvider(1, 0);
         providers = viewContract.getApprovedProviders();
         assertEq(providers.length, 1, "Should have 1 approved provider");
         assertEq(providers[0], 10, "Remaining provider should be 10");
 
-        // Remove last one
-        warmStorage.removeApprovedProvider(10);
+        // Remove last one (provider 10 is at index 0)
+        warmStorage.removeApprovedProvider(10, 0);
         providers = viewContract.getApprovedProviders();
         assertEq(providers.length, 0, "Should have no approved providers after removing all");
     }
@@ -341,8 +341,8 @@ contract ProviderValidationTest is Test {
         assertEq(providers.length, 1, "Should have 1 approved provider");
         assertEq(providers[0], 42, "Provider should be 42");
 
-        // Remove and verify empty
-        warmStorage.removeApprovedProvider(42);
+        // Remove and verify empty (provider 42 is at index 0)
+        warmStorage.removeApprovedProvider(42, 0);
         providers = viewContract.getApprovedProviders();
         assertEq(providers.length, 0, "Should have no approved providers");
     }
@@ -376,8 +376,11 @@ contract ProviderValidationTest is Test {
         assertFalse(viewContract.isProviderApproved(50), "Provider 50 should not be approved");
 
         // Remove some providers and verify consistency
-        warmStorage.removeApprovedProvider(3);
-        warmStorage.removeApprovedProvider(15);
+        // Find indices of providers 3 and 15 in the array
+        // Based on adding order: [1, 3, 7, 15, 100]
+        warmStorage.removeApprovedProvider(3, 1); // provider 3 is at index 1
+        // After removing 3 with swap-and-pop, array becomes: [1, 100, 7, 15]
+        warmStorage.removeApprovedProvider(15, 3); // provider 15 is now at index 3
 
         providers = viewContract.getApprovedProviders();
         assertEq(providers.length, 3, "Should have 3 approved providers after removal");
@@ -398,14 +401,14 @@ contract ProviderValidationTest is Test {
     function testRemoveApprovedProviderNotInList() public {
         // Trying to remove a provider that was never approved should revert
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 10));
-        warmStorage.removeApprovedProvider(10);
+        warmStorage.removeApprovedProvider(10, 0);
 
         // Add and then remove a provider
         warmStorage.addApprovedProvider(6);
-        warmStorage.removeApprovedProvider(6);
+        warmStorage.removeApprovedProvider(6, 0); // provider 6 is at index 0
 
         // Trying to remove the same provider again should revert
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 6));
-        warmStorage.removeApprovedProvider(6);
+        warmStorage.removeApprovedProvider(6, 0);
     }
 }
