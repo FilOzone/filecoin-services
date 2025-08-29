@@ -266,8 +266,9 @@ contract ServiceProviderRegistry is
         });
 
         // Store capability values in mapping
+        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
-            productCapabilities[providerId][productType][capabilityKeys[i]] = capabilityValues[i];
+            capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
     }
 
@@ -299,8 +300,11 @@ contract ServiceProviderRegistry is
         string[] memory capabilityKeys,
         string[] memory capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyProviderBeneficiary(providerId) {
+        // Cache product storage reference
+        ServiceProduct storage product = providerProducts[providerId][productType];
+
         // Check product exists
-        require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
+        require(product.isActive, "Product does not exist for this provider");
 
         // Validate product data
         _validateProductData(productType, productData);
@@ -309,22 +313,20 @@ contract ServiceProviderRegistry is
         _validateCapabilities(capabilityKeys, capabilityValues);
 
         // Clear old capabilities from mapping
-        ServiceProduct storage existingProduct = providerProducts[providerId][productType];
-        for (uint256 i = 0; i < existingProduct.capabilityKeys.length; i++) {
-            delete productCapabilities[providerId][productType][existingProduct.capabilityKeys[i]];
+        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
+            delete capabilities[product.capabilityKeys[i]];
         }
 
         // Update product
-        providerProducts[providerId][productType] = ServiceProduct({
-            productType: productType,
-            productData: productData,
-            capabilityKeys: capabilityKeys,
-            isActive: true
-        });
+        product.productType = productType;
+        product.productData = productData;
+        product.capabilityKeys = capabilityKeys;
+        product.isActive = true;
 
         // Store new capability values in mapping
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
-            productCapabilities[providerId][productType][capabilityKeys[i]] = capabilityValues[i];
+            capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
 
         // Extract serviceUrl for event
@@ -380,8 +382,9 @@ contract ServiceProviderRegistry is
 
         // Clear capabilities from mapping
         ServiceProduct storage product = providerProducts[providerId][productType];
+        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
-            delete productCapabilities[providerId][productType][product.capabilityKeys[i]];
+            delete capabilities[product.capabilityKeys[i]];
         }
 
         // Mark product as inactive
@@ -488,8 +491,9 @@ contract ServiceProviderRegistry is
         if (providerProducts[providerId][ProductType.PDP].productData.length > 0) {
             ServiceProduct storage product = providerProducts[providerId][ProductType.PDP];
             // Clear capabilities from mapping
+            mapping(string => string) storage capabilities = productCapabilities[providerId][ProductType.PDP];
             for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
-                delete productCapabilities[providerId][ProductType.PDP][product.capabilityKeys[i]];
+                delete capabilities[product.capabilityKeys[i]];
             }
             product.isActive = false;
         }
