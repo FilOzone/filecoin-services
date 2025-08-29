@@ -152,17 +152,23 @@ ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
 # defining a global pattern rule because patterns for files that don't exist
 # at parse-time will be rejected by make, so we'll be explicit instead.
 define ABI_RULE
-abi/$(1).abi.json: out/$(1).sol/$(1).json
-	@mkdir -p abi
+abi/$(1).abi.json: out/$(1).sol/$(1).json | abi
 	@echo "Extracting ABI for $(1)..."
 	@jq '.abi' $$< > $$@
+
+# Mark JSON as coming from build (unless it's the library which has its own rule)
+ifneq ($(1),FilecoinWarmStorageServiceStateLibrary)
+out/$(1).sol/$(1).json: | build
+	@# Created by build
+endif
 endef
 
 # Generate rules for each contract using the template above
 $(foreach contract,$(ABI_CONTRACTS),$(eval $(call ABI_RULE,$(contract))))
 
-# JSON files depend on build
-out/%.sol/%.json: build
+# Directory for ABIs
+abi:
+	@mkdir -p abi
 
 # Update ABIs
 .PHONY: update-abi
