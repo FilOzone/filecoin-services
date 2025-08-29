@@ -12,7 +12,7 @@
     ]
   },
   "addPieces": {
-    "signature": "0x6a44a94b3965ce8948b7e5975f1978dbaf5e975a4ccadd837ca7da9539ebe89c0b0cbfd2775d29a60e473197c84940280dac1b7e6a7e1e1bdbf4bd0f7d4a9a1a1b",
+    "signature": "0x215d2d6ea06c7daad46e3e636b305885c7d09aa34420e8dbace032af03cae06224cf678da808c7f1026b08ccf51f3d5d53351b935f5eee9750b80e78caffaaa91c",
     "clientDataSetId": 12345,
     "firstAdded": 1,
     "pieceCidBytes": [

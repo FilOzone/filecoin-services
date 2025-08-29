@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any changes will be lost.
-// Generated with tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
+// Generated with tools/generate_storage_layout.sh
 
 bytes32 constant SERVICE_COMMISSION_BPS_SLOT = bytes32(uint256(0));
 bytes32 constant CLIENT_DATA_SET_IDS_SLOT = bytes32(uint256(1));

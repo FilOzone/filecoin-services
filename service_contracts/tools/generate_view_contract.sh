@@ -5,13 +5,14 @@ echo pragma solidity ^0.8.20\;
 echo
 echo // Code generated - DO NOT EDIT.
 echo // This file is a generated binding and any changes will be lost.
-echo // Generated with $0 $@
+echo // Generated with tools/generate_view_contract.sh
 echo
 
 echo 'import "./FilecoinWarmStorageService.sol";'
 echo 'import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
+echo 'import "@pdp/IPDPProvingSchedule.sol";'
 
-echo contract FilecoinWarmStorageServiceStateView {
+echo contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 echo "    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;"
 echo "    FilecoinWarmStorageService public immutable service;"
 echo "    constructor(FilecoinWarmStorageService _service) {"

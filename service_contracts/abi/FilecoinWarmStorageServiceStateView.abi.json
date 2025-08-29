@@ -322,6 +322,34 @@
   },
   {
     "type": "function",
+    "name": "getPDPConfig",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "maxProvingPeriod",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "challengeWindowSize",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "challengesPerProof",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "initChallengeWindowStart",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getPieceMetadata",
     "inputs": [
       {
@@ -350,6 +378,25 @@
         "name": "value",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextPDPChallengeWindowStart",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -418,7 +465,7 @@
   },
   {
     "type": "function",
-    "name": "provingDeadlines",
+    "name": "provingDeadline",
     "inputs": [
       {
         "name": "setId",
@@ -466,5 +513,16 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "ProvingPeriodNotInitialized",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   }
 ]

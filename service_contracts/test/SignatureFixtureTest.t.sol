@@ -54,8 +54,8 @@ contract MetadataSignatureTestContract is EIP712 {
 
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
         "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
-        "Cid(bytes data)" "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
-        "MetadataEntry(string key,string value)"
+        "Cid(bytes data)" "MetadataEntry(string key,string value)"
+        "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
@@ -406,6 +406,13 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("    { name: 'firstAdded', type: 'uint256' },");
         console.log("    { name: 'pieceData', type: 'Cid[]' },");
         console.log("    { name: 'pieceMetadata', type: 'PieceMetadata[]' }");
+        console.log("  ],");
+        console.log("  SchedulePieceRemovals: [");
+        console.log("    { name: 'clientDataSetId', type: 'uint256' },");
+        console.log("    { name: 'pieceIds', type: 'uint256[]' }");
+        console.log("  ],");
+        console.log("  DeleteDataSet: [");
+        console.log("    { name: 'clientDataSetId', type: 'uint256' }");
         console.log("  ]");
     }
 

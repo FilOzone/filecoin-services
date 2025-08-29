@@ -5,7 +5,7 @@ echo pragma solidity ^0.8.20\;
 echo
 echo // Code generated - DO NOT EDIT.
 echo // This file is a generated binding and any changes will be lost.
-echo // Generated with $0 $@
+echo // Generated with tools/generate_storage_layout.sh
 echo
 
 forge inspect --json $1 storageLayout \
