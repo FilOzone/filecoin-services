@@ -202,6 +202,11 @@
             "name": "paymentEndEpoch",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "cdnEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -266,6 +271,11 @@
           },
           {
             "name": "paymentEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cdnEndEpoch",
             "type": "uint256",
             "internalType": "uint256"
           }
