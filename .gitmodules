@@ -13,3 +13,6 @@
 [submodule "service_contracts/lib/pdp"]
 	path = service_contracts/lib/pdp
 	url = https://github.com/FilOzone/pdp
+[submodule "service_contracts/lib/session-key-registry"]
+	path = service_contracts/lib/session-key-registry
+	url = git@github.com:FilOzone/SessionKeyRegistry.git

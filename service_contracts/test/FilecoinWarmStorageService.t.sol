@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
 import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -224,16 +225,21 @@ contract FilecoinWarmStorageServiceTest is Test {
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
+    SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
 
     // Test accounts
     address public deployer;
     address public client;
     address public serviceProvider;
     address public filCDN;
+    address public session;
 
     address public sp1;
     address public sp2;
     address public sp3;
+
+    address public sessionKey1;
+    address public sessionKey2;
 
     // Test parameters
     bytes public extraData;
@@ -243,6 +249,17 @@ contract FilecoinWarmStorageServiceTest is Test {
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
+
+    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
+        "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+    );
+    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+    );
+    bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
+        keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
+
+    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
     // Structs
     struct PieceMetadataSetup {
@@ -281,6 +298,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         sp2 = address(0xf5);
         sp3 = address(0xf6);
 
+        // Session keys
+        sessionKey1 = address(0xa1);
+        sessionKey2 = address(0xa2);
+
         // Fund test accounts
         vm.deal(deployer, 100 ether);
         vm.deal(client, 100 ether);
@@ -308,8 +329,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, sessionKeyRegistry
+        );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -551,12 +573,41 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Get data set info
         FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertEq(dataSet.payer, client);
+        assertEq(dataSet.payee, serviceProvider);
         // Verify the commission rate was set correctly for basic service (no CDN)
         Payments.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
         assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
 
         assertEq(dataSet.cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
         assertEq(dataSet.cdnRailId, 0, "CDN rail ID should be 0 for basic service (no CDN)");
+
+        // now with session key
+        vm.prank(client);
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = CREATE_DATA_SET_TYPEHASH;
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        makeSignaturePass(sessionKey1);
+
+        vm.prank(serviceProvider);
+        uint256 newDataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        FilecoinWarmStorageService.DataSetInfo memory dataSet2 = viewContract.getDataSet(newDataSetId2);
+        assertEq(dataSet2.payer, client);
+        assertEq(dataSet2.payee, serviceProvider);
+
+        // ensure another session key would be denied
+        makeSignaturePass(sessionKey2);
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        // session key expires
+        vm.warp(block.timestamp + 1);
+        makeSignaturePass(sessionKey1);
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
 
     function testCreateDataSetAddPieces() public {
@@ -638,6 +689,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         (bool e4, string memory v4) = viewContract.getPieceMetadata(dataSetId, 4, "meta");
         assertTrue(e4);
         assertEq(v4, metadataLong);
+
+        // now with session keys
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = ADD_PIECES_TYPEHASH;
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+
+        makeSignaturePass(sessionKey1);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+        );
+        firstAdded += pieceData2.length;
+
+        // unauthorized session key reverts
+        makeSignaturePass(sessionKey2);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+        );
+
+        // expired session key reverts
+        vm.warp(block.timestamp + 1);
+        makeSignaturePass(sessionKey1);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
+        );
     }
 
     // Helper function to get account info from the Payments contract
@@ -2110,8 +2188,17 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
-    ) FilecoinWarmStorageService(_pdpVerifierAddress, _paymentsContractAddress, _usdfcTokenAddress, _filCDNAddress) {}
+        address _filCDNAddress,
+        SessionKeyRegistry _sessionKeyRegistry
+    )
+        FilecoinWarmStorageService(
+            _pdpVerifierAddress,
+            _paymentsContractAddress,
+            _usdfcTokenAddress,
+            _filCDNAddress,
+            _sessionKeyRegistry
+        )
+    {}
 
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
@@ -2133,6 +2220,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     uint256 public wrongSignerPrivateKey;
     uint256 public filCDNPrivateKey;
     address public filCDN;
+
+    SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
 
     function setUp() public {
         // Set up test accounts with known private keys
@@ -2158,8 +2247,9 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         payments = Payments(address(paymentsProxy));
 
         // Deploy and initialize the service
-        SignatureCheckingService serviceImpl =
-            new SignatureCheckingService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        SignatureCheckingService serviceImpl = new SignatureCheckingService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, sessionKeyRegistry
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -2233,6 +2323,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     address public deployer;
     address public filCDN;
 
+    SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
+
     function setUp() public {
         deployer = address(this);
         filCDN = address(0xf2);
@@ -2249,8 +2341,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
-        FilecoinWarmStorageService warmStorageImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, sessionKeyRegistry
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod

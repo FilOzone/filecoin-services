@@ -32,6 +32,11 @@ if [ -z "$FILCDN_ADDRESS" ]; then
   exit 1
 fi
 
+if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
+  echo "Error: SESSION_KEY_REGISTRY_ADDRESS is not set"
+  exit 1
+fi
+
 # Fixed constants for initialization
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 
@@ -69,7 +74,7 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
