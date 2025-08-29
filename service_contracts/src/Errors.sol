@@ -13,14 +13,16 @@ library Errors {
         Payments,
         /// USDFC contract address
         USDFC,
-        /// FilecoinCDN service contract address
-        FilecoinCDN,
+        /// FilCDN controller address
+        FilCDNController,
         /// Creator address
         Creator,
         /// Payer address
         Payer,
         /// Service provider address
-        ServiceProvider
+        ServiceProvider,
+        /// FilCDN beneficiary address
+        FilCDNBeneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -124,6 +126,14 @@ library Errors {
     /// @param dataSetId The data set ID
     error DataSetPaymentAlreadyTerminated(uint256 dataSetId);
 
+    /// @notice Data set payment is not terminated
+    /// @param dataSetId The data set ID
+    error DataSetPaymentNotTerminated(uint256 dataSetId);
+
+    /// @notice CDN payment is not terminated
+    /// @param dataSetId The data set ID
+    error CDNPaymentNotTerminated(uint256 dataSetId);
+
     /// @notice The specified data set does not exist or is not valid
     /// @param dataSetId The data set ID that was invalid or unregistered
     error InvalidDataSetId(uint256 dataSetId);
@@ -176,6 +186,19 @@ library Errors {
     /// @notice Data set does not exist for the given rail
     /// @param railId The rail ID
     error DataSetNotFoundForRail(uint256 railId);
+
+    /// @notice CDN service is not configured for the given data set
+    /// @param dataSetId The data set ID
+    error CDNServiceNotConfigured(uint256 dataSetId);
+
+    /// @notice Only the FilCDN controller can call this function
+    /// @param expected The expected CDN address
+    /// @param actual The caller address
+    error OnlyCDNAllowed(address expected, address actual);
+
+    /// @notice CDN payment is already terminated
+    /// @param dataSetId The data set ID
+    error CDNPaymentAlreadyTerminated(uint256 dataSetId);
 
     /// @notice Metadata key and value length mismatch
     /// @dev Thrown when metadataKeys and metadataValues arrays do not have the same length

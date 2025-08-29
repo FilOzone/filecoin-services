@@ -92,7 +92,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
-        bytes32[] memory info8 = service.extsloadStruct(slot, 8);
+        bytes32[] memory info8 = service.extsloadStruct(slot, 9);
         info.pdpRailId = uint256(info8[0]);
         info.cacheMissRailId = uint256(info8[1]);
         info.cdnRailId = uint256(info8[2]);
@@ -101,6 +101,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         info.commissionBps = uint256(info8[5]);
         info.clientDataSetId = uint256(info8[6]);
         info.paymentEndEpoch = uint256(info8[7]);
+        info.cdnEndEpoch = uint256(info8[8]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -229,6 +230,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return deadline + periodsSkipped * maxProvingPeriod - challengeWindowSize;
     }
 
+    /**
+     * @dev To determine termination status: check if paymentEndEpoch != 0.
+     * If paymentEndEpoch > 0, the rails have already been terminated.
+     * @dev To determine deletion status: deleted datasets don't appear in
+     * getClientDataSets() anymore - they are completely removed.
+     */
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         internal
         view
