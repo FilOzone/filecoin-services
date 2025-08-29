@@ -1121,13 +1121,13 @@ contract ServiceProviderRegistryFullTest is Test {
         );
     }
 
-    function testCannotRemoveLastProduct() public {
+    function testCanRemoveLastProduct() public {
         // Empty capability arrays
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{value: REGISTRATION_FEE}(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -1136,10 +1136,17 @@ contract ServiceProviderRegistryFullTest is Test {
             emptyValues
         );
 
-        // Try to remove the only product
+        // Verify product exists before removal
+        assertTrue(registry.providerHasProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP));
+
+        // Remove the only product - should succeed now
         vm.prank(provider1);
-        vm.expectRevert("Cannot remove last product");
+        vm.expectEmit(true, true, false, true);
+        emit ProductRemoved(providerId, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
         registry.removeProduct(ServiceProviderRegistryStorage.ProductType.PDP);
+
+        // Verify product is removed
+        assertFalse(registry.providerHasProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP));
     }
 
     // ========== Getter Tests ==========

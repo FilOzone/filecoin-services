@@ -370,16 +370,6 @@ contract ServiceProviderRegistry is
         // Check product exists
         require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
 
-        // Count active products
-        uint256 activeProductCount = 0;
-        // For now we only have PDP, but this is extensible
-        if (providerProducts[providerId][ProductType.PDP].isActive) {
-            activeProductCount++;
-        }
-
-        // Don't allow removing the last product
-        require(activeProductCount > 1, "Cannot remove last product");
-
         // Clear capabilities from mapping
         ServiceProduct storage product = providerProducts[providerId][productType];
         mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
