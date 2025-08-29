@@ -4,7 +4,7 @@ type DataSet @entity(immutable: false) {
   listener: Bytes! # address
   clientAddr: Bytes! # address
   withCDN: Boolean!
-  serviceProvider: Provider! # address of the provider
+  storageProvider: Provider! # address of the provider
   leafCount: BigInt! # uint256
   challengeRange: BigInt! # uint256
   isActive: Boolean!
@@ -25,12 +25,19 @@ type DataSet @entity(immutable: false) {
   # Derived relationships
   pieces: [Piece!]! @derivedFrom(field: "dataSet")
   faultRecords: [FaultRecord!]! @derivedFrom(field: "dataSet")
-  rail: Rail @derivedFrom(field: "dataSet")
+  rails: [Rail!]! @derivedFrom(field: "dataSet")
+}
+
+enum RailType {
+  PDP
+  CACHE_MISS
+  CDN
 }
 
 type Rail @entity(immutable: false) {
   id: Bytes!
   railId: BigInt!
+  type: RailType!
   token: Bytes!
   from: Bytes!
   to: Bytes!
@@ -82,7 +89,7 @@ type Provider @entity(immutable: false) {
   blockNumber: BigInt!
 
   # Derived relationship
-  dataSets: [DataSet!]! @derivedFrom(field: "serviceProvider")
+  dataSets: [DataSet!]! @derivedFrom(field: "storageProvider")
 }
 
 type Piece @entity(immutable: false) {

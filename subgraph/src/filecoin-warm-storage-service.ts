@@ -1,6 +1,6 @@
 import { Address, BigInt, Bytes, crypto, log } from "@graphprotocol/graph-ts";
 import {
-  DataSetRailCreated as DataSetRailCreatedEvent,
+  DataSetRailsCreated as DataSetRailsCreatedEvent,
   FaultRecord as FaultRecordEvent,
   ProviderApproved as ProviderApprovedEvent,
   ProviderRegistered as ProviderRegisteredEvent,
@@ -17,14 +17,11 @@ import {
   Rail,
   RateChangeQueue,
 } from "../generated/schema";
-import {
-  DefaultLockupPeriod,
-  NumChallenges,
-  PDPVerifierAddress,
-  USDFCTokenAddress,
-} from "../utils";
+import { NumChallenges, PDPVerifierAddress } from "./constants";
 import { decodeStringAddressBoolBytes } from "./decode";
 import { SumTree } from "./sumTree";
+import { createRails } from "./utils/entity";
+import { ProviderStatus, RailType } from "./constants";
 
 // --- Helper Functions
 function getDataSetEntityId(setId: BigInt): Bytes {
@@ -194,7 +191,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 
   const challengeEpoch = dataSet.nextChallengeEpoch;
   const challengeRange = dataSet.challengeRange;
-  const serviceProvider = dataSet.storageProvider;
+  const storageProviderId = dataSet.storageProvider;
   const nextPieceId = dataSet.totalPieces;
 
   let nextChallengeEpoch = BigInt.fromI32(0);
@@ -293,7 +290,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(serviceProvider);
+  const provider = Provider.load(storageProviderId);
   if (provider) {
     provider.totalFaultedPeriods =
       provider.totalFaultedPeriods.plus(periodsFaultedParam);
@@ -305,7 +302,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     provider.save();
   } else {
     log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [
-      serviceProvider.toHex(),
+      storageProviderId.toHex(),
       setId.toString(),
     ]);
   }
@@ -315,16 +312,19 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
  * Handles the DataSetRailCreated event.
  * Creates a new rail for a data set.
  */
-export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
+export function handleDataSetRailsCreated(
+  event: DataSetRailsCreatedEvent
+): void {
   const listenerAddr = event.address;
   const setId = event.params.dataSetId;
-  const railId = event.params.railId;
+  const pdpRailId = event.params.pdpRailId;
+  const cacheMissRailId = event.params.cacheMissRailId;
+  const cdnRailId = event.params.cdnRailId;
   const clientAddr = event.params.payer;
-  const serviceProvider = event.params.payee;
+  const storageProviderId = event.params.payee;
   const withCDN = event.params.withCDN;
   const dataSetEntityId = getDataSetEntityId(setId);
-  const railEntityId = getRailEntityId(railId);
-  const providerEntityId = serviceProvider; // Provider ID is the serviceProvider address
+  const providerEntityId = storageProviderId; // Provider ID is the storageProvider address
 
   let dataSet = new DataSet(dataSetEntityId);
 
@@ -344,7 +344,7 @@ export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   dataSet.metadata = metadata;
   dataSet.clientAddr = clientAddr;
   dataSet.withCDN = withCDN;
-  dataSet.serviceProvider = providerEntityId; // Link to Provider via serviceProvider address (which is Provider's ID)
+  dataSet.storageProvider = providerEntityId; // Link to Provider via storageProvider address (which is Provider's ID)
   dataSet.listener = listenerAddr;
   dataSet.isActive = true;
   dataSet.leafCount = BigInt.fromI32(0);
@@ -363,29 +363,22 @@ export function handleDataSetRailCreated(event: DataSetRailCreatedEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  // Create Rail
-  let rail = new Rail(railEntityId);
-  rail.railId = railId;
-  rail.token = Address.fromHexString(USDFCTokenAddress);
-  rail.from = clientAddr;
-  rail.to = serviceProvider;
-  rail.operator = listenerAddr;
-  rail.arbiter = listenerAddr;
-  rail.paymentRate = BigInt.fromI32(0);
-  rail.lockupPeriod = BigInt.fromI32(DefaultLockupPeriod);
-  rail.lockupFixed = BigInt.fromI32(0); // lockupFixed - oneTimePayment
-  rail.settledUpto = BigInt.fromI32(0);
-  rail.endEpoch = BigInt.fromI32(0);
-  rail.queueLength = BigInt.fromI32(0);
-  rail.dataSet = dataSetEntityId;
-  rail.save();
+  // Create Rails
+  createRails(
+    [pdpRailId, cacheMissRailId, cdnRailId],
+    [RailType.PDP, RailType.CACHE_MISS, RailType.CDN],
+    clientAddr,
+    storageProviderId,
+    listenerAddr,
+    dataSetEntityId
+  );
 
   // Create or Update Provider
   let provider = Provider.load(providerEntityId);
   if (provider == null) {
     provider = new Provider(providerEntityId);
-    provider.address = serviceProvider;
-    provider.status = "Created";
+    provider.address = storageProviderId;
+    provider.status = ProviderStatus.Created;
     provider.totalPieces = BigInt.fromI32(0);
     provider.totalDataSets = BigInt.fromI32(1);
     provider.totalFaultedPeriods = BigInt.fromI32(0);
@@ -457,7 +450,7 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
   provider.serviceUrl = serviceUrl;
   provider.peerId = peerId;
   provider.registeredAt = event.block.number;
-  provider.status = "Registered";
+  provider.status = ProviderStatus.Registered;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -466,12 +459,6 @@ export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
 
 /**
  * Handler for ProviderApproved event
- * Follows the intended flow:
- * 1. Check if event is emitted in addServiceProvider function
- * 2. If yes, extract all addServiceProvider calldatas and find matching provider
- * 3. If no match found in calldatas, log warning
- * 4. If not addServiceProvider function, find existing provider and update status
- * 5. If no existing provider found, log warning
  */
 export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerAddress = event.params.provider;
@@ -489,7 +476,7 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
 
   provider.providerId = providerId;
   provider.approvedAt = event.block.number;
-  provider.status = "Approved";
+  provider.status = ProviderStatus.Approved;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -506,7 +493,7 @@ export function handleProviderRejected(event: ProviderRejectedEvent): void {
   let provider = Provider.load(providerAddress);
   if (!provider) return;
 
-  provider.status = "Rejected";
+  provider.status = ProviderStatus.Rejected;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -523,7 +510,7 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
   let provider = Provider.load(providerAddress);
   if (!provider) return;
 
-  provider.status = "Removed";
+  provider.status = ProviderStatus.Removed;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 

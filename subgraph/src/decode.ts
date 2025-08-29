@@ -92,18 +92,6 @@ export class BytesStringResult {
   }
 }
 
-export class AddServiceProviderFunctionParams {
-  provider: Address;
-  pdpUrl: string;
-  pieceRetrievalUrl: string;
-
-  constructor(provider: Address, pdpUrl: string, pieceRetrievalUrl: string) {
-    this.provider = provider;
-    this.pdpUrl = pdpUrl;
-    this.pieceRetrievalUrl = pieceRetrievalUrl;
-  }
-}
-
 //--------------------------------
 // 2. Contract Function Decoders
 //--------------------------------
