@@ -5,6 +5,7 @@ import "forge-std/Test.sol";
 import "../src/ServiceProviderRegistry.sol";
 import "../src/ServiceProviderRegistryStorage.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract ServiceProviderRegistryFullTest is Test {
     ServiceProviderRegistry public implementation;
@@ -91,7 +92,7 @@ contract ServiceProviderRegistryFullTest is Test {
             storagePricePerTibPerMonth: 1000000000000000000, // 1 FIL per TiB per month
             minProvingPeriodInEpochs: 2880, // 1 day in epochs (30 second blocks)
             location: "North America",
-            paymentTokenAddress: address(0) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
         updatedPDPData = ServiceProviderRegistryStorage.PDPOffering({
@@ -103,7 +104,7 @@ contract ServiceProviderRegistryFullTest is Test {
             storagePricePerTibPerMonth: 2000000000000000000, // 2 FIL per TiB per month
             minProvingPeriodInEpochs: 1440, // 12 hours in epochs
             location: "Europe",
-            paymentTokenAddress: address(0) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
         // Encode PDP data

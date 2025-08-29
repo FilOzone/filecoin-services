@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 /// @title ServiceProviderRegistryStorage
 /// @notice Centralized storage contract for ServiceProviderRegistry
 /// @dev All storage variables are declared here to prevent storage slot collisions during upgrades
@@ -40,7 +42,7 @@ contract ServiceProviderRegistryStorage {
         uint256 storagePricePerTibPerMonth; // Storage price per TiB per month (in token's smallest unit)
         uint256 minProvingPeriodInEpochs; // Minimum proving period in epochs
         string location; // Geographic location of the service provider
-        address paymentTokenAddress; // Token address for payment (address(0) for FIL)
+        IERC20 paymentTokenAddress; // Token contract for payment (IERC20(address(0)) for FIL)
     }
 
     /// @notice Combined provider and product information for detailed queries

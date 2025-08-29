@@ -175,7 +175,7 @@ contract ProviderValidationTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-West",
-                    paymentTokenAddress: address(0) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
                 })
             ),
             new string[](0),
@@ -212,7 +212,7 @@ contract ProviderValidationTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-West",
-                    paymentTokenAddress: address(0) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
                 })
             ),
             new string[](0),
