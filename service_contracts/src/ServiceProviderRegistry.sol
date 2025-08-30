@@ -167,6 +167,8 @@ contract ServiceProviderRegistry is
         // Update address mapping
         addressToProviderId[msg.sender] = providerId;
 
+        activeProviderCount++;
+
         // Emit provider registration event
         emit ProviderRegistered(providerId, msg.sender, block.number);
 
@@ -474,6 +476,8 @@ contract ServiceProviderRegistry is
         // Soft delete - mark as inactive
         providers[providerId].isActive = false;
 
+        activeProviderCount--;
+
         // Mark all products as inactive and clear capabilities
         // For now just PDP, but this is extensible
         if (providerProducts[providerId][ProductType.PDP].productData.length > 0) {
@@ -682,20 +686,53 @@ contract ServiceProviderRegistry is
     /// @notice Get all active providers
     /// @return activeProviderIds Array of active provider IDs
     function getAllActiveProviders() external view returns (uint256[] memory activeProviderIds) {
-        // Count active providers
-        uint256 activeCount = 0;
-        for (uint256 i = 1; i <= numProviders; i++) {
-            if (providers[i].isActive) {
-                activeCount++;
-            }
-        }
+        uint256 activeCount = activeProviderCount;
 
         // Collect active provider IDs
         activeProviderIds = new uint256[](activeCount);
         uint256 index = 0;
-        for (uint256 i = 1; i <= numProviders; i++) {
+        for (uint256 i = 1; i <= numProviders && index < activeCount; i++) {
             if (providers[i].isActive) {
                 activeProviderIds[index++] = i;
+            }
+        }
+    }
+
+    /// @notice Get all active providers with pagination
+    /// @param offset Starting index for pagination (0-based)
+    /// @param limit Maximum number of results to return
+    /// @return providerIds Array of active provider IDs
+    /// @return hasMore Whether there are more results after this page
+    function getAllActiveProvidersPaginated(uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory providerIds, bool hasMore)
+    {
+        uint256 totalCount = activeProviderCount;
+
+        if (offset >= totalCount || limit == 0) {
+            providerIds = new uint256[](0);
+            hasMore = false;
+            return (providerIds, hasMore);
+        }
+
+        uint256 itemsToReturn = limit;
+        if (offset + limit > totalCount) {
+            itemsToReturn = totalCount - offset;
+        }
+
+        providerIds = new uint256[](itemsToReturn);
+        hasMore = (offset + itemsToReturn) < totalCount;
+
+        uint256 currentIndex = 0;
+        uint256 resultIndex = 0;
+
+        for (uint256 i = 1; i <= numProviders && resultIndex < itemsToReturn; i++) {
+            if (providers[i].isActive) {
+                if (currentIndex >= offset && currentIndex < offset + limit) {
+                    providerIds[resultIndex++] = i;
+                }
+                currentIndex++;
             }
         }
     }

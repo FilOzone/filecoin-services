@@ -82,4 +82,7 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Count of active providers offering each product type
     mapping(ProductType productType => uint256 count) public activeProductTypeProviderCount;
+
+    /// @notice Count of active providers
+    uint256 public activeProviderCount;
 }
