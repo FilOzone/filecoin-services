@@ -66,7 +66,6 @@ contract ServiceProviderRegistry is
     event ProductAdded(
         uint256 indexed providerId,
         ProductType indexed productType,
-        uint256 addedAt,
         string serviceUrl,
         address beneficiary,
         string[] capabilityKeys,
@@ -182,7 +181,7 @@ contract ServiceProviderRegistry is
         }
 
         emit ProductAdded(
-            providerId, productType, block.number, serviceUrl, msg.sender, capabilityKeys, capabilityValues
+            providerId, productType, serviceUrl, msg.sender, capabilityKeys, capabilityValues
         );
 
         // Burn the registration fee
@@ -235,7 +234,6 @@ contract ServiceProviderRegistry is
         emit ProductAdded(
             providerId,
             productType,
-            block.number,
             serviceUrl,
             providers[providerId].beneficiary,
             capabilityKeys,
@@ -673,11 +671,7 @@ contract ServiceProviderRegistry is
     /// @return info The provider information (empty struct if not registered)
     function getProviderByAddress(address providerAddress) external view returns (ServiceProviderInfo memory info) {
         uint256 providerId = addressToProviderId[providerAddress];
-        if (providerId != 0 && providerId <= numProviders && providers[providerId].beneficiary != address(0)) {
-            return providers[providerId];
-        }
-        // Return empty struct if not found
-        return info;
+        return providers[providerId];
     }
 
     /// @notice Get provider ID by address
@@ -735,11 +729,6 @@ contract ServiceProviderRegistry is
         return numProviders + 1;
     }
 
-    /// @notice Returns the registration fee amount
-    /// @return The registration fee in attoFIL
-    function getRegistrationFee() external pure returns (uint256) {
-        return REGISTRATION_FEE;
-    }
 
     /// @notice Get multiple capability values for a product
     /// @param providerId The ID of the provider

@@ -41,7 +41,6 @@ contract ServiceProviderRegistryFullTest is Test {
     event ProductAdded(
         uint256 indexed providerId,
         ServiceProviderRegistryStorage.ProductType indexed productType,
-        uint256 addedAt,
         string serviceUrl,
         address beneficiary,
         string[] capabilityKeys,
@@ -119,7 +118,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
         assertEq(registry.owner(), owner, "Owner should be deployer");
         assertEq(registry.getNextProviderId(), 1, "Next provider ID should start at 1");
-        assertEq(registry.getRegistrationFee(), 5 ether, "Registration fee should be 5 FIL");
+        assertEq(registry.REGISTRATION_FEE(), 5 ether, "Registration fee should be 5 FIL");
         assertEq(registry.REGISTRATION_FEE(), 5 ether, "Registration fee constant should be 5 FIL");
         assertEq(registry.getProviderCount(), 0, "Provider count should be 0");
 
@@ -156,7 +155,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.expectEmit(true, true, false, true);
         emit ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, block.number, SERVICE_URL, provider1, capKeys, capValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, capKeys, capValues
         );
 
         // Register provider
@@ -1438,7 +1437,6 @@ contract ServiceProviderRegistryFullTest is Test {
         emit ProductAdded(
             1,
             ServiceProviderRegistryStorage.ProductType.PDP,
-            block.number,
             SERVICE_URL,
             provider1,
             emptyKeys,
