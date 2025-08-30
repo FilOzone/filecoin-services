@@ -397,17 +397,10 @@
   },
   {
     "type": "function",
-<<<<<<< HEAD
     "name": "isProviderApproved",
     "inputs": [
       {
         "name": "providerId",
-=======
-    "name": "nextPDPChallengeWindowStart",
-    "inputs": [
-      {
-        "name": "setId",
->>>>>>> origin/main
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -415,13 +408,27 @@
     "outputs": [
       {
         "name": "",
-<<<<<<< HEAD
         "type": "bool",
         "internalType": "bool"
-=======
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "nextPDPChallengeWindowStart",
+    "inputs": [
+      {
+        "name": "setId",
         "type": "uint256",
         "internalType": "uint256"
->>>>>>> origin/main
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
