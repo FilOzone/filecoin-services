@@ -732,18 +732,17 @@ contract ServiceProviderRegistry is
         providerExists(providerId)
         returns (bool[] memory exists, string[] memory values)
     {
-        ServiceProduct memory product = providerProducts[providerId][productType];
         exists = new bool[](keys.length);
         values = new string[](keys.length);
 
+        // Cache the mapping reference
+        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+
         for (uint256 i = 0; i < keys.length; i++) {
-            // Check if the key exists in the capability keys array
-            for (uint256 j = 0; j < product.capabilityKeys.length; j++) {
-                if (keccak256(bytes(product.capabilityKeys[j])) == keccak256(bytes(keys[i]))) {
-                    exists[i] = true;
-                    values[i] = productCapabilities[providerId][productType][keys[i]];
-                    break;
-                }
+            string memory value = capabilities[keys[i]];
+            if (bytes(value).length > 0) {
+                exists[i] = true;
+                values[i] = value;
             }
         }
     }
@@ -760,14 +759,9 @@ contract ServiceProviderRegistry is
         providerExists(providerId)
         returns (bool exists, string memory value)
     {
-        // Check if the key exists in the capability keys array
-        ServiceProduct memory product = providerProducts[providerId][productType];
-        for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
-            if (keccak256(bytes(product.capabilityKeys[i])) == keccak256(bytes(key))) {
-                return (true, productCapabilities[providerId][productType][key]);
-            }
-        }
-        return (false, "");
+        // Directly check the mapping
+        value = productCapabilities[providerId][productType][key];
+        exists = bytes(value).length > 0;
     }
 
     /// @notice Validate product data based on product type
