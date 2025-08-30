@@ -377,6 +377,40 @@
   },
   {
     "type": "function",
+    "name": "getPDPConfig",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "maxProvingPeriod",
+        "type": "uint64",
+        "internalType": "uint64"
+      },
+      {
+        "name": "challengeWindowSize",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "challengesPerProof",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "initChallengeWindowStart",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getPieceMetadata",
     "inputs": [
       {
@@ -416,7 +450,11 @@
   },
   {
     "type": "function",
+<<<<<<< HEAD
     "name": "isProviderApproved",
+=======
+    "name": "nextPDPChallengeWindowStart",
+>>>>>>> origin/main
     "inputs": [
       {
         "name": "service",
@@ -424,7 +462,11 @@
         "internalType": "contract FilecoinWarmStorageService"
       },
       {
+<<<<<<< HEAD
         "name": "providerId",
+=======
+        "name": "setId",
+>>>>>>> origin/main
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -432,8 +474,13 @@
     "outputs": [
       {
         "name": "",
+<<<<<<< HEAD
         "type": "bool",
         "internalType": "bool"
+=======
+        "type": "uint256",
+        "internalType": "uint256"
+>>>>>>> origin/main
       }
     ],
     "stateMutability": "view"
@@ -517,7 +564,7 @@
   },
   {
     "type": "function",
-    "name": "provingDeadlines",
+    "name": "provingDeadline",
     "inputs": [
       {
         "name": "service",
@@ -562,5 +609,16 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "ProvingPeriodNotInitialized",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   }
 ]
