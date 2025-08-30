@@ -624,6 +624,11 @@
         "name": "providerId",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -651,13 +656,13 @@
   },
   {
     "type": "function",
-    "name": "serviceProviderRegistryAddress",
+    "name": "serviceProviderRegistry",
     "inputs": [],
     "outputs": [
       {
         "name": "",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract ServiceProviderRegistry"
       }
     ],
     "stateMutability": "view"
