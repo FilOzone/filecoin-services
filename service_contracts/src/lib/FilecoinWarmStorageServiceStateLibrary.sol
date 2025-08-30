@@ -88,15 +88,16 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
-        bytes32[] memory info8 = service.extsloadStruct(slot, 8);
-        info.pdpRailId = uint256(info8[0]);
-        info.cacheMissRailId = uint256(info8[1]);
-        info.cdnRailId = uint256(info8[2]);
-        info.payer = address(uint160(uint256(info8[3])));
-        info.payee = address(uint160(uint256(info8[4])));
-        info.commissionBps = uint256(info8[5]);
-        info.clientDataSetId = uint256(info8[6]);
-        info.paymentEndEpoch = uint256(info8[7]);
+        bytes32[] memory info9 = service.extsloadStruct(slot, 9);
+        info.pdpRailId = uint256(info9[0]);
+        info.cacheMissRailId = uint256(info9[1]);
+        info.cdnRailId = uint256(info9[2]);
+        info.payer = address(uint160(uint256(info9[3])));
+        info.payee = address(uint160(uint256(info9[4])));
+        info.commissionBps = uint256(info9[5]);
+        info.clientDataSetId = uint256(info9[6]);
+        info.paymentEndEpoch = uint256(info9[7]);
+        info.providerId = uint256(info9[8]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -374,6 +375,39 @@ library FilecoinWarmStorageServiceStateLibrary {
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
             values[i] = _getPieceMetadataValue(service, dataSetId, pieceId, keys[i]);
+        }
+    }
+
+    /**
+     * @notice Check if a provider is approved
+     * @param service The service contract
+     * @param providerId The ID of the provider to check
+     * @return Whether the provider is approved
+     */
+    function isProviderApproved(FilecoinWarmStorageService service, uint256 providerId) public view returns (bool) {
+        return service.extsload(keccak256(abi.encode(providerId, APPROVED_PROVIDERS_SLOT))) != bytes32(0);
+    }
+
+    /**
+     * @notice Get all approved provider IDs
+     * @param service The service contract
+     * @return providerIds Array of all approved provider IDs
+     */
+    function getApprovedProviders(FilecoinWarmStorageService service)
+        public
+        view
+        returns (uint256[] memory providerIds)
+    {
+        bytes32 slot = APPROVED_PROVIDER_IDS_SLOT;
+        uint256 length = uint256(service.extsload(slot));
+
+        if (length == 0) {
+            return new uint256[](0);
+        }
+
+        bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
+        assembly ("memory-safe") {
+            providerIds := result
         }
     }
 }
