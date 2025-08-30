@@ -180,9 +180,7 @@ contract ServiceProviderRegistry is
             serviceUrl = pdpOffering.serviceURL;
         }
 
-        emit ProductAdded(
-            providerId, productType, serviceUrl, msg.sender, capabilityKeys, capabilityValues
-        );
+        emit ProductAdded(providerId, productType, serviceUrl, msg.sender, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
@@ -232,12 +230,7 @@ contract ServiceProviderRegistry is
 
         // Emit event
         emit ProductAdded(
-            providerId,
-            productType,
-            serviceUrl,
-            providers[providerId].beneficiary,
-            capabilityKeys,
-            capabilityValues
+            providerId, productType, serviceUrl, providers[providerId].beneficiary, capabilityKeys, capabilityValues
         );
     }
 
@@ -268,6 +261,10 @@ contract ServiceProviderRegistry is
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
             capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
+
+        // Increment product type provider counts
+        productTypeProviderCount[productType]++;
+        activeProductTypeProviderCount[productType]++;
     }
 
     /// @notice Update an existing product configuration
@@ -378,6 +375,9 @@ contract ServiceProviderRegistry is
         // Mark product as inactive
         providerProducts[providerId][productType].isActive = false;
 
+        // Decrement active product type provider count
+        activeProductTypeProviderCount[productType]--;
+
         // Emit event
         emit ProductRemoved(providerId, productType, block.number);
     }
@@ -478,6 +478,12 @@ contract ServiceProviderRegistry is
         // For now just PDP, but this is extensible
         if (providerProducts[providerId][ProductType.PDP].productData.length > 0) {
             ServiceProduct storage product = providerProducts[providerId][ProductType.PDP];
+
+            // Decrement active count if product was active
+            if (product.isActive) {
+                activeProductTypeProviderCount[ProductType.PDP]--;
+            }
+
             // Clear capabilities from mapping
             mapping(string => string) storage capabilities = productCapabilities[providerId][ProductType.PDP];
             for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
@@ -551,13 +557,7 @@ contract ServiceProviderRegistry is
         view
         returns (PaginatedProviders memory result)
     {
-        // First, count total providers with this product
-        uint256 totalCount = 0;
-        for (uint256 i = 1; i <= numProviders; i++) {
-            if (providerProducts[i][productType].productData.length > 0) {
-                totalCount++;
-            }
-        }
+        uint256 totalCount = productTypeProviderCount[productType];
 
         // Handle edge cases
         if (offset >= totalCount || limit == 0) {
@@ -604,16 +604,7 @@ contract ServiceProviderRegistry is
         view
         returns (PaginatedProviders memory result)
     {
-        // First, count total active providers with this product
-        uint256 totalCount = 0;
-        for (uint256 i = 1; i <= numProviders; i++) {
-            if (
-                providers[i].isActive && providerProducts[i][productType].isActive
-                    && providerProducts[i][productType].productData.length > 0
-            ) {
-                totalCount++;
-            }
-        }
+        uint256 totalCount = activeProductTypeProviderCount[productType];
 
         // Handle edge cases
         if (offset >= totalCount || limit == 0) {
@@ -728,7 +719,6 @@ contract ServiceProviderRegistry is
     function getNextProviderId() external view returns (uint256) {
         return numProviders + 1;
     }
-
 
     /// @notice Get multiple capability values for a product
     /// @param providerId The ID of the provider

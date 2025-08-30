@@ -154,9 +154,7 @@ contract ServiceProviderRegistryFullTest is Test {
         capValues[3] = "ISO27001";
 
         vm.expectEmit(true, true, false, true);
-        emit ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, capKeys, capValues
-        );
+        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, capKeys, capValues);
 
         // Register provider
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1435,12 +1433,7 @@ contract ServiceProviderRegistryFullTest is Test {
         emit ProviderRegistered(1, provider1, block.number);
         vm.expectEmit(true, true, true, true);
         emit ProductAdded(
-            1,
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            SERVICE_URL,
-            provider1,
-            emptyKeys,
-            emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, emptyKeys, emptyValues
         );
 
         registry.registerProvider{value: REGISTRATION_FEE}(

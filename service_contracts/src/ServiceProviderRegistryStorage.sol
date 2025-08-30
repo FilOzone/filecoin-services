@@ -76,4 +76,10 @@ contract ServiceProviderRegistryStorage {
     /// @notice Capability values mapping for efficient lookups
     mapping(uint256 providerId => mapping(ProductType productType => mapping(string key => string value))) public
         productCapabilities;
+
+    /// @notice Count of providers (including inactive) offering each product type
+    mapping(ProductType productType => uint256 count) public productTypeProviderCount;
+
+    /// @notice Count of active providers offering each product type
+    mapping(ProductType productType => uint256 count) public activeProductTypeProviderCount;
 }
