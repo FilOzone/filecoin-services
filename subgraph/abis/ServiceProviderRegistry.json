@@ -1,0 +1,146 @@
+[
+  {
+    "type": "function",
+    "name": "getProvider",
+    "inputs": [{ "name": "providerId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [
+      {
+        "name": "info",
+        "type": "tuple",
+        "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
+        "components": [
+          { "name": "beneficiary", "type": "address", "internalType": "address" },
+          { "name": "name", "type": "string", "internalType": "string" },
+          { "name": "description", "type": "string", "internalType": "string" },
+          { "name": "isActive", "type": "bool", "internalType": "bool" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProviderByAddress",
+    "inputs": [{ "name": "providerAddress", "type": "address", "internalType": "address" }],
+    "outputs": [
+      {
+        "name": "info",
+        "type": "tuple",
+        "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
+        "components": [
+          { "name": "beneficiary", "type": "address", "internalType": "address" },
+          { "name": "name", "type": "string", "internalType": "string" },
+          { "name": "description", "type": "string", "internalType": "string" },
+          { "name": "isActive", "type": "bool", "internalType": "bool" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProduct",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "internalType": "uint256" },
+      { "name": "productType", "type": "uint8", "internalType": "enum ServiceProviderRegistryStorage.ProductType" }
+    ],
+    "outputs": [
+      { "name": "productData", "type": "bytes", "internalType": "bytes" },
+      { "name": "capabilityKeys", "type": "string[]", "internalType": "string[]" },
+      { "name": "isActive", "type": "bool", "internalType": "bool" }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "BeneficiaryTransferred",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "previousBeneficiary", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "newBeneficiary", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "transferredAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProductAdded",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      {
+        "name": "productType",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum ServiceProviderRegistryStorage.ProductType"
+      },
+      { "name": "addedAt", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
+      { "name": "beneficiary", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
+      { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProductRemoved",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      {
+        "name": "productType",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum ServiceProviderRegistryStorage.ProductType"
+      },
+      { "name": "removedAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProductUpdated",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      {
+        "name": "productType",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum ServiceProviderRegistryStorage.ProductType"
+      },
+      { "name": "updatedAt", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
+      { "name": "beneficiary", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
+      { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderInfoUpdated",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "updatedAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderRegistered",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "beneficiary", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "registeredAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderRemoved",
+    "inputs": [
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "removedAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  }
+]

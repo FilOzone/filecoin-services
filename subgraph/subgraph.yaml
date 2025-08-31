@@ -27,12 +27,8 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: StorageProviderChanged(indexed uint256,indexed address,indexed address)
-          handler: handleStorageProviderChanged
         - event: DataSetDeleted(indexed uint256,uint256)
           handler: handleDataSetDeleted
-        - event: PiecesAdded(indexed uint256,uint256[])
-          handler: handlePiecesAdded
         - event: PiecesRemoved(indexed uint256,uint256[])
           handler: handlePiecesRemoved
         - event: DataSetEmpty(indexed uint256)
@@ -66,18 +62,52 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: "DataSetRailsCreated(indexed uint256,uint256,uint256,uint256,address,address,bool)"
-          handler: handleDataSetRailsCreated
+        - event: "DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,string[],string[])"
+          handler: handleDataSetCreated
+        - event: "PieceAdded(indexed uint256,indexed uint256,string[],string[])"
+          handler: handlePieceAdded
+        - event: "DataSetServiceProviderChanged(indexed uint256,indexed address,indexed address)"
+          handler: handleDataSetServiceProviderChanged
         - event: "RailRateUpdated(indexed uint256,uint256,uint256)"
           handler: handleRailRateUpdated
         - event: "FaultRecord(indexed uint256,uint256,uint256)"
           handler: handleFaultRecord
-        - event: "ProviderRegistered(indexed address,string,bytes)"
-          handler: handleProviderRegistered
-        - event: "ProviderApproved(indexed address,indexed uint256)"
+        - event: "ProviderApproved(indexed uint256)"
           handler: handleProviderApproved
-        - event: "ProviderRejected(indexed address)"
-          handler: handleProviderRejected
-        - event: "ProviderRemoved(indexed address,indexed uint256)"
-          handler: handleProviderRemoved
+        - event: "ProviderUnapproved(indexed uint256)"
+          handler: handleProviderUnapproved
       file: ./src/filecoin-warm-storage-service.ts
+  - kind: ethereum
+    name: ServiceProviderRegistry
+    network: filecoin-testnet
+    source:
+      address: "0x7A605Ad01F7812F5C5e78aa16D795fc0be75974A"
+      abi: ServiceProviderRegistry
+      startBlock: 2942574
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - DataSet
+        - Provider
+        - ProviderProduct
+      abis:
+        - name: ServiceProviderRegistry
+          file: ./abis/ServiceProviderRegistry.json
+      eventHandlers:
+        - event: "ProviderRegistered(indexed uint256,indexed address,uint256)"
+          handler: handleProviderRegistered
+        - event: "ProviderInfoUpdated(indexed uint256,uint256)"
+          handler: handleProviderInfoUpdated
+        - event: "ProviderRemoved(indexed uint256,uint256)"
+          handler: handleProviderRemoved
+        - event: "ProductAdded(indexed uint256,indexed uint8,uint256,string,address,string[],string[])"
+          handler: handleProductAdded
+        - event: "ProductUpdated(indexed uint256,indexed uint8,uint256,string,address,string[],string[])"
+          handler: handleProductUpdated
+        - event: "ProductRemoved(indexed uint256,indexed uint8,uint256)"
+          handler: handleProductRemoved
+        - event: "BeneficiaryTransferred(indexed uint256,indexed address,indexed address,uint256)"
+          handler: handleBeneficiaryTransferred
+      file: ./src/service-provider-registry.ts

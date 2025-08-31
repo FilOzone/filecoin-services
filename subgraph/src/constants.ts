@@ -1,12 +1,22 @@
-export const PDPVerifierAddress = "0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9";
-
-export const USDFCTokenAddress = "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0";
+import { Address, Bytes, BigInt } from "@graphprotocol/graph-ts";
 
 export const NumChallenges = 5;
 
 export const LeafSize = 32;
 
 export const DefaultLockupPeriod = 2880 * 10; // 10 days
+
+export const BIGINT_ZERO = BigInt.zero();
+export const BIGINT_ONE = BigInt.fromI32(1);
+
+export class ContractAddresses {
+  static readonly PDPVerifier: Address = Address.fromBytes(
+    Bytes.fromHexString("0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9"),
+  );
+  static readonly USDFCToken: Address = Address.fromBytes(
+    Bytes.fromHexString("0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"),
+  );
+}
 
 /**
  * Constants for transaction parsing
@@ -31,9 +41,12 @@ export class RailType {
  * Status of provider
  */
 export class ProviderStatus {
-  static readonly Created: string = "Created";
-  static readonly Registered: string = "Registered";
-  static readonly Approved: string = "Approved";
-  static readonly Rejected: string = "Rejected";
-  static readonly Removed: string = "Removed";
+  static readonly REGISTERED: string = "REGISTERED";
+  static readonly APPROVED: string = "APPROVED";
+  static readonly UNAPPROVED: string = "UNAPPROVED";
+  static readonly REMOVED: string = "REMOVED";
+}
+
+export class ProductType {
+  static readonly PDP: BigInt = BigInt.fromI32(0);
 }

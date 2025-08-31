@@ -1,52 +1,29 @@
-import { Address, BigInt, Bytes, crypto, log } from "@graphprotocol/graph-ts";
+import { BigInt, Bytes, crypto, log } from "@graphprotocol/graph-ts";
 import {
-  DataSetRailsCreated as DataSetRailsCreatedEvent,
+  DataSetCreated as DataSetCreatedEvent,
   FaultRecord as FaultRecordEvent,
   ProviderApproved as ProviderApprovedEvent,
-  ProviderRegistered as ProviderRegisteredEvent,
-  ProviderRejected as ProviderRejectedEvent,
-  ProviderRemoved as ProviderRemovedEvent,
+  ProviderUnapproved as ProviderUnapprovedEvent,
   RailRateUpdated as RailRateUpdatedEvent,
+  PieceAdded as PieceAddedEvent,
+  DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
-import {
-  DataSet,
-  FaultRecord,
-  Piece,
-  Provider,
-  Rail,
-  RateChangeQueue,
-} from "../generated/schema";
-import { NumChallenges, PDPVerifierAddress } from "./constants";
+import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
+import { BIGINT_ONE, ContractAddresses, LeafSize, NumChallenges } from "./constants";
 import { decodeStringAddressBoolBytes } from "./decode";
 import { SumTree } from "./sumTree";
 import { createRails } from "./utils/entity";
 import { ProviderStatus, RailType } from "./constants";
-
-// --- Helper Functions
-function getDataSetEntityId(setId: BigInt): Bytes {
-  return Bytes.fromByteArray(Bytes.fromBigInt(setId));
-}
-
-function getPieceEntityId(setId: BigInt, pieceId: BigInt): Bytes {
-  return Bytes.fromUTF8(setId.toString() + "-" + pieceId.toString());
-}
-
-function getRailEntityId(railId: BigInt): Bytes {
-  return Bytes.fromByteArray(Bytes.fromBigInt(railId));
-}
-
-function getEventLogEntityId(txHash: Bytes, logIndex: BigInt): Bytes {
-  return txHash.concatI32(logIndex.toI32());
-}
-
-function getRateChangeQueueEntityId(
-  railId: BigInt,
-  queueLength: BigInt
-): Bytes {
-  return Bytes.fromUTF8(railId.toString() + "-" + queueLength.toString());
-}
-// --- End Helper Functions
+import { getPieceCidData, getServiceProviderInfo } from "./utils/contract-calls";
+import {
+  getDataSetEntityId,
+  getPieceEntityId,
+  getRailEntityId,
+  getEventLogEntityId,
+  getRateChangeQueueEntityId,
+} from "./utils/keys";
+import { unpaddedSize, validateCommPv2 } from "./utils/cid";
 
 /**
  * Pads a Buffer or Uint8Array to 32 bytes with leading zeros.
@@ -66,7 +43,7 @@ export function generateChallengeIndex(
   seed: Uint8Array,
   dataSetID: BigInt,
   proofIndex: i32,
-  totalLeaves: BigInt
+  totalLeaves: BigInt,
 ): BigInt {
   const data = new Uint8Array(32 + 32 + 8);
 
@@ -90,14 +67,14 @@ export function generateChallengeIndex(
   const hashBytes = crypto.keccak256(Bytes.fromUint8Array(data));
   // hashBytes is big-endian, so expected to be reversed
   const hashIntUnsignedR = BigInt.fromUnsignedBytes(
-    Bytes.fromUint8Array(Bytes.fromHexString(hashBytes.toHexString()).reverse())
+    Bytes.fromUint8Array(Bytes.fromHexString(hashBytes.toHexString()).reverse()),
   );
 
   if (totalLeaves.isZero()) {
-    log.error(
-      "generateChallengeIndex: totalLeaves is zero, cannot calculate modulus. DataSetID: {}. Seed: {}",
-      [dataSetID.toString(), Bytes.fromUint8Array(seed).toHex()]
-    );
+    log.error("generateChallengeIndex: totalLeaves is zero, cannot calculate modulus. DataSetID: {}. Seed: {}", [
+      dataSetID.toString(),
+      Bytes.fromUint8Array(seed).toHex(),
+    ]);
     return BigInt.fromI32(0);
   }
 
@@ -119,17 +96,13 @@ export function findChallengedPieces(
   nextPieceId: BigInt,
   challengeEpoch: BigInt,
   totalLeaves: BigInt,
-  blockNumber: BigInt
+  blockNumber: BigInt,
 ): BigInt[] {
-  const instance = PDPVerifier.bind(
-    Address.fromBytes(Bytes.fromHexString(PDPVerifierAddress))
-  );
+  const instance = PDPVerifier.bind(ContractAddresses.PDPVerifier);
 
   const seedIntResult = instance.try_getRandomness(challengeEpoch);
   if (seedIntResult.reverted) {
-    log.warning("findChallengedPieces: Failed to get randomness for epoch {}", [
-      challengeEpoch.toString(),
-    ]);
+    log.warning("findChallengedPieces: Failed to get randomness for epoch {}", [challengeEpoch.toString()]);
     return [];
   }
 
@@ -138,34 +111,20 @@ export function findChallengedPieces(
 
   const challenges: BigInt[] = [];
   if (totalLeaves.isZero()) {
-    log.warning(
-      "findChallengedPieces: totalLeaves is zero for DataSet {}. Cannot generate challenges.",
-      [dataSetId.toString()]
-    );
+    log.warning("findChallengedPieces: totalLeaves is zero for DataSet {}. Cannot generate challenges.", [
+      dataSetId.toString(),
+    ]);
     return [];
   }
   for (let i = 0; i < NumChallenges; i++) {
-    const leafIdx = generateChallengeIndex(
-      Bytes.fromHexString(seedHex),
-      dataSetId,
-      i32(i),
-      totalLeaves
-    );
+    const leafIdx = generateChallengeIndex(Bytes.fromHexString(seedHex), dataSetId, i32(i), totalLeaves);
     challenges.push(leafIdx);
   }
 
   const sumTreeInstance = new SumTree();
-  const pieceIds = sumTreeInstance.findPieceIds(
-    dataSetId.toI32(),
-    nextPieceId.toI32(),
-    challenges,
-    blockNumber
-  );
+  const pieceIds = sumTreeInstance.findPieceIds(dataSetId.toI32(), nextPieceId.toI32(), challenges, blockNumber);
   if (!pieceIds) {
-    log.warning(
-      "findChallengedPieces: findPieceIds reverted for dataSetId {}",
-      [dataSetId.toString()]
-    );
+    log.warning("findChallengedPieces: findPieceIds reverted for dataSetId {}", [dataSetId.toString()]);
     return [];
   }
 
@@ -200,30 +159,19 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     const potentialNextEpochBytes = inputData.slice(4 + 32, 4 + 32 + 32);
     if (potentialNextEpochBytes.length == 32) {
       // Convert reversed Uint8Array to Bytes before converting to BigInt
-      nextChallengeEpoch = BigInt.fromUnsignedBytes(
-        Bytes.fromUint8Array(potentialNextEpochBytes.reverse())
-      );
+      nextChallengeEpoch = BigInt.fromUnsignedBytes(Bytes.fromUint8Array(potentialNextEpochBytes.reverse()));
     }
   } else {
-    log.warning(
-      "handleFaultRecord: Transaction input data too short to parse potential nextChallengeEpoch.",
-      []
-    );
+    log.warning("handleFaultRecord: Transaction input data too short to parse potential nextChallengeEpoch.", []);
   }
 
-  const pieceIds = findChallengedPieces(
-    setId,
-    nextPieceId,
-    challengeEpoch,
-    challengeRange,
-    event.block.number
-  );
+  const pieceIds = findChallengedPieces(setId, nextPieceId, challengeEpoch, challengeRange, event.block.number);
 
   if (pieceIds.length === 0) {
-    log.info(
-      "handleFaultRecord: No pieces found for challenge epoch {} in DataSet {}",
-      [challengeEpoch.toString(), setId.toString()]
-    );
+    log.info("handleFaultRecord: No pieces found for challenge epoch {} in DataSet {}", [
+      challengeEpoch.toString(),
+      setId.toString(),
+    ]);
   }
 
   let uniquePieceIds: BigInt[] = [];
@@ -244,13 +192,13 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     const piece = Piece.load(pieceEntityId);
     if (piece) {
       if (!piece.lastFaultedEpoch.equals(challengeEpoch)) {
-        piece.totalPeriodsFaulted =
-          piece.totalPeriodsFaulted.plus(periodsFaultedParam);
+        piece.totalPeriodsFaulted = piece.totalPeriodsFaulted.plus(periodsFaultedParam);
       } else {
-        log.info(
-          "handleFaultRecord: Piece {} in Set {} already marked faulted for epoch {}",
-          [pieceId.toString(), setId.toString(), challengeEpoch.toString()]
-        );
+        log.info("handleFaultRecord: Piece {} in Set {} already marked faulted for epoch {}", [
+          pieceId.toString(),
+          setId.toString(),
+          challengeEpoch.toString(),
+        ]);
       }
       piece.lastFaultedEpoch = challengeEpoch;
       piece.lastFaultedAt = event.block.timestamp;
@@ -258,10 +206,10 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
       piece.blockNumber = event.block.number;
       piece.save();
     } else {
-      log.warning(
-        "handleFaultRecord: Piece {} for Set {} not found while recording fault",
-        [pieceId.toString(), setId.toString()]
-      );
+      log.warning("handleFaultRecord: Piece {} for Set {} not found while recording fault", [
+        pieceId.toString(),
+        setId.toString(),
+      ]);
     }
     pieceEntityIds.push(pieceEntityId);
   }
@@ -281,22 +229,16 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 
   faultRecord.save();
 
-  dataSet.totalFaultedPeriods =
-    dataSet.totalFaultedPeriods.plus(periodsFaultedParam);
-  dataSet.totalFaultedPieces = dataSet.totalFaultedPieces.plus(
-    BigInt.fromI32(uniquePieceIds.length)
-  );
+  dataSet.totalFaultedPeriods = dataSet.totalFaultedPeriods.plus(periodsFaultedParam);
+  dataSet.totalFaultedPieces = dataSet.totalFaultedPieces.plus(BigInt.fromI32(uniquePieceIds.length));
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
   const provider = Provider.load(storageProviderId);
   if (provider) {
-    provider.totalFaultedPeriods =
-      provider.totalFaultedPeriods.plus(periodsFaultedParam);
-    provider.totalFaultedPieces = provider.totalFaultedPieces.plus(
-      BigInt.fromI32(uniquePieceIds.length)
-    );
+    provider.totalFaultedPeriods = provider.totalFaultedPeriods.plus(periodsFaultedParam);
+    provider.totalFaultedPieces = provider.totalFaultedPieces.plus(BigInt.fromI32(uniquePieceIds.length));
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
@@ -309,12 +251,10 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 }
 
 /**
- * Handles the DataSetRailCreated event.
- * Creates a new rail for a data set.
+ * Handles the DataSetCreated event.
+ * Creates a new data set.
  */
-export function handleDataSetRailsCreated(
-  event: DataSetRailsCreatedEvent
-): void {
+export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   const listenerAddr = event.address;
   const setId = event.params.dataSetId;
   const pdpRailId = event.params.pdpRailId;
@@ -322,7 +262,8 @@ export function handleDataSetRailsCreated(
   const cdnRailId = event.params.cdnRailId;
   const clientAddr = event.params.payer;
   const storageProviderId = event.params.payee;
-  const withCDN = event.params.withCDN;
+  const metadataKeys = event.params.metadataKeys;
+  const metadataValues = event.params.metadataValues;
   const dataSetEntityId = getDataSetEntityId(setId);
   const providerEntityId = storageProviderId; // Provider ID is the storageProvider address
 
@@ -333,17 +274,15 @@ export function handleDataSetRailsCreated(
   const extraDataBytes = inputData.subarray(extraDataStart);
 
   // extraData -> (metadata,payer,withCDN,signature)
-  const decodedData = decodeStringAddressBoolBytes(
-    Bytes.fromUint8Array(extraDataBytes)
-  );
+  const decodedData = decodeStringAddressBoolBytes(Bytes.fromUint8Array(extraDataBytes));
 
   let metadata: string = decodedData.stringValue;
 
   // Create DataSet
   dataSet.setId = setId;
-  dataSet.metadata = metadata;
+  dataSet.metadataKeys = metadataKeys;
+  dataSet.metadataValues = metadataValues;
   dataSet.clientAddr = clientAddr;
-  dataSet.withCDN = withCDN;
   dataSet.storageProvider = providerEntityId; // Link to Provider via storageProvider address (which is Provider's ID)
   dataSet.listener = listenerAddr;
   dataSet.isActive = true;
@@ -370,22 +309,14 @@ export function handleDataSetRailsCreated(
     clientAddr,
     storageProviderId,
     listenerAddr,
-    dataSetEntityId
+    dataSetEntityId,
   );
 
   // Create or Update Provider
   let provider = Provider.load(providerEntityId);
   if (provider == null) {
-    provider = new Provider(providerEntityId);
-    provider.address = storageProviderId;
-    provider.status = ProviderStatus.Created;
-    provider.totalPieces = BigInt.fromI32(0);
-    provider.totalDataSets = BigInt.fromI32(1);
-    provider.totalFaultedPeriods = BigInt.fromI32(0);
-    provider.totalFaultedPieces = BigInt.fromI32(0);
-    provider.totalDataSize = BigInt.fromI32(0);
-    provider.createdAt = event.block.timestamp;
-    provider.blockNumber = event.block.number;
+    log.warning("DataSetCreated: existing provider not found for address: {}", [providerEntityId.toHexString()]);
+    return;
   } else {
     // Update timestamp/block even if exists
     provider.totalDataSets = provider.totalDataSets.plus(BigInt.fromI32(1));
@@ -414,9 +345,7 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
   if (rail.paymentRate.equals(BigInt.fromI32(0))) {
     rail.paymentRate = newRate;
   } else {
-    const rateChangeQueue = new RateChangeQueue(
-      getRateChangeQueueEntityId(railId, rail.queueLength)
-    );
+    const rateChangeQueue = new RateChangeQueue(getRateChangeQueueEntityId(railId, rail.queueLength));
     rateChangeQueue.untilEpoch = event.block.number;
     rateChangeQueue.rate = newRate;
     rateChangeQueue.rail = railEntityId;
@@ -427,56 +356,147 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
 }
 
 /**
- * Handler for ProviderRegistered event
- * Adds serviceUrl and peerId and updates registeredAt to block number with status update to "Registered"
+ * Handles the PieceAdded event.
+ * Creates a new piece.
  */
-export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
-  const providerAddress = event.params.provider;
-  const serviceUrl = event.params.serviceURL;
-  const peerId = event.params.peerId;
+export function handlePieceAdded(event: PieceAddedEvent): void {
+  const setId = event.params.dataSetId;
+  const pieceId = event.params.pieceId;
+  const metadatKeys = event.params.keys;
+  const metadataValues = event.params.values;
 
-  let provider = Provider.load(providerAddress);
-  if (!provider) {
-    provider = new Provider(providerAddress);
-    provider.address = providerAddress;
-    provider.totalFaultedPeriods = BigInt.fromI32(0);
-    provider.totalFaultedPieces = BigInt.fromI32(0);
-    provider.totalDataSets = BigInt.fromI32(0);
-    provider.totalPieces = BigInt.fromI32(0);
-    provider.totalDataSize = BigInt.fromI32(0);
-    provider.createdAt = event.block.timestamp;
-  }
+  const pieceEntityId = getPieceEntityId(setId, pieceId);
 
-  provider.serviceUrl = serviceUrl;
-  provider.peerId = peerId;
-  provider.registeredAt = event.block.number;
-  provider.status = ProviderStatus.Registered;
-  provider.updatedAt = event.block.timestamp;
-  provider.blockNumber = event.block.number;
+  const pieceBytes = getPieceCidData(ContractAddresses.PDPVerifier, setId, pieceId);
+  const commPData = validateCommPv2(pieceBytes);
 
-  provider.save();
-}
+  const rawSize = commPData.isValid ? unpaddedSize(commPData.padding, commPData.height) : BigInt.zero();
 
-/**
- * Handler for ProviderApproved event
- */
-export function handleProviderApproved(event: ProviderApprovedEvent): void {
-  const providerAddress = event.params.provider;
-  const providerId = event.params.providerId;
+  const piece = new Piece(pieceEntityId);
+  piece.pieceId = pieceId;
+  piece.setId = setId;
+  piece.rawSize = rawSize;
+  piece.leafCount = rawSize.div(BigInt.fromI32(LeafSize));
+  piece.cid = pieceBytes.length > 0 ? pieceBytes : Bytes.empty();
+  piece.metadataKeys = metadatKeys;
+  piece.metadataValues = metadataValues;
+  piece.removed = false;
+  piece.lastProvenEpoch = BigInt.fromI32(0);
+  piece.lastProvenAt = BigInt.fromI32(0);
+  piece.lastFaultedEpoch = BigInt.fromI32(0);
+  piece.lastFaultedAt = BigInt.fromI32(0);
+  piece.totalProofsSubmitted = BigInt.fromI32(0);
+  piece.totalPeriodsFaulted = BigInt.fromI32(0);
+  piece.createdAt = event.block.timestamp;
+  piece.updatedAt = event.block.timestamp;
+  piece.blockNumber = event.block.number;
+  piece.dataSet = getDataSetEntityId(setId);
 
-  const provider = Provider.load(providerAddress);
+  piece.save();
 
-  if (provider === null) {
-    log.warning(
-      "ProviderApproved: existing provider not found for address: {}",
-      [providerAddress.toHexString()]
-    );
+  const dataSet = DataSet.load(getDataSetEntityId(setId));
+  if (!dataSet) {
+    log.warning("handlePieceAdded: DataSet not found for setId: {}", [setId.toString()]);
     return;
   }
 
-  provider.providerId = providerId;
+  dataSet.totalPieces = dataSet.totalPieces.plus(BIGINT_ONE);
+  dataSet.nextPieceId = dataSet.nextPieceId.plus(BIGINT_ONE);
+  dataSet.totalDataSize = dataSet.totalDataSize.plus(piece.rawSize);
+  dataSet.leafCount = dataSet.leafCount.plus(piece.rawSize.div(BigInt.fromI32(LeafSize)));
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
+
+  const provider = Provider.load(dataSet.storageProvider);
+  if (!provider) {
+    log.warning("handlePieceAdded: Provider not found for DataSet: {}", [dataSet.id.toString()]);
+    return;
+  }
+
+  provider.totalDataSize = provider.totalDataSize.plus(piece.rawSize);
+  provider.totalPieces = provider.totalPieces.plus(BIGINT_ONE);
+  provider.updatedAt = event.block.timestamp;
+  provider.blockNumber = event.block.number;
+  provider.save();
+}
+
+/**
+ * Handles the DataSetServiceProviderChanged event.
+ * Updates the storage provider for a data set.
+ */
+export function handleDataSetServiceProviderChanged(event: DataSetServiceProviderChangedEvent): void {
+  const setId = event.params.dataSetId;
+  const oldStorageProvider = event.params.oldServiceProvider;
+  const newStorageProvider = event.params.newServiceProvider;
+
+  const dataSetEntityId = getDataSetEntityId(setId);
+
+  // Load DataSet
+  const dataSet = DataSet.load(dataSetEntityId);
+  if (!dataSet) {
+    log.warning("DataSetServiceProviderChanged: DataSet {} not found", [setId.toString()]);
+    return;
+  }
+
+  // Load Old Provider (if exists) - Just update timestamp, derived field handles removal
+  const oldProvider = Provider.load(oldStorageProvider);
+  if (oldProvider) {
+    oldProvider.totalDataSets = oldProvider.totalDataSets.minus(BigInt.fromI32(1));
+    oldProvider.updatedAt = event.block.timestamp;
+    oldProvider.blockNumber = event.block.number;
+    oldProvider.save();
+  } else {
+    log.warning("DataSetServiceProviderChanged: Old Provider {} not found", [oldStorageProvider.toHexString()]);
+  }
+
+  // Load or Create New Provider - Just update timestamp/create, derived field handles addition
+  let newProvider = Provider.load(newStorageProvider);
+  if (newProvider == null) {
+    newProvider = new Provider(newStorageProvider);
+    newProvider.beneficiary = newStorageProvider;
+    newProvider.status = ProviderStatus.REGISTERED;
+    newProvider.totalPieces = BigInt.fromI32(0);
+    newProvider.totalFaultedPeriods = BigInt.fromI32(0);
+    newProvider.totalFaultedPieces = BigInt.fromI32(0);
+    newProvider.totalDataSize = BigInt.fromI32(0);
+    newProvider.totalDataSets = BigInt.fromI32(1);
+    newProvider.createdAt = event.block.timestamp;
+    newProvider.blockNumber = event.block.number;
+  } else {
+    newProvider.totalDataSets = newProvider.totalDataSets.plus(BigInt.fromI32(1));
+    newProvider.blockNumber = event.block.number;
+  }
+  newProvider.updatedAt = event.block.timestamp;
+  newProvider.save();
+
+  // Update DataSet storageProvider (this updates the derived relationship on both old and new Provider)
+  dataSet.storageProvider = newStorageProvider; // Set storageProvider to the new provider's ID
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
+}
+
+/**
+ * Handles the ProviderApproved event.
+ * Approves a new storage provider.
+ */
+export function handleProviderApproved(event: ProviderApprovedEvent): void {
+  const providerId = event.params.providerId;
+
+  const providerInfo = getServiceProviderInfo(event.address, providerId);
+
+  const provider = Provider.load(providerInfo.beneficiary);
+
+  if (provider === null) {
+    log.warning("ProviderApproved: existing provider not found for address: {}", [
+      providerInfo.beneficiary.toHexString(),
+    ]);
+    return;
+  }
+
   provider.approvedAt = event.block.number;
-  provider.status = ProviderStatus.Approved;
+  provider.status = ProviderStatus.APPROVED;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
@@ -484,33 +504,25 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
 }
 
 /**
- * Handler for ProviderRejected event
- * Updates status to "Rejected"
+ * Handles the ProviderUnapproved event.
+ * Unapproves a storage provider.
  */
-export function handleProviderRejected(event: ProviderRejectedEvent): void {
-  const providerAddress = event.params.provider;
+export function handleProviderUnapproved(event: ProviderUnapprovedEvent): void {
+  const providerId = event.params.providerId;
 
-  let provider = Provider.load(providerAddress);
-  if (!provider) return;
+  const providerInfo = getServiceProviderInfo(event.address, providerId);
 
-  provider.status = ProviderStatus.Rejected;
-  provider.updatedAt = event.block.timestamp;
-  provider.blockNumber = event.block.number;
+  const provider = Provider.load(providerInfo.beneficiary);
 
-  provider.save();
-}
+  if (provider === null) {
+    log.warning("ProviderUnapproved: existing provider not found for address: {}", [
+      providerInfo.beneficiary.toHexString(),
+    ]);
+    return;
+  }
 
-/**
- * Handler for ProviderRemoved event
- * Sets status to "Removed"
- */
-export function handleProviderRemoved(event: ProviderRemovedEvent): void {
-  const providerAddress = event.params.provider;
-
-  let provider = Provider.load(providerAddress);
-  if (!provider) return;
-
-  provider.status = ProviderStatus.Removed;
+  provider.status = ProviderStatus.UNAPPROVED;
+  provider.approvedAt = null;
   provider.updatedAt = event.block.timestamp;
   provider.blockNumber = event.block.number;
 
