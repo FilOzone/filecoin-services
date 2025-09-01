@@ -234,7 +234,15 @@ contract FilecoinWarmStorageService is
         _;
     }
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
+    modifier onlyFilCDNController() {
+        require(
+            msg.sender == filCDNControllerAddress,
+            Errors.OnlyFilCDNControllerAllowed(filCDNControllerAddress, msg.sender)
+        );
+        _;
+    }
+
+    /// @custom:oz-upgrades-unsafe-allow cstructor
     constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
@@ -246,11 +254,6 @@ contract FilecoinWarmStorageService is
         _disableInitializers();
 
         require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
-        usdfcTokenAddress = _usdfcTokenAddress;
-
-        require(_filCDNControllerAddress != address(0), "Filecoin CDN address cannot be zero");
-        filCDNControllerAddress = _filCDNControllerAddress;
-
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
@@ -261,11 +264,11 @@ contract FilecoinWarmStorageService is
             Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
         );
 
+        usdfcTokenAddress = _usdfcTokenAddress;
         pdpVerifierAddress = _pdpVerifierAddress;
-        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
-
-        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
         paymentsContractAddress = _paymentsContractAddress;
+        filCDNControllerAddress = _filCDNControllerAddress;
+        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
         serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistryAddress);
 
         // Read token decimals from the USDFC token contract
@@ -869,22 +872,18 @@ contract FilecoinWarmStorageService is
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
-    function terminateCDNService(uint256 dataSetId) external {
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        string memory withCDN = dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
+    function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
         require(
             hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.CDNServiceNotConfigured(dataSetId)
+            Errors.FilCDNServiceNotConfigured(dataSetId)
         );
-        require(keccak256(bytes(withCDN)) == keccak256("true"), Errors.CDNServiceNotConfigured(dataSetId));
+
+        DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.cdnEndEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
-
-        // Check authorization
-        require(msg.sender == filCDNControllerAddress, Errors.OnlyCDNAllowed(filCDNControllerAddress, msg.sender));
+        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
 
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);
@@ -1116,7 +1115,8 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Deletes `key` if it exists in `metadataKeys`.
-     * @param key The array of metadata keys
+     * @param metadataKeys The array of metadata keys
+     * @param key The metadata key to delete
      * @return Modified array of metadata keys
      */
     function deleteMetadataKey(string[] memory metadataKeys, string memory key)
@@ -1128,13 +1128,22 @@ contract FilecoinWarmStorageService is
         uint256 keyLength = keyBytes.length;
         bytes32 keyHash = keccak256(keyBytes);
 
-        for (uint256 i = 0; i < metadataKeys.length; i++) {
+        uint256 len = metadataKeys.length;
+        for (uint256 i = 0; i < len; i++) {
             bytes memory currentKeyBytes = bytes(metadataKeys[i]);
             if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
-                delete metadataKeys[i];
+                // Shift elements left to fill the gap
+                for (uint256 j = i; j < len - 1; j++) {
+                    metadataKeys[j] = metadataKeys[j + 1];
+                }
+
+                delete metadataKeys[len - 1];
+                assembly {
+                    mstore(metadataKeys, sub(len, 1))
+                }
+                break;
             }
         }
-
         return metadataKeys;
     }
 

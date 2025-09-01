@@ -234,7 +234,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public deployer;
     address public client;
     address public serviceProvider;
-    address public filCDN;
+    address public filCDNController;
     address public filCDNBeneficiary;
 
     address public sp1;
@@ -280,7 +280,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         deployer = address(this);
         client = address(0xf1);
         serviceProvider = address(0xf2);
-        filCDN = address(0xf3);
+        filCDNController = address(0xf3);
         filCDNBeneficiary = address(0xf4);
 
         // Additional accounts for registry tests
@@ -414,7 +414,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
+            filCDNController,
             filCDNBeneficiary,
             address(registry)
         );
@@ -461,7 +461,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(pdpServiceWithPayments.filCDNControllerAddress(), filCDN, "FilCDN address should be set correctly");
+        assertEq(
+            pdpServiceWithPayments.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly"
+        );
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -1281,7 +1283,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n3. Terminating CDN payment rails from client address -- should revert");
         console.log("Current block:", block.number);
         vm.prank(client); // client terminates
-        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyCDNAllowed.selector, address(filCDN), address(client)));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.OnlyFilCDNControllerAllowed.selector, address(filCDNController), address(client)
+            )
+        );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 4. Try to terminate payment from FilCDN address
@@ -1290,7 +1296,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
         vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNServiceTerminated(filCDN, dataSetId, info.cacheMissRailId, info.cdnRailId);
+        emit FilecoinWarmStorageService.CDNServiceTerminated(
+            filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
+        );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 5. Assertions
@@ -1302,9 +1310,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
 
+        (metadataKeys, metadataValues) = viewContract.getAllDataSetMetadata(dataSetId);
+        assertTrue(metadataKeys.length == 0, "Metadata keys should be empty after termination");
+        assertTrue(metadataValues.length == 0, "Metadata values should be empty after termination");
+
         // Ensure future CDN service termination reverts
-        vm.prank(filCDN);
-        vm.expectRevert(abi.encodeWithSelector(Errors.CDNServiceNotConfigured.selector, dataSetId));
+        vm.prank(filCDNController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");

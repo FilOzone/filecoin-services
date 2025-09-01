@@ -237,16 +237,16 @@ library Errors {
     /// @param pieceCount The number of pieces being added
     error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
 
-    /// @notice FilecoinCDN service is not configured for the given data set
+    /// @notice FilCDN service is not configured for the given data set
     /// @param dataSetId The data set ID
-    error CDNServiceNotConfigured(uint256 dataSetId);
+    error FilCDNServiceNotConfigured(uint256 dataSetId);
 
-    /// @notice Only the FilecoinCDN address can call this function
-    /// @param expected The expected CDN address
+    /// @notice Only the FilCDN controller address can call this function
+    /// @param expected The expected FilCDN controller address
     /// @param actual The caller address
-    error OnlyCDNAllowed(address expected, address actual);
+    error OnlyFilCDNControllerAllowed(address expected, address actual);
 
     /// @notice CDN payment is already terminated
     /// @param dataSetId The data set ID
-    error CDNPaymentAlreadyTerminated(uint256 dataSetId);
+    error FilCDNPaymentAlreadyTerminated(uint256 dataSetId);
 }
