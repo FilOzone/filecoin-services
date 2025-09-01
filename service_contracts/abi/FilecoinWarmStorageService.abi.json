@@ -1281,28 +1281,6 @@
   },
   {
     "type": "error",
-    "name": "CDNPaymentAlreadyTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "CDNServiceNotConfigured",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "CallerNotPayerOrPayee",
     "inputs": [
       {
@@ -1485,6 +1463,28 @@
     "type": "error",
     "name": "FailedCall",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "FilCDNPaymentAlreadyTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FilCDNServiceNotConfigured",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -1752,7 +1752,7 @@
   },
   {
     "type": "error",
-    "name": "OnlyCDNAllowed",
+    "name": "OnlyFilCDNControllerAllowed",
     "inputs": [
       {
         "name": "expected",
