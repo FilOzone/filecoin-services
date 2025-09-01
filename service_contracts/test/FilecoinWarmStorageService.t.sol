@@ -251,10 +251,13 @@ contract FilecoinWarmStorageServiceTest is Test {
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
-        "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+        "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)"
+        "MetadataEntry(string key,string value)"
     );
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
+        "Cid(bytes data)" "MetadataEntry(string key,string value)"
+        "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
