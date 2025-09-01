@@ -671,27 +671,12 @@ contract ServiceProviderRegistry is
         return providers[providerId].isActive;
     }
 
-    /// @notice Get all active providers
-    /// @return activeProviderIds Array of active provider IDs
-    function getAllActiveProviders() external view returns (uint256[] memory activeProviderIds) {
-        uint256 activeCount = activeProviderCount;
-
-        // Collect active provider IDs
-        activeProviderIds = new uint256[](activeCount);
-        uint256 index = 0;
-        for (uint256 i = 1; i <= numProviders && index < activeCount; i++) {
-            if (providers[i].isActive) {
-                activeProviderIds[index++] = i;
-            }
-        }
-    }
-
     /// @notice Get all active providers with pagination
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return
     /// @return providerIds Array of active provider IDs
     /// @return hasMore Whether there are more results after this page
-    function getAllActiveProvidersPaginated(uint256 offset, uint256 limit)
+    function getAllActiveProviders(uint256 offset, uint256 limit)
         external
         view
         returns (uint256[] memory providerIds, bool hasMore)

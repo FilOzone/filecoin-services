@@ -319,7 +319,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(registry.getProviderCount(), 2, "Provider count should be 2");
 
         // Verify both are in active list
-        uint256[] memory activeProviders = registry.getAllActiveProviders();
+        (uint256[] memory activeProviders,) = registry.getAllActiveProviders(0, 100);
         assertEq(activeProviders.length, 2, "Should have 2 active providers");
         assertEq(activeProviders[0], 1, "First active provider should be ID 1");
         assertEq(activeProviders[1], 2, "Second active provider should be ID 2");
@@ -844,7 +844,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertFalse(isActive, "PDP service should be inactive");
 
         // Verify not in active list
-        uint256[] memory activeProviders = registry.getAllActiveProviders();
+        (uint256[] memory activeProviders,) = registry.getAllActiveProviders(0, 100);
         assertEq(activeProviders.length, 0, "Should have no active providers");
     }
 
@@ -1183,7 +1183,7 @@ contract ServiceProviderRegistryFullTest is Test {
         registry.removeProvider();
 
         // Get active providers
-        uint256[] memory activeProviders = registry.getAllActiveProviders();
+        (uint256[] memory activeProviders,) = registry.getAllActiveProviders(0, 100);
         assertEq(activeProviders.length, 2, "Should have 2 active providers");
         assertEq(activeProviders[0], 1, "First active should be ID 1");
         assertEq(activeProviders[1], 3, "Second active should be ID 3");

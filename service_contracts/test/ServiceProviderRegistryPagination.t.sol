@@ -66,15 +66,15 @@ contract ServiceProviderRegistryPaginationTest is Test {
 
     function testPaginationNoProviders() public {
         // Test with different offset and limit values
-        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProvidersPaginated(0, 10);
+        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProviders(0, 10);
         assertEq(ids.length, 0);
         assertFalse(hasMore);
 
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(5, 10);
+        (ids, hasMore) = registry.getAllActiveProviders(5, 10);
         assertEq(ids.length, 0);
         assertFalse(hasMore);
 
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(0, 0);
+        (ids, hasMore) = registry.getAllActiveProviders(0, 0);
         assertEq(ids.length, 0);
         assertFalse(hasMore);
     }
@@ -94,24 +94,24 @@ contract ServiceProviderRegistryPaginationTest is Test {
         );
 
         // Get with limit larger than count
-        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProvidersPaginated(0, 10);
+        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProviders(0, 10);
         assertEq(ids.length, 1);
         assertEq(ids[0], 1);
         assertFalse(hasMore);
 
         // Get with exact limit
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(0, 1);
+        (ids, hasMore) = registry.getAllActiveProviders(0, 1);
         assertEq(ids.length, 1);
         assertEq(ids[0], 1);
         assertFalse(hasMore);
 
         // Get with offset beyond count
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(1, 10);
+        (ids, hasMore) = registry.getAllActiveProviders(1, 10);
         assertEq(ids.length, 0);
         assertFalse(hasMore);
 
         // Get with offset at boundary
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(0, 1);
+        (ids, hasMore) = registry.getAllActiveProviders(0, 1);
         assertEq(ids.length, 1);
         assertFalse(hasMore);
     }
@@ -134,32 +134,32 @@ contract ServiceProviderRegistryPaginationTest is Test {
         }
 
         // Test exact page size (2 items per page)
-        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProvidersPaginated(0, 2);
+        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProviders(0, 2);
         assertEq(ids.length, 2);
         assertEq(ids[0], 1);
         assertEq(ids[1], 2);
         assertTrue(hasMore);
 
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(2, 2);
+        (ids, hasMore) = registry.getAllActiveProviders(2, 2);
         assertEq(ids.length, 2);
         assertEq(ids[0], 3);
         assertEq(ids[1], 4);
         assertTrue(hasMore);
 
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(4, 2);
+        (ids, hasMore) = registry.getAllActiveProviders(4, 2);
         assertEq(ids.length, 1);
         assertEq(ids[0], 5);
         assertFalse(hasMore);
 
         // Test page boundaries with limit 3
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(0, 3);
+        (ids, hasMore) = registry.getAllActiveProviders(0, 3);
         assertEq(ids.length, 3);
         assertEq(ids[0], 1);
         assertEq(ids[1], 2);
         assertEq(ids[2], 3);
         assertTrue(hasMore);
 
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(3, 3);
+        (ids, hasMore) = registry.getAllActiveProviders(3, 3);
         assertEq(ids.length, 2);
         assertEq(ids[0], 4);
         assertEq(ids[1], 5);
@@ -191,7 +191,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         registry.removeProvider();
 
         // Should have 3 active providers (1, 3, 5)
-        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProvidersPaginated(0, 10);
+        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProviders(0, 10);
         assertEq(ids.length, 3);
         assertEq(ids[0], 1);
         assertEq(ids[1], 3);
@@ -199,13 +199,13 @@ contract ServiceProviderRegistryPaginationTest is Test {
         assertFalse(hasMore);
 
         // Test pagination with limit 2
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(0, 2);
+        (ids, hasMore) = registry.getAllActiveProviders(0, 2);
         assertEq(ids.length, 2);
         assertEq(ids[0], 1);
         assertEq(ids[1], 3);
         assertTrue(hasMore);
 
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(2, 2);
+        (ids, hasMore) = registry.getAllActiveProviders(2, 2);
         assertEq(ids.length, 1);
         assertEq(ids[0], 5);
         assertFalse(hasMore);
@@ -246,22 +246,22 @@ contract ServiceProviderRegistryPaginationTest is Test {
         );
 
         // Test with limit 0 (should return empty)
-        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProvidersPaginated(0, 0);
+        (uint256[] memory ids, bool hasMore) = registry.getAllActiveProviders(0, 0);
         assertEq(ids.length, 0);
         assertFalse(hasMore);
 
         // Test with very large limit
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(0, 1000);
+        (ids, hasMore) = registry.getAllActiveProviders(0, 1000);
         assertEq(ids.length, 3);
         assertFalse(hasMore);
 
         // Test with offset equal to count
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(3, 10);
+        (ids, hasMore) = registry.getAllActiveProviders(3, 10);
         assertEq(ids.length, 0);
         assertFalse(hasMore);
 
         // Test with offset just before count
-        (ids, hasMore) = registry.getAllActiveProvidersPaginated(2, 10);
+        (ids, hasMore) = registry.getAllActiveProviders(2, 10);
         assertEq(ids.length, 1);
         assertEq(ids[0], 3);
         assertFalse(hasMore);
@@ -288,14 +288,15 @@ contract ServiceProviderRegistryPaginationTest is Test {
         vm.prank(provider3);
         registry.removeProvider();
 
-        // Get all active providers using non-paginated function
-        uint256[] memory allProviders = registry.getAllActiveProviders();
+        // Get all active providers using paginated function with large limit
+        (uint256[] memory allProviders, bool hasMore) = registry.getAllActiveProviders(0, 100);
         assertEq(allProviders.length, 5);
-
-        // Get all using paginated with large limit
-        (uint256[] memory paginatedAll, bool hasMore) = registry.getAllActiveProvidersPaginated(0, 100);
-        assertEq(paginatedAll.length, 5);
         assertFalse(hasMore);
+
+        // Get all using paginated with same large limit for comparison
+        (uint256[] memory paginatedAll, bool hasMore2) = registry.getAllActiveProviders(0, 100);
+        assertEq(paginatedAll.length, 5);
+        assertFalse(hasMore2);
 
         // Compare results
         for (uint256 i = 0; i < 5; i++) {
@@ -309,7 +310,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         uint256 pageSize = 2;
 
         while (true) {
-            (uint256[] memory page, bool more) = registry.getAllActiveProvidersPaginated(offset, pageSize);
+            (uint256[] memory page, bool more) = registry.getAllActiveProviders(offset, pageSize);
 
             for (uint256 i = 0; i < page.length; i++) {
                 combined[combinedIndex++] = page[i];
@@ -422,28 +423,28 @@ contract ServiceProviderRegistryPaginationTest is Test {
         }
 
         // Page size of 3
-        (uint256[] memory page1, bool hasMore1) = registry.getAllActiveProvidersPaginated(0, 3);
+        (uint256[] memory page1, bool hasMore1) = registry.getAllActiveProviders(0, 3);
         assertEq(page1.length, 3);
         assertEq(page1[0], 1);
         assertEq(page1[1], 2);
         assertEq(page1[2], 3);
         assertTrue(hasMore1);
 
-        (uint256[] memory page2, bool hasMore2) = registry.getAllActiveProvidersPaginated(3, 3);
+        (uint256[] memory page2, bool hasMore2) = registry.getAllActiveProviders(3, 3);
         assertEq(page2.length, 3);
         assertEq(page2[0], 4);
         assertEq(page2[1], 5);
         assertEq(page2[2], 6);
         assertTrue(hasMore2);
 
-        (uint256[] memory page3, bool hasMore3) = registry.getAllActiveProvidersPaginated(6, 3);
+        (uint256[] memory page3, bool hasMore3) = registry.getAllActiveProviders(6, 3);
         assertEq(page3.length, 3);
         assertEq(page3[0], 7);
         assertEq(page3[1], 8);
         assertEq(page3[2], 9);
         assertTrue(hasMore3);
 
-        (uint256[] memory page4, bool hasMore4) = registry.getAllActiveProvidersPaginated(9, 3);
+        (uint256[] memory page4, bool hasMore4) = registry.getAllActiveProviders(9, 3);
         assertEq(page4.length, 1);
         assertEq(page4[0], 10);
         assertFalse(hasMore4);
