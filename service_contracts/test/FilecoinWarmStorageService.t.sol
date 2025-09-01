@@ -1322,13 +1322,128 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n=== Test completed successfully! ===");
     }
 
-    function testTerminateCDNService_DataSetHasNoCDNEnabled() public {
+    function testTerminateCDNService_checkPDPPaymentRate() public {
+        // 1. Setup: Create a dataset with CDN enabled.
+        console.log("1. Setting up: Creating dataset with service provider");
+
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+
+        // Prepare data set creation data
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            payer: client,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+
+        // Setup client payment approval and deposit
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            address(mockUSDFC),
+            address(pdpServiceWithPayments),
+            true,
+            1000e6, // rate allowance
+            1000e6, // lockup allowance
+            365 days // max lockup period
+        );
+        uint256 depositAmount = 100e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(address(mockUSDFC), client, depositAmount);
+        vm.stopPrank();
+
+        // Create data set
+        makeSignaturePass(client);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+        console.log("Created data set with ID:", dataSetId);
+
+        // 2. Submit a valid proof.
+        console.log("\n2. Starting proving period and submitting proof");
+        // Start proving period
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
+
+        // Warp to challenge window
+        uint256 provingDeadline = viewContract.provingDeadline(dataSetId);
+        vm.roll(provingDeadline - (challengeWindow / 2));
+
+        assertFalse(
+            viewContract.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+
+        // Submit proof
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        assertTrue(
+            viewContract.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+        console.log("Proof submitted successfully");
+
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+        Payments.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
+
+        // 3. Try to terminate payment from FilCDN address
+        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
+        console.log("Current block:", block.number);
+        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNServiceTerminated(
+            filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
+        );
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // 4. Start new proving period and submit new proof
+        console.log("\n4. Starting proving period and submitting proof");
+        challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        // Warp to challenge window
+        provingDeadline = viewContract.provingDeadline(dataSetId);
+        vm.roll(provingDeadline - (challengeWindow / 2));
+
+        assertFalse(
+            viewContract.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+
+        // Submit proof
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
+        assertTrue(
+            viewContract.provenPeriods(
+                dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
+            )
+        );
+
+        // 5. Assert that payment rate has remained unchanged
+        console.log("\n5. Assert that payment rate has remained unchanged");
+        Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertEq(pdpRailPreTermination.paymentRate, pdpRail.paymentRate, "Payments rate should remain unchanged");
+
+        console.log("\n=== Test completed successfully! ===");
+    }
+
+    function testTerminateCDNService_dataSetHasNoCDNEnabled() public {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Try to terminate CDN service
-        console.log("Terminating CDN service for data set without CDN enabled -- should revert");
+        console.log("Terminating CDN service for data set with -- should revert");
         console.log("Current block:", block.number);
         vm.prank(filCDNController);
         vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
