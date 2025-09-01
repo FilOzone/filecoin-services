@@ -20,7 +20,9 @@ library Errors {
         /// Payer address
         Payer,
         /// Service provider address
-        ServiceProvider
+        ServiceProvider,
+        /// ServiceProviderRegistry contract address
+        ServiceProviderRegistry
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -176,6 +178,23 @@ library Errors {
     /// @notice Data set does not exist for the given rail
     /// @param railId The rail ID
     error DataSetNotFoundForRail(uint256 railId);
+
+    /// @notice Provider is not registered in the ServiceProviderRegistry
+    /// @param provider The provider address
+    error ProviderNotRegistered(address provider);
+
+    /// @notice Provider is not approved for service
+    /// @param provider The provider address
+    /// @param providerId The provider ID from registry
+    error ProviderNotApproved(address provider, uint256 providerId);
+
+    /// @notice Provider is already approved
+    /// @param providerId The provider ID that is already approved
+    error ProviderAlreadyApproved(uint256 providerId);
+
+    /// @notice Provider is not in the approved list
+    /// @param providerId The provider ID that is not approved
+    error ProviderNotInApprovedList(uint256 providerId);
 
     /// @notice Metadata key and value length mismatch
     /// @dev Thrown when metadataKeys and metadataValues arrays do not have the same length

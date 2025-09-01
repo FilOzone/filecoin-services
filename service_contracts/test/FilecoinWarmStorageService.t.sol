@@ -13,6 +13,10 @@ import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Errors} from "../src/Errors.sol";
+
+import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
+
 import {FilecoinWarmStorageServiceStateInternalLibrary} from
     "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -224,6 +228,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
+    ServiceProviderRegistry public registry;
 
     // Test accounts
     address public deployer;
@@ -298,6 +303,101 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC = new MockERC20();
         mockPDPVerifier = new MockPDPVerifier();
 
+        // Deploy actual ServiceProviderRegistry
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
+        MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
+        registry = ServiceProviderRegistry(address(registryProxy));
+
+        // Register service providers in the registry
+        vm.prank(serviceProvider);
+        registry.registerProvider{value: 5 ether}(
+            "Service Provider",
+            "Service Provider Description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            abi.encode(
+                ServiceProviderRegistryStorage.PDPOffering({
+                    serviceURL: "https://provider.com",
+                    minPieceSizeInBytes: 1024,
+                    maxPieceSizeInBytes: 1024 * 1024,
+                    ipniPiece: true,
+                    ipniIpfs: false,
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central",
+                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                })
+            ),
+            new string[](0),
+            new string[](0)
+        );
+
+        vm.prank(sp1);
+        registry.registerProvider{value: 5 ether}(
+            "SP1",
+            "Storage Provider 1",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            abi.encode(
+                ServiceProviderRegistryStorage.PDPOffering({
+                    serviceURL: "https://sp1.com",
+                    minPieceSizeInBytes: 1024,
+                    maxPieceSizeInBytes: 1024 * 1024,
+                    ipniPiece: true,
+                    ipniIpfs: false,
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central",
+                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                })
+            ),
+            new string[](0),
+            new string[](0)
+        );
+
+        vm.prank(sp2);
+        registry.registerProvider{value: 5 ether}(
+            "SP2",
+            "Storage Provider 2",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            abi.encode(
+                ServiceProviderRegistryStorage.PDPOffering({
+                    serviceURL: "https://sp2.com",
+                    minPieceSizeInBytes: 1024,
+                    maxPieceSizeInBytes: 1024 * 1024,
+                    ipniPiece: true,
+                    ipniIpfs: false,
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central",
+                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                })
+            ),
+            new string[](0),
+            new string[](0)
+        );
+
+        vm.prank(sp3);
+        registry.registerProvider{value: 5 ether}(
+            "SP3",
+            "Storage Provider 3",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            abi.encode(
+                ServiceProviderRegistryStorage.PDPOffering({
+                    serviceURL: "https://sp3.com",
+                    minPieceSizeInBytes: 1024,
+                    maxPieceSizeInBytes: 1024 * 1024,
+                    ipniPiece: true,
+                    ipniIpfs: false,
+                    storagePricePerTibPerMonth: 1 ether,
+                    minProvingPeriodInEpochs: 2880,
+                    location: "US-Central",
+                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                })
+            ),
+            new string[](0),
+            new string[](0)
+        );
+
         // Deploy actual Payments contract
         Payments paymentsImpl = new Payments();
         bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
@@ -308,8 +408,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, address(registry)
+        );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -319,7 +420,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
         pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
 
-        // Deploy view contract and set it on the main contract
+        // Add providers to approved list
+        pdpServiceWithPayments.addApprovedProvider(1); // serviceProvider
+        pdpServiceWithPayments.addApprovedProvider(2); // sp1
+        pdpServiceWithPayments.addApprovedProvider(3); // sp2
+        pdpServiceWithPayments.addApprovedProvider(4); // sp3
+
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
         pdpServiceWithPayments.setViewContract(address(viewContract));
     }
@@ -413,7 +519,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
-            1, 1, 2, 3, client, serviceProvider, createData.metadataKeys, createData.metadataValues
+            1, 1, 1, 2, 3, client, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
         // Create a data set as the service provider
@@ -540,7 +646,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
-            1, 1, 0, 0, client, serviceProvider, createData.metadataKeys, createData.metadataValues
+            1, 1, 1, 0, 0, client, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
         // Create a data set as the service provider
@@ -588,6 +694,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Create dataset
         makeSignaturePass(client);
+        vm.prank(serviceProvider); // Create dataset as service provider
         uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
 
         // Prepare piece batches
@@ -2110,8 +2217,17 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress
-    ) FilecoinWarmStorageService(_pdpVerifierAddress, _paymentsContractAddress, _usdfcTokenAddress, _filCDNAddress) {}
+        address _filCDNAddress,
+        address _serviceProviderRegistryAddress
+    )
+        FilecoinWarmStorageService(
+            _pdpVerifierAddress,
+            _paymentsContractAddress,
+            _usdfcTokenAddress,
+            _filCDNAddress,
+            _serviceProviderRegistryAddress
+        )
+    {}
 
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return recoverSigner(messageHash, signature);
@@ -2124,6 +2240,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
+    ServiceProviderRegistry public registry;
 
     // Test accounts with known private keys
     address public payer;
@@ -2151,6 +2268,12 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         mockUSDFC = new MockERC20();
         mockPDPVerifier = new MockPDPVerifier();
 
+        // Deploy actual ServiceProviderRegistry
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
+        MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
+        registry = ServiceProviderRegistry(address(registryProxy));
+
         // Deploy actual Payments contract
         Payments paymentsImpl = new Payments();
         bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
@@ -2158,8 +2281,9 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         payments = Payments(address(paymentsProxy));
 
         // Deploy and initialize the service
-        SignatureCheckingService serviceImpl =
-            new SignatureCheckingService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        SignatureCheckingService serviceImpl = new SignatureCheckingService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, address(registry)
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
@@ -2229,6 +2353,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     MockPDPVerifier public mockPDPVerifier;
     Payments public payments;
     MockERC20 public mockUSDFC;
+    ServiceProviderRegistry public registry;
 
     address public deployer;
     address public filCDN;
@@ -2241,6 +2366,12 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         mockUSDFC = new MockERC20();
         mockPDPVerifier = new MockPDPVerifier();
 
+        // Deploy actual ServiceProviderRegistry
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
+        MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
+        registry = ServiceProviderRegistry(address(registryProxy));
+
         // Deploy actual Payments contract
         Payments paymentsImpl = new Payments();
         bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
@@ -2249,8 +2380,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
-        FilecoinWarmStorageService warmStorageImpl =
-            new FilecoinWarmStorageService(address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN);
+        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier), address(payments), address(mockUSDFC), filCDN, address(registry)
+        );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
