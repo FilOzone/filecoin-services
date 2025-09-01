@@ -561,19 +561,18 @@ contract ServiceProviderRegistry is
         }
 
         // Calculate actual items to return
-        uint256 itemsToReturn = limit;
         if (offset + limit > totalCount) {
-            itemsToReturn = totalCount - offset;
+            limit = totalCount - offset;
         }
 
-        result.providers = new ProviderWithProduct[](itemsToReturn);
-        result.hasMore = (offset + itemsToReturn) < totalCount;
+        result.providers = new ProviderWithProduct[](limit);
+        result.hasMore = (offset + limit) < totalCount;
 
         // Collect providers
         uint256 currentIndex = 0;
         uint256 resultIndex = 0;
 
-        for (uint256 i = 1; i <= numProviders && resultIndex < itemsToReturn; i++) {
+        for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
             if (providerProducts[i][productType].productData.length > 0) {
                 if (currentIndex >= offset && currentIndex < offset + limit) {
                     result.providers[resultIndex] = ProviderWithProduct({
@@ -608,19 +607,18 @@ contract ServiceProviderRegistry is
         }
 
         // Calculate actual items to return
-        uint256 itemsToReturn = limit;
         if (offset + limit > totalCount) {
-            itemsToReturn = totalCount - offset;
+            limit = totalCount - offset;
         }
 
-        result.providers = new ProviderWithProduct[](itemsToReturn);
-        result.hasMore = (offset + itemsToReturn) < totalCount;
+        result.providers = new ProviderWithProduct[](limit);
+        result.hasMore = (offset + limit) < totalCount;
 
         // Collect active providers
         uint256 currentIndex = 0;
         uint256 resultIndex = 0;
 
-        for (uint256 i = 1; i <= numProviders && resultIndex < itemsToReturn; i++) {
+        for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
             if (
                 providers[i].isActive && providerProducts[i][productType].isActive
                     && providerProducts[i][productType].productData.length > 0
@@ -706,18 +704,17 @@ contract ServiceProviderRegistry is
             return (providerIds, hasMore);
         }
 
-        uint256 itemsToReturn = limit;
         if (offset + limit > totalCount) {
-            itemsToReturn = totalCount - offset;
+            limit = totalCount - offset;
         }
 
-        providerIds = new uint256[](itemsToReturn);
-        hasMore = (offset + itemsToReturn) < totalCount;
+        providerIds = new uint256[](limit);
+        hasMore = (offset + limit) < totalCount;
 
         uint256 currentIndex = 0;
         uint256 resultIndex = 0;
 
-        for (uint256 i = 1; i <= numProviders && resultIndex < itemsToReturn; i++) {
+        for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
             if (providers[i].isActive) {
                 if (currentIndex >= offset && currentIndex < offset + limit) {
                     providerIds[resultIndex++] = i;
