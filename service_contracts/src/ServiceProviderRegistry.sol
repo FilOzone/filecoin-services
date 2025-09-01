@@ -49,13 +49,12 @@ contract ServiceProviderRegistry is
     uint256 public constant REGISTRATION_FEE = 5e18;
 
     /// @notice Emitted when a new provider registers
-    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
+    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary);
 
     /// @notice Emitted when a product is updated or added
     event ProductUpdated(
         uint256 indexed providerId,
         ProductType indexed productType,
-        uint256 updatedAt,
         string serviceUrl,
         address beneficiary,
         string[] capabilityKeys,
@@ -73,21 +72,20 @@ contract ServiceProviderRegistry is
     );
 
     /// @notice Emitted when a product is removed from a provider
-    event ProductRemoved(uint256 indexed providerId, ProductType indexed productType, uint256 removedAt);
+    event ProductRemoved(uint256 indexed providerId, ProductType indexed productType);
 
     /// @notice Emitted when provider info is updated
-    event ProviderInfoUpdated(uint256 indexed providerId, uint256 updatedAt);
+    event ProviderInfoUpdated(uint256 indexed providerId);
 
     /// @notice Emitted when beneficiary is transferred
     event BeneficiaryTransferred(
         uint256 indexed providerId,
         address indexed previousBeneficiary,
-        address indexed newBeneficiary,
-        uint256 transferredAt
+        address indexed newBeneficiary
     );
 
     /// @notice Emitted when a provider is removed
-    event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
+    event ProviderRemoved(uint256 indexed providerId);
 
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
