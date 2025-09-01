@@ -27,8 +27,14 @@ if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$FILCDN_ADDRESS" ]; then
-  echo "Error: FILCDN_ADDRESS is not set"
+if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
+  echo "Error: FILCDN_CONTROLLER_ADDRESS is not set"
+  exit 1
+fi
+
+
+if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
+  echo "Error: FILCDN_BENEFICIARY_ADDRESS is not set"
   exit 1
 fi
 
@@ -74,7 +80,7 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_CONTROLLER_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -103,7 +109,8 @@ echo ""
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "PDPVerifier address: $PDP_VERIFIER_ADDRESS"
 echo "Payments contract address: $PAYMENTS_CONTRACT_ADDRESS"
+echo "FilCDN controller address: $FILCDN_CONTROLLER_ADDRESS"
+echo "FilCDN beneficiary address: $FILCDN_BENEFICIARY_ADDRESS"
 echo "ServiceProviderRegistry address: $REGISTRY_PROXY_ADDRESS"
-echo "FilCDN wallet address: $FILCDN_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"

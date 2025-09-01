@@ -1249,7 +1249,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         vm.prank(address(mockPDPVerifier));
@@ -1258,7 +1258,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
         // Warp to challenge window
-        uint256 provingDeadline = viewContract.provingDeadlines(dataSetId);
+        uint256 provingDeadline = viewContract.provingDeadline(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(

@@ -38,9 +38,14 @@ if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$FILCDN_ADDRESS" ]; then
-  echo "Warning: FILCDN_ADDRESS not set, using default"
-  FILCDN_ADDRESS="0xff0000000000000000000000000000000002870c"
+if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
+  echo "Warning: FILCDN_CONTROLLER_ADDRESS not set, using default"
+  FILCDN_CONTROLLER_ADDRESS="0xff0000000000000000000000000000000002870c"
+fi
+
+if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
+  echo "Warning: FILCDN_BENEFICIARY_ADDRESS not set, using default"
+  FILCDN_BENEFICIARY_ADDRESS="0xff0000000000000000000000000000000002870c"
 fi
 
 if [ -z "$REGISTRY_PROXY_ADDRESS" ]; then
@@ -56,10 +61,11 @@ echo "Constructor arguments:"
 echo "  PDPVerifier: $PDP_VERIFIER_ADDRESS"
 echo "  Payments: $PAYMENTS_CONTRACT_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
-echo "  FilCDN: $FILCDN_ADDRESS"
+echo "  FilCDN Controller Address: $FILCDN_CONTROLLER_ADDRESS"
+echo "  FilCDN Beneficiary Address: $FILCDN_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $REGISTRY_PROXY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_CONTROLLER_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to deploy FilecoinWarmStorageService implementation"

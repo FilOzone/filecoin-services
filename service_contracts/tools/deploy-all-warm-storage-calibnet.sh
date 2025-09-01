@@ -26,8 +26,11 @@ fi
 
 # Fixed addresses for initialization
 PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
-if [ -z "$FILCDN_WALLET" ]; then
-    FILCDN_WALLET="0xff0000000000000000000000000000000002870c"
+if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
+    FILCDN_CONTROLLER_ADDRESS="0xff0000000000000000000000000000000002870c"
+fi
+if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
+    FILCDN_BENEFICIARY_ADDRESS="0xff0000000000000000000000000000000002870c"
 fi
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 
@@ -121,9 +124,7 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 7: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_WALLET $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
-
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_CONTROLLER_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $REGISTRY_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -172,6 +173,7 @@ echo "FilecoinWarmStorageServiceStateView: $WARM_STORAGE_VIEW_ADDRESS"
 echo "=========================="
 echo ""
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
-echo "FilCDN wallet address: $FILCDN_WALLET"
+echo "FilCDN controller address: $FILCDN_CONTROLLER_ADDRESS"
+echo "FilCDN beneficiary address: $FILCDN_BENEFICIARY_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
