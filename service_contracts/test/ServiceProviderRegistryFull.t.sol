@@ -28,11 +28,10 @@ contract ServiceProviderRegistryFullTest is Test {
     bytes public encodedDefaultPDPData;
     bytes public encodedUpdatedPDPData;
 
-    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary, uint256 registeredAt);
+    event ProviderRegistered(uint256 indexed providerId, address indexed beneficiary);
     event ProductUpdated(
         uint256 indexed providerId,
         ServiceProviderRegistryStorage.ProductType indexed productType,
-        uint256 updatedAt,
         string serviceUrl,
         address beneficiary,
         string[] capabilityKeys,
@@ -46,17 +45,12 @@ contract ServiceProviderRegistryFullTest is Test {
         string[] capabilityKeys,
         string[] capabilityValues
     );
-    event ProductRemoved(
-        uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType, uint256 removedAt
-    );
+    event ProductRemoved(uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType);
     event BeneficiaryTransferred(
-        uint256 indexed providerId,
-        address indexed previousBeneficiary,
-        address indexed newBeneficiary,
-        uint256 transferredAt
+        uint256 indexed providerId, address indexed previousBeneficiary, address indexed newBeneficiary
     );
-    event ProviderRemoved(uint256 indexed providerId, uint256 removedAt);
-    event ProviderInfoUpdated(uint256 indexed providerId, uint256 updatedAt);
+    event ProviderRemoved(uint256 indexed providerId);
+    event ProviderInfoUpdated(uint256 indexed providerId);
 
     function setUp() public {
         owner = address(this);
@@ -138,7 +132,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Expect events
         vm.expectEmit(true, true, true, true);
-        emit ProviderRegistered(1, provider1, block.number);
+        emit ProviderRegistered(1, provider1);
 
         // Non-empty capability arrays
         string[] memory capKeys = new string[](4);
@@ -550,13 +544,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.expectEmit(true, true, false, true);
         emit ProductUpdated(
-            1,
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            block.number,
-            UPDATED_SERVICE_URL,
-            provider1,
-            emptyKeys,
-            emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, UPDATED_SERVICE_URL, provider1, emptyKeys, emptyValues
         );
 
         registry.updateProduct(
@@ -678,7 +666,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, true, true);
-        emit BeneficiaryTransferred(1, provider1, provider2, block.number);
+        emit BeneficiaryTransferred(1, provider1, provider2);
 
         registry.transferProviderBeneficiary(provider2);
 
@@ -834,7 +822,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, false, true);
-        emit ProviderRemoved(1, block.number);
+        emit ProviderRemoved(1);
 
         registry.removeProvider();
 
@@ -1139,7 +1127,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Remove the only product - should succeed now
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
-        emit ProductRemoved(providerId, ServiceProviderRegistryStorage.ProductType.PDP, block.number);
+        emit ProductRemoved(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         registry.removeProduct(ServiceProviderRegistryStorage.ProductType.PDP);
 
         // Verify product is removed
@@ -1272,13 +1260,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
         emit ProductUpdated(
-            1,
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            block.number,
-            UPDATED_SERVICE_URL,
-            provider1,
-            emptyKeys,
-            emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, UPDATED_SERVICE_URL, provider1, emptyKeys, emptyValues
         );
 
         registry.updateProduct(
@@ -1316,7 +1298,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Update description
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
-        emit ProviderInfoUpdated(1, block.number);
+        emit ProviderInfoUpdated(1);
         registry.updateProviderInfo("Updated Name", "Updated description");
 
         // Verify updated description
@@ -1430,7 +1412,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Test ProviderRegistered and ProductAdded events
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit ProviderRegistered(1, provider1, block.number);
+        emit ProviderRegistered(1, provider1);
         vm.expectEmit(true, true, true, true);
         emit ProductAdded(
             1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, emptyKeys, emptyValues
@@ -1449,13 +1431,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
         emit ProductUpdated(
-            1,
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            block.number,
-            UPDATED_SERVICE_URL,
-            provider1,
-            emptyKeys,
-            emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, UPDATED_SERVICE_URL, provider1, emptyKeys, emptyValues
         );
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
@@ -1464,13 +1440,13 @@ contract ServiceProviderRegistryFullTest is Test {
         // Test BeneficiaryTransferred event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit BeneficiaryTransferred(1, provider1, provider2, block.number);
+        emit BeneficiaryTransferred(1, provider1, provider2);
         registry.transferProviderBeneficiary(provider2);
 
         // Test ProviderRemoved event
         vm.prank(provider2);
         vm.expectEmit(true, true, false, true);
-        emit ProviderRemoved(1, block.number);
+        emit ProviderRemoved(1);
         registry.removeProvider();
     }
 

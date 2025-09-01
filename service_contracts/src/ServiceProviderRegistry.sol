@@ -79,9 +79,7 @@ contract ServiceProviderRegistry is
 
     /// @notice Emitted when beneficiary is transferred
     event BeneficiaryTransferred(
-        uint256 indexed providerId,
-        address indexed previousBeneficiary,
-        address indexed newBeneficiary
+        uint256 indexed providerId, address indexed previousBeneficiary, address indexed newBeneficiary
     );
 
     /// @notice Emitted when a provider is removed
@@ -168,7 +166,7 @@ contract ServiceProviderRegistry is
         activeProviderCount++;
 
         // Emit provider registration event
-        emit ProviderRegistered(providerId, msg.sender, block.number);
+        emit ProviderRegistered(providerId, msg.sender);
 
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
@@ -333,13 +331,7 @@ contract ServiceProviderRegistry is
 
         // Emit event
         emit ProductUpdated(
-            providerId,
-            productType,
-            block.number,
-            serviceUrl,
-            providers[providerId].beneficiary,
-            capabilityKeys,
-            capabilityValues
+            providerId, productType, serviceUrl, providers[providerId].beneficiary, capabilityKeys, capabilityValues
         );
     }
 
@@ -379,7 +371,7 @@ contract ServiceProviderRegistry is
         activeProductTypeProviderCount[productType]--;
 
         // Emit event
-        emit ProductRemoved(providerId, productType, block.number);
+        emit ProductRemoved(providerId, productType);
     }
 
     /// @notice Update PDP service configuration with capabilities
@@ -419,7 +411,7 @@ contract ServiceProviderRegistry is
         providers[providerId].description = description;
 
         // Emit event
-        emit ProviderInfoUpdated(providerId, block.number);
+        emit ProviderInfoUpdated(providerId);
     }
 
     /// @notice Transfer provider beneficiary to a new address
@@ -453,7 +445,7 @@ contract ServiceProviderRegistry is
         addressToProviderId[newBeneficiary] = providerId;
 
         // Emit event
-        emit BeneficiaryTransferred(providerId, previousBeneficiary, newBeneficiary, block.number);
+        emit BeneficiaryTransferred(providerId, previousBeneficiary, newBeneficiary);
     }
 
     /// @notice Remove provider registration (soft delete)
@@ -498,7 +490,7 @@ contract ServiceProviderRegistry is
         delete addressToProviderId[providers[providerId].beneficiary];
 
         // Emit event
-        emit ProviderRemoved(providerId, block.number);
+        emit ProviderRemoved(providerId);
     }
 
     /// @notice Get complete provider information
