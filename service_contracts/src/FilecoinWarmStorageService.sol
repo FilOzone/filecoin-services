@@ -381,8 +381,6 @@ contract FilecoinWarmStorageService is
             revert Errors.ProviderNotInApprovedList(providerId);
         }
 
-        // Verify the index is correct
-        require(index < approvedProviderIds.length, "Index out of bounds");
         require(approvedProviderIds[index] == providerId, "Provider ID mismatch at index");
 
         approvedProviders[providerId] = false;
