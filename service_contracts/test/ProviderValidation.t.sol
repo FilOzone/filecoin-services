@@ -93,7 +93,8 @@ contract ProviderValidationTest is Test {
     address public provider1;
     address public provider2;
     address public client;
-    address public filCDN;
+    address public filCDNController;
+    address public filCDNBeneficiary;
 
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef),
@@ -106,7 +107,8 @@ contract ProviderValidationTest is Test {
         provider1 = address(0x1);
         provider2 = address(0x2);
         client = address(0x3);
-        filCDN = address(0x4);
+        filCDNController = address(0x4);
+        filCDNBeneficiary = address(0x5);
 
         // Fund accounts
         vm.deal(provider1, 10 ether);
@@ -130,7 +132,12 @@ contract ProviderValidationTest is Test {
 
         // Deploy FilecoinWarmStorageService
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier), address(payments), address(usdfc), filCDN, address(registry)
+            address(pdpVerifier),
+            address(payments),
+            address(usdfc),
+            filCDNController,
+            filCDNBeneficiary,
+            address(registry)
         );
         bytes memory warmStorageInitData =
             abi.encodeWithSelector(FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60));
