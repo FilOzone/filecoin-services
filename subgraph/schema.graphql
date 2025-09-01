@@ -51,10 +51,11 @@ type Rail @entity(immutable: false) {
   operator: Bytes!
   arbiter: Bytes!
   paymentRate: BigInt!
-  lockupPeriod: BigInt!
-  lockupFixed: BigInt!
   settledUpto: BigInt!
+  settledAmount: BigInt!
+  totalFaultedEpochs: BigInt!
   endEpoch: BigInt!
+  isActive: Boolean!
   queueLength: BigInt!
   rateChangeQueue: [RateChangeQueue!]! @derivedFrom(field: "rail")
 

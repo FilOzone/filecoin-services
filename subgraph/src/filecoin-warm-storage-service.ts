@@ -7,6 +7,8 @@ import {
   RailRateUpdated as RailRateUpdatedEvent,
   PieceAdded as PieceAddedEvent,
   DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
+  PaymentTerminated as PaymentTerminatedEvent,
+  PaymentArbitrated as PaymentArbitratedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
@@ -527,4 +529,64 @@ export function handleProviderUnapproved(event: ProviderUnapprovedEvent): void {
   provider.blockNumber = event.block.number;
 
   provider.save();
+}
+
+/**
+ * Handles the PaymentTerminated event.
+ * Terminates a storage service.
+ */
+export function handlePaymentTerminated(event: PaymentTerminatedEvent): void {
+  const endEpoch = event.params.endEpoch;
+  const pdpRailId = event.params.pdpRailId;
+  const cacheMissRailId = event.params.cacheMissRailId;
+  const cdnRailId = event.params.cdnRailId;
+
+  const pdpRailEntityId = getRailEntityId(pdpRailId);
+  const cacheMissRailEntityId = getRailEntityId(cacheMissRailId);
+  const cdnRailEntityId = getRailEntityId(cdnRailId);
+
+  const pdpRail = Rail.load(pdpRailEntityId);
+  const cacheMissRail = cacheMissRailId.isZero() ? null : Rail.load(cacheMissRailEntityId);
+  const cdnRail = cdnRailId.isZero() ? null : Rail.load(cdnRailEntityId);
+
+  if (pdpRail) {
+    pdpRail.isActive = false;
+    pdpRail.endEpoch = endEpoch;
+    pdpRail.save();
+  }
+  if (cacheMissRail) {
+    cacheMissRail.isActive = false;
+    cacheMissRail.endEpoch = endEpoch;
+    cacheMissRail.save();
+  }
+  if (cdnRail) {
+    cdnRail.isActive = false;
+    cdnRail.endEpoch = endEpoch;
+    cdnRail.save();
+  }
+}
+
+/**
+ * Handles the PaymentArbitrated event.
+ * Arbitrates a storage payment.
+ */
+export function handlePaymentArbitrated(event: PaymentArbitratedEvent): void {
+  const railId = event.params.railId;
+  const dataSetId = event.params.dataSetId;
+  const arbitratedAmount = event.params.modifiedAmount;
+  const faultedEpochs = event.params.faultedEpochs;
+
+  const rail = Rail.load(getRailEntityId(railId));
+  if (!rail) {
+    log.warning("PaymentArbitrated: Rail {} not found", [railId.toString()]);
+    return;
+  }
+
+  const dataSet = DataSet.load(getDataSetEntityId(dataSetId));
+
+  rail.settledAmount = rail.settledAmount.plus(arbitratedAmount);
+  rail.totalFaultedEpochs = rail.totalFaultedEpochs.plus(faultedEpochs);
+  rail.settledUpto = dataSet ? dataSet.lastProvenEpoch : rail.settledUpto;
+
+  rail.save();
 }

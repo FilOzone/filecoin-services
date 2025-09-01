@@ -76,6 +76,10 @@ dataSources:
           handler: handleProviderApproved
         - event: "ProviderUnapproved(indexed uint256)"
           handler: handleProviderUnapproved
+        - event: "PaymentTerminated(indexed uint256,uint256,uint256,uint256,uint256)"
+          handler: handlePaymentTerminated
+        - event: "PaymentArbitrated(uint256,uint256,uint256,uint256,uint256)"
+          handler: handlePaymentArbitrated
       file: ./src/filecoin-warm-storage-service.ts
   - kind: ethereum
     name: ServiceProviderRegistry
