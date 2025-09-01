@@ -1214,7 +1214,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1320,6 +1320,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
+    }
+
+    function testTerminateCDNService_DataSetHasNoCDNEnabled() public {
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Try to terminate CDN service
+        console.log("Terminating CDN service for data set without CDN enabled -- should revert");
+        console.log("Current block:", block.number);
+        vm.prank(filCDNController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
     }
 
     // ==== Data Set Metadata Storage Tests ====
