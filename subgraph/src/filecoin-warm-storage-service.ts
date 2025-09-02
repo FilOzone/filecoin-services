@@ -7,13 +7,13 @@ import {
   RailRateUpdated as RailRateUpdatedEvent,
   PieceAdded as PieceAddedEvent,
   DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
-  PaymentTerminated as PaymentTerminatedEvent,
+  PDPPaymentTerminated as PDPPaymentTerminatedEvent,
+  CDNPaymentTerminated as CDNPaymentTerminatedEvent,
   PaymentArbitrated as PaymentArbitratedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
-import { BIGINT_ONE, ContractAddresses, LeafSize, NumChallenges } from "./utils/constants";
-import { decodeStringAddressBoolBytes } from "./utils/decode";
+import { BIGINT_ONE, BIGINT_ZERO, ContractAddresses, LeafSize, NumChallenges } from "./utils/constants";
 import { SumTree } from "./utils/sumTree";
 import { createRails } from "./utils/entity";
 import { ProviderStatus, RailType } from "./utils/types";
@@ -152,7 +152,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 
   const challengeEpoch = dataSet.nextChallengeEpoch;
   const challengeRange = dataSet.challengeRange;
-  const storageProviderId = dataSet.storageProvider;
+  const owner = dataSet.owner;
   const nextPieceId = dataSet.totalPieces;
 
   let nextChallengeEpoch = BigInt.fromI32(0);
@@ -237,7 +237,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(storageProviderId);
+  const provider = Provider.load(owner);
   if (provider) {
     provider.totalFaultedPeriods = provider.totalFaultedPeriods.plus(periodsFaultedParam);
     provider.totalFaultedPieces = provider.totalFaultedPieces.plus(BigInt.fromI32(uniquePieceIds.length));
@@ -245,10 +245,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [
-      storageProviderId.toHex(),
-      setId.toString(),
-    ]);
+    log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [owner.toHex(), setId.toString()]);
   }
 }
 
@@ -258,47 +255,45 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
  */
 export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   const listenerAddr = event.address;
+  const providerId = event.params.providerId;
   const setId = event.params.dataSetId;
   const pdpRailId = event.params.pdpRailId;
   const cacheMissRailId = event.params.cacheMissRailId;
   const cdnRailId = event.params.cdnRailId;
-  const clientAddr = event.params.payer;
-  const storageProviderId = event.params.payee;
+  const payer = event.params.payer;
+  const creator = event.params.creator;
+  const beneficiary = event.params.beneficiary;
   const metadataKeys = event.params.metadataKeys;
   const metadataValues = event.params.metadataValues;
   const dataSetEntityId = getDataSetEntityId(setId);
-  const providerEntityId = storageProviderId; // Provider ID is the storageProvider address
+  const withCDN = cacheMissRailId != BIGINT_ZERO && cdnRailId != BIGINT_ZERO;
 
   let dataSet = new DataSet(dataSetEntityId);
 
-  const inputData = event.transaction.input;
-  const extraDataStart = 4 + 32 + 32 + 32;
-  const extraDataBytes = inputData.subarray(extraDataStart);
-
-  // extraData -> (metadata,payer,withCDN,signature)
-  const decodedData = decodeStringAddressBoolBytes(Bytes.fromUint8Array(extraDataBytes));
-
-  let metadata: string = decodedData.stringValue;
-
   // Create DataSet
   dataSet.setId = setId;
+  dataSet.providerId = providerId;
   dataSet.metadataKeys = metadataKeys;
   dataSet.metadataValues = metadataValues;
-  dataSet.clientAddr = clientAddr;
-  dataSet.storageProvider = providerEntityId; // Link to Provider via storageProvider address (which is Provider's ID)
   dataSet.listener = listenerAddr;
+  dataSet.payer = payer;
+  dataSet.payee = beneficiary;
+  dataSet.owner = creator;
+  dataSet.withCDN = withCDN;
   dataSet.isActive = true;
-  dataSet.leafCount = BigInt.fromI32(0);
-  dataSet.challengeRange = BigInt.fromI32(0);
-  dataSet.lastProvenEpoch = BigInt.fromI32(0);
-  dataSet.nextChallengeEpoch = BigInt.fromI32(0);
-  dataSet.totalPieces = BigInt.fromI32(0);
-  dataSet.nextPieceId = BigInt.fromI32(0);
-  dataSet.totalDataSize = BigInt.fromI32(0);
-  dataSet.totalFaultedPeriods = BigInt.fromI32(0);
-  dataSet.totalFaultedPieces = BigInt.fromI32(0);
-  dataSet.totalProofs = BigInt.fromI32(0);
-  dataSet.totalProvedPieces = BigInt.fromI32(0);
+  dataSet.pdpEndEpoch = BIGINT_ZERO;
+  dataSet.cdnEndEpoch = BIGINT_ZERO;
+  dataSet.leafCount = BIGINT_ZERO;
+  dataSet.challengeRange = BIGINT_ZERO;
+  dataSet.lastProvenEpoch = BIGINT_ZERO;
+  dataSet.nextChallengeEpoch = BIGINT_ZERO;
+  dataSet.totalPieces = BIGINT_ZERO;
+  dataSet.nextPieceId = BIGINT_ZERO;
+  dataSet.totalDataSize = BIGINT_ZERO;
+  dataSet.totalFaultedPeriods = BIGINT_ZERO;
+  dataSet.totalFaultedPieces = BIGINT_ZERO;
+  dataSet.totalProofs = BIGINT_ZERO;
+  dataSet.totalProvedPieces = BIGINT_ZERO;
   dataSet.createdAt = event.block.timestamp;
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
@@ -308,16 +303,16 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   createRails(
     [pdpRailId, cacheMissRailId, cdnRailId],
     [RailType.PDP, RailType.CACHE_MISS, RailType.CDN],
-    clientAddr,
-    storageProviderId,
+    payer,
+    creator,
     listenerAddr,
     dataSetEntityId,
   );
 
   // Create or Update Provider
-  let provider = Provider.load(providerEntityId);
+  let provider = Provider.load(creator);
   if (provider == null) {
-    log.warning("DataSetCreated: existing provider not found for address: {}", [providerEntityId.toHexString()]);
+    log.warning("DataSetCreated: existing provider not found for address: {}", [creator.toHexString()]);
     return;
   } else {
     // Update timestamp/block even if exists
@@ -410,7 +405,7 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(dataSet.storageProvider);
+  const provider = Provider.load(dataSet.owner);
   if (!provider) {
     log.warning("handlePieceAdded: Provider not found for DataSet: {}", [dataSet.id.toString()]);
     return;
@@ -473,7 +468,7 @@ export function handleDataSetServiceProviderChanged(event: DataSetServiceProvide
   newProvider.save();
 
   // Update DataSet storageProvider (this updates the derived relationship on both old and new Provider)
-  dataSet.storageProvider = newStorageProvider; // Set storageProvider to the new provider's ID
+  dataSet.owner = newStorageProvider; // Set storageProvider to the new provider's ID
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
   dataSet.save();
@@ -532,37 +527,62 @@ export function handleProviderUnapproved(event: ProviderUnapprovedEvent): void {
 }
 
 /**
- * Handles the PaymentTerminated event.
- * Terminates a storage service.
+ * Handles the PDPPaymentTerminated event.
+ * Terminates pdp rail.
  */
-export function handlePaymentTerminated(event: PaymentTerminatedEvent): void {
+export function handlePDPPaymentTerminated(event: PDPPaymentTerminatedEvent): void {
+  const dataSetId = event.params.dataSetId;
   const endEpoch = event.params.endEpoch;
   const pdpRailId = event.params.pdpRailId;
-  const cacheMissRailId = event.params.cacheMissRailId;
-  const cdnRailId = event.params.cdnRailId;
 
   const pdpRailEntityId = getRailEntityId(pdpRailId);
-  const cacheMissRailEntityId = getRailEntityId(cacheMissRailId);
-  const cdnRailEntityId = getRailEntityId(cdnRailId);
+  const dataSetEntityId = getDataSetEntityId(dataSetId);
 
-  const pdpRail: Rail | null = Rail.load(pdpRailEntityId);
-  const cacheMissRail: Rail | null = cacheMissRailId.isZero() ? null : Rail.load(cacheMissRailEntityId);
-  const cdnRail: Rail | null = cdnRailId.isZero() ? null : Rail.load(cdnRailEntityId);
+  const pdpRail = Rail.load(pdpRailEntityId);
+  const dataSet = DataSet.load(dataSetEntityId);
 
   if (pdpRail) {
     pdpRail.isActive = false;
     pdpRail.endEpoch = endEpoch;
     pdpRail.save();
   }
+  if (dataSet) {
+    dataSet.pdpEndEpoch = endEpoch;
+    dataSet.save();
+  }
+}
+
+/**
+ * Handles the CDNPaymentTerminated event.
+ * Terminates cdn rails.
+ */
+export function handleCDNPaymentTerminated(event: CDNPaymentTerminatedEvent): void {
+  const dataSetId = event.params.dataSetId;
+  const endEpoch = event.params.endEpoch;
+  const cacheMissRailId = event.params.cacheMissRailId;
+  const cdnRailId = event.params.cdnRailId;
+
+  const dataSetEntityId = getDataSetEntityId(dataSetId);
+  const cdnRailEntityId = getRailEntityId(cdnRailId);
+  const cacheMissRailEntityId = getRailEntityId(cacheMissRailId);
+
+  const cdnRail = Rail.load(cdnRailEntityId);
+  const cacheMissRail = Rail.load(cacheMissRailEntityId);
+  const dataSet = DataSet.load(dataSetEntityId);
+
+  if (cdnRail) {
+    cdnRail.isActive = false;
+    cdnRail.endEpoch = endEpoch;
+    cdnRail.save();
+  }
   if (cacheMissRail) {
     cacheMissRail.isActive = false;
     cacheMissRail.endEpoch = endEpoch;
     cacheMissRail.save();
   }
-  if (cdnRail) {
-    cdnRail.isActive = false;
-    cdnRail.endEpoch = endEpoch;
-    cdnRail.save();
+  if (dataSet) {
+    dataSet.cdnEndEpoch = endEpoch;
+    dataSet.save();
   }
 }
 

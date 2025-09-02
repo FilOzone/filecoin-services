@@ -62,7 +62,7 @@ dataSources:
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
       eventHandlers:
-        - event: "DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,string[],string[])"
+        - event: "DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])"
           handler: handleDataSetCreated
         - event: "PieceAdded(indexed uint256,indexed uint256,string[],string[])"
           handler: handlePieceAdded
@@ -76,8 +76,10 @@ dataSources:
           handler: handleProviderApproved
         - event: "ProviderUnapproved(indexed uint256)"
           handler: handleProviderUnapproved
-        - event: "PaymentTerminated(indexed uint256,uint256,uint256,uint256,uint256)"
-          handler: handlePaymentTerminated
+        - event: "PDPPaymentTerminated(indexed uint256,uint256,uint256)"
+          handler: handlePDPPaymentTerminated
+        - event: "CDNPaymentTerminated(indexed uint256,uint256,uint256,uint256)"
+          handler: handleCDNPaymentTerminated
         - event: "PaymentArbitrated(uint256,uint256,uint256,uint256,uint256)"
           handler: handlePaymentArbitrated
       file: ./src/filecoin-warm-storage-service.ts
@@ -100,18 +102,16 @@ dataSources:
         - name: ServiceProviderRegistry
           file: ./abis/ServiceProviderRegistry.json
       eventHandlers:
-        - event: "ProviderRegistered(indexed uint256,indexed address,uint256)"
+        - event: "ProviderRegistered(indexed uint256,indexed address,indexed address)"
           handler: handleProviderRegistered
-        - event: "ProviderInfoUpdated(indexed uint256,uint256)"
+        - event: "ProviderInfoUpdated(indexed uint256)"
           handler: handleProviderInfoUpdated
-        - event: "ProviderRemoved(indexed uint256,uint256)"
+        - event: "ProviderRemoved(indexed uint256)"
           handler: handleProviderRemoved
-        - event: "ProductAdded(indexed uint256,indexed uint8,uint256,string,address,string[],string[])"
+        - event: "ProductAdded(indexed uint256,indexed uint8,string,address,string[],string[])"
           handler: handleProductAdded
-        - event: "ProductUpdated(indexed uint256,indexed uint8,uint256,string,address,string[],string[])"
+        - event: "ProductUpdated(indexed uint256,indexed uint8,string,address,string[],string[])"
           handler: handleProductUpdated
-        - event: "ProductRemoved(indexed uint256,indexed uint8,uint256)"
+        - event: "ProductRemoved(indexed uint256,indexed uint8)"
           handler: handleProductRemoved
-        - event: "BeneficiaryTransferred(indexed uint256,indexed address,indexed address,uint256)"
-          handler: handleBeneficiaryTransferred
       file: ./src/service-provider-registry.ts

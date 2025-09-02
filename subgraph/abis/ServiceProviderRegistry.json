@@ -9,6 +9,7 @@
         "type": "tuple",
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
+          { "name": "owner", "type": "address", "internalType": "address" },
           { "name": "beneficiary", "type": "address", "internalType": "address" },
           { "name": "name", "type": "string", "internalType": "string" },
           { "name": "description", "type": "string", "internalType": "string" },
@@ -28,6 +29,7 @@
         "type": "tuple",
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
+          { "name": "owner", "type": "address", "internalType": "address" },
           { "name": "beneficiary", "type": "address", "internalType": "address" },
           { "name": "name", "type": "string", "internalType": "string" },
           { "name": "description", "type": "string", "internalType": "string" },
@@ -53,17 +55,6 @@
   },
   {
     "type": "event",
-    "name": "BeneficiaryTransferred",
-    "inputs": [
-      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
-      { "name": "previousBeneficiary", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "newBeneficiary", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "transferredAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "ProductAdded",
     "inputs": [
       { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
@@ -73,9 +64,8 @@
         "indexed": true,
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
-      { "name": "addedAt", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
-      { "name": "beneficiary", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "owner", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
@@ -91,8 +81,7 @@
         "type": "uint8",
         "indexed": true,
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
-      },
-      { "name": "removedAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+      }
     ],
     "anonymous": false
   },
@@ -107,9 +96,8 @@
         "indexed": true,
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
-      { "name": "updatedAt", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
-      { "name": "beneficiary", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "owner", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
@@ -118,10 +106,7 @@
   {
     "type": "event",
     "name": "ProviderInfoUpdated",
-    "inputs": [
-      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
-      { "name": "updatedAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
-    ],
+    "inputs": [{ "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" }],
     "anonymous": false
   },
   {
@@ -129,18 +114,15 @@
     "name": "ProviderRegistered",
     "inputs": [
       { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
-      { "name": "beneficiary", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "registeredAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
+      { "name": "owner", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "beneficiary", "type": "address", "indexed": true, "internalType": "address" }
     ],
     "anonymous": false
   },
   {
     "type": "event",
     "name": "ProviderRemoved",
-    "inputs": [
-      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
-      { "name": "removedAt", "type": "uint256", "indexed": false, "internalType": "uint256" }
-    ],
+    "inputs": [{ "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" }],
     "anonymous": false
   }
 ]

@@ -42,15 +42,15 @@ export function createRails(
 export function createProviderProduct(event: ProductAddedEvent): void {
   const providerId = event.params.providerId;
   const productType = event.params.productType;
-  const beneficiary = event.params.beneficiary;
+  const owner = event.params.owner;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
   const serviceUrl = event.params.serviceUrl;
 
-  const productId = getProviderProductEntityId(beneficiary, productType);
+  const productId = getProviderProductEntityId(owner, productType);
   const providerProduct = new ProviderProduct(productId);
 
-  providerProduct.provider = beneficiary;
+  providerProduct.provider = owner;
   providerProduct.serviceUrl = serviceUrl;
   providerProduct.productData = getProviderProductData(event.address, providerId, productType);
   providerProduct.productType = BigInt.fromI32(productType);
@@ -63,12 +63,14 @@ export function createProviderProduct(event: ProductAddedEvent): void {
 
 export function initiateProvider(
   providerId: BigInt,
+  owner: Address,
   beneficiary: Address,
   timestamp: BigInt,
   blockNumber: BigInt,
 ): Provider {
   const provider = new Provider(beneficiary);
   provider.providerId = providerId;
+  provider.owner = owner;
   provider.beneficiary = beneficiary;
   provider.name = "";
   provider.description = "";

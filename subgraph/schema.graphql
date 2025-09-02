@@ -2,9 +2,13 @@ type DataSet @entity(immutable: false) {
   id: Bytes! # setId
   setId: BigInt! # uint256
   listener: Bytes! # address
-  clientAddr: Bytes! # address
+  providerId: BigInt! # uint256
+  payer: Bytes! # address
+  payee: Bytes! # address
+  owner: Provider! # address
   withCDN: Boolean!
-  storageProvider: Provider! # address of the provider
+  pdpEndEpoch: BigInt!
+  cdnEndEpoch: BigInt!
   leafCount: BigInt! # uint256
   challengeRange: BigInt! # uint256
   isActive: Boolean!
@@ -78,8 +82,9 @@ enum ProviderStatus {
 }
 
 type Provider @entity(immutable: false) {
-  id: Bytes! # Beneficiary address
+  id: Bytes! # Owner address
   providerId: BigInt!
+  owner: Bytes!
   beneficiary: Bytes!
   name: String!
   description: String!
@@ -101,7 +106,7 @@ type Provider @entity(immutable: false) {
   blockNumber: BigInt!
 
   # Derived relationship
-  dataSets: [DataSet!]! @derivedFrom(field: "storageProvider")
+  dataSets: [DataSet!]! @derivedFrom(field: "owner")
   products: [ProviderProduct!]! @derivedFrom(field: "provider")
 }
 

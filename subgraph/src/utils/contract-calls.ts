@@ -9,10 +9,11 @@ export function getServiceProviderInfo(registryAddress: Address, providerId: Big
   const providerInfoTry = serviceProviderRegistryInstance.try_getProvider(providerId);
 
   if (providerInfoTry.reverted) {
-    return new ServiceProviderInfo(Address.zero(), "", "", false);
+    return new ServiceProviderInfo(Address.zero(), Address.zero(), "", "", false);
   }
 
   return new ServiceProviderInfo(
+    providerInfoTry.value.owner,
     providerInfoTry.value.beneficiary,
     providerInfoTry.value.name,
     providerInfoTry.value.description,

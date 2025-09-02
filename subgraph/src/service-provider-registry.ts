@@ -1,4 +1,4 @@
-import { BigInt, log, store } from "@graphprotocol/graph-ts";
+import { BigInt, log } from "@graphprotocol/graph-ts";
 import {
   ProviderRegistered as ProviderRegisteredEvent,
   ProviderInfoUpdated as ProviderInfoUpdatedEvent,
@@ -6,7 +6,6 @@ import {
   ProductAdded as ProductAddedEvent,
   ProductUpdated as ProductUpdatedEvent,
   ProductRemoved as ProductRemovedEvent,
-  BeneficiaryTransferred as BeneficiaryTransferredEvent,
 } from "../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { Provider, ProviderProduct } from "../generated/schema";
 import { BIGINT_ONE } from "./utils/constants";
@@ -20,12 +19,13 @@ import { getProviderProductEntityId } from "./utils/keys";
  */
 export function handleProviderRegistered(event: ProviderRegisteredEvent): void {
   const providerId = event.params.providerId;
+  const owner = event.params.owner;
   const beneficiary = event.params.beneficiary;
 
   const serviceProviderRegistryAddress = event.address;
   const providerInfo = getServiceProviderInfo(serviceProviderRegistryAddress, providerId);
 
-  const provider = initiateProvider(providerId, beneficiary, event.block.timestamp, event.block.number);
+  const provider = initiateProvider(providerId, owner, beneficiary, event.block.timestamp, event.block.number);
   provider.registeredAt = event.block.number;
   provider.name = providerInfo.name;
   provider.description = providerInfo.description;
@@ -93,7 +93,7 @@ export function handleProviderRemoved(event: ProviderRemovedEvent): void {
 export function handleProductAdded(event: ProductAddedEvent): void {
   createProviderProduct(event);
 
-  const provider = Provider.load(event.params.beneficiary);
+  const provider = Provider.load(event.params.owner);
 
   if (!provider) return;
   provider.totalProducts = provider.totalProducts.plus(BIGINT_ONE);
@@ -106,12 +106,12 @@ export function handleProductAdded(event: ProductAddedEvent): void {
  */
 export function handleProductUpdated(event: ProductUpdatedEvent): void {
   const productType = event.params.productType;
-  const beneficiary = event.params.beneficiary;
+  const owner = event.params.owner;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
   const serviceUrl = event.params.serviceUrl;
 
-  const productId = getProviderProductEntityId(beneficiary, productType);
+  const productId = getProviderProductEntityId(owner, productType);
 
   const providerProduct = ProviderProduct.load(productId);
 
@@ -146,58 +146,4 @@ export function handleProductRemoved(event: ProductRemovedEvent): void {
 
   providerProduct.isActive = false;
   providerProduct.save();
-}
-
-/**
- * Handles the BeneficiaryTransferred event.
- * @param event The BeneficiaryTransferred event.
- */
-export function handleBeneficiaryTransferred(event: BeneficiaryTransferredEvent): void {
-  const providerId = event.params.providerId;
-  const previousBeneficiary = event.params.previousBeneficiary;
-  const newBeneficiary = event.params.newBeneficiary;
-
-  const previousProvider = Provider.load(previousBeneficiary);
-  if (previousProvider) {
-    store.remove("Provider", previousBeneficiary.toString());
-  }
-
-  const newProvider = initiateProvider(providerId, newBeneficiary, event.block.timestamp, event.block.number);
-  if (!previousProvider) {
-    return newProvider.save();
-  }
-
-  newProvider.status = previousProvider.status;
-  newProvider.name = previousProvider.name;
-  newProvider.description = previousProvider.description;
-  newProvider.registeredAt = previousProvider.registeredAt;
-  newProvider.approvedAt = previousProvider.approvedAt;
-  newProvider.isActive = previousProvider.isActive;
-
-  newProvider.totalFaultedPeriods = previousProvider.totalFaultedPeriods;
-  newProvider.totalFaultedPieces = previousProvider.totalFaultedPieces;
-  newProvider.totalDataSets = previousProvider.totalDataSets;
-  newProvider.totalPieces = previousProvider.totalPieces;
-  newProvider.totalDataSize = previousProvider.totalDataSize;
-  newProvider.totalProducts = previousProvider.totalProducts;
-
-  newProvider.createdAt = previousProvider.createdAt;
-  newProvider.updatedAt = event.block.timestamp;
-  newProvider.blockNumber = event.block.number;
-
-  newProvider.save();
-
-  const dataSets = previousProvider.dataSets.load();
-  for (let i = 0; i < dataSets.length; i++) {
-    const dataSet = dataSets[i];
-    dataSet.storageProvider = newBeneficiary;
-    dataSet.save();
-  }
-
-  const products = previousProvider.products.load();
-  for (let i = 0; i < products.length; i++) {
-    const product = products[i];
-    product.provider = newBeneficiary;
-    product.save();
-  }
 }

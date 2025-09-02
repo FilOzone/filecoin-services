@@ -9,7 +9,8 @@
       { "name": "cacheMissRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "cdnRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "payer", "type": "address", "indexed": false, "internalType": "address" },
-      { "name": "payee", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "creator", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "beneficiary", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "metadataKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "metadataValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
@@ -60,11 +61,20 @@
   },
   {
     "type": "event",
-    "name": "PaymentTerminated",
+    "name": "PDPPaymentTerminated",
     "inputs": [
       { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
       { "name": "endEpoch", "type": "uint256", "indexed": false, "internalType": "uint256" },
-      { "name": "pdpRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "pdpRailId", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CDNPaymentTerminated",
+    "inputs": [
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "endEpoch", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "cacheMissRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "cdnRailId", "type": "uint256", "indexed": false, "internalType": "uint256" }
     ],
