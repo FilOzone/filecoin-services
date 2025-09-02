@@ -45,6 +45,7 @@ contract FilecoinWarmStorageService is
 
     // Events
     event ContractUpgraded(string version, address implementation);
+    event FilecoinServiceDeployed(string name, string description);
     event DataSetServiceProviderChanged(
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
@@ -193,6 +194,10 @@ contract FilecoinWarmStorageService is
     // directly instead of going through the view contract for more efficient gas usage.
     address public viewContractAddress;
 
+    // Service name and description (immutable after initialization)
+    string private serviceName;
+    string private serviceDescription;
+
     // Approved provider list
     mapping(uint256 => bool) internal approvedProviders;
 
@@ -279,8 +284,15 @@ contract FilecoinWarmStorageService is
      * @notice Initialize the contract with PDP proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
+     * @param _name Service name (max 256 characters, cannot be empty)
+     * @param _description Service description (max 256 characters, cannot be empty)
      */
-    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
+    function initialize(
+        uint64 _maxProvingPeriod,
+        uint256 _challengeWindowSize,
+        string memory _name,
+        string memory _description
+    ) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
@@ -291,11 +303,24 @@ contract FilecoinWarmStorageService is
             Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
         );
 
+        // Validate name and description
+        require(bytes(_name).length > 0, "Service name cannot be empty");
+        require(bytes(_name).length <= 256, "Service name exceeds 256 characters");
+        require(bytes(_description).length > 0, "Service description cannot be empty");
+        require(bytes(_description).length <= 256, "Service description exceeds 256 characters");
+
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
 
+        // Set service name and description
+        serviceName = _name;
+        serviceDescription = _description;
+
         // Set commission rate
         serviceCommissionBps = 0; // 0%
+
+        // Emit the FilecoinServiceDeployed event
+        emit FilecoinServiceDeployed(_name, _description);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
@@ -1108,6 +1133,22 @@ contract FilecoinWarmStorageService is
         spPayment = total - serviceFee;
 
         return (serviceFee, spPayment);
+    }
+
+    /**
+     * @notice Get the service name
+     * @return The name of the service
+     */
+    function getServiceName() external view returns (string memory) {
+        return serviceName;
+    }
+
+    /**
+     * @notice Get the service description
+     * @return The description of the service
+     */
+    function getServiceDescription() external view returns (string memory) {
+        return serviceDescription;
     }
 
     // ============ Metadata Hashing Functions ============
