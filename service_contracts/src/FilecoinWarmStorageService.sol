@@ -67,9 +67,13 @@ contract FilecoinWarmStorageService is
         address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
 
-    event PaymentTerminated(
-        uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
+    event CDNServiceTerminated(
+        address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
     );
+
+    event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
+
+    event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
 
     event ViewContractSet(address indexed viewContract);
 
@@ -108,7 +112,8 @@ contract FilecoinWarmStorageService is
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
-    address public immutable filCDNAddress;
+    address public immutable filCDNControllerAddress;
+    address public immutable filCDNBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
 
@@ -144,8 +149,9 @@ contract FilecoinWarmStorageService is
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
-        uint256 paymentEndEpoch; // 0 if payment is not terminated
+        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -230,12 +236,21 @@ contract FilecoinWarmStorageService is
         _;
     }
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
+    modifier onlyFilCDNController() {
+        require(
+            msg.sender == filCDNControllerAddress,
+            Errors.OnlyFilCDNControllerAllowed(filCDNControllerAddress, msg.sender)
+        );
+        _;
+    }
+
+    /// @custom:oz-upgrades-unsafe-allow cstructor
     constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddress,
+        address _filCDNControllerAddress,
+        address _filCDNBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
     ) {
@@ -250,8 +265,11 @@ contract FilecoinWarmStorageService is
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfcTokenAddress;
 
-        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
-        filCDNAddress = _filCDNAddress;
+        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        filCDNControllerAddress = _filCDNControllerAddress;
+
+        require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
+        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
 
         require(
             _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
@@ -534,7 +552,7 @@ contract FilecoinWarmStorageService is
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                filCDNAddress,
+                filCDNBeneficiaryAddress, // to FilCDN beneficiary
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -846,7 +864,7 @@ contract FilecoinWarmStorageService is
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
         require(
@@ -866,18 +884,44 @@ contract FilecoinWarmStorageService is
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
+    function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
+        // Check if already terminated
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
+
+        // Check if CDN service is configured
+        require(
+            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
+            Errors.FilCDNServiceNotConfigured(dataSetId)
+        );
+
+        // Check if cache miss and CDN rails are configured
+        require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        Payments payments = Payments(paymentsContractAddress);
+        payments.terminateRail(info.cacheMissRailId);
+        payments.terminateRail(info.cdnRailId);
+
+        // Delete withCDN flag from metadata to prevent further CDN operations
+        dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
+        delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
+
+        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
+    }
+
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
     }
 
     function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch != 0) {
+        if (info.pdpEndEpoch != 0) {
             require(
-                block.number <= info.paymentEndEpoch,
-                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.paymentEndEpoch, block.number)
+                block.number <= info.pdpEndEpoch,
+                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.pdpEndEpoch, block.number)
             );
         }
     }
@@ -1081,6 +1125,40 @@ contract FilecoinWarmStorageService is
 
         // Key absence means disabled
         return false;
+    }
+
+    /**
+     * @notice Deletes `key` if it exists in `metadataKeys`.
+     * @param metadataKeys The array of metadata keys
+     * @param key The metadata key to delete
+     * @return Modified array of metadata keys
+     */
+    function deleteMetadataKey(string[] memory metadataKeys, string memory key)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
+        uint256 len = metadataKeys.length;
+        for (uint256 i = 0; i < len; i++) {
+            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+                // Shift elements left to fill the gap
+                for (uint256 j = i; j < len - 1; j++) {
+                    metadataKeys[j] = metadataKeys[j + 1];
+                }
+
+                delete metadataKeys[len - 1];
+                assembly {
+                    mstore(metadataKeys, sub(len, 1))
+                }
+                break;
+            }
+        }
+        return metadataKeys;
     }
 
     /**
@@ -1440,9 +1518,12 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch == 0) {
-            info.paymentEndEpoch = endEpoch;
-            emit PaymentTerminated(dataSetId, endEpoch, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+        if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
+            info.pdpEndEpoch = endEpoch;
+            emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
+        } else if (info.cdnEndEpoch == 0 && (railId == info.cacheMissRailId || railId == info.cdnRailId)) {
+            info.cdnEndEpoch = endEpoch;
+            emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
     }
 }
