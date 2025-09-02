@@ -1521,7 +1521,7 @@ contract FilecoinWarmStorageService is
         if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
             info.pdpEndEpoch = endEpoch;
             emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
-        } else if (info.cdnEndEpoch == 0 && (railId == info.cdnRailId || railId == info.cacheMissRailId)) {
+        } else if (info.cdnEndEpoch == 0 && (railId == info.cacheMissRailId || railId == info.cdnRailId)) {
             info.cdnEndEpoch = endEpoch;
             emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
