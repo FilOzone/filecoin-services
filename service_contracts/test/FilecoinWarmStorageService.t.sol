@@ -497,22 +497,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
     }
 
-    function testServiceNameAndDescription() public view {
-        // Test that the service name is correctly set
-        assertEq(
-            pdpServiceWithPayments.getServiceName(),
-            "Filecoin Warm Storage Service",
-            "Service name should be set correctly"
-        );
-
-        // Test that the service description is correctly set
-        assertEq(
-            pdpServiceWithPayments.getServiceDescription(),
-            "A decentralized storage service with proof-of-data-possession and payment integration",
-            "Service description should be set correctly"
-        );
-    }
-
     function testFilecoinServiceDeployedEvent() public {
         // Deploy a new service instance to test the event
         FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
@@ -539,10 +523,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Deploy the proxy which triggers the initialize function
         MyERC1967Proxy newServiceProxy = new MyERC1967Proxy(address(newServiceImpl), initData);
         FilecoinWarmStorageService newService = FilecoinWarmStorageService(address(newServiceProxy));
-
-        // Verify the values are set correctly
-        assertEq(newService.getServiceName(), expectedName, "New service name should be correct");
-        assertEq(newService.getServiceDescription(), expectedDescription, "New service description should be correct");
     }
 
     function testServiceNameAndDescriptionValidation() public {
