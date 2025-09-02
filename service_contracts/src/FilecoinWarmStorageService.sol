@@ -297,6 +297,7 @@ contract FilecoinWarmStorageService is
      * @notice Initialize the contract with PDP proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
+     * @param _filCDNControllerAddress Address authorized to terminate CDN services
      */
     function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize, address _filCDNControllerAddress)
         public
