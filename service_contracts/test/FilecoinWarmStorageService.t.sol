@@ -557,7 +557,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
-            1, 1, 1, 2, 3, client, serviceProvider, createData.metadataKeys, createData.metadataValues
+            1, 1, 1, 2, 3, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
         // Create a data set as the service provider
@@ -684,7 +684,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
-            1, 1, 1, 0, 0, client, serviceProvider, createData.metadataKeys, createData.metadataValues
+            1, 1, 1, 0, 0, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
         // Create a data set as the service provider

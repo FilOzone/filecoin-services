@@ -56,7 +56,8 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId,
         uint256 cdnRailId,
         address payer,
-        address payee,
+        address creator,
+        address beneficiary,
         string[] metadataKeys,
         string[] metadataValues
     );
@@ -575,6 +576,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId,
             cdnRailId,
             createData.payer,
+            creator,
             payeeBeneficiary,
             createData.metadataKeys,
             createData.metadataValues
