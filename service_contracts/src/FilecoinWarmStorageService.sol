@@ -885,17 +885,19 @@ contract FilecoinWarmStorageService is
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
+        // Check if already terminated
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
+
+        // Check if CDN service is configured
         require(
             hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
             Errors.FilCDNServiceNotConfigured(dataSetId)
         );
 
-        DataSetInfo storage info = dataSetInfo[dataSetId];
+        // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
-        // Check if already terminated
-        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
 
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);

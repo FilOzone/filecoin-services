@@ -1397,7 +1397,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Ensure future CDN service termination reverts
         vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNPaymentAlreadyTerminated.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
