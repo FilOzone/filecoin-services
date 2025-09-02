@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -114,6 +115,7 @@ contract FilecoinWarmStorageService is
     address public immutable filCDNControllerAddress;
     address public immutable filCDNBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
+    SessionKeyRegistry public immutable sessionKeyRegistry;
 
     // Commission rates
     uint256 public serviceCommissionBps;
@@ -249,27 +251,37 @@ contract FilecoinWarmStorageService is
         address _usdfcTokenAddress,
         address _filCDNControllerAddress,
         address _filCDNBeneficiaryAddress,
-        address _serviceProviderRegistryAddress
+        ServiceProviderRegistry _serviceProviderRegistry,
+        SessionKeyRegistry _sessionKeyRegistry
     ) {
         _disableInitializers();
 
-        require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
+        pdpVerifierAddress = _pdpVerifierAddress;
+
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
+        paymentsContractAddress = _paymentsContractAddress;
+
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfcTokenAddress;
+
         require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        filCDNControllerAddress = _filCDNControllerAddress;
+
         require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
+        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
+
         require(
-            _serviceProviderRegistryAddress != address(0),
+            _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
             Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
         );
+        serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistry);
 
-        usdfcTokenAddress = _usdfcTokenAddress;
-        pdpVerifierAddress = _pdpVerifierAddress;
-        paymentsContractAddress = _paymentsContractAddress;
-        filCDNControllerAddress = _filCDNControllerAddress;
-        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
-        serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistryAddress);
+        require(
+            _sessionKeyRegistry != SessionKeyRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
+        );
+        sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -1267,7 +1279,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1315,7 +1333,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, ADD_PIECES_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1341,7 +1365,14 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH)
+                >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1361,7 +1392,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, DELETE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1479,7 +1516,7 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.pdpEndEpoch == 0 && info.pdpRailId == railId) {
+        if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
             info.pdpEndEpoch = endEpoch;
             emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
         } else if (info.cdnEndEpoch == 0 && (railId == info.cdnRailId || railId == info.cacheMissRailId)) {
