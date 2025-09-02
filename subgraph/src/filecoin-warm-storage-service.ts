@@ -12,11 +12,11 @@ import {
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
-import { BIGINT_ONE, ContractAddresses, LeafSize, NumChallenges } from "./constants";
-import { decodeStringAddressBoolBytes } from "./decode";
-import { SumTree } from "./sumTree";
+import { BIGINT_ONE, ContractAddresses, LeafSize, NumChallenges } from "./utils/constants";
+import { decodeStringAddressBoolBytes } from "./utils/decode";
+import { SumTree } from "./utils/sumTree";
 import { createRails } from "./utils/entity";
-import { ProviderStatus, RailType } from "./constants";
+import { ProviderStatus, RailType } from "./utils/constants";
 import { getPieceCidData, getServiceProviderInfo } from "./utils/contract-calls";
 import {
   getDataSetEntityId,
@@ -545,9 +545,9 @@ export function handlePaymentTerminated(event: PaymentTerminatedEvent): void {
   const cacheMissRailEntityId = getRailEntityId(cacheMissRailId);
   const cdnRailEntityId = getRailEntityId(cdnRailId);
 
-  const pdpRail = Rail.load(pdpRailEntityId);
-  const cacheMissRail = cacheMissRailId.isZero() ? null : Rail.load(cacheMissRailEntityId);
-  const cdnRail = cdnRailId.isZero() ? null : Rail.load(cdnRailEntityId);
+  const pdpRail: Rail | null = Rail.load(pdpRailEntityId);
+  const cacheMissRail: Rail | null = cacheMissRailId.isZero() ? null : Rail.load(cacheMissRailEntityId);
+  const cdnRail: Rail | null = cdnRailId.isZero() ? null : Rail.load(cdnRailEntityId);
 
   if (pdpRail) {
     pdpRail.isActive = false;

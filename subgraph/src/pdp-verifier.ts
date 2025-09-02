@@ -7,8 +7,8 @@ import {
   PossessionProven as PossessionProvenEvent,
 } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, Piece, Provider } from "../generated/schema";
-import { LeafSize } from "./constants";
-import { SumTree } from "./sumTree";
+import { LeafSize } from "./utils/constants";
+import { SumTree } from "./utils/sumTree";
 import { getDataSetEntityId, getPieceEntityId } from "./utils/keys";
 
 /**

@@ -9,7 +9,7 @@ import {
   BeneficiaryTransferred as BeneficiaryTransferredEvent,
 } from "../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { Provider, ProviderProduct } from "../generated/schema";
-import { BIGINT_ONE } from "./constants";
+import { BIGINT_ONE } from "./utils/constants";
 import { getServiceProviderInfo } from "./utils/contract-calls";
 import { createProviderProduct, initiateProvider } from "./utils/entity";
 import { getProviderProductEntityId } from "./utils/keys";

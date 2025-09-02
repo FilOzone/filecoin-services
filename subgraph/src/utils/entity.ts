@@ -1,6 +1,6 @@
 import { Bytes, BigInt, Address } from "@graphprotocol/graph-ts";
 import { Provider, ProviderProduct, Rail } from "../../generated/schema";
-import { ProviderStatus, ContractAddresses } from "../constants";
+import { ProviderStatus, ContractAddresses } from "./constants";
 import { ProductAdded as ProductAddedEvent } from "../../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { getProviderProductEntityId } from "./keys";
 import { getProviderProductData } from "./contract-calls";

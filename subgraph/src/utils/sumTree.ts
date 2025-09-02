@@ -1,5 +1,5 @@
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
-import { SumTreeCount } from "../generated/schema";
+import { SumTreeCount } from "../../generated/schema";
 
 // Define a class for the structure instead of a type alias
 class PieceIdAndOffset {
@@ -14,10 +14,7 @@ export class SumTree {
 
   // Helper: Get sumTreeCounts[setId][index], default 0
   private getSum(setId: i32, index: i32, blockNumber: BigInt): BigInt {
-    const pieceEntityId = this.getPieceEntityId(
-      BigInt.fromI32(setId as i32),
-      BigInt.fromI32(index as i32)
-    );
+    const pieceEntityId = this.getPieceEntityId(BigInt.fromI32(setId as i32), BigInt.fromI32(index as i32));
     const sumTreeCount = SumTreeCount.load(pieceEntityId);
     if (!sumTreeCount) return BigInt.fromI32(0);
     if (sumTreeCount.lastDecEpoch.equals(blockNumber)) {
@@ -28,10 +25,7 @@ export class SumTree {
 
   // Helper: Set sumTreeCounts[setId][index] = value
   private setSum(setId: i32, index: i32, value: BigInt): void {
-    const pieceEntityId = this.getPieceEntityId(
-      BigInt.fromI32(setId),
-      BigInt.fromI32(index)
-    );
+    const pieceEntityId = this.getPieceEntityId(BigInt.fromI32(setId), BigInt.fromI32(index));
     const sumTreeCount = new SumTreeCount(pieceEntityId);
     sumTreeCount.setId = BigInt.fromI32(setId as i32);
     sumTreeCount.pieceId = BigInt.fromI32(index as i32);
@@ -42,16 +36,8 @@ export class SumTree {
   }
 
   // Helper: Decrement sumTreeCounts[setId][index] by delta
-  private decSum(
-    setId: i32,
-    index: i32,
-    delta: BigInt,
-    blockNumber: BigInt
-  ): void {
-    const pieceEntityId = this.getPieceEntityId(
-      BigInt.fromI32(setId),
-      BigInt.fromI32(index)
-    );
+  private decSum(setId: i32, index: i32, delta: BigInt, blockNumber: BigInt): void {
+    const pieceEntityId = this.getPieceEntityId(BigInt.fromI32(setId), BigInt.fromI32(index));
     const sumTreeCount = SumTreeCount.load(pieceEntityId);
     if (!sumTreeCount) return;
     const prev = sumTreeCount.count;
@@ -116,13 +102,7 @@ export class SumTree {
   }
 
   // sumTreeRemove
-  sumTreeRemove(
-    setId: i32,
-    nextPiece: i32,
-    index: i32,
-    delta: BigInt,
-    blockNumber: BigInt
-  ): void {
+  sumTreeRemove(setId: i32, nextPiece: i32, index: i32, delta: BigInt, blockNumber: BigInt): void {
     const top = 32 - this.clz(nextPiece);
     let h = this.heightFromIndex(index);
     while (h <= top && index < nextPiece) {
@@ -133,13 +113,7 @@ export class SumTree {
   }
 
   // findOnePieceId
-  findOnePieceId(
-    setId: i32,
-    nextPiece: i32,
-    leafIndex: BigInt,
-    top: i32,
-    blockNumber: BigInt
-  ): PieceIdAndOffset {
+  findOnePieceId(setId: i32, nextPiece: i32, leafIndex: BigInt, top: i32, blockNumber: BigInt): PieceIdAndOffset {
     let searchPtr = (1 << top) - 1;
     let acc: BigInt = BigInt.fromI32(0);
     let candidate: BigInt = BigInt.fromI32(0);
@@ -161,35 +135,24 @@ export class SumTree {
     if (candidate.le(leafIndex)) {
       return {
         pieceId: BigInt.fromI32(searchPtr + 1), // Keeping field name for compatibility
-        offset: leafIndex.minus(candidate)
+        offset: leafIndex.minus(candidate),
       };
     }
     return {
       pieceId: BigInt.fromI32(searchPtr), // Keeping field name for compatibility
-      offset: leafIndex.minus(acc)
+      offset: leafIndex.minus(acc),
     };
   }
 
   // findPieceIds (batched) - keeping method name for compatibility
-  findPieceIds(
-    setId: i32,
-    nextPieceId: i32,
-    leafIndexes: BigInt[],
-    blockNumber: BigInt
-  ): PieceIdAndOffset[] {
+  findPieceIds(setId: i32, nextPieceId: i32, leafIndexes: BigInt[], blockNumber: BigInt): PieceIdAndOffset[] {
     const top = 32 - this.clz(nextPieceId);
 
     const results: PieceIdAndOffset[] = [];
     for (let i = 0; i < leafIndexes.length; i++) {
       const idx = leafIndexes[i];
 
-      const result = this.findOnePieceId(
-        setId,
-        nextPieceId,
-        idx,
-        top,
-        blockNumber
-      );
+      const result = this.findOnePieceId(setId, nextPieceId, idx, top, blockNumber);
       results.push(result);
     }
 

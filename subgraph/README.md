@@ -65,7 +65,7 @@ Follow these steps to build and deploy the subgraph:
     goldsky subgraph deploy <your-subgraph-name>/<version> --path ./
     ```
 
-    - Replace `<your-subgraph-name>` with the desired name for your subgraph deployment on Goldsky (e.g., `my-pdp-explorer`). You can create/manage this name in your Goldsky dashboard.
+    - Replace `<your-subgraph-name>` with the desired name for your subgraph deployment on Goldsky (e.g., `fwss-subgraph`). You can create/manage this name in your Goldsky dashboard.
     - Replace `<version>` with a version identifier (e.g., `v0.0.1`).
     - You can manage your deployments and find your subgraph details in the [Goldsky Dashboard](https://app.goldsky.com/). The deployment command will output the GraphQL endpoint URL for your subgraph upon successful completion. **Copy this URL**, as you will need it for the client.
 
@@ -93,16 +93,23 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
     - `schema.graphql`: To change the data structure and entities being stored.
     - `subgraph.yaml`: To update contract addresses, ABIs, start blocks, or event handlers.
     - `src/*.ts`: To alter the logic that processes blockchain events and maps them to the defined schema entities.
-    - `utils/index.ts`: If modifying shared utility functions or constants.
+    - `src/utils/*.ts`: If modifying shared utility functions or constants.
 
-2.  **Important Note on PDPVerifier Address:** The handler `handleFaultRecord` in `src/pdp-service.ts` makes a contract call to the PDPVerifier contract. The address for this contract is currently hardcoded in `subgraph/utils/index.ts`:
+2.  **Important Note on PDPVerifier Address:** The handler `handleFaultRecord` in `src/pdp-service.ts` makes a contract call to the PDPVerifier contract. The address for this contract is currently hardcoded in `subgraph/src/utils/constants.ts`:
 
     ```typescript
-    // subgraph/utils/index.ts
-    export const PDPVerifierAddress = "0x..."; // Example address
+    // subgraph/src/utils/constants.ts
+    export class ContractAddresses {
+      static readonly PDPVerifier: Address = Address.fromBytes(
+        Bytes.fromHexString("0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9"),
+      );
+      static readonly USDFCToken: Address = Address.fromBytes(
+        Bytes.fromHexString("0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"),
+      );
+    }
     ```
 
-    **If you update the `PDPVerifier` contract address in your `subgraph.yaml` file to index a different deployment, you MUST also update the `PDPVerifierAddress` constant in `subgraph/utils/index.ts` to match the new address.** Failure to do so will result in the `handleFaultRecord` handler calling the wrong contract instance.
+    **If you update the `PDPVerifier` contract address in your `subgraph.yaml` file to index a different deployment, you MUST also update the `ContractAddresses.PDPVerifier` constant in `subgraph/src/utils/constants.ts` to match the new address.** Failure to do so will result in the `handleFaultRecord` handler calling the wrong contract instance.
 
 3.  **Regenerate Code:** After modifying the schema or manifest, always regenerate the AssemblyScript types:
 

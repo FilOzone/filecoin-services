@@ -1,6 +1,6 @@
 import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { TransactionConstants } from "./constants";
-import { ByteUtils } from "./utils/ByteUtils";
+import { ByteUtils } from "./ByteUtils";
 
 //--------------------------------
 // 1. Common Types
@@ -69,12 +69,7 @@ export class StringAddressBoolBytesResult {
   boolValue: boolean;
   bytesValue: Bytes;
 
-  constructor(
-    stringValue: string,
-    addressValue: Address,
-    boolValue: boolean,
-    bytesValue: Bytes
-  ) {
+  constructor(stringValue: string, addressValue: Address, boolValue: boolean, bytesValue: Bytes) {
     this.stringValue = stringValue;
     this.addressValue = addressValue;
     this.boolValue = boolValue;
@@ -118,10 +113,7 @@ export function decodeAbi(data: Bytes, types: AbiType[]): AbiValue[] {
   // First pass: read header and collect offsets for dynamic types
   for (let i = 0; i < types.length; i++) {
     const slotStart = i * TransactionConstants.WORD_SIZE;
-    const slot = data.subarray(
-      slotStart,
-      slotStart + TransactionConstants.WORD_SIZE
-    );
+    const slot = data.subarray(slotStart, slotStart + TransactionConstants.WORD_SIZE);
 
     if (isDynamicType(types[i])) {
       // For dynamic types, read the offset
@@ -163,20 +155,16 @@ function decodeStaticType(slot: Uint8Array, type: AbiType): AbiValue {
     case AbiType.ADDRESS:
       const addressBytes = slot.subarray(
         TransactionConstants.WORD_SIZE - TransactionConstants.ADDRESS_SIZE,
-        TransactionConstants.WORD_SIZE
+        TransactionConstants.WORD_SIZE,
       ); // Last 20 bytes
-      return AbiValue.fromAddress(
-        Address.fromBytes(Bytes.fromUint8Array(addressBytes))
-      );
+      return AbiValue.fromAddress(Address.fromBytes(Bytes.fromUint8Array(addressBytes)));
 
     case AbiType.BOOL:
       return AbiValue.fromBool(slot[31] != 0);
 
     case AbiType.UINT256:
     case AbiType.INT256:
-      return AbiValue.fromUint256(
-        BigInt.fromUnsignedBytes(changetype<Bytes>(slot))
-      );
+      return AbiValue.fromUint256(BigInt.fromUnsignedBytes(changetype<Bytes>(slot)));
 
     default:
       throw new Error("Unsupported static type");
@@ -258,22 +246,15 @@ function decodeDynamicBytes(data: Bytes, offset: i32): Uint8Array {
 /**
  * Convenience function for ["string", "address", "bool", "bytes"] pattern
  */
-export function decodeStringAddressBoolBytes(
-  data: Bytes
-): StringAddressBoolBytesResult {
-  const types: AbiType[] = [
-    AbiType.STRING,
-    AbiType.ADDRESS,
-    AbiType.BOOL,
-    AbiType.BYTES,
-  ];
+export function decodeStringAddressBoolBytes(data: Bytes): StringAddressBoolBytesResult {
+  const types: AbiType[] = [AbiType.STRING, AbiType.ADDRESS, AbiType.BOOL, AbiType.BYTES];
   const results = decodeAbi(data, types);
 
   return new StringAddressBoolBytesResult(
     results[0].stringValue,
     results[1].addressValue,
     results[2].boolValue,
-    Bytes.fromUint8Array(results[3].bytesValue)
+    Bytes.fromUint8Array(results[3].bytesValue),
   );
 }
 
@@ -284,8 +265,5 @@ export function decodeBytesString(data: Bytes): BytesStringResult {
   const types: AbiType[] = [AbiType.BYTES, AbiType.STRING];
   const results = decodeAbi(data, types);
 
-  return new BytesStringResult(
-    Bytes.fromUint8Array(results[0].bytesValue),
-    results[1].stringValue
-  );
+  return new BytesStringResult(Bytes.fromUint8Array(results[0].bytesValue), results[1].stringValue);
 }
