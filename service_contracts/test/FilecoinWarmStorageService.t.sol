@@ -1225,10 +1225,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // 4. Assertions
-        // Check paymentEndEpoch is set
+        // Check pdpEndEpoch is set
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-        assertTrue(info.paymentEndEpoch > 0, "paymentEndEpoch should be set after termination");
-        console.log("Payment termination successful. Payment end epoch:", info.paymentEndEpoch);
+        assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
+        console.log("Payment termination successful. Payment end epoch:", info.pdpEndEpoch);
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -1247,8 +1247,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Wait for payment end epoch to elapse
         console.log("\n5. Rolling past payment end epoch");
         console.log("Current block:", block.number);
-        console.log("Rolling to block:", info.paymentEndEpoch + 1);
-        vm.roll(info.paymentEndEpoch + 1);
+        console.log("Rolling to block:", info.pdpEndEpoch + 1);
+        vm.roll(info.pdpEndEpoch + 1);
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -1261,7 +1261,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(client);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
         mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
@@ -1272,7 +1272,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
@@ -1283,7 +1283,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
@@ -1399,9 +1399,17 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(metadataKeys.length == 0, "Metadata keys should be empty after termination");
         assertTrue(metadataValues.length == 0, "Metadata values should be empty after termination");
 
+        Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+
+        assertEq(pdpRail.endEpoch, 0, "PDP rail should NOT be terminated");
+        assertTrue(cacheMissRail.endEpoch > 0, "Cache miss rail should be terminated");
+        assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
+
         // Ensure future CDN service termination reverts
         vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNPaymentAlreadyTerminated.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
@@ -2534,6 +2542,127 @@ contract FilecoinWarmStorageServiceTest is Test {
         (bool exists, string memory nonExistentValue) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "anykey");
         assertFalse(exists, "Non-existent key should return false");
         assertEq(bytes(nonExistentValue).length, 0, "Non-existent key should return empty string");
+    }
+
+    function testRailTerminated_RevertsIfCallerNotPaymentsContract() public {
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.CallerNotPayments.selector, address(payments), address(sp1)));
+        vm.prank(sp1);
+        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
+    }
+
+    function testRailTerminated_RevertsIfTerminatorNotServiceContract() public {
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.ServiceContractMustTerminateRail.selector));
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(0xdead), 123);
+    }
+
+    function testRailTerminated_RevertsIfRailNotAssociated() public {
+        vm.expectRevert(abi.encodeWithSelector(Errors.DataSetNotFoundForRail.selector, 1337));
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(1337, address(pdpServiceWithPayments), 123);
+    }
+
+    function testRailTerminated_SetsPdpEndEpochAndEmitsEvent() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 123);
+        assertEq(info.cdnEndEpoch, 0);
+    }
+
+    function testRailTerminated_SetsCdnEndEpochAndEmitsEvent_CdnRail() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 123, info.cacheMissRailId, info.cdnRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.cdnRailId, address(pdpServiceWithPayments), 123);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 0);
+        assertEq(info.cdnEndEpoch, 123);
+    }
+
+    function testRailTerminated_SetsCdnEndEpochAndEmitsEvent_CacheMissRail() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 123, info.cacheMissRailId, info.cdnRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 123);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 0);
+        assertEq(info.cdnEndEpoch, 123);
+    }
+
+    function testRailTerminated_DoesNotOverwritePdpEndEpoch() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 123);
+        assertEq(info.cdnEndEpoch, 0);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 321, info.cacheMissRailId, info.cdnRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 321);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 123);
+        assertEq(info.cdnEndEpoch, 321);
+    }
+
+    function testRailTerminated_DoesNotOverwriteCdnEndEpoch() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 321, info.cacheMissRailId, info.cdnRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 321);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 0);
+        assertEq(info.cdnEndEpoch, 321);
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
+        vm.prank(address(payments));
+        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpEndEpoch, 123);
+        assertEq(info.cdnEndEpoch, 321);
     }
 
     // Utility

@@ -143,9 +143,9 @@ library Errors {
 
     /// @notice Data set is beyond its payment end epoch
     /// @param dataSetId The data set ID
-    /// @param paymentEndEpoch The payment end epoch for the data set
+    /// @param pdpEndEpoch The payment end epoch for the data set
     /// @param currentBlock The current block number
-    error DataSetPaymentBeyondEndEpoch(uint256 dataSetId, uint256 paymentEndEpoch, uint256 currentBlock);
+    error DataSetPaymentBeyondEndEpoch(uint256 dataSetId, uint256 pdpEndEpoch, uint256 currentBlock);
 
     /// @notice No PDP payment rail is configured for the given data set
     /// @param dataSetId The data set ID

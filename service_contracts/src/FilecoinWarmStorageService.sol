@@ -150,9 +150,9 @@ contract FilecoinWarmStorageService is
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
-        uint256 paymentEndEpoch; // 0 if payment is not terminated
+        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN is not terminated
+        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -871,7 +871,7 @@ contract FilecoinWarmStorageService is
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
         require(
@@ -892,23 +892,24 @@ contract FilecoinWarmStorageService is
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
+        // Check if already terminated
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
+
+        // Check if CDN service is configured
         require(
             hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
             Errors.FilCDNServiceNotConfigured(dataSetId)
         );
 
-        DataSetInfo storage info = dataSetInfo[dataSetId];
+        // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
-        // Check if already terminated
-        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
-
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);
         payments.terminateRail(info.cdnRailId);
 
-        // Set withCDN to false to prevent further CDN operations
+        // Delete withCDN flag from metadata to prevent further CDN operations
         dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
@@ -918,15 +919,15 @@ contract FilecoinWarmStorageService is
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
     }
 
     function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch != 0) {
+        if (info.pdpEndEpoch != 0) {
             require(
-                block.number <= info.paymentEndEpoch,
-                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.paymentEndEpoch, block.number)
+                block.number <= info.pdpEndEpoch,
+                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.pdpEndEpoch, block.number)
             );
         }
     }
@@ -1523,10 +1524,10 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch == 0 && info.pdpRailId == railId) {
-            info.paymentEndEpoch = endEpoch;
+        if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
+            info.pdpEndEpoch = endEpoch;
             emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
-        } else if (info.cdnEndEpoch == 0 && (railId == info.cdnRailId || railId == info.cacheMissRailId)) {
+        } else if (info.cdnEndEpoch == 0 && (railId == info.cacheMissRailId || railId == info.cdnRailId)) {
             info.cdnEndEpoch = endEpoch;
             emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
