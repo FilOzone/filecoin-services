@@ -58,14 +58,9 @@ Providers are entities that manage data sets in the PDP system.
 
 ```graphql
 query AllProviders($first: Int, $skip: Int) {
-  providers(
-    first: $first
-    skip: $skip
-    orderBy: createdAt
-    orderDirection: desc
-  ) {
+  providers(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
     id
-    address
+    beneficiary
     totalDataSize
     totalDataSets
     totalPieces
@@ -82,7 +77,9 @@ query AllProviders($first: Int, $skip: Int) {
 query ProviderById($providerId: ID!) {
   provider(id: $providerId) {
     id
-    address
+    beneficiary
+    name
+    description
     totalDataSize
     totalDataSets
     totalPieces
@@ -101,19 +98,14 @@ query ProviderById($providerId: ID!) {
 query ProviderWithDataSets($providerId: ID!, $first: Int, $skip: Int) {
   provider(id: $providerId) {
     id
-    address
+    beneficiary
     totalDataSize
     totalDataSets
     totalPieces
     totalFaultedPieces
     totalFaultedPeriods
     createdAt
-    dataSets(
-      first: $first
-      skip: $skip
-      orderBy: createdAt
-      orderDirection: desc
-    ) {
+    dataSets(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
       id
       setId
       isActive
@@ -130,14 +122,11 @@ query ProviderWithDataSets($providerId: ID!, $first: Int, $skip: Int) {
 
 ```graphql
 query FilteredProviders($minDataSize: BigInt) {
-  providers(
-    where: { totalDataSize_gte: $minDataSize }
-    orderBy: totalDataSize
-    orderDirection: desc
-    first: 10
-  ) {
+  providers(where: { totalDataSize_gte: $minDataSize }, orderBy: totalDataSize, orderDirection: desc, first: 10) {
     id
-    address
+    beneficiary
+    name
+    description
     totalDataSize
     totalDataSets
     createdAt
@@ -153,12 +142,7 @@ Data Sets are collections of piece that providers maintain and prove possession 
 
 ```graphql
 query AllDataSets($first: Int, $skip: Int) {
-  dataSets(
-    first: $first
-    skip: $skip
-    orderBy: createdAt
-    orderDirection: desc
-  ) {
+  dataSets(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
     id
     setId
     isActive
@@ -166,8 +150,9 @@ query AllDataSets($first: Int, $skip: Int) {
     totalProofs
     totalDataSize
     createdAt
-    serviceProvider {
-      address
+    storageProvider {
+      id
+      beneficiary
     }
   }
 }
@@ -181,9 +166,9 @@ query DataSetById($dataSetId: ID!) {
     id
     setId
     isActive
-    serviceProvider {
+    storageProvider {
       id
-      address
+      beneficiary
     }
     leafCount
     challengeRange
@@ -233,19 +218,15 @@ query DataSetWithPieces($dataSetId: ID!, $first: Int, $skip: Int) {
 
 ```graphql
 query ActiveDataSets($first: Int) {
-  dataSets(
-    where: { isActive: true }
-    orderBy: totalDataSize
-    orderDirection: desc
-    first: $first
-  ) {
+  dataSets(where: { isActive: true }, orderBy: totalDataSize, orderDirection: desc, first: $first) {
     id
     setId
     totalPieces
     totalDataSize
     createdAt
-    serviceProvider {
-      address
+    storageProvider {
+      id
+      beneficiary
     }
   }
 }
@@ -301,8 +282,9 @@ query PieceById($pieceId: ID!) {
     dataSet {
       id
       setId
-      serviceProvider {
-        address
+      storageProvider {
+        id
+        beneficiary
       }
     }
   }
@@ -313,12 +295,7 @@ query PieceById($pieceId: ID!) {
 
 ```graphql
 query FilteredPieces($minSize: BigInt, $isRemoved: Boolean) {
-  piece(
-    where: { rawSize_gte: $minSize, removed: $isRemoved }
-    orderBy: rawSize
-    orderDirection: desc
-    first: 10
-  ) {
+  piece(where: { rawSize_gte: $minSize, removed: $isRemoved }, orderBy: rawSize, orderDirection: desc, first: 10) {
     id
     pieceId
     setId
@@ -327,8 +304,9 @@ query FilteredPieces($minSize: BigInt, $isRemoved: Boolean) {
     createdAt
     dataSet {
       id
-      serviceProvider {
-        address
+      storageProvider {
+        id
+        beneficiary
       }
     }
   }
@@ -352,8 +330,6 @@ query AllRails($first: Int, $skip: Int) {
     operator
     arbiter
     paymentRate
-    lockupPeriod
-    lockupFixed
     settledUpto
     endEpoch
     queueLength
@@ -378,16 +354,15 @@ query RailById($railId: ID!) {
     operator
     arbiter
     paymentRate
-    lockupPeriod
-    lockupFixed
     settledUpto
     endEpoch
     queueLength
     dataSet {
       id
       setId
-      serviceProvider {
-        address
+      storageProvider {
+        id
+        beneficiary
       }
     }
     rateChangeQueue {
@@ -403,18 +378,12 @@ query RailById($railId: ID!) {
 
 ```graphql
 query RailsByClient($clientAddress: Bytes!) {
-  rails(
-    where: { from: $clientAddress }
-    orderBy: createdAt
-    orderDirection: desc
-  ) {
+  rails(where: { from: $clientAddress }, orderBy: createdAt, orderDirection: desc) {
     id
     railId
     token
     to
     paymentRate
-    lockupPeriod
-    lockupFixed
     settledUpto
     endEpoch
     dataSet {
@@ -430,18 +399,12 @@ query RailsByClient($clientAddress: Bytes!) {
 
 ```graphql
 query RailsByProvider($providerAddress: Bytes!) {
-  rails(
-    where: { to: $providerAddress }
-    orderBy: createdAt
-    orderDirection: desc
-  ) {
+  rails(where: { to: $providerAddress }, orderBy: createdAt, orderDirection: desc) {
     id
     railId
     token
     from
     paymentRate
-    lockupPeriod
-    lockupFixed
     settledUpto
     endEpoch
     dataSet {
@@ -457,20 +420,15 @@ query RailsByProvider($providerAddress: Bytes!) {
 
 ```graphql
 query HighPaymentRails($minRate: BigInt!) {
-  rails(
-    where: { paymentRate_gte: $minRate }
-    orderBy: paymentRate
-    orderDirection: desc
-    first: 10
-  ) {
+  rails(where: { paymentRate_gte: $minRate }, orderBy: paymentRate, orderDirection: desc, first: 10) {
     id
     railId
     token
     from
     to
     paymentRate
-    lockupPeriod
-    lockupFixed
+    settledUpto
+    endEpoch
     dataSet {
       id
       setId
@@ -487,12 +445,7 @@ Rate Change Queue entries represent scheduled payment rate changes for Rails.
 
 ```graphql
 query AllRateChanges($first: Int, $skip: Int) {
-  rateChangeQueues(
-    first: $first
-    skip: $skip
-    orderBy: untilEpoch
-    orderDirection: asc
-  ) {
+  rateChangeQueues(first: $first, skip: $skip, orderBy: untilEpoch, orderDirection: asc) {
     id
     untilEpoch
     rate
@@ -529,12 +482,7 @@ query RateChangesForRail($railId: ID!) {
 
 ```graphql
 query UpcomingRateChanges($currentEpoch: BigInt!) {
-  rateChangeQueues(
-    where: { untilEpoch_gt: $currentEpoch }
-    orderBy: untilEpoch
-    orderDirection: asc
-    first: 20
-  ) {
+  rateChangeQueues(where: { untilEpoch_gt: $currentEpoch }, orderBy: untilEpoch, orderDirection: asc, first: 20) {
     id
     untilEpoch
     rate
@@ -561,18 +509,13 @@ query UpcomingRateChanges($currentEpoch: BigInt!) {
 query ProviderWithDetailedDataSets($providerId: ID!, $first: Int, $skip: Int) {
   provider(id: $providerId) {
     id
-    address
+    beneficiary
     totalDataSize
     totalDataSets
     totalPieces
     totalFaultedPieces
     totalFaultedPeriods
-    dataSets(
-      first: $first
-      skip: $skip
-      orderBy: createdAt
-      orderDirection: desc
-    ) {
+    dataSets(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
       id
       setId
       isActive
@@ -610,7 +553,7 @@ query Search($providerId: ID, $dataSetId: Bytes) {
   # Search for provider
   provider(id: $providerId) {
     id
-    address
+    beneficiary
     totalDataSets
     totalDataSize
   }
@@ -620,8 +563,8 @@ query Search($providerId: ID, $dataSetId: Bytes) {
     setId
     isActive
     totalDataSize
-    serviceProvider {
-      address
+    storageProvider {
+      beneficiary
     }
   }
 }
@@ -637,8 +580,8 @@ query Search($clientAddress: Bytes!) {
     isActive
     totalDataSize
     metadata
-    serviceProvider {
-      address
+    storageProvider {
+      beneficiary
     }
   }
 }
@@ -672,8 +615,8 @@ query Search($cid: Bytes!) {
       id
       setId
       metadata
-      serviceProvider {
-        address
+      storageProvider {
+        beneficiary
       }
     }
   }
@@ -714,8 +657,8 @@ const fetchDataSets = async () => {
         totalPieces
         totalDataSize
         metadata
-        serviceProvider {
-          address
+        storageProvider {
+          beneficiary
         }
       }
     }
@@ -768,7 +711,7 @@ const GET_PROVIDER = gql`
   query GetProvider($providerId: ID!) {
     provider(id: $providerId) {
       id
-      address
+      beneficiary
       totalDataSets
       totalDataSize
       totalPieces
@@ -796,7 +739,7 @@ function ProviderDetails({ providerId }) {
 
   return (
     <div>
-      <h2>Provider: {provider.address}</h2>
+      <h2>Provider: {provider.beneficiary}</h2>
       <p>Total Data Sets: {provider.totalDataSets.toString()}</p>
       <p>Total Data Size: {provider.totalDataSize.toString()} bytes</p>
       <h3>Recent Data Sets</h3>
@@ -990,8 +933,8 @@ async function searchByCid(cid) {
           id
           setId
           metadata
-          serviceProvider {
-            address
+          storageProvider {
+            beneficiary
           }
         }
       }
