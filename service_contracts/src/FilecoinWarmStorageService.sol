@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
 import {Cids} from "@pdp/Cids.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -109,6 +110,7 @@ contract FilecoinWarmStorageService is
     address public immutable usdfcTokenAddress;
     address public immutable filCDNAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
+    SessionKeyRegistry public immutable sessionKeyRegistry;
 
     // Commission rates
     uint256 public serviceCommissionBps;
@@ -234,30 +236,34 @@ contract FilecoinWarmStorageService is
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
         address _filCDNAddress,
-        address _serviceProviderRegistryAddress
+        ServiceProviderRegistry _serviceProviderRegistry,
+        SessionKeyRegistry _sessionKeyRegistry
     ) {
         _disableInitializers();
 
-        require(_usdfcTokenAddress != address(0), "USDFC token address cannot be zero");
-        usdfcTokenAddress = _usdfcTokenAddress;
-
-        require(_filCDNAddress != address(0), "Filecoin CDN address cannot be zero");
-        filCDNAddress = _filCDNAddress;
-
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
-        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
-        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
-        require(
-            _serviceProviderRegistryAddress != address(0),
-            Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
-        );
-
         pdpVerifierAddress = _pdpVerifierAddress;
 
-        require(_paymentsContractAddress != address(0), "Payments contract address cannot be zero");
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         paymentsContractAddress = _paymentsContractAddress;
-        serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistryAddress);
+
+        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfcTokenAddress;
+
+        require(_filCDNAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinCDN));
+        filCDNAddress = _filCDNAddress;
+
+        require(
+            _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
+        );
+        serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistry);
+
+        require(
+            _sessionKeyRegistry != SessionKeyRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
+        );
+        sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
         tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
@@ -1197,7 +1203,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1245,7 +1257,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, ADD_PIECES_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1271,7 +1289,14 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH)
+                >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**
@@ -1291,7 +1316,13 @@ contract FilecoinWarmStorageService is
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
 
-        require(payer == recoveredSigner, Errors.InvalidSignature(payer, recoveredSigner));
+        if (payer == recoveredSigner) {
+            return;
+        }
+        require(
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, DELETE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, recoveredSigner)
+        );
     }
 
     /**

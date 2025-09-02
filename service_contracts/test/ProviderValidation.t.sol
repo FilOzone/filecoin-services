@@ -6,6 +6,7 @@ import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol"
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -84,7 +85,8 @@ contract MockPDPVerifier {
 contract ProviderValidationTest is Test {
     FilecoinWarmStorageService public warmStorage;
     FilecoinWarmStorageServiceStateView public viewContract;
-    ServiceProviderRegistry public registry;
+    ServiceProviderRegistry public serviceProviderRegistry;
+    SessionKeyRegistry public sessionKeyRegistry;
     MockPDPVerifier public pdpVerifier;
     Payments public payments;
     MockERC20 public usdfc;
@@ -120,7 +122,8 @@ contract ProviderValidationTest is Test {
         ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
-        registry = ServiceProviderRegistry(address(registryProxy));
+        serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
+        sessionKeyRegistry = new SessionKeyRegistry();
 
         // Deploy Payments
         Payments paymentsImpl = new Payments();
@@ -130,7 +133,7 @@ contract ProviderValidationTest is Test {
 
         // Deploy FilecoinWarmStorageService
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier), address(payments), address(usdfc), filCDN, address(registry)
+            address(pdpVerifier), address(payments), address(usdfc), filCDN, serviceProviderRegistry, sessionKeyRegistry
         );
         bytes memory warmStorageInitData =
             abi.encodeWithSelector(FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60));
@@ -159,9 +162,9 @@ contract ProviderValidationTest is Test {
     }
 
     function testProviderRegisteredButNotApproved() public {
-        // Register provider1 in registry
+        // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
-        registry.registerProvider{value: 5 ether}(
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -196,9 +199,9 @@ contract ProviderValidationTest is Test {
     }
 
     function testProviderApprovedCanCreateDataset() public {
-        // Register provider1 in registry
+        // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
-        registry.registerProvider{value: 5 ether}(
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,

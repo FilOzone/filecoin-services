@@ -23,9 +23,14 @@
         "internalType": "address"
       },
       {
-        "name": "_serviceProviderRegistryAddress",
+        "name": "_serviceProviderRegistry",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract ServiceProviderRegistry"
+      },
+      {
+        "name": "_sessionKeyRegistry",
+        "type": "address",
+        "internalType": "contract SessionKeyRegistry"
       }
     ],
     "stateMutability": "nonpayable"
@@ -616,6 +621,19 @@
         "name": "",
         "type": "address",
         "internalType": "contract ServiceProviderRegistry"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "sessionKeyRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract SessionKeyRegistry"
       }
     ],
     "stateMutability": "view"
