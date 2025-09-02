@@ -208,6 +208,11 @@
             "internalType": "address"
           },
           {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "commissionBps",
             "type": "uint256",
             "internalType": "uint256"
@@ -280,6 +285,11 @@
           },
           {
             "name": "payee",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "owner",
             "type": "address",
             "internalType": "address"
           },
