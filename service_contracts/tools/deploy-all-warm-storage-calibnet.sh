@@ -7,12 +7,27 @@
 #
 echo "Deploying all Warm Storage contracts to calibnet"
 
-CHAIN_ID=314159
-
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
 fi
+
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+if [ -z "$CHAIN_ID" ]; then
+  echo "Error: Failed to detect chain ID from RPC"
+  exit 1
+fi
+
+# Verify we're on calibnet
+if [ "$CHAIN_ID" != "314159" ]; then
+  echo "Error: This script is for Filecoin Calibration testnet only"
+  echo "  Expected chain ID: 314159 (calibnet)"
+  echo "  Detected chain ID: $CHAIN_ID"
+  exit 1
+fi
+
+echo "Detected Chain ID: $CHAIN_ID (calibnet)"
 
 if [ -z "$KEYSTORE" ]; then
   echo "Error: KEYSTORE is not set"
@@ -105,7 +120,7 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 5: Deploy ServiceProviderRegistry implementation
 echo "Deploying ServiceProviderRegistry implementation..."
-REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
+REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract ServiceProviderRegistry implementation address"
     exit 1
@@ -116,7 +131,7 @@ NONCE=$(expr $NONCE + "1")
 # Step 6: Deploy ServiceProviderRegistry proxy
 echo "Deploying ServiceProviderRegistry proxy..."
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
-SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
+SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
     echo "Error: Failed to extract ServiceProviderRegistry proxy address"
     exit 1
@@ -152,15 +167,8 @@ NONCE=$(expr $NONCE + "1")
 source tools/deploy-warm-storage-view.sh
 
 # Step 8: Set the view contract address on the main contract
-echo "Setting view contract address on FilecoinWarmStorageService..."
 NONCE=$(expr $NONCE + "1")
-cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --nonce $NONCE --chain-id $CHAIN_ID $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS
-if [ $? -eq 0 ]; then
-    echo "View contract address set successfully"
-else
-    echo "Error: Failed to set view contract address"
-    exit 1
-fi
+source tools/set-warm-storage-view.sh
 
 # Summary of deployed contracts
 echo
