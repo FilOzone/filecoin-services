@@ -148,6 +148,7 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
+        address owner; // Current owner of the dataset
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
@@ -469,6 +470,7 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
         info.payee = payeeBeneficiary; // Using beneficiary as the payee
+        info.owner = creator; // Set the creator as the initial owner
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.providerId = providerId;
@@ -854,13 +856,22 @@ contract FilecoinWarmStorageService is
         // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.payee == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.payee, oldServiceProvider)
+            info.owner == oldServiceProvider,
+            Errors.OldServiceProviderMismatch(dataSetId, info.owner, oldServiceProvider)
         );
         require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
-        // Update the data set payee (service provider)
-        info.payee = newServiceProvider;
+        // Verify new service provider is registered and approved
+        uint256 newProviderId = serviceProviderRegistry.getProviderIdByAddress(newServiceProvider);
+
+        // Check if provider is registered
+        require(newProviderId != 0, Errors.ProviderNotRegistered(newServiceProvider));
+
+        // Check if provider is approved
+        require(approvedProviders[newProviderId], Errors.ProviderNotApproved(newServiceProvider, newProviderId));
+
+        // Update the data set owner (service provider)
+        info.owner = newServiceProvider;
 
         // Emit event for off-chain tracking
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
@@ -875,8 +886,8 @@ contract FilecoinWarmStorageService is
 
         // Check authorization
         require(
-            msg.sender == info.payer || msg.sender == info.payee,
-            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.payee, msg.sender)
+            msg.sender == info.payer || msg.sender == info.owner,
+            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.owner, msg.sender)
         );
 
         Payments payments = Payments(paymentsContractAddress);
