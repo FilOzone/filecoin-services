@@ -192,7 +192,7 @@
             "internalType": "uint256"
           },
           {
-            "name": "paymentEndEpoch",
+            "name": "pdpEndEpoch",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -263,7 +263,7 @@
             "internalType": "uint256"
           },
           {
-            "name": "paymentEndEpoch",
+            "name": "pdpEndEpoch",
             "type": "uint256",
             "internalType": "uint256"
           },
