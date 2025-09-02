@@ -27,26 +27,3 @@ export class TransactionConstants {
   static readonly SELECTOR_SIZE: i32 = 4;
   static readonly MIN_ADD_SERVICE_PROVIDER_SIZE: i32 = 3 * 32; // 3 parameters * 32 bytes each
 }
-
-/**
- * Type of rail provider
- */
-export class RailType {
-  static readonly PDP: string = "PDP";
-  static readonly CACHE_MISS: string = "CACHE_MISS";
-  static readonly CDN: string = "CDN";
-}
-
-/**
- * Status of provider
- */
-export class ProviderStatus {
-  static readonly REGISTERED: string = "REGISTERED";
-  static readonly APPROVED: string = "APPROVED";
-  static readonly UNAPPROVED: string = "UNAPPROVED";
-  static readonly REMOVED: string = "REMOVED";
-}
-
-export class ProductType {
-  static readonly PDP: BigInt = BigInt.fromI32(0);
-}

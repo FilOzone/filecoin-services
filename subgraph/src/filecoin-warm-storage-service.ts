@@ -16,7 +16,7 @@ import { BIGINT_ONE, ContractAddresses, LeafSize, NumChallenges } from "./utils/
 import { decodeStringAddressBoolBytes } from "./utils/decode";
 import { SumTree } from "./utils/sumTree";
 import { createRails } from "./utils/entity";
-import { ProviderStatus, RailType } from "./utils/constants";
+import { ProviderStatus, RailType } from "./utils/types";
 import { getPieceCidData, getServiceProviderInfo } from "./utils/contract-calls";
 import {
   getDataSetEntityId,
