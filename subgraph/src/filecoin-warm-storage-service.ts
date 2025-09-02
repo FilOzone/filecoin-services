@@ -364,7 +364,7 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
 export function handlePieceAdded(event: PieceAddedEvent): void {
   const setId = event.params.dataSetId;
   const pieceId = event.params.pieceId;
-  const metadatKeys = event.params.keys;
+  const metadataKeys = event.params.keys;
   const metadataValues = event.params.values;
 
   const pieceEntityId = getPieceEntityId(setId, pieceId);
@@ -380,7 +380,7 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
   piece.rawSize = rawSize;
   piece.leafCount = rawSize.div(BigInt.fromI32(LeafSize));
   piece.cid = pieceBytes.length > 0 ? pieceBytes : Bytes.empty();
-  piece.metadataKeys = metadatKeys;
+  piece.metadataKeys = metadataKeys;
   piece.metadataValues = metadataValues;
   piece.removed = false;
   piece.lastProvenEpoch = BigInt.fromI32(0);

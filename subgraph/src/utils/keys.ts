@@ -1,8 +1,8 @@
 import { Address, BigInt, Bytes } from "@graphprotocol/graph-ts";
 
-export const getProviderProductEntityId = (beneficiary: Address, productType: number): string => {
+export function getProviderProductEntityId(beneficiary: Address, productType: number): string {
   return beneficiary.toHexString() + "-" + productType.toString();
-};
+}
 
 export function getDataSetEntityId(setId: BigInt): Bytes {
   return Bytes.fromByteArray(Bytes.fromBigInt(setId));
