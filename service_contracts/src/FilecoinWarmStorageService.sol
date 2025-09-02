@@ -903,7 +903,7 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.cacheMissRailId);
         payments.terminateRail(info.cdnRailId);
 
-        // Set withCDN to false to prevent further CDN operations
+        // Delete withCDN flag from metadata to prevent further CDN operations
         dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
