@@ -1555,6 +1555,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.transferFilCDNController(filCDNController);
     }
 
+    function testTransferCDNController_revertsIfZeroAddress() public {
+        vm.prank(filCDNController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilCDNController));
+        pdpServiceWithPayments.transferFilCDNController(address(0));
+    }
+
     // Data Set Metadata Storage Tests
     function testDataSetMetadataStorage() public {
         // Create a data set with metadata
