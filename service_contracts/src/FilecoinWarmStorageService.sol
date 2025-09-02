@@ -75,6 +75,8 @@ contract FilecoinWarmStorageService is
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
 
+    event FilCDNControllerChanged(address oldController, address newController);
+
     event ViewContractSet(address indexed viewContract);
 
     // Constants
@@ -112,7 +114,6 @@ contract FilecoinWarmStorageService is
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
-    address public immutable filCDNControllerAddress;
     address public immutable filCDNBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -229,6 +230,9 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    // The address allowed to terminate CDN services
+    address public filCDNControllerAddress;
+
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
@@ -249,7 +253,6 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNControllerAddress,
         address _filCDNBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -264,9 +267,6 @@ contract FilecoinWarmStorageService is
 
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfcTokenAddress;
-
-        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
-        filCDNControllerAddress = _filCDNControllerAddress;
 
         require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
         filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
@@ -298,7 +298,10 @@ contract FilecoinWarmStorageService is
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      */
-    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) public initializer {
+    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize, address _filCDNControllerAddress)
+        public
+        initializer
+    {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
@@ -308,6 +311,9 @@ contract FilecoinWarmStorageService is
             _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
             Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
         );
+
+        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        filCDNControllerAddress = _filCDNControllerAddress;
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
@@ -908,6 +914,13 @@ contract FilecoinWarmStorageService is
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
+    }
+
+    function transferFilCDNController(address newController) external onlyFilCDNController {
+        require(newController != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        address oldController = filCDNControllerAddress;
+        filCDNControllerAddress = newController;
+        emit FilCDNControllerChanged(oldController, newController);
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {

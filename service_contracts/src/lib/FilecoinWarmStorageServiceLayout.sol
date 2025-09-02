@@ -23,3 +23,4 @@ bytes32 constant CHALLENGE_WINDOW_SIZE_SLOT = bytes32(uint256(14));
 bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(15));
 bytes32 constant APPROVED_PROVIDERS_SLOT = bytes32(uint256(16));
 bytes32 constant APPROVED_PROVIDER_IDS_SLOT = bytes32(uint256(17));
+bytes32 constant FIL_C_D_N_CONTROLLER_ADDRESS_SLOT = bytes32(uint256(18));

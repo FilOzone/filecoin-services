@@ -438,7 +438,6 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -446,7 +445,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
-            uint256(60) // challengeWindowSize
+            uint256(60), // challengeWindowSize
+            filCDNController // filCDNControllerAddress
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
@@ -1537,6 +1537,24 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(filCDNController);
         vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
+    }
+
+    function testTransferCDNController() public {
+        address newController = address(0xDEADBEEF);
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.transferFilCDNController(newController);
+        assertEq(pdpServiceWithPayments.filCDNControllerAddress(), newController, "CDN controller should be updated");
+
+        // Attempt transfer from old controller should revert
+        vm.prank(filCDNController);
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, newController, filCDNController)
+        );
+        pdpServiceWithPayments.transferFilCDNController(address(0x1234));
+
+        // Restore the original state
+        vm.prank(newController);
+        pdpServiceWithPayments.transferFilCDNController(filCDNController);
     }
 
     // Data Set Metadata Storage Tests
@@ -2679,7 +2697,6 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddressController,
         address _filCDNAddressBeneficiary,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -2688,7 +2705,6 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
-            _filCDNAddressController,
             _filCDNAddressBeneficiary,
             _serviceProviderRegistry,
             _sessionKeyRegistry
@@ -2758,7 +2774,6 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -2766,7 +2781,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
-            uint256(60) // challengeWindowSize
+            uint256(60), // challengeWindowSize
+            filCDNController // filCDNControllerAddress
         );
 
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
@@ -2867,7 +2883,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -2875,7 +2890,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
-            uint256(60) // challengeWindowSize
+            uint256(60), // challengeWindowSize
+            filCDNController // filCDNControllerAddress
         );
 
         MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), initData);
