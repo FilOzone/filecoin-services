@@ -415,4 +415,13 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
             providerIds := result
         }
     }
+
+    /**
+     * @notice Get the FIL CDN Controller address
+     * @param service The service contract
+     * @return The FIL CDN Controller address
+     */
+    function filCDNControllerAddress(FilecoinWarmStorageService service) internal view returns (address) {
+        return address(uint160(uint256(service.extsload(FIL_C_D_N_CONTROLLER_ADDRESS_SLOT))));
+    }
 }

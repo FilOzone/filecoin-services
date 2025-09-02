@@ -231,7 +231,7 @@ contract FilecoinWarmStorageService is
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
     // The address allowed to terminate CDN services
-    address public filCDNControllerAddress;
+    address private filCDNControllerAddress;
 
     // Modifier to ensure only the PDP verifier contract can call certain functions
 

@@ -486,9 +486,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(
-            pdpServiceWithPayments.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly"
-        );
+        assertEq(viewContract.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly");
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -1375,7 +1373,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
             filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
@@ -1486,7 +1484,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 3. Try to terminate payment from FilCDN address
         console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
-        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
             filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
@@ -1543,7 +1541,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         address newController = address(0xDEADBEEF);
         vm.prank(filCDNController);
         pdpServiceWithPayments.transferFilCDNController(newController);
-        assertEq(pdpServiceWithPayments.filCDNControllerAddress(), newController, "CDN controller should be updated");
+        assertEq(viewContract.filCDNControllerAddress(), newController, "CDN controller should be updated");
 
         // Attempt transfer from old controller should revert
         vm.prank(filCDNController);
