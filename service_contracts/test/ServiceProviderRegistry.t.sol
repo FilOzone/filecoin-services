@@ -79,6 +79,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, // beneficiary
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -128,6 +129,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, // beneficiary
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -165,6 +167,82 @@ contract ServiceProviderRegistryTest is Test {
         assertEq(compliance, "SOC2", "Third value should be SOC2");
     }
 
+    function testBeneficiaryIsSetCorrectly() public {
+        // Give user1 some ETH for registration fee
+        vm.deal(user1, 10 ether);
+
+        // Register a provider with user2 as beneficiary
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+            serviceURL: "https://example.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+
+        bytes memory encodedData = abi.encode(pdpData);
+
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Register with user2 as beneficiary
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user2, // beneficiary is different from owner
+            "Provider One",
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Verify provider info
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(providerId);
+        assertEq(info.owner, user1, "Owner should be user1");
+        assertEq(info.beneficiary, user2, "Beneficiary should be user2");
+        assertTrue(info.isActive, "Provider should be active");
+    }
+
+    function testCannotRegisterWithZeroBeneficiary() public {
+        // Give user1 some ETH for registration fee
+        vm.deal(user1, 10 ether);
+
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+            serviceURL: "https://example.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerMonth: 500000000000000000,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East",
+            paymentTokenAddress: IERC20(address(0))
+        });
+
+        bytes memory encodedData = abi.encode(pdpData);
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Try to register with zero beneficiary
+        vm.prank(user1);
+        vm.expectRevert("Beneficiary cannot be zero address");
+        registry.registerProvider{value: 5 ether}(
+            address(0), // zero beneficiary
+            "Provider One",
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
+        );
+    }
+
     function testGetProviderWorks() public {
         // Give user1 some ETH for registration fee
         vm.deal(user1, 10 ether);
@@ -190,6 +268,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         registry.registerProvider{value: 5 ether}(
+            user1, // beneficiary
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -200,6 +279,7 @@ contract ServiceProviderRegistryTest is Test {
 
         // Now get provider should work
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        assertEq(info.owner, user1, "Owner should be user1");
         assertEq(info.beneficiary, user1, "Beneficiary should be user1");
     }
 

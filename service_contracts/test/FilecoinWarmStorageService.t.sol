@@ -338,6 +338,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Register service providers in the serviceProviderRegistry
         vm.prank(serviceProvider);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
+            serviceProvider, // beneficiary
             "Service Provider",
             "Service Provider Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -360,6 +361,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.prank(sp1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
+            sp1, // beneficiary
             "SP1",
             "Storage Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -382,6 +384,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.prank(sp2);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
+            sp2, // beneficiary
             "SP2",
             "Storage Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -404,6 +407,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.prank(sp3);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
+            sp3, // beneficiary
             "SP3",
             "Storage Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,

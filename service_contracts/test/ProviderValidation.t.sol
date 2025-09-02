@@ -173,6 +173,7 @@ contract ProviderValidationTest is Test {
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
+            provider1, // beneficiary
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -210,6 +211,7 @@ contract ProviderValidationTest is Test {
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
+            provider1, // beneficiary
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,

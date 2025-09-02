@@ -445,6 +445,11 @@ contract FilecoinWarmStorageService is
         // Check if provider is approved
         require(approvedProviders[providerId], Errors.ProviderNotApproved(creator, providerId));
 
+        // Get the provider's beneficiary address from the registry
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
+            serviceProviderRegistry.getProvider(providerId);
+        address payeeBeneficiary = providerInfo.beneficiary;
+
         // Update client state
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
@@ -453,7 +458,7 @@ contract FilecoinWarmStorageService is
         verifyCreateDataSetSignature(
             createData.payer,
             clientDataSetId,
-            creator,
+            payeeBeneficiary,
             createData.metadataKeys,
             createData.metadataValues,
             createData.signature
@@ -462,7 +467,7 @@ contract FilecoinWarmStorageService is
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Using creator as the payee
+        info.payee = payeeBeneficiary; // Using beneficiary as the payee
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.providerId = providerId;
@@ -505,7 +510,7 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // data set creator, SPs in  most cases
+            payeeBeneficiary, // beneficiary address from registry
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
             address(this)
@@ -540,7 +545,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                creator, // data set creator, SPs in most cases
+                payeeBeneficiary, // beneficiary address from registry
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -570,7 +575,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId,
             cdnRailId,
             createData.payer,
-            creator,
+            payeeBeneficiary,
             createData.metadataKeys,
             createData.metadataValues
         );
