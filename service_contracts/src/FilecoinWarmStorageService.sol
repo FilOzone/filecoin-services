@@ -147,9 +147,9 @@ contract FilecoinWarmStorageService is
         address payee; // SP's beneficiary address
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
-        uint256 paymentEndEpoch; // 0 if payment is not terminated
+        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN is not terminated
+        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -852,7 +852,7 @@ contract FilecoinWarmStorageService is
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if already terminated
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         // Check authorization
         require(
@@ -899,15 +899,15 @@ contract FilecoinWarmStorageService is
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        require(info.paymentEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
     }
 
     function requirePaymentNotBeyondEndEpoch(uint256 dataSetId) internal view {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch != 0) {
+        if (info.pdpEndEpoch != 0) {
             require(
-                block.number <= info.paymentEndEpoch,
-                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.paymentEndEpoch, block.number)
+                block.number <= info.pdpEndEpoch,
+                Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.pdpEndEpoch, block.number)
             );
         }
     }
@@ -1479,8 +1479,8 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        if (info.paymentEndEpoch == 0 && info.pdpRailId == railId) {
-            info.paymentEndEpoch = endEpoch;
+        if (info.pdpEndEpoch == 0 && info.pdpRailId == railId) {
+            info.pdpEndEpoch = endEpoch;
             emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
         } else if (info.cdnEndEpoch == 0 && (railId == info.cdnRailId || railId == info.cacheMissRailId)) {
             info.cdnEndEpoch = endEpoch;

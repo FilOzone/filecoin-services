@@ -96,7 +96,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.payee = address(uint160(uint256(info9[4])));
         info.commissionBps = uint256(info9[5]);
         info.clientDataSetId = uint256(info9[6]);
-        info.paymentEndEpoch = uint256(info9[7]);
+        info.pdpEndEpoch = uint256(info9[7]);
         info.providerId = uint256(info9[8]);
         info.cdnEndEpoch = uint256(info9[9]);
     }

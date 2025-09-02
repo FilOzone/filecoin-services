@@ -1140,10 +1140,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // 4. Assertions
-        // Check paymentEndEpoch is set
+        // Check pdpEndEpoch is set
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-        assertTrue(info.paymentEndEpoch > 0, "paymentEndEpoch should be set after termination");
-        console.log("Payment termination successful. Payment end epoch:", info.paymentEndEpoch);
+        assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
+        console.log("Payment termination successful. Payment end epoch:", info.pdpEndEpoch);
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -1162,8 +1162,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Wait for payment end epoch to elapse
         console.log("\n5. Rolling past payment end epoch");
         console.log("Current block:", block.number);
-        console.log("Rolling to block:", info.paymentEndEpoch + 1);
-        vm.roll(info.paymentEndEpoch + 1);
+        console.log("Rolling to block:", info.pdpEndEpoch + 1);
+        vm.roll(info.pdpEndEpoch + 1);
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -1176,7 +1176,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         makeSignaturePass(client);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
         mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
@@ -1187,7 +1187,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
@@ -1198,7 +1198,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(mockPDPVerifier));
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.paymentEndEpoch, block.number
+                Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
