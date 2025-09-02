@@ -15,6 +15,8 @@ library Errors {
         USDFC,
         /// FilCDN controller address
         FilCDNController,
+        /// Session Key Registry contract address
+        SessionKeyRegistry,
         /// Creator address
         Creator,
         /// Payer address
