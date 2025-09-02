@@ -1395,6 +1395,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(metadataKeys.length == 0, "Metadata keys should be empty after termination");
         assertTrue(metadataValues.length == 0, "Metadata values should be empty after termination");
 
+        Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+
+        assertEq(pdpRail.endEpoch, 0, "PDP rail should NOT be terminated");
+        assertTrue(cacheMissRail.endEpoch > 0, "Cache miss rail should be terminated");
+        assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
+
         // Ensure future CDN service termination reverts
         vm.prank(filCDNController);
         vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNPaymentAlreadyTerminated.selector, dataSetId));
