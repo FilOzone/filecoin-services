@@ -85,7 +85,7 @@ dataSources:
     name: ServiceProviderRegistry
     network: filecoin-testnet
     source:
-      address: "0x7A605Ad01F7812F5C5e78aa16D795fc0be75974A"
+      address: "0x7A605Ad01F7812F5C5e78aa16D795fc0be75974A" # TODO: update ServiceProviderRegistry address with actual address
       abi: ServiceProviderRegistry
       startBlock: 2942574
     mapping:
