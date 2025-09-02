@@ -23,6 +23,11 @@
         "internalType": "address"
       },
       {
+        "name": "_serviceProviderRegistry",
+        "type": "address",
+        "internalType": "contract ServiceProviderRegistry"
+      },
+      {
         "name": "_sessionKeyRegistry",
         "type": "address",
         "internalType": "contract SessionKeyRegistry"
@@ -42,6 +47,19 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "addApprovedProvider",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -558,6 +576,24 @@
   },
   {
     "type": "function",
+    "name": "removeApprovedProvider",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
@@ -572,6 +608,19 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "serviceProviderRegistry",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract ServiceProviderRegistry"
       }
     ],
     "stateMutability": "view"
@@ -794,6 +843,12 @@
     "inputs": [
       {
         "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "providerId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
@@ -1032,6 +1087,32 @@
         "type": "string[]",
         "indexed": false,
         "internalType": "string[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderApproved",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderUnapproved",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1646,6 +1727,55 @@
         "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderAlreadyApproved",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderNotApproved",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderNotInApprovedList",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderNotRegistered",
+    "inputs": [
+      {
+        "name": "provider",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },

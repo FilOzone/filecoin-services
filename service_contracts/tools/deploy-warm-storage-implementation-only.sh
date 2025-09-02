@@ -43,6 +43,11 @@ if [ -z "$FILCDN_ADDRESS" ]; then
   FILCDN_ADDRESS="0xff0000000000000000000000000000000002870c"
 fi
 
+if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+  echo "Error: SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS is not set"
+  exit 1
+fi
+
 if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   echo "Error: SESSION_KEY_REGISTRY_ADDRESS is not set"
   exit 1
@@ -57,9 +62,10 @@ echo "  PDPVerifier: $PDP_VERIFIER_ADDRESS"
 echo "  Payments: $PAYMENTS_CONTRACT_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
 echo "  FilCDN: $FILCDN_ADDRESS"
+echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
@@ -67,7 +73,7 @@ if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
 fi
 
 echo ""
-echo "=== DEPLOYMENT COMPLETE ==="
+echo "# DEPLOYMENT COMPLETE"
 echo "FilecoinWarmStorageService Implementation deployed at: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
 echo ""
 
@@ -86,15 +92,15 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
         echo "Your address: $ADDR"
 
         if [ "$PROXY_OWNER" != "$ADDR" ]; then
-            echo ""
+            echo
             echo "⚠️  WARNING: You are not the owner of this proxy!"
             echo "Only the owner ($PROXY_OWNER) can upgrade this proxy."
-            echo ""
+            echo
             echo "If you need to upgrade, you have these options:"
             echo "1. Have the owner run this script"
             echo "2. Have the owner transfer ownership to you first"
             echo "3. If the owner is a multisig, create a proposal"
-            echo ""
+            echo
             echo "To manually upgrade (as owner):"
             echo "cast send $WARM_STORAGE_PROXY_ADDRESS \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL"
             exit 1

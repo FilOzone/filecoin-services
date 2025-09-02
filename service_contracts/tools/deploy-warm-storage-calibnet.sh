@@ -37,6 +37,11 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
+if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+  echo "Error: SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS is not set"
+  exit 1
+fi
+
 # Fixed constants for initialization
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 
@@ -74,7 +79,7 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -94,15 +99,15 @@ fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
 # Summary of deployed contracts
-echo ""
-echo "=== DEPLOYMENT SUMMARY ==="
+echo
+echo "# DEPLOYMENT SUMMARY"
 echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
-echo "=========================="
-echo ""
+echo
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "PDPVerifier address: $PDP_VERIFIER_ADDRESS"
 echo "Payments contract address: $PAYMENTS_CONTRACT_ADDRESS"
+echo "ServiceProviderRegistry address: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "FilCDN wallet address: $FILCDN_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
