@@ -103,6 +103,11 @@ clean:
 	forge clean
 	rm -rf out cache
 
+# Clean everything including generated files and ABIs
+.PHONY: clean-all
+clean-all: clean clean-gen clean-abi
+	@echo "All artifacts cleaned"
+
 # Format code
 .PHONY: fmt
 fmt:
@@ -132,18 +137,47 @@ contract-size-check:
 	@echo "Checking contract sizes..."
 	bash tools/check-contract-size.sh src/
 
-# Update checked-in ABIs
-.PHONY: update-abi
-update-abi: build
-	@echo "Updating checked-in ABIs..."
+# ABI Management
+
+# Core contracts we publish ABIs for
+ABI_CONTRACTS := \
+	FilecoinWarmStorageService \
+	FilecoinWarmStorageServiceStateLibrary \
+	FilecoinWarmStorageServiceStateView \
+	ServiceProviderRegistry
+
+# Generate ABI file targets
+ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
+
+# Define a template for ABI extraction; we use a template approach instead of
+# defining a global pattern rule because patterns for files that don't exist
+# at parse-time will be rejected by make, so we'll be explicit instead.
+define ABI_RULE
+abi/$(1).abi.json: out/$(1).sol/$(1).json | abi
+	@echo "Extracting ABI for $(1)..."
+	@jq '.abi' $$< > $$@
+
+# Mark JSON as coming from build (unless it's the library which has its own rule)
+ifneq ($(1),FilecoinWarmStorageServiceStateLibrary)
+out/$(1).sol/$(1).json: | build
+endif
+endef
+
+# Generate rules for each contract using the template above
+$(foreach contract,$(ABI_CONTRACTS),$(eval $(call ABI_RULE,$(contract))))
+
+# Directory for ABIs
+abi:
 	@mkdir -p abi
-	@echo "  Extracting FilecoinWarmStorageService ABI..."
-	@forge inspect FilecoinWarmStorageService abi --json > abi/FilecoinWarmStorageService.abi.json
-	@echo "  Extracting FilecoinWarmStorageServiceStateView ABI..."
-	@forge inspect FilecoinWarmStorageServiceStateView abi --json > abi/FilecoinWarmStorageServiceStateView.abi.json
-	@echo "  Extracting FilecoinWarmStorageServiceStateLibrary ABI..."
-	@forge inspect src/lib/FilecoinWarmStorageServiceStateLibrary.sol:FilecoinWarmStorageServiceStateLibrary abi --json > abi/FilecoinWarmStorageServiceStateLibrary.abi.json
-	@echo "ABIs updated in abi/ directory"
+
+# Update ABIs
+.PHONY: update-abi
+update-abi: $(ABI_FILES)
+
+# Clean just the ABIs
+.PHONY: clean-abi
+clean-abi:
+	@rm -rf abi
 
 # Help target
 .PHONY: help
@@ -166,4 +200,10 @@ help:
 	@echo ""
 	@echo "  help       - Show this help message"
 	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
-	@echo "  update-abi - Update checked-in ABIs in abi/ directory"
+	@echo ""
+	@echo "ABI management targets:"
+	@echo "  update-abi - Update checked-in ABIs in abi/ directory (incremental)"
+	@echo "  clean-abi  - Remove all ABI files"
+	@echo ""
+	@echo "Full cleanup:"
+	@echo "  clean-all  - Remove all artifacts (build, generated, ABIs)"
