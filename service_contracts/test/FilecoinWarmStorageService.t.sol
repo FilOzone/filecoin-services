@@ -508,7 +508,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
+            filCDNController,
+            filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -536,7 +537,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
+            filCDNController,
+            filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -557,7 +559,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
+            filCDNController,
+            filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -578,7 +581,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
+            filCDNController,
+            filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -605,7 +609,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDN,
+            filCDNController,
+            filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );

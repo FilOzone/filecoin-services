@@ -43,10 +43,6 @@ contract FilecoinWarmStorageService is
     // Version tracking
     string public constant VERSION = "0.1.0";
 
-    // Service information
-    string public serviceName;
-    string public serviceDescription;
-
     // Events
     event ContractUpgraded(string version, address implementation);
     event FilecoinServiceDeployed(string name, string description);
@@ -233,6 +229,10 @@ contract FilecoinWarmStorageService is
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
+
+    // Service information (added at the end to preserve storage layout for upgrades)
+    string public serviceName;
+    string public serviceDescription;
 
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
