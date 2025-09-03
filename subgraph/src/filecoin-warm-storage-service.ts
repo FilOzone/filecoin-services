@@ -547,6 +547,7 @@ export function handlePDPPaymentTerminated(event: PDPPaymentTerminatedEvent): vo
     pdpRail.save();
   }
   if (dataSet) {
+    dataSet.isActive = false;
     dataSet.pdpEndEpoch = endEpoch;
     dataSet.save();
   }
@@ -581,6 +582,7 @@ export function handleCDNPaymentTerminated(event: CDNPaymentTerminatedEvent): vo
     cacheMissRail.save();
   }
   if (dataSet) {
+    dataSet.isActive = false;
     dataSet.cdnEndEpoch = endEpoch;
     dataSet.save();
   }
