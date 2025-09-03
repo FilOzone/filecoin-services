@@ -418,6 +418,6 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @return The FIL CDN Controller address
      */
     function filCDNControllerAddress(FilecoinWarmStorageService service) public view returns (address) {
-        return address(uint160(uint256(service.extsload(FIL_C_D_N_CONTROLLER_ADDRESS_SLOT))));
+        return address(uint160(uint256(service.extsload(FIL_CDN_CONTROLLER_ADDRESS_SLOT))));
     }
 }
