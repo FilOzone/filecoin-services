@@ -627,7 +627,50 @@ contract FilecoinWarmStorageService is
         // Verify the client's signature
         verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
-        // TODO Data set deletion logic
+        // Check if the data set's payment rails have finalized
+        require(
+            info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
+            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch)
+        );
+
+        // Check CDN payment rail: either no CDN configured (cdnEndEpoch == 0) or past CDN end epoch
+        require(
+            info.cdnEndEpoch == 0 || block.number > info.cdnEndEpoch,
+            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch)
+        );
+
+        // Complete cleanup - remove the dataset from all mappings
+        delete dataSetInfo[dataSetId];
+
+        // Remove from client's dataset list
+        uint256[] storage clientDataSetList = clientDataSets[payer];
+        for (uint256 i = 0; i < clientDataSetList.length; i++) {
+            if (clientDataSetList[i] == dataSetId) {
+                // Remove this dataset from the array
+                clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
+                clientDataSetList.pop();
+                break;
+            }
+        }
+
+        // Clean up proving-related state
+        delete provingDeadlines[dataSetId];
+        delete provenThisPeriod[dataSetId];
+        delete provingActivationEpoch[dataSetId];
+
+        // Clean up metadata mappings
+        string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            delete dataSetMetadata[dataSetId][metadataKeys[i]];
+        }
+        delete dataSetMetadataKeys[dataSetId];
+
+        // Clean up rail mappings
+        delete railToDataSet[info.pdpRailId];
+        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+            delete railToDataSet[info.cacheMissRailId];
+            delete railToDataSet[info.cdnRailId];
+        }
     }
 
     /**

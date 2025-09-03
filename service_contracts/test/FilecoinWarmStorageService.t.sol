@@ -120,6 +120,7 @@ contract MockPDPVerifier {
     event DataSetServiceProviderChanged(
         uint256 indexed setId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
+    event DataSetDeleted(uint256 indexed setId, uint256 deletedLeafCount);
 
     // Basic implementation to create data sets and call the listener
     function createDataSet(PDPListener listenerAddr, bytes calldata extraData) public payable returns (uint256) {
@@ -135,6 +136,15 @@ contract MockPDPVerifier {
 
         emit DataSetCreated(setId, msg.sender);
         return setId;
+    }
+
+    function deleteDataSet(address listenerAddr, uint256 setId, bytes calldata extraData) public {
+        if (listenerAddr != address(0)) {
+            PDPListener(listenerAddr).dataSetDeleted(setId, 0, extraData);
+        }
+
+        delete dataSetServiceProviders[setId];
+        emit DataSetDeleted(setId, 0);
     }
 
     function addPieces(
@@ -1085,6 +1095,22 @@ contract FilecoinWarmStorageServiceTest is Test {
         return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
+    /**
+     * @notice Helper function to delete a data set for a client
+     * @dev This function creates the necessary delete signature and calls the PDP verifier
+     * @param provider The service provider address who owns the data set
+     * @param clientAddress The client address who should sign the deletion
+     * @param dataSetId The ID of the data set to delete
+     */
+    function deleteDataSetForClient(address provider, address clientAddress, uint256 dataSetId) internal {
+        bytes memory signature = abi.encode(FAKE_SIGNATURE);
+
+        makeSignaturePass(clientAddress);
+        // Delete the data set as the provider
+        vm.prank(provider);
+        mockPDPVerifier.deleteDataSet(address(pdpServiceWithPayments), dataSetId, signature);
+    }
+
     function testGetClientDataSets_EmptyClient() public view {
         // Test with a client that has no data sets
         FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
@@ -1134,7 +1160,75 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSets[1].clientDataSetId, 1, "Second data set ID should be 1");
     }
 
-    // Data Set Service Provider Change Tests
+    function testGetClientDataSets_TerminatedDataSets() public {
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        (string[] memory metadataKeys3, string[] memory metadataValues3) = _getSingleMetadataKV("label", "Metadata 3");
+
+        // Create multiple data sets for the client
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSet2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+        createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
+
+        // Verify we have 3 datasets initially
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 3, "Should return three data sets initially");
+
+        // Terminate the second dataset (dataSet2) - client terminates
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSet2);
+
+        // Verify the dataset is now terminated (paymentEndEpoch > 0)
+        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set after termination");
+
+        // Verify getClientDataSets still returns all 3 datasets (termination doesn't exclude from list)
+        dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 3, "Should return all three data sets after termination");
+
+        // Verify the terminated dataset has correct status
+        assertTrue(dataSets[1].pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch > 0");
+    }
+
+    function testGetClientDataSets_ExcludesDeletedDataSets() public {
+        // Create multiple data sets for the client
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        (string[] memory metadataKeys3, string[] memory metadataValues3) = _getSingleMetadataKV("label", "Metadata 3");
+
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSet2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+        createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
+
+        // Verify we have 3 datasets initially
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 3, "Should return three data sets initially");
+
+        // Terminate the second dataset (dataSet2)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSet2);
+
+        // Verify termination status
+        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
+
+        // Advance block number to be greater than the end epoch to allow deletion
+        vm.roll(terminatedInfo.pdpEndEpoch + 1);
+
+        // Delete the second dataset (dataSet2) - this should completely remove it
+        deleteDataSetForClient(sp2, client, dataSet2);
+
+        // Verify getClientDataSets now only returns 2 datasets (the deleted one is completely gone)
+        dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 2, "Should return only 2 data sets after deletion");
+
+        // Verify the deleted dataset is completely gone
+        for (uint256 i = 0; i < dataSets.length; i++) {
+            assertTrue(dataSets[i].clientDataSetId != 1, "Deleted dataset should not be in returned array");
+        }
+    }
+
+    // ===== Data Set Service Provider Change Tests =====
 
     /**
      * @notice Helper function to create a data set and return its ID

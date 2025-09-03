@@ -1901,6 +1901,27 @@
   },
   {
     "type": "error",
+    "name": "PaymentRailsNotFinalized",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pdpEndEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnEndEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ProofAlreadySubmitted",
     "inputs": [
       {
