@@ -391,6 +391,11 @@
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
                   {
+                    "name": "owner",
+                    "type": "address",
+                    "internalType": "address"
+                  },
+                  {
                     "name": "beneficiary",
                     "type": "address",
                     "internalType": "address"
@@ -688,6 +693,11 @@
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
           {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
             "name": "beneficiary",
             "type": "address",
             "internalType": "address"
@@ -728,6 +738,11 @@
         "type": "tuple",
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
+          {
+            "name": "owner",
+            "type": "address",
+            "internalType": "address"
+          },
           {
             "name": "beneficiary",
             "type": "address",
@@ -826,6 +841,11 @@
                 "type": "tuple",
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
+                  {
+                    "name": "owner",
+                    "type": "address",
+                    "internalType": "address"
+                  },
                   {
                     "name": "beneficiary",
                     "type": "address",
@@ -1076,6 +1096,11 @@
     ],
     "outputs": [
       {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "beneficiary",
         "type": "address",
         "internalType": "address"
@@ -1115,6 +1140,11 @@
     "type": "function",
     "name": "registerProvider",
     "inputs": [
+      {
+        "name": "beneficiary",
+        "type": "address",
+        "internalType": "address"
+      },
       {
         "name": "name",
         "type": "string",
@@ -1188,19 +1218,6 @@
     "inputs": [
       {
         "name": "newOwner",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "transferProviderBeneficiary",
-    "inputs": [
-      {
-        "name": "newBeneficiary",
         "type": "address",
         "internalType": "address"
       }
@@ -1344,31 +1361,6 @@
   },
   {
     "type": "event",
-    "name": "BeneficiaryTransferred",
-    "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "previousBeneficiary",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newBeneficiary",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "ContractUpgraded",
     "inputs": [
       {
@@ -1447,7 +1439,7 @@
         "internalType": "string"
       },
       {
-        "name": "beneficiary",
+        "name": "owner",
         "type": "address",
         "indexed": false,
         "internalType": "address"
@@ -1509,7 +1501,7 @@
         "internalType": "string"
       },
       {
-        "name": "beneficiary",
+        "name": "owner",
         "type": "address",
         "indexed": false,
         "internalType": "address"
@@ -1551,6 +1543,12 @@
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      },
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       },
       {
         "name": "beneficiary",
