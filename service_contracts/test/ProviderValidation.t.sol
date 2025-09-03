@@ -138,7 +138,6 @@ contract ProviderValidationTest is Test {
             address(pdpVerifier),
             address(payments),
             address(usdfc),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -147,6 +146,7 @@ contract ProviderValidationTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
+            filCDNController,
             "Provider Validation Test Service",
             "Test service for provider validation"
         );

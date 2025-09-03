@@ -76,6 +76,8 @@ contract FilecoinWarmStorageService is
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
 
+    event FilCDNControllerChanged(address oldController, address newController);
+
     event ViewContractSet(address indexed viewContract);
 
     // Constants
@@ -113,7 +115,6 @@ contract FilecoinWarmStorageService is
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
     address public immutable usdfcTokenAddress;
-    address public immutable filCDNControllerAddress;
     address public immutable filCDNBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -230,6 +231,9 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    // The address allowed to terminate CDN services
+    address private filCDNControllerAddress;
+
     // Service information (added at the end to preserve storage layout for upgrades)
     string public serviceName;
     string public serviceDescription;
@@ -254,7 +258,6 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNControllerAddress,
         address _filCDNBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -269,9 +272,6 @@ contract FilecoinWarmStorageService is
 
         require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfcTokenAddress;
-
-        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
-        filCDNControllerAddress = _filCDNControllerAddress;
 
         require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
         filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
@@ -302,12 +302,14 @@ contract FilecoinWarmStorageService is
      * @notice Initialize the contract with PDP proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
+     * @param _filCDNControllerAddress Address authorized to terminate CDN services
      * @param _name Service name (max 256 characters, cannot be empty)
      * @param _description Service description (max 256 characters, cannot be empty)
      */
     function initialize(
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize,
+        address _filCDNControllerAddress,
         string memory _name,
         string memory _description
     ) public initializer {
@@ -320,6 +322,9 @@ contract FilecoinWarmStorageService is
             _challengeWindowSize > 0 && _challengeWindowSize < _maxProvingPeriod,
             Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
         );
+
+        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        filCDNControllerAddress = _filCDNControllerAddress;
 
         // Validate name and description
         require(bytes(_name).length > 0, "Service name cannot be empty");
@@ -933,6 +938,13 @@ contract FilecoinWarmStorageService is
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
+    }
+
+    function transferFilCDNController(address newController) external onlyFilCDNController {
+        require(newController != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
+        address oldController = filCDNControllerAddress;
+        filCDNControllerAddress = newController;
+        emit FilCDNControllerChanged(oldController, newController);
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {

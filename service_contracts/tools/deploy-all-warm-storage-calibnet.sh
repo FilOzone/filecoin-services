@@ -130,7 +130,7 @@ NONCE=$(expr $NONCE + "1")
 # Step 7: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
 
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_CONTROLLER_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
@@ -141,8 +141,8 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 8: Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
-# Initialize with PDPVerifier address, payments contract address, USDFC token address, commission rate, max proving period, and challenge window size
-INIT_DATA=$(cast calldata "initialize(uint64,uint256)"  $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE)
+# Initialize with max proving period, challenge window size, and FilCDN controller address
+INIT_DATA=$(cast calldata "initialize(uint64,uint256,address)"  $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS)
 WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
