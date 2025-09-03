@@ -100,9 +100,6 @@ make force-gen
 
 # Clean all generated files
 make clean-gen
-
-# Safe regeneration with automatic rollback on failure
-make safe-gen
 ```
 
 ### ABI Management

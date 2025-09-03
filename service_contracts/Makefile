@@ -64,22 +64,6 @@ clean-gen:
 	@rm -rf out/FilecoinWarmStorageServiceStateLibrary.sol
 	@echo "Generated files removed"
 
-# Safe regeneration - saves current state, attempts gen, restores on failure
-.PHONY: safe-gen
-safe-gen: check-tools
-	@echo "Backing up current generated files..."
-	@mkdir -p .backup-gen
-	@cp -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_CONTRACT) .backup-gen/ 2>/dev/null || true
-	@if $(MAKE) force-gen; then \
-		echo "Generation successful"; \
-		rm -rf .backup-gen; \
-	else \
-		echo "Generation failed, restoring backup..."; \
-		cp -f .backup-gen/* . 2>/dev/null || true; \
-		rm -rf .backup-gen; \
-		exit 1; \
-	fi
-
 # Check required tools
 .PHONY: check-tools
 check-tools:
@@ -195,7 +179,6 @@ help:
 	@echo "Code generation targets:"
 	@echo "  gen        - Generate code (layout, internal lib, view contract)"
 	@echo "  force-gen  - Clean and regenerate all files (use when broken)"
-	@echo "  safe-gen   - Attempt generation with automatic rollback on failure"
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
 	@echo "  help       - Show this help message"

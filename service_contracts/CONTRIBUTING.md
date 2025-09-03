@@ -64,7 +64,6 @@ make src/FilecoinWarmStorageServiceStateView.sol                # View contract
 - `FilecoinWarmStorageServiceLayout` is auto-generated from the storage layout of `FilecoinWarmStorageService`
 - Always run `make gen` after modifying storage variables or the state library
 - Use `make force-gen` if the generated files become corrupted
-- Use `make safe-gen` for a safe regeneration with automatic rollback on failure
 
 ### Deploy a new `FilecoinWarmStorageServiceStateView`
 ```sh
