@@ -49,14 +49,14 @@ contract ServiceProviderRegistry is
     uint256 public constant REGISTRATION_FEE = 5e18;
 
     /// @notice Emitted when a new provider registers
-    event ProviderRegistered(uint256 indexed providerId, address indexed owner, address indexed beneficiary);
+    event ProviderRegistered(uint256 indexed providerId, address indexed serviceProvider, address indexed payee);
 
     /// @notice Emitted when a product is updated or added
     event ProductUpdated(
         uint256 indexed providerId,
         ProductType indexed productType,
         string serviceUrl,
-        address owner,
+        address serviceProvider,
         string[] capabilityKeys,
         string[] capabilityValues
     );
@@ -66,7 +66,7 @@ contract ServiceProviderRegistry is
         uint256 indexed providerId,
         ProductType indexed productType,
         string serviceUrl,
-        address owner,
+        address serviceProvider,
         string[] capabilityKeys,
         string[] capabilityValues
     );
@@ -83,16 +83,16 @@ contract ServiceProviderRegistry is
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
 
-    /// @notice Ensures the caller is the owner of the provider
-    modifier onlyProviderOwner(uint256 providerId) {
-        require(providers[providerId].owner == msg.sender, "Only provider owner can call this function");
+    /// @notice Ensures the caller is the service provider
+    modifier onlyServiceProvider(uint256 providerId) {
+        require(providers[providerId].serviceProvider == msg.sender, "Only service provider can call this function");
         _;
     }
 
     /// @notice Ensures the provider exists
     modifier providerExists(uint256 providerId) {
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
-        require(providers[providerId].owner != address(0), "Provider not found");
+        require(providers[providerId].serviceProvider != address(0), "Provider not found");
         _;
     }
 
@@ -118,7 +118,7 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Register as a new service provider with a specific product type
-    /// @param beneficiary Address that will receive payments (cannot be changed after registration)
+    /// @param payee Address that will receive payments (cannot be changed after registration)
     /// @param name Provider name (optional, max 128 chars)
     /// @param description Provider description (max 256 chars)
     /// @param productType The type of product to register
@@ -127,7 +127,7 @@ contract ServiceProviderRegistry is
     /// @param capabilityValues Array of capability values
     /// @return providerId The unique ID assigned to the provider
     function registerProvider(
-        address beneficiary,
+        address payee,
         string calldata name,
         string calldata description,
         ProductType productType,
@@ -138,8 +138,8 @@ contract ServiceProviderRegistry is
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
-        // Validate beneficiary address
-        require(beneficiary != address(0), "Beneficiary cannot be zero address");
+        // Validate payee address
+        require(payee != address(0), "Payee cannot be zero address");
 
         // Check if address is already registered
         require(addressToProviderId[msg.sender] == 0, "Address already registered");
@@ -158,8 +158,8 @@ contract ServiceProviderRegistry is
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({
-            owner: msg.sender,
-            beneficiary: beneficiary,
+            serviceProvider: msg.sender,
+            payee: payee,
             name: name,
             description: description,
             isActive: true
@@ -171,7 +171,7 @@ contract ServiceProviderRegistry is
         activeProviderCount++;
 
         // Emit provider registration event
-        emit ProviderRegistered(providerId, msg.sender, beneficiary);
+        emit ProviderRegistered(providerId, msg.sender, payee);
 
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
@@ -184,7 +184,7 @@ contract ServiceProviderRegistry is
         }
 
         emit ProductAdded(
-            providerId, productType, serviceUrl, providers[providerId].owner, capabilityKeys, capabilityValues
+            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
         );
 
         // Burn the registration fee
@@ -219,7 +219,7 @@ contract ServiceProviderRegistry is
         bytes memory productData,
         string[] memory capabilityKeys,
         string[] memory capabilityValues
-    ) private providerExists(providerId) providerActive(providerId) onlyProviderOwner(providerId) {
+    ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Check product doesn't already exist
         require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
 
@@ -235,7 +235,7 @@ contract ServiceProviderRegistry is
 
         // Emit event
         emit ProductAdded(
-            providerId, productType, serviceUrl, providers[providerId].owner, capabilityKeys, capabilityValues
+            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
         );
     }
 
@@ -299,7 +299,7 @@ contract ServiceProviderRegistry is
         bytes memory productData,
         string[] memory capabilityKeys,
         string[] memory capabilityValues
-    ) private providerExists(providerId) providerActive(providerId) onlyProviderOwner(providerId) {
+    ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Cache product storage reference
         ServiceProduct storage product = providerProducts[providerId][productType];
 
@@ -338,7 +338,7 @@ contract ServiceProviderRegistry is
 
         // Emit event
         emit ProductUpdated(
-            providerId, productType, serviceUrl, providers[providerId].owner, capabilityKeys, capabilityValues
+            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
         );
     }
 
@@ -359,7 +359,7 @@ contract ServiceProviderRegistry is
         private
         providerExists(providerId)
         providerActive(providerId)
-        onlyProviderOwner(providerId)
+        onlyServiceProvider(providerId)
     {
         // Check product exists
         require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
@@ -404,7 +404,7 @@ contract ServiceProviderRegistry is
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
-        require(providers[providerId].owner != address(0), "Provider not found");
+        require(providers[providerId].serviceProvider != address(0), "Provider not found");
         require(providers[providerId].isActive, "Provider is not active");
 
         // Validate name (optional, so empty is allowed)
@@ -434,7 +434,7 @@ contract ServiceProviderRegistry is
         private
         providerExists(providerId)
         providerActive(providerId)
-        onlyProviderOwner(providerId)
+        onlyServiceProvider(providerId)
     {
         // Soft delete - mark as inactive
         providers[providerId].isActive = false;
@@ -460,7 +460,7 @@ contract ServiceProviderRegistry is
         }
 
         // Clear address mapping
-        delete addressToProviderId[providers[providerId].owner];
+        delete addressToProviderId[providers[providerId].serviceProvider];
 
         // Emit event
         emit ProviderRemoved(providerId);
@@ -623,7 +623,7 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Get provider info by address
-    /// @param providerAddress The address of the provider owner
+    /// @param providerAddress The address of the service provider
     /// @return info The provider information (empty struct if not registered)
     function getProviderByAddress(address providerAddress) external view returns (ServiceProviderInfo memory info) {
         uint256 providerId = addressToProviderId[providerAddress];
@@ -631,7 +631,7 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Get provider ID by address
-    /// @param providerAddress The address of the provider owner
+    /// @param providerAddress The address of the service provider
     /// @return providerId The provider ID (0 if not registered)
     function getProviderIdByAddress(address providerAddress) external view returns (uint256) {
         return addressToProviderId[providerAddress];

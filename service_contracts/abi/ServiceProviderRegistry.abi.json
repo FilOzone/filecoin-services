@@ -391,12 +391,12 @@
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
                   {
-                    "name": "owner",
+                    "name": "serviceProvider",
                     "type": "address",
                     "internalType": "address"
                   },
                   {
-                    "name": "beneficiary",
+                    "name": "payee",
                     "type": "address",
                     "internalType": "address"
                   },
@@ -693,12 +693,12 @@
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
           {
-            "name": "owner",
+            "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
           },
           {
-            "name": "beneficiary",
+            "name": "payee",
             "type": "address",
             "internalType": "address"
           },
@@ -739,12 +739,12 @@
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
           {
-            "name": "owner",
+            "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
           },
           {
-            "name": "beneficiary",
+            "name": "payee",
             "type": "address",
             "internalType": "address"
           },
@@ -842,12 +842,12 @@
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
                   {
-                    "name": "owner",
+                    "name": "serviceProvider",
                     "type": "address",
                     "internalType": "address"
                   },
                   {
-                    "name": "beneficiary",
+                    "name": "payee",
                     "type": "address",
                     "internalType": "address"
                   },
@@ -1096,12 +1096,12 @@
     ],
     "outputs": [
       {
-        "name": "owner",
+        "name": "serviceProvider",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "beneficiary",
+        "name": "payee",
         "type": "address",
         "internalType": "address"
       },
@@ -1141,7 +1141,7 @@
     "name": "registerProvider",
     "inputs": [
       {
-        "name": "beneficiary",
+        "name": "payee",
         "type": "address",
         "internalType": "address"
       },
@@ -1439,7 +1439,7 @@
         "internalType": "string"
       },
       {
-        "name": "owner",
+        "name": "serviceProvider",
         "type": "address",
         "indexed": false,
         "internalType": "address"
@@ -1501,7 +1501,7 @@
         "internalType": "string"
       },
       {
-        "name": "owner",
+        "name": "serviceProvider",
         "type": "address",
         "indexed": false,
         "internalType": "address"
@@ -1545,13 +1545,13 @@
         "internalType": "uint256"
       },
       {
-        "name": "owner",
+        "name": "serviceProvider",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "beneficiary",
+        "name": "payee",
         "type": "address",
         "indexed": true,
         "internalType": "address"

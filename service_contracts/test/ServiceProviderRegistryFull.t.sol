@@ -107,7 +107,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
     function testInitialState() public view {
         assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
-        assertEq(registry.owner(), owner, "Owner should be deployer");
+        assertEq(registry.owner(), owner, "Service provider should be deployer");
         assertEq(registry.getNextProviderId(), 1, "Next provider ID should start at 1");
         assertEq(registry.REGISTRATION_FEE(), 5 ether, "Registration fee should be 5 FIL");
         assertEq(registry.REGISTRATION_FEE(), 5 ether, "Registration fee constant should be 5 FIL");
@@ -164,15 +164,15 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(providerId, 1, "Provider ID should be 1");
         ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
             registry.getProviderByAddress(provider1);
-        assertEq(providerInfo.owner, provider1, "Provider address should match");
+        assertEq(providerInfo.serviceProvider, provider1, "Provider address should match");
         assertTrue(providerInfo.isActive, "Provider should be active");
         assertTrue(registry.isRegisteredProvider(provider1), "Provider should be registered");
         assertTrue(registry.isProviderActive(1), "Provider should be active");
 
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.owner, provider1, "Owner should be provider1");
-        assertEq(info.beneficiary, provider1, "Beneficiary should be provider1");
+        assertEq(info.serviceProvider, provider1, "Service provider should be provider1");
+        assertEq(info.payee, provider1, "Payee should be provider1");
         assertEq(info.name, "", "Name should be empty");
         assertEq(info.description, "Test provider description", "Description should match");
         assertTrue(info.isActive, "Provider should be active");
@@ -409,7 +409,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify provider was not registered
         ServiceProviderRegistryStorage.ServiceProviderInfo memory notRegisteredInfo =
             registry.getProviderByAddress(provider1);
-        assertEq(notRegisteredInfo.owner, address(0), "Provider should not be registered");
+        assertEq(notRegisteredInfo.serviceProvider, address(0), "Provider should not be registered");
     }
 
     function testRegisterWithInvalidData() public {
@@ -679,13 +679,13 @@ contract ServiceProviderRegistryFullTest is Test {
         assertFalse(registry.isProviderActive(1), "Provider should be inactive");
         assertFalse(registry.isRegisteredProvider(provider1), "Provider should not be registered");
         ServiceProviderRegistryStorage.ServiceProviderInfo memory removedInfo = registry.getProviderByAddress(provider1);
-        assertEq(removedInfo.owner, address(0), "Address lookup should return empty");
+        assertEq(removedInfo.serviceProvider, address(0), "Address lookup should return empty");
 
         // Verify provider info still exists (soft delete)
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
         assertFalse(info.isActive, "Provider should be marked inactive");
-        assertEq(info.owner, provider1, "Owner should still be recorded");
-        assertEq(info.beneficiary, provider1, "Beneficiary should still be recorded");
+        assertEq(info.serviceProvider, provider1, "Service provider should still be recorded");
+        assertEq(info.payee, provider1, "Payee should still be recorded");
 
         // Verify PDP service is inactive
         (,, bool isActive) = registry.getPDPService(1);

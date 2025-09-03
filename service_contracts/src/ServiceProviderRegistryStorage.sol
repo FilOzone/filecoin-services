@@ -18,8 +18,8 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Main provider information
     struct ServiceProviderInfo {
-        address owner; // Address that controls the provider registration
-        address beneficiary; // Address that receives payments (cannot be changed after registration)
+        address serviceProvider; // Address that controls the provider registration
+        address payee; // Address that receives payments (cannot be changed after registration)
         string name; // Optional provider name (max 128 chars)
         string description; //Service description, ToC, contract info, website..
         bool isActive;

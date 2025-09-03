@@ -17,12 +17,10 @@ library Errors {
         FilCDNController,
         /// Session Key Registry contract address
         SessionKeyRegistry,
-        /// Creator address
-        Creator,
-        /// Payer address
-        Payer,
         /// Service provider address
         ServiceProvider,
+        /// Payer address
+        Payer,
         /// ServiceProviderRegistry contract address
         ServiceProviderRegistry,
         /// FilCDN beneficiary address

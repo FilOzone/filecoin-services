@@ -1290,7 +1290,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Only the data set's owner is updated
         FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(testDataSetId);
-        assertEq(dataSet.owner, sp2, "Owner should be updated to new service provider");
+        assertEq(dataSet.serviceProvider, sp2, "Service provider should be updated to new service provider");
         // Payee should remain unchanged (still sp1's beneficiary)
         assertEq(dataSet.payee, sp1, "Payee should remain unchanged");
     }
@@ -1365,9 +1365,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         // ps1 owner updated, ps2 owner unchanged
         FilecoinWarmStorageService.DataSetInfo memory dataSet1 = viewContract.getDataSet(ps1);
         FilecoinWarmStorageService.DataSetInfo memory dataSet2 = viewContract.getDataSet(ps2);
-        assertEq(dataSet1.owner, sp2, "ps1 owner should be sp2");
+        assertEq(dataSet1.serviceProvider, sp2, "ps1 owner should be sp2");
         assertEq(dataSet1.payee, sp1, "ps1 payee should remain sp1");
-        assertEq(dataSet2.owner, sp1, "ps2 owner should remain sp1");
+        assertEq(dataSet2.serviceProvider, sp1, "ps2 owner should remain sp1");
         assertEq(dataSet2.payee, sp1, "ps2 payee should remain sp1");
     }
 
@@ -1383,7 +1383,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
         FilecoinWarmStorageService.DataSetInfo memory dataSet = viewContract.getDataSet(testDataSetId);
-        assertEq(dataSet.owner, sp2, "Owner should be updated to new service provider");
+        assertEq(dataSet.serviceProvider, sp2, "Service provider should be updated to new service provider");
         assertEq(dataSet.payee, sp1, "Payee should remain unchanged");
     }
 

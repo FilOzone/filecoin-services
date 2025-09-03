@@ -131,7 +131,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "creator",
+        "name": "serviceProvider",
         "type": "address",
         "internalType": "address"
       },
@@ -994,13 +994,13 @@
         "internalType": "address"
       },
       {
-        "name": "creator",
+        "name": "serviceProvider",
         "type": "address",
         "indexed": false,
         "internalType": "address"
       },
       {
-        "name": "beneficiary",
+        "name": "payee",
         "type": "address",
         "indexed": false,
         "internalType": "address"

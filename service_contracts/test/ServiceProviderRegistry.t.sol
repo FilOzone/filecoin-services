@@ -35,7 +35,7 @@ contract ServiceProviderRegistryTest is Test {
         assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
 
         // Check owner
-        assertEq(registry.owner(), owner, "Owner should be deployer");
+        assertEq(registry.owner(), owner, "Service provider should be deployer");
 
         // Check next provider ID
         assertEq(registry.getNextProviderId(), 1, "Next provider ID should start at 1");
@@ -204,8 +204,8 @@ contract ServiceProviderRegistryTest is Test {
 
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(providerId);
-        assertEq(info.owner, user1, "Owner should be user1");
-        assertEq(info.beneficiary, user2, "Beneficiary should be user2");
+        assertEq(info.serviceProvider, user1, "Service provider should be user1");
+        assertEq(info.payee, user2, "Payee should be user2");
         assertTrue(info.isActive, "Provider should be active");
     }
 
@@ -231,7 +231,7 @@ contract ServiceProviderRegistryTest is Test {
 
         // Try to register with zero beneficiary
         vm.prank(user1);
-        vm.expectRevert("Beneficiary cannot be zero address");
+        vm.expectRevert("Payee cannot be zero address");
         registry.registerProvider{value: 5 ether}(
             address(0), // zero beneficiary
             "Provider One",
@@ -279,8 +279,8 @@ contract ServiceProviderRegistryTest is Test {
 
         // Now get provider should work
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.owner, user1, "Owner should be user1");
-        assertEq(info.beneficiary, user1, "Beneficiary should be user1");
+        assertEq(info.serviceProvider, user1, "Service provider should be user1");
+        assertEq(info.payee, user1, "Payee should be user1");
     }
 
     // Note: We can't test non-PDP product types since Solidity doesn't allow
@@ -303,6 +303,6 @@ contract ServiceProviderRegistryTest is Test {
     function testTransferOwnership() public {
         // Transfer ownership
         registry.transferOwnership(user1);
-        assertEq(registry.owner(), user1, "Owner should be transferred");
+        assertEq(registry.owner(), user1, "Service provider should be transferred");
     }
 }

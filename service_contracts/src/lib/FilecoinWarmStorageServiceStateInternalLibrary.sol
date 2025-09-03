@@ -98,7 +98,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         info.cdnRailId = uint256(info11[2]);
         info.payer = address(uint160(uint256(info11[3])));
         info.payee = address(uint160(uint256(info11[4])));
-        info.owner = address(uint160(uint256(info11[5])));
+        info.serviceProvider = address(uint160(uint256(info11[5])));
         info.commissionBps = uint256(info11[6]);
         info.clientDataSetId = uint256(info11[7]);
         info.pdpEndEpoch = uint256(info11[8]);

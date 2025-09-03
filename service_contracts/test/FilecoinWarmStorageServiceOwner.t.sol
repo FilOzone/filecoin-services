@@ -304,11 +304,11 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         // Check that owner is set to the creator (provider1)
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
 
-        assertEq(info.owner, provider1, "Owner should be set to creator");
+        assertEq(info.serviceProvider, provider1, "Service provider should be set to creator");
         assertEq(info.payer, client, "Payer should be set correctly");
         assertEq(info.payee, provider1, "Payee should be provider's beneficiary");
 
-        console.log("Owner field correctly set to creator:", provider1);
+        console.log("Service provider field correctly set to creator:", provider1);
     }
 
     function testStorageProviderChangedUpdatesOnlyOwnerField() public {
@@ -318,7 +318,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         // Get initial state
         FilecoinWarmStorageService.DataSetInfo memory infoBefore = viewContract.getDataSet(dataSetId);
-        assertEq(infoBefore.owner, provider1, "Initial owner should be provider1");
+        assertEq(infoBefore.serviceProvider, provider1, "Initial owner should be provider1");
 
         // Change storage provider
         vm.expectEmit(true, true, true, true);
@@ -330,11 +330,11 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         // Check updated state
         FilecoinWarmStorageService.DataSetInfo memory infoAfter = viewContract.getDataSet(dataSetId);
 
-        assertEq(infoAfter.owner, provider2, "Owner should be updated to provider2");
+        assertEq(infoAfter.serviceProvider, provider2, "Service provider should be updated to provider2");
         assertEq(infoAfter.payee, provider1, "Payee should remain unchanged");
         assertEq(infoAfter.payer, client, "Payer should remain unchanged");
 
-        console.log("Owner updated from", provider1, "to", provider2);
+        console.log("Service provider updated from", provider1, "to", provider2);
         console.log("Payee remained unchanged:", provider1);
     }
 
@@ -434,17 +434,17 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
 
         FilecoinWarmStorageService.DataSetInfo memory info1 = viewContract.getDataSet(dataSetId);
-        assertEq(info1.owner, provider2, "Owner should be provider2 after first change");
+        assertEq(info1.serviceProvider, provider2, "Service provider should be provider2 after first change");
 
         // Second change: provider2 -> provider3
         vm.prank(provider3);
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider3, address(serviceContract), new bytes(0));
 
         FilecoinWarmStorageService.DataSetInfo memory info2 = viewContract.getDataSet(dataSetId);
-        assertEq(info2.owner, provider3, "Owner should be provider3 after second change");
+        assertEq(info2.serviceProvider, provider3, "Service provider should be provider3 after second change");
         assertEq(info2.payee, provider1, "Payee should still be original provider1");
 
-        console.log("Owner changed successfully: provider1 -> provider2 -> provider3");
+        console.log("Service provider changed successfully: provider1 -> provider2 -> provider3");
         console.log("Payee remained as provider1 throughout");
     }
 }

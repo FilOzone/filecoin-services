@@ -195,7 +195,7 @@
             "internalType": "address"
           },
           {
-            "name": "owner",
+            "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
           },
@@ -271,7 +271,7 @@
             "internalType": "address"
           },
           {
-            "name": "owner",
+            "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
           },
