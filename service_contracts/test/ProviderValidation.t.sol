@@ -143,7 +143,12 @@ contract ProviderValidationTest is Test {
             sessionKeyRegistry
         );
         bytes memory warmStorageInitData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60), filCDNController
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "Provider Validation Test Service",
+            "Test service for provider validation"
         );
         MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), warmStorageInitData);
         warmStorage = FilecoinWarmStorageService(address(warmStorageProxy));

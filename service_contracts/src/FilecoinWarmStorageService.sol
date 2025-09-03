@@ -41,10 +41,11 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string private constant VERSION = "0.1.0";
+    string public constant VERSION = "0.1.0";
 
     // Events
     event ContractUpgraded(string version, address implementation);
+    event FilecoinServiceDeployed(string name, string description);
     event DataSetServiceProviderChanged(
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
@@ -233,6 +234,10 @@ contract FilecoinWarmStorageService is
     // The address allowed to terminate CDN services
     address private filCDNControllerAddress;
 
+    // Service information
+    string public serviceName;
+    string public serviceDescription;
+
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
@@ -298,11 +303,16 @@ contract FilecoinWarmStorageService is
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      * @param _filCDNControllerAddress Address authorized to terminate CDN services
+     * @param _name Service name (max 256 characters, cannot be empty)
+     * @param _description Service description (max 256 characters, cannot be empty)
      */
-    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize, address _filCDNControllerAddress)
-        public
-        initializer
-    {
+    function initialize(
+        uint64 _maxProvingPeriod,
+        uint256 _challengeWindowSize,
+        address _filCDNControllerAddress,
+        string memory _name,
+        string memory _description
+    ) public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
@@ -315,6 +325,19 @@ contract FilecoinWarmStorageService is
 
         require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
         filCDNControllerAddress = _filCDNControllerAddress;
+
+        // Validate name and description
+        require(bytes(_name).length > 0, "Service name cannot be empty");
+        require(bytes(_name).length <= 256, "Service name exceeds 256 characters");
+        require(bytes(_description).length > 0, "Service description cannot be empty");
+        require(bytes(_description).length <= 256, "Service description exceeds 256 characters");
+
+        // Store service information
+        serviceName = _name;
+        serviceDescription = _description;
+
+        // Emit the FilecoinServiceDeployed event
+        emit FilecoinServiceDeployed(_name, _description);
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;

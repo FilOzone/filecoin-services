@@ -446,7 +446,9 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController // filCDNControllerAddress
+            filCDNController, // filCDNControllerAddress
+            "Filecoin Warm Storage Service", // service name
+            "A decentralized storage service with proof-of-data-possession and payment integration" // service description
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
@@ -496,6 +498,149 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(maxProvingPeriod, 2880, "Max proving period should be set correctly");
         assertEq(challengeWindow, 60, "Challenge window size should be set correctly");
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
+    }
+
+    function testFilecoinServiceDeployedEvent() public {
+        // Deploy a new service instance to test the event
+        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        // Expected event parameters
+        string memory expectedName = "Test Event Service";
+        string memory expectedDescription = "Service for testing events";
+
+        bytes memory initData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            expectedName,
+            expectedDescription
+        );
+
+        // Expect the FilecoinServiceDeployed event
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.FilecoinServiceDeployed(expectedName, expectedDescription);
+
+        // Deploy the proxy which triggers the initialize function
+        MyERC1967Proxy newServiceProxy = new MyERC1967Proxy(address(newServiceImpl), initData);
+        FilecoinWarmStorageService newService = FilecoinWarmStorageService(address(newServiceProxy));
+    }
+
+    function testServiceNameAndDescriptionValidation() public {
+        // Test empty name validation
+        FilecoinWarmStorageService serviceImpl1 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        bytes memory initDataEmptyName = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "", // empty name
+            "Valid description"
+        );
+
+        vm.expectRevert("Service name cannot be empty");
+        new MyERC1967Proxy(address(serviceImpl1), initDataEmptyName);
+
+        // Test empty description validation
+        FilecoinWarmStorageService serviceImpl2 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        bytes memory initDataEmptyDesc = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "Valid name",
+            "" // empty description
+        );
+
+        vm.expectRevert("Service description cannot be empty");
+        new MyERC1967Proxy(address(serviceImpl2), initDataEmptyDesc);
+
+        // Test name exceeding 256 characters
+        FilecoinWarmStorageService serviceImpl3 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        string memory longName = string(
+            abi.encodePacked(
+                "This is a very long name that exceeds the maximum allowed length of 256 characters. ",
+                "It needs to be long enough to trigger the validation error in the contract. ",
+                "Adding more text here to ensure we go past the limit. ",
+                "Still need more characters to exceed 256 total length for this test case to work properly. ",
+                "Almost there, just a bit more text needed to push us over the limit."
+            )
+        );
+
+        bytes memory initDataLongName = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            longName,
+            "Valid description"
+        );
+
+        vm.expectRevert("Service name exceeds 256 characters");
+        new MyERC1967Proxy(address(serviceImpl3), initDataLongName);
+
+        // Test description exceeding 256 characters
+        FilecoinWarmStorageService serviceImpl4 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        string memory longDesc = string(
+            abi.encodePacked(
+                "This is a very long description that exceeds the maximum allowed length of 256 characters. ",
+                "It needs to be long enough to trigger the validation error in the contract. ",
+                "Adding more text here to ensure we go past the limit. ",
+                "Still need more characters to exceed 256 total length for this test case to work properly. ",
+                "Almost there, just a bit more text needed to push us over the limit."
+            )
+        );
+
+        bytes memory initDataLongDesc = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "Valid name",
+            longDesc
+        );
+
+        vm.expectRevert("Service description exceeds 256 characters");
+        new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)
@@ -2786,7 +2931,9 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController // filCDNControllerAddress
+            filCDNController, // filCDNControllerAddress
+            "Test Service", // service name
+            "Test Description" // service description
         );
 
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
@@ -2895,7 +3042,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController // filCDNControllerAddress
+            filCDNController, // filCDNControllerAddress
+            "Test Service", // service name
+            "Test Description" // service description
         );
 
         MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), initData);
