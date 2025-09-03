@@ -234,7 +234,7 @@ contract FilecoinWarmStorageService is
     // The address allowed to terminate CDN services
     address private filCDNControllerAddress;
 
-    // Service information (added at the end to preserve storage layout for upgrades)
+    // Service information
     string public serviceName;
     string public serviceDescription;
 
