@@ -120,6 +120,7 @@ contract MockPDPVerifier {
     event DataSetServiceProviderChanged(
         uint256 indexed setId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
+    event DataSetDeleted(uint256 indexed setId, uint256 deletedLeafCount);
 
     // Basic implementation to create data sets and call the listener
     function createDataSet(PDPListener listenerAddr, bytes calldata extraData) public payable returns (uint256) {
@@ -135,6 +136,15 @@ contract MockPDPVerifier {
 
         emit DataSetCreated(setId, msg.sender);
         return setId;
+    }
+
+    function deleteDataSet(address listenerAddr, uint256 setId, bytes calldata extraData) public {
+        if (listenerAddr != address(0)) {
+            PDPListener(listenerAddr).dataSetDeleted(setId, 0, extraData);
+        }
+
+        delete dataSetServiceProviders[setId];
+        emit DataSetDeleted(setId, 0);
     }
 
     function addPieces(
@@ -442,7 +452,6 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -450,7 +459,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
-            uint256(60) // challengeWindowSize
+            uint256(60), // challengeWindowSize
+            filCDNController, // filCDNControllerAddress
+            "Filecoin Warm Storage Service", // service name
+            "A decentralized storage service with proof-of-data-possession and payment integration" // service description
         );
 
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
@@ -490,9 +502,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(
-            pdpServiceWithPayments.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly"
-        );
+        assertEq(viewContract.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly");
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -502,6 +512,149 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(maxProvingPeriod, 2880, "Max proving period should be set correctly");
         assertEq(challengeWindow, 60, "Challenge window size should be set correctly");
         assertEq(challengesPerProof, 5, "Challenges per proof should be 5");
+    }
+
+    function testFilecoinServiceDeployedEvent() public {
+        // Deploy a new service instance to test the event
+        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        // Expected event parameters
+        string memory expectedName = "Test Event Service";
+        string memory expectedDescription = "Service for testing events";
+
+        bytes memory initData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            expectedName,
+            expectedDescription
+        );
+
+        // Expect the FilecoinServiceDeployed event
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.FilecoinServiceDeployed(expectedName, expectedDescription);
+
+        // Deploy the proxy which triggers the initialize function
+        MyERC1967Proxy newServiceProxy = new MyERC1967Proxy(address(newServiceImpl), initData);
+        FilecoinWarmStorageService newService = FilecoinWarmStorageService(address(newServiceProxy));
+    }
+
+    function testServiceNameAndDescriptionValidation() public {
+        // Test empty name validation
+        FilecoinWarmStorageService serviceImpl1 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        bytes memory initDataEmptyName = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "", // empty name
+            "Valid description"
+        );
+
+        vm.expectRevert("Service name cannot be empty");
+        new MyERC1967Proxy(address(serviceImpl1), initDataEmptyName);
+
+        // Test empty description validation
+        FilecoinWarmStorageService serviceImpl2 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        bytes memory initDataEmptyDesc = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "Valid name",
+            "" // empty description
+        );
+
+        vm.expectRevert("Service description cannot be empty");
+        new MyERC1967Proxy(address(serviceImpl2), initDataEmptyDesc);
+
+        // Test name exceeding 256 characters
+        FilecoinWarmStorageService serviceImpl3 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        string memory longName = string(
+            abi.encodePacked(
+                "This is a very long name that exceeds the maximum allowed length of 256 characters. ",
+                "It needs to be long enough to trigger the validation error in the contract. ",
+                "Adding more text here to ensure we go past the limit. ",
+                "Still need more characters to exceed 256 total length for this test case to work properly. ",
+                "Almost there, just a bit more text needed to push us over the limit."
+            )
+        );
+
+        bytes memory initDataLongName = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            longName,
+            "Valid description"
+        );
+
+        vm.expectRevert("Service name exceeds 256 characters");
+        new MyERC1967Proxy(address(serviceImpl3), initDataLongName);
+
+        // Test description exceeding 256 characters
+        FilecoinWarmStorageService serviceImpl4 = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            address(mockUSDFC),
+            filCDNBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        string memory longDesc = string(
+            abi.encodePacked(
+                "This is a very long description that exceeds the maximum allowed length of 256 characters. ",
+                "It needs to be long enough to trigger the validation error in the contract. ",
+                "Adding more text here to ensure we go past the limit. ",
+                "Still need more characters to exceed 256 total length for this test case to work properly. ",
+                "Almost there, just a bit more text needed to push us over the limit."
+            )
+        );
+
+        bytes memory initDataLongDesc = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filCDNController,
+            "Valid name",
+            longDesc
+        );
+
+        vm.expectRevert("Service description exceeds 256 characters");
+        new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)
@@ -946,6 +1099,22 @@ contract FilecoinWarmStorageServiceTest is Test {
         return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
+    /**
+     * @notice Helper function to delete a data set for a client
+     * @dev This function creates the necessary delete signature and calls the PDP verifier
+     * @param provider The service provider address who owns the data set
+     * @param clientAddress The client address who should sign the deletion
+     * @param dataSetId The ID of the data set to delete
+     */
+    function deleteDataSetForClient(address provider, address clientAddress, uint256 dataSetId) internal {
+        bytes memory signature = abi.encode(FAKE_SIGNATURE);
+
+        makeSignaturePass(clientAddress);
+        // Delete the data set as the provider
+        vm.prank(provider);
+        mockPDPVerifier.deleteDataSet(address(pdpServiceWithPayments), dataSetId, signature);
+    }
+
     function testGetClientDataSets_EmptyClient() public view {
         // Test with a client that has no data sets
         FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
@@ -995,7 +1164,75 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSets[1].clientDataSetId, 1, "Second data set ID should be 1");
     }
 
-    // Data Set Service Provider Change Tests
+    function testGetClientDataSets_TerminatedDataSets() public {
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        (string[] memory metadataKeys3, string[] memory metadataValues3) = _getSingleMetadataKV("label", "Metadata 3");
+
+        // Create multiple data sets for the client
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSet2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+        createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
+
+        // Verify we have 3 datasets initially
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 3, "Should return three data sets initially");
+
+        // Terminate the second dataset (dataSet2) - client terminates
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSet2);
+
+        // Verify the dataset is now terminated (paymentEndEpoch > 0)
+        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set after termination");
+
+        // Verify getClientDataSets still returns all 3 datasets (termination doesn't exclude from list)
+        dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 3, "Should return all three data sets after termination");
+
+        // Verify the terminated dataset has correct status
+        assertTrue(dataSets[1].pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch > 0");
+    }
+
+    function testGetClientDataSets_ExcludesDeletedDataSets() public {
+        // Create multiple data sets for the client
+        (string[] memory metadataKeys1, string[] memory metadataValues1) = _getSingleMetadataKV("label", "Metadata 1");
+        (string[] memory metadataKeys2, string[] memory metadataValues2) = _getSingleMetadataKV("label", "Metadata 2");
+        (string[] memory metadataKeys3, string[] memory metadataValues3) = _getSingleMetadataKV("label", "Metadata 3");
+
+        createDataSetForClient(sp1, client, metadataKeys1, metadataValues1);
+        uint256 dataSet2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
+        createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
+
+        // Verify we have 3 datasets initially
+        FilecoinWarmStorageService.DataSetInfo[] memory dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 3, "Should return three data sets initially");
+
+        // Terminate the second dataset (dataSet2)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSet2);
+
+        // Verify termination status
+        FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
+
+        // Advance block number to be greater than the end epoch to allow deletion
+        vm.roll(terminatedInfo.pdpEndEpoch + 1);
+
+        // Delete the second dataset (dataSet2) - this should completely remove it
+        deleteDataSetForClient(sp2, client, dataSet2);
+
+        // Verify getClientDataSets now only returns 2 datasets (the deleted one is completely gone)
+        dataSets = viewContract.getClientDataSets(client);
+        assertEq(dataSets.length, 2, "Should return only 2 data sets after deletion");
+
+        // Verify the deleted dataset is completely gone
+        for (uint256 i = 0; i < dataSets.length; i++) {
+            assertTrue(dataSets[i].clientDataSetId != 1, "Deleted dataset should not be in returned array");
+        }
+    }
+
+    // ===== Data Set Service Provider Change Tests =====
 
     /**
      * @notice Helper function to create a data set and return its ID
@@ -1384,7 +1621,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
             filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
@@ -1495,7 +1732,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 3. Try to terminate payment from FilCDN address
         console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
         console.log("Current block:", block.number);
-        vm.prank(pdpServiceWithPayments.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
             filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
@@ -1546,6 +1783,30 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(filCDNController);
         vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
+    }
+
+    function testTransferCDNController() public {
+        address newController = address(0xDEADBEEF);
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.transferFilCDNController(newController);
+        assertEq(viewContract.filCDNControllerAddress(), newController, "CDN controller should be updated");
+
+        // Attempt transfer from old controller should revert
+        vm.prank(filCDNController);
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, newController, filCDNController)
+        );
+        pdpServiceWithPayments.transferFilCDNController(address(0x1234));
+
+        // Restore the original state
+        vm.prank(newController);
+        pdpServiceWithPayments.transferFilCDNController(filCDNController);
+    }
+
+    function testTransferCDNController_revertsIfZeroAddress() public {
+        vm.prank(filCDNController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilCDNController));
+        pdpServiceWithPayments.transferFilCDNController(address(0));
     }
 
     // Data Set Metadata Storage Tests
@@ -2688,7 +2949,6 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         address _usdfcTokenAddress,
-        address _filCDNAddressController,
         address _filCDNAddressBeneficiary,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -2697,7 +2957,6 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
-            _filCDNAddressController,
             _filCDNAddressBeneficiary,
             _serviceProviderRegistry,
             _sessionKeyRegistry
@@ -2767,7 +3026,6 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -2775,7 +3033,10 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
-            uint256(60) // challengeWindowSize
+            uint256(60), // challengeWindowSize
+            filCDNController, // filCDNControllerAddress
+            "Test Service", // service name
+            "Test Description" // service description
         );
 
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
@@ -2876,7 +3137,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             address(mockUSDFC),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -2884,7 +3144,10 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
-            uint256(60) // challengeWindowSize
+            uint256(60), // challengeWindowSize
+            filCDNController, // filCDNControllerAddress
+            "Test Service", // service name
+            "Test Description" // service description
         );
 
         MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), initData);

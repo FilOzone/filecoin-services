@@ -10,8 +10,8 @@ echo
 
 forge inspect --json $1 storageLayout \
     | jq -rM 'reduce .storage.[] as {$label,$slot} (null; . += "bytes32 constant " + (
-            $label | [ splits("(?=[A-Z])") ]
-            | map(
-                select(. != "") | ascii_upcase
-            ) | join("_")
+            $label
+                | [scan("[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z0-9]+")]
+                | map(ascii_upcase)
+                | join("_")
         ) + "_SLOT = bytes32(uint256(" + $slot + "));\n")'

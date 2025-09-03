@@ -195,14 +195,19 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
             address(pdpVerifier),
             address(payments),
             address(usdfcToken),
-            filCDNController,
             filCDNBeneficiary,
             providerRegistry,
             sessionKeyRegistry
         );
 
-        bytes memory serviceInitData =
-            abi.encodeWithSelector(FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(1440));
+        bytes memory serviceInitData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(1440),
+            filCDNController,
+            "Test Service",
+            "Test Description"
+        );
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), serviceInitData);
         serviceContract = FilecoinWarmStorageService(address(serviceProxy));
 

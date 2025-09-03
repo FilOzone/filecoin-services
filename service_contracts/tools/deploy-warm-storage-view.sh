@@ -1,7 +1,6 @@
 #!/bin/bash
 
 # env params:
-# CHAIN_ID
 # RPC_URL
 # WARM_STORAGE_SERVICE_ADDRESS
 # KEYSTORE
@@ -11,14 +10,18 @@
 # - called from service_contracts directory
 # - PATH has forge and cast
 
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=314159
-  echo "CHAIN_ID not set, assuming Calibnet ($CHAIN_ID)"
-fi
-
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
+fi
+
+# Auto-detect chain ID from RPC if not already set
+if [ -z "$CHAIN_ID" ]; then
+  CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+  if [ -z "$CHAIN_ID" ]; then
+    echo "Error: Failed to detect chain ID from RPC"
+    exit 1
+  fi
 fi
 
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then

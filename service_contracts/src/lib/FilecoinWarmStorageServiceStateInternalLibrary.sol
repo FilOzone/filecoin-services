@@ -232,6 +232,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return deadline + periodsSkipped * maxProvingPeriod - challengeWindowSize;
     }
 
+    /**
+     * @dev To determine termination status: check if paymentEndEpoch != 0.
+     * If paymentEndEpoch > 0, the rails have already been terminated.
+     * @dev To determine deletion status: deleted datasets don't appear in
+     * getClientDataSets() anymore - they are completely removed.
+     */
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         internal
         view
@@ -415,5 +421,14 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         assembly ("memory-safe") {
             providerIds := result
         }
+    }
+
+    /**
+     * @notice Get the FIL CDN Controller address
+     * @param service The service contract
+     * @return The FIL CDN Controller address
+     */
+    function filCDNControllerAddress(FilecoinWarmStorageService service) internal view returns (address) {
+        return address(uint160(uint256(service.extsload(FIL_CDN_CONTROLLER_ADDRESS_SLOT))));
     }
 }
