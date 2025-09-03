@@ -259,4 +259,11 @@ library Errors {
     /// @notice CDN payment is already terminated
     /// @param dataSetId The data set ID
     error FilCDNPaymentAlreadyTerminated(uint256 dataSetId);
+
+    /// @notice Payment rails have not finalized yet
+    /// @param dataSetId The data set ID
+    /// @param pdpEndEpoch The end epoch when the PDP payment rail will finalize
+    /// @param cdnEndEpoch The end epoch when the CDN payment rail will finalize (0 if no CDN)
+    /// @param currentEpoch The current epoch
+    error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch, uint256 cdnEndEpoch, uint256 currentEpoch);
 }

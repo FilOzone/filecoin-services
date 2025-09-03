@@ -1299,17 +1299,6 @@
   },
   {
     "type": "error",
-    "name": "CDNPaymentNotTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "CallerNotPayerOrPayee",
     "inputs": [
       {
@@ -1441,17 +1430,6 @@
       },
       {
         "name": "currentBlock",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "DataSetPaymentNotTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1857,6 +1835,32 @@
         "name": "account",
         "type": "address",
         "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PaymentRailsNotFinalized",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pdpEndEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnEndEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "currentEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },

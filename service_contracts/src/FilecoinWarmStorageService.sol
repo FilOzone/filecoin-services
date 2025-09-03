@@ -598,11 +598,17 @@ contract FilecoinWarmStorageService is
         // Verify the client's signature
         verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
-        // Check if the data set is terminated
-        require(info.pdpEndEpoch != 0, Errors.DataSetPaymentNotTerminated(dataSetId));
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
-            require(info.cdnEndEpoch != 0, Errors.CDNPaymentNotTerminated(dataSetId));
-        }
+        // Check if the data set is terminated and current epoch is past the end epochs
+        require(
+            info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
+            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch, block.number)
+        );
+
+        // Check CDN payment rail: either no CDN configured (cdnEndEpoch == 0) or past CDN end epoch
+        require(
+            info.cdnEndEpoch == 0 || block.number > info.cdnEndEpoch,
+            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch, block.number)
+        );
 
         // Complete cleanup - remove the dataset from all mappings
         delete dataSetInfo[dataSetId];

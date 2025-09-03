@@ -1069,6 +1069,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfo memory terminatedInfo = viewContract.getDataSet(dataSet2);
         assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
 
+        // Advance block number to be greater than the end epoch to allow deletion
+        vm.roll(terminatedInfo.pdpEndEpoch + 1);
+
         // Delete the second dataset (dataSet2) - this should completely remove it
         deleteDataSetForClient(sp2, client, dataSet2);
 
