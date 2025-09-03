@@ -43,7 +43,9 @@ contract FilecoinWarmStorageService is
     // Version tracking
     string public constant VERSION = "0.1.0";
 
+    // =========================================================================
     // Events
+
     event ContractUpgraded(string version, address implementation);
     event FilecoinServiceDeployed(string name, string description);
     event DataSetServiceProviderChanged(
@@ -80,7 +82,51 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
+    // Events for provider management
+    event ProviderApproved(uint256 indexed providerId);
+    event ProviderUnapproved(uint256 indexed providerId);
+
+    // Event for validation
+    event PaymentArbitrated(
+        uint256 railId, uint256 dataSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
+    );
+
+    // =========================================================================
+    // Structs
+
+    // Storage for data set payment information
+    struct DataSetInfo {
+        uint256 pdpRailId; // ID of the PDP payment rail
+        uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
+        uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
+        address payer; // Address paying for storage
+        address payee; // SP's beneficiary address
+        uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
+        uint256 clientDataSetId; // ClientDataSetID
+        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
+        uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
+    }
+
+    // Decode structure for data set creation extra data
+    struct DataSetCreateData {
+        address payer;
+        string[] metadataKeys;
+        string[] metadataValues;
+        bytes signature; // Authentication signature
+    }
+
+    // Structure for service pricing information
+    struct ServicePricing {
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
+        address tokenAddress; // Address of the USDFC token
+        uint256 epochsPerMonth; // Number of epochs in a month
+    }
+
+    // =========================================================================
     // Constants
+
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
     uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
@@ -119,96 +165,9 @@ contract FilecoinWarmStorageService is
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
 
-    // Commission rates
-    uint256 public serviceCommissionBps;
-
-    // Events for provider management
-    event ProviderApproved(uint256 indexed providerId);
-    event ProviderUnapproved(uint256 indexed providerId);
-
-    // Mapping from client address to clientDataSetId
-    mapping(address => uint256) private clientDataSetIds;
-
-    // Mapping from data set ID to key value pair metadata
-    // dataSetId => (key => value)
-    mapping(uint256 dataSetId => mapping(string key => string value)) internal dataSetMetadata;
-    // dataSetId => array of keys
-    mapping(uint256 dataSetId => string[] keys) internal dataSetMetadataKeys;
-
-    // Mapping from data set ID and piece ID to key value pair metadata
-    // dataSetId => PieceId => (key => value)
-    mapping(uint256 dataSetId => mapping(uint256 pieceId => mapping(string key => string value))) internal
-        dataSetPieceMetadata;
-    // dataSetId => PieceId => array of keys
-    mapping(uint256 dataSetId => mapping(uint256 pieceId => string[] keys)) internal dataSetPieceMetadataKeys;
-
-    // Storage for data set payment information
-    struct DataSetInfo {
-        uint256 pdpRailId; // ID of the PDP payment rail
-        uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
-        uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
-        address payer; // Address paying for storage
-        address payee; // SP's beneficiary address
-        uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
-        uint256 clientDataSetId; // ClientDataSetID
-        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
-        uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
-    }
-
-    // Decode structure for data set creation extra data
-    struct DataSetCreateData {
-        address payer;
-        string[] metadataKeys;
-        string[] metadataValues;
-        bytes signature; // Authentication signature
-    }
-
-    // Structure for service pricing information
-    struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
-        uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
-        address tokenAddress; // Address of the USDFC token
-        uint256 epochsPerMonth; // Number of epochs in a month
-    }
-
-    // Mappings
-    mapping(uint256 => uint256) private provingDeadlines;
-    mapping(uint256 => bool) private provenThisPeriod;
-    mapping(uint256 => DataSetInfo) private dataSetInfo;
-    mapping(address => uint256[]) private clientDataSets;
-
-    // Mapping from rail ID to data set ID for validation
-    mapping(uint256 => uint256) private railToDataSet;
-
-    // Event for validation
-    event PaymentArbitrated(
-        uint256 railId, uint256 dataSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
-    );
-
-    // Track which proving periods have valid proofs
-    mapping(uint256 dataSetId => mapping(uint256 periodId => bool)) private provenPeriods;
-
-    // Track when proving was first activated for each data set
-    mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
-
-    // Proving period constants - set during initialization
-    uint64 private maxProvingPeriod;
-    uint256 private challengeWindowSize;
-
-    // View contract for read-only operations
-    // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
-    // directly instead of going through the view contract for more efficient gas usage.
-    address public viewContractAddress;
-
-    // Approved provider list
-    mapping(uint256 => bool) internal approvedProviders;
-
-    // Array to track all approved provider IDs for enumeration
-    uint256[] internal approvedProviderIds;
-
+    // =========================================================================
     // EIP-712 Type hashes
-    // EIP-712 type definitions with metadata support
+
     bytes32 private constant METADATA_ENTRY_TYPEHASH = keccak256("MetadataEntry(string key,string value)");
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
@@ -231,11 +190,59 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    // =========================================================================
+    // Storage variables
+    //
+    // Each one of these variables is stored in its own storage slot and
+    // corresponds to the layout defined in
+    // FilecoinWarmStorageServiceLayout.sol.
+    // Storage layout should never change to ensure upgradability!
+
+    // Proving period constants - set during initialization
+    uint64 private maxProvingPeriod;
+    uint256 private challengeWindowSize;
+
+    // Commission rate
+    uint256 public serviceCommissionBps;
+
+    // Track which proving periods have valid proofs
+    mapping(uint256 dataSetId => mapping(uint256 periodId => bool)) private provenPeriods;
+    // Track when proving was first activated for each data set
+    mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
+
+    mapping(uint256 => uint256) private provingDeadlines;
+    mapping(uint256 => bool) private provenThisPeriod;
+
+    mapping(uint256 => DataSetInfo) private dataSetInfo;
+    mapping(address => uint256) private clientDataSetIds;
+    mapping(address => uint256[]) private clientDataSets;
+    mapping(uint256 => uint256) private railToDataSet;
+
+    // dataSetId => (key => value)
+    mapping(uint256 dataSetId => mapping(string key => string value)) internal dataSetMetadata;
+    // dataSetId => array of keys
+    mapping(uint256 dataSetId => string[] keys) internal dataSetMetadataKeys;
+    // dataSetId => PieceId => (key => value)
+    mapping(uint256 dataSetId => mapping(uint256 pieceId => mapping(string key => string value))) internal
+        dataSetPieceMetadata;
+    // dataSetId => PieceId => array of keys
+    mapping(uint256 dataSetId => mapping(uint256 pieceId => string[] keys)) internal dataSetPieceMetadataKeys;
+
+    // Approved provider list
+    mapping(uint256 => bool) internal approvedProviders;
+    uint256[] internal approvedProviderIds;
+
+    // View contract for read-only operations
+    // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
+    // directly instead of going through the view contract for more efficient gas usage.
+    address public viewContractAddress;
+
     // The address allowed to terminate CDN services
     address private filCDNControllerAddress;
 
-    // Modifier to ensure only the PDP verifier contract can call certain functions
+    // =========================================================================
 
+    // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
         require(msg.sender == pdpVerifierAddress, Errors.OnlyPDPVerifierAllowed(pdpVerifierAddress, msg.sender));
         _;
