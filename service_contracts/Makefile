@@ -144,6 +144,8 @@ ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
+	Payments \
+	PDPVerifier \
 	ServiceProviderRegistry \
 	SessionKeyRegistry
 
