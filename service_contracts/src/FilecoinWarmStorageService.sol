@@ -234,10 +234,6 @@ contract FilecoinWarmStorageService is
     // The address allowed to terminate CDN services
     address private filCDNControllerAddress;
 
-    // Service information
-    string public serviceName;
-    string public serviceDescription;
-
     // Modifier to ensure only the PDP verifier contract can call certain functions
 
     modifier onlyPDPVerifier() {
@@ -331,10 +327,6 @@ contract FilecoinWarmStorageService is
         require(bytes(_name).length <= 256, "Service name exceeds 256 characters");
         require(bytes(_description).length > 0, "Service description cannot be empty");
         require(bytes(_description).length <= 256, "Service description exceeds 256 characters");
-
-        // Store service information
-        serviceName = _name;
-        serviceDescription = _description;
 
         // Emit the FilecoinServiceDeployed event
         emit FilecoinServiceDeployed(_name, _description);
