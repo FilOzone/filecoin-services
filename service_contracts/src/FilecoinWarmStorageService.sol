@@ -41,7 +41,11 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string private constant VERSION = "0.1.0";
+    string public constant VERSION = "0.1.0";
+
+    // Service information
+    string public serviceName;
+    string public serviceDescription;
 
     // Events
     event ContractUpgraded(string version, address implementation);
@@ -304,6 +308,10 @@ contract FilecoinWarmStorageService is
         require(bytes(_name).length <= 256, "Service name exceeds 256 characters");
         require(bytes(_description).length > 0, "Service description cannot be empty");
         require(bytes(_description).length <= 256, "Service description exceeds 256 characters");
+
+        // Store service information
+        serviceName = _name;
+        serviceDescription = _description;
 
         // Emit the FilecoinServiceDeployed event
         emit FilecoinServiceDeployed(_name, _description);
