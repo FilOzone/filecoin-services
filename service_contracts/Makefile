@@ -144,7 +144,8 @@ ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
-	ServiceProviderRegistry
+	ServiceProviderRegistry \
+	SessionKeyRegistry
 
 # Generate ABI file targets
 ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
