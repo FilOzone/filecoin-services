@@ -138,13 +138,13 @@ contract ProviderValidationTest is Test {
             address(pdpVerifier),
             address(payments),
             address(usdfc),
-            filCDNController,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
-        bytes memory warmStorageInitData =
-            abi.encodeWithSelector(FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60));
+        bytes memory warmStorageInitData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60), filCDNController
+        );
         MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), warmStorageInitData);
         warmStorage = FilecoinWarmStorageService(address(warmStorageProxy));
 
