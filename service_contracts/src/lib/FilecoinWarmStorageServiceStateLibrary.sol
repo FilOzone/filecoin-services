@@ -88,7 +88,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (FilecoinWarmStorageService.DataSetInfo memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
-        bytes32[] memory info9 = service.extsloadStruct(slot, 9);
+        bytes32[] memory info9 = service.extsloadStruct(slot, 10);
         info.pdpRailId = uint256(info9[0]);
         info.cacheMissRailId = uint256(info9[1]);
         info.cdnRailId = uint256(info9[2]);
@@ -96,8 +96,9 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.payee = address(uint160(uint256(info9[4])));
         info.commissionBps = uint256(info9[5]);
         info.clientDataSetId = uint256(info9[6]);
-        info.paymentEndEpoch = uint256(info9[7]);
+        info.pdpEndEpoch = uint256(info9[7]);
         info.providerId = uint256(info9[8]);
+        info.cdnEndEpoch = uint256(info9[9]);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)

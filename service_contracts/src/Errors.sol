@@ -13,8 +13,8 @@ library Errors {
         Payments,
         /// USDFC contract address
         USDFC,
-        /// FilecoinCDN service contract address
-        FilecoinCDN,
+        /// FilCDN controller address
+        FilCDNController,
         /// Session Key Registry contract address
         SessionKeyRegistry,
         /// Creator address
@@ -24,7 +24,9 @@ library Errors {
         /// Service provider address
         ServiceProvider,
         /// ServiceProviderRegistry contract address
-        ServiceProviderRegistry
+        ServiceProviderRegistry,
+        /// FilCDN beneficiary address
+        FilCDNBeneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -141,9 +143,9 @@ library Errors {
 
     /// @notice Data set is beyond its payment end epoch
     /// @param dataSetId The data set ID
-    /// @param paymentEndEpoch The payment end epoch for the data set
+    /// @param pdpEndEpoch The payment end epoch for the data set
     /// @param currentBlock The current block number
-    error DataSetPaymentBeyondEndEpoch(uint256 dataSetId, uint256 paymentEndEpoch, uint256 currentBlock);
+    error DataSetPaymentBeyondEndEpoch(uint256 dataSetId, uint256 pdpEndEpoch, uint256 currentBlock);
 
     /// @notice No PDP payment rail is configured for the given data set
     /// @param dataSetId The data set ID
@@ -236,4 +238,17 @@ library Errors {
     /// @param metadataArrayCount The number of metadata arrays provided
     /// @param pieceCount The number of pieces being added
     error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
+
+    /// @notice FilCDN service is not configured for the given data set
+    /// @param dataSetId The data set ID
+    error FilCDNServiceNotConfigured(uint256 dataSetId);
+
+    /// @notice Only the FilCDN controller address can call this function
+    /// @param expected The expected FilCDN controller address
+    /// @param actual The caller address
+    error OnlyFilCDNControllerAllowed(address expected, address actual);
+
+    /// @notice CDN payment is already terminated
+    /// @param dataSetId The data set ID
+    error FilCDNPaymentAlreadyTerminated(uint256 dataSetId);
 }
