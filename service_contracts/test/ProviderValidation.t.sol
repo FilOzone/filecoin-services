@@ -59,11 +59,8 @@ contract ProviderValidationTest is Test {
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
         sessionKeyRegistry = new SessionKeyRegistry();
 
-        // Deploy Payments
-        Payments paymentsImpl = new Payments();
-        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
-        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
-        payments = Payments(address(paymentsProxy));
+        // Deploy Payments (no longer upgradeable)
+        payments = new Payments();
 
         // Deploy FilecoinWarmStorageService
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(

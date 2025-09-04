@@ -82,11 +82,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         registerProvider(provider3, "Provider 3");
         registerProvider(unauthorizedProvider, "Unauthorized Provider");
 
-        // Deploy payments contract
-        Payments paymentsImpl = new Payments();
-        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
-        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
-        payments = Payments(address(paymentsProxy));
+        // Deploy payments contract (no longer upgradeable)
+        payments = new Payments();
 
         // Deploy service contract
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(

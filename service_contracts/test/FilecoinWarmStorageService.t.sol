@@ -235,11 +235,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             new string[](0)
         );
 
-        // Deploy actual Payments contract
-        Payments paymentsImpl = new Payments();
-        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
-        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
-        payments = Payments(address(paymentsProxy));
+        // Deploy Payments contract (no longer upgradeable)
+        payments = new Payments();
 
         // Transfer tokens to client for payment
         mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
@@ -2812,11 +2809,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
 
-        // Deploy actual Payments contract
-        Payments paymentsImpl = new Payments();
-        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
-        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
-        payments = Payments(address(paymentsProxy));
+        // Deploy Payments contract (no longer upgradeable)
+        payments = new Payments();
 
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService(
@@ -2922,11 +2916,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
 
-        // Deploy actual Payments contract
-        Payments paymentsImpl = new Payments();
-        bytes memory paymentsInitData = abi.encodeWithSelector(Payments.initialize.selector);
-        MyERC1967Proxy paymentsProxy = new MyERC1967Proxy(address(paymentsImpl), paymentsInitData);
-        payments = Payments(address(paymentsProxy));
+        // Deploy Payments contract (no longer upgradeable)
+        payments = new Payments();
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade
