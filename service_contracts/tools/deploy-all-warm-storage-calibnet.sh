@@ -39,6 +39,35 @@ if [ -z "$CHALLENGE_FINALITY" ]; then
   exit 1
 fi
 
+# Service name and description - mandatory environment variables
+if [ -z "$SERVICE_NAME" ]; then
+  echo "Error: SERVICE_NAME is not set. Please set SERVICE_NAME environment variable (max 256 characters)"
+  exit 1
+fi
+
+if [ -z "$SERVICE_DESCRIPTION" ]; then
+  echo "Error: SERVICE_DESCRIPTION is not set. Please set SERVICE_DESCRIPTION environment variable (max 256 characters)"
+  exit 1
+fi
+
+# Validate name and description lengths
+NAME_LENGTH=${#SERVICE_NAME}
+DESC_LENGTH=${#SERVICE_DESCRIPTION}
+
+if [ $NAME_LENGTH -eq 0 ] || [ $NAME_LENGTH -gt 256 ]; then
+  echo "Error: SERVICE_NAME must be between 1 and 256 characters (current: $NAME_LENGTH)"
+  exit 1
+fi
+
+if [ $DESC_LENGTH -eq 0 ] || [ $DESC_LENGTH -gt 256 ]; then
+  echo "Error: SERVICE_DESCRIPTION must be between 1 and 256 characters (current: $DESC_LENGTH)"
+  exit 1
+fi
+
+echo "Service configuration:"
+echo "  Name: $SERVICE_NAME"
+echo "  Description: $SERVICE_DESCRIPTION"
+
 # Fixed addresses for initialization
 PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
 if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
@@ -100,28 +129,17 @@ fi
 echo "PDPVerifier proxy deployed at: $PDP_VERIFIER_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 3: Deploy Payments implementation
-echo "Deploying Payments implementation..."
-PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
-if [ -z "$PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
+# Step 3: Deploy Payments contract Implementation
+echo "Deploying Payments contract..."
+PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
+if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
     echo "Error: Failed to extract Payments contract address"
     exit 1
 fi
-echo "Payments implementation deployed at: $PAYMENTS_IMPLEMENTATION_ADDRESS"
+echo "Payments contract deployed at: $PAYMENTS_CONTRACT_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 4: Deploy Payments proxy
-echo "Deploying Payments proxy..."
-PAYMENTS_INIT_DATA=$(cast calldata "initialize()")
-PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $PAYMENTS_IMPLEMENTATION_ADDRESS $PAYMENTS_INIT_DATA | grep "Deployed to" | awk '{print $3}')
-if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
-    echo "Error: Failed to extract Payments proxy address"
-    exit 1
-fi
-echo "Payments proxy deployed at: $PAYMENTS_CONTRACT_ADDRESS"
-NONCE=$(expr $NONCE + "1")
-
-# Step 5: Deploy ServiceProviderRegistry implementation
+# Step 4: Deploy ServiceProviderRegistry implementation
 echo "Deploying ServiceProviderRegistry implementation..."
 REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
@@ -131,7 +149,7 @@ fi
 echo "ServiceProviderRegistry implementation deployed at: $REGISTRY_IMPLEMENTATION_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 6: Deploy ServiceProviderRegistry proxy
+# Step 5: Deploy ServiceProviderRegistry proxy
 echo "Deploying ServiceProviderRegistry proxy..."
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
 SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
@@ -142,7 +160,7 @@ fi
 echo "ServiceProviderRegistry proxy deployed at: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 7: Deploy FilecoinWarmStorageService implementation
+# Step 6: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
 
 SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
@@ -154,10 +172,10 @@ fi
 echo "FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
-# Step 8: Deploy FilecoinWarmStorageService proxy
+# Step 7: Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
-# Initialize with max proving period, challenge window size, and FilCDN controller address
-INIT_DATA=$(cast calldata "initialize(uint64,uint256,address)"  $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS)
+# Initialize with max proving period, challenge window size, FilCDN controller address, name, and description
+INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
@@ -165,11 +183,11 @@ if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
-# Step 7: Deploy FilecoinWarmStorageServiceStateView
+# Step 8: Deploy FilecoinWarmStorageServiceStateView
 NONCE=$(expr $NONCE + "1")
 source tools/deploy-warm-storage-view.sh
 
-# Step 8: Set the view contract address on the main contract
+# Step 9: Set the view contract address on the main contract
 NONCE=$(expr $NONCE + "1")
 source tools/set-warm-storage-view.sh
 
@@ -178,8 +196,7 @@ echo
 echo "# DEPLOYMENT SUMMARY"
 echo "PDPVerifier Implementation: $VERIFIER_IMPLEMENTATION_ADDRESS"
 echo "PDPVerifier Proxy: $PDP_VERIFIER_ADDRESS"
-echo "Payments Implementation: $PAYMENTS_IMPLEMENTATION_ADDRESS"
-echo "Payments Proxy: $PAYMENTS_CONTRACT_ADDRESS"
+echo "Payments Contract: $PAYMENTS_CONTRACT_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
@@ -191,3 +208,5 @@ echo "FilCDN controller address: $FILCDN_CONTROLLER_ADDRESS"
 echo "FilCDN beneficiary address: $FILCDN_BENEFICIARY_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
+echo "Service name: $SERVICE_NAME"
+echo "Service description: $SERVICE_DESCRIPTION"
