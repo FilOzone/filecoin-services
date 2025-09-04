@@ -101,12 +101,13 @@ echo "  CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE"
 ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
 echo "Deploying contracts from address $ADDR"
 
+NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+
 if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
     # If existing session key registry not supplied, deploy another one
     source tools/deploy-session-key-registry.sh
+    NONCE=$(expr $NONCE + "1")
 fi
-
-NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Step 1: Deploy PDPVerifier implementation
 echo "Deploying PDPVerifier implementation..."
