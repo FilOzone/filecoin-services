@@ -59,6 +59,7 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId,
         uint256 cdnRailId,
         address payer,
+        address serviceProvider,
         address payee,
         string[] metadataKeys,
         string[] metadataValues
@@ -101,6 +102,7 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
         address payer; // Address paying for storage
         address payee; // SP's beneficiary address
+        address serviceProvider; // Current service provider of the dataset
         uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
@@ -453,28 +455,32 @@ contract FilecoinWarmStorageService is
      * @notice Handles data set creation by creating a payment rail
      * @dev Called by the PDPVerifier contract when a new data set is created
      * @param dataSetId The ID of the newly created data set
-     * @param creator The address that created the data set and will receive payments
+     * @param serviceProvider The address that creates and owns the data set
      * @param extraData Encoded data containing metadata, payer information, and signature
      */
-    function dataSetCreated(uint256 dataSetId, address creator, bytes calldata extraData) external onlyPDPVerifier {
+    function dataSetCreated(uint256 dataSetId, address serviceProvider, bytes calldata extraData)
+        external
+        onlyPDPVerifier
+    {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, Errors.ExtraDataRequired());
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
-        require(creator != address(0), Errors.ZeroAddress(Errors.AddressField.Creator));
+        require(serviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
-        // Validate provider is registered and approved
-        uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(creator);
+        uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
 
-        // Check if provider is registered
-        require(providerId != 0, Errors.ProviderNotRegistered(creator));
+        require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
 
         // Check if provider is approved
-        require(approvedProviders[providerId], Errors.ProviderNotApproved(creator, providerId));
+        require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
-        // Update client state
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
+            serviceProviderRegistry.getProvider(providerId);
+        address payee = providerInfo.payee;
+
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
 
@@ -482,7 +488,7 @@ contract FilecoinWarmStorageService is
         verifyCreateDataSetSignature(
             createData.payer,
             clientDataSetId,
-            creator,
+            payee,
             createData.metadataKeys,
             createData.metadataValues,
             createData.signature
@@ -491,7 +497,8 @@ contract FilecoinWarmStorageService is
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
         info.payer = createData.payer;
-        info.payee = creator; // Using creator as the payee
+        info.payee = payee; // Using payee address from registry
+        info.serviceProvider = serviceProvider; // Set the service provider
         info.commissionBps = serviceCommissionBps;
         info.clientDataSetId = clientDataSetId;
         info.providerId = providerId;
@@ -534,7 +541,7 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
-            creator, // data set creator, SPs in  most cases
+            payee, // payee address from registry
             address(this), // this contract acts as the validator
             info.commissionBps, // commission rate based on CDN usage
             address(this)
@@ -555,7 +562,7 @@ contract FilecoinWarmStorageService is
         );
 
         // Charge the one-time data set creation fee
-        // This is a payment from payer to data set creator of a fixed amount
+        // This is a payment from payer to data set service provider of a fixed amount
         payments.modifyRailPayment(
             pdpRailId,
             0, // Initial rate is 0, will be updated when roots are added
@@ -569,7 +576,7 @@ contract FilecoinWarmStorageService is
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                creator, // data set creator, SPs in most cases
+                payee, // payee address from registry
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -599,7 +606,8 @@ contract FilecoinWarmStorageService is
             cacheMissRailId,
             cdnRailId,
             createData.payer,
-            creator,
+            serviceProvider,
+            payee,
             createData.metadataKeys,
             createData.metadataValues
         );
@@ -919,13 +927,22 @@ contract FilecoinWarmStorageService is
         // Verify the data set exists and validate the old service provider
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(
-            info.payee == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.payee, oldServiceProvider)
+            info.serviceProvider == oldServiceProvider,
+            Errors.OldServiceProviderMismatch(dataSetId, info.serviceProvider, oldServiceProvider)
         );
         require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
-        // Update the data set payee (service provider)
-        info.payee = newServiceProvider;
+        // Verify new service provider is registered and approved
+        uint256 newProviderId = serviceProviderRegistry.getProviderIdByAddress(newServiceProvider);
+
+        // Check if provider is registered
+        require(newProviderId != 0, Errors.ProviderNotRegistered(newServiceProvider));
+
+        // Check if provider is approved
+        require(approvedProviders[newProviderId], Errors.ProviderNotApproved(newServiceProvider, newProviderId));
+
+        // Update the data set service provider
+        info.serviceProvider = newServiceProvider;
 
         // Emit event for off-chain tracking
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
@@ -940,8 +957,8 @@ contract FilecoinWarmStorageService is
 
         // Check authorization
         require(
-            msg.sender == info.payer || msg.sender == info.payee,
-            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.payee, msg.sender)
+            msg.sender == info.payer || msg.sender == info.serviceProvider,
+            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
         );
 
         Payments payments = Payments(paymentsContractAddress);
@@ -970,7 +987,6 @@ contract FilecoinWarmStorageService is
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
         Payments payments = Payments(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);
         payments.terminateRail(info.cdnRailId);

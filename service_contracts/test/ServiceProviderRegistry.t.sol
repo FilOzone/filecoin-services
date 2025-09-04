@@ -35,7 +35,7 @@ contract ServiceProviderRegistryTest is Test {
         assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
 
         // Check owner
-        assertEq(registry.owner(), owner, "Owner should be deployer");
+        assertEq(registry.owner(), owner, "Service provider should be deployer");
 
         // Check next provider ID
         assertEq(registry.getNextProviderId(), 1, "Next provider ID should start at 1");
@@ -79,6 +79,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, // payee
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -128,6 +129,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, // payee
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -165,6 +167,82 @@ contract ServiceProviderRegistryTest is Test {
         assertEq(compliance, "SOC2", "Third value should be SOC2");
     }
 
+    function testBeneficiaryIsSetCorrectly() public {
+        // Give user1 some ETH for registration fee
+        vm.deal(user1, 10 ether);
+
+        // Register a provider with user2 as beneficiary
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+            serviceURL: "https://example.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+
+        bytes memory encodedData = abi.encode(pdpData);
+
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Register with user2 as beneficiary
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user2, // payee is different from owner
+            "Provider One",
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Verify provider info
+        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(providerId);
+        assertEq(info.serviceProvider, user1, "Service provider should be user1");
+        assertEq(info.payee, user2, "Payee should be user2");
+        assertTrue(info.isActive, "Provider should be active");
+    }
+
+    function testCannotRegisterWithZeroBeneficiary() public {
+        // Give user1 some ETH for registration fee
+        vm.deal(user1, 10 ether);
+
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+            serviceURL: "https://example.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerMonth: 500000000000000000,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East",
+            paymentTokenAddress: IERC20(address(0))
+        });
+
+        bytes memory encodedData = abi.encode(pdpData);
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Try to register with zero beneficiary
+        vm.prank(user1);
+        vm.expectRevert("Payee cannot be zero address");
+        registry.registerProvider{value: 5 ether}(
+            address(0), // zero beneficiary
+            "Provider One",
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
+        );
+    }
+
     function testGetProviderWorks() public {
         // Give user1 some ETH for registration fee
         vm.deal(user1, 10 ether);
@@ -190,6 +268,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         registry.registerProvider{value: 5 ether}(
+            user1, // payee
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -200,7 +279,8 @@ contract ServiceProviderRegistryTest is Test {
 
         // Now get provider should work
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
-        assertEq(info.beneficiary, user1, "Beneficiary should be user1");
+        assertEq(info.serviceProvider, user1, "Service provider should be user1");
+        assertEq(info.payee, user1, "Payee should be user1");
     }
 
     // Note: We can't test non-PDP product types since Solidity doesn't allow
@@ -223,6 +303,6 @@ contract ServiceProviderRegistryTest is Test {
     function testTransferOwnership() public {
         // Transfer ownership
         registry.transferOwnership(user1);
-        assertEq(registry.owner(), user1, "Owner should be transferred");
+        assertEq(registry.owner(), user1, "Service provider should be transferred");
     }
 }

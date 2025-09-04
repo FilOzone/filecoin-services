@@ -131,7 +131,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "creator",
+        "name": "serviceProvider",
         "type": "address",
         "internalType": "address"
       },
@@ -989,6 +989,12 @@
       },
       {
         "name": "payer",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "serviceProvider",
         "type": "address",
         "indexed": false,
         "internalType": "address"
