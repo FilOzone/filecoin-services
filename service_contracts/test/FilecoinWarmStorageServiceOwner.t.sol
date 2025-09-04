@@ -11,110 +11,8 @@ import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import {Errors} from "../src/Errors.sol";
+import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-
-// Mock USDFC token
-contract MockUSDFC is IERC20, IERC20Metadata {
-    string private _name = "USD Filecoin";
-    string private _symbol = "USDFC";
-    uint8 private _decimals = 6;
-
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
-
-    constructor() {
-        _mint(msg.sender, 1000000 * 10 ** _decimals);
-    }
-
-    function name() public view override returns (string memory) {
-        return _name;
-    }
-
-    function symbol() public view override returns (string memory) {
-        return _symbol;
-    }
-
-    function decimals() public view override returns (uint8) {
-        return _decimals;
-    }
-
-    function totalSupply() public view override returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) public view override returns (uint256) {
-        return _balances[account];
-    }
-
-    function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _transfer(msg.sender, recipient, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public override returns (bool) {
-        _allowances[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        _transfer(sender, recipient, amount);
-        uint256 currentAllowance = _allowances[sender][msg.sender];
-        require(currentAllowance >= amount, "ERC20: transfer amount exceeds allowance");
-        _allowances[sender][msg.sender] = currentAllowance - amount;
-        return true;
-    }
-
-    function _transfer(address sender, address recipient, uint256 amount) internal {
-        require(sender != address(0), "ERC20: transfer from the zero address");
-        require(recipient != address(0), "ERC20: transfer to the zero address");
-        require(_balances[sender] >= amount, "ERC20: transfer amount exceeds balance");
-        _balances[sender] -= amount;
-        _balances[recipient] += amount;
-        emit Transfer(sender, recipient, amount);
-    }
-
-    function _mint(address account, uint256 amount) internal {
-        require(account != address(0), "ERC20: mint to the zero address");
-        _totalSupply += amount;
-        _balances[account] += amount;
-        emit Transfer(address(0), account, amount);
-    }
-}
-
-// Mock PDPVerifier
-contract MockPDPVerifier {
-    mapping(uint256 => address) public dataSetServiceProviders;
-    uint256 public dataSetCounter;
-
-    function createDataSet(PDPListener listener, bytes calldata extraData) external returns (uint256) {
-        dataSetCounter++;
-        dataSetServiceProviders[dataSetCounter] = msg.sender;
-        listener.dataSetCreated(dataSetCounter, msg.sender, extraData);
-        return dataSetCounter;
-    }
-
-    function changeDataSetServiceProvider(
-        uint256 dataSetId,
-        address newServiceProvider,
-        address listenerAddr,
-        bytes calldata extraData
-    ) external {
-        address oldServiceProvider = dataSetServiceProviders[dataSetId];
-        dataSetServiceProviders[dataSetId] = newServiceProvider;
-        if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).storageProviderChanged(
-                dataSetId, oldServiceProvider, newServiceProvider, extraData
-            );
-        }
-    }
-}
 
 contract FilecoinWarmStorageServiceOwnerTest is Test {
     // Constants
@@ -130,7 +28,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
     ServiceProviderRegistry public providerRegistry;
     MockPDPVerifier public pdpVerifier;
     Payments public payments;
-    MockUSDFC public usdfcToken;
+    MockERC20 public usdfcToken;
     SessionKeyRegistry public sessionKeyRegistry;
 
     // Test accounts
@@ -168,7 +66,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         vm.deal(unauthorizedProvider, 100 ether);
 
         // Deploy contracts
-        usdfcToken = new MockUSDFC();
+        usdfcToken = new MockERC20();
         pdpVerifier = new MockPDPVerifier();
         sessionKeyRegistry = new SessionKeyRegistry();
 
@@ -293,7 +191,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         // Create data set
         makeSignaturePass(payer);
         vm.prank(provider);
-        return pdpVerifier.createDataSet(serviceContract, encodedData);
+        return pdpVerifier.createDataSet(PDPListener(address(serviceContract)), encodedData);
     }
 
     function testOwnerFieldSetCorrectlyOnDataSetCreation() public {

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
+import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
@@ -9,78 +10,9 @@ import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStor
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Payments} from "@fws-payments/Payments.sol";
+import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Errors} from "../src/Errors.sol";
-
-// Simple mock for testing
-contract MockERC20 is IERC20, IERC20Metadata {
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
-
-    constructor() {
-        _mint(msg.sender, 1000000 * 10 ** 6);
-    }
-
-    function name() public pure override returns (string memory) {
-        return "USDFC";
-    }
-
-    function symbol() public pure override returns (string memory) {
-        return "USDFC";
-    }
-
-    function decimals() public pure override returns (uint8) {
-        return 6;
-    }
-
-    function totalSupply() public view override returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) public view override returns (uint256) {
-        return _balances[account];
-    }
-
-    function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _balances[msg.sender] -= amount;
-        _balances[recipient] += amount;
-        emit Transfer(msg.sender, recipient, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public override returns (bool) {
-        _allowances[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        _balances[sender] -= amount;
-        _balances[recipient] += amount;
-        _allowances[sender][msg.sender] -= amount;
-        emit Transfer(sender, recipient, amount);
-        return true;
-    }
-
-    function _mint(address account, uint256 amount) internal {
-        _totalSupply += amount;
-        _balances[account] += amount;
-        emit Transfer(address(0), account, amount);
-    }
-}
-
-contract MockPDPVerifier {
-    function createDataSet(address listenerAddr, bytes calldata extraData) public returns (uint256) {
-        FilecoinWarmStorageService(listenerAddr).dataSetCreated(1, msg.sender, extraData);
-        return 1;
-    }
-}
 
 contract ProviderValidationTest is Test {
     FilecoinWarmStorageService public warmStorage;
@@ -171,7 +103,7 @@ contract ProviderValidationTest is Test {
 
         vm.prank(provider1);
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, provider1));
-        pdpVerifier.createDataSet(address(warmStorage), extraData);
+        pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
     }
 
     function testProviderRegisteredButNotApproved() public {
@@ -209,7 +141,7 @@ contract ProviderValidationTest is Test {
 
         vm.prank(provider1);
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotApproved.selector, provider1, 1));
-        pdpVerifier.createDataSet(address(warmStorage), extraData);
+        pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
     }
 
     function testProviderApprovedCanCreateDataset() public {
@@ -265,7 +197,7 @@ contract ProviderValidationTest is Test {
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
 
         vm.prank(provider1);
-        uint256 dataSetId = pdpVerifier.createDataSet(address(warmStorage), extraData);
+        uint256 dataSetId = pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
         assertEq(dataSetId, 1, "Dataset should be created");
     }
 
