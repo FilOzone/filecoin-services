@@ -237,7 +237,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         vm.prank(provider);
         providerRegistry.registerProvider{value: 5 ether}(
-            provider, // beneficiary
+            provider, // payee
             name,
             string.concat(name, " Description"),
             ServiceProviderRegistryStorage.ProductType.PDP,

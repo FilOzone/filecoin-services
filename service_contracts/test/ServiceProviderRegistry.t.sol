@@ -79,7 +79,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
-            user1, // beneficiary
+            user1, // payee
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -129,7 +129,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
-            user1, // beneficiary
+            user1, // payee
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -193,7 +193,7 @@ contract ServiceProviderRegistryTest is Test {
         // Register with user2 as beneficiary
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
-            user2, // beneficiary is different from owner
+            user2, // payee is different from owner
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -268,7 +268,7 @@ contract ServiceProviderRegistryTest is Test {
 
         vm.prank(user1);
         registry.registerProvider{value: 5 ether}(
-            user1, // beneficiary
+            user1, // payee
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,

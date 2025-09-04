@@ -470,21 +470,17 @@ contract FilecoinWarmStorageService is
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(serviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
-        // Validate provider is registered and approved
         uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
 
-        // Check if provider is registered
         require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
 
         // Check if provider is approved
         require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
-        // Get the provider's payee address from the registry
         ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
             serviceProviderRegistry.getProvider(providerId);
         address payee = providerInfo.payee;
 
-        // Update client state
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
 

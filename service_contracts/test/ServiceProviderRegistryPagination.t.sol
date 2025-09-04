@@ -85,7 +85,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         // Register one provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // beneficiary
+            provider1, // payee
             "",
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -125,7 +125,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(providers[i]);
             registry.registerProvider{value: REGISTRATION_FEE}(
-                providers[i], // beneficiary
+                providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
@@ -176,7 +176,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(providers[i]);
             registry.registerProvider{value: REGISTRATION_FEE}(
-                providers[i], // beneficiary
+                providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
@@ -220,7 +220,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         // Register 3 providers
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // beneficiary
+            provider1, // payee
             "",
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -231,7 +231,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
 
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider2, // beneficiary
+            provider2, // payee
             "",
             "Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -242,7 +242,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
 
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider3, // beneficiary
+            provider3, // payee
             "",
             "Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -281,7 +281,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         for (uint256 i = 0; i < 6; i++) {
             vm.prank(providers[i]);
             registry.registerProvider{value: REGISTRATION_FEE}(
-                providers[i], // beneficiary
+                providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
@@ -342,7 +342,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         // Register first provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // beneficiary
+            provider1, // payee
             "",
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -355,7 +355,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         // Register second provider
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider2, // beneficiary
+            provider2, // payee
             "",
             "Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -373,7 +373,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         // Register third provider
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
-            provider3, // beneficiary
+            provider3, // payee
             "",
             "Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
@@ -423,7 +423,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         for (uint256 i = 0; i < 10; i++) {
             vm.prank(providers[i]);
             registry.registerProvider{value: REGISTRATION_FEE}(
-                providers[i], // beneficiary
+                providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
