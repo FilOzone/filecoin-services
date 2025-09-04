@@ -48,6 +48,35 @@ if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
   exit 1
 fi
 
+# Service name and description - mandatory environment variables
+if [ -z "$SERVICE_NAME" ]; then
+  echo "Error: SERVICE_NAME is not set. Please set SERVICE_NAME environment variable (max 256 characters)"
+  exit 1
+fi
+
+if [ -z "$SERVICE_DESCRIPTION" ]; then
+  echo "Error: SERVICE_DESCRIPTION is not set. Please set SERVICE_DESCRIPTION environment variable (max 256 characters)"
+  exit 1
+fi
+
+# Validate name and description lengths
+NAME_LENGTH=${#SERVICE_NAME}
+DESC_LENGTH=${#SERVICE_DESCRIPTION}
+
+if [ $NAME_LENGTH -eq 0 ] || [ $NAME_LENGTH -gt 256 ]; then
+  echo "Error: SERVICE_NAME must be between 1 and 256 characters (current: $NAME_LENGTH)"
+  exit 1
+fi
+
+if [ $DESC_LENGTH -eq 0 ] || [ $DESC_LENGTH -gt 256 ]; then
+  echo "Error: SERVICE_DESCRIPTION must be between 1 and 256 characters (current: $DESC_LENGTH)"
+  exit 1
+fi
+
+echo "Service configuration:"
+echo "  Name: $SERVICE_NAME"
+echo "  Description: $SERVICE_DESCRIPTION"
+
 # Fixed constants for initialization
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 
@@ -95,8 +124,8 @@ NONCE=$(expr $NONCE + "1")
 
 # Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
-# Initialize with max proving period, challenge window size, and FilCDN controller address
-INIT_DATA=$(cast calldata "initialize(uint64,uint256,address)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS)
+# Initialize with max proving period, challenge window size, FilCDN controller address, name, and description
+INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
@@ -118,3 +147,5 @@ echo "FilCDN beneficiary address: $FILCDN_BENEFICIARY_ADDRESS"
 echo "ServiceProviderRegistry address: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
+echo "Service name: $SERVICE_NAME"
+echo "Service description: $SERVICE_DESCRIPTION"
