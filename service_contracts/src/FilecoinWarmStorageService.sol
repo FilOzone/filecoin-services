@@ -65,7 +65,7 @@ contract FilecoinWarmStorageService is
         string[] metadataValues
     );
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
-    event PieceAdded(uint256 indexed dataSetId, uint256 indexed pieceId, string[] keys, string[] values);
+    event PieceAdded(uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values);
 
     event ServiceTerminated(
         address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
@@ -755,7 +755,7 @@ contract FilecoinWarmStorageService is
                 dataSetPieceMetadata[dataSetId][pieceId][key] = string(value);
                 dataSetPieceMetadataKeys[dataSetId][pieceId].push(key);
             }
-            emit PieceAdded(dataSetId, pieceId, pieceKeys, pieceValues);
+            emit PieceAdded(dataSetId, pieceId, pieceData[i], pieceKeys, pieceValues);
         }
     }
 
