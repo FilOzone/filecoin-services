@@ -7,13 +7,7 @@ export class ByteUtils {
   /**
    * Efficiently compare bytes without creating new arrays
    */
-  static equals(
-    a: Uint8Array,
-    aStart: i32,
-    b: Uint8Array,
-    bStart: i32 = 0,
-    length: i32 = -1
-  ): boolean {
+  static equals(a: Uint8Array, aStart: i32, b: Uint8Array, bStart: i32 = 0, length: i32 = -1): boolean {
     const len = length === -1 ? b.length : length;
 
     if (aStart + len > a.length || bStart + len > b.length) {
@@ -35,9 +29,7 @@ export class ByteUtils {
     if (offset + 32 > data.length) {
       return BigInt.zero();
     }
-    return BigInt.fromUnsignedBytes(
-      Bytes.fromUint8Array(data.slice(offset, offset + 32))
-    );
+    return BigInt.fromUnsignedBytes(Bytes.fromUint8Array(data.slice(offset, offset + 32)));
   }
 
   /**
@@ -50,12 +42,7 @@ export class ByteUtils {
 
     // Skip leading zeros for the last 4 bytes of a 32-byte word
     const start = offset + 28; // Last 4 bytes of 32-byte word
-    return (
-      (i32(data[start]) << 24) |
-      (i32(data[start + 1]) << 16) |
-      (i32(data[start + 2]) << 8) |
-      i32(data[start + 3])
-    );
+    return (i32(data[start]) << 24) | (i32(data[start + 1]) << 16) | (i32(data[start + 2]) << 8) | i32(data[start + 3]);
   }
 
   /**

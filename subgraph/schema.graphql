@@ -2,9 +2,13 @@ type DataSet @entity(immutable: false) {
   id: Bytes! # setId
   setId: BigInt! # uint256
   listener: Bytes! # address
-  clientAddr: Bytes! # address
+  providerId: BigInt! # uint256
+  payer: Bytes! # address
+  payee: Bytes! # address
+  serviceProvider: Provider! # address
   withCDN: Boolean!
-  storageProvider: Provider! # address of the provider
+  pdpEndEpoch: BigInt!
+  cdnEndEpoch: BigInt!
   leafCount: BigInt! # uint256
   challengeRange: BigInt! # uint256
   isActive: Boolean!
@@ -17,7 +21,8 @@ type DataSet @entity(immutable: false) {
   totalProvedPieces: BigInt! # uint256
   totalFaultedPeriods: BigInt! # uint256
   totalFaultedPieces: BigInt! # uint256
-  metadata: String!
+  metadataKeys: [String!]
+  metadataValues: [String!]
   createdAt: BigInt!
   updatedAt: BigInt!
   blockNumber: BigInt!
@@ -44,10 +49,11 @@ type Rail @entity(immutable: false) {
   operator: Bytes!
   arbiter: Bytes!
   paymentRate: BigInt!
-  lockupPeriod: BigInt!
-  lockupFixed: BigInt!
   settledUpto: BigInt!
+  settledAmount: BigInt!
+  totalFaultedEpochs: BigInt!
   endEpoch: BigInt!
+  isActive: Boolean!
   queueLength: BigInt!
   rateChangeQueue: [RateChangeQueue!]! @derivedFrom(field: "rail")
 
@@ -63,33 +69,50 @@ type RateChangeQueue @entity(immutable: false) {
 }
 
 enum ProviderStatus {
-  Created
-  Registered
-  Approved
-  Rejected
-  Removed
+  REGISTERED
+  APPROVED
+  UNAPPROVED
+  REMOVED
 }
 
 type Provider @entity(immutable: false) {
-  id: Bytes! # address
-  address: Bytes!
-  providerId: BigInt
-  serviceUrl: String
-  peerId: Bytes
+  id: Bytes! # Service provider address
+  providerId: BigInt!
+  serviceProvider: Bytes!
+  payee: Bytes!
+  name: String!
+  description: String!
+  status: ProviderStatus!
   registeredAt: BigInt
   approvedAt: BigInt
-  status: ProviderStatus!
+  isActive: Boolean!
+
+  # Statistics
   totalFaultedPeriods: BigInt!
   totalFaultedPieces: BigInt!
   totalDataSets: BigInt!
   totalPieces: BigInt!
   totalDataSize: BigInt!
+  totalProducts: BigInt!
+
   createdAt: BigInt!
   updatedAt: BigInt!
   blockNumber: BigInt!
 
   # Derived relationship
-  dataSets: [DataSet!]! @derivedFrom(field: "storageProvider")
+  dataSets: [DataSet!]! @derivedFrom(field: "serviceProvider")
+  products: [ProviderProduct!]! @derivedFrom(field: "provider")
+}
+
+type ProviderProduct @entity(immutable: false) {
+  id: ID!
+  provider: Provider!
+  serviceUrl: String
+  productData: Bytes!
+  productType: BigInt!
+  capabilityKeys: [String!]
+  capabilityValues: [String!]
+  isActive: Boolean!
 }
 
 type Piece @entity(immutable: false) {
@@ -109,7 +132,8 @@ type Piece @entity(immutable: false) {
   createdAt: BigInt!
   updatedAt: BigInt!
   blockNumber: BigInt!
-  metadata: String!
+  metadataKeys: [String!]
+  metadataValues: [String!]
 
   # Relationship
   dataSet: DataSet! # Link to DataSet (stores DataSet ID)

@@ -7,7 +7,7 @@ export class CommPv2ValidationResult {
     public isValid: boolean,
     public padding: BigInt = BigInt.zero(),
     public height: u8 = 0,
-    public digestOffset: BigInt = BigInt.zero()
+    public digestOffset: BigInt = BigInt.zero(),
   ) {}
 }
 
@@ -15,7 +15,7 @@ export class UvarintResult {
   constructor(
     public isValid: boolean,
     public value: BigInt = BigInt.zero(),
-    public offset: BigInt = BigInt.zero()
+    public offset: BigInt = BigInt.zero(),
   ) {}
 }
 
@@ -45,11 +45,7 @@ export function readUvarint(data: Bytes, offset: BigInt): UvarintResult {
   }
 
   i++;
-  return new UvarintResult(
-    true,
-    BigInt.fromU64(value),
-    BigInt.fromU32(offsetU32 + i)
-  );
+  return new UvarintResult(true, BigInt.fromU64(value), BigInt.fromU32(offsetU32 + i));
 }
 
 export function validateCommPv2(cidData: Bytes): CommPv2ValidationResult {
