@@ -5,7 +5,7 @@ type DataSet @entity(immutable: false) {
   providerId: BigInt! # uint256
   payer: Bytes! # address
   payee: Bytes! # address
-  owner: Provider! # address
+  serviceProvider: Provider! # address
   withCDN: Boolean!
   pdpEndEpoch: BigInt!
   cdnEndEpoch: BigInt!
@@ -31,12 +31,6 @@ type DataSet @entity(immutable: false) {
   pieces: [Piece!]! @derivedFrom(field: "dataSet")
   faultRecords: [FaultRecord!]! @derivedFrom(field: "dataSet")
   rails: [Rail!]! @derivedFrom(field: "dataSet")
-}
-
-enum RailType {
-  PDP
-  CACHE_MISS
-  CDN
 }
 
 enum RailType {
@@ -84,8 +78,8 @@ enum ProviderStatus {
 type Provider @entity(immutable: false) {
   id: Bytes! # Owner address
   providerId: BigInt!
-  owner: Bytes!
-  beneficiary: Bytes!
+  serviceProvider: Bytes!
+  payee: Bytes!
   name: String!
   description: String!
   status: ProviderStatus!
@@ -106,7 +100,7 @@ type Provider @entity(immutable: false) {
   blockNumber: BigInt!
 
   # Derived relationship
-  dataSets: [DataSet!]! @derivedFrom(field: "owner")
+  dataSets: [DataSet!]! @derivedFrom(field: "serviceProvider")
   products: [ProviderProduct!]! @derivedFrom(field: "provider")
 }
 

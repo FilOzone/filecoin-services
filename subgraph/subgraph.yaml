@@ -8,9 +8,9 @@ dataSources:
     name: PDPVerifier
     network: filecoin-testnet
     source:
-      address: "0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9"
+      address: "0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"
       abi: PDPVerifier
-      startBlock: 2942565
+      startBlock: 2988297
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -42,9 +42,9 @@ dataSources:
     name: FilecoinWarmStorageService
     network: filecoin-testnet
     source:
-      address: "0x7A605Ad01F7812F5C5e78aa16D795fc0be75974E"
+      address: "0x80617b65FD2EEa1D7fDe2B4F85977670690ed348"
       abi: FilecoinWarmStorageService
-      startBlock: 2942574
+      startBlock: 2988329
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -61,6 +61,8 @@ dataSources:
           file: ./abis/FilecoinWarmStorageService.json
         - name: PDPVerifier
           file: ./abis/PDPVerifier.json
+        - name: ServiceProviderRegistry
+          file: ./abis/ServiceProviderRegistry.json
       eventHandlers:
         - event: "DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])"
           handler: handleDataSetCreated
@@ -87,9 +89,9 @@ dataSources:
     name: ServiceProviderRegistry
     network: filecoin-testnet
     source:
-      address: "0x7A605Ad01F7812F5C5e78aa16D795fc0be75974A" # TODO: update ServiceProviderRegistry address with actual address
+      address: "0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb"
       abi: ServiceProviderRegistry
-      startBlock: 2942574
+      startBlock: 2988311
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9

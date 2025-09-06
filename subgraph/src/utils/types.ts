@@ -5,8 +5,8 @@ import { Address } from "@graphprotocol/graph-ts";
  */
 export class ServiceProviderInfo {
   constructor(
-    public owner: Address,
-    public beneficiary: Address,
+    public serviceProvider: Address,
+    public payee: Address,
     public name: string,
     public description: string,
     public isActive: boolean,

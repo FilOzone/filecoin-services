@@ -27,7 +27,7 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
     return;
   }
 
-  const storageProvider = dataSet.owner;
+  const storageProvider = dataSet.serviceProvider;
 
   // Load Provider (to update stats before changing storageProvider)
   const provider = Provider.load(storageProvider);
@@ -49,7 +49,7 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
 
   // Update DataSet
   dataSet.isActive = false;
-  dataSet.owner = Bytes.empty();
+  dataSet.serviceProvider = Bytes.empty();
   dataSet.totalPieces = BigInt.fromI32(0);
   dataSet.totalDataSize = BigInt.fromI32(0);
   dataSet.nextChallengeEpoch = BigInt.fromI32(0);
@@ -87,7 +87,7 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
   dataSet.save();
 
   // Update Provider's total data size
-  const provider = Provider.load(dataSet.owner);
+  const provider = Provider.load(dataSet.serviceProvider);
   if (provider) {
     // Subtract the size this data set had *before* it was zeroed
     provider.totalDataSize = provider.totalDataSize.minus(oldTotalDataSize);
@@ -99,7 +99,10 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
     provider.save();
   } else {
     // It's possible the provider was deleted or storageProvider changed before this event
-    log.warning("DataSetEmpty: Provider {} for DataSet {} not found", [dataSet.owner.toHexString(), setId.toString()]);
+    log.warning("DataSetEmpty: Provider {} for DataSet {} not found", [
+      dataSet.serviceProvider.toHexString(),
+      setId.toString(),
+    ]);
   }
 }
 
@@ -260,26 +263,31 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   dataSet.save();
 
   // Update Provider stats
-  const provider = Provider.load(dataSet.owner);
+  const provider = Provider.load(dataSet.serviceProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(removedDataSize);
     // Ensure provider totalDataSize doesn't go negative
     if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
       log.warning("handlePiecesRemoved: Provider {} totalDataSize went negative. Setting to 0.", [
-        dataSet.owner.toHex(),
+        dataSet.serviceProvider.toHex(),
       ]);
       provider.totalDataSize = BigInt.fromI32(0);
     }
     provider.totalPieces = provider.totalPieces.minus(BigInt.fromI32(removedPieceCount));
     // Ensure provider totalPieces doesn't go negative
     if (provider.totalPieces.lt(BigInt.fromI32(0))) {
-      log.warning("handlePiecesRemoved: Provider {} totalPieces went negative. Setting to 0.", [dataSet.owner.toHex()]);
+      log.warning("handlePiecesRemoved: Provider {} totalPieces went negative. Setting to 0.", [
+        dataSet.serviceProvider.toHex(),
+      ]);
       provider.totalPieces = BigInt.fromI32(0);
     }
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("handlePiecesRemoved: Provider {} for DataSet {} not found", [dataSet.owner.toHex(), setId.toString()]);
+    log.warning("handlePiecesRemoved: Provider {} for DataSet {} not found", [
+      dataSet.serviceProvider.toHex(),
+      setId.toString(),
+    ]);
   }
 }

@@ -95,13 +95,16 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
     - `src/*.ts`: To alter the logic that processes blockchain events and maps them to the defined schema entities.
     - `src/utils/*.ts`: If modifying shared utility functions or constants.
 
-2.  **Important Note on PDPVerifier Address:** The handler `handleFaultRecord` in `src/pdp-service.ts` makes a contract call to the PDPVerifier contract. The address for this contract is currently hardcoded in `subgraph/src/utils/constants.ts`:
+2.  **Important Note on PDPVerifier Address:** Several handlers make a contract call to the PDPVerifier and ServiceProviderRegistry contract. The address for these contracts is currently hardcoded in `subgraph/src/utils/constants.ts`:
 
     ```typescript
     // subgraph/src/utils/constants.ts
     export class ContractAddresses {
       static readonly PDPVerifier: Address = Address.fromBytes(
-        Bytes.fromHexString("0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9"),
+        Bytes.fromHexString("0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"),
+      );
+      static readonly ServiceProviderRegistry: Address = Address.fromBytes(
+        Bytes.fromHexString("0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb"),
       );
       static readonly USDFCToken: Address = Address.fromBytes(
         Bytes.fromHexString("0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"),
@@ -109,7 +112,7 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
     }
     ```
 
-    **If you update the `PDPVerifier` contract address in your `subgraph.yaml` file to index a different deployment, you MUST also update the `ContractAddresses.PDPVerifier` constant in `subgraph/src/utils/constants.ts` to match the new address.** Failure to do so will result in the `handleFaultRecord` handler calling the wrong contract instance.
+    **If you update the `PDPVerifier` and `ServiceProviderRegistry` contract address in your `subgraph.yaml` file to index a different deployment, you MUST also update the `ContractAddresses.PDPVerifier` and `ContractAddresses.ServiceProviderRegistry` constants in `subgraph/src/utils/constants.ts` to match the new addresses.** Failure to do so will result in the wrong contract instance being called.
 
 3.  **Regenerate Code:** After modifying the schema or manifest, always regenerate the AssemblyScript types:
 

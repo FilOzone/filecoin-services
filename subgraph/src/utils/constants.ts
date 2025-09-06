@@ -11,7 +11,10 @@ export const BIGINT_ONE = BigInt.fromI32(1);
 
 export class ContractAddresses {
   static readonly PDPVerifier: Address = Address.fromBytes(
-    Bytes.fromHexString("0x07074aDd0364e79a1fEC01c128c1EFfa19C184E9"),
+    Bytes.fromHexString("0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"),
+  );
+  static readonly ServiceProviderRegistry: Address = Address.fromBytes(
+    Bytes.fromHexString("0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb"),
   );
   static readonly USDFCToken: Address = Address.fromBytes(
     Bytes.fromHexString("0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"),

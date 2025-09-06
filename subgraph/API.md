@@ -60,8 +60,8 @@ Providers are entities that manage data sets in the PDP system.
 query AllProviders($first: Int, $skip: Int) {
   providers(first: $first, skip: $skip, orderBy: createdAt, orderDirection: desc) {
     id
-    owner
-    beneficiary
+    serviceProvider
+    payee
     totalDataSize
     totalDataSets
     totalPieces
@@ -78,8 +78,8 @@ query AllProviders($first: Int, $skip: Int) {
 query ProviderById($providerId: ID!) {
   provider(id: $providerId) {
     id
-    owner
-    beneficiary
+    serviceProvider
+    payee
     name
     description
     totalDataSize
@@ -100,8 +100,8 @@ query ProviderById($providerId: ID!) {
 query ProviderWithDataSets($providerId: ID!, $first: Int, $skip: Int) {
   provider(id: $providerId) {
     id
-    owner
-    beneficiary
+    serviceProvider
+    payee
     totalDataSize
     totalDataSets
     totalPieces
@@ -127,8 +127,8 @@ query ProviderWithDataSets($providerId: ID!, $first: Int, $skip: Int) {
 query FilteredProviders($minDataSize: BigInt) {
   providers(where: { totalDataSize_gte: $minDataSize }, orderBy: totalDataSize, orderDirection: desc, first: 10) {
     id
-    owner
-    beneficiary
+    serviceProvider
+    payee
     name
     description
     totalDataSize
@@ -156,7 +156,8 @@ query AllDataSets($first: Int, $skip: Int) {
     createdAt
     storageProvider {
       id
-      owner
+      serviceProvider
+      payee
     }
   }
 }
@@ -172,7 +173,7 @@ query DataSetById($dataSetId: ID!) {
     isActive
     storageProvider {
       id
-      owner
+      serviceProvider
     }
     leafCount
     challengeRange
@@ -230,7 +231,7 @@ query ActiveDataSets($first: Int) {
     createdAt
     storageProvider {
       id
-      owner
+      serviceProvider
     }
   }
 }
@@ -288,7 +289,7 @@ query PieceById($pieceId: ID!) {
       setId
       storageProvider {
         id
-        owner
+        serviceProvider
       }
     }
   }
@@ -310,7 +311,7 @@ query FilteredPieces($minSize: BigInt, $isRemoved: Boolean) {
       id
       storageProvider {
         id
-        owner
+        serviceProvider
       }
     }
   }
@@ -366,7 +367,7 @@ query RailById($railId: ID!) {
       setId
       storageProvider {
         id
-        owner
+        serviceProvider
       }
     }
     rateChangeQueue {
@@ -513,8 +514,8 @@ query UpcomingRateChanges($currentEpoch: BigInt!) {
 query ProviderWithDetailedDataSets($providerId: ID!, $first: Int, $skip: Int) {
   provider(id: $providerId) {
     id
-    owner
-    beneficiary
+    serviceProvider
+    payee
     totalDataSize
     totalDataSets
     totalPieces
@@ -558,8 +559,8 @@ query Search($providerId: ID, $dataSetId: Bytes) {
   # Search for provider
   provider(id: $providerId) {
     id
-    owner
-    beneficiary
+    serviceProvider
+    payee
     totalDataSets
     totalDataSize
   }
@@ -570,8 +571,8 @@ query Search($providerId: ID, $dataSetId: Bytes) {
     isActive
     totalDataSize
     storageProvider {
-      owner
-      beneficiary
+      serviceProvider
+      payee
     }
   }
 }
@@ -588,8 +589,8 @@ query Search($clientAddress: Bytes!) {
     totalDataSize
     metadata
     storageProvider {
-      owner
-      beneficiary
+      serviceProvider
+      payee
     }
   }
 }
@@ -624,8 +625,8 @@ query Search($cid: Bytes!) {
       setId
       metadata
       storageProvider {
-        owner
-        beneficiary
+        serviceProvider
+        payee
       }
     }
   }
@@ -667,8 +668,8 @@ const fetchDataSets = async () => {
         totalDataSize
         metadata
         storageProvider {
-          owner
-          beneficiary
+          serviceProvider
+          payee
         }
       }
     }
@@ -721,8 +722,8 @@ const GET_PROVIDER = gql`
   query GetProvider($providerId: ID!) {
     provider(id: $providerId) {
       id
-      owner
-      beneficiary
+      serviceProvider
+      payee
       totalDataSets
       totalDataSize
       totalPieces
@@ -750,7 +751,7 @@ function ProviderDetails({ providerId }) {
 
   return (
     <div>
-      <h2>Provider: {provider.owner}</h2>
+      <h2>Provider: {provider.serviceProvider}</h2>
       <p>Total Data Sets: {provider.totalDataSets.toString()}</p>
       <p>Total Data Size: {provider.totalDataSize.toString()} bytes</p>
       <h3>Recent Data Sets</h3>
@@ -945,7 +946,7 @@ async function searchByCid(cid) {
           setId
           metadata
           storageProvider {
-            beneficiary
+            payee
           }
         }
       }

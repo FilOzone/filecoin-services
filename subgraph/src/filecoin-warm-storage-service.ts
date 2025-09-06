@@ -152,7 +152,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
 
   const challengeEpoch = dataSet.nextChallengeEpoch;
   const challengeRange = dataSet.challengeRange;
-  const owner = dataSet.owner;
+  const serviceProvider = dataSet.serviceProvider;
   const nextPieceId = dataSet.totalPieces;
 
   let nextChallengeEpoch = BigInt.fromI32(0);
@@ -237,7 +237,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(owner);
+  const provider = Provider.load(serviceProvider);
   if (provider) {
     provider.totalFaultedPeriods = provider.totalFaultedPeriods.plus(periodsFaultedParam);
     provider.totalFaultedPieces = provider.totalFaultedPieces.plus(BigInt.fromI32(uniquePieceIds.length));
@@ -245,7 +245,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
     provider.blockNumber = event.block.number;
     provider.save();
   } else {
-    log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [owner.toHex(), setId.toString()]);
+    log.warning("handleFaultRecord: Provider {} not found for DataSet {}", [serviceProvider.toHex(), setId.toString()]);
   }
 }
 
@@ -261,8 +261,8 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   const cacheMissRailId = event.params.cacheMissRailId;
   const cdnRailId = event.params.cdnRailId;
   const payer = event.params.payer;
-  const creator = event.params.creator;
-  const beneficiary = event.params.beneficiary;
+  const serviceProvider = event.params.serviceProvider;
+  const payee = event.params.payee;
   const metadataKeys = event.params.metadataKeys;
   const metadataValues = event.params.metadataValues;
   const dataSetEntityId = getDataSetEntityId(setId);
@@ -277,8 +277,8 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   dataSet.metadataValues = metadataValues;
   dataSet.listener = listenerAddr;
   dataSet.payer = payer;
-  dataSet.payee = beneficiary;
-  dataSet.owner = creator;
+  dataSet.payee = payee;
+  dataSet.serviceProvider = serviceProvider;
   dataSet.withCDN = withCDN;
   dataSet.isActive = true;
   dataSet.pdpEndEpoch = BIGINT_ZERO;
@@ -304,22 +304,20 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
     [pdpRailId, cacheMissRailId, cdnRailId],
     [RailType.PDP, RailType.CACHE_MISS, RailType.CDN],
     payer,
-    creator,
+    serviceProvider,
     listenerAddr,
     dataSetEntityId,
   );
 
-  // Create or Update Provider
-  let provider = Provider.load(creator);
+  // Update Provider
+  let provider = Provider.load(serviceProvider);
   if (provider == null) {
-    log.warning("DataSetCreated: existing provider not found for address: {}", [creator.toHexString()]);
+    log.warning("DataSetCreated: existing provider not found for address: {}", [serviceProvider.toHexString()]);
     return;
-  } else {
-    // Update timestamp/block even if exists
-    provider.totalDataSets = provider.totalDataSets.plus(BigInt.fromI32(1));
-    provider.blockNumber = event.block.number;
   }
-  // provider.dataSetIds = provider.dataSetIds.concat([event.params.setId]); // REMOVED - Handled by @derivedFrom
+
+  provider.totalDataSets = provider.totalDataSets.plus(BigInt.fromI32(1));
+  provider.blockNumber = event.block.number;
   provider.updatedAt = event.block.timestamp;
   provider.save();
 }
@@ -405,7 +403,7 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
   dataSet.blockNumber = event.block.number;
   dataSet.save();
 
-  const provider = Provider.load(dataSet.owner);
+  const provider = Provider.load(dataSet.serviceProvider);
   if (!provider) {
     log.warning("handlePieceAdded: Provider not found for DataSet: {}", [dataSet.id.toString()]);
     return;
@@ -424,8 +422,8 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
  */
 export function handleDataSetServiceProviderChanged(event: DataSetServiceProviderChangedEvent): void {
   const setId = event.params.dataSetId;
-  const oldStorageProvider = event.params.oldServiceProvider;
-  const newStorageProvider = event.params.newServiceProvider;
+  const oldServiceProvider = event.params.oldServiceProvider;
+  const newServiceProvider = event.params.newServiceProvider;
 
   const dataSetEntityId = getDataSetEntityId(setId);
 
@@ -436,42 +434,33 @@ export function handleDataSetServiceProviderChanged(event: DataSetServiceProvide
     return;
   }
 
+  // Update DataSet storageProvider (this updates the derived relationship on both old and new Provider)
+  dataSet.serviceProvider = newServiceProvider; // Set storageProvider to the new provider's ID
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
+
   // Load Old Provider (if exists) - Just update timestamp, derived field handles removal
-  const oldProvider = Provider.load(oldStorageProvider);
+  const oldProvider = Provider.load(oldServiceProvider);
   if (oldProvider) {
     oldProvider.totalDataSets = oldProvider.totalDataSets.minus(BigInt.fromI32(1));
     oldProvider.updatedAt = event.block.timestamp;
     oldProvider.blockNumber = event.block.number;
     oldProvider.save();
   } else {
-    log.warning("DataSetServiceProviderChanged: Old Provider {} not found", [oldStorageProvider.toHexString()]);
+    log.warning("DataSetServiceProviderChanged: Old Provider {} not found", [oldServiceProvider.toHexString()]);
   }
 
   // Load or Create New Provider - Just update timestamp/create, derived field handles addition
-  let newProvider = Provider.load(newStorageProvider);
-  if (newProvider == null) {
-    newProvider = new Provider(newStorageProvider);
-    newProvider.beneficiary = newStorageProvider;
-    newProvider.status = ProviderStatus.REGISTERED;
-    newProvider.totalPieces = BigInt.fromI32(0);
-    newProvider.totalFaultedPeriods = BigInt.fromI32(0);
-    newProvider.totalFaultedPieces = BigInt.fromI32(0);
-    newProvider.totalDataSize = BigInt.fromI32(0);
-    newProvider.totalDataSets = BigInt.fromI32(1);
-    newProvider.createdAt = event.block.timestamp;
-    newProvider.blockNumber = event.block.number;
-  } else {
-    newProvider.totalDataSets = newProvider.totalDataSets.plus(BigInt.fromI32(1));
-    newProvider.blockNumber = event.block.number;
+  let newProvider = Provider.load(newServiceProvider);
+  if (!newProvider) {
+    log.warning("DataSetServiceProviderChanged: New Provider {} not found", [newServiceProvider.toHexString()]);
+    return;
   }
+  newProvider.totalDataSets = newProvider.totalDataSets.plus(BigInt.fromI32(1));
+  newProvider.blockNumber = event.block.number;
   newProvider.updatedAt = event.block.timestamp;
   newProvider.save();
-
-  // Update DataSet storageProvider (this updates the derived relationship on both old and new Provider)
-  dataSet.owner = newStorageProvider; // Set storageProvider to the new provider's ID
-  dataSet.updatedAt = event.block.timestamp;
-  dataSet.blockNumber = event.block.number;
-  dataSet.save();
 }
 
 /**
@@ -481,13 +470,13 @@ export function handleDataSetServiceProviderChanged(event: DataSetServiceProvide
 export function handleProviderApproved(event: ProviderApprovedEvent): void {
   const providerId = event.params.providerId;
 
-  const providerInfo = getServiceProviderInfo(event.address, providerId);
+  const providerInfo = getServiceProviderInfo(ContractAddresses.ServiceProviderRegistry, providerId);
 
-  const provider = Provider.load(providerInfo.beneficiary);
+  const provider = Provider.load(providerInfo.serviceProvider);
 
   if (provider === null) {
     log.warning("ProviderApproved: existing provider not found for address: {}", [
-      providerInfo.beneficiary.toHexString(),
+      providerInfo.serviceProvider.toHexString(),
     ]);
     return;
   }
@@ -507,13 +496,13 @@ export function handleProviderApproved(event: ProviderApprovedEvent): void {
 export function handleProviderUnapproved(event: ProviderUnapprovedEvent): void {
   const providerId = event.params.providerId;
 
-  const providerInfo = getServiceProviderInfo(event.address, providerId);
+  const providerInfo = getServiceProviderInfo(ContractAddresses.ServiceProviderRegistry, providerId);
 
-  const provider = Provider.load(providerInfo.beneficiary);
+  const provider = Provider.load(providerInfo.serviceProvider);
 
   if (provider === null) {
     log.warning("ProviderUnapproved: existing provider not found for address: {}", [
-      providerInfo.beneficiary.toHexString(),
+      providerInfo.serviceProvider.toHexString(),
     ]);
     return;
   }

@@ -9,8 +9,8 @@
         "type": "tuple",
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
-          { "name": "owner", "type": "address", "internalType": "address" },
-          { "name": "beneficiary", "type": "address", "internalType": "address" },
+          { "name": "serviceProvider", "type": "address", "internalType": "address" },
+          { "name": "payee", "type": "address", "internalType": "address" },
           { "name": "name", "type": "string", "internalType": "string" },
           { "name": "description", "type": "string", "internalType": "string" },
           { "name": "isActive", "type": "bool", "internalType": "bool" }
@@ -29,8 +29,8 @@
         "type": "tuple",
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
-          { "name": "owner", "type": "address", "internalType": "address" },
-          { "name": "beneficiary", "type": "address", "internalType": "address" },
+          { "name": "serviceProvider", "type": "address", "internalType": "address" },
+          { "name": "payee", "type": "address", "internalType": "address" },
           { "name": "name", "type": "string", "internalType": "string" },
           { "name": "description", "type": "string", "internalType": "string" },
           { "name": "isActive", "type": "bool", "internalType": "bool" }
@@ -65,7 +65,7 @@
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
       { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
-      { "name": "owner", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "serviceProvider", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
@@ -97,7 +97,7 @@
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
       { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
-      { "name": "owner", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "serviceProvider", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
@@ -114,8 +114,8 @@
     "name": "ProviderRegistered",
     "inputs": [
       { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
-      { "name": "owner", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "beneficiary", "type": "address", "indexed": true, "internalType": "address" }
+      { "name": "serviceProvider", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "payee", "type": "address", "indexed": true, "internalType": "address" }
     ],
     "anonymous": false
   },

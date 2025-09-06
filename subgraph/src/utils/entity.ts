@@ -1,6 +1,6 @@
 import { Bytes, BigInt, Address } from "@graphprotocol/graph-ts";
 import { Provider, ProviderProduct, Rail } from "../../generated/schema";
-import { ContractAddresses } from "./constants";
+import { BIGINT_ZERO, ContractAddresses } from "./constants";
 import { ProviderStatus } from "./types";
 import { ProductAdded as ProductAddedEvent } from "../../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { getProviderProductEntityId } from "./keys";
@@ -28,13 +28,13 @@ export function createRails(
     rail.operator = listenerAddr;
     rail.arbiter = listenerAddr;
     rail.dataSet = dataSetId;
-    rail.paymentRate = BigInt.fromI32(0);
-    rail.settledUpto = BigInt.fromI32(0);
-    rail.settledAmount = BigInt.fromI32(0);
-    rail.totalFaultedEpochs = BigInt.fromI32(0);
-    rail.endEpoch = BigInt.fromI32(0);
+    rail.paymentRate = BIGINT_ZERO;
+    rail.settledUpto = BIGINT_ZERO;
+    rail.settledAmount = BIGINT_ZERO;
+    rail.totalFaultedEpochs = BIGINT_ZERO;
+    rail.endEpoch = BIGINT_ZERO;
     rail.isActive = true;
-    rail.queueLength = BigInt.fromI32(0);
+    rail.queueLength = BIGINT_ZERO;
     rail.save();
   }
 }
@@ -42,15 +42,15 @@ export function createRails(
 export function createProviderProduct(event: ProductAddedEvent): void {
   const providerId = event.params.providerId;
   const productType = event.params.productType;
-  const owner = event.params.owner;
+  const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
   const serviceUrl = event.params.serviceUrl;
 
-  const productId = getProviderProductEntityId(owner, productType);
+  const productId = getProviderProductEntityId(serviceProvider, productType);
   const providerProduct = new ProviderProduct(productId);
 
-  providerProduct.provider = owner;
+  providerProduct.provider = serviceProvider;
   providerProduct.serviceUrl = serviceUrl;
   providerProduct.productData = getProviderProductData(event.address, providerId, productType);
   providerProduct.productType = BigInt.fromI32(productType);
@@ -63,25 +63,26 @@ export function createProviderProduct(event: ProductAddedEvent): void {
 
 export function initiateProvider(
   providerId: BigInt,
-  owner: Address,
-  beneficiary: Address,
+  serviceProvider: Address,
+  payee: Address,
   timestamp: BigInt,
   blockNumber: BigInt,
 ): Provider {
-  const provider = new Provider(beneficiary);
+  const provider = new Provider(serviceProvider);
   provider.providerId = providerId;
-  provider.owner = owner;
-  provider.beneficiary = beneficiary;
+  provider.serviceProvider = serviceProvider;
+  provider.payee = payee;
   provider.name = "";
   provider.description = "";
   provider.status = ProviderStatus.REGISTERED;
   provider.isActive = true;
 
-  provider.totalFaultedPeriods = BigInt.zero();
-  provider.totalFaultedPieces = BigInt.zero();
-  provider.totalDataSets = BigInt.zero();
-  provider.totalPieces = BigInt.zero();
-  provider.totalDataSize = BigInt.zero();
+  provider.totalFaultedPeriods = BIGINT_ZERO;
+  provider.totalFaultedPieces = BIGINT_ZERO;
+  provider.totalDataSets = BIGINT_ZERO;
+  provider.totalPieces = BIGINT_ZERO;
+  provider.totalDataSize = BIGINT_ZERO;
+  provider.totalProducts = BIGINT_ZERO;
 
   provider.createdAt = timestamp;
   provider.updatedAt = timestamp;
