@@ -7,7 +7,7 @@ import {
   PossessionProven as PossessionProvenEvent,
 } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, Piece, Provider } from "../generated/schema";
-import { LeafSize } from "./utils/constants";
+import { LeafSize, BIGINT_ZERO, BIGINT_ONE } from "./utils/constants";
 import { SumTree } from "./utils/sumTree";
 import { getDataSetEntityId, getPieceEntityId } from "./utils/keys";
 
@@ -33,10 +33,10 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
   const provider = Provider.load(storageProvider);
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(dataSet.totalDataSize);
-    if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
-      provider.totalDataSize = BigInt.fromI32(0);
+    if (provider.totalDataSize.lt(BIGINT_ZERO)) {
+      provider.totalDataSize = BIGINT_ZERO;
     }
-    provider.totalDataSets = provider.totalDataSets.minus(BigInt.fromI32(1));
+    provider.totalDataSets = provider.totalDataSets.minus(BIGINT_ONE);
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
     provider.save();
@@ -50,10 +50,10 @@ export function handleDataSetDeleted(event: DataSetDeletedEvent): void {
   // Update DataSet
   dataSet.isActive = false;
   dataSet.serviceProvider = Bytes.empty();
-  dataSet.totalPieces = BigInt.fromI32(0);
-  dataSet.totalDataSize = BigInt.fromI32(0);
-  dataSet.nextChallengeEpoch = BigInt.fromI32(0);
-  dataSet.lastProvenEpoch = BigInt.fromI32(0);
+  dataSet.totalPieces = BIGINT_ZERO;
+  dataSet.totalDataSize = BIGINT_ZERO;
+  dataSet.nextChallengeEpoch = BIGINT_ZERO;
+  dataSet.lastProvenEpoch = BIGINT_ZERO;
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
   dataSet.save();
@@ -79,9 +79,9 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
 
   const oldTotalDataSize = dataSet.totalDataSize; // Store size before zeroing
 
-  dataSet.totalPieces = BigInt.fromI32(0);
-  dataSet.totalDataSize = BigInt.fromI32(0);
-  dataSet.leafCount = BigInt.fromI32(0);
+  dataSet.totalPieces = BIGINT_ZERO;
+  dataSet.totalDataSize = BIGINT_ZERO;
+  dataSet.leafCount = BIGINT_ZERO;
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
   dataSet.save();
@@ -91,8 +91,8 @@ export function handleDataSetEmpty(event: DataSetEmptyEvent): void {
   if (provider) {
     // Subtract the size this data set had *before* it was zeroed
     provider.totalDataSize = provider.totalDataSize.minus(oldTotalDataSize);
-    if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
-      provider.totalDataSize = BigInt.fromI32(0); // Prevent negative size
+    if (provider.totalDataSize.lt(BIGINT_ZERO)) {
+      provider.totalDataSize = BIGINT_ZERO; // Prevent negative size
     }
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;
@@ -145,7 +145,7 @@ export function handlePossessionProven(event: PossessionProvenEvent): void {
     if (piece) {
       piece.lastProvenEpoch = currentBlockNumber;
       piece.lastProvenAt = currentTimestamp;
-      piece.totalProofsSubmitted = piece.totalProofsSubmitted.plus(BigInt.fromI32(1));
+      piece.totalProofsSubmitted = piece.totalProofsSubmitted.plus(BIGINT_ONE);
       piece.updatedAt = currentTimestamp;
       piece.blockNumber = currentBlockNumber;
       piece.save();
@@ -161,7 +161,7 @@ export function handlePossessionProven(event: PossessionProvenEvent): void {
 
   dataSet.lastProvenEpoch = currentBlockNumber; // Update last proven epoch for the set
   dataSet.totalProvedPieces = dataSet.totalProvedPieces.plus(BigInt.fromI32(uniquePieces.length));
-  dataSet.totalProofs = dataSet.totalProofs.plus(BigInt.fromI32(1));
+  dataSet.totalProofs = dataSet.totalProofs.plus(BIGINT_ONE);
   dataSet.updatedAt = currentTimestamp;
   dataSet.blockNumber = currentBlockNumber;
   dataSet.save();
@@ -205,7 +205,7 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   if (!dataSet) return; // dataSet doesn't belong to Warm Storage Service
 
   let removedPieceCount = 0;
-  let removedDataSize = BigInt.fromI32(0);
+  let removedDataSize = BIGINT_ZERO;
 
   // Mark Piece entities as removed (soft delete)
   for (let i = 0; i < pieceIds.length; i++) {
@@ -246,17 +246,17 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   dataSet.leafCount = dataSet.leafCount.minus(removedDataSize.div(BigInt.fromI32(LeafSize)));
 
   // Ensure stats don't go negative
-  if (dataSet.totalPieces.lt(BigInt.fromI32(0))) {
+  if (dataSet.totalPieces.lt(BIGINT_ZERO)) {
     log.warning("handlePiecesRemoved: DataSet {} pieceCount went negative. Setting to 0.", [setId.toString()]);
-    dataSet.totalPieces = BigInt.fromI32(0);
+    dataSet.totalPieces = BIGINT_ZERO;
   }
-  if (dataSet.totalDataSize.lt(BigInt.fromI32(0))) {
+  if (dataSet.totalDataSize.lt(BIGINT_ZERO)) {
     log.warning("handlePiecesRemoved: DataSet {} totalDataSize went negative. Setting to 0.", [setId.toString()]);
-    dataSet.totalDataSize = BigInt.fromI32(0);
+    dataSet.totalDataSize = BIGINT_ZERO;
   }
-  if (dataSet.leafCount.lt(BigInt.fromI32(0))) {
+  if (dataSet.leafCount.lt(BIGINT_ZERO)) {
     log.warning("handlePiecesRemoved: DataSet {} leafCount went negative. Setting to 0.", [setId.toString()]);
-    dataSet.leafCount = BigInt.fromI32(0);
+    dataSet.leafCount = BIGINT_ZERO;
   }
   dataSet.updatedAt = event.block.timestamp;
   dataSet.blockNumber = event.block.number;
@@ -267,19 +267,19 @@ export function handlePiecesRemoved(event: PiecesRemovedEvent): void {
   if (provider) {
     provider.totalDataSize = provider.totalDataSize.minus(removedDataSize);
     // Ensure provider totalDataSize doesn't go negative
-    if (provider.totalDataSize.lt(BigInt.fromI32(0))) {
+    if (provider.totalDataSize.lt(BIGINT_ZERO)) {
       log.warning("handlePiecesRemoved: Provider {} totalDataSize went negative. Setting to 0.", [
         dataSet.serviceProvider.toHex(),
       ]);
-      provider.totalDataSize = BigInt.fromI32(0);
+      provider.totalDataSize = BIGINT_ZERO;
     }
     provider.totalPieces = provider.totalPieces.minus(BigInt.fromI32(removedPieceCount));
     // Ensure provider totalPieces doesn't go negative
-    if (provider.totalPieces.lt(BigInt.fromI32(0))) {
+    if (provider.totalPieces.lt(BIGINT_ZERO)) {
       log.warning("handlePiecesRemoved: Provider {} totalPieces went negative. Setting to 0.", [
         dataSet.serviceProvider.toHex(),
       ]);
-      provider.totalPieces = BigInt.fromI32(0);
+      provider.totalPieces = BIGINT_ZERO;
     }
     provider.updatedAt = event.block.timestamp;
     provider.blockNumber = event.block.number;

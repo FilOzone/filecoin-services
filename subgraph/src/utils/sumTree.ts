@@ -1,5 +1,6 @@
 import { BigInt, Bytes } from "@graphprotocol/graph-ts";
 import { SumTreeCount } from "../../generated/schema";
+import { BIGINT_ZERO, BIGINT_ONE } from "./constants";
 
 // Define a class for the structure instead of a type alias
 class PieceIdAndOffset {
@@ -16,7 +17,7 @@ export class SumTree {
   private getSum(setId: i32, index: i32, blockNumber: BigInt): BigInt {
     const pieceEntityId = this.getPieceEntityId(BigInt.fromI32(setId as i32), BigInt.fromI32(index as i32));
     const sumTreeCount = SumTreeCount.load(pieceEntityId);
-    if (!sumTreeCount) return BigInt.fromI32(0);
+    if (!sumTreeCount) return BIGINT_ZERO;
     if (sumTreeCount.lastDecEpoch.equals(blockNumber)) {
       return sumTreeCount.lastCount;
     }
@@ -30,8 +31,8 @@ export class SumTree {
     sumTreeCount.setId = BigInt.fromI32(setId as i32);
     sumTreeCount.pieceId = BigInt.fromI32(index as i32);
     sumTreeCount.count = value;
-    sumTreeCount.lastCount = BigInt.fromI32(0);
-    sumTreeCount.lastDecEpoch = BigInt.fromI32(0);
+    sumTreeCount.lastCount = BIGINT_ZERO;
+    sumTreeCount.lastDecEpoch = BIGINT_ZERO;
     sumTreeCount.save();
   }
 
@@ -96,7 +97,7 @@ export class SumTree {
     let sum = count;
     for (let i = 0; i < h; i++) {
       let j = index - (1 << i);
-      sum = sum.plus(this.getSum(setId, j, BigInt.fromI32(1))); // 0 is default value of lastDecEpoch so using 1
+      sum = sum.plus(this.getSum(setId, j, BIGINT_ONE)); // 0 is default value of lastDecEpoch so using 1
     }
     this.setSum(setId, pieceId, sum);
   }
@@ -115,8 +116,8 @@ export class SumTree {
   // findOnePieceId
   findOnePieceId(setId: i32, nextPiece: i32, leafIndex: BigInt, top: i32, blockNumber: BigInt): PieceIdAndOffset {
     let searchPtr = (1 << top) - 1;
-    let acc: BigInt = BigInt.fromI32(0);
-    let candidate: BigInt = BigInt.fromI32(0);
+    let acc: BigInt = BIGINT_ZERO;
+    let candidate: BigInt = BIGINT_ZERO;
     for (let h = top; h > 0; h--) {
       if (searchPtr >= nextPiece) {
         searchPtr -= 1 << (h - 1);

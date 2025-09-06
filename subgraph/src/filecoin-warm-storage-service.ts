@@ -77,7 +77,7 @@ export function generateChallengeIndex(
       dataSetID.toString(),
       Bytes.fromUint8Array(seed).toHex(),
     ]);
-    return BigInt.fromI32(0);
+    return BIGINT_ZERO;
   }
 
   const challengeIndex = hashIntUnsignedR.mod(totalLeaves);
@@ -155,7 +155,7 @@ export function handleFaultRecord(event: FaultRecordEvent): void {
   const serviceProvider = dataSet.serviceProvider;
   const nextPieceId = dataSet.totalPieces;
 
-  let nextChallengeEpoch = BigInt.fromI32(0);
+  let nextChallengeEpoch = BIGINT_ZERO;
   const inputData = event.transaction.input;
   if (inputData.length >= 4 + 32) {
     const potentialNextEpochBytes = inputData.slice(4 + 32, 4 + 32 + 32);
@@ -316,7 +316,7 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
     return;
   }
 
-  provider.totalDataSets = provider.totalDataSets.plus(BigInt.fromI32(1));
+  provider.totalDataSets = provider.totalDataSets.plus(BIGINT_ONE);
   provider.blockNumber = event.block.number;
   provider.updatedAt = event.block.timestamp;
   provider.save();
@@ -337,7 +337,7 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
   if (!rail) return;
 
   // if initial paymentRate is 0 -> don't enqueue rate changes
-  if (rail.paymentRate.equals(BigInt.fromI32(0))) {
+  if (rail.paymentRate.equals(BIGINT_ZERO)) {
     rail.paymentRate = newRate;
   } else {
     const rateChangeQueue = new RateChangeQueue(getRateChangeQueueEntityId(railId, rail.queueLength));
@@ -345,7 +345,7 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
     rateChangeQueue.rate = newRate;
     rateChangeQueue.rail = railEntityId;
     rateChangeQueue.save();
-    rail.queueLength = rail.queueLength.plus(BigInt.fromI32(1));
+    rail.queueLength = rail.queueLength.plus(BIGINT_ONE);
   }
   rail.save();
 }
@@ -376,12 +376,12 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
   piece.metadataKeys = metadataKeys;
   piece.metadataValues = metadataValues;
   piece.removed = false;
-  piece.lastProvenEpoch = BigInt.fromI32(0);
-  piece.lastProvenAt = BigInt.fromI32(0);
-  piece.lastFaultedEpoch = BigInt.fromI32(0);
-  piece.lastFaultedAt = BigInt.fromI32(0);
-  piece.totalProofsSubmitted = BigInt.fromI32(0);
-  piece.totalPeriodsFaulted = BigInt.fromI32(0);
+  piece.lastProvenEpoch = BIGINT_ZERO;
+  piece.lastProvenAt = BIGINT_ZERO;
+  piece.lastFaultedEpoch = BIGINT_ZERO;
+  piece.lastFaultedAt = BIGINT_ZERO;
+  piece.totalProofsSubmitted = BIGINT_ZERO;
+  piece.totalPeriodsFaulted = BIGINT_ZERO;
   piece.createdAt = event.block.timestamp;
   piece.updatedAt = event.block.timestamp;
   piece.blockNumber = event.block.number;
@@ -443,7 +443,7 @@ export function handleDataSetServiceProviderChanged(event: DataSetServiceProvide
   // Load Old Provider (if exists) - Just update timestamp, derived field handles removal
   const oldProvider = Provider.load(oldServiceProvider);
   if (oldProvider) {
-    oldProvider.totalDataSets = oldProvider.totalDataSets.minus(BigInt.fromI32(1));
+    oldProvider.totalDataSets = oldProvider.totalDataSets.minus(BIGINT_ONE);
     oldProvider.updatedAt = event.block.timestamp;
     oldProvider.blockNumber = event.block.number;
     oldProvider.save();
@@ -457,7 +457,7 @@ export function handleDataSetServiceProviderChanged(event: DataSetServiceProvide
     log.warning("DataSetServiceProviderChanged: New Provider {} not found", [newServiceProvider.toHexString()]);
     return;
   }
-  newProvider.totalDataSets = newProvider.totalDataSets.plus(BigInt.fromI32(1));
+  newProvider.totalDataSets = newProvider.totalDataSets.plus(BIGINT_ONE);
   newProvider.blockNumber = event.block.number;
   newProvider.updatedAt = event.block.timestamp;
   newProvider.save();
