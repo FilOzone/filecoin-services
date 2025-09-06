@@ -76,7 +76,7 @@ enum ProviderStatus {
 }
 
 type Provider @entity(immutable: false) {
-  id: Bytes! # Owner address
+  id: Bytes! # Service provider address
   providerId: BigInt!
   serviceProvider: Bytes!
   payee: Bytes!
