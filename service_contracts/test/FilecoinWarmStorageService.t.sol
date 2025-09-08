@@ -1930,7 +1930,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         if (caller == address(mockPDPVerifier)) {
             vm.expectEmit(true, false, false, true);
-            emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], keys, values);
+            emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, keys, values, pieceData[0]);
         } else {
             // Handle case where caller is not the PDP verifier
             vm.expectRevert(
@@ -2002,7 +2002,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             if (keyLength <= 32) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
-                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
+                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, keys, values, pieceData[0]);
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
@@ -2067,7 +2067,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             if (valueLength <= 128) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
-                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
+                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, keys, values, pieceData[0]);
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
@@ -2133,7 +2133,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             if (keyCount <= MAX_KEYS_PER_PIECE) {
                 // Should succeed for valid counts
                 vm.expectEmit(true, false, false, true);
-                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + testIdx, pieceData[0], keys, values);
+                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + testIdx, keys, values, pieceData[0]);
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
@@ -2410,11 +2410,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect events for each piece with their specific metadata
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, allKeys[0], allValues[0], pieceData[0]);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, allKeys[1], allValues[1], pieceData[1]);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 2, pieceData[2], allKeys[2], allValues[2]);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 2, allKeys[2], allValues[2], pieceData[2]);
 
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
@@ -2582,9 +2582,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect events with empty metadata arrays
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, allKeys[0], allValues[0], pieceData[0]);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, allKeys[1], allValues[1], pieceData[1]);
 
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
