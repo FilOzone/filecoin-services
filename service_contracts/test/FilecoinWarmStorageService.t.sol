@@ -1264,7 +1264,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Check pdpEndEpoch is set
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
-        console.log("Payment termination successful. Payment end epoch:", info.pdpEndEpoch);
+        console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
+        // Check cdnEndEpoch is set
+        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
+        console.log("CDN termination successful. CDN end epoch:", info.cdnEndEpoch);
+        // Check withCDN metadata is cleared
+        (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should not exist after termination");
+        assertEq(withCDN, "", "withCDN value should be cleared for dataset");
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
