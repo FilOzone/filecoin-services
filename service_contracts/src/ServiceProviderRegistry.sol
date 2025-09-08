@@ -158,6 +158,7 @@ contract ServiceProviderRegistry is
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({
+            providerId: providerId,
             serviceProvider: msg.sender,
             payee: payee,
             name: name,

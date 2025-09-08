@@ -18,6 +18,7 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Main provider information
     struct ServiceProviderInfo {
+        uint256 providerId; // Unique identifier for the provider
         address serviceProvider; // Address that controls the provider registration
         address payee; // Address that receives payments (cannot be changed after registration)
         string name; // Optional provider name (max 128 chars)
