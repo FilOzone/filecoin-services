@@ -391,11 +391,6 @@
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
                   {
-                    "name": "providerId",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                  },
-                  {
                     "name": "serviceProvider",
                     "type": "address",
                     "internalType": "address"
@@ -419,6 +414,11 @@
                     "name": "isActive",
                     "type": "bool",
                     "internalType": "bool"
+                  },
+                  {
+                    "name": "providerId",
+                    "type": "uint256",
+                    "internalType": "uint256"
                   }
                 ]
               },
@@ -698,11 +698,6 @@
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
           {
-            "name": "providerId",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
@@ -726,6 +721,11 @@
             "name": "isActive",
             "type": "bool",
             "internalType": "bool"
+          },
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -749,11 +749,6 @@
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
           {
-            "name": "providerId",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
@@ -777,6 +772,11 @@
             "name": "isActive",
             "type": "bool",
             "internalType": "bool"
+          },
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -857,11 +857,6 @@
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
                   {
-                    "name": "providerId",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                  },
-                  {
                     "name": "serviceProvider",
                     "type": "address",
                     "internalType": "address"
@@ -885,6 +880,11 @@
                     "name": "isActive",
                     "type": "bool",
                     "internalType": "bool"
+                  },
+                  {
+                    "name": "providerId",
+                    "type": "uint256",
+                    "internalType": "uint256"
                   }
                 ]
               },
@@ -1116,11 +1116,6 @@
     ],
     "outputs": [
       {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
         "name": "serviceProvider",
         "type": "address",
         "internalType": "address"
@@ -1144,6 +1139,11 @@
         "name": "isActive",
         "type": "bool",
         "internalType": "bool"
+      },
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
