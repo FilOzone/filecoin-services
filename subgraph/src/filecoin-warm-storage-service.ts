@@ -13,7 +13,14 @@ import {
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
-import { BIGINT_ONE, BIGINT_ZERO, ContractAddresses, LeafSize, NumChallenges } from "./utils/constants";
+import {
+  BIGINT_ONE,
+  BIGINT_ZERO,
+  ContractAddresses,
+  LeafSize,
+  METADATA_KEY_WITH_CDN,
+  NumChallenges,
+} from "./utils/constants";
 import { SumTree } from "./utils/sumTree";
 import { createRails } from "./utils/entity";
 import { ProviderStatus, RailType } from "./utils/types";
@@ -266,7 +273,7 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   const metadataKeys = event.params.metadataKeys;
   const metadataValues = event.params.metadataValues;
   const dataSetEntityId = getDataSetEntityId(setId);
-  const withCDN = cacheMissRailId != BIGINT_ZERO && cdnRailId != BIGINT_ZERO;
+  const withCDN = !!metadataKeys.includes(METADATA_KEY_WITH_CDN);
 
   let dataSet = new DataSet(dataSetEntityId);
 

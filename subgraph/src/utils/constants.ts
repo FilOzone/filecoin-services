@@ -9,6 +9,8 @@ export const DefaultLockupPeriod = 2880 * 10; // 10 days
 export const BIGINT_ZERO = BigInt.zero();
 export const BIGINT_ONE = BigInt.fromI32(1);
 
+export const METADATA_KEY_WITH_CDN = "withCDN";
+
 export class ContractAddresses {
   static readonly PDPVerifier: Address = Address.fromBytes(
     Bytes.fromHexString("0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"),
