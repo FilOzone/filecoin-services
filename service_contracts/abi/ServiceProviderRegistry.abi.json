@@ -391,6 +391,11 @@
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
                   {
+                    "name": "providerId",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
+                  {
                     "name": "serviceProvider",
                     "type": "address",
                     "internalType": "address"
@@ -693,6 +698,11 @@
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
           {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "serviceProvider",
             "type": "address",
             "internalType": "address"
@@ -738,6 +748,11 @@
         "type": "tuple",
         "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
         "components": [
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
           {
             "name": "serviceProvider",
             "type": "address",
@@ -841,6 +856,11 @@
                 "type": "tuple",
                 "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
+                  {
+                    "name": "providerId",
+                    "type": "uint256",
+                    "internalType": "uint256"
+                  },
                   {
                     "name": "serviceProvider",
                     "type": "address",
@@ -1095,6 +1115,11 @@
       }
     ],
     "outputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
       {
         "name": "serviceProvider",
         "type": "address",

@@ -164,6 +164,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(providerId, 1, "Provider ID should be 1");
         ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
             registry.getProviderByAddress(provider1);
+        assertEq(providerInfo.providerId, 1, "Provider ID should be 1");
         assertEq(providerInfo.serviceProvider, provider1, "Provider address should match");
         assertTrue(providerInfo.isActive, "Provider should be active");
         assertTrue(registry.isRegisteredProvider(provider1), "Provider should be registered");
@@ -171,6 +172,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify provider info
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        assertEq(info.providerId, 1, "Provider ID should be 1");
         assertEq(info.serviceProvider, provider1, "Service provider should be provider1");
         assertEq(info.payee, provider1, "Payee should be provider1");
         assertEq(info.name, "", "Name should be empty");
@@ -683,6 +685,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify provider info still exists (soft delete)
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        assertEq(info.providerId, 1, "Provider ID should still be 1");
         assertFalse(info.isActive, "Provider should be marked inactive");
         assertEq(info.serviceProvider, provider1, "Service provider should still be recorded");
         assertEq(info.payee, provider1, "Payee should still be recorded");
@@ -1162,6 +1165,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify initial description
         ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        assertEq(info.providerId, 1, "Provider ID should be 1");
         assertEq(info.description, "Initial description", "Initial description should match");
 
         // Update description
@@ -1172,6 +1176,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify updated description
         info = registry.getProvider(1);
+        assertEq(info.providerId, 1, "Provider ID should still be 1");
         assertEq(info.description, "Updated description", "Description should be updated");
     }
 
