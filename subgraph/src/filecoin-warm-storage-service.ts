@@ -5,7 +5,8 @@ import {
   ProviderApproved as ProviderApprovedEvent,
   ProviderUnapproved as ProviderUnapprovedEvent,
   RailRateUpdated as RailRateUpdatedEvent,
-  PieceAdded as PieceAddedEvent,
+  PieceAdded as PieceAddedEventV1,
+  PieceAdded1 as PieceAddedEventV2,
   DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
   PDPPaymentTerminated as PDPPaymentTerminatedEvent,
   CDNPaymentTerminated as CDNPaymentTerminatedEvent,
@@ -358,22 +359,22 @@ export function handleRailRateUpdated(event: RailRateUpdatedEvent): void {
 }
 
 /**
- * Handles the PieceAdded event.
- * Creates a new piece.
+ * Common logic for handling PieceAdded events.
+ * Creates a new piece and updates related entities.
  */
-export function handlePieceAdded(event: PieceAddedEvent): void {
-  const setId = event.params.dataSetId;
-  const pieceId = event.params.pieceId;
-  const metadataKeys = event.params.keys;
-  const metadataValues = event.params.values;
-
-  const pieceEntityId = getPieceEntityId(setId, pieceId);
-
-  const pieceBytes = getPieceCidData(ContractAddresses.PDPVerifier, setId, pieceId);
+function handlePieceAddedCommon(
+  setId: BigInt,
+  pieceId: BigInt,
+  metadataKeys: string[],
+  metadataValues: string[],
+  pieceBytes: Bytes,
+  blockTimestamp: BigInt,
+  blockNumber: BigInt,
+): void {
   const commPData = validateCommPv2(pieceBytes);
-
   const rawSize = commPData.isValid ? unpaddedSize(commPData.padding, commPData.height) : BigInt.zero();
 
+  const pieceEntityId = getPieceEntityId(setId, pieceId);
   const piece = new Piece(pieceEntityId);
   piece.pieceId = pieceId;
   piece.setId = setId;
@@ -389,9 +390,9 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
   piece.lastFaultedAt = BIGINT_ZERO;
   piece.totalProofsSubmitted = BIGINT_ZERO;
   piece.totalPeriodsFaulted = BIGINT_ZERO;
-  piece.createdAt = event.block.timestamp;
-  piece.updatedAt = event.block.timestamp;
-  piece.blockNumber = event.block.number;
+  piece.createdAt = blockTimestamp;
+  piece.updatedAt = blockTimestamp;
+  piece.blockNumber = blockNumber;
   piece.dataSet = getDataSetEntityId(setId);
 
   piece.save();
@@ -406,8 +407,8 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
   dataSet.nextPieceId = dataSet.nextPieceId.plus(BIGINT_ONE);
   dataSet.totalDataSize = dataSet.totalDataSize.plus(piece.rawSize);
   dataSet.leafCount = dataSet.leafCount.plus(piece.rawSize.div(BigInt.fromI32(LeafSize)));
-  dataSet.updatedAt = event.block.timestamp;
-  dataSet.blockNumber = event.block.number;
+  dataSet.updatedAt = blockTimestamp;
+  dataSet.blockNumber = blockNumber;
   dataSet.save();
 
   const provider = Provider.load(dataSet.serviceProvider);
@@ -418,9 +419,54 @@ export function handlePieceAdded(event: PieceAddedEvent): void {
 
   provider.totalDataSize = provider.totalDataSize.plus(piece.rawSize);
   provider.totalPieces = provider.totalPieces.plus(BIGINT_ONE);
-  provider.updatedAt = event.block.timestamp;
-  provider.blockNumber = event.block.number;
+  provider.updatedAt = blockTimestamp;
+  provider.blockNumber = blockNumber;
   provider.save();
+}
+
+/**
+ * Handles the PieceAdded event with definition- PieceAdded(indexed uint256,indexed uint256,string[],string[])
+ * Parses the pieceCid from the contract and creates a new piece.
+ */
+export function handlePieceAddedV1(event: PieceAddedEventV1): void {
+  const setId = event.params.dataSetId;
+  const pieceId = event.params.pieceId;
+  const metadataKeys = event.params.keys;
+  const metadataValues = event.params.values;
+
+  const pieceBytes = getPieceCidData(ContractAddresses.PDPVerifier, setId, pieceId);
+
+  handlePieceAddedCommon(
+    setId,
+    pieceId,
+    metadataKeys,
+    metadataValues,
+    pieceBytes,
+    event.block.timestamp,
+    event.block.number,
+  );
+}
+
+/**
+ * Handles the PieceAdded event with definition- PieceAdded(indexed uint256,indexed uint256,(bytes),string[],string[])
+ * Parses the pieceCid from the event and creates a new piece.
+ */
+export function handlePieceAddedV2(event: PieceAddedEventV2): void {
+  const setId = event.params.dataSetId;
+  const pieceId = event.params.pieceId;
+  const metadataKeys = event.params.keys;
+  const metadataValues = event.params.values;
+  const pieceBytes = event.params.pieceCid.data;
+
+  handlePieceAddedCommon(
+    setId,
+    pieceId,
+    metadataKeys,
+    metadataValues,
+    pieceBytes,
+    event.block.timestamp,
+    event.block.number,
+  );
 }
 
 /**

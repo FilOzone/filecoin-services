@@ -67,7 +67,9 @@ dataSources:
         - event: "DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])"
           handler: handleDataSetCreated
         - event: "PieceAdded(indexed uint256,indexed uint256,string[],string[])"
-          handler: handlePieceAdded
+          handler: handlePieceAddedV1
+        - event: "PieceAdded(indexed uint256,indexed uint256,(bytes),string[],string[])"
+          handler: handlePieceAddedV2
         - event: "DataSetServiceProviderChanged(indexed uint256,indexed address,indexed address)"
           handler: handleDataSetServiceProviderChanged
         - event: "RailRateUpdated(indexed uint256,uint256,uint256)"

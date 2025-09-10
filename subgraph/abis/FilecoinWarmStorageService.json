@@ -61,6 +61,30 @@
   },
   {
     "type": "event",
+    "name": "PieceAdded",
+    "inputs": [
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "pieceId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      {
+        "name": "pieceCid",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Cids.Cid",
+        "components": [
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      { "name": "keys", "type": "string[]", "indexed": false, "internalType": "string[]" },
+      { "name": "values", "type": "string[]", "indexed": false, "internalType": "string[]" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PDPPaymentTerminated",
     "inputs": [
       { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
