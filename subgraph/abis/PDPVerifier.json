@@ -7,6 +7,23 @@
     "stateMutability": "view"
   },
   {
+    "type": "function",
+    "name": "getPieceCid",
+    "inputs": [
+      { "name": "setId", "type": "uint256", "internalType": "uint256" },
+      { "name": "pieceId", "type": "uint256", "internalType": "uint256" }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct Cids.Cid",
+        "components": [{ "name": "data", "type": "bytes", "internalType": "bytes" }]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
     "type": "event",
     "name": "StorageProviderChanged",
     "inputs": [

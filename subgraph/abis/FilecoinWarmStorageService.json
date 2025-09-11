@@ -1,15 +1,18 @@
 [
   {
     "type": "event",
-    "name": "DataSetRailsCreated",
+    "name": "DataSetCreated",
     "inputs": [
       { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" },
       { "name": "pdpRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "cacheMissRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "cdnRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "payer", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "serviceProvider", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "payee", "type": "address", "indexed": false, "internalType": "address" },
-      { "name": "withCDN", "type": "bool", "indexed": false, "internalType": "bool" }
+      { "name": "metadataKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
+      { "name": "metadataValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
     "anonymous": false
   },
@@ -36,34 +39,90 @@
   {
     "type": "event",
     "name": "ProviderApproved",
+    "inputs": [{ "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" }],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderUnapproved",
+    "inputs": [{ "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" }],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PieceAdded",
     "inputs": [
-      { "name": "provider", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "pieceId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "keys", "type": "string[]", "indexed": false, "internalType": "string[]" },
+      { "name": "values", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
     "anonymous": false
   },
   {
     "type": "event",
-    "name": "ProviderRegistered",
+    "name": "PieceAdded",
     "inputs": [
-      { "name": "provider", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "serviceURL", "type": "string", "indexed": false, "internalType": "string" },
-      { "name": "peerId", "type": "bytes", "indexed": false, "internalType": "bytes" }
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "pieceId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      {
+        "name": "pieceCid",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct Cids.Cid",
+        "components": [
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      { "name": "keys", "type": "string[]", "indexed": false, "internalType": "string[]" },
+      { "name": "values", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
     "anonymous": false
   },
   {
     "type": "event",
-    "name": "ProviderRejected",
-    "inputs": [{ "name": "provider", "type": "address", "indexed": true, "internalType": "address" }],
+    "name": "PDPPaymentTerminated",
+    "inputs": [
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "endEpoch", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "pdpRailId", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
     "anonymous": false
   },
   {
     "type": "event",
-    "name": "ProviderRemoved",
+    "name": "CDNPaymentTerminated",
     "inputs": [
-      { "name": "provider", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "providerId", "type": "uint256", "indexed": true, "internalType": "uint256" }
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "endEpoch", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "cacheMissRailId", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "cdnRailId", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PaymentArbitrated",
+    "inputs": [
+      { "name": "railId", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "dataSetId", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "originalAmount", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "modifiedAmount", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "faultedEpochs", "type": "uint256", "indexed": false, "internalType": "uint256" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DataSetServiceProviderChanged",
+    "inputs": [
+      { "name": "dataSetId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "oldServiceProvider", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "newServiceProvider", "type": "address", "indexed": true, "internalType": "address" }
     ],
     "anonymous": false
   }
