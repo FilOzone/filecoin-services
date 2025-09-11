@@ -34,6 +34,11 @@ if [ -z "$KEYSTORE" ]; then
   exit 1
 fi
 
+if [ -z "$PASSWORD" ]; then
+  echo "Error: PASSWORD is not set"
+  exit 1
+fi
+
 if [ -z "$CHALLENGE_FINALITY" ]; then
   echo "Error: CHALLENGE_FINALITY is not set"
   exit 1
@@ -141,25 +146,17 @@ echo "Payments contract deployed at: $PAYMENTS_CONTRACT_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
 # Step 4: Deploy ServiceProviderRegistry implementation
-echo "Deploying ServiceProviderRegistry implementation..."
-REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
-if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to extract ServiceProviderRegistry implementation address"
-    exit 1
-fi
-echo "ServiceProviderRegistry implementation deployed at: $REGISTRY_IMPLEMENTATION_ADDRESS"
-NONCE=$(expr $NONCE + "1")
-
 # Step 5: Deploy ServiceProviderRegistry proxy
-echo "Deploying ServiceProviderRegistry proxy..."
-REGISTRY_INIT_DATA=$(cast calldata "initialize()")
-SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
+source tools/deploy-service-provider-registry.sh
+NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
-    echo "Error: Failed to extract ServiceProviderRegistry proxy address"
-    exit 1
+  echo "Error: Failed to extract ServiceProviderRegistry proxy address"
+  exit 1
 fi
-echo "ServiceProviderRegistry proxy deployed at: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
-NONCE=$(expr $NONCE + "1")
+if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
+  echo "Error: Failed to extract ServiceProviderRegistry implementation address"
+  exit 1
+fi
 
 # Step 6: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
@@ -183,9 +180,9 @@ if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     exit 1
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
+NONCE=$(expr $NONCE + "1")
 
 # Step 8: Deploy FilecoinWarmStorageServiceStateView
-NONCE=$(expr $NONCE + "1")
 source tools/deploy-warm-storage-view.sh
 
 # Step 9: Set the view contract address on the main contract
