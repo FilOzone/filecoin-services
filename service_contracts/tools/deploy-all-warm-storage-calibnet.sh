@@ -5,6 +5,11 @@
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
+
+# Get the absolute path to this script's directory so we can reliably source other scripts
+# in the same directory, regardless of where this script is executed from
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 echo "Deploying all Warm Storage contracts to calibnet"
 
 if [ -z "$RPC_URL" ]; then
@@ -105,7 +110,7 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
     # If existing session key registry not supplied, deploy another one
-    source tools/deploy-session-key-registry.sh
+    source "$SCRIPT_DIR/deploy-session-key-registry.sh"
     NONCE=$(expr $NONCE + "1")
 fi
 
@@ -186,11 +191,11 @@ echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRES
 
 # Step 8: Deploy FilecoinWarmStorageServiceStateView
 NONCE=$(expr $NONCE + "1")
-source tools/deploy-warm-storage-view.sh
+source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
 
 # Step 9: Set the view contract address on the main contract
 NONCE=$(expr $NONCE + "1")
-source tools/set-warm-storage-view.sh
+source "$SCRIPT_DIR/set-warm-storage-view.sh"
 
 # Summary of deployed contracts
 echo
