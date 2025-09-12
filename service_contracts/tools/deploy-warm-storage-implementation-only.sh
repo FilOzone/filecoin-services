@@ -185,3 +185,27 @@ else
     echo "3. Run manually:"
     echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
 fi
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    # Install filfox-verifier if needed
+    if [ ! -d "node_modules" ]; then
+        npm install
+    fi
+    
+    # Detect chain ID for verification
+    FILECOIN_NETWORK=${FILECOIN_NETWORK:-calibnet}
+    if [ "$FILECOIN_NETWORK" = "mainnet" ]; then
+        VERIFY_CHAIN_ID=314
+    else
+        VERIFY_CHAIN_ID=314159
+    fi
+    
+    npx filfox-verifier forge "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" --chain "$VERIFY_CHAIN_ID"
+else
+    echo
+    echo "⏭️  Skipping automatic verification (set AUTO_VERIFY=true to enable)"
+fi

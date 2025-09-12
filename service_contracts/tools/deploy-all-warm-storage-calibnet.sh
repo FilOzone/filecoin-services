@@ -184,6 +184,7 @@ if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
+
 # Step 8: Deploy FilecoinWarmStorageServiceStateView
 NONCE=$(expr $NONCE + "1")
 source tools/deploy-warm-storage-view.sh
@@ -211,3 +212,37 @@ echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    # Install filfox-verifier if needed
+    if [ ! -d "node_modules" ]; then
+        npm install
+    fi
+    
+    # Detect chain ID for verification
+    FILECOIN_NETWORK=${FILECOIN_NETWORK:-calibnet}
+    if [ "$FILECOIN_NETWORK" = "mainnet" ]; then
+        VERIFY_CHAIN_ID=314
+    else
+        VERIFY_CHAIN_ID=314159
+    fi
+    
+    # Verify all major contracts
+    npx filfox-verifier forge "$PDP_VERIFIER_ADDRESS" "src/PDPVerifier.sol:PDPVerifier" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge "$PAYMENTS_CONTRACT_ADDRESS" "src/Payments.sol:Payments" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge "$REGISTRY_IMPLEMENTATION_ADDRESS" "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge "$WARM_STORAGE_VIEW_ADDRESS" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" --chain "$VERIFY_CHAIN_ID"
+    
+    # Verify proxy contracts
+    echo "🔍 Verifying proxy contracts..."
+    npx filfox-verifier forge "$REGISTRY_PROXY_ADDRESS" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge "$WARM_STORAGE_SERVICE_ADDRESS" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" --chain "$VERIFY_CHAIN_ID"
+else
+    echo
+    echo "⏭️  Skipping automatic verification (set AUTO_VERIFY=true to enable)"
+fi
