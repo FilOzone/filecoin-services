@@ -40,3 +40,27 @@ fi
 export SESSION_KEY_REGISTRY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry | grep "Deployed to" | awk '{print $3}')
 
 echo SessionKeyRegistry deployed at $SESSION_KEY_REGISTRY_ADDRESS
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    # Install filfox-verifier if needed
+    if [ ! -d "node_modules" ]; then
+        npm install
+    fi
+    
+    # Detect chain ID for verification
+    FILECOIN_NETWORK=${FILECOIN_NETWORK:-calibnet}
+    if [ "$FILECOIN_NETWORK" = "mainnet" ]; then
+        VERIFY_CHAIN_ID=314
+    else
+        VERIFY_CHAIN_ID=314159
+    fi
+    
+    npx filfox-verifier forge "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" --chain "$VERIFY_CHAIN_ID"
+else
+    echo
+    echo "⏭️  Skipping automatic verification (set AUTO_VERIFY=true to enable)"
+fi
