@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+- **Payments**: Added ERC-3009 support with new deposit authorization functions ([#223](https://github.com/FilOzone/filecoin-services/pull/223))
+  - `depositWithAuthorization()` for ERC-3009 compliant deposits
+  - `depositWithAuthorizationAndApproveOperator()` for combined deposit and operator approval
+  - `depositWithAuthorizationAndIncreaseOperatorApproval()` for combined deposit and operator allowance increase
+
+### Changed
+- **BREAKING**: Updated Payments contract ABI with breaking changes ([#223](https://github.com/FilOzone/filecoin-services/pull/223))
+  - **BREAKING**: `DepositRecorded` event removes `usedPermit` parameter - event listeners must be updated
+  - **BREAKING**: `railCancel` function state mutability changed from `nonpayable` to `payable` - callers may need to handle potential ETH transfers
+  - **BREAKING**: `PermitRecipientMustBeMsgSender` error replaced with `SignerMustBeMsgSender` error - error handling code must be updated
+
+
 ## [0.1.0] - 2025-01-24
 
 ### Changed
