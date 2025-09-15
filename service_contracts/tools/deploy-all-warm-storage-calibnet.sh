@@ -6,9 +6,9 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
-# Get the absolute path to this script's directory so we can reliably source other scripts
+# Get this script's directory so we can reliably source other scripts
 # in the same directory, regardless of where this script is executed from
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
 echo "Deploying all Warm Storage contracts to calibnet"
 
