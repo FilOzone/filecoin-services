@@ -9,6 +9,8 @@
 # - called from service_contracts directory
 # - PATH has forge and cast
 
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
@@ -53,21 +55,8 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo
     echo "🔍 Starting automatic contract verification..."
     
-    # Install filfox-verifier if needed
-    if [ ! -d "$(dirname $0)/node_modules" ]; then
-        cd "$(dirname $0)" && npm install
-    fi
-    
-    # Detect chain ID for verification
-    FILECOIN_NETWORK=${FILECOIN_NETWORK:-calibnet}
-    if [ "$FILECOIN_NETWORK" = "mainnet" ]; then
-        VERIFY_CHAIN_ID=314
-    else
-        VERIFY_CHAIN_ID=314159
-    fi
-    
     pushd "$(dirname $0)/.." > /dev/null
-    npx filfox-verifier forge "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" --chain "$VERIFY_CHAIN_ID"
+    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" --chain "$CHAIN_ID"
     popd > /dev/null
 else
     echo

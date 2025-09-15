@@ -8,6 +8,8 @@
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
 if [ -z "$RPC_URL" ]; then
@@ -198,13 +200,8 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo
     echo "🔍 Starting automatic contract verification..."
     
-    # Install filfox-verifier if needed
-    if [ ! -d "$(dirname $0)/node_modules" ]; then
-        cd "$(dirname $0)" && npm install
-    fi
-    
     pushd "$(dirname $0)/.." > /dev/null
-    npx filfox-verifier forge $WARM_STORAGE_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
+    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $WARM_STORAGE_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
     popd > /dev/null
 else
     echo

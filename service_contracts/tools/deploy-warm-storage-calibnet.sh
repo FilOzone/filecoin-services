@@ -5,6 +5,9 @@
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
+
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 echo "Deploying Warm Storage Service Contract"
 
 if [ -z "$RPC_URL" ]; then
@@ -165,18 +168,13 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo
     echo "🔍 Starting automatic contract verification..."
     
-    # Install filfox-verifier if needed
-    if [ ! -d "$(dirname $0)/node_modules" ]; then
-        cd "$(dirname $0)" && npm install
-    fi
-    
     # Verify implementation contract
     pushd "$(dirname $0)/.." > /dev/null
-    npx filfox-verifier forge $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
+    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
     
     # Verify proxy contract
     echo "🔍 Verifying FilecoinWarmStorageService proxy..."
-    npx filfox-verifier forge $WARM_STORAGE_SERVICE_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $WARM_STORAGE_SERVICE_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
     popd > /dev/null
 else
     echo
