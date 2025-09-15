@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 - **BREAKING**: Updated Payments contract ABI with breaking changes ([#223](https://github.com/FilOzone/filecoin-services/pull/223))
   - **BREAKING**: `DepositRecorded` event removes `usedPermit` parameter - event listeners must be updated
-  - **BREAKING**: `railCancel` function state mutability changed from `nonpayable` to `payable` - callers may need to handle potential ETH transfers
+  - **BREAKING**: `railCancel` function state mutability changed from `nonpayable` to `payable` - callers may need to handle potential token transfers
   - **BREAKING**: `PermitRecipientMustBeMsgSender` error replaced with `SignerMustBeMsgSender` error - error handling code must be updated
 
 
