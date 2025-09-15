@@ -219,30 +219,24 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo "🔍 Starting automatic contract verification..."
     
     # Install filfox-verifier if needed
-    if [ ! -d "node_modules" ]; then
-        npm install
-    fi
-    
-    # Detect chain ID for verification
-    FILECOIN_NETWORK=${FILECOIN_NETWORK:-calibnet}
-    if [ "$FILECOIN_NETWORK" = "mainnet" ]; then
-        VERIFY_CHAIN_ID=314
-    else
-        VERIFY_CHAIN_ID=314159
+    if [ ! -d "$(dirname $0)/node_modules" ]; then
+        cd "$(dirname $0)" && npm install
     fi
     
     # Verify all major contracts
-    npx filfox-verifier forge "$PDP_VERIFIER_ADDRESS" "src/PDPVerifier.sol:PDPVerifier" --chain "$VERIFY_CHAIN_ID"
-    npx filfox-verifier forge "$PAYMENTS_CONTRACT_ADDRESS" "src/Payments.sol:Payments" --chain "$VERIFY_CHAIN_ID"
-    npx filfox-verifier forge "$REGISTRY_IMPLEMENTATION_ADDRESS" "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" --chain "$VERIFY_CHAIN_ID"
-    npx filfox-verifier forge "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" --chain "$VERIFY_CHAIN_ID"
-    npx filfox-verifier forge "$WARM_STORAGE_VIEW_ADDRESS" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" --chain "$VERIFY_CHAIN_ID"
+    pushd "$(dirname $0)/.." > /dev/null
+    npx filfox-verifier forge $PDP_VERIFIER_ADDRESS src/PDPVerifier.sol:PDPVerifier --chain $CHAIN_ID
+    npx filfox-verifier forge $PAYMENTS_CONTRACT_ADDRESS src/Payments.sol:Payments --chain $CHAIN_ID
+    npx filfox-verifier forge $REGISTRY_IMPLEMENTATION_ADDRESS src/ServiceProviderRegistry.sol:ServiceProviderRegistry --chain $CHAIN_ID
+    npx filfox-verifier forge $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
+    npx filfox-verifier forge $WARM_STORAGE_VIEW_ADDRESS src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --chain $CHAIN_ID
     
     # Verify proxy contracts
     echo "🔍 Verifying proxy contracts..."
-    npx filfox-verifier forge "$REGISTRY_PROXY_ADDRESS" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" --chain "$VERIFY_CHAIN_ID"
-    npx filfox-verifier forge "$WARM_STORAGE_SERVICE_ADDRESS" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge $REGISTRY_PROXY_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    npx filfox-verifier forge $WARM_STORAGE_SERVICE_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    popd > /dev/null
 else
     echo
-    echo "⏭️  Skipping automatic verification (set AUTO_VERIFY=true to enable)"
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

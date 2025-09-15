@@ -14,6 +14,13 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+if [ -z "$CHAIN_ID" ]; then
+  echo "Error: Failed to detect chain ID from RPC"
+  exit 1
+fi
+
 # Auto-detect chain ID from RPC if not already set
 if [ -z "$CHAIN_ID" ]; then
   CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
@@ -47,8 +54,8 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo "🔍 Starting automatic contract verification..."
     
     # Install filfox-verifier if needed
-    if [ ! -d "node_modules" ]; then
-        npm install
+    if [ ! -d "$(dirname $0)/node_modules" ]; then
+        cd "$(dirname $0)" && npm install
     fi
     
     # Detect chain ID for verification
@@ -59,8 +66,10 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
         VERIFY_CHAIN_ID=314159
     fi
     
+    pushd "$(dirname $0)/.." > /dev/null
     npx filfox-verifier forge "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" --chain "$VERIFY_CHAIN_ID"
+    popd > /dev/null
 else
     echo
-    echo "⏭️  Skipping automatic verification (set AUTO_VERIFY=true to enable)"
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

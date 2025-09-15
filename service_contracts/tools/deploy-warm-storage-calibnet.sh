@@ -12,6 +12,13 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+if [ -z "$CHAIN_ID" ]; then
+  echo "Error: Failed to detect chain ID from RPC"
+  exit 1
+fi
+
 if [ -z "$KEYSTORE" ]; then
   echo "Error: KEYSTORE is not set"
   exit 1
@@ -159,25 +166,19 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo "🔍 Starting automatic contract verification..."
     
     # Install filfox-verifier if needed
-    if [ ! -d "node_modules" ]; then
-        npm install
-    fi
-    
-    # Detect chain ID for verification
-    FILECOIN_NETWORK=${FILECOIN_NETWORK:-calibnet}
-    if [ "$FILECOIN_NETWORK" = "mainnet" ]; then
-        VERIFY_CHAIN_ID=314
-    else
-        VERIFY_CHAIN_ID=314159
+    if [ ! -d "$(dirname $0)/node_modules" ]; then
+        cd "$(dirname $0)" && npm install
     fi
     
     # Verify implementation contract
-    npx filfox-verifier forge "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" --chain "$VERIFY_CHAIN_ID"
+    pushd "$(dirname $0)/.." > /dev/null
+    npx filfox-verifier forge $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
     
     # Verify proxy contract
     echo "🔍 Verifying FilecoinWarmStorageService proxy..."
-    npx filfox-verifier forge "$WARM_STORAGE_SERVICE_ADDRESS" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" --chain "$VERIFY_CHAIN_ID"
+    npx filfox-verifier forge $WARM_STORAGE_SERVICE_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    popd > /dev/null
 else
     echo
-    echo "⏭️  Skipping automatic verification (set AUTO_VERIFY=true to enable)"
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi
