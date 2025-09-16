@@ -214,13 +214,13 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
-    mapping(uint256 => uint256) private provingDeadlines;
-    mapping(uint256 => bool) private provenThisPeriod;
+    mapping(uint256 dataSetId => uint256) private provingDeadlines;
+    mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
-    mapping(uint256 => DataSetInfo) private dataSetInfo;
-    mapping(address => uint256) private clientDataSetIds;
-    mapping(address => uint256[]) private clientDataSets;
-    mapping(uint256 => uint256) private railToDataSet;
+    mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
+    mapping(address payer => uint256) private clientDataSetIds;
+    mapping(address payer => uint256[]) private clientDataSets;
+    mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
     // dataSetId => (key => value)
     mapping(uint256 dataSetId => mapping(string key => string value)) internal dataSetMetadata;
@@ -233,7 +233,7 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => mapping(uint256 pieceId => string[] keys)) internal dataSetPieceMetadataKeys;
 
     // Approved provider list
-    mapping(uint256 => bool) internal approvedProviders;
+    mapping(uint256 providerId => bool) internal approvedProviders;
     uint256[] internal approvedProviderIds;
 
     // View contract for read-only operations
