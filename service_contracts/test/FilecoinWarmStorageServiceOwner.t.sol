@@ -87,12 +87,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         // Deploy service contract
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier),
-            address(payments),
-            address(usdfcToken),
-            filCDNBeneficiary,
-            providerRegistry,
-            sessionKeyRegistry
+            address(pdpVerifier), address(payments), usdfcToken, filCDNBeneficiary, providerRegistry, sessionKeyRegistry
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(
@@ -180,9 +175,9 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         // Setup payment approval
         vm.startPrank(payer);
-        payments.setOperatorApproval(address(usdfcToken), address(serviceContract), true, 1000e6, 1000e6, 365 days);
+        payments.setOperatorApproval(usdfcToken, address(serviceContract), true, 1000e6, 1000e6, 365 days);
         usdfcToken.approve(address(payments), 100e6);
-        payments.deposit(address(usdfcToken), payer, 100e6);
+        payments.deposit(usdfcToken, payer, 100e6);
         vm.stopPrank();
 
         // Create data set
