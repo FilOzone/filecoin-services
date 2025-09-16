@@ -35,12 +35,12 @@
     "name": "accounts",
     "inputs": [
       {
-        "name": "",
+        "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
-        "name": "",
+        "name": "owner",
         "type": "address",
         "internalType": "address"
       }
@@ -76,7 +76,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -120,7 +120,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -337,7 +337,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -380,7 +380,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -443,7 +443,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -501,7 +501,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "owner",
@@ -552,7 +552,7 @@
           {
             "name": "token",
             "type": "address",
-            "internalType": "address"
+            "internalType": "contract IERC20"
           },
           {
             "name": "from",
@@ -626,7 +626,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       }
     ],
     "outputs": [
@@ -667,7 +667,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       }
     ],
     "outputs": [
@@ -722,7 +722,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -794,17 +794,17 @@
     "name": "operatorApprovals",
     "inputs": [
       {
-        "name": "",
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "client",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
+        "name": "operator",
         "type": "address",
         "internalType": "address"
       }
@@ -850,7 +850,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -984,7 +984,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "amount",
@@ -1002,7 +1002,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -1026,7 +1026,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "owner",
@@ -1063,7 +1063,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1094,7 +1094,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "client",
@@ -1161,7 +1161,7 @@
         "name": "token",
         "type": "address",
         "indexed": false,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -1360,7 +1360,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1469,7 +1469,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1493,12 +1493,12 @@
     "name": "InsufficientCurrentLockup",
     "inputs": [
       {
-        "name": "from",
+        "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
-        "name": "token",
+        "name": "from",
         "type": "address",
         "internalType": "address"
       },
@@ -1521,7 +1521,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1547,7 +1547,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1573,7 +1573,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1673,7 +1673,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "account",
@@ -1699,7 +1699,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1730,7 +1730,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1787,7 +1787,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1813,7 +1813,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
