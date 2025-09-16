@@ -124,7 +124,7 @@ contract FilecoinWarmStorageService is
     struct ServicePricing {
         uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
-        address tokenAddress; // Address of the USDFC token
+        IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
     }
 
@@ -164,7 +164,7 @@ contract FilecoinWarmStorageService is
     // External contract addresses
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
-    address public immutable usdfcTokenAddress;
+    IERC20Metadata public immutable usdfcTokenAddress;
     address public immutable filCDNBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -264,7 +264,7 @@ contract FilecoinWarmStorageService is
     constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
-        address _usdfcTokenAddress,
+        IERC20Metadata _usdfc,
         address _filCDNBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -277,8 +277,8 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         paymentsContractAddress = _paymentsContractAddress;
 
-        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        usdfcTokenAddress = _usdfcTokenAddress;
+        require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfc;
 
         require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
         filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
@@ -296,7 +296,7 @@ contract FilecoinWarmStorageService is
         sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
-        tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
+        tokenDecimals = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** tokenDecimals); // 5 USDFC
