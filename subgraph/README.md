@@ -22,8 +22,10 @@ Before you begin, ensure you have the following installed and set up:
 This subgraph supports deployment to multiple Filecoin networks using mustache templating. The configuration is managed through:
 
 - **`config/network.json`**: Contains network-specific contract addresses and start blocks
-- **`templates/subgraph.template.yaml`**: Template file with mustache variables
+- **`templates/subgraph.template.yaml`**: Template file with mustache variables for subgraph configuration
+- **`templates/constants.template.ts`**: Template file with mustache variables for TypeScript constants
 - **`scripts/generate-config.js`**: Script to extract network-specific configuration
+- **`scripts/generate-constants.js`**: Script to generate TypeScript constants from template
 
 ### Available Networks
 
@@ -36,47 +38,49 @@ For **Calibration**:
 
 ```bash
 # Build for calibration
-pnpm run build:calibration
+npm run build:calibration
 
 # Deploy to calibration
-goldsky subgraph deploy <your-subgraph-name>/<version> --path ./
+goldsky subgraph deploy <your-subgraph-name>/<version>
 ```
 
 For **Mainnet**:
 
 ```bash
 # Build for mainnet
-pnpm run build:mainnet
+npm run build:mainnet
 
 # Deploy to mainnet
-goldsky subgraph deploy <your-subgraph-name>/<version> --path ./
+goldsky subgraph deploy <your-subgraph-name>/<version>
 ```
 
 ### Available Scripts
 
-The following npm/pnpm scripts are available for multi-network deployment:
+The following npm scripts are available for multi-network deployment:
 
 **Network-specific builds:**
 
-- `pnpm run build:calibration` - Build for calibration network
-- `pnpm run build:mainnet` - Build for mainnet
+- `npm run build:calibration` - Build for calibration network
+- `npm run build:mainnet` - Build for mainnet
 
 **Template generation:**
 
-- `pnpm run generate:yaml:calibration` - Generate subgraph.yaml for calibration
-- `pnpm run generate:yaml:mainnet` - Generate subgraph.yaml for mainnet
+- `npm run generate:yaml:calibration` - Generate subgraph.yaml for calibration
+- `npm run generate:yaml:mainnet` - Generate subgraph.yaml for mainnet
 
 **Constants generation:**
 
-- `pnpm run generate:constants:calibration` - Generate contract addresses for calibration
-- `pnpm run generate:constants:mainnet` - Generate contract addresses for mainnet
+- `npm run generate:constants:calibration` - Generate contract addresses for calibration
+- `npm run generate:constants:mainnet` - Generate contract addresses for mainnet
 
 **Environment variable approach:**
 
 ```bash
 # Set network via environment variable (defaults to calibration)
-NETWORK=mainnet pnpm run precodegen
+NETWORK=mainnet npm run precodegen
 ```
+
+**Cross-Platform Compatibility**: All scripts are designed to work on Windows, macOS, and Linux without requiring shell-specific features like pipes or redirects.
 
 ## Automated Contract Address Generation
 
@@ -85,9 +89,12 @@ One of the key features of this setup is **automated contract address generation
 ### How It Works
 
 1. **Configuration Source**: Contract addresses are defined in `config/network.json`
-2. **Generation Script**: `scripts/generate-constants.js` extracts network-specific addresses
-3. **Generated File**: Creates `src/generated/constants.ts` with TypeScript constants
-4. **Import**: Your code imports from the generated file via `src/utils/constants.ts`
+2. **Template Files**: Mustache templates in `templates/` define structure for generated files
+3. **Generation Scripts**:
+   - `scripts/generate-config.js` extracts network config and optionally generates subgraph.yaml (cross-platform)
+   - `scripts/generate-constants.js` uses `templates/constants.template.ts` to generate TypeScript constants
+4. **Generated Files**: Creates `src/generated/constants.ts` and `subgraph.yaml` with network-specific data
+5. **Import**: Your code imports from the generated file via `src/utils/constants.ts`
 
 ### Generated Constants Structure
 
@@ -130,7 +137,7 @@ Follow these steps to build and deploy the subgraph:
     # or
     yarn install
     # or
-    pnpm install
+    npm install
     ```
 
 3.  **Authenticate with Goldsky:**
@@ -144,9 +151,9 @@ Follow these steps to build and deploy the subgraph:
     Compile your subgraph code into WebAssembly (WASM) for the selected network ( calibration or mainnet).
 
     ```bash
-    pnpm run build:calibration
+    npm run build:calibration
     # or
-    pnpm run build:mainnet
+    npm run build:mainnet
     ```
 
 5.  **Deploy to Goldsky:**
@@ -187,12 +194,12 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
     - `src/*.ts`: To alter the logic that processes blockchain events and maps them to the defined schema entities.
     - `src/utils/*.ts`: If modifying shared utility functions or constants.
 
-2.  **Rebuild:** Compile the updated subgraph code using `pnpm run build:<network>`:
+2.  **Rebuild:** Compile the updated subgraph code using `npm run build:<network>`:
 
     ```bash
-    pnpm run build:calibration
+    npm run build:calibration
     # or
-    pnpm run build:mainnet
+    npm run build:mainnet
     ```
 
 3.  **Redeploy:** Deploy the new version to Goldsky. It's good practice to increment the version number:

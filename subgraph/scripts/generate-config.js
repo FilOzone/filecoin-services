@@ -2,49 +2,43 @@
 
 const fs = require("fs");
 const path = require("path");
+const mustache = require("mustache");
+const { loadNetworkConfig } = require("./utils/config-loader");
 
-// Get network from command line argument or environment variable
-const network = process.argv[2] || process.env.NETWORK || "calibration";
+// Parse command line arguments
+const args = process.argv.slice(2);
+const shouldGenerateYaml = args.includes("--yaml");
 
-// Read the network configuration
-const configPath = path.join(__dirname, "..", "config", "network.json");
-let networkConfig;
+// Get network from command line arguments (excluding flags) or environment variable
+const networkArgs = args.filter((arg) => !arg.startsWith("--"));
+const network = process.env.NETWORK || networkArgs[0] || "calibration";
 
-try {
-  if (!fs.existsSync(configPath)) {
-    console.error(`Error: Configuration file not found at: ${configPath}`);
-    console.error("Please ensure config/network.json exists in your project.");
+const selectedConfig = loadNetworkConfig(network);
+
+if (shouldGenerateYaml) {
+  const templatePath = path.join(__dirname, "..", "templates", "subgraph.template.yaml");
+  let templateContent;
+
+  try {
+    templateContent = fs.readFileSync(templatePath, "utf8");
+  } catch (error) {
+    console.error(`Error: Failed to read subgraph template at: ${templatePath}`);
+    console.error(`Template Error: ${error.message}`);
     process.exit(1);
   }
 
-  const configContent = fs.readFileSync(configPath, "utf8");
-  networkConfig = JSON.parse(configContent);
-} catch (error) {
-  if (error instanceof SyntaxError) {
-    console.error(`Error: Invalid JSON in configuration file: ${configPath}`);
-    console.error("Please check that config/network.json contains valid JSON.");
-    console.error(`JSON Error: ${error.message}`);
-  } else {
-    console.error(`Error reading configuration file: ${configPath}`);
-    console.error(`File Error: ${error.message}`);
+  const yamlContent = mustache.render(templateContent, selectedConfig);
+
+  const outputPath = path.join(__dirname, "..", "subgraph.yaml");
+
+  try {
+    fs.writeFileSync(outputPath, yamlContent);
+    console.log(`✅ Generated subgraph.yaml for ${network} network at: ${outputPath}`);
+  } catch (error) {
+    console.error(`Error: Failed to write subgraph.yaml to: ${outputPath}`);
+    console.error(`Write Error: ${error.message}`);
+    process.exit(1);
   }
-  process.exit(1);
+} else {
+  console.log(JSON.stringify(selectedConfig, null, 2));
 }
-
-// Validate configuration structure
-if (!networkConfig.networks) {
-  console.error("Error: Invalid configuration structure. Missing 'networks' object in config/network.json");
-  console.error("Expected structure: { \"networks\": { \"calibration\": {...}, \"mainnet\": {...} } }");
-  process.exit(1);
-}
-
-// Check if the network exists in the configuration
-if (!networkConfig.networks[network]) {
-  console.error(`Error: Network '${network}' not found in config/network.json`);
-  console.error(`Available networks: ${Object.keys(networkConfig.networks).join(", ")}`);
-  process.exit(1);
-}
-
-// Output the specific network configuration
-const selectedConfig = networkConfig.networks[network];
-console.log(JSON.stringify(selectedConfig, null, 2));

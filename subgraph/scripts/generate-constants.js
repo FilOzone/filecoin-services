@@ -2,52 +2,18 @@
 
 const fs = require("fs");
 const path = require("path");
+const mustache = require("mustache");
+const { loadNetworkConfig } = require("./utils/config-loader");
 
-// Get network from command line argument or environment variable
-const network = process.argv[2] || process.env.NETWORK || "calibration";
+// Parse command line arguments
+const args = process.argv.slice(2);
 
-// Read the network configuration
-const configPath = path.join(__dirname, "..", "config", "network.json");
-let networkConfig;
+// Get network from command line arguments (excluding flags) or environment variable
+const networkArgs = args.filter((arg) => !arg.startsWith("--"));
+const network = process.env.NETWORK || networkArgs[0] || "calibration";
 
-try {
-  if (!fs.existsSync(configPath)) {
-    console.error(`Error: Configuration file not found at: ${configPath}`);
-    console.error("Please ensure config/network.json exists in your project.");
-    process.exit(1);
-  }
+const selectedConfig = loadNetworkConfig(network);
 
-  const configContent = fs.readFileSync(configPath, "utf8");
-  networkConfig = JSON.parse(configContent);
-} catch (error) {
-  if (error instanceof SyntaxError) {
-    console.error(`Error: Invalid JSON in configuration file: ${configPath}`);
-    console.error("Please check that config/network.json contains valid JSON.");
-    console.error(`JSON Error: ${error.message}`);
-  } else {
-    console.error(`Error reading configuration file: ${configPath}`);
-    console.error(`File Error: ${error.message}`);
-  }
-  process.exit(1);
-}
-
-// Validate configuration structure
-if (!networkConfig.networks) {
-  console.error("Error: Invalid configuration structure. Missing 'networks' object in config/network.json");
-  console.error("Expected structure: { \"networks\": { \"calibration\": {...}, \"mainnet\": {...} } }");
-  process.exit(1);
-}
-
-// Check if the network exists in the configuration
-if (!networkConfig.networks[network]) {
-  console.error(`Error: Network '${network}' not found in config/network.json`);
-  console.error(`Available networks: ${Object.keys(networkConfig.networks).join(", ")}`);
-  process.exit(1);
-}
-
-const selectedConfig = networkConfig.networks[network];
-
-// Validate required contract configurations
 const requiredContracts = ["PDPVerifier", "ServiceProviderRegistry", "FilecoinWarmStorageService", "USDFCToken"];
 for (const contract of requiredContracts) {
   if (!selectedConfig[contract] || !selectedConfig[contract].address) {
@@ -57,37 +23,30 @@ for (const contract of requiredContracts) {
   }
 }
 
-// Generate the TypeScript constants file
-const constantsContent = `// This file is auto-generated. Do not edit manually.
-// Generated from config/network.json for network: ${network}
-// Last generated: ${new Date().toISOString()}
+const templatePath = path.join(__dirname, "..", "templates", "constants.template.ts");
+let templateContent;
 
-import { Address, Bytes } from "@graphprotocol/graph-ts";
-
-export class ContractAddresses {
-  static readonly PDPVerifier: Address = Address.fromBytes(
-    Bytes.fromHexString("${selectedConfig.PDPVerifier.address}"),
-  );
-  static readonly ServiceProviderRegistry: Address = Address.fromBytes(
-    Bytes.fromHexString("${selectedConfig.ServiceProviderRegistry.address}"),
-  );
-  static readonly FilecoinWarmStorageService: Address = Address.fromBytes(
-    Bytes.fromHexString("${selectedConfig.FilecoinWarmStorageService.address}"),
-  );
-  static readonly USDFCToken: Address = Address.fromBytes(
-    Bytes.fromHexString("${selectedConfig.USDFCToken.address}"),
-  );
+try {
+  templateContent = fs.readFileSync(templatePath, "utf8");
+} catch (error) {
+  console.error(`Error: Failed to read constants template at: ${templatePath}`);
+  console.error(`Template Error: ${error.message}`);
+  process.exit(1);
 }
-`;
 
-// Ensure the generated directory exists and write the constants file
+const templateData = {
+  network: network,
+  timestamp: new Date().toISOString(),
+  ...selectedConfig,
+};
+
+const constantsContent = mustache.render(templateContent, templateData);
+
 const generatedDir = path.join(__dirname, "..", "src", "generated");
 const outputPath = path.join(generatedDir, "constants.ts");
 
 try {
-  if (!fs.existsSync(generatedDir)) {
-    fs.mkdirSync(generatedDir, { recursive: true });
-  }
+  fs.mkdirSync(generatedDir, { recursive: true });
 
   fs.writeFileSync(outputPath, constantsContent);
   console.log(`✅ Generated constants for ${network} network at: ${outputPath}`);
