@@ -1,4 +1,7 @@
-import { Address, Bytes, BigInt } from "@graphprotocol/graph-ts";
+import { BigInt } from "@graphprotocol/graph-ts";
+
+// Import network-specific contract addresses from generated constants
+export { ContractAddresses } from "../generated/constants";
 
 export const NumChallenges = 5;
 
@@ -10,18 +13,6 @@ export const BIGINT_ZERO = BigInt.zero();
 export const BIGINT_ONE = BigInt.fromI32(1);
 
 export const METADATA_KEY_WITH_CDN = "withCDN";
-
-export class ContractAddresses {
-  static readonly PDPVerifier: Address = Address.fromBytes(
-    Bytes.fromHexString("0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"),
-  );
-  static readonly ServiceProviderRegistry: Address = Address.fromBytes(
-    Bytes.fromHexString("0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb"),
-  );
-  static readonly USDFCToken: Address = Address.fromBytes(
-    Bytes.fromHexString("0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"),
-  );
-}
 
 /**
  * Constants for transaction parsing

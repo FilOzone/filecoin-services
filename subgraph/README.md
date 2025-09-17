@@ -1,6 +1,6 @@
-# Subgraph Deployment and Client Usage
+# Filecoin Services Subgraph - Multi-Network Deployment
 
-This guide details the steps required to deploy the provided subgraph to Goldsky and run the accompanying subgraph client application.
+This guide details the steps required to deploy the subgraph to multiple Filecoin networks (testnet and mainnet) using mustache templating for network-specific configurations.
 
 ## Prerequisites
 
@@ -17,7 +17,101 @@ Before you begin, ensure you have the following installed and set up:
 3.  **Goldsky Account:** You need an account on Goldsky to host your subgraph. Sign up at [goldsky.com](https://goldsky.com/).
 4.  **Goldsky CLI:** This tool allows you to deploy subgraphs to the Goldsky platform. Follow the installation instructions in the [Goldsky Documentation](https://docs.goldsky.com/introduction).
 
-## Deploying the Subgraph to Goldsky
+## Multi-Network Configuration
+
+This subgraph supports deployment to multiple Filecoin networks using mustache templating. The configuration is managed through:
+
+- **`config/network.json`**: Contains network-specific contract addresses and start blocks
+- **`templates/subgraph.template.yaml`**: Template file with mustache variables
+- **`scripts/generate-config.js`**: Script to extract network-specific configuration
+
+### Available Networks
+
+- **Calibration**: Calibration network configuration (ready to use)
+- **Mainnet**: Filecoin mainnet configuration (requires contract addresses)
+
+### Quick Start Commands
+
+For **Calibration**:
+
+```bash
+# Build for calibration
+pnpm run build:calibration
+
+# Deploy to calibration
+goldsky subgraph deploy <your-subgraph-name>/<version> --path ./
+```
+
+For **Mainnet**:
+
+```bash
+# Build for mainnet
+pnpm run build:mainnet
+
+# Deploy to mainnet
+goldsky subgraph deploy <your-subgraph-name>/<version> --path ./
+```
+
+### Available Scripts
+
+The following npm/pnpm scripts are available for multi-network deployment:
+
+**Network-specific builds:**
+
+- `pnpm run build:calibration` - Build for calibration network
+- `pnpm run build:mainnet` - Build for mainnet
+
+**Template generation:**
+
+- `pnpm run generate:yaml:calibration` - Generate subgraph.yaml for calibration
+- `pnpm run generate:yaml:mainnet` - Generate subgraph.yaml for mainnet
+
+**Constants generation:**
+
+- `pnpm run generate:constants:calibration` - Generate contract addresses for calibration
+- `pnpm run generate:constants:mainnet` - Generate contract addresses for mainnet
+
+**Environment variable approach:**
+
+```bash
+# Set network via environment variable (defaults to calibration)
+NETWORK=mainnet pnpm run precodegen
+```
+
+## Automated Contract Address Generation
+
+One of the key features of this setup is **automated contract address generation**. Instead of manually updating hardcoded addresses in your TypeScript files, the system automatically generates them from your network configuration.
+
+### How It Works
+
+1. **Configuration Source**: Contract addresses are defined in `config/network.json`
+2. **Generation Script**: `scripts/generate-constants.js` extracts network-specific addresses
+3. **Generated File**: Creates `src/generated/constants.ts` with TypeScript constants
+4. **Import**: Your code imports from the generated file via `src/utils/constants.ts`
+
+### Generated Constants Structure
+
+The generated `src/generated/constants.ts` includes:
+
+```typescript
+export class ContractAddresses {
+  static readonly PDPVerifier: Address = Address.fromBytes(/*...*/);
+  static readonly ServiceProviderRegistry: Address = Address.fromBytes(/*...*/);
+  static readonly FilecoinWarmStorageService: Address = Address.fromBytes(/*...*/);
+  static readonly USDFCToken: Address = Address.fromBytes(/*...*/);
+}
+```
+
+### Usage in Code
+
+```typescript
+import { ContractAddresses } from "./constants";
+
+// Use network-specific addresses
+const pdpContract = PDPVerifier.bind(ContractAddresses.PDPVerifier);
+```
+
+## Deploying the Subgraph
 
 Follow these steps to build and deploy the subgraph:
 
@@ -35,6 +129,8 @@ Follow these steps to build and deploy the subgraph:
     npm install
     # or
     yarn install
+    # or
+    pnpm install
     ```
 
 3.  **Authenticate with Goldsky:**
@@ -44,21 +140,16 @@ Follow these steps to build and deploy the subgraph:
     goldsky login
     ```
 
-4.  **Generate Code:**
-    The Graph CLI uses the `subgraph.yaml` manifest and GraphQL schema (`schema.graphql`) to generate AssemblyScript types.
+4.  **Build the Subgraph:**
+    Compile your subgraph code into WebAssembly (WASM) for the selected network ( calibration or mainnet).
 
     ```bash
-    graph codegen
+    pnpm run build:calibration
+    # or
+    pnpm run build:mainnet
     ```
 
-5.  **Build the Subgraph:**
-    Compile your subgraph code into WebAssembly (WASM).
-
-    ```bash
-    graph build
-    ```
-
-6.  **Deploy to Goldsky:**
+5.  **Deploy to Goldsky:**
     Use the Goldsky CLI to deploy your built subgraph.
 
     ```bash
@@ -69,8 +160,8 @@ Follow these steps to build and deploy the subgraph:
     - Replace `<version>` with a version identifier (e.g., `v0.0.1`).
     - You can manage your deployments and find your subgraph details in the [Goldsky Dashboard](https://app.goldsky.com/). The deployment command will output the GraphQL endpoint URL for your subgraph upon successful completion. **Copy this URL**, as you will need it for the client.
 
-7.  **Tag the Subgraph (Optional):**
-    Tag the subgraph you deployed in step 6.
+6.  **Tag the Subgraph (Optional):**
+    Tag the subgraph you deployed in step 5.
 
     ```bash
     goldsky subgraph tag create <your-subgraph-name>/<version> --tag <tag-name>
@@ -90,43 +181,21 @@ If you need to make changes to the subgraph's logic, schema, or configuration, f
 
 1.  **Modify Code:** Edit the relevant files:
 
-    - `schema.graphql`: To change the data structure and entities being stored.
-    - `subgraph.yaml`: To update contract addresses, ABIs, start blocks, or event handlers.
+    - `config/network.json`: To update contract addresses.
+    - `schemas/schema.*.graphql`: To change the data structure and entities being stored.
+    - `templates/subgraph.template.yaml`: To update contract addresses, ABIs, start blocks, or event handlers.
     - `src/*.ts`: To alter the logic that processes blockchain events and maps them to the defined schema entities.
     - `src/utils/*.ts`: If modifying shared utility functions or constants.
 
-2.  **Important Note on PDPVerifier Address:** Several handlers make a contract call to the PDPVerifier and ServiceProviderRegistry contract. The address for these contracts is currently hardcoded in `subgraph/src/utils/constants.ts`:
-
-    ```typescript
-    // subgraph/src/utils/constants.ts
-    export class ContractAddresses {
-      static readonly PDPVerifier: Address = Address.fromBytes(
-        Bytes.fromHexString("0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"),
-      );
-      static readonly ServiceProviderRegistry: Address = Address.fromBytes(
-        Bytes.fromHexString("0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb"),
-      );
-      static readonly USDFCToken: Address = Address.fromBytes(
-        Bytes.fromHexString("0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"),
-      );
-    }
-    ```
-
-    **If you update the `PDPVerifier` and `ServiceProviderRegistry` contract address in your `subgraph.yaml` file to index a different deployment, you MUST also update the `ContractAddresses.PDPVerifier` and `ContractAddresses.ServiceProviderRegistry` constants in `subgraph/src/utils/constants.ts` to match the new addresses.** Failure to do so will result in the wrong contract instance being called.
-
-3.  **Regenerate Code:** After modifying the schema or manifest, always regenerate the AssemblyScript types:
+2.  **Rebuild:** Compile the updated subgraph code using `pnpm run build:<network>`:
 
     ```bash
-    graph codegen
+    pnpm run build:calibration
+    # or
+    pnpm run build:mainnet
     ```
 
-4.  **Rebuild:** Compile the updated subgraph code:
-
-    ```bash
-    graph build
-    ```
-
-5.  **Redeploy:** Deploy the new version to Goldsky. It's good practice to increment the version number:
+3.  **Redeploy:** Deploy the new version to Goldsky. It's good practice to increment the version number:
     ```bash
     goldsky subgraph deploy <your-subgraph-name>/<new-version> --path ./
     ```

@@ -1,13 +1,28 @@
 {
-  "name": "synapse-m1",
+  "name": "synapse",
   "license": "UNLICENSED",
   "scripts": {
+    "precodegen": "rm -rf ./generated && pnpm generate:constants && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
+    "generate:constants": "node ./scripts/generate-constants.js",
+    "generate:constants:calibration": "node ./scripts/generate-constants.js calibration",
+    "generate:constants:mainnet": "node ./scripts/generate-constants.js mainnet",
+    "generate:yaml": "node ./scripts/generate-config.js | mustache - ./templates/subgraph.template.yaml > subgraph.yaml",
+    "generate:yaml:calibration": "node ./scripts/generate-config.js calibration | mustache - ./templates/subgraph.template.yaml > subgraph.yaml",
+    "generate:yaml:mainnet": "node ./scripts/generate-config.js mainnet | mustache - ./templates/subgraph.template.yaml > subgraph.yaml",
+    "generate:schema": "cp ./schemas/schema.${VERSION:-v1}.graphql schema.graphql",
+    "prebuild": "pnpm codegen",
     "build": "graph build",
-    "deploy": "graph deploy --node https://api.studio.thegraph.com/deploy/ synapse-m1",
-    "create-local": "graph create --node http://localhost:8020/ synapse-m1",
-    "remove-local": "graph remove --node http://localhost:8020/ synapse-m1",
-    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 synapse-m1",
+    "build:calibration": "NETWORK=calibration pnpm run build",
+    "build:mainnet": "NETWORK=mainnet pnpm run build",
+    "deploy": "goldsky subgraph deploy synapse/1.0.0 --path ./",
+    "deploy:calibration": "pnpm run build:calibration && pnpm run deploy",
+    "deploy:mainnet": "pnpm run build:mainnet && pnpm run deploy",
+    "create-local": "graph create --node http://localhost:8020/ synapse",
+    "remove-local": "graph remove --node http://localhost:8020/ synapse",
+    "deploy-local": "graph deploy --node http://localhost:8020/ --ipfs http://localhost:5001 synapse",
+    "deploy-local:calibration": "pnpm run build:calibration && pnpm run deploy-local",
+    "deploy-local:mainnet": "pnpm run build:mainnet && pnpm run deploy-local",
     "test": "graph test"
   },
   "dependencies": {
@@ -15,6 +30,7 @@
     "@graphprotocol/graph-ts": "0.37.0"
   },
   "devDependencies": {
-    "matchstick-as": "0.6.0"
+    "matchstick-as": "0.6.0",
+    "mustache": "^4.2.0"
   }
 }
