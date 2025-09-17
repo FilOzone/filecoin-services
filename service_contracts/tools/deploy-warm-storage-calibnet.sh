@@ -7,6 +7,19 @@
 #
 echo "Deploying Warm Storage Service Contract"
 
+# Get the current git commit hash
+GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+# Get submodule commit hashes for contracts being deployed
+PDP_COMMIT=$(cd lib/pdp 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "unknown")
+PAYMENTS_COMMIT=$(cd lib/fws-payments 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "unknown")
+SESSION_KEY_COMMIT=$(cd lib/session-key-registry 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "unknown")
+
+echo "Git commit: $GIT_COMMIT"
+echo "PDP submodule commit: $PDP_COMMIT"
+echo "FWS Payments submodule commit: $PAYMENTS_COMMIT"
+echo "Session Key Registry submodule commit: $SESSION_KEY_COMMIT"
+echo
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
@@ -136,6 +149,11 @@ echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRES
 # Summary of deployed contracts
 echo
 echo "# DEPLOYMENT SUMMARY"
+echo "Git commit: $GIT_COMMIT"
+echo "PDP submodule commit: $PDP_COMMIT"
+echo "FWS Payments submodule commit: $PAYMENTS_COMMIT"
+echo "Session Key Registry submodule commit: $SESSION_KEY_COMMIT"
+echo
 echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo

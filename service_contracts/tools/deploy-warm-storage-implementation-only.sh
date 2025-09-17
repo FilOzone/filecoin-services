@@ -10,6 +10,18 @@
 
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
+# Get the current git commit hash and submodule commits
+GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+PDP_COMMIT=$(cd lib/pdp 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "unknown")
+PAYMENTS_COMMIT=$(cd lib/fws-payments 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "unknown")
+SESSION_KEY_COMMIT=$(cd lib/session-key-registry 2>/dev/null && git rev-parse HEAD 2>/dev/null || echo "unknown")
+
+echo "Git commit: $GIT_COMMIT"
+echo "PDP submodule commit: $PDP_COMMIT"
+echo "FWS Payments submodule commit: $PAYMENTS_COMMIT"
+echo "Session Key Registry submodule commit: $SESSION_KEY_COMMIT"
+echo
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
@@ -81,6 +93,10 @@ fi
 echo ""
 echo "# DEPLOYMENT COMPLETE"
 echo "FilecoinWarmStorageService Implementation deployed at: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
+echo "Git commit: $GIT_COMMIT"
+echo "PDP submodule commit: $PDP_COMMIT"
+echo "FWS Payments submodule commit: $PAYMENTS_COMMIT"
+echo "Session Key Registry submodule commit: $SESSION_KEY_COMMIT"
 echo ""
 
 # If proxy address is provided, perform the upgrade

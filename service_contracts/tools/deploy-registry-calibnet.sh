@@ -7,6 +7,11 @@
 #
 echo "Deploying Service Provider Registry Contract"
 
+# Get the current git commit hash
+GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+echo "Git commit: $GIT_COMMIT"
+echo
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
@@ -90,6 +95,7 @@ echo ""
 echo "=========================================="
 echo "=== DEPLOYMENT SUMMARY ==="
 echo "=========================================="
+echo "Git commit: $GIT_COMMIT"
 echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS" 
 echo "ServiceProviderRegistry Proxy: $REGISTRY_PROXY_ADDRESS"
 echo "=========================================="
