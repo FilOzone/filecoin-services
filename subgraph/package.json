@@ -2,7 +2,7 @@
   "name": "synapse",
   "license": "UNLICENSED",
   "scripts": {
-    "precodegen": "rm -rf ./generated && pnpm generate:constants && pnpm generate:schema && pnpm generate:yaml",
+    "precodegen": "pnpm generate:constants && pnpm generate:schema && pnpm generate:yaml",
     "codegen": "graph codegen",
     "generate:constants": "node ./scripts/generate-constants.js",
     "generate:constants:calibration": "node ./scripts/generate-constants.js calibration",
