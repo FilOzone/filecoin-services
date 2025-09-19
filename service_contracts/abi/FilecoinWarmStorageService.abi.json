@@ -13,9 +13,9 @@
         "internalType": "address"
       },
       {
-        "name": "_usdfcTokenAddress",
+        "name": "_usdfc",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20Metadata"
       },
       {
         "name": "_filCDNBeneficiaryAddress",
@@ -331,7 +331,7 @@
           {
             "name": "tokenAddress",
             "type": "address",
-            "internalType": "address"
+            "internalType": "contract IERC20"
           },
           {
             "name": "epochsPerMonth",
@@ -798,7 +798,7 @@
       {
         "name": "",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20Metadata"
       }
     ],
     "stateMutability": "view"

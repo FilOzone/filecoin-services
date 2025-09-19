@@ -35,12 +35,12 @@
     "name": "accounts",
     "inputs": [
       {
-        "name": "",
+        "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
-        "name": "",
+        "name": "owner",
         "type": "address",
         "internalType": "address"
       }
@@ -76,7 +76,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -120,7 +120,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -138,12 +138,206 @@
   },
   {
     "type": "function",
+    "name": "depositWithAuthorization",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC3009"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validBefore",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "depositWithAuthorizationAndApproveOperator",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC3009"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validBefore",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "rateAllowance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lockupAllowance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxLockupPeriod",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "depositWithAuthorizationAndIncreaseOperatorApproval",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC3009"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validAfter",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "validBefore",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "rateAllowanceIncrease",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lockupAllowanceIncrease",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "depositWithPermit",
     "inputs": [
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -186,7 +380,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -249,7 +443,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -307,7 +501,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "owner",
@@ -358,7 +552,7 @@
           {
             "name": "token",
             "type": "address",
-            "internalType": "address"
+            "internalType": "contract IERC20"
           },
           {
             "name": "from",
@@ -432,7 +626,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       }
     ],
     "outputs": [
@@ -473,7 +667,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       }
     ],
     "outputs": [
@@ -528,7 +722,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -600,17 +794,17 @@
     "name": "operatorApprovals",
     "inputs": [
       {
-        "name": "",
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "client",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "",
+        "name": "operator",
         "type": "address",
         "internalType": "address"
       }
@@ -656,7 +850,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -768,7 +962,7 @@
         "internalType": "string"
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -790,7 +984,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "amount",
@@ -808,7 +1002,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "to",
@@ -832,7 +1026,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "owner",
@@ -869,7 +1063,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -888,12 +1082,6 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      },
-      {
-        "name": "usedPermit",
-        "type": "bool",
-        "indexed": false,
-        "internalType": "bool"
       }
     ],
     "anonymous": false
@@ -906,7 +1094,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "client",
@@ -973,7 +1161,7 @@
         "name": "token",
         "type": "address",
         "indexed": false,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -1172,7 +1360,7 @@
         "name": "token",
         "type": "address",
         "indexed": true,
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1281,7 +1469,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1305,12 +1493,12 @@
     "name": "InsufficientCurrentLockup",
     "inputs": [
       {
-        "name": "from",
+        "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
-        "name": "token",
+        "name": "from",
         "type": "address",
         "internalType": "address"
       },
@@ -1333,7 +1521,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1359,7 +1547,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1385,7 +1573,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1485,7 +1673,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "account",
@@ -1511,7 +1699,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1542,7 +1730,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1599,7 +1787,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "from",
@@ -1625,7 +1813,7 @@
       {
         "name": "token",
         "type": "address",
-        "internalType": "address"
+        "internalType": "contract IERC20"
       },
       {
         "name": "operator",
@@ -1925,22 +2113,6 @@
   },
   {
     "type": "error",
-    "name": "PermitRecipientMustBeMsgSender",
-    "inputs": [
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "RailAlreadyTerminated",
     "inputs": [
       {
@@ -2005,6 +2177,22 @@
     "inputs": [
       {
         "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "SignerMustBeMsgSender",
+    "inputs": [
+      {
+        "name": "expected",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "actual",
         "type": "address",
         "internalType": "address"
       }

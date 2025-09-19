@@ -20,6 +20,8 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
 import {FilecoinWarmStorageServiceStateInternalLibrary} from
     "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 
 contract FilecoinWarmStorageServiceTest is Test {
@@ -245,7 +247,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -292,7 +294,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "Payments contract address should be set correctly"
         );
         assertEq(
-            pdpServiceWithPayments.usdfcTokenAddress(),
+            address(pdpServiceWithPayments.usdfcTokenAddress()),
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
@@ -313,7 +315,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -346,7 +348,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService serviceImpl1 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -368,7 +370,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService serviceImpl2 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -390,7 +392,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService serviceImpl3 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -422,7 +424,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService serviceImpl4 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -483,7 +485,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.startPrank(client);
         // Set operator approval for the PDP service in the Payments contract
         payments.setOperatorApproval(
-            address(mockUSDFC),
+            mockUSDFC,
             address(pdpServiceWithPayments),
             true, // approved
             1000e6, // rate allowance (1000 USDFC)
@@ -494,12 +496,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Client deposits funds to the Payments contract for the one-time fee
         uint256 depositAmount = 1e6; // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
-        payments.deposit(address(mockUSDFC), client, depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
         // Get account balances before creating data set
-        (uint256 clientFundsBefore,) = getAccountInfo(address(mockUSDFC), client);
-        (uint256 spFundsBefore,) = getAccountInfo(address(mockUSDFC), serviceProvider);
+        (uint256 clientFundsBefore,) = getAccountInfo(mockUSDFC, client);
+        (uint256 spFundsBefore,) = getAccountInfo(mockUSDFC, serviceProvider);
 
         // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
@@ -551,7 +553,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify the rails in the actual Payments contract
         Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
-        assertEq(pdpRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(address(pdpRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(pdpRail.from, client, "From address should be client");
         assertEq(pdpRail.to, serviceProvider, "To address should be service provider");
         assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
@@ -561,7 +563,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
         Payments.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
-        assertEq(cacheMissRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(address(cacheMissRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cacheMissRail.from, client, "From address should be client");
         assertEq(cacheMissRail.to, serviceProvider, "To address should be service provider");
         assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
@@ -571,7 +573,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
-        assertEq(cdnRail.token, address(mockUSDFC), "Token should be USDFC");
+        assertEq(address(cdnRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
         assertEq(cdnRail.to, filCDNBeneficiary, "To address should be FilCDNBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
@@ -581,8 +583,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
 
         // Get account balances after creating data set
-        (uint256 clientFundsAfter,) = getAccountInfo(address(mockUSDFC), client);
-        (uint256 spFundsAfter,) = getAccountInfo(address(mockUSDFC), serviceProvider);
+        (uint256 clientFundsAfter,) = getAccountInfo(mockUSDFC, client);
+        (uint256 spFundsAfter,) = getAccountInfo(mockUSDFC, serviceProvider);
 
         // Calculate expected client balance
         uint256 expectedClientFundsAfter = clientFundsBefore - 1e5;
@@ -614,7 +616,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.startPrank(client);
         // Set operator approval for the PDP service in the Payments contract
         payments.setOperatorApproval(
-            address(mockUSDFC),
+            mockUSDFC,
             address(pdpServiceWithPayments),
             true, // approved
             1000e6, // rate allowance (1000 USDFC)
@@ -625,7 +627,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Client deposits funds to the Payments contract for the one-time fee
         uint256 depositAmount = 1e6; // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
-        payments.deposit(address(mockUSDFC), client, depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
         // Expect DataSetCreated event when creating the data set
@@ -694,7 +696,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Approvals and deposit
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
+            mockUSDFC,
             address(pdpServiceWithPayments),
             true, // approved
             1000e6, // rate allowance (1000 USDFC)
@@ -703,7 +705,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         uint256 depositAmount = 1e6; // 10x the required fee
         mockUSDFC.approve(address(payments), depositAmount);
-        payments.deposit(address(mockUSDFC), client, depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
         // Create dataset
@@ -789,11 +791,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     // Helper function to get account info from the Payments contract
-    function getAccountInfo(address token, address owner)
-        internal
-        view
-        returns (uint256 funds, uint256 lockupCurrent)
-    {
+    function getAccountInfo(IERC20 token, address owner) internal view returns (uint256 funds, uint256 lockupCurrent) {
         (funds, lockupCurrent,,) = payments.accounts(token, owner);
         return (funds, lockupCurrent);
     }
@@ -821,7 +819,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 5 * 10^decimals");
         assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 5.5 * 10^decimals");
-        assertEq(pricing.tokenAddress, address(mockUSDFC), "Token address should match USDFC");
+        assertEq(address(pricing.tokenAddress), address(mockUSDFC), "Token address should match USDFC");
         assertEq(pricing.epochsPerMonth, 86400, "Epochs per month should be 86400");
 
         // Verify the values are in expected range
@@ -869,11 +867,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
-        payments.setOperatorApproval(
-            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
-        );
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
         mockUSDFC.approve(address(payments), 100e6);
-        payments.deposit(address(mockUSDFC), clientAddress, 100e6);
+        payments.deposit(mockUSDFC, clientAddress, 100e6);
         vm.stopPrank();
 
         // Create data set as approved provider
@@ -1054,11 +1050,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
-        payments.setOperatorApproval(
-            address(mockUSDFC), address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days
-        );
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
         mockUSDFC.approve(address(payments), 100e6);
-        payments.deposit(address(mockUSDFC), clientAddress, 100e6);
+        payments.deposit(mockUSDFC, clientAddress, 100e6);
         vm.stopPrank();
 
         // Create data set as approved provider
@@ -1205,7 +1199,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Setup client payment approval and deposit
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
+            mockUSDFC,
             address(pdpServiceWithPayments),
             true,
             1000e6, // rate allowance
@@ -1214,7 +1208,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         uint256 depositAmount = 100e6;
         mockUSDFC.approve(address(payments), depositAmount);
-        payments.deposit(address(mockUSDFC), client, depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
         // Create data set
@@ -1358,7 +1352,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Setup client payment approval and deposit
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
+            mockUSDFC,
             address(pdpServiceWithPayments),
             true,
             1000e6, // rate allowance
@@ -1367,7 +1361,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         uint256 depositAmount = 100e6;
         mockUSDFC.approve(address(payments), depositAmount);
-        payments.deposit(address(mockUSDFC), client, depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
         // Create data set
@@ -1478,7 +1472,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Setup client payment approval and deposit
         vm.startPrank(client);
         payments.setOperatorApproval(
-            address(mockUSDFC),
+            mockUSDFC,
             address(pdpServiceWithPayments),
             true,
             1000e6, // rate allowance
@@ -1487,7 +1481,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         uint256 depositAmount = 100e6;
         mockUSDFC.approve(address(payments), depositAmount);
-        payments.deposit(address(mockUSDFC), client, depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
         // Create data set
@@ -2749,7 +2743,7 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
     constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
-        address _usdfcTokenAddress,
+        IERC20Metadata _usdfcTokenAddress,
         address _filCDNAddressBeneficiary,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -2823,7 +2817,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         SignatureCheckingService serviceImpl = new SignatureCheckingService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -2931,7 +2925,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
-            address(mockUSDFC),
+            mockUSDFC,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry

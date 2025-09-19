@@ -66,7 +66,7 @@ contract ProviderValidationTest is Test {
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
             address(pdpVerifier),
             address(payments),
-            address(usdfc),
+            usdfc,
             filCDNBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
@@ -172,9 +172,9 @@ contract ProviderValidationTest is Test {
         // Approve USDFC spending, deposit and set operator
         vm.startPrank(client);
         usdfc.approve(address(payments), 10000 * 10 ** 6);
-        payments.deposit(address(usdfc), client, 10000 * 10 ** 6); // Deposit funds
+        payments.deposit(usdfc, client, 10000 * 10 ** 6); // Deposit funds
         payments.setOperatorApproval(
-            address(usdfc), // token
+            usdfc, // token
             address(warmStorage), // operator
             true, // approved
             10000 * 10 ** 6, // rateAllowance

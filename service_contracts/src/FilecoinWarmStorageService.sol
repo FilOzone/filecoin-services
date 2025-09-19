@@ -124,7 +124,7 @@ contract FilecoinWarmStorageService is
     struct ServicePricing {
         uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
-        address tokenAddress; // Address of the USDFC token
+        IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
     }
 
@@ -164,7 +164,7 @@ contract FilecoinWarmStorageService is
     // External contract addresses
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
-    address public immutable usdfcTokenAddress;
+    IERC20Metadata public immutable usdfcTokenAddress;
     address public immutable filCDNBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -214,13 +214,13 @@ contract FilecoinWarmStorageService is
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
-    mapping(uint256 => uint256) private provingDeadlines;
-    mapping(uint256 => bool) private provenThisPeriod;
+    mapping(uint256 dataSetId => uint256) private provingDeadlines;
+    mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
-    mapping(uint256 => DataSetInfo) private dataSetInfo;
-    mapping(address => uint256) private clientDataSetIds;
-    mapping(address => uint256[]) private clientDataSets;
-    mapping(uint256 => uint256) private railToDataSet;
+    mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
+    mapping(address payer => uint256) private clientDataSetIds;
+    mapping(address payer => uint256[]) private clientDataSets;
+    mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
     // dataSetId => (key => value)
     mapping(uint256 dataSetId => mapping(string key => string value)) internal dataSetMetadata;
@@ -233,7 +233,7 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => mapping(uint256 pieceId => string[] keys)) internal dataSetPieceMetadataKeys;
 
     // Approved provider list
-    mapping(uint256 => bool) internal approvedProviders;
+    mapping(uint256 providerId => bool) internal approvedProviders;
     uint256[] internal approvedProviderIds;
 
     // View contract for read-only operations
@@ -264,7 +264,7 @@ contract FilecoinWarmStorageService is
     constructor(
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
-        address _usdfcTokenAddress,
+        IERC20Metadata _usdfc,
         address _filCDNBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
@@ -277,8 +277,8 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.Payments));
         paymentsContractAddress = _paymentsContractAddress;
 
-        require(_usdfcTokenAddress != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        usdfcTokenAddress = _usdfcTokenAddress;
+        require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfc;
 
         require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
         filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
@@ -296,7 +296,7 @@ contract FilecoinWarmStorageService is
         sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
-        tokenDecimals = IERC20Metadata(_usdfcTokenAddress).decimals();
+        tokenDecimals = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** tokenDecimals); // 5 USDFC

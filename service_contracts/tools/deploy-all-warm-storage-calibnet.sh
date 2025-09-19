@@ -6,7 +6,12 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
+
 FILFOX_VERIFIER_VERSION="v1.4.4"
+# Get this script's directory so we can reliably source other scripts
+# in the same directory, regardless of where this script is executed from
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+
 
 echo "Deploying all Warm Storage contracts to calibnet"
 
@@ -74,10 +79,10 @@ echo "  Description: $SERVICE_DESCRIPTION"
 # Fixed addresses for initialization
 PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
 if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
-    FILCDN_CONTROLLER_ADDRESS="0xff0000000000000000000000000000000002870c"
+    FILCDN_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
 fi
 if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
-    FILCDN_BENEFICIARY_ADDRESS="0xff0000000000000000000000000000000002870c"
+    FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
 fi
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
 
@@ -108,7 +113,7 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
     # If existing session key registry not supplied, deploy another one
-    source tools/deploy-session-key-registry.sh
+    source "$SCRIPT_DIR/deploy-session-key-registry.sh"
     NONCE=$(expr $NONCE + "1")
 fi
 
@@ -190,11 +195,11 @@ echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRES
 
 # Step 8: Deploy FilecoinWarmStorageServiceStateView
 NONCE=$(expr $NONCE + "1")
-source tools/deploy-warm-storage-view.sh
+source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
 
 # Step 9: Set the view contract address on the main contract
 NONCE=$(expr $NONCE + "1")
-source tools/set-warm-storage-view.sh
+source "$SCRIPT_DIR/set-warm-storage-view.sh"
 
 # Summary of deployed contracts
 echo
