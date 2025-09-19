@@ -10,18 +10,19 @@
 # - called from service_contracts directory
 # - PATH has forge and cast
 
+# Pinned version for security
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
 fi
 
-# Auto-detect chain ID from RPC if not already set
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
 if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-  if [ -z "$CHAIN_ID" ]; then
-    echo "Error: Failed to detect chain ID from RPC"
-    exit 1
-  fi
+  echo "Error: Failed to detect chain ID from RPC"
+  exit 1
 fi
 
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
@@ -46,3 +47,17 @@ fi
 export WARM_STORAGE_VIEW_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --constructor-args $WARM_STORAGE_SERVICE_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 echo FilecoinWarmStorageServiceStateView deployed at $WARM_STORAGE_VIEW_ADDRESS
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    pushd "$(dirname $0)/.." > /dev/null
+    source tools/verify-contracts.sh
+    verify_contracts_batch "$WARM_STORAGE_VIEW_ADDRESS" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "FilecoinWarmStorageServiceStateView" "$CHAIN_ID"
+    popd > /dev/null
+else
+    echo
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi

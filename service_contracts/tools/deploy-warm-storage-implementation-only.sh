@@ -8,10 +8,19 @@
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
+  exit 1
+fi
+
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+if [ -z "$CHAIN_ID" ]; then
+  echo "Error: Failed to detect chain ID from RPC"
   exit 1
 fi
 
@@ -184,4 +193,18 @@ else
     echo "2. Run this script again, or"
     echo "3. Run manually:"
     echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
+fi
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    pushd "$(dirname $0)/.." > /dev/null
+    source tools/verify-contracts.sh
+    verify_contracts_batch $WARM_STORAGE_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID
+    popd > /dev/null
+else
+    echo
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

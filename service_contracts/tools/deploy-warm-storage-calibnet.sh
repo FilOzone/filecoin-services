@@ -5,10 +5,20 @@
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
+
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 echo "Deploying Warm Storage Service Contract"
 
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
+  exit 1
+fi
+
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+if [ -z "$CHAIN_ID" ]; then
+  echo "Error: Failed to detect chain ID from RPC"
   exit 1
 fi
 
@@ -120,6 +130,8 @@ if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     exit 1
 fi
 echo "FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
+
+
 NONCE=$(expr $NONCE + "1")
 
 # Deploy FilecoinWarmStorageService proxy
@@ -132,6 +144,7 @@ if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     exit 1
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
+
 
 # Summary of deployed contracts
 echo
@@ -149,3 +162,17 @@ echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    pushd "$(dirname $0)/.." > /dev/null
+    source tools/verify-contracts.sh
+    verify_contracts_batch $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID
+    popd > /dev/null
+else
+    echo
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi

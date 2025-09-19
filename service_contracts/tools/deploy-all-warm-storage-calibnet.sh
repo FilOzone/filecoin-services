@@ -6,9 +6,12 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
+
+FILFOX_VERIFIER_VERSION="v1.4.4"
 # Get this script's directory so we can reliably source other scripts
 # in the same directory, regardless of where this script is executed from
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+
 
 echo "Deploying all Warm Storage contracts to calibnet"
 
@@ -189,6 +192,7 @@ if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
+
 # Step 8: Deploy FilecoinWarmStorageServiceStateView
 NONCE=$(expr $NONCE + "1")
 source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
@@ -216,3 +220,18 @@ echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    # Verify all major contracts
+    pushd "$(dirname $0)/.." > /dev/null
+    source tools/verify-contracts.sh
+    verify_contracts_batch $VERIFIER_IMPLEMENTATION_ADDRESS "lib/pdp/src/PDPVerifier.sol:PDPVerifier" "PDPVerifier Implementation" $CHAIN_ID $PAYMENTS_CONTRACT_ADDRESS "lib/fws-payments/src/Payments.sol:Payments" "Payments Contract" $CHAIN_ID $REGISTRY_IMPLEMENTATION_ADDRESS "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" "ServiceProviderRegistry Implementation" $CHAIN_ID $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID $WARM_STORAGE_VIEW_ADDRESS "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "FilecoinWarmStorageServiceStateView" $CHAIN_ID
+    popd > /dev/null
+else
+    echo
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi

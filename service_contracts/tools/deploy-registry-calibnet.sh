@@ -5,10 +5,19 @@
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
+FILFOX_VERIFIER_VERSION="v1.4.4"
+
 echo "Deploying Service Provider Registry Contract"
 
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
+  exit 1
+fi
+
+# Auto-detect chain ID from RPC
+CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+if [ -z "$CHAIN_ID" ]; then
+  echo "Error: Failed to detect chain ID from RPC"
   exit 1
 fi
 
@@ -114,4 +123,18 @@ echo "    cast call $REGISTRY_PROXY_ADDRESS \"getAllActiveProviders()(uint256[])
 echo "  State changes (requires 1 FIL fee):"
 echo "    Register as provider (requires proper encoding of PDPData)"
 echo ""
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    pushd "$(dirname $0)/.." > /dev/null
+    source tools/verify-contracts.sh
+    verify_contracts_batch $REGISTRY_IMPLEMENTATION_ADDRESS "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" "ServiceProviderRegistry Implementation" $CHAIN_ID
+    popd > /dev/null
+else
+    echo
+    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi
 echo "=========================================="
