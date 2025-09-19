@@ -129,13 +129,9 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo
     echo "🔍 Starting automatic contract verification..."
     
-    # Verify implementation contract
     pushd "$(dirname $0)/.." > /dev/null
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $REGISTRY_IMPLEMENTATION_ADDRESS src/ServiceProviderRegistry.sol:ServiceProviderRegistry --chain $CHAIN_ID
-    
-    # Verify proxy contract
-    echo "🔍 Verifying ServiceProviderRegistry proxy..."
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $REGISTRY_PROXY_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    source tools/verify-contracts.sh
+    verify_contracts_batch $REGISTRY_IMPLEMENTATION_ADDRESS "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" "ServiceProviderRegistry Implementation" $CHAIN_ID
     popd > /dev/null
 else
     echo

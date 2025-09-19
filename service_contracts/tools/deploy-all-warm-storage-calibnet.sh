@@ -228,16 +228,8 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     
     # Verify all major contracts
     pushd "$(dirname $0)/.." > /dev/null
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $PDP_VERIFIER_ADDRESS src/PDPVerifier.sol:PDPVerifier --chain $CHAIN_ID
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $PAYMENTS_CONTRACT_ADDRESS src/Payments.sol:Payments --chain $CHAIN_ID
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $REGISTRY_IMPLEMENTATION_ADDRESS src/ServiceProviderRegistry.sol:ServiceProviderRegistry --chain $CHAIN_ID
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $WARM_STORAGE_VIEW_ADDRESS src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --chain $CHAIN_ID
-    
-    # Verify proxy contracts
-    echo "🔍 Verifying proxy contracts..."
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $REGISTRY_PROXY_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $WARM_STORAGE_SERVICE_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    source tools/verify-contracts.sh
+    verify_contracts_batch $VERIFIER_IMPLEMENTATION_ADDRESS "lib/pdp/src/PDPVerifier.sol:PDPVerifier" "PDPVerifier Implementation" $CHAIN_ID $PAYMENTS_CONTRACT_ADDRESS "lib/fws-payments/src/Payments.sol:Payments" "Payments Contract" $CHAIN_ID $REGISTRY_IMPLEMENTATION_ADDRESS "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" "ServiceProviderRegistry Implementation" $CHAIN_ID $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID $WARM_STORAGE_VIEW_ADDRESS "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "FilecoinWarmStorageServiceStateView" $CHAIN_ID
     popd > /dev/null
 else
     echo

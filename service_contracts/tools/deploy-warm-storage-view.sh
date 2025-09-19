@@ -54,7 +54,8 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo "🔍 Starting automatic contract verification..."
     
     pushd "$(dirname $0)/.." > /dev/null
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$WARM_STORAGE_VIEW_ADDRESS" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" --chain "$CHAIN_ID"
+    source tools/verify-contracts.sh
+    verify_contracts_batch "$WARM_STORAGE_VIEW_ADDRESS" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "FilecoinWarmStorageServiceStateView" "$CHAIN_ID"
     popd > /dev/null
 else
     echo

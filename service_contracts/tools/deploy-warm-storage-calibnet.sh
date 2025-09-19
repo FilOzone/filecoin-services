@@ -168,13 +168,9 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo
     echo "🔍 Starting automatic contract verification..."
     
-    # Verify implementation contract
     pushd "$(dirname $0)/.." > /dev/null
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --chain $CHAIN_ID
-    
-    # Verify proxy contract
-    echo "🔍 Verifying FilecoinWarmStorageService proxy..."
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge $WARM_STORAGE_SERVICE_ADDRESS lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --chain $CHAIN_ID
+    source tools/verify-contracts.sh
+    verify_contracts_batch $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID
     popd > /dev/null
 else
     echo

@@ -56,7 +56,8 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
     echo "🔍 Starting automatic contract verification..."
     
     pushd "$(dirname $0)/.." > /dev/null
-    npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" --chain "$CHAIN_ID"
+    source tools/verify-contracts.sh
+    verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" "SessionKeyRegistry" "$CHAIN_ID"
     popd > /dev/null
 else
     echo
