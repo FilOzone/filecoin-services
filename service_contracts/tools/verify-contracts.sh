@@ -57,7 +57,7 @@ verify_sourcify() {
     local contract_name=$3
     local chain_id=${4:-314159}
     
-    echo "🔍 Verifying $contract_name on Sourcify..."
+    echo "Verifying $contract_name on Sourcify..."
     if forge verify-contract $address $contract_path --chain-id $chain_id --verifier sourcify 2>/dev/null; then
         echo "Sourcify verification successful for $contract_name"
         return 0
@@ -97,8 +97,8 @@ verify_contract_all_platforms() {
     echo
     echo "Verification Summary for $contract_name:"
     echo "   Filfox: $([ $filfox_success -eq 0 ] && echo "Success" || echo "Failed")"
-    echo "   Blockscout: $([ $blockscout_success -eq 0 ] && echo "Success" || echo "Failed (expected)")"
-    echo "   Sourcify: $([ $sourcify_success -eq 0 ] && echo "Success" || echo "Failed (expected)")"
+    echo "   Blockscout: $([ $blockscout_success -eq 0 ] && echo "Success" || echo "Failed")"
+    echo "   Sourcify: $([ $sourcify_success -eq 0 ] && echo "Success" || echo "Failed")"
     echo
     
     # Return success if at least Filfox succeeded
