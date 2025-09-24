@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console, Vm} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
+import {Payments} from "@fws-payments/Payments.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
-import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
-import {Payments} from "@fws-payments/Payments.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
 contract ProviderValidationTest is Test {
+    using SafeERC20 for MockERC20;
+
     FilecoinWarmStorageService public warmStorage;
     FilecoinWarmStorageServiceStateView public viewContract;
     ServiceProviderRegistry public serviceProviderRegistry;
@@ -86,7 +90,7 @@ contract ProviderValidationTest is Test {
         viewContract = new FilecoinWarmStorageServiceStateView(warmStorage);
 
         // Transfer tokens to client
-        usdfc.transfer(client, 10000 * 10 ** 6);
+        usdfc.safeTransfer(client, 10000 * 10 ** 6);
     }
 
     function testProviderNotRegistered() public {
