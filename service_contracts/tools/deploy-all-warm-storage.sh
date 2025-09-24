@@ -45,7 +45,6 @@ case "$CHAIN_ID" in
   "314159")
     NETWORK_NAME="calibnet"
     # Network-specific addresses for calibnet
-    PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
     USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"
     # Default challenge and proving configuration for calibnet (testing values)
     DEFAULT_CHALLENGE_FINALITY="10"          # Low value for fast testing (should be 150 in production)
@@ -55,7 +54,6 @@ case "$CHAIN_ID" in
   "314")
     NETWORK_NAME="mainnet"
     # Network-specific addresses for mainnet
-    PAYMENTS_CONTRACT_ADDRESS="0x8c81C77E433725393Ba1eD5439ACdA098278eE1A" # Mainnet Alpha Payments contract address
     USDFC_TOKEN_ADDRESS="0x80B98d3aa09ffff255c3ba4A241111Ff1262F045"
     # Default challenge and proving configuration for mainnet (production values)
     DEFAULT_CHALLENGE_FINALITY="150"         # Production security value
