@@ -32,3 +32,63 @@ jobs:
         run: |
           cd service_contracts
           make contract-size-check
+
+      - name: Build current commit sizes
+        run: |
+          cd service_contracts
+          forge build --sizes --json > current_sizes.json
+
+      - name: Build base branch sizes (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin main
+          mkdir base_build
+          git worktree add base_build origin/main
+          cd base_build/service_contracts
+          forge install
+          forge build --sizes --json > ../base_sizes.json
+          cd ../..
+          git worktree remove --force base_build
+
+      - name: Compare contract sizes
+        run: |
+          cd service_contracts
+          export CONTRACT_SIZE_LIMIT=24576
+          if [ -f base_sizes.json ]; then
+            printf "| %-60s | %-15s | %-15s | %-10s | %-10s | %-18s |\n" "Contract" "Current Size" "Base Size" "Delta" "% Change" "Status"
+            printf "| %-.60s | %-.15s | %-.15s | %-.10s | %-.10s | %-.18s |\n" \
+              "------------------------------------------------------------" "---------------" "---------------" "----------" "----------" "------------------"
+
+            jq -s '
+              def status(delta; curr): 
+                if curr > (env.CONTRACT_SIZE_LIMIT | tonumber) then "Limit Exceeded"
+                else if delta > 0 then "Increased"
+                else if delta < 0 then "Decreased"
+                else "Unchanged" end end end;
+              def bytes_fmt(n): "\(n) bytes";
+              def pct(curr; base): if base == 0 then "N/A" else (((curr - base) / base) * 100 | tostring + "%") end;
+
+              (.[0] * .[1]) as $merged
+              | ($merged | keys_unsorted[]) as $k
+              | {
+                  contract: $k,
+                  curr: (.[0][$k].runtime_size // 0),
+                  base: (.[1][$k].runtime_size // 0)
+                }
+              | .delta = (.curr - .base)
+              | {
+                  c: .contract,
+                  curr: bytes_fmt(.curr),
+                  base: bytes_fmt(.base),
+                  delta: (if .delta > 0 then "+" else "" end) + bytes_fmt(.delta),
+                  pct: pct(.curr; .base),
+                  status: status(.delta; .curr)
+                }
+            ' current_sizes.json base_sizes.json \
+            | jq -r '[.c, .curr, .base, .delta, .pct, .status] | @tsv' \
+            | while IFS=$'\t' read -r c curr base delta pct status; do
+                printf "| %-60s | %-15s | %-15s | %-10s | %-10s | %-18s |\n" "$c" "$curr" "$base" "$delta" "$pct" "$status"
+              done
+          else
+            echo "No base size data found - skipping delta comparison."
+          fi
