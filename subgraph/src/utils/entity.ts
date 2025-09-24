@@ -4,7 +4,7 @@ import { BIGINT_ZERO, ContractAddresses } from "./constants";
 import { ProviderStatus } from "./types";
 import { ProductAdded as ProductAddedEvent } from "../../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { getProviderProductEntityId } from "./keys";
-import { getProviderProductData } from "./contract-calls";
+import { decodePDPOfferingData, getProviderProductData } from "./contract-calls";
 
 export function createRails(
   railIds: BigInt[],
@@ -45,14 +45,15 @@ export function createProviderProduct(event: ProductAddedEvent): void {
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
-  const serviceUrl = event.params.serviceUrl;
 
   const productId = getProviderProductEntityId(serviceProvider, productType);
   const providerProduct = new ProviderProduct(productId);
 
+  const productData = getProviderProductData(event.address, providerId, productType);
+
   providerProduct.provider = serviceProvider;
-  providerProduct.serviceUrl = serviceUrl;
-  providerProduct.productData = getProviderProductData(event.address, providerId, productType);
+  providerProduct.productData = productData;
+  providerProduct.decodedProductData = decodePDPOfferingData(event.address, productData).toJSON();
   providerProduct.productType = BigInt.fromI32(productType);
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;
