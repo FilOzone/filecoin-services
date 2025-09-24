@@ -63,6 +63,6 @@ export class PDPOffering {
   }
 
   toJSON(): string {
-    return `{"serviceURL": "${this.serviceURL}", "minPieceSizeInBytes": "${this.minPieceSizeInBytes}", "maxPieceSizeInBytes": "${this.maxPieceSizeInBytes}", "ipniPiece": "${this.ipniPiece}", "ipniIpfs": "${this.ipniIpfs}", "storagePricePerTibPerMonth": "${this.storagePricePerTibPerMonth}", "minProvingPeriodInEpochs": "${this.minProvingPeriodInEpochs}", "location": "${this.location}", "paymentTokenAddress": "${this.paymentTokenAddress}"}`;
+    return `{"serviceURL": "${this.serviceURL}", "minPieceSizeInBytes": "${this.minPieceSizeInBytes}", "maxPieceSizeInBytes": "${this.maxPieceSizeInBytes}", "ipniPiece": ${this.ipniPiece}, "ipniIpfs": ${this.ipniIpfs}, "storagePricePerTibPerMonth": "${this.storagePricePerTibPerMonth}", "minProvingPeriodInEpochs": "${this.minProvingPeriodInEpochs}", "location": "${this.location}", "paymentTokenAddress": "${this.paymentTokenAddress}"}`;
   }
 }
