@@ -1,6 +1,6 @@
 import { Address, BigInt, Bytes, log } from "@graphprotocol/graph-ts";
 import { ServiceProviderRegistry } from "../../generated/ServiceProviderRegistry/ServiceProviderRegistry";
-import { ServiceProviderInfo } from "./types";
+import { PDPOffering, ServiceProviderInfo } from "./types";
 import { PDPVerifier } from "../../generated/PDPVerifier/PDPVerifier";
 
 export function getServiceProviderInfo(registryAddress: Address, providerId: BigInt): ServiceProviderInfo {
@@ -49,4 +49,27 @@ export function getPieceCidData(verifierAddress: Address, setId: BigInt, pieceId
   }
 
   return pieceCidTry.value.data;
+}
+
+export function decodePDPOfferingData(registryAddress: Address, data: Bytes): PDPOffering {
+  const serviceProviderRegistryInstance = ServiceProviderRegistry.bind(registryAddress);
+
+  const pdpOfferingTry = serviceProviderRegistryInstance.try_decodePDPOffering(data);
+
+  if (pdpOfferingTry.reverted) {
+    log.warning("decodePDPOfferingData: contract call reverted for data: {}", [data.toHexString()]);
+    return PDPOffering.empty();
+  }
+
+  return new PDPOffering(
+    pdpOfferingTry.value.serviceURL,
+    pdpOfferingTry.value.minPieceSizeInBytes,
+    pdpOfferingTry.value.maxPieceSizeInBytes,
+    pdpOfferingTry.value.ipniPiece,
+    pdpOfferingTry.value.ipniIpfs,
+    pdpOfferingTry.value.storagePricePerTibPerMonth,
+    pdpOfferingTry.value.minProvingPeriodInEpochs,
+    pdpOfferingTry.value.location,
+    pdpOfferingTry.value.paymentTokenAddress,
+  );
 }

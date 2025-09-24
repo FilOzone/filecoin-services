@@ -1,4 +1,4 @@
-import { Address } from "@graphprotocol/graph-ts";
+import { Address, BigInt } from "@graphprotocol/graph-ts";
 
 /**
  * Information about a service provider
@@ -30,4 +30,39 @@ export class ProviderStatus {
   static readonly APPROVED: string = "APPROVED";
   static readonly UNAPPROVED: string = "UNAPPROVED";
   static readonly REMOVED: string = "REMOVED";
+}
+
+/**
+ * PDP Offering
+ */
+export class PDPOffering {
+  constructor(
+    public serviceURL: string,
+    public minPieceSizeInBytes: BigInt,
+    public maxPieceSizeInBytes: BigInt,
+    public ipniPiece: boolean,
+    public ipniIpfs: boolean,
+    public storagePricePerTibPerMonth: BigInt,
+    public minProvingPeriodInEpochs: BigInt,
+    public location: string,
+    public paymentTokenAddress: Address,
+  ) {}
+
+  static empty(): PDPOffering {
+    return new PDPOffering(
+      "",
+      BigInt.zero(),
+      BigInt.zero(),
+      false,
+      false,
+      BigInt.zero(),
+      BigInt.zero(),
+      "",
+      Address.zero(),
+    );
+  }
+
+  toJSON(): string {
+    return `{"serviceURL": "${this.serviceURL}", "minPieceSizeInBytes": "${this.minPieceSizeInBytes}", "maxPieceSizeInBytes": "${this.maxPieceSizeInBytes}", "ipniPiece": ${this.ipniPiece}, "ipniIpfs": ${this.ipniIpfs}, "storagePricePerTibPerMonth": "${this.storagePricePerTibPerMonth}", "minProvingPeriodInEpochs": "${this.minProvingPeriodInEpochs}", "location": "${this.location}", "paymentTokenAddress": "${this.paymentTokenAddress}"}`;
+  }
 }
