@@ -10,6 +10,10 @@
 # Set DRY_RUN=false to actually deploy and broadcast transactions (default is dry-run for safety)
 DRY_RUN=${DRY_RUN:-true}
 
+# Default constants (same across all networks)
+DEFAULT_FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
+DEFAULT_FILCDN_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
+
 if [ "$DRY_RUN" = "true" ]; then
     echo "🧪 Running in DRY-RUN mode - simulation only, no actual deployment"
 else
@@ -43,8 +47,6 @@ case "$CHAIN_ID" in
     # Network-specific addresses for calibnet
     PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
     USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"
-    # Default FILCDN addresses for calibnet
-    DEFAULT_FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
     # Default challenge and proving configuration for calibnet (testing values)
     DEFAULT_CHALLENGE_FINALITY="10"          # Low value for fast testing (should be 150 in production)
     DEFAULT_MAX_PROVING_PERIOD="240"         # 240 epochs on calibnet
@@ -55,8 +57,6 @@ case "$CHAIN_ID" in
     # Network-specific addresses for mainnet
     PAYMENTS_CONTRACT_ADDRESS="0x8c81C77E433725393Ba1eD5439ACdA098278eE1A" # Mainnet Alpha Payments contract address
     USDFC_TOKEN_ADDRESS="0x80B98d3aa09ffff255c3ba4A241111Ff1262F045"
-    # Default FILCDN addresses for mainnet
-    DEFAULT_FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
     # Default challenge and proving configuration for mainnet (production values)
     DEFAULT_CHALLENGE_FINALITY="150"         # Production security value
     DEFAULT_MAX_PROVING_PERIOD="2880"        # 2880 epochs on mainnet
@@ -110,7 +110,7 @@ echo "  Description: $SERVICE_DESCRIPTION"
 
 # Use environment variables if set, otherwise use network defaults
 if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
-    FILCDN_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
+    FILCDN_CONTROLLER_ADDRESS="$DEFAULT_FILCDN_CONTROLLER_ADDRESS"
 fi
 
 if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
