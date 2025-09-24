@@ -6,11 +6,11 @@ schema:
 dataSources:
   - kind: ethereum
     name: PDPVerifier
-    network: filecoin-testnet
+    network: {{name}}
     source:
-      address: "0x445238Eca6c6aB8Dff1Aa6087d9c05734D22f137"
+      address: "{{PDPVerifier.address}}"
       abi: PDPVerifier
-      startBlock: 2988297
+      startBlock: {{PDPVerifier.startBlock}}
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -40,11 +40,11 @@ dataSources:
       file: ./src/pdp-verifier.ts
   - kind: ethereum
     name: FilecoinWarmStorageService
-    network: filecoin-testnet
+    network: {{name}}
     source:
-      address: "0x80617b65FD2EEa1D7fDe2B4F85977670690ed348"
+      address: "{{FilecoinWarmStorageService.address}}"
       abi: FilecoinWarmStorageService
-      startBlock: 2988329
+      startBlock: {{FilecoinWarmStorageService.startBlock}}
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
@@ -89,11 +89,11 @@ dataSources:
       file: ./src/filecoin-warm-storage-service.ts
   - kind: ethereum
     name: ServiceProviderRegistry
-    network: filecoin-testnet
+    network: {{name}}
     source:
-      address: "0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb"
+      address: "{{ServiceProviderRegistry.address}}"
       abi: ServiceProviderRegistry
-      startBlock: 2988311
+      startBlock: {{ServiceProviderRegistry.startBlock}}
     mapping:
       kind: ethereum/events
       apiVersion: 0.0.9
