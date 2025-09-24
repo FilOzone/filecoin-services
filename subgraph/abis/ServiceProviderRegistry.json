@@ -1,6 +1,72 @@
 [
   {
     "type": "function",
+    "name": "decodePDPOffering",
+    "inputs": [
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct ServiceProviderRegistryStorage.PDPOffering",
+        "components": [
+          {
+            "name": "serviceURL",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "minPieceSizeInBytes",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "maxPieceSizeInBytes",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "ipniPiece",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "ipniIpfs",
+            "type": "bool",
+            "internalType": "bool"
+          },
+          {
+            "name": "storagePricePerTibPerMonth",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minProvingPeriodInEpochs",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "location",
+            "type": "string",
+            "internalType": "string"
+          },
+          {
+            "name": "paymentTokenAddress",
+            "type": "address",
+            "internalType": "contract IERC20"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "getProvider",
     "inputs": [{ "name": "providerId", "type": "uint256", "internalType": "uint256" }],
     "outputs": [
