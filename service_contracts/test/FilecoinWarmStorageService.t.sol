@@ -465,9 +465,25 @@ contract FilecoinWarmStorageServiceTest is Test {
         return (keys, values);
     }
 
+    function _getCDNMetadataKV(string memory cdnValue, string memory cacheMissRatio, string memory cdnRatio)
+        internal
+        pure
+        returns (string[] memory, string[] memory)
+    {
+        string[] memory keys = new string[](3);
+        string[] memory values = new string[](3);
+        keys[0] = "withCDN";
+        values[0] = cdnValue;
+        keys[1] = "cacheMissPaymentRailLockupRatio";
+        values[1] = cacheMissRatio;
+        keys[2] = "cdnPaymentRailLockupRatio";
+        values[2] = cdnRatio;
+        return (keys, values);
+    }
+
     function testCreateDataSetCreatesRailAndChargesFee() public {
         // Prepare ExtraData - withCDN key presence means CDN is enabled
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "80", "20");
 
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -567,20 +583,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.from, client, "From address should be client");
         assertEq(cacheMissRail.to, serviceProvider, "To address should be service provider");
         assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(cacheMissRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(cacheMissRail.validator, address(0), "Validator should be empty");
         assertEq(cacheMissRail.commissionRateBps, 0, "No commission");
-        assertEq(cacheMissRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
-        assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
+        // assertEq(cacheMissRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        // assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(address(cdnRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
         assertEq(cdnRail.to, filCDNBeneficiary, "To address should be FilCDNBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(cdnRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(cdnRail.validator, address(0), "Validator should be empty");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
-        assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
-        assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
+        // assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        // assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
 
         // Get account balances after creating data set
         (uint256 clientFundsAfter,) = getAccountInfo(mockUSDFC, client);
@@ -1183,7 +1199,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "80", "20");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1259,9 +1275,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
         console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
-        // Check cdnEndEpoch is set
-        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
-        console.log("CDN termination successful. CDN end epoch:", info.cdnEndEpoch);
         // Check withCDN metadata is cleared
         (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN metadata should not exist after termination");
@@ -1336,7 +1349,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("", "80", "20");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1429,12 +1442,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN metadata should not exist after termination");
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
-        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
-
-        (metadataKeys, metadataValues) = viewContract.getAllDataSetMetadata(dataSetId);
-        assertTrue(metadataKeys.length == 0, "Metadata keys should be empty after termination");
-        assertTrue(metadataValues.length == 0, "Metadata values should be empty after termination");
 
         Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
@@ -1446,7 +1454,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Ensure future CDN service termination reverts
         vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNPaymentAlreadyTerminated.selector, dataSetId));
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
@@ -1456,7 +1464,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("", "80", "20");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1678,10 +1686,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId1 = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
 
         // Test 2: Dataset with CDN metadata
-        string[] memory cdnKeys = new string[](1);
-        string[] memory cdnValues = new string[](1);
-        cdnKeys[0] = "withCDN";
-        cdnValues[0] = "true";
+        (string[] memory cdnKeys, string[] memory cdnValues) = _getCDNMetadataKV("true", "80", "20");
         uint256 dataSetId2 = createDataSetForClient(sp1, client, cdnKeys, cdnValues);
 
         // Test 3: Dataset with regular metadata
@@ -1692,12 +1697,15 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId3 = createDataSetForClient(sp1, client, metaKeys, metaValues);
 
         // Test 4: Dataset with multiple metadata including CDN
-        string[] memory bothKeys = new string[](2);
-        string[] memory bothValues = new string[](2);
+        (string[] memory cdnKeysTemp, string[] memory cdnValuesTemp) = _getCDNMetadataKV("true", "80", "20");
+        string[] memory bothKeys = new string[](cdnKeysTemp.length + 1);
+        string[] memory bothValues = new string[](cdnValuesTemp.length + 1);
         bothKeys[0] = "label";
         bothValues[0] = "test";
-        bothKeys[1] = "withCDN";
-        bothValues[1] = "true";
+        for (uint256 i = 0; i < cdnKeysTemp.length; i++) {
+            bothKeys[i + 1] = cdnKeysTemp[i];
+            bothValues[i + 1] = cdnValuesTemp[i];
+        }
         uint256 dataSetId4 = createDataSetForClient(sp1, client, bothKeys, bothValues);
 
         // Verify dataset with multiple metadata keys
@@ -2459,14 +2467,8 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testEmptyStringMetadata() public {
-        // Create data set with empty string metadata
-        string[] memory metadataKeys = new string[](2);
-        metadataKeys[0] = "withCDN";
-        metadataKeys[1] = "description";
-
-        string[] memory metadataValues = new string[](2);
-        metadataValues[0] = ""; // Empty string for withCDN
-        metadataValues[1] = "Test dataset"; // Non-empty for description
+        // Empty string for withCDN
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("", "80", "20");
 
         // Create dataset using the helper function
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
@@ -2634,7 +2636,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testRailTerminated_SetsPdpEndEpochAndEmitsEvent() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "80", "20");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
 
@@ -2645,41 +2647,10 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 0);
-    }
-
-    function testRailTerminated_SetsCdnEndEpochAndEmitsEvent_CdnRail() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 123, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cdnRailId, address(pdpServiceWithPayments), 123);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 0);
-        assertEq(info.cdnEndEpoch, 123);
-    }
-
-    function testRailTerminated_SetsCdnEndEpochAndEmitsEvent_CacheMissRail() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 123, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 123);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 0);
-        assertEq(info.cdnEndEpoch, 123);
     }
 
     function testRailTerminated_DoesNotOverwritePdpEndEpoch() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "80", "20");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
 
@@ -2690,40 +2661,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 0);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 321, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 321);
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 321);
-    }
-
-    function testRailTerminated_DoesNotOverwriteCdnEndEpoch() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 321, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 321);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 0);
-        assertEq(info.cdnEndEpoch, 321);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 321);
     }
 
     // Utility

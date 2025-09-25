@@ -8,7 +8,6 @@ type DataSet @entity(immutable: false) {
   serviceProvider: Provider! # address
   withCDN: Boolean!
   pdpEndEpoch: BigInt!
-  cdnEndEpoch: BigInt!
   leafCount: BigInt! # uint256
   challengeRange: BigInt! # uint256
   isActive: Boolean!

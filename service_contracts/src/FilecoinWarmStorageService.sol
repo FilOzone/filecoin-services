@@ -79,8 +79,6 @@ contract FilecoinWarmStorageService is
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
 
-    event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
-
     event FilCDNControllerChanged(address oldController, address newController);
 
     event ViewContractSet(address indexed viewContract);
@@ -109,7 +107,6 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
     // Decode structure for data set creation extra data
@@ -146,6 +143,8 @@ contract FilecoinWarmStorageService is
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
+    string private constant METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_RATIO = "cacheMissPaymentRailLockupRatio";
+    string private constant METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_RATIO = "cdnPaymentRailLockupRatio";
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
@@ -575,29 +574,54 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId = 0;
 
         if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
+            // Get cache-miss and CDN ratios from metadata (as percentages 0-100)
+            string memory cacheMissPaymentRailLockupRatioStr = getMetadataValue(
+                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_RATIO
+            );
+            string memory cdnPaymentRailLockupRatioStr = getMetadataValue(
+                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_RATIO
+            );
+
+            uint256 cacheMissPaymentRailLockupRatio = stringToUint(cacheMissPaymentRailLockupRatioStr);
+            uint256 cdnPaymentRailLockupRatio = stringToUint(cdnPaymentRailLockupRatioStr);
+
+            // Validate ratios are provided and sum to 100%
+            require(
+                cacheMissPaymentRailLockupRatio > 0 && cdnPaymentRailLockupRatio > 0,
+                "Cache-miss and CDN lockup ratios must be provided"
+            );
+            require(
+                cacheMissPaymentRailLockupRatio + cdnPaymentRailLockupRatio == 100,
+                "Cache-miss and CDN lockup ratios must sum to 100%"
+            );
+
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
                 payee, // payee address from registry
-                address(this), // this contract acts as the arbiter
+                address(0), // no validator
                 0, // no service commission
-                address(this)
+                address(this) // controller
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, 0);
+            // Set lockup based on cache-miss ratio percentage of monthly usage estimate
+            uint256 cacheMissLockup = (CACHE_MISS_PRICE_PER_TIB_PER_MONTH * cacheMissPaymentRailLockupRatio) / 100;
+            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissLockup);
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
                 filCDNBeneficiaryAddress, // to FilCDN beneficiary
-                address(this), // this contract acts as the arbiter
+                address(0), // no validator
                 0, // no service commission
-                address(this)
+                address(this) // controller
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, 0);
+            // Set lockup based on CDN ratio percentage of monthly usage estimate
+            uint256 cdnLockup = (CDN_PRICE_PER_TIB_PER_MONTH * cdnPaymentRailLockupRatio) / 100;
+            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnLockup);
         }
 
         // Emit event for tracking
@@ -640,13 +664,7 @@ contract FilecoinWarmStorageService is
         // Check if the data set's payment rails have finalized
         require(
             info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
-            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch)
-        );
-
-        // Check CDN payment rail: either no CDN configured (cdnEndEpoch == 0) or past CDN end epoch
-        require(
-            info.cdnEndEpoch == 0 || block.number > info.cdnEndEpoch,
-            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch)
+            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
         // Complete cleanup - remove the dataset from all mappings
@@ -981,10 +999,73 @@ contract FilecoinWarmStorageService is
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
-    function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
-        // Check if already terminated
+    /**
+     * @notice Settles CDN payment rails with specified amounts
+     * @dev Only callable by FilCDN (Operator) contract
+     * @param dataSetId The ID of the data set
+     * @param cdnAmount Amount to settle for CDN rail
+     */
+    function settleCDNPaymentRail(uint256 dataSetId, uint256 cdnAmount) external onlyFilCDNController {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        // Check if CDN service is configured
+        require(
+            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
+            Errors.FilCDNServiceNotConfigured(dataSetId)
+        );
+
+        // Check if CDN rails is configured
+        require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        if (cdnAmount > 0) {
+            payments.modifyRailPayment(info.cdnRailId, 0, cdnAmount);
+        }
+    }
+
+    /**
+     * @notice Settles CDN payment rails with specified amounts
+     * @dev Only callable by FilCDN (Operator) contract
+     * @param dataSetId The ID of the data set
+     * @param cacheMissAmount Amount to settle for cache miss rail
+     */
+    function settleCacheMissPaymentRail(uint256 dataSetId, uint256 cacheMissAmount) external onlyFilCDNController {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        // Check if CDN service is configured
+        require(
+            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
+            Errors.FilCDNServiceNotConfigured(dataSetId)
+        );
+
+        // Check if cache miss rail is configured
+        require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        if (cacheMissAmount > 0) {
+            payments.modifyRailPayment(info.cacheMissRailId, 0, cacheMissAmount);
+        }
+    }
+
+    /**
+     * @notice Allows users to add funds to their CDN-related payment rails
+     * @param dataSetId The ID of the data set
+     * @param cdnAmount Amount to add to CDN rail lockup
+     * @param cacheMissAmount Amount to add to cache miss rail lockup
+     */
+    function topUpCDNPaymentRails(uint256 dataSetId, uint256 cdnAmount, uint256 cacheMissAmount) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        // Check authorization - only payer can top up
+        require(
+            msg.sender == info.payer,
+            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
+        );
 
         // Check if CDN service is configured
         require(
@@ -993,6 +1074,35 @@ contract FilecoinWarmStorageService is
         );
 
         // Check if cache miss and CDN rails are configured
+        require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        if (cacheMissAmount > 0) {
+            // Get current lockup and increment by the passed amount
+            Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+            payments.modifyRailLockup(
+                info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissRail.lockupFixed + cacheMissAmount
+            );
+        }
+
+        if (cdnAmount > 0) {
+            // Get current lockup and increment by the passed amount
+            Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+            payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnRail.lockupFixed + cdnAmount);
+        }
+    }
+
+    function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
+        // Check if CDN service is configured
+        require(
+            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
+            Errors.FilCDNServiceNotConfigured(dataSetId)
+        );
+
+        // Check if cache miss and CDN rails are configured
+        DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         Payments payments = Payments(paymentsContractAddress);
@@ -1228,6 +1338,56 @@ contract FilecoinWarmStorageService is
 
         // Key absence means disabled
         return false;
+    }
+
+    /**
+     * @notice Gets the value for a given metadata key
+     * @param metadataKeys The array of metadata keys
+     * @param metadataValues The array of metadata values
+     * @param key The metadata key to look up
+     * @return The value associated with the key, or empty string if not found
+     */
+    function getMetadataValue(string[] memory metadataKeys, string[] memory metadataValues, string memory key)
+        internal
+        pure
+        returns (string memory)
+    {
+        bytes memory keyBytes = bytes(key);
+        uint256 keyLength = keyBytes.length;
+        bytes32 keyHash = keccak256(keyBytes);
+
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
+            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+                return metadataValues[i];
+            }
+        }
+
+        return "";
+    }
+
+    /**
+     * @notice Converts a string to uint256, returns 0 if conversion fails
+     * @param str The string to convert
+     * @return The converted uint256 value
+     */
+    function stringToUint(string memory str) internal pure returns (uint256) {
+        bytes memory strBytes = bytes(str);
+        if (strBytes.length == 0) {
+            return 0;
+        }
+
+        uint256 result = 0;
+        for (uint256 i = 0; i < strBytes.length; i++) {
+            uint8 digit = uint8(strBytes[i]);
+            if (digit >= 48 && digit <= 57) {
+                // '0' to '9'
+                result = result * 10 + (digit - 48);
+            } else {
+                return 0; // Invalid character, return 0
+            }
+        }
+        return result;
     }
 
     /**
@@ -1624,9 +1784,6 @@ contract FilecoinWarmStorageService is
         if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
             info.pdpEndEpoch = endEpoch;
             emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
-        } else if (info.cdnEndEpoch == 0 && (railId == info.cacheMissRailId || railId == info.cdnRailId)) {
-            info.cdnEndEpoch = endEpoch;
-            emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
     }
 }
