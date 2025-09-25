@@ -362,4 +362,126 @@ contract ProviderValidationTest is Test {
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 6));
         warmStorage.removeApprovedProvider(6, 0);
     }
+
+    function testGetApprovedProvidersLength() public {
+        // Initially should be 0
+        assertEq(viewContract.getApprovedProvidersLength(), 0, "Initial length should be 0");
+
+        // Add providers and check length
+        warmStorage.addApprovedProvider(1);
+        assertEq(viewContract.getApprovedProvidersLength(), 1, "Length should be 1 after adding one provider");
+
+        warmStorage.addApprovedProvider(2);
+        warmStorage.addApprovedProvider(3);
+        assertEq(viewContract.getApprovedProvidersLength(), 3, "Length should be 3 after adding three providers");
+
+        // Remove one and check length
+        warmStorage.removeApprovedProvider(2, 1); // provider 2 is at index 1
+        assertEq(viewContract.getApprovedProvidersLength(), 2, "Length should be 2 after removing one provider");
+    }
+
+    function testGetApprovedProvidersPaginated() public {
+        // Test with empty list
+        uint256[] memory providers = viewContract.getApprovedProvidersPaginated(0, 10);
+        assertEq(providers.length, 0, "Empty list should return empty array");
+
+        // Add 5 providers
+        for (uint256 i = 1; i <= 5; i++) {
+            warmStorage.addApprovedProvider(i);
+        }
+
+        // Test pagination with different offsets and limits
+        providers = viewContract.getApprovedProvidersPaginated(0, 2);
+        assertEq(providers.length, 2, "Should return 2 providers");
+        assertEq(providers[0], 1, "First provider should be 1");
+        assertEq(providers[1], 2, "Second provider should be 2");
+
+        providers = viewContract.getApprovedProvidersPaginated(2, 2);
+        assertEq(providers.length, 2, "Should return 2 providers");
+        assertEq(providers[0], 3, "First provider should be 3");
+        assertEq(providers[1], 4, "Second provider should be 4");
+
+        providers = viewContract.getApprovedProvidersPaginated(4, 2);
+        assertEq(providers.length, 1, "Should return 1 provider (only 5 total)");
+        assertEq(providers[0], 5, "Provider should be 5");
+
+        // Test offset beyond array length
+        providers = viewContract.getApprovedProvidersPaginated(10, 5);
+        assertEq(providers.length, 0, "Offset beyond length should return empty array");
+
+        // Test limit larger than remaining items
+        providers = viewContract.getApprovedProvidersPaginated(3, 10);
+        assertEq(providers.length, 2, "Should return remaining 2 providers");
+        assertEq(providers[0], 4, "First provider should be 4");
+        assertEq(providers[1], 5, "Second provider should be 5");
+    }
+
+    function testGetApprovedProvidersPaginatedConsistency() public {
+        // Add 10 providers
+        for (uint256 i = 1; i <= 10; i++) {
+            warmStorage.addApprovedProvider(i);
+        }
+
+        // Get all providers using original function
+        uint256[] memory allProviders = viewContract.getApprovedProviders();
+
+        // Get all providers using pagination (in chunks of 3)
+        uint256[] memory paginatedProviders = new uint256[](10);
+        uint256 index = 0;
+
+        for (uint256 offset = 0; offset < 10; offset += 3) {
+            uint256[] memory chunk = viewContract.getApprovedProvidersPaginated(offset, 3);
+            for (uint256 i = 0; i < chunk.length; i++) {
+                paginatedProviders[index] = chunk[i];
+                index++;
+            }
+        }
+
+        // Compare results
+        assertEq(allProviders.length, paginatedProviders.length, "Lengths should match");
+        for (uint256 i = 0; i < allProviders.length; i++) {
+            // Avoid string concatenation in solidity test assertion messages
+            assertEq(allProviders[i], paginatedProviders[i], "Provider mismatch in paginated results");
+        }
+    }
+
+    function testGetApprovedProvidersPaginatedEdgeCases() public {
+        // Add single provider
+        warmStorage.addApprovedProvider(42);
+
+        // Test various edge cases
+        uint256[] memory providers;
+
+        // Limit 0 should return empty array
+        providers = viewContract.getApprovedProvidersPaginated(0, 0);
+        assertEq(providers.length, 0, "Limit 0 should return empty array");
+
+        // Offset 0, limit 1 should return the provider
+        providers = viewContract.getApprovedProvidersPaginated(0, 1);
+        assertEq(providers.length, 1, "Should return 1 provider");
+        assertEq(providers[0], 42, "Provider should be 42");
+
+        // Offset 1 should return empty (beyond array)
+        providers = viewContract.getApprovedProvidersPaginated(1, 1);
+        assertEq(providers.length, 0, "Offset beyond array should return empty");
+    }
+
+    function testGetApprovedProvidersPaginatedGasEfficiency() public {
+        // Add many providers to test gas efficiency
+        for (uint256 i = 1; i <= 100; i++) {
+            warmStorage.addApprovedProvider(i);
+        }
+
+        // Test that pagination works with large numbers
+        uint256[] memory providers = viewContract.getApprovedProvidersPaginated(50, 10);
+        assertEq(providers.length, 10, "Should return 10 providers");
+        assertEq(providers[0], 51, "First provider should be 51");
+        assertEq(providers[9], 60, "Last provider should be 60");
+
+        // Test last chunk
+        providers = viewContract.getApprovedProvidersPaginated(95, 10);
+        assertEq(providers.length, 5, "Should return remaining 5 providers");
+        assertEq(providers[0], 96, "First provider should be 96");
+        assertEq(providers[4], 100, "Last provider should be 100");
+    }
 }

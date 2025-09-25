@@ -54,6 +54,18 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getApprovedProviders();
     }
 
+    function getApprovedProvidersLength() external view returns (uint256 count) {
+        return service.getApprovedProvidersLength();
+    }
+
+    function getApprovedProvidersPaginated(uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory providerIds)
+    {
+        return service.getApprovedProvidersPaginated(offset, limit);
+    }
+
     function getChallengesPerProof() external pure returns (uint64) {
         return FilecoinWarmStorageServiceStateInternalLibrary.getChallengesPerProof();
     }
