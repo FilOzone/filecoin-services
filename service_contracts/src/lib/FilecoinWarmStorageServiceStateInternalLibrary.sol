@@ -428,7 +428,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param service The service contract
      * @return The FIL CDN Controller address
      */
-    function filCDNControllerAddress(FilecoinWarmStorageService service) internal view returns (address) {
-        return address(uint160(uint256(service.extsload(FIL_CDN_CONTROLLER_ADDRESS_SLOT))));
+    function filBeamControllerAddress(FilecoinWarmStorageService service) internal view returns (address) {
+        return address(uint160(uint256(service.extsload(FIL_BEAM_CONTROLLER_ADDRESS_SLOT))));
     }
 }

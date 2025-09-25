@@ -27,8 +27,8 @@ contract ProviderValidationTest is Test {
     address public provider1;
     address public provider2;
     address public client;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
 
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef),
@@ -41,8 +41,8 @@ contract ProviderValidationTest is Test {
         provider1 = address(0x1);
         provider2 = address(0x2);
         client = address(0x3);
-        filCDNController = address(0x4);
-        filCDNBeneficiary = address(0x5);
+        filBeamController = address(0x4);
+        filBeamBeneficiary = address(0x5);
 
         // Fund accounts
         vm.deal(provider1, 10 ether);
@@ -67,7 +67,7 @@ contract ProviderValidationTest is Test {
             address(pdpVerifier),
             address(payments),
             usdfc,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -75,7 +75,7 @@ contract ProviderValidationTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "Provider Validation Test Service",
             "Test service for provider validation"
         );
