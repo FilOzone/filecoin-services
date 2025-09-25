@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import "../src/ServiceProviderRegistry.sol";
-import "../src/ServiceProviderRegistryStorage.sol";
-import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
+import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 
 contract ServiceProviderRegistryTest is Test {
     ServiceProviderRegistry public implementation;

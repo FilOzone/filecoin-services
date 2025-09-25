@@ -8,12 +8,13 @@ echo // This file is a generated binding and any changes will be lost.
 echo // Generated with tools/generate_view_contract.sh
 echo
 
-echo 'import "./FilecoinWarmStorageService.sol";'
-echo 'import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
-echo 'import "@pdp/IPDPProvingSchedule.sol";'
+echo 'import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";'
+echo 'import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
+echo 'import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";'
 
 echo contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 echo "    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;"
+echo
 echo "    FilecoinWarmStorageService public immutable service;"
 echo "    constructor(FilecoinWarmStorageService _service) {"
 echo "        service = _service;"

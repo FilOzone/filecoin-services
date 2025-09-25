@@ -6,15 +6,18 @@ import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol"
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract FilecoinWarmStorageServiceOwnerTest is Test {
+    using SafeERC20 for MockERC20;
+
     // Constants
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef),
@@ -115,7 +118,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         serviceContract.addApprovedProvider(providerId3);
 
         // Setup USDFC tokens for client
-        usdfcToken.transfer(client, 10000e6);
+        usdfcToken.safeTransfer(client, 10000e6);
 
         // Make signatures pass
         makeSignaturePass(client);

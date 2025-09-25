@@ -5,9 +5,9 @@ pragma solidity ^0.8.20;
 // This file is a generated binding and any changes will be lost.
 // Generated with tools/generate_view_contract.sh
 
-import "./FilecoinWarmStorageService.sol";
-import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
-import "@pdp/IPDPProvingSchedule.sol";
+import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 
 contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
