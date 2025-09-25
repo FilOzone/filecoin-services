@@ -27,14 +27,14 @@ if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
-  echo "Error: FILCDN_CONTROLLER_ADDRESS is not set"
+if [ -z "$FILBEAM_CONTROLLER_ADDRESS" ]; then
+  echo "Error: FILBEAM_CONTROLLER_ADDRESS is not set"
   exit 1
 fi
 
 
-if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
-  echo "Error: FILCDN_BENEFICIARY_ADDRESS is not set"
+if [ -z "$FILBEAM_BENEFICIARY_ADDRESS" ]; then
+  echo "Error: FILBEAM_BENEFICIARY_ADDRESS is not set"
   exit 1
 fi
 
@@ -114,7 +114,7 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService contract address"
     exit 1
@@ -124,8 +124,8 @@ NONCE=$(expr $NONCE + "1")
 
 # Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
-# Initialize with max proving period, challenge window size, FilCDN controller address, name, and description
-INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
+# Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
+INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
     echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
@@ -142,8 +142,8 @@ echo
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "PDPVerifier address: $PDP_VERIFIER_ADDRESS"
 echo "Payments contract address: $PAYMENTS_CONTRACT_ADDRESS"
-echo "FilCDN controller address: $FILCDN_CONTROLLER_ADDRESS"
-echo "FilCDN beneficiary address: $FILCDN_BENEFICIARY_ADDRESS"
+echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
+echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "ServiceProviderRegistry address: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"

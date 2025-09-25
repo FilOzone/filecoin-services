@@ -11,8 +11,8 @@
 DRY_RUN=${DRY_RUN:-true}
 
 # Default constants (same across all networks)
-DEFAULT_FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
-DEFAULT_FILCDN_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
+DEFAULT_FILBEAM_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
+DEFAULT_FILBEAM_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
 
 if [ "$DRY_RUN" = "true" ]; then
     echo "🧪 Running in DRY-RUN mode - simulation only, no actual deployment"
@@ -107,12 +107,12 @@ echo "  Name: $SERVICE_NAME"
 echo "  Description: $SERVICE_DESCRIPTION"
 
 # Use environment variables if set, otherwise use network defaults
-if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
-    FILCDN_CONTROLLER_ADDRESS="$DEFAULT_FILCDN_CONTROLLER_ADDRESS"
+if [ -z "$FILBEAM_CONTROLLER_ADDRESS" ]; then
+    FILBEAM_CONTROLLER_ADDRESS="$DEFAULT_FILBEAM_CONTROLLER_ADDRESS"
 fi
 
-if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
-    FILCDN_BENEFICIARY_ADDRESS="$DEFAULT_FILCDN_BENEFICIARY_ADDRESS"
+if [ -z "$FILBEAM_BENEFICIARY_ADDRESS" ]; then
+    FILBEAM_BENEFICIARY_ADDRESS="$DEFAULT_FILBEAM_BENEFICIARY_ADDRESS"
 fi
 
 # Challenge and proving period configuration - use environment variables if set, otherwise use network defaults
@@ -301,13 +301,13 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "   - PDP Verifier: $PDP_VERIFIER_ADDRESS"
     echo "   - Payments Contract: $PAYMENTS_CONTRACT_ADDRESS"
     echo "   - USDFC Token: $USDFC_TOKEN_ADDRESS"
-    echo "   - FilCDN Beneficiary: $FILCDN_BENEFICIARY_ADDRESS"
+    echo "   - FilBeam Beneficiary: $FILBEAM_BENEFICIARY_ADDRESS"
     echo "   - Service Provider Registry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
     echo "   - Session Key Registry: $SESSION_KEY_REGISTRY_ADDRESS"
     SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService implementation deployment planned"
 else
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService contract address"
         exit 1
@@ -318,14 +318,14 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 7: Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
-# Initialize with max proving period, challenge window size, FilCDN controller address, name, and description
-INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
+# Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
+INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 Would deploy FilecoinWarmStorageService proxy with:"
     echo "   - Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
     echo "   - Max Proving Period: $MAX_PROVING_PERIOD epochs"
     echo "   - Challenge Window Size: $CHALLENGE_WINDOW_SIZE epochs"
-    echo "   - FilCDN Controller: $FILCDN_CONTROLLER_ADDRESS"
+    echo "   - FilBeam Controller: $FILBEAM_CONTROLLER_ADDRESS"
     echo "   - Service Name: $SERVICE_NAME"
     echo "   - Service Description: $SERVICE_DESCRIPTION"
     WARM_STORAGE_SERVICE_ADDRESS="0x7890123456789012345678901234567890123456"  # Dummy address for dry-run
@@ -385,7 +385,7 @@ echo "Challenge finality: $CHALLENGE_FINALITY epochs"
 echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
-echo "FilCDN controller address: $FILCDN_CONTROLLER_ADDRESS"
-echo "FilCDN beneficiary address: $FILCDN_BENEFICIARY_ADDRESS"
+echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
+echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"

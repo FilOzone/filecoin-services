@@ -30,8 +30,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.clientDataSets(payer);
     }
 
-    function filCDNControllerAddress() external view returns (address) {
-        return service.filCDNControllerAddress();
+    function filBeamControllerAddress() external view returns (address) {
+        return service.filBeamControllerAddress();
     }
 
     function getAllDataSetMetadata(uint256 dataSetId)

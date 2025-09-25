@@ -68,7 +68,7 @@
   },
   {
     "type": "function",
-    "name": "filCDNControllerAddress",
+    "name": "filBeamControllerAddress",
     "inputs": [
       {
         "name": "service",
