@@ -418,6 +418,8 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @notice Get all approved provider IDs
      * @param service The service contract
      * @return providerIds Array of all approved provider IDs
+     * @dev WARNING: This function can run out of gas if there are too many providers.
+     * Use getApprovedProvidersPaginated for large lists.
      */
     function getApprovedProviders(FilecoinWarmStorageService service)
         internal
@@ -432,6 +434,51 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         }
 
         bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
+        assembly ("memory-safe") {
+            providerIds := result
+        }
+    }
+
+    /**
+     * @notice Get the total number of approved providers
+     * @param service The service contract
+     * @return count Total number of approved providers
+     */
+    function getApprovedProvidersLength(FilecoinWarmStorageService service) internal view returns (uint256 count) {
+        bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
+        return uint256(service.extsload(slot));
+    }
+
+    /**
+     * @notice Get a paginated list of approved provider IDs
+     * @param service The service contract
+     * @param offset Starting index (0-based)
+     * @param limit Maximum number of providers to return
+     * @return providerIds Array of approved provider IDs
+     * @dev Use this function to avoid gas limit issues with large provider lists.
+     * Example: getApprovedProvidersPaginated(service, 0, 100) gets first 100 providers
+     */
+    function getApprovedProvidersPaginated(FilecoinWarmStorageService service, uint256 offset, uint256 limit)
+        internal
+        view
+        returns (uint256[] memory providerIds)
+    {
+        bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
+        uint256 totalLength = uint256(service.extsload(slot));
+
+        if (totalLength == 0 || offset >= totalLength) {
+            return new uint256[](0);
+        }
+
+        uint256 actualLength = limit;
+        if (offset + limit > totalLength) {
+            actualLength = totalLength - offset;
+        }
+
+        bytes32 baseSlot = keccak256(abi.encode(slot));
+        bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
+        bytes32[] memory result = service.extsloadStruct(startSlot, actualLength);
+
         assembly ("memory-safe") {
             providerIds := result
         }
