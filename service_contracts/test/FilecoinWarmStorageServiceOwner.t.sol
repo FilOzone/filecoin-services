@@ -90,7 +90,12 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         // Deploy service contract
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier), address(payments), usdfcToken, filBeamBeneficiary, providerRegistry, sessionKeyRegistry
+            address(pdpVerifier),
+            address(payments),
+            usdfcToken,
+            filBeamBeneficiary,
+            providerRegistry,
+            sessionKeyRegistry
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(
