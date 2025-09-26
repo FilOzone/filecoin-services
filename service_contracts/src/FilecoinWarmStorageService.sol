@@ -111,6 +111,22 @@ contract FilecoinWarmStorageService is
         uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
+    // Storage for data set payment information with dataSetId
+    struct DataSetInfoView {
+        uint256 pdpRailId; // ID of the PDP payment rail
+        uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
+        uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
+        address payer; // Address paying for storage
+        address payee; // SP's beneficiary address
+        address serviceProvider; // Current service provider of the dataset
+        uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
+        uint256 clientDataSetId; // ClientDataSetID
+        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
+        uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
+        uint256 dataSetId; // DataSet ID
+    }
+
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
         address payer;
