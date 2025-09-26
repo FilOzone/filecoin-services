@@ -411,27 +411,50 @@ library FilecoinWarmStorageServiceStateLibrary {
     }
 
     /**
-     * @notice Get all approved provider IDs
+     * @notice Get approved provider IDs with optional pagination
      * @param service The service contract
-     * @return providerIds Array of all approved provider IDs
-     * @dev WARNING: This function can run out of gas if there are too many providers.
-     * Use getApprovedProvidersPaginated for large lists.
+     * @param offset Starting index (0-based). Use 0 to start from beginning
+     * @param limit Maximum number of providers to return. Use 0 to get all remaining providers
+     * @return providerIds Array of approved provider IDs
+     * @dev When offset=0 and limit=0, returns all providers (backward compatible)
+     * @dev For large lists, use pagination to avoid gas limit issues
+     * @dev Example: getApprovedProviders(service, 0, 100) gets first 100 providers
      */
-    function getApprovedProviders(FilecoinWarmStorageService service)
+    function getApprovedProviders(FilecoinWarmStorageService service, uint256 offset, uint256 limit)
         public
         view
         returns (uint256[] memory providerIds)
     {
         bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
-        uint256 length = uint256(service.extsload(slot));
+        uint256 totalLength = uint256(service.extsload(slot));
 
-        if (length == 0) {
+        if (totalLength == 0) {
             return new uint256[](0);
         }
 
-        bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
+        if (offset == 0 && limit == 0) {
+            bytes32[] memory allResult = service.extsloadStruct(keccak256(abi.encode(slot)), totalLength);
+            assembly ("memory-safe") {
+                providerIds := allResult
+            }
+            return providerIds;
+        }
+
+        if (offset >= totalLength) {
+            return new uint256[](0);
+        }
+
+        uint256 actualLength = limit;
+        if (limit == 0 || offset + limit > totalLength) {
+            actualLength = totalLength - offset;
+        }
+
+        bytes32 baseSlot = keccak256(abi.encode(slot));
+        bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
+        bytes32[] memory paginatedResult = service.extsloadStruct(startSlot, actualLength);
+
         assembly ("memory-safe") {
-            providerIds := result
+            providerIds := paginatedResult
         }
     }
 
@@ -443,41 +466,6 @@ library FilecoinWarmStorageServiceStateLibrary {
     function getApprovedProvidersLength(FilecoinWarmStorageService service) public view returns (uint256 count) {
         bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
         return uint256(service.extsload(slot));
-    }
-
-    /**
-     * @notice Get a paginated list of approved provider IDs
-     * @param service The service contract
-     * @param offset Starting index (0-based)
-     * @param limit Maximum number of providers to return
-     * @return providerIds Array of approved provider IDs
-     * @dev Use this function to avoid gas limit issues with large provider lists.
-     * Example: getApprovedProvidersPaginated(service, 0, 100) gets first 100 providers
-     */
-    function getApprovedProvidersPaginated(FilecoinWarmStorageService service, uint256 offset, uint256 limit)
-        public
-        view
-        returns (uint256[] memory providerIds)
-    {
-        bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
-        uint256 totalLength = uint256(service.extsload(slot));
-
-        if (totalLength == 0 || offset >= totalLength) {
-            return new uint256[](0);
-        }
-
-        uint256 actualLength = limit;
-        if (offset + limit > totalLength) {
-            actualLength = totalLength - offset;
-        }
-
-        bytes32 baseSlot = keccak256(abi.encode(slot));
-        bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
-        bytes32[] memory result = service.extsloadStruct(startSlot, actualLength);
-
-        assembly ("memory-safe") {
-            providerIds := result
-        }
     }
 
     /**
