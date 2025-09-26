@@ -462,7 +462,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         return (keys, values);
     }
 
-    function testCreateDataSetCreatesRailAndChargesFee() public {
+    function testCreateDataSetCreatesRail() public {
         // Prepare ExtraData - withCDN key presence means CDN is enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
@@ -490,15 +490,11 @@ contract FilecoinWarmStorageServiceTest is Test {
             365 days // max lockup period
         );
 
-        // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 1e6; // 10x the required fee
+        // Client deposits funds to the Payments contract for future payments
+        uint256 depositAmount = 1e5; // Sufficient funds for future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
-
-        // Get account balances before creating data set
-        (uint256 clientFundsBefore,) = getAccountInfo(mockUSDFC, client);
-        (uint256 spFundsBefore,) = getAccountInfo(mockUSDFC, serviceProvider);
 
         // Expect DataSetCreated event when creating the data set
         vm.expectEmit(true, true, true, true);
@@ -578,19 +574,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
         assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
         assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
-
-        // Get account balances after creating data set
-        (uint256 clientFundsAfter,) = getAccountInfo(mockUSDFC, client);
-        (uint256 spFundsAfter,) = getAccountInfo(mockUSDFC, serviceProvider);
-
-        // Calculate expected client balance
-        uint256 expectedClientFundsAfter = clientFundsBefore - 1e5;
-
-        // Verify balances changed correctly (one-time fee transferred)
-        assertEq(
-            clientFundsAfter, expectedClientFundsAfter, "Client funds should decrease by the data set creation fee"
-        );
-        assertTrue(spFundsAfter > spFundsBefore, "Service provider funds should increase");
     }
 
     function testCreateDataSetNoCDN() public {
@@ -621,8 +604,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             365 days // max lockup period
         );
 
-        // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 1e6; // 10x the required fee
+        // Client deposits funds to the Payments contract for future payments
+        uint256 depositAmount = 1e5; // Sufficient funds for future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -700,7 +683,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             1000e6, // lockup allowance (1000 USDFC)
             365 days // max lockup period
         );
-        uint256 depositAmount = 1e6; // 10x the required fee
+        uint256 depositAmount = 1e5;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
