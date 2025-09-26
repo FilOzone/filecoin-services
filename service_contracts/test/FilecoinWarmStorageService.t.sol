@@ -2,30 +2,27 @@
 pragma solidity ^0.8.13;
 
 import {Test, console, Vm} from "forge-std/Test.sol";
-import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
+import {Cids} from "@pdp/Cids.sol";
+import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
-import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
-import {Cids} from "@pdp/Cids.sol";
-import {Payments, IValidator} from "@fws-payments/Payments.sol";
+import {Payments} from "@fws-payments/Payments.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
-import {FilecoinWarmStorageServiceStateInternalLibrary} from
-    "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
-
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
-
 contract FilecoinWarmStorageServiceTest is Test {
+    using SafeERC20 for MockERC20;
     // Testing Constants
+
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // r
         bytes32(0x9999997890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // s
@@ -241,7 +238,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         payments = new Payments();
 
         // Transfer tokens to client for payment
-        mockUSDFC.transfer(client, 10000 * 10 ** mockUSDFC.decimals());
+        mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
@@ -2704,6 +2701,8 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
 }
 
 contract FilecoinWarmStorageServiceSignatureTest is Test {
+    using SafeERC20 for MockERC20;
+
     // Contracts
     SignatureCheckingService public pdpService;
     MockPDPVerifier public mockPDPVerifier;
@@ -2775,7 +2774,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         pdpService = SignatureCheckingService(address(serviceProxy));
 
         // Fund the payer
-        mockUSDFC.transfer(payer, 1000 * 10 ** 6); // 1000 USDFC
+        mockUSDFC.safeTransfer(payer, 1000 * 10 ** 6); // 1000 USDFC
     }
 
     // Test the recoverSigner function indirectly through signature verification

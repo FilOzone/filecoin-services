@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
-import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
+import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
-import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
 
@@ -158,7 +157,7 @@ contract FilecoinWarmStorageService is
     uint256 private immutable DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
 
     // Token decimals
-    uint8 private immutable tokenDecimals;
+    uint8 private immutable TOKEN_DECIMALS;
 
     // External contract addresses
     address public immutable pdpVerifierAddress;
@@ -295,13 +294,13 @@ contract FilecoinWarmStorageService is
         sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
-        tokenDecimals = _usdfc.decimals();
+        TOKEN_DECIMALS = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** tokenDecimals); // 5 USDFC
-        DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
-        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
-        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS); // 5 USDFC
+        DATA_SET_CREATION_FEE = (1 * 10 ** TOKEN_DECIMALS) / 10; // 0.1 USDFC
+        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
+        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
     }
 
     /**
@@ -1261,7 +1260,7 @@ contract FilecoinWarmStorageService is
         // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
         // This prevents charging 0 for very small sizes due to integer division.
         if (ratePerEpoch == 0 && totalBytes > 0) {
-            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
+            uint256 minRate = (1 * 10 ** uint256(TOKEN_DECIMALS)) / 100000;
             return minRate;
         }
 
