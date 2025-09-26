@@ -249,7 +249,7 @@ contract ProviderValidationTest is Test {
 
     function testGetApprovedProviders() public {
         // Test empty list initially
-        uint256[] memory providers = viewContract.getApprovedProviders();
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 0, "Should have no approved providers initially");
 
         // Add some providers
@@ -258,7 +258,7 @@ contract ProviderValidationTest is Test {
         warmStorage.addApprovedProvider(10);
 
         // Test retrieval
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 3, "Should have 3 approved providers");
         assertEq(providers[0], 1, "First provider should be 1");
         assertEq(providers[1], 5, "Second provider should be 5");
@@ -268,33 +268,33 @@ contract ProviderValidationTest is Test {
         warmStorage.removeApprovedProvider(5, 1);
 
         // Test after removal (should have provider 10 in place of 5 due to swap-and-pop)
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 2, "Should have 2 approved providers after removal");
         assertEq(providers[0], 1, "First provider should still be 1");
         assertEq(providers[1], 10, "Second provider should be 10 (moved from last position)");
 
         // Remove another (provider 1 is at index 0)
         warmStorage.removeApprovedProvider(1, 0);
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 1, "Should have 1 approved provider");
         assertEq(providers[0], 10, "Remaining provider should be 10");
 
         // Remove last one (provider 10 is at index 0)
         warmStorage.removeApprovedProvider(10, 0);
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 0, "Should have no approved providers after removing all");
     }
 
     function testGetApprovedProvidersWithSingleProvider() public {
         // Add single provider and verify
         warmStorage.addApprovedProvider(42);
-        uint256[] memory providers = viewContract.getApprovedProviders();
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 1, "Should have 1 approved provider");
         assertEq(providers[0], 42, "Provider should be 42");
 
         // Remove and verify empty (provider 42 is at index 0)
         warmStorage.removeApprovedProvider(42, 0);
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 0, "Should have no approved providers");
     }
 
@@ -312,7 +312,7 @@ contract ProviderValidationTest is Test {
         }
 
         // Verify consistency - all providers in the array should return true for isProviderApproved
-        uint256[] memory providers = viewContract.getApprovedProviders();
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 5, "Should have 5 approved providers");
 
         for (uint256 i = 0; i < providers.length; i++) {
@@ -333,7 +333,7 @@ contract ProviderValidationTest is Test {
         // After removing 3 with swap-and-pop, array becomes: [1, 100, 7, 15]
         warmStorage.removeApprovedProvider(15, 3); // provider 15 is now at index 3
 
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 3, "Should have 3 approved providers after removal");
 
         // Verify all remaining are still approved
@@ -382,7 +382,7 @@ contract ProviderValidationTest is Test {
 
     function testGetApprovedProvidersPaginated() public {
         // Test with empty list
-        uint256[] memory providers = viewContract.getApprovedProvidersPaginated(0, 10);
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 10);
         assertEq(providers.length, 0, "Empty list should return empty array");
 
         // Add 5 providers
@@ -391,26 +391,26 @@ contract ProviderValidationTest is Test {
         }
 
         // Test pagination with different offsets and limits
-        providers = viewContract.getApprovedProvidersPaginated(0, 2);
+        providers = viewContract.getApprovedProviders(0, 2);
         assertEq(providers.length, 2, "Should return 2 providers");
         assertEq(providers[0], 1, "First provider should be 1");
         assertEq(providers[1], 2, "Second provider should be 2");
 
-        providers = viewContract.getApprovedProvidersPaginated(2, 2);
+        providers = viewContract.getApprovedProviders(2, 2);
         assertEq(providers.length, 2, "Should return 2 providers");
         assertEq(providers[0], 3, "First provider should be 3");
         assertEq(providers[1], 4, "Second provider should be 4");
 
-        providers = viewContract.getApprovedProvidersPaginated(4, 2);
+        providers = viewContract.getApprovedProviders(4, 2);
         assertEq(providers.length, 1, "Should return 1 provider (only 5 total)");
         assertEq(providers[0], 5, "Provider should be 5");
 
         // Test offset beyond array length
-        providers = viewContract.getApprovedProvidersPaginated(10, 5);
+        providers = viewContract.getApprovedProviders(10, 5);
         assertEq(providers.length, 0, "Offset beyond length should return empty array");
 
         // Test limit larger than remaining items
-        providers = viewContract.getApprovedProvidersPaginated(3, 10);
+        providers = viewContract.getApprovedProviders(3, 10);
         assertEq(providers.length, 2, "Should return remaining 2 providers");
         assertEq(providers[0], 4, "First provider should be 4");
         assertEq(providers[1], 5, "Second provider should be 5");
@@ -423,14 +423,14 @@ contract ProviderValidationTest is Test {
         }
 
         // Get all providers using original function
-        uint256[] memory allProviders = viewContract.getApprovedProviders();
+        uint256[] memory allProviders = viewContract.getApprovedProviders(0, 0);
 
         // Get all providers using pagination (in chunks of 3)
         uint256[] memory paginatedProviders = new uint256[](10);
         uint256 index = 0;
 
         for (uint256 offset = 0; offset < 10; offset += 3) {
-            uint256[] memory chunk = viewContract.getApprovedProvidersPaginated(offset, 3);
+            uint256[] memory chunk = viewContract.getApprovedProviders(offset, 3);
             for (uint256 i = 0; i < chunk.length; i++) {
                 paginatedProviders[index] = chunk[i];
                 index++;
@@ -453,16 +453,16 @@ contract ProviderValidationTest is Test {
         uint256[] memory providers;
 
         // Limit 0 should return empty array
-        providers = viewContract.getApprovedProvidersPaginated(0, 0);
-        assertEq(providers.length, 0, "Limit 0 should return empty array");
+        providers = viewContract.getApprovedProviders(0, 0);
+        assertEq(providers.length, 1, "Offset 0, limit 0 should return all providers (backward compatibility)");
 
         // Offset 0, limit 1 should return the provider
-        providers = viewContract.getApprovedProvidersPaginated(0, 1);
+        providers = viewContract.getApprovedProviders(0, 1);
         assertEq(providers.length, 1, "Should return 1 provider");
         assertEq(providers[0], 42, "Provider should be 42");
 
         // Offset 1 should return empty (beyond array)
-        providers = viewContract.getApprovedProvidersPaginated(1, 1);
+        providers = viewContract.getApprovedProviders(1, 1);
         assertEq(providers.length, 0, "Offset beyond array should return empty");
     }
 
@@ -473,13 +473,13 @@ contract ProviderValidationTest is Test {
         }
 
         // Test that pagination works with large numbers
-        uint256[] memory providers = viewContract.getApprovedProvidersPaginated(50, 10);
+        uint256[] memory providers = viewContract.getApprovedProviders(50, 10);
         assertEq(providers.length, 10, "Should return 10 providers");
         assertEq(providers[0], 51, "First provider should be 51");
         assertEq(providers[9], 60, "Last provider should be 60");
 
         // Test last chunk
-        providers = viewContract.getApprovedProvidersPaginated(95, 10);
+        providers = viewContract.getApprovedProviders(95, 10);
         assertEq(providers.length, 5, "Should return remaining 5 providers");
         assertEq(providers[0], 96, "First provider should be 96");
         assertEq(providers[4], 100, "Last provider should be 100");
