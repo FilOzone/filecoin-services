@@ -601,7 +601,7 @@ contract FilecoinWarmStorageService is
 
             // Validate lockup values are provided
             require(
-                bytes(cacheMissPaymentRailLockupValueStr).length > 0 && bytes(cdnPaymentRailLockupValueStr).length > 0,
+                cacheMissPaymentRailLockupValue > 0 && cdnPaymentRailLockupValue > 0,
                 "Cache-miss and CDN lockup values must be provided"
             );
 
