@@ -42,8 +42,8 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public deployer;
     address public client;
     address public serviceProvider;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
     address public session;
 
     address public sp1;
@@ -106,8 +106,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         deployer = address(this);
         client = address(0xf1);
         serviceProvider = address(0xf2);
-        filCDNController = address(0xf3);
-        filCDNBeneficiary = address(0xf4);
+        filBeamController = address(0xf3);
+        filBeamBeneficiary = address(0xf4);
 
         // Additional accounts for serviceProviderRegistry tests
         sp1 = address(0xf5);
@@ -245,7 +245,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -253,7 +253,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController, // filCDNControllerAddress
+            filBeamController, // filBeamControllerAddress
             "Filecoin Warm Storage Service", // service name
             "A decentralized storage service with proof-of-data-possession and payment integration" // service description
         );
@@ -295,7 +295,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(viewContract.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly");
+        assertEq(viewContract.filBeamControllerAddress(), filBeamController, "FilBeam address should be set correctly");
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -313,7 +313,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -326,7 +326,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             expectedName,
             expectedDescription
         );
@@ -346,7 +346,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -355,7 +355,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "", // empty name
             "Valid description"
         );
@@ -368,7 +368,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -377,7 +377,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "Valid name",
             "" // empty description
         );
@@ -390,7 +390,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -409,7 +409,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             longName,
             "Valid description"
         );
@@ -422,7 +422,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -441,7 +441,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "Valid name",
             longDesc
         );
@@ -572,7 +572,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(address(cdnRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
-        assertEq(cdnRail.to, filCDNBeneficiary, "To address should be FilCDNBeneficiary");
+        assertEq(cdnRail.to, filBeamBeneficiary, "To address should be FilBeamBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cdnRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
@@ -1404,19 +1404,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client); // client terminates
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.OnlyFilCDNControllerAllowed.selector, address(filCDNController), address(client)
+                Errors.OnlyFilBeamControllerAllowed.selector, address(filBeamController), address(client)
             )
         );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
-        // 4. Try to terminate payment from FilCDN address
-        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
+        // 4. Try to terminate payment from FilBeam address
+        console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
+            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
         );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
@@ -1442,8 +1442,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
 
         // Ensure future CDN service termination reverts
-        vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNPaymentAlreadyTerminated.selector, dataSetId));
+        vm.prank(filBeamController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamPaymentAlreadyTerminated.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
@@ -1521,13 +1521,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         Payments.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
 
-        // 3. Try to terminate payment from FilCDN address
-        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
+        // 3. Try to terminate payment from FilBeam address
+        console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
-        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
+            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
         );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
@@ -1572,33 +1572,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Try to terminate CDN service
         console.log("Terminating CDN service for data set with -- should revert");
         console.log("Current block:", block.number);
-        vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        vm.prank(filBeamController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
     }
 
     function testTransferCDNController() public {
         address newController = address(0xDEADBEEF);
-        vm.prank(filCDNController);
-        pdpServiceWithPayments.transferFilCDNController(newController);
-        assertEq(viewContract.filCDNControllerAddress(), newController, "CDN controller should be updated");
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.transferFilBeamController(newController);
+        assertEq(viewContract.filBeamControllerAddress(), newController, "CDN controller should be updated");
 
         // Attempt transfer from old controller should revert
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         vm.expectRevert(
-            abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, newController, filCDNController)
+            abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, newController, filBeamController)
         );
-        pdpServiceWithPayments.transferFilCDNController(address(0x1234));
+        pdpServiceWithPayments.transferFilBeamController(address(0x1234));
 
         // Restore the original state
         vm.prank(newController);
-        pdpServiceWithPayments.transferFilCDNController(filCDNController);
+        pdpServiceWithPayments.transferFilBeamController(filBeamController);
     }
 
     function testTransferCDNController_revertsIfZeroAddress() public {
-        vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilCDNController));
-        pdpServiceWithPayments.transferFilCDNController(address(0));
+        vm.prank(filBeamController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilBeamController));
+        pdpServiceWithPayments.transferFilBeamController(address(0));
     }
 
     // Data Set Metadata Storage Tests
@@ -2741,7 +2741,7 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         IERC20Metadata _usdfcTokenAddress,
-        address _filCDNAddressBeneficiary,
+        address _filBeamAddressBeneficiary,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
     )
@@ -2749,7 +2749,7 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
-            _filCDNAddressBeneficiary,
+            _filBeamAddressBeneficiary,
             _serviceProviderRegistry,
             _sessionKeyRegistry
         )
@@ -2776,10 +2776,10 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
-    uint256 public filCDNControllerPrivateKey;
-    address public filCDNController;
-    uint256 public filCDNBeneficiaryPrivateKey;
-    address public filCDNBeneficiary;
+    uint256 public filBeamControllerPrivateKey;
+    address public filBeamController;
+    uint256 public filBeamBeneficiaryPrivateKey;
+    address public filBeamBeneficiary;
 
     SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
 
@@ -2791,11 +2791,11 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
 
-        filCDNControllerPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
-        filCDNController = vm.addr(filCDNControllerPrivateKey);
+        filBeamControllerPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
+        filBeamController = vm.addr(filBeamControllerPrivateKey);
 
-        filCDNBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
-        filCDNBeneficiary = vm.addr(filCDNBeneficiaryPrivateKey);
+        filBeamBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
+        filBeamBeneficiary = vm.addr(filBeamBeneficiaryPrivateKey);
 
         creator = address(0xf2);
 
@@ -2817,7 +2817,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -2825,7 +2825,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController, // filCDNControllerAddress
+            filBeamController, // filBeamControllerAddress
             "Test Service", // service name
             "Test Description" // service description
         );
@@ -2896,15 +2896,15 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     ServiceProviderRegistry public serviceProviderRegistry;
 
     address public deployer;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
 
     SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
 
     function setUp() public {
         deployer = address(this);
-        filCDNController = address(0xf2);
-        filCDNBeneficiary = address(0xf3);
+        filBeamController = address(0xf2);
+        filBeamBeneficiary = address(0xf3);
 
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -2925,7 +2925,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -2933,7 +2933,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController, // filCDNControllerAddress
+            filBeamController, // filBeamControllerAddress
             "Test Service", // service name
             "Test Description" // service description
         );

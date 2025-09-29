@@ -63,7 +63,7 @@
   },
   {
     "type": "function",
-    "name": "filCDNControllerAddress",
+    "name": "filBeamControllerAddress",
     "inputs": [],
     "outputs": [
       {
