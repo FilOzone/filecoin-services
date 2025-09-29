@@ -826,6 +826,25 @@
   },
   {
     "type": "function",
+    "name": "getProviderPayee",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "payee",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getProvidersByProductType",
     "inputs": [
       {

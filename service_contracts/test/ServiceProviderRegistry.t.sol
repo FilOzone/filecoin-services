@@ -308,4 +308,55 @@ contract ServiceProviderRegistryTest is Test {
         registry.transferOwnership(user1);
         assertEq(registry.owner(), user1, "Service provider should be transferred");
     }
+
+    function testGetProviderPayeeReturnsCorrectAddress() public {
+        // Give user1 some ETH for registration fee
+        vm.deal(user1, 10 ether);
+
+        // Prepare PDP data
+        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+            serviceURL: "https://example.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US-East",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+
+        // Encode PDP data
+        bytes memory encodedData = abi.encode(pdpData);
+
+        // Empty capability arrays
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        // Register provider with user2 as payee
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user2,
+            "Provider One",
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Verify helper returns the payee address
+        address payee = registry.getProviderPayee(providerId);
+        assertEq(payee, user2, "getProviderPayee should return the registered payee");
+    }
+
+    function testGetProviderPayeeRevertsForInvalidProviderId() public {
+        // 0 is invalid provider ID; expect revert due to providerExists modifier
+        vm.expectRevert("Provider does not exist");
+        registry.getProviderPayee(0);
+
+        // Non-existent but non-zero ID should also revert
+        vm.expectRevert("Provider does not exist");
+        registry.getProviderPayee(1);
+    }
 }
