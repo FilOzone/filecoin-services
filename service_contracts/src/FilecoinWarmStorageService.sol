@@ -170,8 +170,6 @@ contract FilecoinWarmStorageService is
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
-    // Dynamic fee values based on token decimals
-
     // Token decimals
     uint8 private immutable TOKEN_DECIMALS;
 
@@ -570,13 +568,6 @@ contract FilecoinWarmStorageService is
 
         // Set lockup period for the rail
         payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
-
-        // Initialize rail with zero rate - will be updated when roots are added
-        payments.modifyRailPayment(
-            pdpRailId,
-            0, // Initial rate is 0, will be updated when roots are added
-            0
-        );
 
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
