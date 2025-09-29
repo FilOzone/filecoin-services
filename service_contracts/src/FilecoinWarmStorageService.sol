@@ -120,7 +120,6 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
         uint256 dataSetId; // DataSet ID
     }
 
@@ -158,8 +157,8 @@ contract FilecoinWarmStorageService is
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
-    string private constant METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_RATIO = "cacheMissPaymentRailLockupRatio";
-    string private constant METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_RATIO = "cdnPaymentRailLockupRatio";
+    string private constant METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_VALUE = "cacheMissPaymentRailLockupValue";
+    string private constant METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_VALUE = "cdnPaymentRailLockupValue";
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
@@ -589,25 +588,21 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId = 0;
 
         if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
-            // Get cache-miss and CDN ratios from metadata (as percentages 0-100)
-            string memory cacheMissPaymentRailLockupRatioStr = getMetadataValue(
-                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_RATIO
+            // Get cache-miss and CDN lockup values from metadata
+            string memory cacheMissPaymentRailLockupValueStr = getMetadataValue(
+                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_VALUE
             );
-            string memory cdnPaymentRailLockupRatioStr = getMetadataValue(
-                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_RATIO
+            string memory cdnPaymentRailLockupValueStr = getMetadataValue(
+                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_VALUE
             );
 
-            uint256 cacheMissPaymentRailLockupRatio = stringToUint(cacheMissPaymentRailLockupRatioStr);
-            uint256 cdnPaymentRailLockupRatio = stringToUint(cdnPaymentRailLockupRatioStr);
+            uint256 cacheMissPaymentRailLockupValue = stringToUint(cacheMissPaymentRailLockupValueStr);
+            uint256 cdnPaymentRailLockupValue = stringToUint(cdnPaymentRailLockupValueStr);
 
-            // Validate ratios are provided and sum to 100%
+            // Validate lockup values are provided
             require(
-                cacheMissPaymentRailLockupRatio > 0 && cdnPaymentRailLockupRatio > 0,
-                "Cache-miss and CDN lockup ratios must be provided"
-            );
-            require(
-                cacheMissPaymentRailLockupRatio + cdnPaymentRailLockupRatio == 100,
-                "Cache-miss and CDN lockup ratios must sum to 100%"
+                bytes(cacheMissPaymentRailLockupValueStr).length > 0 && bytes(cdnPaymentRailLockupValueStr).length > 0,
+                "Cache-miss and CDN lockup values must be provided"
             );
 
             cacheMissRailId = payments.createRail(
@@ -620,9 +615,8 @@ contract FilecoinWarmStorageService is
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
-            // Set lockup based on cache-miss ratio percentage of monthly usage estimate
-            uint256 cacheMissLockup = (CACHE_MISS_PRICE_PER_TIB_PER_MONTH * cacheMissPaymentRailLockupRatio) / 100;
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissLockup);
+            // Set lockup using the provided cache-miss lockup value
+            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissPaymentRailLockupValue);
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
@@ -634,9 +628,8 @@ contract FilecoinWarmStorageService is
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
-            // Set lockup based on CDN ratio percentage of monthly usage estimate
-            uint256 cdnLockup = (CDN_PRICE_PER_TIB_PER_MONTH * cdnPaymentRailLockupRatio) / 100;
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnLockup);
+            // Set lockup using the provided CDN lockup value
+            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnPaymentRailLockupValue);
         }
 
         // Emit event for tracking
