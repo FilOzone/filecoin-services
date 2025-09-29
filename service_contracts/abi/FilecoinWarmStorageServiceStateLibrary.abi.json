@@ -199,7 +199,7 @@
       {
         "name": "infos",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfo[]",
+        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView[]",
         "components": [
           {
             "name": "pdpRailId",
@@ -253,6 +253,11 @@
           },
           {
             "name": "cdnEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -280,7 +285,7 @@
       {
         "name": "info",
         "type": "tuple",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfo",
+        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView",
         "components": [
           {
             "name": "pdpRailId",
@@ -334,6 +339,11 @@
           },
           {
             "name": "cdnEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
           }

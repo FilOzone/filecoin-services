@@ -90,7 +90,7 @@ library FilecoinWarmStorageServiceStateLibrary {
     function getDataSet(FilecoinWarmStorageService service, uint256 dataSetId)
         public
         view
-        returns (FilecoinWarmStorageService.DataSetInfo memory info)
+        returns (FilecoinWarmStorageService.DataSetInfoView memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
         bytes32[] memory info11 = service.extsloadStruct(slot, 11);
@@ -105,6 +105,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.pdpEndEpoch = uint256(info11[8]);
         info.providerId = uint256(info11[9]);
         info.cdnEndEpoch = uint256(info11[10]);
+        info.dataSetId = dataSetId;
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -243,11 +244,11 @@ library FilecoinWarmStorageServiceStateLibrary {
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         public
         view
-        returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
+        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
     {
         uint256[] memory dataSetIds = clientDataSets(service, client);
 
-        infos = new FilecoinWarmStorageService.DataSetInfo[](dataSetIds.length);
+        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
         }

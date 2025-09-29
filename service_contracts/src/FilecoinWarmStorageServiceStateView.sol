@@ -61,12 +61,16 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     function getClientDataSets(address client)
         external
         view
-        returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
+        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
     {
         return service.getClientDataSets(client);
     }
 
-    function getDataSet(uint256 dataSetId) external view returns (FilecoinWarmStorageService.DataSetInfo memory info) {
+    function getDataSet(uint256 dataSetId)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetInfoView memory info)
+    {
         return service.getDataSet(dataSetId);
     }
 
