@@ -1012,8 +1012,12 @@ contract FilecoinWarmStorageService is
      * @dev Only callable by FilCDN (Operator) contract
      * @param dataSetId The ID of the data set
      * @param cdnAmount Amount to settle for CDN rail
+     * @param cacheMissAmount Amount to settle for cache miss rail
      */
-    function settleCDNPaymentRail(uint256 dataSetId, uint256 cdnAmount) external onlyFilCDNController {
+    function settleCDNPaymentRails(uint256 dataSetId, uint256 cdnAmount, uint256 cacheMissAmount)
+        external
+        onlyFilCDNController
+    {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
@@ -1023,36 +1027,14 @@ contract FilecoinWarmStorageService is
             Errors.FilCDNServiceNotConfigured(dataSetId)
         );
 
-        // Check if CDN rails is configured
-        require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        // Check if CDN rails are configured
+        require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         Payments payments = Payments(paymentsContractAddress);
 
         if (cdnAmount > 0) {
             payments.modifyRailPayment(info.cdnRailId, 0, cdnAmount);
         }
-    }
-
-    /**
-     * @notice Settles CDN payment rails with specified amounts
-     * @dev Only callable by FilCDN (Operator) contract
-     * @param dataSetId The ID of the data set
-     * @param cacheMissAmount Amount to settle for cache miss rail
-     */
-    function settleCacheMissPaymentRail(uint256 dataSetId, uint256 cacheMissAmount) external onlyFilCDNController {
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
-        // Check if CDN service is configured
-        require(
-            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilCDNServiceNotConfigured(dataSetId)
-        );
-
-        // Check if cache miss rail is configured
-        require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
-        Payments payments = Payments(paymentsContractAddress);
 
         if (cacheMissAmount > 0) {
             payments.modifyRailPayment(info.cacheMissRailId, 0, cacheMissAmount);

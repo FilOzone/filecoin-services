@@ -96,6 +96,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 commissionRateBps
     );
 
+    event RailOneTimePaymentProcessed(uint256 indexed railId, uint256 netPayeeAmount, uint256 operatorCommission);
+
     // Service provider change event to verify
     event DataSetServiceProviderChanged(
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
@@ -2802,6 +2804,187 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(pdpRail.validator, address(pdpServiceWithPayments), "PDP rail should have this contract as validator");
         assertEq(cacheMissRail.validator, address(0), "Cache miss rail should have no validator");
         assertEq(cdnRail.validator, address(0), "CDN rail should have no validator");
+    }
+
+    // Tests for settleCDNPaymentRails function
+    function testSettleCDNPaymentRails_BothAmounts() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_OnlyCdnAmount() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 75000;
+        uint256 cacheMissAmount = 0;
+
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_OnlyCacheMissAmount() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 0;
+        uint256 cacheMissAmount = 30000;
+
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_ZeroAmounts() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 0, 0);
+    }
+
+    function testSettleCDNPaymentRails_OnlyFilCDNController() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+    }
+
+    function testSettleCDNPaymentRails_RevertIfNotController() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, filCDNController, client));
+        vm.prank(client);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, filCDNController, sp1));
+        vm.prank(sp1);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+    }
+
+    function testSettleCDNPaymentRails_InvalidDataSetId() public {
+        uint256 invalidDataSetId = 999999;
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, invalidDataSetId));
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(invalidDataSetId, 50000, 25000);
+    }
+
+    function testSettleCDNPaymentRails_DataSetWithoutCDN() public {
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+    }
+
+    function testSettleCDNPaymentRails_DataSetWithEmptyCDNMetadata() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Empty CDN metadata still creates CDN rails, so this should succeed
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+    }
+
+    function testSettleCDNPaymentRails_EmitsCorrectEvents() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 100000;
+        uint256 cacheMissAmount = 50000;
+
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_NoEventsForZeroAmounts() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.recordLogs();
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 0, 0);
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; i++) {
+            assertFalse(
+                logs[i].topics[0] == keccak256("RailOneTimePaymentProcessed(uint256,uint256,uint256)"),
+                "RailOneTimePaymentProcessed should not be emitted for zero amounts"
+            );
+        }
+    }
+
+    function testSettleCDNPaymentRails_ProcessesPaymentsCorrectly() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 75000;
+        uint256 cacheMissAmount = 35000;
+
+        Payments.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
+
+        assertEq(cdnRailBefore.paymentRate, 0, "CDN rail payment rate should be 0");
+        assertEq(cacheMissRailBefore.paymentRate, 0, "Cache miss rail payment rate should be 0");
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+
+        Payments.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
+
+        assertEq(cdnRailAfter.paymentRate, 0, "CDN rail payment rate should remain 0 after settlement");
+        assertEq(cacheMissRailAfter.paymentRate, 0, "Cache miss rail payment rate should remain 0 after settlement");
+    }
+
+    function testSettleCDNPaymentRails_HandlesMaxLockupAmounts() public {
+        // Create dataset with large lockup values to test larger settlements
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true", "400000", "100000");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Use amounts that don't exceed the lockup values (400000 and 100000)
+        uint256 maxCacheMissAmount = 400000; // Matches cache miss lockup value
+        uint256 maxCdnAmount = 100000; // Matches CDN lockup value
+
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, maxCdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, maxCacheMissAmount, 0);
+
+        vm.prank(filCDNController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, maxCdnAmount, maxCacheMissAmount);
     }
 
     // Utility
