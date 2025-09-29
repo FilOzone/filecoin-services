@@ -25,16 +25,6 @@ contract ServiceProviderRegistryStorage {
         bool isActive;
     }
 
-    /// @notice Provider information for API returns
-    struct ServiceProviderInfoView {
-        uint256 providerId; // Provider ID
-        address serviceProvider; // Address that controls the provider registration
-        address payee; // Address that receives payments (cannot be changed after registration)
-        string name; // Optional provider name (max 128 chars)
-        string description; //Service description, ToC, contract info, website..
-        bool isActive;
-    }
-
     /// @notice Product offering of the Service Provider
     struct ServiceProduct {
         ProductType productType;
@@ -59,7 +49,7 @@ contract ServiceProviderRegistryStorage {
     /// @notice Combined provider and product information for detailed queries
     struct ProviderWithProduct {
         uint256 providerId;
-        ServiceProviderInfoView providerInfo;
+        ServiceProviderInfo providerInfo;
         ServiceProduct product;
     }
 

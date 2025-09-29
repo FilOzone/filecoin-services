@@ -388,13 +388,8 @@
               {
                 "name": "providerInfo",
                 "type": "tuple",
-                "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfoView",
+                "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
-                  {
-                    "name": "providerId",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                  },
                   {
                     "name": "serviceProvider",
                     "type": "address",
@@ -695,7 +690,7 @@
       {
         "name": "info",
         "type": "tuple",
-        "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfoView",
+        "internalType": "struct ServiceProviderRegistry.ServiceProviderInfoView",
         "components": [
           {
             "name": "providerId",
@@ -703,29 +698,36 @@
             "internalType": "uint256"
           },
           {
-            "name": "serviceProvider",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "payee",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "name",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "description",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "isActive",
-            "type": "bool",
-            "internalType": "bool"
+            "name": "info",
+            "type": "tuple",
+            "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
+            "components": [
+              {
+                "name": "serviceProvider",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "description",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "isActive",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
           }
         ]
       }
@@ -746,7 +748,7 @@
       {
         "name": "info",
         "type": "tuple",
-        "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfoView",
+        "internalType": "struct ServiceProviderRegistry.ServiceProviderInfoView",
         "components": [
           {
             "name": "providerId",
@@ -754,29 +756,36 @@
             "internalType": "uint256"
           },
           {
-            "name": "serviceProvider",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "payee",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "name",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "description",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "isActive",
-            "type": "bool",
-            "internalType": "bool"
+            "name": "info",
+            "type": "tuple",
+            "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
+            "components": [
+              {
+                "name": "serviceProvider",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "description",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "isActive",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
           }
         ]
       }
@@ -854,13 +863,8 @@
               {
                 "name": "providerInfo",
                 "type": "tuple",
-                "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfoView",
+                "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
                 "components": [
-                  {
-                    "name": "providerId",
-                    "type": "uint256",
-                    "internalType": "uint256"
-                  },
                   {
                     "name": "serviceProvider",
                     "type": "address",

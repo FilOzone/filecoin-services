@@ -17,6 +17,12 @@ contract ServiceProviderRegistry is
     EIP712Upgradeable,
     ServiceProviderRegistryStorage
 {
+    /// @notice Provider information for API returns
+    struct ServiceProviderInfoView {
+        uint256 providerId; // Provider ID
+        ServiceProviderInfo info; // Nested provider information
+    }
+
     /// @notice Version of the contract implementation
     string public constant VERSION = "0.0.1";
 
@@ -475,14 +481,7 @@ contract ServiceProviderRegistry is
         returns (ServiceProviderInfoView memory info)
     {
         ServiceProviderInfo storage provider = providers[providerId];
-        return ServiceProviderInfoView({
-            providerId: providerId,
-            serviceProvider: provider.serviceProvider,
-            payee: provider.payee,
-            name: provider.name,
-            description: provider.description,
-            isActive: provider.isActive
-        });
+        return ServiceProviderInfoView({providerId: providerId, info: provider});
     }
 
     /// @notice Get product data for a specific product type
@@ -558,14 +557,7 @@ contract ServiceProviderRegistry is
                     ServiceProviderInfo storage provider = providers[i];
                     result.providers[resultIndex] = ProviderWithProduct({
                         providerId: i,
-                        providerInfo: ServiceProviderInfoView({
-                            providerId: i,
-                            serviceProvider: provider.serviceProvider,
-                            payee: provider.payee,
-                            name: provider.name,
-                            description: provider.description,
-                            isActive: provider.isActive
-                        }),
+                        providerInfo: provider,
                         product: providerProducts[i][productType]
                     });
                     resultIndex++;
@@ -615,14 +607,7 @@ contract ServiceProviderRegistry is
                     ServiceProviderInfo storage provider = providers[i];
                     result.providers[resultIndex] = ProviderWithProduct({
                         providerId: i,
-                        providerInfo: ServiceProviderInfoView({
-                            providerId: i,
-                            serviceProvider: provider.serviceProvider,
-                            payee: provider.payee,
-                            name: provider.name,
-                            description: provider.description,
-                            isActive: provider.isActive
-                        }),
+                        providerInfo: provider,
                         product: providerProducts[i][productType]
                     });
                     resultIndex++;
@@ -657,23 +642,18 @@ contract ServiceProviderRegistry is
         if (providerId == 0) {
             return ServiceProviderInfoView({
                 providerId: 0,
-                serviceProvider: address(0),
-                payee: address(0),
-                name: "",
-                description: "",
-                isActive: false
+                info: ServiceProviderInfo({
+                    serviceProvider: address(0),
+                    payee: address(0),
+                    name: "",
+                    description: "",
+                    isActive: false
+                })
             });
         }
 
         ServiceProviderInfo storage provider = providers[providerId];
-        return ServiceProviderInfoView({
-            providerId: providerId,
-            serviceProvider: provider.serviceProvider,
-            payee: provider.payee,
-            name: provider.name,
-            description: provider.description,
-            isActive: provider.isActive
-        });
+        return ServiceProviderInfoView({providerId: providerId, info: provider});
     }
 
     /// @notice Get provider ID by address

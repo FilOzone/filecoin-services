@@ -204,11 +204,11 @@ contract ServiceProviderRegistryTest is Test {
         );
 
         // Verify provider info
-        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(providerId);
+        ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(providerId);
         assertEq(info.providerId, providerId, "Provider ID should match");
-        assertEq(info.serviceProvider, user1, "Service provider should be user1");
-        assertEq(info.payee, user2, "Payee should be user2");
-        assertTrue(info.isActive, "Provider should be active");
+        assertEq(info.info.serviceProvider, user1, "Service provider should be user1");
+        assertEq(info.info.payee, user2, "Payee should be user2");
+        assertTrue(info.info.isActive, "Provider should be active");
     }
 
     function testCannotRegisterWithZeroBeneficiary() public {
@@ -280,10 +280,10 @@ contract ServiceProviderRegistryTest is Test {
         );
 
         // Now get provider should work
-        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(1);
+        ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(1);
         assertEq(info.providerId, 1, "Provider ID should be 1");
-        assertEq(info.serviceProvider, user1, "Service provider should be user1");
-        assertEq(info.payee, user1, "Payee should be user1");
+        assertEq(info.info.serviceProvider, user1, "Service provider should be user1");
+        assertEq(info.info.payee, user1, "Payee should be user1");
     }
 
     // Note: We can't test non-PDP product types since Solidity doesn't allow

@@ -15,7 +15,6 @@ import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
-import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
 
 import {Extsload} from "./Extsload.sol";
 
@@ -494,9 +493,9 @@ contract FilecoinWarmStorageService is
         // Check if provider is approved
         require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
-        ServiceProviderRegistryStorage.ServiceProviderInfoView memory providerInfo =
+        ServiceProviderRegistry.ServiceProviderInfoView memory providerInfo =
             serviceProviderRegistry.getProvider(providerId);
-        address payee = providerInfo.payee;
+        address payee = providerInfo.info.payee;
 
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
