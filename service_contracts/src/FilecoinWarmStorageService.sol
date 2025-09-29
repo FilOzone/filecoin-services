@@ -170,9 +170,6 @@ contract FilecoinWarmStorageService is
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
-    // Dynamic fee values based on token decimals
-    uint256 private immutable DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
-
     // Token decimals
     uint8 private immutable TOKEN_DECIMALS;
 
@@ -315,7 +312,6 @@ contract FilecoinWarmStorageService is
 
         // Initialize the fee constants based on the actual token decimals
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-        DATA_SET_CREATION_FEE = (1 * 10 ** TOKEN_DECIMALS) / 10; // 0.1 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
     }
@@ -570,21 +566,8 @@ contract FilecoinWarmStorageService is
         // Store reverse mapping from rail ID to data set ID for validation
         railToDataSet[pdpRailId] = dataSetId;
 
-        // First, set a lockupFixed value that's at least equal to the one-time payment
-        // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
-        payments.modifyRailLockup(
-            pdpRailId,
-            DEFAULT_LOCKUP_PERIOD,
-            DATA_SET_CREATION_FEE // lockupFixed equal to the one-time payment amount
-        );
-
-        // Charge the one-time data set creation fee
-        // This is a payment from payer to data set service provider of a fixed amount
-        payments.modifyRailPayment(
-            pdpRailId,
-            0, // Initial rate is 0, will be updated when roots are added
-            DATA_SET_CREATION_FEE // One-time payment amount
-        );
+        // Set lockup period for the rail
+        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
 
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
