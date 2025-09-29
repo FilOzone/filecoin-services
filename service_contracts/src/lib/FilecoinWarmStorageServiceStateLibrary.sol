@@ -416,9 +416,9 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @param offset Starting index (0-based). Use 0 to start from beginning
      * @param limit Maximum number of providers to return. Use 0 to get all remaining providers
      * @return providerIds Array of approved provider IDs
-     * @dev When offset=0 and limit=0, returns all providers (backward compatible)
-     * @dev For large lists, use pagination to avoid gas limit issues
-     * @dev Example: getApprovedProviders(service, 0, 100) gets first 100 providers
+     * @dev For large lists, use pagination to avoid gas limit issues. If limit=0,
+     * returns all remaining providers starting from offset. Example:
+     * getApprovedProviders(service, 0, 100) gets first 100 providers.
      */
     function getApprovedProviders(FilecoinWarmStorageService service, uint256 offset, uint256 limit)
         public
@@ -430,14 +430,6 @@ library FilecoinWarmStorageServiceStateLibrary {
 
         if (totalLength == 0) {
             return new uint256[](0);
-        }
-
-        if (offset == 0 && limit == 0) {
-            bytes32[] memory allResult = service.extsloadStruct(keccak256(abi.encode(slot)), totalLength);
-            assembly ("memory-safe") {
-                providerIds := allResult
-            }
-            return providerIds;
         }
 
         if (offset >= totalLength) {
