@@ -681,6 +681,29 @@
   },
   {
     "type": "function",
+    "name": "settleCDNPaymentRails",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "storageProviderChanged",
     "inputs": [
       {
@@ -726,6 +749,29 @@
     "inputs": [
       {
         "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "topUpCDNPaymentRails",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissAmount",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -871,37 +917,6 @@
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "event",
-    "name": "CDNPaymentTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "endEpoch",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cacheMissRailId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnRailId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
   },
   {
     "type": "event",
@@ -1564,17 +1579,6 @@
   },
   {
     "type": "error",
-    "name": "FilCDNPaymentAlreadyTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "FilCDNServiceNotConfigured",
     "inputs": [
       {
@@ -1929,11 +1933,6 @@
       },
       {
         "name": "pdpEndEpoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnEndEpoch",
         "type": "uint256",
         "internalType": "uint256"
       }

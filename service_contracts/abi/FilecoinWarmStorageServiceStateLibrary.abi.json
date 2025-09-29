@@ -252,11 +252,6 @@
             "internalType": "uint256"
           },
           {
-            "name": "cdnEndEpoch",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
@@ -334,11 +329,6 @@
           },
           {
             "name": "providerId",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "cdnEndEpoch",
             "type": "uint256",
             "internalType": "uint256"
           },
