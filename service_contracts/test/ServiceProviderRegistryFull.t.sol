@@ -162,7 +162,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify registration
         assertEq(providerId, 1, "Provider ID should be 1");
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory providerInfo =
             registry.getProviderByAddress(provider1);
         assertEq(providerInfo.providerId, 1, "Provider ID should be 1");
         assertEq(providerInfo.serviceProvider, provider1, "Provider address should match");
@@ -171,7 +171,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertTrue(registry.isProviderActive(1), "Provider should be active");
 
         // Verify provider info
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(1);
         assertEq(info.providerId, 1, "Provider ID should be 1");
         assertEq(info.serviceProvider, provider1, "Service provider should be provider1");
         assertEq(info.payee, provider1, "Payee should be provider1");
@@ -409,7 +409,7 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify provider was not registered
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory notRegisteredInfo =
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory notRegisteredInfo =
             registry.getProviderByAddress(provider1);
         assertEq(notRegisteredInfo.serviceProvider, address(0), "Provider should not be registered");
     }
@@ -680,11 +680,12 @@ contract ServiceProviderRegistryFullTest is Test {
         // Verify removal
         assertFalse(registry.isProviderActive(1), "Provider should be inactive");
         assertFalse(registry.isRegisteredProvider(provider1), "Provider should not be registered");
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory removedInfo = registry.getProviderByAddress(provider1);
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory removedInfo =
+            registry.getProviderByAddress(provider1);
         assertEq(removedInfo.serviceProvider, address(0), "Address lookup should return empty");
 
         // Verify provider info still exists (soft delete)
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(1);
         assertEq(info.providerId, 1, "Provider ID should still be 1");
         assertFalse(info.isActive, "Provider should be marked inactive");
         assertEq(info.serviceProvider, provider1, "Service provider should still be recorded");
@@ -1164,7 +1165,7 @@ contract ServiceProviderRegistryFullTest is Test {
         );
 
         // Verify initial description
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(1);
         assertEq(info.providerId, 1, "Provider ID should be 1");
         assertEq(info.description, "Initial description", "Initial description should match");
 

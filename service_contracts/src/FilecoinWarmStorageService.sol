@@ -494,7 +494,7 @@ contract FilecoinWarmStorageService is
         // Check if provider is approved
         require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory providerInfo =
             serviceProviderRegistry.getProvider(providerId);
         address payee = providerInfo.payee;
 

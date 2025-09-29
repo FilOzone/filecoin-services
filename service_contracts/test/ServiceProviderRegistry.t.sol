@@ -204,7 +204,7 @@ contract ServiceProviderRegistryTest is Test {
         );
 
         // Verify provider info
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(providerId);
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(providerId);
         assertEq(info.providerId, providerId, "Provider ID should match");
         assertEq(info.serviceProvider, user1, "Service provider should be user1");
         assertEq(info.payee, user2, "Payee should be user2");
@@ -280,7 +280,7 @@ contract ServiceProviderRegistryTest is Test {
         );
 
         // Now get provider should work
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory info = registry.getProvider(1);
+        ServiceProviderRegistryStorage.ServiceProviderInfoView memory info = registry.getProvider(1);
         assertEq(info.providerId, 1, "Provider ID should be 1");
         assertEq(info.serviceProvider, user1, "Service provider should be user1");
         assertEq(info.payee, user1, "Payee should be user1");
