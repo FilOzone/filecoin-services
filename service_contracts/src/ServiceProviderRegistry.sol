@@ -484,6 +484,13 @@ contract ServiceProviderRegistry is
         return ServiceProviderInfoView({providerId: providerId, info: provider});
     }
 
+    /// @notice Get only the payee address for a provider
+    /// @param providerId The ID of the provider
+    /// @return payee The payee address
+    function getProviderPayee(uint256 providerId) external view providerExists(providerId) returns (address payee) {
+        return providers[providerId].payee;
+    }
+
     /// @notice Get product data for a specific product type
     /// @param providerId The ID of the provider
     /// @param productType The type of product to retrieve
