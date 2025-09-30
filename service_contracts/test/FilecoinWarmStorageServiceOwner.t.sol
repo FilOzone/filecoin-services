@@ -6,15 +6,18 @@ import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol"
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {PDPListener, PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract FilecoinWarmStorageServiceOwnerTest is Test {
+    using SafeERC20 for MockERC20;
+
     // Constants
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef),
@@ -38,8 +41,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
     address public provider2;
     address public provider3;
     address public unauthorizedProvider;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
 
     // Events
     event DataSetServiceProviderChanged(
@@ -54,8 +57,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         provider2 = address(0x3);
         provider3 = address(0x4);
         unauthorizedProvider = address(0x5);
-        filCDNController = address(0x6);
-        filCDNBeneficiary = address(0x7);
+        filBeamController = address(0x6);
+        filBeamBeneficiary = address(0x7);
 
         // Fund accounts
         vm.deal(owner, 100 ether);
@@ -87,14 +90,19 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         // Deploy service contract
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier), address(payments), usdfcToken, filCDNBeneficiary, providerRegistry, sessionKeyRegistry
+            address(pdpVerifier),
+            address(payments),
+            usdfcToken,
+            filBeamBeneficiary,
+            providerRegistry,
+            sessionKeyRegistry
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(1440),
-            filCDNController,
+            filBeamController,
             "Test Service",
             "Test Description"
         );
@@ -115,7 +123,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         serviceContract.addApprovedProvider(providerId3);
 
         // Setup USDFC tokens for client
-        usdfcToken.transfer(client, 10000e6);
+        usdfcToken.safeTransfer(client, 10000e6);
 
         // Make signatures pass
         makeSignaturePass(client);
@@ -138,7 +146,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
                     maxPieceSizeInBytes: 1024 * 1024,
                     ipniPiece: false,
                     ipniIpfs: false,
-                    storagePricePerTibPerMonth: 5 * 10 ** 6, // 5 USDFC per TiB per month
+                    storagePricePerTibPerMonth: 25 * 10 ** 5, // 2.5 USDFC per TiB per month
                     minProvingPeriodInEpochs: 2880,
                     location: "US",
                     paymentTokenAddress: IERC20(address(0))
@@ -192,7 +200,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         uint256 dataSetId = createDataSet(provider1, client);
 
         // Check that owner is set to the creator (provider1)
-        FilecoinWarmStorageService.DataSetInfo memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
         assertEq(info.serviceProvider, provider1, "Service provider should be set to creator");
         assertEq(info.payer, client, "Payer should be set correctly");
@@ -207,7 +215,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         uint256 dataSetId = createDataSet(provider1, client);
 
         // Get initial state
-        FilecoinWarmStorageService.DataSetInfo memory infoBefore = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory infoBefore = viewContract.getDataSet(dataSetId);
         assertEq(infoBefore.serviceProvider, provider1, "Initial owner should be provider1");
 
         // Change storage provider
@@ -218,7 +226,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
 
         // Check updated state
-        FilecoinWarmStorageService.DataSetInfo memory infoAfter = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory infoAfter = viewContract.getDataSet(dataSetId);
 
         assertEq(infoAfter.serviceProvider, provider2, "Service provider should be updated to provider2");
         assertEq(infoAfter.payee, provider1, "Payee should remain unchanged");
@@ -323,14 +331,14 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         vm.prank(provider2);
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
 
-        FilecoinWarmStorageService.DataSetInfo memory info1 = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info1 = viewContract.getDataSet(dataSetId);
         assertEq(info1.serviceProvider, provider2, "Service provider should be provider2 after first change");
 
         // Second change: provider2 -> provider3
         vm.prank(provider3);
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider3, address(serviceContract), new bytes(0));
 
-        FilecoinWarmStorageService.DataSetInfo memory info2 = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info2 = viewContract.getDataSet(dataSetId);
         assertEq(info2.serviceProvider, provider3, "Service provider should be provider3 after second change");
         assertEq(info2.payee, provider1, "Payee should still be original provider1");
 

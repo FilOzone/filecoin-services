@@ -27,8 +27,8 @@ pragma solidity ^0.8.13;
  */
 import {Test, console} from "forge-std/Test.sol";
 import {Cids} from "@pdp/Cids.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 /**
  * @title EIP-712 Signature Fixture Generator

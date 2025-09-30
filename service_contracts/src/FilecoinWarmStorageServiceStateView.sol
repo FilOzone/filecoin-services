@@ -5,9 +5,9 @@ pragma solidity ^0.8.20;
 // This file is a generated binding and any changes will be lost.
 // Generated with tools/generate_view_contract.sh
 
-import "./FilecoinWarmStorageService.sol";
-import "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
-import "@pdp/IPDPProvingSchedule.sol";
+import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 
 contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
@@ -30,8 +30,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.clientDataSets(payer);
     }
 
-    function filCDNControllerAddress() external view returns (address) {
-        return service.filCDNControllerAddress();
+    function filBeamControllerAddress() external view returns (address) {
+        return service.filBeamControllerAddress();
     }
 
     function getAllDataSetMetadata(uint256 dataSetId)
@@ -50,8 +50,12 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getAllPieceMetadata(dataSetId, pieceId);
     }
 
-    function getApprovedProviders() external view returns (uint256[] memory providerIds) {
-        return service.getApprovedProviders();
+    function getApprovedProviders(uint256 offset, uint256 limit) external view returns (uint256[] memory providerIds) {
+        return service.getApprovedProviders(offset, limit);
+    }
+
+    function getApprovedProvidersLength() external view returns (uint256 count) {
+        return service.getApprovedProvidersLength();
     }
 
     function getChallengesPerProof() external pure returns (uint64) {
@@ -61,12 +65,16 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     function getClientDataSets(address client)
         external
         view
-        returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
+        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
     {
         return service.getClientDataSets(client);
     }
 
-    function getDataSet(uint256 dataSetId) external view returns (FilecoinWarmStorageService.DataSetInfo memory info) {
+    function getDataSet(uint256 dataSetId)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetInfoView memory info)
+    {
         return service.getDataSet(dataSetId);
     }
 

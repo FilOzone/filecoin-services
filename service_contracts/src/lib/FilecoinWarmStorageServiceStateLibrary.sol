@@ -2,8 +2,13 @@
 pragma solidity ^0.8.20;
 
 import {Errors} from "../Errors.sol";
-import "../FilecoinWarmStorageService.sol";
-import "./FilecoinWarmStorageServiceLayout.sol";
+import {
+    BYTES_PER_LEAF,
+    CHALLENGES_PER_PROOF,
+    NO_PROVING_DEADLINE,
+    FilecoinWarmStorageService
+} from "../FilecoinWarmStorageService.sol";
+import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
 bytes32 constant EXTSLOAD_STRUCT_SELECTOR = 0x5379a43500000000000000000000000000000000000000000000000000000000;
@@ -70,11 +75,11 @@ library FilecoinWarmStorageServiceStateLibrary {
     }
 
     function clientDataSetIDs(FilecoinWarmStorageService service, address payer) public view returns (uint256) {
-        return uint256(service.extsload(keccak256(abi.encode(payer, CLIENT_DATA_SET_IDS_SLOT))));
+        return uint256(service.extsload(keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SET_IDS_SLOT))));
     }
 
     function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
-        return service.extsload(keccak256(abi.encode(dataSetId, PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
+        return service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
 
     /**
@@ -85,9 +90,9 @@ library FilecoinWarmStorageServiceStateLibrary {
     function getDataSet(FilecoinWarmStorageService service, uint256 dataSetId)
         public
         view
-        returns (FilecoinWarmStorageService.DataSetInfo memory info)
+        returns (FilecoinWarmStorageService.DataSetInfoView memory info)
     {
-        bytes32 slot = keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT));
+        bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
         bytes32[] memory info11 = service.extsloadStruct(slot, 11);
         info.pdpRailId = uint256(info11[0]);
         info.cacheMissRailId = uint256(info11[1]);
@@ -100,6 +105,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.pdpEndEpoch = uint256(info11[8]);
         info.providerId = uint256(info11[9]);
         info.cdnEndEpoch = uint256(info11[10]);
+        info.dataSetId = dataSetId;
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -107,7 +113,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (uint256[] memory dataSetIds)
     {
-        bytes32 slot = keccak256(abi.encode(payer, CLIENT_DATA_SETS_SLOT));
+        bytes32 slot = keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SETS_SLOT));
         uint256 length = uint256(service.extsload(slot));
         bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
         assembly ("memory-safe") {
@@ -116,7 +122,7 @@ library FilecoinWarmStorageServiceStateLibrary {
     }
 
     function railToDataSet(FilecoinWarmStorageService service, uint256 railId) public view returns (uint256) {
-        return uint256(service.extsload(keccak256(abi.encode(railId, RAIL_TO_DATA_SET_SLOT))));
+        return uint256(service.extsload(keccak256(abi.encode(railId, StorageLayout.RAIL_TO_DATA_SET_SLOT))));
     }
 
     function provenPeriods(FilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId)
@@ -124,8 +130,9 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (bool)
     {
-        return service.extsload(keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, PROVEN_PERIODS_SLOT)))))
-            != bytes32(0);
+        return service.extsload(
+            keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT))))
+        ) != bytes32(0);
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
@@ -133,21 +140,21 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (uint256)
     {
-        return uint256(service.extsload(keccak256(abi.encode(dataSetId, PROVING_ACTIVATION_EPOCH_SLOT))));
+        return uint256(service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.PROVING_ACTIVATION_EPOCH_SLOT))));
     }
 
     function provingDeadline(FilecoinWarmStorageService service, uint256 setId) public view returns (uint256) {
-        return uint256(service.extsload(keccak256(abi.encode(setId, PROVING_DEADLINES_SLOT))));
+        return uint256(service.extsload(keccak256(abi.encode(setId, StorageLayout.PROVING_DEADLINES_SLOT))));
     }
 
     function getMaxProvingPeriod(FilecoinWarmStorageService service) public view returns (uint64) {
-        return uint64(uint256(service.extsload(MAX_PROVING_PERIOD_SLOT)));
+        return uint64(uint256(service.extsload(StorageLayout.MAX_PROVING_PERIOD_SLOT)));
     }
 
     // Number of epochs at the end of a proving period during which a
     // proof of possession can be submitted
     function challengeWindow(FilecoinWarmStorageService service) public view returns (uint256) {
-        return uint256(service.extsload(CHALLENGE_WINDOW_SIZE_SLOT));
+        return uint256(service.extsload(StorageLayout.CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
     /**
@@ -237,11 +244,11 @@ library FilecoinWarmStorageServiceStateLibrary {
     function getClientDataSets(FilecoinWarmStorageService service, address client)
         public
         view
-        returns (FilecoinWarmStorageService.DataSetInfo[] memory infos)
+        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
     {
         uint256[] memory dataSetIds = clientDataSets(service, client);
 
-        infos = new FilecoinWarmStorageService.DataSetInfo[](dataSetIds.length);
+        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
         }
@@ -260,7 +267,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (string memory value)
     {
         // For nested mapping with string key: mapping(uint256 => mapping(string => string))
-        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_METADATA_SLOT));
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_METADATA_SLOT));
         bytes32 slot = keccak256(abi.encodePacked(bytes(key), firstLevel));
         return getString(service, slot);
     }
@@ -278,7 +285,8 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (bool exists, string memory value)
     {
         // Check if key exists in the keys array
-        string[] memory keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+        string[] memory keys =
+            getStringArray(service, keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_METADATA_KEYS_SLOT)));
 
         bytes memory keyBytes = bytes(key);
         uint256 keyLength = keyBytes.length;
@@ -305,7 +313,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (string[] memory keys, string[] memory values)
     {
-        keys = getStringArray(service, keccak256(abi.encode(dataSetId, DATA_SET_METADATA_KEYS_SLOT)));
+        keys = getStringArray(service, keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_METADATA_KEYS_SLOT)));
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
             values[i] = _getDataSetMetadataValue(service, dataSetId, keys[i]);
@@ -327,7 +335,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         string memory key
     ) internal view returns (string memory value) {
         // For triple nested mapping: mapping(uint256 => mapping(uint256 => mapping(string => string)))
-        bytes32 firstLevel = keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_SLOT));
+        bytes32 firstLevel = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_PIECE_METADATA_SLOT));
         bytes32 secondLevel = keccak256(abi.encode(pieceId, firstLevel));
         bytes32 slot = keccak256(abi.encodePacked(bytes(key), secondLevel));
         return getString(service, slot);
@@ -348,7 +356,10 @@ library FilecoinWarmStorageServiceStateLibrary {
     {
         // Check if key exists in the keys array
         string[] memory keys = getStringArray(
-            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
+            service,
+            keccak256(
+                abi.encode(pieceId, keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_PIECE_METADATA_KEYS_SLOT)))
+            )
         );
 
         bytes memory keyBytes = bytes(key);
@@ -378,7 +389,10 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (string[] memory keys, string[] memory values)
     {
         keys = getStringArray(
-            service, keccak256(abi.encode(pieceId, keccak256(abi.encode(dataSetId, DATA_SET_PIECE_METADATA_KEYS_SLOT))))
+            service,
+            keccak256(
+                abi.encode(pieceId, keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_PIECE_METADATA_KEYS_SLOT)))
+            )
         );
         values = new string[](keys.length);
         for (uint256 i = 0; i < keys.length; i++) {
@@ -393,38 +407,65 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @return Whether the provider is approved
      */
     function isProviderApproved(FilecoinWarmStorageService service, uint256 providerId) public view returns (bool) {
-        return service.extsload(keccak256(abi.encode(providerId, APPROVED_PROVIDERS_SLOT))) != bytes32(0);
+        return service.extsload(keccak256(abi.encode(providerId, StorageLayout.APPROVED_PROVIDERS_SLOT))) != bytes32(0);
     }
 
     /**
-     * @notice Get all approved provider IDs
+     * @notice Get approved provider IDs with optional pagination
      * @param service The service contract
-     * @return providerIds Array of all approved provider IDs
+     * @param offset Starting index (0-based). Use 0 to start from beginning
+     * @param limit Maximum number of providers to return. Use 0 to get all remaining providers
+     * @return providerIds Array of approved provider IDs
+     * @dev For large lists, use pagination to avoid gas limit issues. If limit=0,
+     * returns all remaining providers starting from offset. Example:
+     * getApprovedProviders(service, 0, 100) gets first 100 providers.
      */
-    function getApprovedProviders(FilecoinWarmStorageService service)
+    function getApprovedProviders(FilecoinWarmStorageService service, uint256 offset, uint256 limit)
         public
         view
         returns (uint256[] memory providerIds)
     {
-        bytes32 slot = APPROVED_PROVIDER_IDS_SLOT;
-        uint256 length = uint256(service.extsload(slot));
+        bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
+        uint256 totalLength = uint256(service.extsload(slot));
 
-        if (length == 0) {
+        if (totalLength == 0) {
             return new uint256[](0);
         }
 
-        bytes32[] memory result = service.extsloadStruct(keccak256(abi.encode(slot)), length);
+        if (offset >= totalLength) {
+            return new uint256[](0);
+        }
+
+        uint256 actualLength = limit;
+        if (limit == 0 || offset + limit > totalLength) {
+            actualLength = totalLength - offset;
+        }
+
+        bytes32 baseSlot = keccak256(abi.encode(slot));
+        bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
+        bytes32[] memory paginatedResult = service.extsloadStruct(startSlot, actualLength);
+
         assembly ("memory-safe") {
-            providerIds := result
+            providerIds := paginatedResult
         }
     }
 
     /**
-     * @notice Get the FIL CDN Controller address
+     * @notice Get the total number of approved providers
      * @param service The service contract
-     * @return The FIL CDN Controller address
+     * @return count Total number of approved providers
      */
-    function filCDNControllerAddress(FilecoinWarmStorageService service) public view returns (address) {
-        return address(uint160(uint256(service.extsload(FIL_CDN_CONTROLLER_ADDRESS_SLOT))));
+    function getApprovedProvidersLength(FilecoinWarmStorageService service) public view returns (uint256 count) {
+        bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
+        return uint256(service.extsload(slot));
+    }
+
+    /**
+     * @notice Get the FilBeam Controller address
+     * @param service The service contract
+     * @return The FilBeam Controller address
+     */
+    function filBeamControllerAddress(FilecoinWarmStorageService service) public view returns (address) {
+        return address(uint160(uint256(service.extsload(StorageLayout.FIL_BEAM_CONTROLLER_ADDRESS_SLOT))));
     }
 }
