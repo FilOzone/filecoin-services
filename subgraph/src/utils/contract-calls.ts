@@ -14,11 +14,11 @@ export function getServiceProviderInfo(registryAddress: Address, providerId: Big
   }
 
   return new ServiceProviderInfo(
-    providerInfoTry.value.serviceProvider,
-    providerInfoTry.value.payee,
-    providerInfoTry.value.name,
-    providerInfoTry.value.description,
-    providerInfoTry.value.isActive,
+    providerInfoTry.value.info.serviceProvider,
+    providerInfoTry.value.info.payee,
+    providerInfoTry.value.info.name,
+    providerInfoTry.value.info.description,
+    providerInfoTry.value.info.isActive,
   );
 }
 

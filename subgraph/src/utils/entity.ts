@@ -1,10 +1,11 @@
-import { Bytes, BigInt, Address } from "@graphprotocol/graph-ts";
-import { Provider, ProviderProduct, Rail } from "../../generated/schema";
-import { BIGINT_ZERO, ContractAddresses } from "./constants";
-import { ProviderStatus } from "./types";
+import { Bytes, BigInt, Address, log } from "@graphprotocol/graph-ts";
+import { Provider, ProviderProduct, Rail, DataSet, Piece } from "../../generated/schema";
 import { ProductAdded as ProductAddedEvent } from "../../generated/ServiceProviderRegistry/ServiceProviderRegistry";
-import { getProviderProductEntityId } from "./keys";
+import { BIGINT_ZERO, BIGINT_ONE, ContractAddresses, LeafSize } from "./constants";
+import { ProviderStatus } from "./types";
+import { getProviderProductEntityId, getPieceEntityId, getDataSetEntityId } from "./keys";
 import { decodePDPOfferingData, getProviderProductData } from "./contract-calls";
+import { validateCommPv2, unpaddedSize } from "./cid";
 
 export function createRails(
   railIds: BigInt[],
@@ -90,4 +91,70 @@ export function initiateProvider(
   provider.blockNumber = blockNumber;
 
   return provider;
+}
+
+/**
+ * Common logic for handling PieceAdded events.
+ * Creates a new piece and updates related entities.
+ */
+export function handlePieceAddedCommon(
+  setId: BigInt,
+  pieceId: BigInt,
+  metadataKeys: string[],
+  metadataValues: string[],
+  pieceBytes: Bytes,
+  blockTimestamp: BigInt,
+  blockNumber: BigInt,
+): void {
+  const commPData = validateCommPv2(pieceBytes);
+  const rawSize = commPData.isValid ? unpaddedSize(commPData.padding, commPData.height) : BigInt.zero();
+
+  const pieceEntityId = getPieceEntityId(setId, pieceId);
+  const piece = new Piece(pieceEntityId);
+  piece.pieceId = pieceId;
+  piece.setId = setId;
+  piece.rawSize = rawSize;
+  piece.leafCount = rawSize.div(BigInt.fromI32(LeafSize));
+  piece.cid = pieceBytes.length > 0 ? pieceBytes : Bytes.empty();
+  piece.metadataKeys = metadataKeys;
+  piece.metadataValues = metadataValues;
+  piece.removed = false;
+  piece.lastProvenEpoch = BIGINT_ZERO;
+  piece.lastProvenAt = BIGINT_ZERO;
+  piece.lastFaultedEpoch = BIGINT_ZERO;
+  piece.lastFaultedAt = BIGINT_ZERO;
+  piece.totalProofsSubmitted = BIGINT_ZERO;
+  piece.totalPeriodsFaulted = BIGINT_ZERO;
+  piece.createdAt = blockTimestamp;
+  piece.updatedAt = blockTimestamp;
+  piece.blockNumber = blockNumber;
+  piece.dataSet = getDataSetEntityId(setId);
+
+  piece.save();
+
+  const dataSet = DataSet.load(getDataSetEntityId(setId));
+  if (!dataSet) {
+    log.warning("handlePieceAdded: DataSet not found for setId: {}", [setId.toString()]);
+    return;
+  }
+
+  dataSet.totalPieces = dataSet.totalPieces.plus(BIGINT_ONE);
+  dataSet.nextPieceId = dataSet.nextPieceId.plus(BIGINT_ONE);
+  dataSet.totalDataSize = dataSet.totalDataSize.plus(piece.rawSize);
+  dataSet.leafCount = dataSet.leafCount.plus(piece.rawSize.div(BigInt.fromI32(LeafSize)));
+  dataSet.updatedAt = blockTimestamp;
+  dataSet.blockNumber = blockNumber;
+  dataSet.save();
+
+  const provider = Provider.load(dataSet.serviceProvider);
+  if (!provider) {
+    log.warning("handlePieceAdded: Provider not found for DataSet: {}", [dataSet.id.toString()]);
+    return;
+  }
+
+  provider.totalDataSize = provider.totalDataSize.plus(piece.rawSize);
+  provider.totalPieces = provider.totalPieces.plus(BIGINT_ONE);
+  provider.updatedAt = blockTimestamp;
+  provider.blockNumber = blockNumber;
+  provider.save();
 }
