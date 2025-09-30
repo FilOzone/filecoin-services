@@ -6,8 +6,6 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
-FILFOX_VERIFIER_VERSION="v1.4.4"
-
 echo "Deploying Warm Storage Service Contract"
 
 if [ -z "$RPC_URL" ]; then
@@ -41,7 +39,6 @@ if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
   echo "Error: FILCDN_CONTROLLER_ADDRESS is not set"
   exit 1
 fi
-
 
 if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
   echo "Error: FILCDN_BENEFICIARY_ADDRESS is not set"
@@ -88,11 +85,11 @@ echo "  Name: $SERVICE_NAME"
 echo "  Description: $SERVICE_DESCRIPTION"
 
 # Fixed constants for initialization
-USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
+USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address
 
 # Proving period configuration - use defaults if not set
-MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
-CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}"                # Default 15 epochs
+MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"       # Default 30 epochs (15 minutes on calibnet)
+CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}" # Default 15 epochs
 
 # Query the actual challengeFinality from PDPVerifier
 echo "Querying PDPVerifier's challengeFinality..."
@@ -104,12 +101,12 @@ echo "PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
 # This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
 MIN_REQUIRED=$((CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE / 2))
 if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
-    echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for PDPVerifier's challengeFinality ($CHALLENGE_FINALITY)"
-    echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
-    echo "       To fix: Set MAX_PROVING_PERIOD to at least $MIN_REQUIRED"
-    echo ""
-    echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./deploy-warm-storage-calibnet.sh"
-    exit 1
+  echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for PDPVerifier's challengeFinality ($CHALLENGE_FINALITY)"
+  echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
+  echo "       To fix: Set MAX_PROVING_PERIOD to at least $MIN_REQUIRED"
+  echo ""
+  echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./deploy-warm-storage-calibnet.sh"
+  exit 1
 fi
 
 echo "Configuration validation passed:"
@@ -126,11 +123,10 @@ NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 echo "Deploying FilecoinWarmStorageService implementation..."
 SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to extract FilecoinWarmStorageService contract address"
-    exit 1
+  echo "Error: Failed to extract FilecoinWarmStorageService contract address"
+  exit 1
 fi
 echo "FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
-
 
 NONCE=$(expr $NONCE + "1")
 
@@ -140,11 +136,10 @@ echo "Deploying FilecoinWarmStorageService proxy..."
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
-    echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
-    exit 1
+  echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
+  exit 1
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
-
 
 # Summary of deployed contracts
 echo
@@ -165,14 +160,14 @@ echo "Service description: $SERVICE_DESCRIPTION"
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then
-    echo
-    echo "🔍 Starting automatic contract verification..."
-    
-    pushd "$(dirname $0)/.." > /dev/null
-    source tools/verify-contracts.sh
-    verify_contracts_batch $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID
-    popd > /dev/null
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation,$CHAIN_ID"
+  popd >/dev/null
 else
-    echo
-    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

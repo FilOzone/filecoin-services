@@ -9,8 +9,6 @@
 # - called from service_contracts directory
 # - PATH has forge and cast
 
-FILFOX_VERIFIER_VERSION="v1.4.4"
-
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
@@ -52,14 +50,14 @@ echo SessionKeyRegistry deployed at $SESSION_KEY_REGISTRY_ADDRESS
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then
-    echo
-    echo "🔍 Starting automatic contract verification..."
-    
-    pushd "$(dirname $0)/.." > /dev/null
-    source tools/verify-contracts.sh
-    verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" "SessionKeyRegistry" "$CHAIN_ID"
-    popd > /dev/null
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS,src/SessionKeyRegistry.sol:SessionKeyRegistry,SessionKeyRegistry,$CHAIN_ID"
+  popd >/dev/null
 else
-    echo
-    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

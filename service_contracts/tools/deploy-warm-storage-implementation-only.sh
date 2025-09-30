@@ -8,8 +8,6 @@
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
-FILFOX_VERIFIER_VERSION="v1.4.4"
-
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
 if [ -z "$RPC_URL" ]; then
@@ -67,7 +65,7 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
-USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address on calibnet
+USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address on calibnet
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
@@ -83,8 +81,8 @@ echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
-    exit 1
+  echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
+  exit 1
 fi
 
 echo ""
@@ -94,117 +92,117 @@ echo ""
 
 # If proxy address is provided, perform the upgrade
 if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
-    echo "Proxy address provided: $WARM_STORAGE_PROXY_ADDRESS"
+  echo "Proxy address provided: $WARM_STORAGE_PROXY_ADDRESS"
 
-    # First check if we're the owner
-    echo "Checking proxy ownership..."
-    PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
+  # First check if we're the owner
+  echo "Checking proxy ownership..."
+  PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
 
-    if [ -z "$PROXY_OWNER" ]; then
-        echo "Warning: Could not determine proxy owner. Attempting upgrade anyway..."
-    else
-        echo "Proxy owner: $PROXY_OWNER"
-        echo "Your address: $ADDR"
+  if [ -z "$PROXY_OWNER" ]; then
+    echo "Warning: Could not determine proxy owner. Attempting upgrade anyway..."
+  else
+    echo "Proxy owner: $PROXY_OWNER"
+    echo "Your address: $ADDR"
 
-        if [ "$PROXY_OWNER" != "$ADDR" ]; then
-            echo
-            echo "⚠️  WARNING: You are not the owner of this proxy!"
-            echo "Only the owner ($PROXY_OWNER) can upgrade this proxy."
-            echo
-            echo "If you need to upgrade, you have these options:"
-            echo "1. Have the owner run this script"
-            echo "2. Have the owner transfer ownership to you first"
-            echo "3. If the owner is a multisig, create a proposal"
-            echo
-            echo "To manually upgrade (as owner):"
-            echo "cast send $WARM_STORAGE_PROXY_ADDRESS \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL"
-            exit 1
-        fi
+    if [ "$PROXY_OWNER" != "$ADDR" ]; then
+      echo
+      echo "⚠️  WARNING: You are not the owner of this proxy!"
+      echo "Only the owner ($PROXY_OWNER) can upgrade this proxy."
+      echo
+      echo "If you need to upgrade, you have these options:"
+      echo "1. Have the owner run this script"
+      echo "2. Have the owner transfer ownership to you first"
+      echo "3. If the owner is a multisig, create a proposal"
+      echo
+      echo "To manually upgrade (as owner):"
+      echo "cast send $WARM_STORAGE_PROXY_ADDRESS \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL"
+      exit 1
     fi
+  fi
 
-    echo "Performing proxy upgrade..."
+  echo "Performing proxy upgrade..."
 
-    # Check if we should deploy and set a new view contract
-    if [ -n "$DEPLOY_VIEW_CONTRACT" ] && [ "$DEPLOY_VIEW_CONTRACT" = "true" ]; then
-        echo "Deploying new view contract for upgraded proxy..."
-        NONCE=$(expr $NONCE + "1")
-        export WARM_STORAGE_SERVICE_ADDRESS=$WARM_STORAGE_PROXY_ADDRESS
-        source tools/deploy-warm-storage-view.sh
-        echo "New view contract deployed at: $WARM_STORAGE_VIEW_ADDRESS"
-
-        # Prepare migrate call with view contract address
-        MIGRATE_DATA=$(cast calldata "migrate(address)" "$WARM_STORAGE_VIEW_ADDRESS")
-    else
-        # Check if a view contract address was provided
-        if [ -n "$VIEW_CONTRACT_ADDRESS" ]; then
-            echo "Using provided view contract address: $VIEW_CONTRACT_ADDRESS"
-            MIGRATE_DATA=$(cast calldata "migrate(address)" "$VIEW_CONTRACT_ADDRESS")
-        else
-            echo "No view contract address provided, using address(0) in migrate"
-            MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
-        fi
-    fi
-
-    # Increment nonce for next transaction
+  # Check if we should deploy and set a new view contract
+  if [ -n "$DEPLOY_VIEW_CONTRACT" ] && [ "$DEPLOY_VIEW_CONTRACT" = "true" ]; then
+    echo "Deploying new view contract for upgraded proxy..."
     NONCE=$(expr $NONCE + "1")
+    export WARM_STORAGE_SERVICE_ADDRESS=$WARM_STORAGE_PROXY_ADDRESS
+    source tools/deploy-warm-storage-view.sh
+    echo "New view contract deployed at: $WARM_STORAGE_VIEW_ADDRESS"
 
-    # Call upgradeToAndCall on the proxy with migrate function
-    echo "Upgrading proxy and calling migrate..."
-    TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
-        --rpc-url "$RPC_URL" \
-        --keystore "$KEYSTORE" \
-        --password "$PASSWORD" \
-        --nonce "$NONCE" \
-        --chain-id 314159 \
-        --json | jq -r '.transactionHash')
-
-    if [ -z "$TX_HASH" ]; then
-        echo "Error: Failed to send upgrade transaction"
-        echo "The transaction may have failed due to:"
-        echo "- Insufficient permissions (not owner)"
-        echo "- Proxy is paused or locked"
-        echo "- Implementation address is invalid"
-        exit 1
-    fi
-
-    echo "Upgrade transaction sent: $TX_HASH"
-    echo "Waiting for confirmation..."
-
-    # Wait for transaction receipt
-    cast receipt --rpc-url "$RPC_URL" "$TX_HASH" --confirmations 1 > /dev/null
-
-    # Verify the upgrade by checking the implementation address
-    echo "Verifying upgrade (waiting for Filecoin 30s block time)..."
-    sleep 35
-    NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
-
-    if [ "$NEW_IMPL" = "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
-        echo "✅ Upgrade successful! Proxy now points to: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
+    # Prepare migrate call with view contract address
+    MIGRATE_DATA=$(cast calldata "migrate(address)" "$WARM_STORAGE_VIEW_ADDRESS")
+  else
+    # Check if a view contract address was provided
+    if [ -n "$VIEW_CONTRACT_ADDRESS" ]; then
+      echo "Using provided view contract address: $VIEW_CONTRACT_ADDRESS"
+      MIGRATE_DATA=$(cast calldata "migrate(address)" "$VIEW_CONTRACT_ADDRESS")
     else
-        echo "⚠️  Warning: Could not verify upgrade. Please check manually."
-        echo "Expected: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
-        echo "Got: $NEW_IMPL"
+      echo "No view contract address provided, using address(0) in migrate"
+      MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
     fi
+  fi
+
+  # Increment nonce for next transaction
+  NONCE=$(expr $NONCE + "1")
+
+  # Call upgradeToAndCall on the proxy with migrate function
+  echo "Upgrading proxy and calling migrate..."
+  TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
+    --rpc-url "$RPC_URL" \
+    --keystore "$KEYSTORE" \
+    --password "$PASSWORD" \
+    --nonce "$NONCE" \
+    --chain-id 314159 \
+    --json | jq -r '.transactionHash')
+
+  if [ -z "$TX_HASH" ]; then
+    echo "Error: Failed to send upgrade transaction"
+    echo "The transaction may have failed due to:"
+    echo "- Insufficient permissions (not owner)"
+    echo "- Proxy is paused or locked"
+    echo "- Implementation address is invalid"
+    exit 1
+  fi
+
+  echo "Upgrade transaction sent: $TX_HASH"
+  echo "Waiting for confirmation..."
+
+  # Wait for transaction receipt
+  cast receipt --rpc-url "$RPC_URL" "$TX_HASH" --confirmations 1 >/dev/null
+
+  # Verify the upgrade by checking the implementation address
+  echo "Verifying upgrade (waiting for Filecoin 30s block time)..."
+  sleep 35
+  NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
+
+  if [ "$NEW_IMPL" = "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
+    echo "✅ Upgrade successful! Proxy now points to: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
+  else
+    echo "⚠️  Warning: Could not verify upgrade. Please check manually."
+    echo "Expected: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
+    echo "Got: $NEW_IMPL"
+  fi
 else
-    echo "No WARM_STORAGE_PROXY_ADDRESS provided. Skipping automatic upgrade."
-    echo ""
-    echo "To upgrade an existing proxy manually:"
-    echo "1. Export the proxy address: export WARM_STORAGE_PROXY_ADDRESS=<your_proxy_address>"
-    echo "2. Run this script again, or"
-    echo "3. Run manually:"
-    echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
+  echo "No WARM_STORAGE_PROXY_ADDRESS provided. Skipping automatic upgrade."
+  echo ""
+  echo "To upgrade an existing proxy manually:"
+  echo "1. Export the proxy address: export WARM_STORAGE_PROXY_ADDRESS=<your_proxy_address>"
+  echo "2. Run this script again, or"
+  echo "3. Run manually:"
+  echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
 fi
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then
-    echo
-    echo "🔍 Starting automatic contract verification..."
-    
-    pushd "$(dirname $0)/.." > /dev/null
-    source tools/verify-contracts.sh
-    verify_contracts_batch $WARM_STORAGE_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID
-    popd > /dev/null
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation,$CHAIN_ID"
+  popd >/dev/null
 else
-    echo
-    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

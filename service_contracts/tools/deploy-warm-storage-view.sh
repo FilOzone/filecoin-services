@@ -10,9 +10,6 @@
 # - called from service_contracts directory
 # - PATH has forge and cast
 
-# Pinned version for security
-FILFOX_VERIFIER_VERSION="v1.4.4"
-
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
@@ -50,14 +47,14 @@ echo FilecoinWarmStorageServiceStateView deployed at $WARM_STORAGE_VIEW_ADDRESS
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then
-    echo
-    echo "🔍 Starting automatic contract verification..."
-    
-    pushd "$(dirname $0)/.." > /dev/null
-    source tools/verify-contracts.sh
-    verify_contracts_batch "$WARM_STORAGE_VIEW_ADDRESS" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "FilecoinWarmStorageServiceStateView" "$CHAIN_ID"
-    popd > /dev/null
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView,FilecoinWarmStorageServiceStateView,$CHAIN_ID"
+  popd >/dev/null
 else
-    echo
-    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi
