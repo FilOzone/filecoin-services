@@ -157,8 +157,6 @@ contract FilecoinWarmStorageService is
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
-    string private constant METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_VALUE = "cacheMissPaymentRailLockupValue";
-    string private constant METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_VALUE = "cdnPaymentRailLockupValue";
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
@@ -588,23 +586,7 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId = 0;
 
         if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
-            // Get cache-miss and CDN lockup values from metadata
-            string memory cacheMissPaymentRailLockupValueStr = getMetadataValue(
-                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CACHE_MISS_PAYMENT_RAIL_LOCKUP_VALUE
-            );
-            string memory cdnPaymentRailLockupValueStr = getMetadataValue(
-                createData.metadataKeys, createData.metadataValues, METADATA_KEY_CDN_PAYMENT_RAIL_LOCKUP_VALUE
-            );
-
-            uint256 cacheMissPaymentRailLockupValue = stringToUint(cacheMissPaymentRailLockupValueStr);
-            uint256 cdnPaymentRailLockupValue = stringToUint(cdnPaymentRailLockupValueStr);
-
-            // Validate lockup values are provided
-            require(
-                cacheMissPaymentRailLockupValue > 0 && cdnPaymentRailLockupValue > 0,
-                "Cache-miss and CDN lockup values must be provided"
-            );
-
+            // Create cache-miss payment rail with default lockup value of 0
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -615,9 +597,10 @@ contract FilecoinWarmStorageService is
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
-            // Set lockup using the provided cache-miss lockup value
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissPaymentRailLockupValue);
+            // Set lockup with default value of 0
+            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, 0);
 
+            // Create CDN payment rail with default lockup value of 0
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -628,8 +611,8 @@ contract FilecoinWarmStorageService is
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
-            // Set lockup using the provided CDN lockup value
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnPaymentRailLockupValue);
+            // Set lockup with default value of 0
+            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, 0);
         }
 
         // Emit event for tracking
@@ -1328,56 +1311,6 @@ contract FilecoinWarmStorageService is
 
         // Key absence means disabled
         return false;
-    }
-
-    /**
-     * @notice Gets the value for a given metadata key
-     * @param metadataKeys The array of metadata keys
-     * @param metadataValues The array of metadata values
-     * @param key The metadata key to look up
-     * @return The value associated with the key, or empty string if not found
-     */
-    function getMetadataValue(string[] memory metadataKeys, string[] memory metadataValues, string memory key)
-        internal
-        pure
-        returns (string memory)
-    {
-        bytes memory keyBytes = bytes(key);
-        uint256 keyLength = keyBytes.length;
-        bytes32 keyHash = keccak256(keyBytes);
-
-        for (uint256 i = 0; i < metadataKeys.length; i++) {
-            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
-                return metadataValues[i];
-            }
-        }
-
-        return "";
-    }
-
-    /**
-     * @notice Converts a string to uint256, returns 0 if conversion fails
-     * @param str The string to convert
-     * @return The converted uint256 value
-     */
-    function stringToUint(string memory str) internal pure returns (uint256) {
-        bytes memory strBytes = bytes(str);
-        if (strBytes.length == 0) {
-            return 0;
-        }
-
-        uint256 result = 0;
-        for (uint256 i = 0; i < strBytes.length; i++) {
-            uint8 digit = uint8(strBytes[i]);
-            if (digit >= 48 && digit <= 57) {
-                // '0' to '9'
-                result = result * 10 + (digit - 48);
-            } else {
-                return 0; // Invalid character, return 0
-            }
-        }
-        return result;
     }
 
     /**
