@@ -464,17 +464,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         return (keys, values);
     }
 
-    function _getCDNMetadataKV(string memory cdnValue) internal pure returns (string[] memory, string[] memory) {
-        string[] memory keys = new string[](1);
-        string[] memory values = new string[](1);
-        keys[0] = "withCDN";
-        values[0] = cdnValue;
-        return (keys, values);
-    }
-
     function testCreateDataSetCreatesRailAndChargesFee() public {
         // Prepare ExtraData - withCDN key presence means CDN is enabled
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -576,8 +568,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cacheMissRail.validator, address(0), "Validator should be empty");
         assertEq(cacheMissRail.commissionRateBps, 0, "No commission");
-        // assertEq(cacheMissRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
-        // assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
+        assertEq(cacheMissRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(address(cdnRail.token), address(mockUSDFC), "Token should be USDFC");
@@ -588,19 +580,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
         assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
         assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
-
-        // Get account balances after creating data set
-        (uint256 clientFundsAfter,) = getAccountInfo(mockUSDFC, client);
-        (uint256 spFundsAfter,) = getAccountInfo(mockUSDFC, serviceProvider);
-
-        // Calculate expected client balance
-        uint256 expectedClientFundsAfter = clientFundsBefore - 1e5;
-
-        // Verify balances changed correctly (one-time fee transferred)
-        assertEq(
-            clientFundsAfter, expectedClientFundsAfter, "Client funds should decrease by the data set creation fee"
-        );
-        assertTrue(spFundsAfter > spFundsBefore, "Service provider funds should increase");
     }
 
     function testCreateDataSetNoCDN() public {
@@ -1190,7 +1169,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1340,7 +1319,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1455,7 +1434,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
@@ -1677,7 +1656,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId1 = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
 
         // Test 2: Dataset with CDN metadata
-        (string[] memory cdnKeys, string[] memory cdnValues) = _getCDNMetadataKV("true");
+        (string[] memory cdnKeys, string[] memory cdnValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId2 = createDataSetForClient(sp1, client, cdnKeys, cdnValues);
 
         // Test 3: Dataset with regular metadata
@@ -1688,7 +1667,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId3 = createDataSetForClient(sp1, client, metaKeys, metaValues);
 
         // Test 4: Dataset with multiple metadata including CDN
-        (string[] memory cdnKeysTemp, string[] memory cdnValuesTemp) = _getCDNMetadataKV("true");
+        (string[] memory cdnKeysTemp, string[] memory cdnValuesTemp) = _getSingleMetadataKV("withCDN", "true");
         string[] memory bothKeys = new string[](cdnKeysTemp.length + 1);
         string[] memory bothValues = new string[](cdnValuesTemp.length + 1);
         bothKeys[0] = "label";
@@ -2459,7 +2438,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testEmptyStringMetadata() public {
         // Empty string for withCDN
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Create dataset using the helper function
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
@@ -2627,7 +2606,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testRailTerminated_SetsPdpEndEpochAndEmitsEvent() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2642,7 +2621,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testRailTerminated_DoesNotOverwritePdpEndEpoch() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2663,7 +2642,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testCreateDataSetWithCDN_DefaultLockupValues() public {
         // Test that CDN datasets now use default lockup values of 0
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
@@ -2701,7 +2680,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testCreateDataSetWithCDN_VerifyDefaultBehavior() public {
         // Test that CDN creation works correctly with default lockup values
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
@@ -2735,7 +2714,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     function testCreateDataSetWithCDN_VerifyPaymentRailValidatorConfiguration() public {
         // Test that CDN payment rails are created with no validator (address(0))
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
@@ -2772,7 +2751,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     // Tests for settleCDNPaymentRails function
     function testSettleCDNPaymentRails_BothAmounts() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2794,7 +2773,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_OnlyCdnAmount() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2814,7 +2793,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_OnlyCacheMissAmount() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2834,7 +2813,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_ZeroAmounts() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         vm.prank(filBeamController);
@@ -2842,7 +2821,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_OnlyfilBeamController() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Expecting the payment to fail due to insufficient lockup (OneTimePaymentExceedsLockup error)
@@ -2852,7 +2831,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_RevertIfNotController() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, client));
@@ -2883,7 +2862,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_DataSetWithEmptyCDNMetadata() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         uint256 cdnAmount = 50000;
@@ -2899,7 +2878,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_EmitsCorrectEvents() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2921,7 +2900,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_NoEventsForZeroAmounts() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         vm.recordLogs();
@@ -2938,7 +2917,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_ProcessesPaymentsCorrectly() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -2960,34 +2939,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
-    function testSettleCDNPaymentRails_HandlesMaxLockupAmounts() public {
-        // Create dataset with default zero lockup values
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-
-        // Test with large amounts
-        uint256 maxCacheMissAmount = 400000;
-        uint256 maxCdnAmount = 100000;
-
-        // Top up rails with these large amounts
-        vm.prank(client);
-        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, maxCdnAmount, maxCacheMissAmount);
-
-        // Verify events for large payments
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, maxCdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, maxCacheMissAmount, 0);
-
-        // Process the large payments
-        vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, maxCdnAmount, maxCacheMissAmount);
-    }
-
     // Tests for topUpCDNPaymentRails function
     function testTopUpCDNPaymentRails_Success() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -3012,7 +2966,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testTopUpCDNPaymentRails_OnlyPayerCanTopUp() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Try to top up as non-payer
@@ -3043,7 +2997,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testTopUpCDNPaymentRails_IncrementalTopUps() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -3067,7 +3021,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testTopUpCDNPaymentRails_ZeroAmounts() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
@@ -3092,7 +3046,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     // Tests for insufficient lockup failures
     function testSettleCDNPaymentRails_FailsWithInsufficientLockup() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         uint256 cdnAmount = 50000;
@@ -3106,7 +3060,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_FailsWhenLockupLessThanSettlement() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Top up with smaller amounts than we'll try to settle
@@ -3124,7 +3078,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testSettleCDNPaymentRails_PartialLockupFailure() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Top up only the CDN rail

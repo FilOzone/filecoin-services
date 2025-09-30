@@ -104,7 +104,6 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.clientDataSetId = uint256(info11[7]);
         info.pdpEndEpoch = uint256(info11[8]);
         info.providerId = uint256(info11[9]);
-        // cdnEndEpoch field removed - CDN rails don't track endEpoch
         info.dataSetId = dataSetId;
     }
 
