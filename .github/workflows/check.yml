@@ -18,7 +18,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: v1.2.3
+          version: v1.3.5
 
       - name: Install jq
         run: sudo apt-get install -y jq
@@ -50,7 +50,7 @@ jobs:
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: v1.2.3
+          version: v1.3.5
 
       - name: Check for ABI changes
         run: |

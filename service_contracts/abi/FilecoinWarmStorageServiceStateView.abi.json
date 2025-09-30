@@ -63,7 +63,7 @@
   },
   {
     "type": "function",
-    "name": "filCDNControllerAddress",
+    "name": "filBeamControllerAddress",
     "inputs": [],
     "outputs": [
       {
@@ -130,12 +130,36 @@
   {
     "type": "function",
     "name": "getApprovedProviders",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "outputs": [
       {
         "name": "providerIds",
         "type": "uint256[]",
         "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getApprovedProvidersLength",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -167,7 +191,7 @@
       {
         "name": "infos",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfo[]",
+        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView[]",
         "components": [
           {
             "name": "pdpRailId",
@@ -221,6 +245,11 @@
           },
           {
             "name": "cdnEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -243,7 +272,7 @@
       {
         "name": "info",
         "type": "tuple",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfo",
+        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView",
         "components": [
           {
             "name": "pdpRailId",
@@ -297,6 +326,11 @@
           },
           {
             "name": "cdnEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
           }

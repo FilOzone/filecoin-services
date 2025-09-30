@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title ServiceProviderRegistryStorage
 /// @notice Centralized storage contract for ServiceProviderRegistry
@@ -23,7 +23,6 @@ contract ServiceProviderRegistryStorage {
         string name; // Optional provider name (max 128 chars)
         string description; //Service description, ToC, contract info, website..
         bool isActive;
-        uint256 providerId; // Unique identifier for the provider
     }
 
     /// @notice Product offering of the Service Provider

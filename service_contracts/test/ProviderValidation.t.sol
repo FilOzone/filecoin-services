@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console, Vm} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
+import {Payments} from "@fws-payments/Payments.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
-import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
-import {Payments} from "@fws-payments/Payments.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
 contract ProviderValidationTest is Test {
+    using SafeERC20 for MockERC20;
+
     FilecoinWarmStorageService public warmStorage;
     FilecoinWarmStorageServiceStateView public viewContract;
     ServiceProviderRegistry public serviceProviderRegistry;
@@ -27,8 +31,8 @@ contract ProviderValidationTest is Test {
     address public provider1;
     address public provider2;
     address public client;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
 
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
         bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef),
@@ -41,8 +45,8 @@ contract ProviderValidationTest is Test {
         provider1 = address(0x1);
         provider2 = address(0x2);
         client = address(0x3);
-        filCDNController = address(0x4);
-        filCDNBeneficiary = address(0x5);
+        filBeamController = address(0x4);
+        filBeamBeneficiary = address(0x5);
 
         // Fund accounts
         vm.deal(provider1, 10 ether);
@@ -67,7 +71,7 @@ contract ProviderValidationTest is Test {
             address(pdpVerifier),
             address(payments),
             usdfc,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -75,7 +79,7 @@ contract ProviderValidationTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "Provider Validation Test Service",
             "Test service for provider validation"
         );
@@ -86,7 +90,7 @@ contract ProviderValidationTest is Test {
         viewContract = new FilecoinWarmStorageServiceStateView(warmStorage);
 
         // Transfer tokens to client
-        usdfc.transfer(client, 10000 * 10 ** 6);
+        usdfc.safeTransfer(client, 10000 * 10 ** 6);
     }
 
     function testProviderNotRegistered() public {
@@ -245,7 +249,7 @@ contract ProviderValidationTest is Test {
 
     function testGetApprovedProviders() public {
         // Test empty list initially
-        uint256[] memory providers = viewContract.getApprovedProviders();
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 0, "Should have no approved providers initially");
 
         // Add some providers
@@ -254,7 +258,7 @@ contract ProviderValidationTest is Test {
         warmStorage.addApprovedProvider(10);
 
         // Test retrieval
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 3, "Should have 3 approved providers");
         assertEq(providers[0], 1, "First provider should be 1");
         assertEq(providers[1], 5, "Second provider should be 5");
@@ -264,33 +268,33 @@ contract ProviderValidationTest is Test {
         warmStorage.removeApprovedProvider(5, 1);
 
         // Test after removal (should have provider 10 in place of 5 due to swap-and-pop)
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 2, "Should have 2 approved providers after removal");
         assertEq(providers[0], 1, "First provider should still be 1");
         assertEq(providers[1], 10, "Second provider should be 10 (moved from last position)");
 
         // Remove another (provider 1 is at index 0)
         warmStorage.removeApprovedProvider(1, 0);
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 1, "Should have 1 approved provider");
         assertEq(providers[0], 10, "Remaining provider should be 10");
 
         // Remove last one (provider 10 is at index 0)
         warmStorage.removeApprovedProvider(10, 0);
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 0, "Should have no approved providers after removing all");
     }
 
     function testGetApprovedProvidersWithSingleProvider() public {
         // Add single provider and verify
         warmStorage.addApprovedProvider(42);
-        uint256[] memory providers = viewContract.getApprovedProviders();
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 1, "Should have 1 approved provider");
         assertEq(providers[0], 42, "Provider should be 42");
 
         // Remove and verify empty (provider 42 is at index 0)
         warmStorage.removeApprovedProvider(42, 0);
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 0, "Should have no approved providers");
     }
 
@@ -308,7 +312,7 @@ contract ProviderValidationTest is Test {
         }
 
         // Verify consistency - all providers in the array should return true for isProviderApproved
-        uint256[] memory providers = viewContract.getApprovedProviders();
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 5, "Should have 5 approved providers");
 
         for (uint256 i = 0; i < providers.length; i++) {
@@ -329,7 +333,7 @@ contract ProviderValidationTest is Test {
         // After removing 3 with swap-and-pop, array becomes: [1, 100, 7, 15]
         warmStorage.removeApprovedProvider(15, 3); // provider 15 is now at index 3
 
-        providers = viewContract.getApprovedProviders();
+        providers = viewContract.getApprovedProviders(0, 0);
         assertEq(providers.length, 3, "Should have 3 approved providers after removal");
 
         // Verify all remaining are still approved
@@ -357,5 +361,127 @@ contract ProviderValidationTest is Test {
         // Trying to remove the same provider again should revert
         vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotInApprovedList.selector, 6));
         warmStorage.removeApprovedProvider(6, 0);
+    }
+
+    function testGetApprovedProvidersLength() public {
+        // Initially should be 0
+        assertEq(viewContract.getApprovedProvidersLength(), 0, "Initial length should be 0");
+
+        // Add providers and check length
+        warmStorage.addApprovedProvider(1);
+        assertEq(viewContract.getApprovedProvidersLength(), 1, "Length should be 1 after adding one provider");
+
+        warmStorage.addApprovedProvider(2);
+        warmStorage.addApprovedProvider(3);
+        assertEq(viewContract.getApprovedProvidersLength(), 3, "Length should be 3 after adding three providers");
+
+        // Remove one and check length
+        warmStorage.removeApprovedProvider(2, 1); // provider 2 is at index 1
+        assertEq(viewContract.getApprovedProvidersLength(), 2, "Length should be 2 after removing one provider");
+    }
+
+    function testGetApprovedProvidersPaginated() public {
+        // Test with empty list
+        uint256[] memory providers = viewContract.getApprovedProviders(0, 10);
+        assertEq(providers.length, 0, "Empty list should return empty array");
+
+        // Add 5 providers
+        for (uint256 i = 1; i <= 5; i++) {
+            warmStorage.addApprovedProvider(i);
+        }
+
+        // Test pagination with different offsets and limits
+        providers = viewContract.getApprovedProviders(0, 2);
+        assertEq(providers.length, 2, "Should return 2 providers");
+        assertEq(providers[0], 1, "First provider should be 1");
+        assertEq(providers[1], 2, "Second provider should be 2");
+
+        providers = viewContract.getApprovedProviders(2, 2);
+        assertEq(providers.length, 2, "Should return 2 providers");
+        assertEq(providers[0], 3, "First provider should be 3");
+        assertEq(providers[1], 4, "Second provider should be 4");
+
+        providers = viewContract.getApprovedProviders(4, 2);
+        assertEq(providers.length, 1, "Should return 1 provider (only 5 total)");
+        assertEq(providers[0], 5, "Provider should be 5");
+
+        // Test offset beyond array length
+        providers = viewContract.getApprovedProviders(10, 5);
+        assertEq(providers.length, 0, "Offset beyond length should return empty array");
+
+        // Test limit larger than remaining items
+        providers = viewContract.getApprovedProviders(3, 10);
+        assertEq(providers.length, 2, "Should return remaining 2 providers");
+        assertEq(providers[0], 4, "First provider should be 4");
+        assertEq(providers[1], 5, "Second provider should be 5");
+    }
+
+    function testGetApprovedProvidersPaginatedConsistency() public {
+        // Add 10 providers
+        for (uint256 i = 1; i <= 10; i++) {
+            warmStorage.addApprovedProvider(i);
+        }
+
+        // Get all providers using original function
+        uint256[] memory allProviders = viewContract.getApprovedProviders(0, 0);
+
+        // Get all providers using pagination (in chunks of 3)
+        uint256[] memory paginatedProviders = new uint256[](10);
+        uint256 index = 0;
+
+        for (uint256 offset = 0; offset < 10; offset += 3) {
+            uint256[] memory chunk = viewContract.getApprovedProviders(offset, 3);
+            for (uint256 i = 0; i < chunk.length; i++) {
+                paginatedProviders[index] = chunk[i];
+                index++;
+            }
+        }
+
+        // Compare results
+        assertEq(allProviders.length, paginatedProviders.length, "Lengths should match");
+        for (uint256 i = 0; i < allProviders.length; i++) {
+            // Avoid string concatenation in solidity test assertion messages
+            assertEq(allProviders[i], paginatedProviders[i], "Provider mismatch in paginated results");
+        }
+    }
+
+    function testGetApprovedProvidersPaginatedEdgeCases() public {
+        // Add single provider
+        warmStorage.addApprovedProvider(42);
+
+        // Test various edge cases
+        uint256[] memory providers;
+
+        // Limit 0 should return empty array
+        providers = viewContract.getApprovedProviders(0, 0);
+        assertEq(providers.length, 1, "Offset 0, limit 0 should return all providers (backward compatibility)");
+
+        // Offset 0, limit 1 should return the provider
+        providers = viewContract.getApprovedProviders(0, 1);
+        assertEq(providers.length, 1, "Should return 1 provider");
+        assertEq(providers[0], 42, "Provider should be 42");
+
+        // Offset 1 should return empty (beyond array)
+        providers = viewContract.getApprovedProviders(1, 1);
+        assertEq(providers.length, 0, "Offset beyond array should return empty");
+    }
+
+    function testGetApprovedProvidersPaginatedGasEfficiency() public {
+        // Add many providers to test gas efficiency
+        for (uint256 i = 1; i <= 100; i++) {
+            warmStorage.addApprovedProvider(i);
+        }
+
+        // Test that pagination works with large numbers
+        uint256[] memory providers = viewContract.getApprovedProviders(50, 10);
+        assertEq(providers.length, 10, "Should return 10 providers");
+        assertEq(providers[0], 51, "First provider should be 51");
+        assertEq(providers[9], 60, "Last provider should be 60");
+
+        // Test last chunk
+        providers = viewContract.getApprovedProviders(95, 10);
+        assertEq(providers.length, 5, "Should return remaining 5 providers");
+        assertEq(providers[0], 96, "First provider should be 96");
+        assertEq(providers[4], 100, "Last provider should be 100");
     }
 }

@@ -1,22 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {PDPVerifier, PDPListener} from "@pdp/PDPVerifier.sol";
-import {IPDPTypes} from "@pdp/interfaces/IPDPTypes.sol";
+import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
-import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Payments, IValidator} from "@fws-payments/Payments.sol";
 import {Errors} from "./Errors.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
-import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
 
 import {Extsload} from "./Extsload.sol";
 
@@ -81,7 +79,7 @@ contract FilecoinWarmStorageService is
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
 
-    event FilCDNControllerChanged(address oldController, address newController);
+    event FilBeamControllerChanged(address oldController, address newController);
 
     event ViewContractSet(address indexed viewContract);
 
@@ -112,6 +110,22 @@ contract FilecoinWarmStorageService is
         uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
+    // Storage for data set payment information with dataSetId
+    struct DataSetInfoView {
+        uint256 pdpRailId; // ID of the PDP payment rail
+        uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
+        uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
+        address payer; // Address paying for storage
+        address payee; // SP's beneficiary address
+        address serviceProvider; // Current service provider of the dataset
+        uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
+        uint256 clientDataSetId; // ClientDataSetID
+        uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
+        uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
+        uint256 dataSetId; // DataSet ID
+    }
+
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
         address payer;
@@ -122,7 +136,7 @@ contract FilecoinWarmStorageService is
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
@@ -133,7 +147,7 @@ contract FilecoinWarmStorageService is
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 10; // 10 days in epochs
+    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 30; // 1 month (30 days) in epochs
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
@@ -148,24 +162,21 @@ contract FilecoinWarmStorageService is
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
 
     // Pricing constants
-    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
     uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
-    // Dynamic fee values based on token decimals
-    uint256 private immutable DATA_SET_CREATION_FEE; // 0.1 USDFC with correct decimals
-
     // Token decimals
-    uint8 private immutable tokenDecimals;
+    uint8 private immutable TOKEN_DECIMALS;
 
     // External contract addresses
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
     IERC20Metadata public immutable usdfcTokenAddress;
-    address public immutable filCDNBeneficiaryAddress;
+    address public immutable filBeamBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
 
@@ -242,7 +253,7 @@ contract FilecoinWarmStorageService is
     address public viewContractAddress;
 
     // The address allowed to terminate CDN services
-    address private filCDNControllerAddress;
+    address private filBeamControllerAddress;
 
     // =========================================================================
 
@@ -252,10 +263,10 @@ contract FilecoinWarmStorageService is
         _;
     }
 
-    modifier onlyFilCDNController() {
+    modifier onlyFilBeamController() {
         require(
-            msg.sender == filCDNControllerAddress,
-            Errors.OnlyFilCDNControllerAllowed(filCDNControllerAddress, msg.sender)
+            msg.sender == filBeamControllerAddress,
+            Errors.OnlyFilBeamControllerAllowed(filBeamControllerAddress, msg.sender)
         );
         _;
     }
@@ -265,7 +276,7 @@ contract FilecoinWarmStorageService is
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         IERC20Metadata _usdfc,
-        address _filCDNBeneficiaryAddress,
+        address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
     ) {
@@ -280,8 +291,8 @@ contract FilecoinWarmStorageService is
         require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
 
-        require(_filCDNBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNBeneficiary));
-        filCDNBeneficiaryAddress = _filCDNBeneficiaryAddress;
+        require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
+        filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
 
         require(
             _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
@@ -296,27 +307,26 @@ contract FilecoinWarmStorageService is
         sessionKeyRegistry = _sessionKeyRegistry;
 
         // Read token decimals from the USDFC token contract
-        tokenDecimals = _usdfc.decimals();
+        TOKEN_DECIMALS = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** tokenDecimals); // 5 USDFC
-        DATA_SET_CREATION_FEE = (1 * 10 ** tokenDecimals) / 10; // 0.1 USDFC
-        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
-        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** tokenDecimals) / 2; // 0.5 USDFC
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
+        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
+        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
     }
 
     /**
      * @notice Initialize the contract with PDP proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
-     * @param _filCDNControllerAddress Address authorized to terminate CDN services
+     * @param _filBeamControllerAddress Address authorized to terminate CDN services
      * @param _name Service name (max 256 characters, cannot be empty)
      * @param _description Service description (max 256 characters, cannot be empty)
      */
     function initialize(
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize,
-        address _filCDNControllerAddress,
+        address _filBeamControllerAddress,
         string memory _name,
         string memory _description
     ) public initializer {
@@ -330,8 +340,8 @@ contract FilecoinWarmStorageService is
             Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
         );
 
-        require(_filCDNControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
-        filCDNControllerAddress = _filCDNControllerAddress;
+        require(_filBeamControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
+        filBeamControllerAddress = _filBeamControllerAddress;
 
         // Validate name and description
         require(bytes(_name).length > 0, "Service name cannot be empty");
@@ -479,9 +489,9 @@ contract FilecoinWarmStorageService is
         // Check if provider is approved
         require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
-        ServiceProviderRegistryStorage.ServiceProviderInfo memory providerInfo =
+        ServiceProviderRegistry.ServiceProviderInfoView memory providerInfo =
             serviceProviderRegistry.getProvider(providerId);
-        address payee = providerInfo.payee;
+        address payee = providerInfo.info.payee;
 
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
@@ -555,21 +565,8 @@ contract FilecoinWarmStorageService is
         // Store reverse mapping from rail ID to data set ID for validation
         railToDataSet[pdpRailId] = dataSetId;
 
-        // First, set a lockupFixed value that's at least equal to the one-time payment
-        // This is necessary because modifyRailPayment requires that lockupFixed >= oneTimePayment
-        payments.modifyRailLockup(
-            pdpRailId,
-            DEFAULT_LOCKUP_PERIOD,
-            DATA_SET_CREATION_FEE // lockupFixed equal to the one-time payment amount
-        );
-
-        // Charge the one-time data set creation fee
-        // This is a payment from payer to data set service provider of a fixed amount
-        payments.modifyRailPayment(
-            pdpRailId,
-            0, // Initial rate is 0, will be updated when roots are added
-            DATA_SET_CREATION_FEE // One-time payment amount
-        );
+        // Set lockup period for the rail
+        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
 
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
@@ -590,7 +587,7 @@ contract FilecoinWarmStorageService is
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
-                filCDNBeneficiaryAddress, // to FilCDN beneficiary
+                filBeamBeneficiaryAddress, // to FilBeam beneficiary
                 address(this), // this contract acts as the arbiter
                 0, // no service commission
                 address(this)
@@ -981,15 +978,15 @@ contract FilecoinWarmStorageService is
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
-    function terminateCDNService(uint256 dataSetId) external onlyFilCDNController {
+    function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
         // Check if already terminated
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.cdnEndEpoch == 0, Errors.FilCDNPaymentAlreadyTerminated(dataSetId));
+        require(info.cdnEndEpoch == 0, Errors.FilBeamPaymentAlreadyTerminated(dataSetId));
 
         // Check if CDN service is configured
         require(
             hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilCDNServiceNotConfigured(dataSetId)
+            Errors.FilBeamServiceNotConfigured(dataSetId)
         );
 
         // Check if cache miss and CDN rails are configured
@@ -1006,11 +1003,11 @@ contract FilecoinWarmStorageService is
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
     }
 
-    function transferFilCDNController(address newController) external onlyFilCDNController {
-        require(newController != address(0), Errors.ZeroAddress(Errors.AddressField.FilCDNController));
-        address oldController = filCDNControllerAddress;
-        filCDNControllerAddress = newController;
-        emit FilCDNControllerChanged(oldController, newController);
+    function transferFilBeamController(address newController) external onlyFilBeamController {
+        require(newController != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
+        address oldController = filBeamControllerAddress;
+        filBeamControllerAddress = newController;
+        emit FilBeamControllerChanged(oldController, newController);
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
@@ -1151,7 +1148,7 @@ contract FilecoinWarmStorageService is
         // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
         // This prevents charging 0 for very small sizes due to integer division.
         if (ratePerEpoch == 0 && totalBytes > 0) {
-            uint256 minRate = (1 * 10 ** uint256(tokenDecimals)) / 100000;
+            uint256 minRate = (1 * 10 ** uint256(TOKEN_DECIMALS)) / 100000;
             return minRate;
         }
 
