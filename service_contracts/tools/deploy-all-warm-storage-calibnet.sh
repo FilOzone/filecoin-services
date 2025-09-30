@@ -6,12 +6,9 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
-
-FILFOX_VERIFIER_VERSION="v1.4.4"
 # Get this script's directory so we can reliably source other scripts
 # in the same directory, regardless of where this script is executed from
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
-
 
 echo "Deploying all Warm Storage contracts to calibnet"
 
@@ -79,26 +76,26 @@ echo "  Description: $SERVICE_DESCRIPTION"
 # Fixed addresses for initialization
 PAYMENTS_CONTRACT_ADDRESS="0x0000000000000000000000000000000000000001" # TODO Placeholder to be updated later
 if [ -z "$FILCDN_CONTROLLER_ADDRESS" ]; then
-    FILCDN_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
+  FILCDN_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
 fi
 if [ -z "$FILCDN_BENEFICIARY_ADDRESS" ]; then
-    FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
+  FILCDN_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
 fi
-USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
+USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address
 
 # Proving period configuration - use defaults if not set
-MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
-CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}"                # Default 15 epochs
+MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"       # Default 30 epochs (15 minutes on calibnet)
+CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}" # Default 15 epochs
 
 # Validate that the configuration will work with PDPVerifier's challengeFinality
 # The calculation: (MAX_PROVING_PERIOD - CHALLENGE_WINDOW_SIZE) + (CHALLENGE_WINDOW_SIZE/2) must be >= CHALLENGE_FINALITY
 # This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
 MIN_REQUIRED=$((CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE / 2))
 if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
-    echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for CHALLENGE_FINALITY ($CHALLENGE_FINALITY)"
-    echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
-    echo "       Either increase MAX_PROVING_PERIOD or decrease CHALLENGE_FINALITY"
-    exit 1
+  echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for CHALLENGE_FINALITY ($CHALLENGE_FINALITY)"
+  echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
+  echo "       Either increase MAX_PROVING_PERIOD or decrease CHALLENGE_FINALITY"
+  exit 1
 fi
 
 echo "Configuration validation passed:"
@@ -112,17 +109,17 @@ echo "Deploying contracts from address $ADDR"
 NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
 
 if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
-    # If existing session key registry not supplied, deploy another one
-    source "$SCRIPT_DIR/deploy-session-key-registry.sh"
-    NONCE=$(expr $NONCE + "1")
+  # If existing session key registry not supplied, deploy another one
+  source "$SCRIPT_DIR/deploy-session-key-registry.sh"
+  NONCE=$(expr $NONCE + "1")
 fi
 
 # Step 1: Deploy PDPVerifier implementation
 echo "Deploying PDPVerifier implementation..."
 VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
 if [ -z "$VERIFIER_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to extract PDPVerifier contract address"
-    exit 1
+  echo "Error: Failed to extract PDPVerifier contract address"
+  exit 1
 fi
 echo "PDPVerifier implementation deployed at: $VERIFIER_IMPLEMENTATION_ADDRESS"
 NONCE=$(expr $NONCE + "1")
@@ -132,8 +129,8 @@ echo "Deploying PDPVerifier proxy..."
 INIT_DATA=$(cast calldata "initialize(uint256)" $CHALLENGE_FINALITY)
 PDP_VERIFIER_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
-    echo "Error: Failed to extract PDPVerifier proxy address"
-    exit 1
+  echo "Error: Failed to extract PDPVerifier proxy address"
+  exit 1
 fi
 echo "PDPVerifier proxy deployed at: $PDP_VERIFIER_ADDRESS"
 NONCE=$(expr $NONCE + "1")
@@ -142,8 +139,8 @@ NONCE=$(expr $NONCE + "1")
 echo "Deploying Payments contract..."
 PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
 if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
-    echo "Error: Failed to extract Payments contract address"
-    exit 1
+  echo "Error: Failed to extract Payments contract address"
+  exit 1
 fi
 echo "Payments contract deployed at: $PAYMENTS_CONTRACT_ADDRESS"
 NONCE=$(expr $NONCE + "1")
@@ -152,8 +149,8 @@ NONCE=$(expr $NONCE + "1")
 echo "Deploying ServiceProviderRegistry implementation..."
 REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to extract ServiceProviderRegistry implementation address"
-    exit 1
+  echo "Error: Failed to extract ServiceProviderRegistry implementation address"
+  exit 1
 fi
 echo "ServiceProviderRegistry implementation deployed at: $REGISTRY_IMPLEMENTATION_ADDRESS"
 NONCE=$(expr $NONCE + "1")
@@ -163,8 +160,8 @@ echo "Deploying ServiceProviderRegistry proxy..."
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
 SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
-    echo "Error: Failed to extract ServiceProviderRegistry proxy address"
-    exit 1
+  echo "Error: Failed to extract ServiceProviderRegistry proxy address"
+  exit 1
 fi
 echo "ServiceProviderRegistry proxy deployed at: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 NONCE=$(expr $NONCE + "1")
@@ -175,8 +172,8 @@ echo "Deploying FilecoinWarmStorageService implementation..."
 SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILCDN_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to extract FilecoinWarmStorageService contract address"
-    exit 1
+  echo "Error: Failed to extract FilecoinWarmStorageService contract address"
+  exit 1
 fi
 echo "FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
 NONCE=$(expr $NONCE + "1")
@@ -187,11 +184,10 @@ echo "Deploying FilecoinWarmStorageService proxy..."
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILCDN_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
-    echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
-    exit 1
+  echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
+  exit 1
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
-
 
 # Step 8: Deploy FilecoinWarmStorageServiceStateView
 NONCE=$(expr $NONCE + "1")
@@ -223,15 +219,20 @@ echo "Service description: $SERVICE_DESCRIPTION"
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then
-    echo
-    echo "🔍 Starting automatic contract verification..."
-    
-    # Verify all major contracts
-    pushd "$(dirname $0)/.." > /dev/null
-    source tools/verify-contracts.sh
-    verify_contracts_batch $VERIFIER_IMPLEMENTATION_ADDRESS "lib/pdp/src/PDPVerifier.sol:PDPVerifier" "PDPVerifier Implementation" $CHAIN_ID $PAYMENTS_CONTRACT_ADDRESS "lib/fws-payments/src/Payments.sol:Payments" "Payments Contract" $CHAIN_ID $REGISTRY_IMPLEMENTATION_ADDRESS "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" "ServiceProviderRegistry Implementation" $CHAIN_ID $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" "FilecoinWarmStorageService Implementation" $CHAIN_ID $WARM_STORAGE_VIEW_ADDRESS "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "FilecoinWarmStorageServiceStateView" $CHAIN_ID
-    popd > /dev/null
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  # Verify all major contracts
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch \
+    "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier,PDPVerifier Implementation,$CHAIN_ID" \
+    "$PAYMENTS_CONTRACT_ADDRESS,lib/fws-payments/src/Payments.sol:Payments,Payments Contract,$CHAIN_ID" \
+    "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry,ServiceProviderRegistry Implementation,$CHAIN_ID" \
+    "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation,$CHAIN_ID" \
+    "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView,FilecoinWarmStorageServiceStateView,$CHAIN_ID"
+  popd >/dev/null
 else
-    echo
-    echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi

@@ -8,8 +8,8 @@ echo // This file is a generated binding and any changes will be lost.
 echo // Generated with tools/generate_storage_layout.sh
 echo
 
-forge inspect --json $1 storageLayout \
-    | jq -rM 'reduce .storage.[] as {$label,$slot} (null; . += "bytes32 constant " + (
+forge inspect --json $1 storageLayout |
+  jq -rM 'reduce .storage.[] as {$label,$slot} (null; . += "bytes32 constant " + (
             $label
                 | [scan("[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z0-9]+")]
                 | map(ascii_upcase)

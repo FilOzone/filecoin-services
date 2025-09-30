@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 
+#
 # This script checks if any Solidity contract/library in the `service_contracts/src/` folder
 # exceeds the EIP-170 contract runtime size limit (24,576 bytes)
 # and the EIP-3860 init code size limit (49,152 bytes).
@@ -17,21 +17,27 @@ fi
 
 SRC_DIR="$1"
 
-command -v jq >/dev/null 2>&1 || { echo >&2 "jq is required but not installed."; exit 1; }
-command -v forge >/dev/null 2>&1 || { echo >&2 "forge is required but not installed."; exit 1; }
+command -v jq >/dev/null 2>&1 || {
+  echo >&2 "jq is required but not installed."
+  exit 1
+}
+command -v forge >/dev/null 2>&1 || {
+  echo >&2 "forge is required but not installed."
+  exit 1
+}
 
 # Gather contract and library names from service_contracts/src/
 # Only matches [A-Za-z0-9_] in contract/library names (no special characters)
 if [[ -d "$SRC_DIR" ]]; then
-    mapfile -t contracts < <(grep -rE '^(contract|library) ' "$SRC_DIR" 2>/dev/null | sed -E 's/.*(contract|library) ([A-Za-z0-9_]+).*/\2/')
+  mapfile -t contracts < <(grep -rE '^(contract|library) ' "$SRC_DIR" 2>/dev/null | sed -E 's/.*(contract|library) ([A-Za-z0-9_]+).*/\2/')
 else
-    contracts=()
+  contracts=()
 fi
 
 # Exit early if none found (common in empty/new projects)
 if [[ ${#contracts[@]} -eq 0 ]]; then
-    echo "No contracts or libraries found in service_contracts/src/."
-    exit 0
+  echo "No contracts or libraries found in service_contracts/src/."
+  exit 0
 fi
 
 # cd service_contracts || { echo "Failed to change directory to service_contracts"; exit 1; }
@@ -39,20 +45,20 @@ trap 'rm -f contract_sizes.json' EXIT
 
 # Build the contracts, get size info as JSON (ignore non-zero exit to always parse output)
 forge clean || true
-forge build --sizes --json | jq . > contract_sizes.json || true
+forge build --sizes --json | jq . >contract_sizes.json || true
 
 # Validate JSON output
 if ! jq empty contract_sizes.json 2>/dev/null; then
-    echo "forge build did not return valid JSON. Output:"
-    cat contract_sizes.json
-    exit 1
+  echo "forge build did not return valid JSON. Output:"
+  cat contract_sizes.json
+  exit 1
 fi
 
 if jq -e '. == {}' contract_sizes.json >/dev/null; then
-    echo "forge did not find any contracts. forge build:"
-    # This usually means build failure
-    forge build
-    exit 1
+  echo "forge did not find any contracts. forge build:"
+  # This usually means build failure
+  forge build
+  exit 1
 fi
 
 json=$(cat contract_sizes.json)
@@ -65,7 +71,8 @@ json=$(echo "$json" | jq --argjson keys "$(printf '%s\n' "${contracts[@]}" | jq 
 ')
 
 # Find all that violate the EIP-170 runtime size limit (24,576 bytes)
-exceeding_runtime=$(echo "$json" | jq -r '
+exceeding_runtime=$(
+  echo "$json" | jq -r '
   to_entries
   | map(select(.value.runtime_size > 24576))
   | .[]
@@ -73,7 +80,8 @@ exceeding_runtime=$(echo "$json" | jq -r '
 )
 
 # Find all that violate the EIP-3860 init code size limit (49,152 bytes)
-exceeding_initcode=$(echo "$json" | jq -r '
+exceeding_initcode=$(
+  echo "$json" | jq -r '
   to_entries
   | map(select(.value.init_size > 49152))
   | .[]
