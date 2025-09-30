@@ -41,8 +41,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
     address public provider2;
     address public provider3;
     address public unauthorizedProvider;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
 
     // Events
     event DataSetServiceProviderChanged(
@@ -57,8 +57,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         provider2 = address(0x3);
         provider3 = address(0x4);
         unauthorizedProvider = address(0x5);
-        filCDNController = address(0x6);
-        filCDNBeneficiary = address(0x7);
+        filBeamController = address(0x6);
+        filBeamBeneficiary = address(0x7);
 
         // Fund accounts
         vm.deal(owner, 100 ether);
@@ -90,14 +90,19 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
 
         // Deploy service contract
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier), address(payments), usdfcToken, filCDNBeneficiary, providerRegistry, sessionKeyRegistry
+            address(pdpVerifier),
+            address(payments),
+            usdfcToken,
+            filBeamBeneficiary,
+            providerRegistry,
+            sessionKeyRegistry
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(1440),
-            filCDNController,
+            filBeamController,
             "Test Service",
             "Test Description"
         );

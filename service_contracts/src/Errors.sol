@@ -13,8 +13,8 @@ library Errors {
         Payments,
         /// USDFC contract address
         USDFC,
-        /// FilCDN controller address
-        FilCDNController,
+        /// FilBeam controller address
+        FilBeamController,
         /// Session Key Registry contract address
         SessionKeyRegistry,
         /// Service provider address
@@ -23,8 +23,8 @@ library Errors {
         Payer,
         /// ServiceProviderRegistry contract address
         ServiceProviderRegistry,
-        /// FilCDN beneficiary address
-        FilCDNBeneficiary
+        /// FilBeam beneficiary address
+        FilBeamBeneficiary
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -237,14 +237,14 @@ library Errors {
     /// @param pieceCount The number of pieces being added
     error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
 
-    /// @notice FilCDN service is not configured for the given data set
+    /// @notice FilBeam service is not configured for the given data set
     /// @param dataSetId The data set ID
-    error FilCDNServiceNotConfigured(uint256 dataSetId);
+    error FilBeamServiceNotConfigured(uint256 dataSetId);
 
-    /// @notice Only the FilCDN controller address can call this function
-    /// @param expected The expected FilCDN controller address
+    /// @notice Only the FilBeam controller address can call this function
+    /// @param expected The expected FilBeam controller address
     /// @param actual The caller address
-    error OnlyFilCDNControllerAllowed(address expected, address actual);
+    error OnlyFilBeamControllerAllowed(address expected, address actual);
 
     /// @notice Payment rails have not finalized yet, so the data set can't be deleted
     /// @param dataSetId The data set ID

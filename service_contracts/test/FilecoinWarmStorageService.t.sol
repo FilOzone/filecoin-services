@@ -42,8 +42,8 @@ contract FilecoinWarmStorageServiceTest is Test {
     address public deployer;
     address public client;
     address public serviceProvider;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
     address public session;
 
     address public sp1;
@@ -108,8 +108,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         deployer = address(this);
         client = address(0xf1);
         serviceProvider = address(0xf2);
-        filCDNController = address(0xf3);
-        filCDNBeneficiary = address(0xf4);
+        filBeamController = address(0xf3);
+        filBeamBeneficiary = address(0xf4);
 
         // Additional accounts for serviceProviderRegistry tests
         sp1 = address(0xf5);
@@ -247,7 +247,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -255,7 +255,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController, // filCDNControllerAddress
+            filBeamController, // filBeamControllerAddress
             "Filecoin Warm Storage Service", // service name
             "A decentralized storage service with proof-of-data-possession and payment integration" // service description
         );
@@ -297,7 +297,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockUSDFC),
             "USDFC token address should be set correctly"
         );
-        assertEq(viewContract.filCDNControllerAddress(), filCDNController, "FilCDN address should be set correctly");
+        assertEq(viewContract.filBeamControllerAddress(), filBeamController, "FilBeam address should be set correctly");
         assertEq(
             pdpServiceWithPayments.serviceCommissionBps(),
             0, // 0%
@@ -315,7 +315,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -328,7 +328,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             expectedName,
             expectedDescription
         );
@@ -348,7 +348,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -357,7 +357,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "", // empty name
             "Valid description"
         );
@@ -370,7 +370,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -379,7 +379,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "Valid name",
             "" // empty description
         );
@@ -392,7 +392,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -411,7 +411,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             longName,
             "Valid description"
         );
@@ -424,7 +424,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -443,7 +443,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880),
             uint256(60),
-            filCDNController,
+            filBeamController,
             "Valid name",
             longDesc
         );
@@ -500,8 +500,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             365 days // max lockup period
         );
 
-        // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 1e6; // 10x the required fee
+        // Client deposits funds to the Payments contract for future payments
+        uint256 depositAmount = 1e5; // Sufficient funds for future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -582,12 +582,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(address(cdnRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
-        assertEq(cdnRail.to, filCDNBeneficiary, "To address should be FilCDNBeneficiary");
+        assertEq(cdnRail.to, filBeamBeneficiary, "To address should be FilBeamBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cdnRail.validator, address(0), "Validator should be empty");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
-        // assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
-        // assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
+        assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
 
         // Get account balances after creating data set
         (uint256 clientFundsAfter,) = getAccountInfo(mockUSDFC, client);
@@ -631,8 +631,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             365 days // max lockup period
         );
 
-        // Client deposits funds to the Payments contract for the one-time fee
-        uint256 depositAmount = 1e6; // 10x the required fee
+        // Client deposits funds to the Payments contract for future payments
+        uint256 depositAmount = 1e5; // Sufficient funds for future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -710,7 +710,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             1000e6, // lockup allowance (1000 USDFC)
             365 days // max lockup period
         );
-        uint256 depositAmount = 1e6; // 10x the required fee
+        uint256 depositAmount = 1e5;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -1411,19 +1411,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client); // client terminates
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.OnlyFilCDNControllerAllowed.selector, address(filCDNController), address(client)
+                Errors.OnlyFilBeamControllerAllowed.selector, address(filBeamController), address(client)
             )
         );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
-        // 4. Try to terminate payment from FilCDN address
-        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
+        // 4. Try to terminate payment from FilBeam address
+        console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
+            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
         );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
@@ -1444,8 +1444,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
 
         // Ensure future CDN service termination reverts
-        vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        vm.prank(filBeamController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
@@ -1523,13 +1523,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         Payments.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
 
-        // 3. Try to terminate payment from FilCDN address
-        console.log("\n4. Terminating CDN payment rails from FilCDN address -- should pass");
+        // 3. Try to terminate payment from FilBeam address
+        console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
-        vm.prank(viewContract.filCDNControllerAddress()); // FilCDN terminates
+        vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filCDNController, dataSetId, info.cacheMissRailId, info.cdnRailId
+            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
         );
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
@@ -1574,33 +1574,33 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Try to terminate CDN service
         console.log("Terminating CDN service for data set with -- should revert");
         console.log("Current block:", block.number);
-        vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
+        vm.prank(filBeamController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
     }
 
     function testTransferCDNController() public {
         address newController = address(0xDEADBEEF);
-        vm.prank(filCDNController);
-        pdpServiceWithPayments.transferFilCDNController(newController);
-        assertEq(viewContract.filCDNControllerAddress(), newController, "CDN controller should be updated");
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.transferFilBeamController(newController);
+        assertEq(viewContract.filBeamControllerAddress(), newController, "CDN controller should be updated");
 
         // Attempt transfer from old controller should revert
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         vm.expectRevert(
-            abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, newController, filCDNController)
+            abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, newController, filBeamController)
         );
-        pdpServiceWithPayments.transferFilCDNController(address(0x1234));
+        pdpServiceWithPayments.transferFilBeamController(address(0x1234));
 
         // Restore the original state
         vm.prank(newController);
-        pdpServiceWithPayments.transferFilCDNController(filCDNController);
+        pdpServiceWithPayments.transferFilBeamController(filBeamController);
     }
 
     function testTransferCDNController_revertsIfZeroAddress() public {
-        vm.prank(filCDNController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilCDNController));
-        pdpServiceWithPayments.transferFilCDNController(address(0));
+        vm.prank(filBeamController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilBeamController));
+        pdpServiceWithPayments.transferFilBeamController(address(0));
     }
 
     // Data Set Metadata Storage Tests
@@ -2789,7 +2789,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.expectEmit(true, false, false, true);
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -2809,7 +2809,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.expectEmit(true, false, false, true);
         emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
 
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -2829,7 +2829,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.expectEmit(true, false, false, true);
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -2837,17 +2837,17 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 0, 0);
     }
 
-    function testSettleCDNPaymentRails_OnlyFilCDNController() public {
+    function testSettleCDNPaymentRails_OnlyfilBeamController() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Expecting the payment to fail due to insufficient lockup (OneTimePaymentExceedsLockup error)
         vm.expectRevert();
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
     }
 
@@ -2855,11 +2855,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getCDNMetadataKV("true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
-        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, filCDNController, client));
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, client));
         vm.prank(client);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
 
-        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilCDNControllerAllowed.selector, filCDNController, sp1));
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, sp1));
         vm.prank(sp1);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
     }
@@ -2868,7 +2868,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 invalidDataSetId = 999999;
 
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, invalidDataSetId));
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(invalidDataSetId, 50000, 25000);
     }
 
@@ -2877,8 +2877,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         string[] memory emptyValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
 
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilCDNServiceNotConfigured.selector, dataSetId));
-        vm.prank(filCDNController);
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
     }
 
@@ -2894,7 +2894,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Empty CDN metadata still creates CDN rails and can be settled after top-up
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -2916,7 +2916,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.expectEmit(true, false, false, true);
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -2925,7 +2925,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         vm.recordLogs();
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 0, 0);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -2956,7 +2956,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRailBefore.lockupFixed, cacheMissAmount, "Cache miss rail should have lockup equal to amount");
 
         // Process the payments
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -2981,7 +2981,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, maxCacheMissAmount, 0);
 
         // Process the large payments
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, maxCdnAmount, maxCacheMissAmount);
     }
 
@@ -3101,7 +3101,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Attempt to settle without topping up (lockup is 0)
         // Expecting OneTimePaymentExceedsLockup error
         vm.expectRevert();
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -3119,7 +3119,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should fail due to insufficient lockup
         vm.expectRevert();
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -3137,7 +3137,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should fail because cache miss rail has insufficient lockup
         vm.expectRevert();
-        vm.prank(filCDNController);
+        vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
@@ -3159,7 +3159,7 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
         address _pdpVerifierAddress,
         address _paymentsContractAddress,
         IERC20Metadata _usdfcTokenAddress,
-        address _filCDNAddressBeneficiary,
+        address _filBeamAddressBeneficiary,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
     )
@@ -3167,7 +3167,7 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
             _pdpVerifierAddress,
             _paymentsContractAddress,
             _usdfcTokenAddress,
-            _filCDNAddressBeneficiary,
+            _filBeamAddressBeneficiary,
             _serviceProviderRegistry,
             _sessionKeyRegistry
         )
@@ -3194,10 +3194,10 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     address public creator;
     address public wrongSigner;
     uint256 public wrongSignerPrivateKey;
-    uint256 public filCDNControllerPrivateKey;
-    address public filCDNController;
-    uint256 public filCDNBeneficiaryPrivateKey;
-    address public filCDNBeneficiary;
+    uint256 public filBeamControllerPrivateKey;
+    address public filBeamController;
+    uint256 public filBeamBeneficiaryPrivateKey;
+    address public filBeamBeneficiary;
 
     SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
 
@@ -3209,11 +3209,11 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         wrongSignerPrivateKey = 0x9876543210987654321098765432109876543210987654321098765432109876;
         wrongSigner = vm.addr(wrongSignerPrivateKey);
 
-        filCDNControllerPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
-        filCDNController = vm.addr(filCDNControllerPrivateKey);
+        filBeamControllerPrivateKey = 0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdef;
+        filBeamController = vm.addr(filBeamControllerPrivateKey);
 
-        filCDNBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
-        filCDNBeneficiary = vm.addr(filCDNBeneficiaryPrivateKey);
+        filBeamBeneficiaryPrivateKey = 0x133713371337133713371337133713371337133713371337133713371337;
+        filBeamBeneficiary = vm.addr(filBeamBeneficiaryPrivateKey);
 
         creator = address(0xf2);
 
@@ -3235,7 +3235,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -3243,7 +3243,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController, // filCDNControllerAddress
+            filBeamController, // filBeamControllerAddress
             "Test Service", // service name
             "Test Description" // service description
         );
@@ -3314,15 +3314,15 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     ServiceProviderRegistry public serviceProviderRegistry;
 
     address public deployer;
-    address public filCDNController;
-    address public filCDNBeneficiary;
+    address public filBeamController;
+    address public filBeamBeneficiary;
 
     SessionKeyRegistry sessionKeyRegistry = new SessionKeyRegistry();
 
     function setUp() public {
         deployer = address(this);
-        filCDNController = address(0xf2);
-        filCDNBeneficiary = address(0xf3);
+        filBeamController = address(0xf2);
+        filBeamBeneficiary = address(0xf3);
 
         // Deploy mock contracts
         mockUSDFC = new MockERC20();
@@ -3343,7 +3343,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
-            filCDNBeneficiary,
+            filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry
         );
@@ -3351,7 +3351,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             FilecoinWarmStorageService.initialize.selector,
             uint64(2880), // maxProvingPeriod
             uint256(60), // challengeWindowSize
-            filCDNController, // filCDNControllerAddress
+            filBeamController, // filBeamControllerAddress
             "Test Service", // service name
             "Test Description" // service description
         );

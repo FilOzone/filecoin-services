@@ -23,7 +23,6 @@ contract ServiceProviderRegistryStorage {
         string name; // Optional provider name (max 128 chars)
         string description; //Service description, ToC, contract info, website..
         bool isActive;
-        uint256 providerId; // Unique identifier for the provider
     }
 
     /// @notice Product offering of the Service Provider

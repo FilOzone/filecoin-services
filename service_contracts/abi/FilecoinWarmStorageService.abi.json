@@ -18,7 +18,7 @@
         "internalType": "contract IERC20Metadata"
       },
       {
-        "name": "_filCDNBeneficiaryAddress",
+        "name": "_filBeamBeneficiaryAddress",
         "type": "address",
         "internalType": "address"
       },
@@ -255,7 +255,7 @@
   },
   {
     "type": "function",
-    "name": "filCDNBeneficiaryAddress",
+    "name": "filBeamBeneficiaryAddress",
     "inputs": [],
     "outputs": [
       {
@@ -358,7 +358,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "_filCDNControllerAddress",
+        "name": "_filBeamControllerAddress",
         "type": "address",
         "internalType": "address"
       },
@@ -781,7 +781,7 @@
   },
   {
     "type": "function",
-    "name": "transferFilCDNController",
+    "name": "transferFilBeamController",
     "inputs": [
       {
         "name": "newController",
@@ -917,6 +917,37 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "CDNPaymentTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "endEpoch",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -1093,7 +1124,7 @@
   },
   {
     "type": "event",
-    "name": "FilCDNControllerChanged",
+    "name": "FilBeamControllerChanged",
     "inputs": [
       {
         "name": "oldController",
@@ -1579,7 +1610,7 @@
   },
   {
     "type": "error",
-    "name": "FilCDNServiceNotConfigured",
+    "name": "FilBeamServiceNotConfigured",
     "inputs": [
       {
         "name": "dataSetId",
@@ -1854,7 +1885,7 @@
   },
   {
     "type": "error",
-    "name": "OnlyFilCDNControllerAllowed",
+    "name": "OnlyFilBeamControllerAllowed",
     "inputs": [
       {
         "name": "expected",
