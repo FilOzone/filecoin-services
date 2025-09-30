@@ -647,16 +647,7 @@ contract ServiceProviderRegistry is
     {
         uint256 providerId = addressToProviderId[providerAddress];
         if (providerId == 0) {
-            return ServiceProviderInfoView({
-                providerId: 0,
-                info: ServiceProviderInfo({
-                    serviceProvider: address(0),
-                    payee: address(0),
-                    name: "",
-                    description: "",
-                    isActive: false
-                })
-            });
+            return _getEmptyProviderInfoView();
         }
 
         ServiceProviderInfo storage provider = providers[providerId];
@@ -713,6 +704,56 @@ contract ServiceProviderRegistry is
                 currentIndex++;
             }
         }
+    }
+
+    /// @notice Get multiple providers by their IDs
+    /// @param providerIds Array of provider IDs to retrieve
+    /// @return providerInfos Array of provider information corresponding to the input IDs
+    /// @return validIds Array of booleans indicating whether each ID is valid (exists and is active)
+    /// @dev Returns empty ServiceProviderInfoView structs for invalid IDs, with corresponding validIds[i] = false
+    function getProvidersByIds(uint256[] calldata providerIds)
+        external
+        view
+        returns (ServiceProviderInfoView[] memory providerInfos, bool[] memory validIds)
+    {
+        uint256 length = providerIds.length;
+        providerInfos = new ServiceProviderInfoView[](length);
+        validIds = new bool[](length);
+
+        uint256 _numProviders = numProviders;
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 providerId = providerIds[i];
+
+            if (providerId > 0 && providerId <= _numProviders) {
+                ServiceProviderInfo storage provider = providers[providerId];
+                if (provider.serviceProvider != address(0) && provider.isActive) {
+                    providerInfos[i] = ServiceProviderInfoView({providerId: providerId, info: provider});
+                    validIds[i] = true;
+                } else {
+                    providerInfos[i] = _getEmptyProviderInfoView();
+                    validIds[i] = false;
+                }
+            } else {
+                providerInfos[i] = _getEmptyProviderInfoView();
+                validIds[i] = false;
+            }
+        }
+    }
+
+    /// @notice Internal helper to create an empty ServiceProviderInfoView
+    /// @return Empty ServiceProviderInfoView struct
+    function _getEmptyProviderInfoView() internal pure returns (ServiceProviderInfoView memory) {
+        return ServiceProviderInfoView({
+            providerId: 0,
+            info: ServiceProviderInfo({
+                serviceProvider: address(0),
+                payee: address(0),
+                name: "",
+                description: "",
+                isActive: false
+            })
+        });
     }
 
     /// @notice Get total number of registered providers (including inactive)
