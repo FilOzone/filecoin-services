@@ -1029,18 +1029,22 @@ contract FilecoinWarmStorageService is
 
         Payments payments = Payments(paymentsContractAddress);
 
-        if (cacheMissAmount > 0) {
-            // Get current lockup and increment by the passed amount
-            Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-            payments.modifyRailLockup(
-                info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissRail.lockupFixed + cacheMissAmount
-            );
-        }
-
         if (cdnAmount > 0) {
             // Get current lockup and increment by the passed amount
             Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+            // Ensure the rail is not terminated
+            require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
             payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnRail.lockupFixed + cdnAmount);
+        }
+
+        if (cacheMissAmount > 0) {
+            // Get current lockup and increment by the passed amount
+            Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+            // Ensure the rail is not terminated
+            require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
+            payments.modifyRailLockup(
+                info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, cacheMissRail.lockupFixed + cacheMissAmount
+            );
         }
 
         if (cdnAmount > 0 || cacheMissAmount > 0) {
