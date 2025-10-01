@@ -464,7 +464,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         return (keys, values);
     }
 
-    function testCreateDataSetCreatesRailAndChargesFee() public {
+    function testCreateDataSetCreatesRail() public {
         // Prepare ExtraData - withCDN key presence means CDN is enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
