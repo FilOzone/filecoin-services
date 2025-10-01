@@ -1,4 +1,4 @@
-# FWSS Contract Upgrade Dependencies Document
+# Updating FWSS Dependencies
 
 This document outlines the procedures for upgrading dependencies and contracts in the FilecoinWarmStorageService (FWSS) ecosystem.
 
@@ -11,15 +11,19 @@ The FWSS system depends on several key components that may need periodic upgrade
 
 ## Dependency Upgrade Procedures
 
-### 1. PDP Contract Upgrade
+### PDP Contract Upgrades
 
-#### In the PDP Repository:
+#### Non-breaking PDP Contract Upgrade
+
+This is outlining the upgrade flow if there is a non-breaking PDP contract upgrade change.
+
+##### In the PDP Repository:
 - [ ] Create a PR with changelog changes
 - [ ] Bump version string in `PDPVerifier.sol`
 - [ ] Merge PR after review
 - [ ] Create tag/release manually on GitHub UI
 
-#### Upgrade PDP Implementation Contract in FWSS:
+##### Upgrade PDP Implementation Contract in FWSS:
 - [ ] Checkout the desired PDP tag you want to upgrade to
 - [ ] Set required environment variables:
   ```bash
@@ -33,142 +37,16 @@ The FWSS system depends on several key components that may need periodic upgrade
 - [ ] Use the `upgrade-contract.sh` script to upgrade the contract
 - [ ] Verify upgrade on Calibnet
 
-### 2. Filecoin-Pay Upgrade
+#### A breaking PDP Contract Upgrade 
 
-> **TODO:** Document FWS-Payments upgrade procedure
-- [ ] Update procedure documentation
-- [ ] Define environment variables required
-- [ ] Document testing steps
-- [ ] Create upgrade scripts if needed
+This is outlining the flow for a breaking change in the PDP Contract, and how to get that upgraded in FWSS.
 
-### 3. OpenZeppelin Contracts Upgrade
+### Filecoin-Pay Upgrades
 
-> **TODO:** Document OpenZeppelin contracts upgrade procedure
-- [ ] Document procedure for `openzeppelin-contracts` submodule
-- [ ] Document procedure for `openzeppelin-contracts-upgradeable` submodule
-- [ ] Define compatibility testing requirements
-- [ ] Create migration scripts for breaking changes
+Filecoin-Pay is a non-upgradeable contract, so every change that needs to get propagated up to FWSS requires a new set of contracts currently.
+
+TODO: Outline publishing a new set of Filecoin-Pay contracts.
 
 ### 4. Session Key Registry Upgrade
 
-> **TODO:** Document Session Key Registry upgrade procedure
-- [ ] Update procedure documentation
-- [ ] Define required environment variables
-- [ ] Document testing and verification steps
-
-### 5. Subgraph Dependencies Upgrade
-
-> **TODO:** Document subgraph dependencies upgrade procedure
-- [ ] Document npm package updates in `/subgraph`
-- [ ] Define subgraph redeployment process
-- [ ] Document ABI synchronization requirements
-
-## Network-Specific Procedures
-
-### Calibnet (Testnet) Upgrades
-- [ ] Always test upgrades on Calibnet first
-- [ ] Verify contract interactions work as expected
-- [ ] Run integration tests
-- [ ] Update subgraph with new contract addresses/ABIs
-- [ ] Monitor for 24 hours before mainnet deployment
-
-### Mainnet Upgrades
-- [ ] Ensure Calibnet upgrade was successful
-- [ ] Double-check all environment variables
-- [ ] Execute upgrade during low-traffic periods
-- [ ] Have rollback plan ready
-- [ ] Monitor transactions immediately after upgrade
-
-## Post-Upgrade Verification
-
-### Contract Verification
-- [ ] Verify contracts on block explorer (Etherscan/FilScan)
-- [ ] Confirm ABI matches deployed contract
-- [ ] Test basic contract functionality
-- [ ] Verify proxy-implementation linkage (for upgradeable contracts)
-
-### System Integration Testing
-- [ ] Run full integration test suite
-- [ ] Verify subgraph indexing
-- [ ] Test frontend integration (if applicable)
-- [ ] Monitor gas costs and performance
-
-### Documentation Updates
-- [ ] Update contract addresses in documentation
-- [ ] Update ABI files in repository
-- [ ] Update CHANGELOG.md
-- [ ] Notify integration partners of changes
-
-## Emergency Procedures
-
-### Rollback Plan
-- [ ] Previous contract addresses documented
-- [ ] Rollback scripts tested and ready
-- [ ] Emergency contact list available
-- [ ] Monitoring alerts configured
-
-### Issue Response
-- [ ] Incident response team identified
-- [ ] Communication channels established
-- [ ] Escalation procedures defined
-
-## Environment Variables Reference
-
-### Required for PDP Upgrades
-```bash
-export RPC_URL="<network_rpc_url>"
-export KEYSTORE="<path_to_keystore>"
-export PASSWORD="<keystore_password>"
-export PROXY_ADDRESS="<proxy_contract_address>"
-export UPGRADE_DATA="<upgrade_function_signature>"
-export IMPLEMENTATION_PATH="<contract_path>"
-```
-
-### Required for Other Dependencies
-> **TODO:** Document environment variables for other dependencies
-
-## Useful Commands
-
-### Foundry/Cast Commands
-```bash
-# Get function signature for upgrade data
-cast sig "migrate()"
-
-# Check contract size
-make size-check
-
-# Run tests
-make test
-
-# Deploy to Calibnet
-make deploy-calibnet
-
-# Deploy to Mainnet  
-make deploy-mainnet
-```
-
-### Git Submodule Management
-```bash
-# Update all submodules
-git submodule update --recursive --remote
-
-# Update specific submodule
-git submodule update --remote lib/pdp
-
-# Check submodule status
-git submodule status
-```
-
-## Notes
-
-- Always upgrade dependencies in a controlled manner
-- Test thoroughly on Calibnet before mainnet deployment
-- Keep detailed records of upgrade procedures and results
-- Consider gas implications of upgrades, especially for frequently called functions
-- Coordinate with integration partners for major upgrades
-
----
-
-**Last Updated:** [DATE]  
-**Document Version:** v1.0  
-**Maintainer:** [TEAM/PERSON]
+TODO: Outline upgrading/publishing a new SessionKeyRegistry contract.
