@@ -498,10 +498,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
-        // Get account balances before creating data set
-        (uint256 clientFundsBefore,) = getAccountInfo(mockUSDFC, client);
-        (uint256 spFundsBefore,) = getAccountInfo(mockUSDFC, serviceProvider);
-
         // Expect DataSetCreated event when creating the data set (with CDN rails)
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
@@ -1169,7 +1165,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
