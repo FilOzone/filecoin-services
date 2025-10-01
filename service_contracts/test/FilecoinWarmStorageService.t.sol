@@ -1667,15 +1667,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId3 = createDataSetForClient(sp1, client, metaKeys, metaValues);
 
         // Test 4: Dataset with multiple metadata including CDN
-        (string[] memory cdnKeysTemp, string[] memory cdnValuesTemp) = _getSingleMetadataKV("withCDN", "true");
-        string[] memory bothKeys = new string[](cdnKeysTemp.length + 1);
-        string[] memory bothValues = new string[](cdnValuesTemp.length + 1);
+        string[] memory bothKeys = new string[](2);
+        string[] memory bothValues = new string[](2);
         bothKeys[0] = "label";
         bothValues[0] = "test";
-        for (uint256 i = 0; i < cdnKeysTemp.length; i++) {
-            bothKeys[i + 1] = cdnKeysTemp[i];
-            bothValues[i + 1] = cdnValuesTemp[i];
-        }
+        bothKeys[1] = "withCDN";
+        bothValues[1] = "true";
         uint256 dataSetId4 = createDataSetForClient(sp1, client, bothKeys, bothValues);
 
         // Verify dataset with multiple metadata keys
@@ -2437,8 +2434,14 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     function testEmptyStringMetadata() public {
-        // Empty string for withCDN
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        // Create data set with empty string metadata
+        string[] memory metadataKeys = new string[](2);
+        metadataKeys[0] = "withCDN";
+        metadataKeys[1] = "description";
+
+        string[] memory metadataValues = new string[](2);
+        metadataValues[0] = ""; // Empty string for withCDN
+        metadataValues[1] = "Test dataset"; // Non-empty for description
 
         // Create dataset using the helper function
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
