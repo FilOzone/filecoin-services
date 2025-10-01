@@ -2793,7 +2793,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         string[] memory emptyValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
 
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, dataSetId));
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
     }
@@ -3034,6 +3034,70 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should fail due to insufficient lockup
         vm.expectRevert();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_AfterTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up CDN rails with sufficient funds
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
+
+        // Terminate the CDN service (this removes withCDN metadata)
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // Verify withCDN metadata is removed
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be removed after termination");
+
+        // Should still be able to settle CDN payment rails after termination
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Expect the correct events to be emitted for successful settlement
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_AfterServiceTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up CDN rails with sufficient funds
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
+
+        // Terminate the entire service (this also removes withCDN metadata and terminates CDN rails)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Verify withCDN metadata is removed
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be removed after service termination");
+
+        // Should still be able to settle CDN payment rails after termination
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Expect the correct events to be emitted for successful settlement
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }

@@ -990,13 +990,7 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        // Check if CDN service is configured
-        require(
-            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilBeamServiceNotConfigured(dataSetId)
-        );
-
-        // Check if CDN rails are configured
+        // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         Payments payments = Payments(paymentsContractAddress);
