@@ -139,6 +139,12 @@ library Errors {
     /// @param caller The actual caller
     error CallerNotPayerOrPayee(uint256 dataSetId, address expectedPayer, address expectedPayee, address caller);
 
+    /// @notice Only payer can top-up CDN payment rail balance
+    /// @param dataSetId The data set ID
+    /// @param expectedPayer The payer address
+    /// @param caller The actual caller
+    error CallerNotPayer(uint256 dataSetId, address expectedPayer, address caller);
+
     /// @notice Data set is beyond its payment end epoch
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The payment end epoch for the data set

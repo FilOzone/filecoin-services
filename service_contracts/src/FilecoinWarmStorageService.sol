@@ -1015,10 +1015,7 @@ contract FilecoinWarmStorageService is
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check authorization - only payer can top up
-        require(
-            msg.sender == info.payer,
-            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
-        );
+        require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
 
         // Check if CDN service is configured
         require(
