@@ -83,6 +83,8 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
+    event CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 cdnAmount, uint256 cacheMissAmount);
+
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
@@ -1048,6 +1050,10 @@ contract FilecoinWarmStorageService is
             // Get current lockup and increment by the passed amount
             Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
             payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, cdnRail.lockupFixed + cdnAmount);
+        }
+
+        if (cdnAmount > 0 || cacheMissAmount > 0) {
+            emit CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
         }
     }
 
