@@ -15,10 +15,12 @@ remappings = [
     '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
     '@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/',
     'forge-std/=lib/forge-std/src/',
-    '@fws-payments/=lib/fws-payments/src/',
-    '@pdp/=lib/pdp/src/',
-    '@session-key-registry/=lib/session-key-registry/src/',
-    '@pythnetwork/pyth-sdk-solidity/=lib/pdp/lib/pyth-sdk-solidity/',
+    '@payments/=src/payments/contracts/',
+    '@pdp/=src/pdp/contracts/',
+    '@session-key-registry/=src/session-key-registry/contracts/',
+    '@service-provider/=src/service-provider/',
+    '@pythnetwork/pyth-sdk-solidity/=lib/pyth-sdk-solidity/',
+    '@prb-math/=lib/prb-math/src/',
 ]
 
 # Allow reading test data files
