@@ -7,12 +7,9 @@
 [submodule "service_contracts/lib/openzeppelin-contracts-upgradeable"]
 	path = service_contracts/lib/openzeppelin-contracts-upgradeable
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
-[submodule "service_contracts/lib/fws-payments"]
-	path = service_contracts/lib/fws-payments
-	url = https://github.com/FilOzone/fws-payments
-[submodule "service_contracts/lib/pdp"]
-	path = service_contracts/lib/pdp
-	url = https://github.com/FilOzone/pdp
-[submodule "service_contracts/lib/session-key-registry"]
-	path = service_contracts/lib/session-key-registry
-	url = https://github.com/FilOzone/SessionKeyRegistry
+[submodule "service_contracts/lib/pyth-sdk-solidity"]
+	path = service_contracts/lib/pyth-sdk-solidity
+	url = https://github.com/pyth-network/pyth-sdk-solidity
+[submodule "service_contracts/lib/prb-math"]
+	path = service_contracts/lib/prb-math
+	url = https://github.com/PaulRBerg/prb-math
