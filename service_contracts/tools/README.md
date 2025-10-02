@@ -67,10 +67,6 @@ The following parameters are critical for proof generation and validation. They 
 - `upgrade-warm-storage-calibnet.sh` requires:
   - `WARM_STORAGE_SERVICE_PROXY_ADDRESS` - Address of existing FilecoinWarmStorageService proxy to upgrade
 
-### Optional proving period configuration:
-- `MAX_PROVING_PERIOD` - Maximum epochs between proofs (default: 30 epochs = 15 minutes on calibnet)
-- `CHALLENGE_WINDOW_SIZE` - Challenge window size in epochs (default: 15 epochs)
-
 ## Usage Examples
 
 ### Fresh Deployment (All Contracts)
@@ -121,23 +117,6 @@ The FilecoinWarmStorageService contract uses OpenZeppelin's upgradeable pattern.
 
 1. **Deploy new implementation**: The script deploys a new implementation contract
 2. **Upgrade proxy**: Uses `upgradeToAndCall` to point the proxy to the new implementation
-
-### Important Notes for Upgrades:
-
-- The original `initialize` function can only be called once during initial deployment
-- Use `configureProvingPeriod` to set the new proving period parameters
-- Storage layout is preserved - new variables are added at the end of existing storage
-
-## Proving Period Parameters
-
-- **Max Proving Period**: Maximum number of epochs between consecutive proofs
-  - Calibnet default: 30 epochs (≈15 minutes, since calibnet has ~30 second epochs)
-  - Mainnet typical: 2880 epochs (≈24 hours, since mainnet has ~30 second epochs)
-
-- **Challenge Window Size**: Number of epochs at the end of each proving period during which proofs can be submitted
-  - Calibnet default: 15 epochs
-  - Must be less than Max Proving Period
-  - Must be greater than 0
 
 ## Testing
 
