@@ -90,6 +90,14 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
+    function getDataSetStatus(uint256 dataSetId)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetStatus status)
+    {
+        return service.getDataSetStatus(dataSetId);
+    }
+
     function getMaxProvingPeriod() external view returns (uint64) {
         return service.getMaxProvingPeriod();
     }
