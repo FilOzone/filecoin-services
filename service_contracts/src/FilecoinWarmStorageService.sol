@@ -166,6 +166,10 @@ contract FilecoinWarmStorageService is
     uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
+    // Fixed lockup amounts for CDN rails
+    uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
+    uint256 private immutable DEFAULT_CACHE_MISS_LOCKUP_AMOUNT; // 0.3 USDFC
+
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
 
@@ -313,6 +317,10 @@ contract FilecoinWarmStorageService is
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
+
+        // Initialize the lockup constants based on the actual token decimals
+        DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
+        DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) / 10; // 0.3 USDFC
     }
 
     /**
@@ -572,7 +580,7 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId = 0;
 
         if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
-            // Create cache-miss payment rail with default lockup value of 0
+            // Create cache-miss payment rail with 0.3 USDFC lockup
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -583,10 +591,10 @@ contract FilecoinWarmStorageService is
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
-            // Set lockup with default value of 0
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, 0);
+            // Set lockup with 0.3 USDFC
+            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
-            // Create CDN payment rail with default lockup value of 0
+            // Create CDN payment rail with 0.7 USDFC lockup
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -597,8 +605,8 @@ contract FilecoinWarmStorageService is
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
-            // Set lockup with default value of 0
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, 0);
+            // Set lockup with 0.7 USDFC
+            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
         }
 
         // Emit event for tracking
