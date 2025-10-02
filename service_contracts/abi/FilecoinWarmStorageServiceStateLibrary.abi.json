@@ -436,6 +436,30 @@
   },
   {
     "type": "function",
+    "name": "getDataSetStatus",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      },
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "status",
+        "type": "FilecoinWarmStorageService.DataSetStatus",
+        "internalType": "enum FilecoinWarmStorageService.DataSetStatus"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getMaxProvingPeriod",
     "inputs": [
       {

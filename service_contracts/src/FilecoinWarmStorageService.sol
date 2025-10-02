@@ -126,6 +126,15 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId; // DataSet ID
     }
 
+    enum DataSetStatus {
+        // Data set doesn't yet exist or has been deleted
+        NotFound,
+        // Data set is active
+        Active,
+        // Data set is in the process of being terminated
+        Terminating
+    }
+
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
         address payer;
@@ -611,26 +620,21 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set deletion and terminates the payment rail
+     * @notice Handles data set deletion after the payment rails were terminated
      * @dev Called by the PDPVerifier contract when a data set is deleted
      * @param dataSetId The ID of the data set being deleted
-     * @param extraData Signature for authentication
      */
     function dataSetDeleted(
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
-        bytes calldata extraData
+        bytes calldata // extraData, - not used
     ) external onlyPDPVerifier {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
-        (bytes memory signature) = abi.decode(extraData, (bytes));
 
         // Get the payer address for this data set
         address payer = dataSetInfo[dataSetId].payer;
-
-        // Verify the client's signature
-        verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
         // Check if the data set's payment rails have finalized
         require(

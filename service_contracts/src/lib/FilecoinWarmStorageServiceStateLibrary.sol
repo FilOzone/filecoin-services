@@ -108,6 +108,21 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.dataSetId = dataSetId;
     }
 
+    function getDataSetStatus(FilecoinWarmStorageService service, uint256 dataSetId)
+        public
+        view
+        returns (FilecoinWarmStorageService.DataSetStatus status)
+    {
+        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+        if (info.pdpRailId == 0) {
+            return FilecoinWarmStorageService.DataSetStatus.NotFound;
+        }
+        if (info.pdpEndEpoch != 0) {
+            return FilecoinWarmStorageService.DataSetStatus.Terminating;
+        }
+        return FilecoinWarmStorageService.DataSetStatus.Active;
+    }
+
     function clientDataSets(FilecoinWarmStorageService service, address payer)
         public
         view
