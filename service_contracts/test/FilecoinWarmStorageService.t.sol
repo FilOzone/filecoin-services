@@ -9,7 +9,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
@@ -1150,6 +1150,36 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(testDataSetId);
         assertEq(dataSet.serviceProvider, sp2, "Service provider should be updated to new service provider");
         assertEq(dataSet.payee, sp1, "Payee should remain unchanged");
+    }
+
+    function testProvenPeriods() public {
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
+        for (uint256 i = 0; i < 2049; i++) {
+            assertFalse(viewContract.provenPeriods(testDataSetId, i));
+        }
+        (
+            uint64 maxProvingPeriod,
+            uint256 challengeWindowSize,
+            uint256 challengesPerProof,
+            uint256 initChallengeWindowStart
+        ) = viewContract.getPDPConfig();
+        vm.startPrank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+        vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
+        for (uint256 i = 0; i < 2049; i++) {
+            assertFalse(viewContract.provenPeriods(testDataSetId, i));
+            pdpServiceWithPayments.possessionProven(testDataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+            assertTrue(viewContract.provenPeriods(testDataSetId, i));
+
+            vm.roll(vm.getBlockNumber() + challengeWindowSize);
+            pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+            vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
+        }
+        vm.stopPrank();
+
+        for (uint256 i = 0; i < 2049; i++) {
+            assertTrue(viewContract.provenPeriods(testDataSetId, i));
+        }
     }
 
     // Data Set Payment Termination Tests
