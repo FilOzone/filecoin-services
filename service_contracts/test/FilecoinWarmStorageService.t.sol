@@ -77,9 +77,9 @@ contract FilecoinWarmStorageServiceTest is Test {
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
     // Expected lockup amounts for CDN rails
-    uint256 expectedCDNLockup;
-    uint256 expectedCacheMissLockup;
-    uint256 totalCDNInitialLockup;
+    uint256 defaultCDNLockup;
+    uint256 defaultCacheMissLockup;
+    uint256 defaultTotalCDNLockup;
 
     // Structs
     struct PieceMetadataSetup {
@@ -248,9 +248,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
         // Initialize expected lockup amounts based on token decimals
-        expectedCDNLockup = (7 * 10 ** mockUSDFC.decimals()) / 10; // 0.7 USDFC
-        expectedCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
-        totalCDNInitialLockup = 10 ** mockUSDFC.decimals(); // 1.0 USDFC
+        defaultCDNLockup = (7 * 10 ** mockUSDFC.decimals()) / 10; // 0.7 USDFC
+        defaultCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
+        defaultTotalCDNLockup = 10 ** mockUSDFC.decimals(); // 1.0 USDFC
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
@@ -574,7 +574,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cacheMissRail.validator, address(0), "Validator should be empty");
         assertEq(cacheMissRail.commissionRateBps, 0, "No commission");
-        assertEq(cacheMissRail.lockupFixed, expectedCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
+        assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
         assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
@@ -584,7 +584,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(cdnRail.validator, address(0), "Validator should be empty");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
-        assertEq(cdnRail.lockupFixed, expectedCDNLockup, "CDN lockup should be 0.7 USDFC");
+        assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should be 0.7 USDFC");
         assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
     }
 
@@ -2683,8 +2683,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify lockup amounts are set to the expected values
         Payments.RailView memory cacheMissRail = payments.getRail(dataSet.cacheMissRailId);
         Payments.RailView memory cdnRail = payments.getRail(dataSet.cdnRailId);
-        assertEq(cacheMissRail.lockupFixed, expectedCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
-        assertEq(cdnRail.lockupFixed, expectedCDNLockup, "CDN lockup should be 0.7 USDFC");
+        assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
+        assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should be 0.7 USDFC");
         // Verify that CDN rails have no validator
         assertEq(cacheMissRail.validator, address(0), "Cache miss rail should have no validator");
         assertEq(cdnRail.validator, address(0), "CDN rail should have no validator");
@@ -2702,7 +2702,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Top up the rails first to allow for settlement
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2728,7 +2728,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Top up only the CDN rail
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2752,7 +2752,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Top up only the cache miss rail
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2779,8 +2779,8 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expecting the payment to fail due to insufficient lockup (OneTimePaymentExceedsLockup error)
         // Try to settle more than the initial lockup
-        uint256 cdnAmount = expectedCDNLockup + 50000; // More than initial 0.7 USDFC
-        uint256 cacheMissAmount = expectedCacheMissLockup + 25000; // More than initial 0.3 USDFC
+        uint256 cdnAmount = defaultCDNLockup + 50000; // More than initial 0.7 USDFC
+        uint256 cacheMissAmount = defaultCacheMissLockup + 25000; // More than initial 0.3 USDFC
 
         vm.expectRevert();
         vm.prank(filBeamController);
@@ -2828,7 +2828,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2849,7 +2849,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2892,7 +2892,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2902,12 +2902,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
         assertEq(
             cdnRailBefore.lockupFixed,
-            expectedCDNLockup + cdnAmount,
+            defaultCDNLockup + cdnAmount,
             "CDN rail should have lockup equal to initial plus top-up"
         );
         assertEq(
             cacheMissRailBefore.lockupFixed,
-            expectedCacheMissLockup + cacheMissAmount,
+            defaultCacheMissLockup + cacheMissAmount,
             "Cache miss rail should have lockup equal to initial plus top-up"
         );
 
@@ -2928,17 +2928,17 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify initial lockup matches expected values
         Payments.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
         Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
-        assertEq(cdnRailBefore.lockupFixed, expectedCDNLockup, "CDN rail should start with 0.7 USDFC lockup");
+        assertEq(cdnRailBefore.lockupFixed, defaultCDNLockup, "CDN rail should start with 0.7 USDFC lockup");
         assertEq(
             cacheMissRailBefore.lockupFixed,
-            expectedCacheMissLockup,
+            defaultCacheMissLockup,
             "Cache miss rail should start with 0.3 USDFC lockup"
         );
 
         // Top up the rails
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
@@ -2947,11 +2947,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         Payments.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
         Payments.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
         assertEq(
-            cdnRailAfter.lockupFixed, expectedCDNLockup + cdnTopUp, "CDN rail lockup should equal initial plus top-up"
+            cdnRailAfter.lockupFixed, defaultCDNLockup + cdnTopUp, "CDN rail lockup should equal initial plus top-up"
         );
         assertEq(
             cacheMissRailAfter.lockupFixed,
-            expectedCacheMissLockup + cacheMissTopUp,
+            defaultCacheMissLockup + cacheMissTopUp,
             "Cache miss rail lockup should equal initial plus top-up"
         );
     }
@@ -2973,7 +2973,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Should work as payer
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + 1000, expectedCacheMissLockup + 1000
+            dataSetId, defaultCDNLockup + 1000, defaultCacheMissLockup + 1000
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
@@ -2999,30 +2999,30 @@ contract FilecoinWarmStorageServiceTest is Test {
         // First top-up
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + 1000, expectedCacheMissLockup + 500
+            dataSetId, defaultCDNLockup + 1000, defaultCacheMissLockup + 500
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 500);
 
         Payments.RailView memory cdnRail1 = payments.getRail(info.cdnRailId);
         Payments.RailView memory cacheMissRail1 = payments.getRail(info.cacheMissRailId);
-        assertEq(cdnRail1.lockupFixed, expectedCDNLockup + 1000);
-        assertEq(cacheMissRail1.lockupFixed, expectedCacheMissLockup + 500);
+        assertEq(cdnRail1.lockupFixed, defaultCDNLockup + 1000);
+        assertEq(cacheMissRail1.lockupFixed, defaultCacheMissLockup + 500);
 
         // Second top-up (should be additive)
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + 3000, expectedCacheMissLockup + 2000
+            dataSetId, defaultCDNLockup + 3000, defaultCacheMissLockup + 2000
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 2000, 1500);
 
         Payments.RailView memory cdnRail2 = payments.getRail(info.cdnRailId);
         Payments.RailView memory cacheMissRail2 = payments.getRail(info.cacheMissRailId);
-        assertEq(cdnRail2.lockupFixed, expectedCDNLockup + 3000, "CDN lockup should be initial plus cumulative top-ups");
+        assertEq(cdnRail2.lockupFixed, defaultCDNLockup + 3000, "CDN lockup should be initial plus cumulative top-ups");
         assertEq(
             cacheMissRail2.lockupFixed,
-            expectedCacheMissLockup + 2000,
+            defaultCacheMissLockup + 2000,
             "Cache miss lockup should be initial plus cumulative top-ups"
         );
     }
@@ -3049,9 +3049,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify lockup remains at initial values
         Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
         Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-        assertEq(cdnRail.lockupFixed, expectedCDNLockup, "CDN lockup should remain at initial 0.7 USDFC");
+        assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should remain at initial 0.7 USDFC");
         assertEq(
-            cacheMissRail.lockupFixed, expectedCacheMissLockup, "Cache miss lockup should remain at initial 0.3 USDFC"
+            cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should remain at initial 0.3 USDFC"
         );
     }
 
@@ -3074,7 +3074,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
@@ -3100,7 +3100,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
@@ -3127,7 +3127,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
@@ -3172,28 +3172,28 @@ contract FilecoinWarmStorageServiceTest is Test {
         // First top-up
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
         // Second top-up
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp * 3, expectedCacheMissLockup + cacheMissTopUp * 3
+            dataSetId, defaultCDNLockup + cdnTopUp * 3, defaultCacheMissLockup + cacheMissTopUp * 3
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp * 2, cacheMissTopUp * 2);
 
         // Third top-up (only CDN)
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp * 4, expectedCacheMissLockup + cacheMissTopUp * 3
+            dataSetId, defaultCDNLockup + cdnTopUp * 4, defaultCacheMissLockup + cacheMissTopUp * 3
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
 
         // Fourth top-up (only cache miss)
         vm.expectEmit(true, false, false, true);
         emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, expectedCDNLockup + cdnTopUp * 4, expectedCacheMissLockup + cacheMissTopUp * 4
+            dataSetId, defaultCDNLockup + cdnTopUp * 4, defaultCacheMissLockup + cacheMissTopUp * 4
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);
 
@@ -3208,10 +3208,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.endEpoch, 0, "Cache miss rail should not be terminated");
 
         // Verify lockup amounts (initial lockup plus sum of all top-ups)
-        uint256 expectedCdnLockupTotal = expectedCDNLockup + (cdnTopUp * 4); // initial + (1 + 2 + 1 + 0 = 4x)
-        uint256 expectedCacheMissLockupTotal = expectedCacheMissLockup + (cacheMissTopUp * 4); // initial + (1 + 2 + 0 + 1 = 4x)
+        uint256 expectedCdnLockupTotal = defaultCDNLockup + (cdnTopUp * 4); // initial + (1 + 2 + 1 + 0 = 4x)
+        uint256 defaultCacheMissLockupTotal = defaultCacheMissLockup + (cacheMissTopUp * 4); // initial + (1 + 2 + 0 + 1 = 4x)
         assertEq(cdnRail.lockupFixed, expectedCdnLockupTotal, "CDN rail lockup incorrect");
-        assertEq(cacheMissRail.lockupFixed, expectedCacheMissLockupTotal, "Cache miss rail lockup incorrect");
+        assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockupTotal, "Cache miss rail lockup incorrect");
     }
 
     // Tests for insufficient lockup failures
@@ -3220,8 +3220,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Try to settle more than the initial lockup amount
-        uint256 cdnAmount = expectedCDNLockup + 50000; // More than initial 0.7 USDFC
-        uint256 cacheMissAmount = expectedCacheMissLockup + 10000; // More than initial 0.3 USDFC
+        uint256 cdnAmount = defaultCDNLockup + 50000; // More than initial 0.7 USDFC
+        uint256 cacheMissAmount = defaultCacheMissLockup + 10000; // More than initial 0.3 USDFC
 
         // Attempt to settle without additional top-up (only initial lockup available)
         // Expecting OneTimePaymentExceedsLockup error
@@ -3241,8 +3241,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, topUpCdn, topUpCacheMiss);
 
         // Try to settle with amounts larger than initial plus top-up
-        uint256 cdnAmount = expectedCDNLockup + topUpCdn + 50000; // More than available lockup
-        uint256 cacheMissAmount = expectedCacheMissLockup + topUpCacheMiss + 10000; // More than available lockup
+        uint256 cdnAmount = defaultCDNLockup + topUpCdn + 50000; // More than available lockup
+        uint256 cacheMissAmount = defaultCacheMissLockup + topUpCacheMiss + 10000; // More than available lockup
 
         // Should fail due to insufficient lockup
         vm.expectRevert();
