@@ -3137,19 +3137,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(address(pdpServiceWithPayments));
         payments.terminateRail(info.cdnRailId);
 
-        // Attempt to top up CDN rail (should fail with our new validation)
+        // Attempt to top up only CDN rail (should fail since CDN rail is terminated)
         vm.expectRevert(abi.encodeWithSelector(Errors.CDNPaymentAlreadyTerminated.selector, dataSetId));
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
 
+        // Attempt to top up only cache miss rail (should also fail since CDN rail is terminated)
+        vm.expectRevert(abi.encodeWithSelector(Errors.CDNPaymentAlreadyTerminated.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);
+
         // Now terminate cache miss rail too
         vm.prank(address(pdpServiceWithPayments));
         payments.terminateRail(info.cacheMissRailId);
-
-        // Attempt to top up cache miss rail (should also fail)
-        vm.expectRevert(abi.encodeWithSelector(Errors.CacheMissPaymentAlreadyTerminated.selector, dataSetId));
-        vm.prank(client);
-        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);
 
         // Attempt to top up both (should fail on first check)
         vm.expectRevert(abi.encodeWithSelector(Errors.CDNPaymentAlreadyTerminated.selector, dataSetId));

@@ -1037,37 +1037,28 @@ contract FilecoinWarmStorageService is
 
         Payments payments = Payments(paymentsContractAddress);
 
-        uint256 totalCdnLockup = 0;
-        uint256 totalCacheMissLockup = 0;
+        // Both rails must be active for any top-up operation
+        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
 
+        require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
+        require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
+
+        // Calculate total lockup amounts
+        uint256 totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
+        uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
+
+        // Only modify rails if amounts are being added
         if (cdnAmountToAdd > 0) {
-            // Get current lockup and increment by the passed amount
-            Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-            // Ensure the rail is not terminated
-            require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
-            totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
             payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
         }
 
         if (cacheMissAmountToAdd > 0) {
-            // Get current lockup and increment by the passed amount
-            Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-            // Ensure the rail is not terminated
-            require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
-            totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
             payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
         }
 
+        // Emit event if any amount was added
         if (cdnAmountToAdd > 0 || cacheMissAmountToAdd > 0) {
-            // If we didn't update one of the rails, we need to get its current total
-            if (cdnAmountToAdd == 0 && info.cdnRailId != 0) {
-                Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-                totalCdnLockup = cdnRail.lockupFixed;
-            }
-            if (cacheMissAmountToAdd == 0 && info.cacheMissRailId != 0) {
-                Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-                totalCacheMissLockup = cacheMissRail.lockupFixed;
-            }
             emit CDNPaymentRailsToppedUp(dataSetId, totalCdnLockup, totalCacheMissLockup);
         }
     }
