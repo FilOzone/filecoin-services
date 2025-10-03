@@ -766,12 +766,12 @@
         "internalType": "uint256"
       },
       {
-        "name": "cdnAmount",
+        "name": "cdnAmountToAdd",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "cacheMissAmount",
+        "name": "cacheMissAmountToAdd",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -929,13 +929,13 @@
         "internalType": "uint256"
       },
       {
-        "name": "cdnAmount",
+        "name": "totalCdnLockup",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
       },
       {
-        "name": "cacheMissAmount",
+        "name": "totalCacheMissLockup",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
