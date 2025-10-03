@@ -212,8 +212,6 @@ contract FilecoinWarmStorageService is
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
-    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
-
     // =========================================================================
     // Storage variables
     //
@@ -1475,32 +1473,6 @@ contract FilecoinWarmStorageService is
         require(
             sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH)
                 >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
-        );
-    }
-
-    /**
-     * @notice Verifies a signature for the DeleteDataSet operation
-     * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The ID of the data set
-     * @param signature The signature bytes (v, r, s)
-     */
-    function verifyDeleteDataSetSignature(address payer, uint256 clientDataSetId, bytes memory signature)
-        internal
-        view
-    {
-        // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, clientDataSetId));
-        bytes32 digest = _hashTypedDataV4(structHash);
-
-        // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(digest, signature);
-
-        if (payer == recoveredSigner) {
-            return;
-        }
-        require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, DELETE_DATA_SET_TYPEHASH) >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
     }
