@@ -27,6 +27,7 @@ fs_permissions = [{ access = "read", path = "./test" }]
 [lint]
 exclude_lints = [
     "asm-keccak256",
+    "incorrect-shift",
     "mixed-case-function",
     "mixed-case-variable",
     "pascal-case-struct",
