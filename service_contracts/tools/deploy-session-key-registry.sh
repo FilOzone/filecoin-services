@@ -14,13 +14,6 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
-# Auto-detect chain ID from RPC
-CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-if [ -z "$CHAIN_ID" ]; then
-  echo "Error: Failed to detect chain ID from RPC"
-  exit 1
-fi
-
 # Auto-detect chain ID from RPC if not already set
 if [ -z "$CHAIN_ID" ]; then
   CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
@@ -55,7 +48,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS,src/SessionKeyRegistry.sol:SessionKeyRegistry,SessionKeyRegistry,$CHAIN_ID"
+  CHAIN_ID=$CHAIN_ID verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS,src/SessionKeyRegistry.sol:SessionKeyRegistry,SessionKeyRegistry"
   popd >/dev/null
 else
   echo

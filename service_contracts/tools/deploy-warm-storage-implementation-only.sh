@@ -78,7 +78,7 @@ echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
@@ -153,7 +153,7 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
     --keystore "$KEYSTORE" \
     --password "$PASSWORD" \
     --nonce "$NONCE" \
-    --chain-id 314159 \
+    --chain-id "$CHAIN_ID" \
     --json | jq -r '.transactionHash')
 
   if [ -z "$TX_HASH" ]; then
@@ -171,9 +171,6 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
   # Wait for transaction receipt
   cast receipt --rpc-url "$RPC_URL" "$TX_HASH" --confirmations 1 >/dev/null
 
-  # Verify the upgrade by checking the implementation address
-  echo "Verifying upgrade (waiting for Filecoin 30s block time)..."
-  sleep 35
   NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
 
   if [ "$NEW_IMPL" = "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
@@ -200,7 +197,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation,$CHAIN_ID"
+  CHAIN_ID=$CHAIN_ID verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation"
   popd >/dev/null
 else
   echo

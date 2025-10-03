@@ -2,16 +2,20 @@
 
 # Supports Filfox, Blockscout, and Sourcify verification with proper error handling
 
+# Configuration
 FILFOX_VERIFIER_VERSION="v1.4.4"
+
+# Default to calibnet (314159) if CHAIN_ID is not set
+export CHAIN_ID=${CHAIN_ID:-314159}
+echo "Using chain ID: $CHAIN_ID (calibnet)"
 
 verify_filfox() {
   local address=$1
   local contract_path=$2
   local contract_name=$3
-  local chain_id=${4:-314159}
 
-  echo "Verifying $contract_name on Filfox..."
-  if npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$address" "$contract_path" --chain "$chain_id"; then
+  echo "Verifying $contract_name on Filfox (chain ID: $CHAIN_ID)..."
+  if npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$address" "$contract_path" --chain "$CHAIN_ID"; then
     echo "Filfox verification successful for $contract_name"
     return 0
   else
@@ -24,11 +28,10 @@ verify_blockscout() {
   local address=$1
   local contract_path=$2
   local contract_name=$3
-  local chain_id=${4:-314159}
 
   # Determine the correct Blockscout API URL based on chain ID
   local blockscout_url
-  case $chain_id in
+  case $CHAIN_ID in
   314)
     blockscout_url="https://filecoin.blockscout.com/api/"
     ;;
@@ -36,29 +39,24 @@ verify_blockscout() {
     blockscout_url="https://filecoin-testnet.blockscout.com/api/"
     ;;
   *)
-    echo "Unknown chain ID $chain_id for Blockscout verification"
+    echo "Unknown chain ID $CHAIN_ID for Blockscout verification"
     return 1
     ;;
   esac
 
   echo "Verifying $contract_name on Blockscout..."
-  if forge verify-contract "$address" "$contract_path" --chain-id "$chain_id" --verifier blockscout --verifier-url "$blockscout_url" 2>/dev/null; then
+  if forge verify-contract "$address" "$contract_path" --chain-id "$CHAIN_ID" --verifier blockscout --verifier-url "$blockscout_url" 2>/dev/null; then
     echo "Blockscout verification successful for $contract_name"
     return 0
-  else
-    echo "Blockscout verification failed for $contract_name"
-    return 1
-  fi
 }
 
 verify_sourcify() {
   local address=$1
   local contract_path=$2
   local contract_name=$3
-  local chain_id=${4:-314159}
 
-  echo "Verifying $contract_name on Sourcify..."
-  if forge verify-contract "$address" "$contract_path" --chain-id "$chain_id" --verifier sourcify 2>/dev/null; then
+  echo "Verifying $contract_name on Sourcify (chain ID: $CHAIN_ID)..."
+  if forge verify-contract "$address" "$contract_path" --chain-id "$CHAIN_ID" --verifier sourcify 2>/dev/null; then
     echo "Sourcify verification successful for $contract_name"
     return 0
   else
@@ -71,9 +69,8 @@ verify_contract_all_platforms() {
   local address=$1
   local contract_path=$2
   local contract_name=$3
-  local chain_id=${4:-314159}
 
-  echo "Starting verification for $contract_name at $address"
+  echo "Starting verification for $contract_name at $address on chain ID: $CHAIN_ID"
   echo
 
   local filfox_success=0
@@ -81,17 +78,17 @@ verify_contract_all_platforms() {
   local sourcify_success=0
 
   # Verify on Filfox (primary)
-  verify_filfox "$address" "$contract_path" "$contract_name" "$chain_id"
+  verify_filfox "$address" "$contract_path" "$contract_name"
   filfox_success=$?
 
   echo
 
-  verify_blockscout "$address" "$contract_path" "$contract_name" "$chain_id"
+  verify_blockscout "$address" "$contract_path" "$contract_name"
   blockscout_success=$?
 
   echo
 
-  verify_sourcify "$address" "$contract_path" "$contract_name" "$chain_id"
+  verify_sourcify "$address" "$contract_path" "$contract_name"
   sourcify_success=$?
 
   echo
@@ -109,21 +106,21 @@ verify_contract_all_platforms() {
   fi
 }
 
-# Function to verify multiple contracts with delay
-# Usage: verify_contracts_batch "address1,contract_path1,contract_name1,chain_id1" "address2,contract_path2,contract_name2,chain_id2" ...
+# Function to verify multiple contracts
+# Usage: verify_contracts_batch "address1,contract_path1,contract_name1" "address2,contract_path2,contract_name2" ...
 verify_contracts_batch() {
   local contract_specs=("$@")
   local total_contracts=${#contract_specs[@]}
 
-  echo " Starting batch verification of $total_contracts contracts..."
+  echo " Starting batch verification of $total_contracts contracts on chain ID: $CHAIN_ID..."
   echo
 
   local success_count=0
 
   for contract_spec in "${contract_specs[@]}"; do
-    IFS=',' read -r address contract_path contract_name chain_id <<<"$contract_spec"
+    IFS=',' read -r address contract_path contract_name <<<"$contract_spec"
 
-    if verify_contract_all_platforms "$address" "$contract_path" "$contract_name" "$chain_id"; then
+    if verify_contract_all_platforms "$address" "$contract_path" "$contract_name"; then
       success_count=$((success_count + 1))
     fi
 
