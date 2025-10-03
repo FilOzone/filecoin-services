@@ -227,8 +227,8 @@ contract FilecoinWarmStorageService is
     // Commission rate
     uint256 public serviceCommissionBps;
 
-    // Track which proving periods have valid proofs
-    mapping(uint256 dataSetId => mapping(uint256 periodId => bool)) private provenPeriods;
+    // Track which proving periods have valid proofs with bitmap
+    mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
@@ -814,7 +814,7 @@ contract FilecoinWarmStorageService is
         }
         provenThisPeriod[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        provenPeriods[dataSetId][currentPeriod] = true;
+        provenPeriods[dataSetId][currentPeriod >> 8] |= uint256(1) << (currentPeriod & 255);
     }
 
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
@@ -889,12 +889,12 @@ contract FilecoinWarmStorageService is
         }
 
         // Record the status of the current/previous proving period that's ending
-        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE) {
+        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE && provenThisPeriod[dataSetId]) {
             // Determine the period ID that just completed
             uint256 completedPeriodId = getProvingPeriodForEpoch(dataSetId, provingDeadlines[dataSetId] - 1);
 
             // Record whether this period was proven
-            provenPeriods[dataSetId][completedPeriodId] = provenThisPeriod[dataSetId];
+            provenPeriods[dataSetId][completedPeriodId >> 8] |= uint256(1) << (completedPeriodId & 255);
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
@@ -1114,8 +1114,8 @@ contract FilecoinWarmStorageService is
             return provenThisPeriod[dataSetId];
         }
 
-        // For past periods, check the provenPeriods mapping
-        return provenPeriods[dataSetId][periodId];
+        // For past periods, check the provenPeriods bitmapping
+        return 0 != provenPeriods[dataSetId][periodId >> 8] & (uint256(1) << (periodId & 255));
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
