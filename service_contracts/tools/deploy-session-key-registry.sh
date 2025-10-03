@@ -40,3 +40,17 @@ fi
 export SESSION_KEY_REGISTRY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry | grep "Deployed to" | awk '{print $3}')
 
 echo SessionKeyRegistry deployed at $SESSION_KEY_REGISTRY_ADDRESS
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  CHAIN_ID=$CHAIN_ID verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS,src/SessionKeyRegistry.sol:SessionKeyRegistry,SessionKeyRegistry"
+  popd >/dev/null
+else
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi

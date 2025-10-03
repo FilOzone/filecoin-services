@@ -54,9 +54,9 @@ echo "Setting view contract address on FilecoinWarmStorageService..."
 TX_OUTPUT=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --nonce $NONCE --chain-id $CHAIN_ID $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS 2>&1)
 
 if [ $? -eq 0 ]; then
-    echo "View contract address set successfully"
+  echo "View contract address set successfully"
 else
-    echo "Error: Failed to set view contract address"
-    echo "$TX_OUTPUT"
-    exit 1
+  echo "Error: Failed to set view contract address"
+  echo "$TX_OUTPUT"
+  exit 1
 fi
