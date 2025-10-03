@@ -247,10 +247,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Transfer tokens to client for payment
         mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
 
-        // Initialize expected lockup amounts based on token decimals
+        // Initialize expected lockup amounts
         defaultCDNLockup = (7 * 10 ** mockUSDFC.decimals()) / 10; // 0.7 USDFC
         defaultCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
-        defaultTotalCDNLockup = 10 ** mockUSDFC.decimals(); // 1.0 USDFC
+        defaultTotalCDNLockup = defaultCacheMissLockup + defaultCDNLockup;
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
@@ -2916,6 +2916,106 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
+    // Tests for insufficient lockup failures
+    function testSettleCDNPaymentRails_FailsWithInsufficientLockup() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Try to settle more than the initial lockup amount
+        uint256 cdnAmount = defaultCDNLockup + 50000; // More than initial 0.7 USDFC
+        uint256 cacheMissAmount = defaultCacheMissLockup + 10000; // More than initial 0.3 USDFC
+
+        // Attempt to settle without additional top-up (only initial lockup available)
+        // Expecting OneTimePaymentExceedsLockup error
+        vm.expectRevert();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_FailsWhenLockupLessThanSettlement() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Top up with smaller amounts than we'll try to settle
+        uint256 topUpCdn = 10000;
+        uint256 topUpCacheMiss = 5000;
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, topUpCdn, topUpCacheMiss);
+
+        // Try to settle with amounts larger than initial plus top-up
+        uint256 cdnAmount = defaultCDNLockup + topUpCdn + 50000; // More than available lockup
+        uint256 cacheMissAmount = defaultCacheMissLockup + topUpCacheMiss + 10000; // More than available lockup
+
+        // Should fail due to insufficient lockup
+        vm.expectRevert();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_AfterTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up CDN rails with sufficient funds
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
+
+        // Terminate the CDN service (this removes withCDN metadata)
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // Verify withCDN metadata is removed
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be removed after termination");
+
+        // Should still be able to settle CDN payment rails after termination
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Expect the correct events to be emitted for successful settlement
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleCDNPaymentRails_AfterServiceTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up CDN rails with sufficient funds
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
+
+        // Terminate the entire service (this also removes withCDN metadata and terminates CDN rails)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Verify withCDN metadata is removed
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be removed after service termination");
+
+        // Should still be able to settle CDN payment rails after termination
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Expect the correct events to be emitted for successful settlement
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
     // Tests for topUpCDNPaymentRails function
     function testTopUpCDNPaymentRails_Success() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
@@ -3203,106 +3303,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 defaultCacheMissLockupTotal = defaultCacheMissLockup + (cacheMissTopUp * 4); // initial + (1 + 2 + 0 + 1 = 4x)
         assertEq(cdnRail.lockupFixed, expectedCdnLockupTotal, "CDN rail lockup incorrect");
         assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockupTotal, "Cache miss rail lockup incorrect");
-    }
-
-    // Tests for insufficient lockup failures
-    function testSettleCDNPaymentRails_FailsWithInsufficientLockup() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-
-        // Try to settle more than the initial lockup amount
-        uint256 cdnAmount = defaultCDNLockup + 50000; // More than initial 0.7 USDFC
-        uint256 cacheMissAmount = defaultCacheMissLockup + 10000; // More than initial 0.3 USDFC
-
-        // Attempt to settle without additional top-up (only initial lockup available)
-        // Expecting OneTimePaymentExceedsLockup error
-        vm.expectRevert();
-        vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
-    }
-
-    function testSettleCDNPaymentRails_FailsWhenLockupLessThanSettlement() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-
-        // Top up with smaller amounts than we'll try to settle
-        uint256 topUpCdn = 10000;
-        uint256 topUpCacheMiss = 5000;
-        vm.prank(client);
-        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, topUpCdn, topUpCacheMiss);
-
-        // Try to settle with amounts larger than initial plus top-up
-        uint256 cdnAmount = defaultCDNLockup + topUpCdn + 50000; // More than available lockup
-        uint256 cacheMissAmount = defaultCacheMissLockup + topUpCacheMiss + 10000; // More than available lockup
-
-        // Should fail due to insufficient lockup
-        vm.expectRevert();
-        vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
-    }
-
-    function testSettleCDNPaymentRails_AfterTermination() public {
-        // Create dataset with CDN enabled
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-
-        // Top up CDN rails with sufficient funds
-        vm.prank(client);
-        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
-
-        // Terminate the CDN service (this removes withCDN metadata)
-        vm.prank(filBeamController);
-        pdpServiceWithPayments.terminateCDNService(dataSetId);
-
-        // Verify withCDN metadata is removed
-        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN metadata should be removed after termination");
-
-        // Should still be able to settle CDN payment rails after termination
-        uint256 cdnAmount = 50000;
-        uint256 cacheMissAmount = 25000;
-
-        // Expect the correct events to be emitted for successful settlement
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
-
-        vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
-    }
-
-    function testSettleCDNPaymentRails_AfterServiceTermination() public {
-        // Create dataset with CDN enabled
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-
-        // Top up CDN rails with sufficient funds
-        vm.prank(client);
-        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
-
-        // Terminate the entire service (this also removes withCDN metadata and terminates CDN rails)
-        vm.prank(client);
-        pdpServiceWithPayments.terminateService(dataSetId);
-
-        // Verify withCDN metadata is removed
-        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN metadata should be removed after service termination");
-
-        // Should still be able to settle CDN payment rails after termination
-        uint256 cdnAmount = 50000;
-        uint256 cacheMissAmount = 25000;
-
-        // Expect the correct events to be emitted for successful settlement
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
-
-        vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function _makeStringOfLength(uint256 len) internal pure returns (string memory s) {
