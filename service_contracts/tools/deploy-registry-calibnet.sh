@@ -13,13 +13,6 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
-# Auto-detect chain ID from RPC
-CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-if [ -z "$CHAIN_ID" ]; then
-  echo "Error: Failed to detect chain ID from RPC"
-  exit 1
-fi
-
 if [ -z "$KEYSTORE" ]; then
   echo "Error: KEYSTORE is not set"
   exit 1
@@ -130,7 +123,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  verify_contracts_batch "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry,ServiceProviderRegistry Implementation,$CHAIN_ID"
+  CHAIN_ID=314159 verify_contracts_batch "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry,ServiceProviderRegistry Implementation"
   popd >/dev/null
 else
   echo

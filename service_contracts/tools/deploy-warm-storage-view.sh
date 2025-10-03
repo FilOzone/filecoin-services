@@ -52,7 +52,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  verify_contracts_batch "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView,FilecoinWarmStorageServiceStateView,$CHAIN_ID"
+  CHAIN_ID=$CHAIN_ID verify_contracts_batch "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView,FilecoinWarmStorageServiceStateView"
   popd >/dev/null
 else
   echo

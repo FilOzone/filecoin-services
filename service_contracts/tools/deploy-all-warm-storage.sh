@@ -389,3 +389,24 @@ echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
 echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Contract verification
+if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    pushd "$(dirname "$0")/.." >/dev/null
+    source tools/verify-contracts.sh
+    
+    CHAIN_ID=$CHAIN_ID verify_contracts_batch \
+        "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier,PDPVerifier Implementation" \
+        "$PDP_VERIFIER_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy,PDPVerifier Proxy" \
+        "$PAYMENTS_CONTRACT_ADDRESS,src/Payments.sol:Payments,Payments Contract" \
+        "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry,ServiceProviderRegistry Implementation" \
+        "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy,ServiceProviderRegistry Proxy" \
+        "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation" \
+        "$WARM_STORAGE_SERVICE_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy,FilecoinWarmStorageService Proxy" \
+        "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView,FilecoinWarmStorageServiceStateView"
+    
+    popd >/dev/null
+fi
