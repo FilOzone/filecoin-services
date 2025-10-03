@@ -136,6 +136,10 @@ library Errors {
     /// @param dataSetId The data set ID
     error CacheMissPaymentAlreadyTerminated(uint256 dataSetId);
 
+    /// @notice Invalid top-up amount - both CDN and cache miss amounts are zero
+    /// @param dataSetId The data set ID
+    error InvalidTopUpAmount(uint256 dataSetId);
+
     /// @notice The specified data set does not exist or is not valid
     /// @param dataSetId The data set ID that was invalid or unregistered
     error InvalidDataSetId(uint256 dataSetId);

@@ -3032,19 +3032,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
-        // Top up with zero amounts (should not revert and should not emit event)
-        vm.recordLogs();
+        // Top up with zero amounts (should revert with InvalidTopUpAmount error)
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidTopUpAmount.selector, dataSetId));
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, 0);
-
-        // Verify no CDNPaymentRailsToppedUp event was emitted
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        for (uint256 i = 0; i < logs.length; i++) {
-            assertFalse(
-                logs[i].topics[0] == keccak256("CDNPaymentRailsToppedUp(uint256,uint256,uint256)"),
-                "CDNPaymentRailsToppedUp should not be emitted for zero amounts"
-            );
-        }
 
         // Verify lockup remains at initial values
         Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);

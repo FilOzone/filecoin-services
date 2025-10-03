@@ -1032,8 +1032,7 @@ contract FilecoinWarmStorageService is
         );
 
         // Check if cache miss and CDN rails are configured
-        require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         Payments payments = Payments(paymentsContractAddress);
 
@@ -1044,23 +1043,20 @@ contract FilecoinWarmStorageService is
         require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
         require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
 
+        // Require at least one amount to be non-zero
+        if (cdnAmountToAdd == 0 && cacheMissAmountToAdd == 0) {
+            revert Errors.InvalidTopUpAmount(dataSetId);
+        }
+
         // Calculate total lockup amounts
         uint256 totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
         uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
 
         // Only modify rails if amounts are being added
-        if (cdnAmountToAdd > 0) {
-            payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
-        }
+        payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
+        payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
 
-        if (cacheMissAmountToAdd > 0) {
-            payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
-        }
-
-        // Emit event if any amount was added
-        if (cdnAmountToAdd > 0 || cacheMissAmountToAdd > 0) {
-            emit CDNPaymentRailsToppedUp(dataSetId, totalCdnLockup, totalCacheMissLockup);
-        }
+        emit CDNPaymentRailsToppedUp(dataSetId, totalCdnLockup, totalCacheMissLockup);
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {

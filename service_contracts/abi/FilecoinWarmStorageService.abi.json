@@ -1816,6 +1816,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidTopUpAmount",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "MaxProvingPeriodZero",
     "inputs": []
   },
