@@ -814,7 +814,7 @@ contract FilecoinWarmStorageService is
         }
         provenThisPeriod[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        provenPeriods[dataSetId][currentPeriod >> 8] |= uint256(1) << (currentPeriod & 255);
+        provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
     }
 
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
@@ -894,7 +894,7 @@ contract FilecoinWarmStorageService is
             uint256 completedPeriodId = getProvingPeriodForEpoch(dataSetId, provingDeadlines[dataSetId] - 1);
 
             // Record whether this period was proven
-            provenPeriods[dataSetId][completedPeriodId >> 8] |= uint256(1) << (completedPeriodId & 255);
+            provenPeriods[dataSetId][completedPeriodId >> 8] |= 1 << (completedPeriodId & 255);
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
@@ -1115,7 +1115,7 @@ contract FilecoinWarmStorageService is
         }
 
         // For past periods, check the provenPeriods bitmapping
-        return 0 != provenPeriods[dataSetId][periodId >> 8] & (uint256(1) << (periodId & 255));
+        return 0 != provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {

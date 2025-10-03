@@ -151,7 +151,7 @@ library FilecoinWarmStorageServiceStateLibrary {
                     abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
                 )
             )
-        ) & (uint256(1) << (periodId & 255)) != 0;
+        ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
