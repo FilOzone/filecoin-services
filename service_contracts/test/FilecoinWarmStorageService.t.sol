@@ -2701,7 +2701,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up the rails first to allow for settlement
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
@@ -2725,7 +2727,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up only the CDN rail
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
@@ -2747,7 +2751,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up only the cache miss rail
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
@@ -2821,7 +2827,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
@@ -2840,7 +2848,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
@@ -2881,7 +2891,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnAmount, cacheMissAmount);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnAmount, expectedCacheMissLockup + cacheMissAmount
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
@@ -2925,7 +2937,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Top up the rails
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp, cacheMissTopUp);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
@@ -2958,7 +2972,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Should work as payer
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, 1000, 1000);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + 1000, expectedCacheMissLockup + 1000
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
     }
@@ -2982,7 +2998,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // First top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, 1000, 500);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + 1000, expectedCacheMissLockup + 500
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 500);
 
@@ -2993,7 +3011,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Second top-up (should be additive)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, 2000, 1500);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + 3000, expectedCacheMissLockup + 2000
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 2000, 1500);
 
@@ -3053,7 +3073,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp, cacheMissTopUp);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
@@ -3077,7 +3099,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp, cacheMissTopUp);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
@@ -3102,7 +3126,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp, cacheMissTopUp);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
@@ -3145,22 +3171,30 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // First top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp, cacheMissTopUp);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp, expectedCacheMissLockup + cacheMissTopUp
+        );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
         // Second top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp * 2, cacheMissTopUp * 2);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp * 3, expectedCacheMissLockup + cacheMissTopUp * 3
+        );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp * 2, cacheMissTopUp * 2);
 
         // Third top-up (only CDN)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, cdnTopUp, 0);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp * 4, expectedCacheMissLockup + cacheMissTopUp * 3
+        );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
 
         // Fourth top-up (only cache miss)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(dataSetId, 0, cacheMissTopUp);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, expectedCDNLockup + cdnTopUp * 4, expectedCacheMissLockup + cacheMissTopUp * 4
+        );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);
 
         vm.stopPrank();
