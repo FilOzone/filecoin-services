@@ -129,3 +129,7 @@ All dependencies are managed as git submodules and initialized with:
 ```bash
 git submodule update --init --recursive
 ```
+
+## Documentation
+
+For detailed technical specifications of the Filecoin Warm Storage Service contract, including payment rail behavior, renewal mechanics, and service architecture, see [SPEC.md](./SPEC.md).
