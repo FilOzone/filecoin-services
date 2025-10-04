@@ -450,6 +450,75 @@ contract FilecoinWarmStorageServiceTest is Test {
         new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
+    function testUpgrade() public {
+        FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            mockUSDFC,
+            filBeamBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        // Expected event parameters
+        string memory name = "FWSS";
+        string memory description = "FilecoinWarmStorageService";
+
+        bytes memory initData = abi.encodeWithSelector(
+            FilecoinWarmStorageService.initialize.selector,
+            uint64(2880),
+            uint256(60),
+            filBeamController,
+            name,
+            description
+        );
+
+        // Deploy the proxy which triggers the initialize function
+        MyERC1967Proxy proxy = new MyERC1967Proxy(address(firstServiceImpl), initData);
+        FilecoinWarmStorageService service = FilecoinWarmStorageService(address(proxy));
+        viewContract = new FilecoinWarmStorageServiceStateView(service);
+
+        bytes memory migrateData = abi.encodeWithSelector(FilecoinWarmStorageService.migrate.selector, viewContract);
+
+        (address nextImplementation, uint96 afterEpoch) = viewContract.nextUpgrade();
+        assertEq(nextImplementation, address(0));
+        assertEq(afterEpoch, uint96(0));
+
+        // Do not allow upgrade to zero address even if it's the nextImplementation
+        vm.expectRevert();
+        service.upgradeToAndCall(nextImplementation, migrateData);
+
+        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            mockUSDFC,
+            filBeamBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry
+        );
+
+        FilecoinWarmStorageService.PlannedUpgrade memory plan;
+        plan.nextImplementation = address(newServiceImpl);
+        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+        service.announcePlannedUpgrade(plan);
+
+        (nextImplementation, afterEpoch) = viewContract.nextUpgrade();
+        assertEq(nextImplementation, plan.nextImplementation);
+        assertEq(afterEpoch, plan.afterEpoch);
+
+        // Do not allow upgrade until afterEpoch
+        vm.expectRevert();
+        service.upgradeToAndCall(nextImplementation, migrateData);
+        vm.roll(plan.afterEpoch - 1);
+        vm.expectRevert();
+        service.upgradeToAndCall(plan.nextImplementation, migrateData);
+
+        vm.roll(plan.afterEpoch);
+        vm.expectEmit(false, false, false, true, address(service));
+        emit FilecoinWarmStorageService.ContractUpgraded(newServiceImpl.VERSION(), plan.nextImplementation);
+        service.upgradeToAndCall(plan.nextImplementation, migrateData);
+    }
+
     function _getSingleMetadataKV(string memory key, string memory value)
         internal
         pure
@@ -3002,7 +3071,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
 
         // Simulate migration being called during upgrade (must be called by proxy itself)
-        vm.prank(address(warmStorageService));
         warmStorageService.migrate(address(viewContract));
 
         // Verify view contract was set
@@ -3056,7 +3124,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         vm.recordLogs();
 
         // Simulate calling migrate during upgrade (called by proxy)
-        vm.prank(address(warmStorageService));
+        vm.prank(warmStorageService.owner());
         warmStorageService.migrate(address(0));
 
         // Get recorded logs
@@ -3080,23 +3148,12 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         assertTrue(foundEvent, "Should emit ContractUpgraded event");
     }
 
-    function testMigrateOnlyCallableDuringUpgrade() public {
-        // Test that migrate can only be called by the contract itself
-        vm.expectRevert(abi.encodeWithSelector(Errors.OnlySelf.selector, address(warmStorageService), address(this)));
-        warmStorageService.migrate(address(0));
-    }
-
     function testMigrateOnlyOnce() public {
         // Test that migrate can only be called once per reinitializer version
-        vm.prank(address(warmStorageService));
         warmStorageService.migrate(address(0));
 
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
-        vm.prank(address(warmStorageService));
         warmStorageService.migrate(address(0));
     }
-
-    // Event declaration for testing (must match the contract's event)
-    event ContractUpgraded(string version, address implementation);
 }

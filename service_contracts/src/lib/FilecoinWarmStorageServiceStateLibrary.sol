@@ -483,4 +483,20 @@ library FilecoinWarmStorageServiceStateLibrary {
     function filBeamControllerAddress(FilecoinWarmStorageService service) public view returns (address) {
         return address(uint160(uint256(service.extsload(StorageLayout.FIL_BEAM_CONTROLLER_ADDRESS_SLOT))));
     }
+
+    /**
+     * @notice Get information about the next contract upgrade
+     * @param service The service contract
+     * @return nextImplementation The next code for the contract
+     * @return afterEpoch The earliest the upgrade may complete
+     */
+    function nextUpgrade(FilecoinWarmStorageService service)
+        public
+        view
+        returns (address nextImplementation, uint96 afterEpoch)
+    {
+        bytes32 upgradeInfo = service.extsload(StorageLayout.NEXT_UPGRADE_SLOT);
+        nextImplementation = address(uint160(uint256(upgradeInfo)));
+        afterEpoch = uint96(uint256(upgradeInfo) >> 160);
+    }
 }
