@@ -18,8 +18,9 @@ The FWSS system depends on several key components that may need periodic upgrade
 This is outlining the upgrade flow if there is a non-breaking PDP contract upgrade change.
 
 ##### In the PDP Repository:
-- [ ] Create a PR with changelog changes
-- [ ] Bump version string in `PDPVerifier.sol`
+- [ ] Create a PR with 
+   - [ ] Changelog changes
+    - [ ] Bumped version string in `PDPVerifier.sol`
 - [ ] Merge PR after review
 - [ ] Create tag/release manually on GitHub UI
 
