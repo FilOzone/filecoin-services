@@ -131,6 +131,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.nextPDPChallengeWindowStart(setId);
     }
 
+    function nextUpgrade() external view returns (address nextImplementation, uint96 afterEpoch) {
+        return service.nextUpgrade();
+    }
+
     function provenPeriods(uint256 dataSetId, uint256 periodId) external view returns (bool) {
         return service.provenPeriods(dataSetId, periodId);
     }
