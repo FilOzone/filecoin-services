@@ -521,6 +521,24 @@
   },
   {
     "type": "function",
+    "name": "nextUpgrade",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "afterEpoch",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "provenPeriods",
     "inputs": [
       {
