@@ -18,9 +18,11 @@ The FWSS system depends on several key components that may need periodic upgrade
 This is outlining the upgrade flow if there is a non-breaking PDP contract upgrade change.
 
 ##### In the PDP Repository:
-- [ ] Create a PR with 
-   - [ ] Changelog changes
-    - [ ] Bumped version string in `PDPVerifier.sol`
+- [ ] Create a PR titled `build: prep PDP vX.Y.Z release` with the following changes:
+  - [ ] Add an entry for the new version in the changelog:
+    - Run `git log --pretty=format:"%h - %an, %ar : %s" vX.Y.Z..main` (where `vX.Y.Z` is the last tagged release version)
+    - Use the output to document changes since the last release
+  - [ ] Bump the version string in [pdp/src/PDPVerifier.sol](https://github.com/FilOzone/pdp/blob/e8d31459151d38a057c1df1ed43e34cd7de45476/src/PDPVerifier.sol#L161)
 - [ ] Merge PR after review
 - [ ] Create tag/release manually on GitHub UI
 
