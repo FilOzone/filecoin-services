@@ -35,7 +35,7 @@ This is outlining the upgrade flow if there is a non-breaking PDP contract upgra
   export UPGRADE_DATA="0x..." # Get this by running "cast sig migrate()"
   export IMPLEMENTATION_PATH="src/PDPVerifier.sol:PDPVerifier" # If executing from /pdp
   ```
-- [ ] Use the `upgrade-contract.sh` script to upgrade the contract
+- [ ] Use the [`upgrade-contract.sh`](https://github.com/FilOzone/pdp/blob/main/tools/upgrade-contract.sh) script to upgrade the contract
 - [ ] Verify upgrade on Calibnet
 
 #### A breaking PDP Contract Upgrade 
