@@ -1287,11 +1287,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         console.log("Testing dataSetDeleted - should revert (in grace period)");
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.PaymentRailsNotFinalized.selector, dataSetId, info.pdpEndEpoch, info.cdnEndEpoch
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Errors.PaymentRailsNotFinalized.selector, dataSetId, info.pdpEndEpoch));
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         // Wait for payment end epoch to elapse
