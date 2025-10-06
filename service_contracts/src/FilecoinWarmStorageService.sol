@@ -605,7 +605,6 @@ contract FilecoinWarmStorageService is
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
-            // Set lockup with 0.7 USDFC
             payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
 
             emit CDNPaymentRailsToppedUp(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
