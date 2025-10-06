@@ -580,7 +580,6 @@ contract FilecoinWarmStorageService is
         uint256 cdnRailId = 0;
 
         if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
-            // Create cache-miss payment rail with 0.3 USDFC lockup
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
