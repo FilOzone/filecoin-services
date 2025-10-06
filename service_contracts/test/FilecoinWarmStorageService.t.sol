@@ -508,6 +508,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
+        // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(1, defaultCDNLockup, defaultCacheMissLockup);
+
         // Expect DataSetCreated event when creating the data set (with CDN rails)
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
@@ -2670,6 +2674,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
+        // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(1, defaultCDNLockup, defaultCacheMissLockup);
+
         makeSignaturePass(client);
         vm.startPrank(serviceProvider);
         uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
@@ -2688,6 +2696,94 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Verify that CDN rails have no validator
         assertEq(cacheMissRail.validator, address(0), "Cache miss rail should have no validator");
         assertEq(cdnRail.validator, address(0), "CDN rail should have no validator");
+    }
+
+    function testCreateDataSetWithCDN_EmitsCDNPaymentRailsToppedUp() public {
+        // Test that creating a dataset with CDN enabled emits CDNPaymentRailsToppedUp event
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+
+        vm.startPrank(client);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        uint256 depositAmount = 1e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
+        vm.stopPrank();
+
+        // Expect the CDNPaymentRailsToppedUp event with correct parameters
+        // Event signature: CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 totalCdnLockup, uint256 totalCacheMissLockup)
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            1, // dataSetId will be 1 (first dataset created)
+            defaultCDNLockup, // Should be 0.7 USDFC
+            defaultCacheMissLockup // Should be 0.3 USDFC
+        );
+
+        // Create the dataset
+        makeSignaturePass(client);
+        vm.startPrank(serviceProvider);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+        vm.stopPrank();
+
+        // Verify the dataset was created with CDN rails
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
+        assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
+    }
+
+    function testCreateDataSetWithoutCDN_NoCDNPaymentRailsToppedUpEvent() public {
+        // Test that creating a dataset without CDN does not emit CDNPaymentRailsToppedUp event
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+
+        vm.startPrank(client);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        uint256 depositAmount = 10e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
+        vm.stopPrank();
+
+        // Record logs to verify CDNPaymentRailsToppedUp event is NOT emitted
+        vm.recordLogs();
+
+        // Create the dataset
+        makeSignaturePass(client);
+        vm.startPrank(serviceProvider);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+        vm.stopPrank();
+
+        // Check that CDNPaymentRailsToppedUp event was NOT emitted
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 cdnEventSignature = keccak256("CDNPaymentRailsToppedUp(uint256,uint256,uint256)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            assertNotEq(
+                logs[i].topics[0], cdnEventSignature, "CDNPaymentRailsToppedUp should not be emitted without CDN"
+            );
+        }
+
+        // Verify the dataset was created without CDN rails
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertEq(dataSet.cacheMissRailId, 0, "Cache Miss Rail ID should be zero");
+        assertEq(dataSet.cdnRailId, 0, "CDN Rail ID should be zero");
     }
 
     // Tests for settleCDNPaymentRails function
