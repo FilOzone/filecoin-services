@@ -810,11 +810,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
 
         uint256 decimals = 6; // MockUSDFC uses 6 decimals in tests
-        uint256 expectedNoCDN = 25 * 10 ** (decimals - 1); // 2.5 USDFC with 6 decimals
-        uint256 expectedWithCDN = 3 * 10 ** decimals; // 3 USDFC with 6 decimals (2.5 + 0.5 CDN)
+        uint256 expectedNoCDN = 5 * 10 ** decimals; // 5 USDFC with 6 decimals
+        uint256 expectedWithCDN = 55 * 10 ** (decimals - 1); // 5.5 USDFC with 6 decimals
 
-        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 2.5 * 10^decimals");
-        assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 3 * 10^decimals");
+        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 5 * 10^decimals");
+        assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 5.5 * 10^decimals");
         assertEq(address(pricing.tokenAddress), address(mockUSDFC), "Token address should match USDFC");
         assertEq(pricing.epochsPerMonth, 86400, "Epochs per month should be 86400");
 
@@ -828,16 +828,16 @@ contract FilecoinWarmStorageServiceTest is Test {
         (uint256 serviceFee, uint256 spPayment) = pdpServiceWithPayments.getEffectiveRates();
 
         uint256 decimals = 6; // MockUSDFC uses 6 decimals in tests
-        // Total is 2.5 USDFC with 6 decimals
-        uint256 expectedTotal = 25 * 10 ** (decimals - 1);
+        // Total is 5 USDFC with 6 decimals
+        uint256 expectedTotal = 5 * 10 ** decimals;
 
         // Test setup uses 0% commission
         uint256 expectedServiceFee = 0; // 0% commission
         uint256 expectedSpPayment = expectedTotal; // 100% goes to SP
 
         assertEq(serviceFee, expectedServiceFee, "Service fee should be 0 with 0% commission");
-        assertEq(spPayment, expectedSpPayment, "SP payment should be 2.5 * 10^6");
-        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 2.5 * 10^6");
+        assertEq(spPayment, expectedSpPayment, "SP payment should be 5 * 10^6");
+        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 5 * 10^6");
 
         // Verify the values are in expected range
         assert(serviceFee + spPayment < 10 ** 8); // Less than 10^8
@@ -893,12 +893,9 @@ contract FilecoinWarmStorageServiceTest is Test {
      * @param dataSetId The ID of the data set to delete
      */
     function deleteDataSetForClient(address provider, address clientAddress, uint256 dataSetId) internal {
-        bytes memory signature = abi.encode(FAKE_SIGNATURE);
-
-        makeSignaturePass(clientAddress);
         // Delete the data set as the provider
         vm.prank(provider);
-        mockPDPVerifier.deleteDataSet(address(pdpServiceWithPayments), dataSetId, signature);
+        mockPDPVerifier.deleteDataSet(address(pdpServiceWithPayments), dataSetId, bytes(""));
     }
 
     function testGetClientDataSets_EmptyClient() public view {
@@ -1176,6 +1173,10 @@ contract FilecoinWarmStorageServiceTest is Test {
     function testTerminateServiceLifecycle() public {
         console.log("=== Test: Data Set Payment Termination Lifecycle ===");
 
+        // 0. Verify that DataSet with ID 1 is not found
+        FilecoinWarmStorageService.DataSetStatus status = viewContract.getDataSetStatus(1);
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.NotFound), "expected NotFound");
+
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
 
@@ -1213,6 +1214,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
         console.log("Created data set with ID:", dataSetId);
 
+        status = viewContract.getDataSetStatus(dataSetId);
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active");
+
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
@@ -1244,6 +1248,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         console.log("Proof submitted successfully");
 
+        status = viewContract.getDataSetStatus(dataSetId);
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active");
+
         // 3. Terminate payment
         console.log("\n3. Terminating payment rails");
         console.log("Current block:", block.number);
@@ -1260,6 +1267,10 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertFalse(exists, "withCDN metadata should not exist after termination");
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
 
+        // check status is terminating
+        status = viewContract.getDataSetStatus(dataSetId);
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Terminating), "expected Terminating");
+
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
         console.log("Testing piecesAdded - should revert (payment terminated)");
@@ -1274,11 +1285,24 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieces, addPiecesExtraData);
         console.log("[OK] piecesAdded correctly reverted after termination");
 
+        console.log("Testing dataSetDeleted - should revert (in grace period)");
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.PaymentRailsNotFinalized.selector, dataSetId, info.pdpEndEpoch, info.cdnEndEpoch
+            )
+        );
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
         // Wait for payment end epoch to elapse
         console.log("\n5. Rolling past payment end epoch");
         console.log("Current block:", block.number);
         console.log("Rolling to block:", info.pdpEndEpoch + 1);
         vm.roll(info.pdpEndEpoch + 1);
+
+        // check status is still Terminating as data set is not yet deleted from PDP
+        status = viewContract.getDataSetStatus(dataSetId);
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Terminating), "expected Terminating");
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -1318,7 +1342,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
         console.log("[OK] nextProvingPeriod correctly reverted");
+        console.log("\n7. Testring dataSetDeleted");
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
+        status = viewContract.getDataSetStatus(dataSetId);
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.NotFound), "expected NotFound");
         console.log("\n=== Test completed successfully! ===");
     }
 

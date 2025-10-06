@@ -61,8 +61,6 @@ contract MetadataSignatureTestContract is EIP712 {
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
-    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
-
     // Metadata hashing functions
     function hashMetadataEntry(string memory key, string memory value) internal pure returns (bytes32) {
         return keccak256(abi.encode(METADATA_ENTRY_TYPEHASH, keccak256(bytes(key)), keccak256(bytes(value))));
@@ -180,11 +178,6 @@ contract MetadataSignatureTestContract is EIP712 {
         return _hashTypedDataV4(structHash);
     }
 
-    function getDeleteDataSetDigest(uint256 clientDataSetId) public view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, clientDataSetId));
-        return _hashTypedDataV4(structHash);
-    }
-
     function getDomainSeparator() public view returns (bytes32) {
         return _domainSeparatorV4();
     }
@@ -228,7 +221,6 @@ contract MetadataSignatureFixturesTest is Test {
         testPieceIds[1] = 3;
         testPieceIds[2] = 5;
         bytes memory scheduleRemovalsSig = generateSchedulePieceRemovalsSignature(testPieceIds);
-        bytes memory deleteDataSetSig = generateDeleteDataSetSignature();
 
         // Get all digests
         bytes32 createDataSetDigest =
@@ -237,7 +229,6 @@ contract MetadataSignatureFixturesTest is Test {
         bytes32 addPiecesDigest =
             testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, FIRST_ADDED, pieceCidsArray, pieceKeys, pieceValues);
         bytes32 scheduleRemovalsDigest = testContract.getSchedulePieceRemovalsDigest(CLIENT_DATA_SET_ID, testPieceIds);
-        bytes32 deleteDataSetDigest = testContract.getDeleteDataSetDigest(CLIENT_DATA_SET_ID);
 
         // Output JavaScript format for copying to synapse-sdk tests
         console.log("Copy this JavaScript const to synapse-sdk src/test/pdp-auth.test.ts:");
@@ -283,11 +274,6 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      digest: '%s',", vm.toString(scheduleRemovalsDigest));
         console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
         console.log("      pieceIds: [%d, %d, %d]", testPieceIds[0], testPieceIds[1], testPieceIds[2]);
-        console.log("    },");
-        console.log("    deleteDataSet: {");
-        console.log("      signature: '%s',", vm.toString(deleteDataSetSig));
-        console.log("      digest: '%s',", vm.toString(deleteDataSetDigest));
-        console.log("      clientDataSetId: %d", CLIENT_DATA_SET_ID);
         console.log("    }");
         console.log("  }");
         console.log("}");
@@ -329,10 +315,6 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      %d,", testPieceIds[1]);
         console.log("      %d", testPieceIds[2]);
         console.log("    ]");
-        console.log("  },");
-        console.log("  \"deleteDataSet\": {");
-        console.log("    \"signature\": \"%s\",", vm.toString(deleteDataSetSig));
-        console.log("    \"clientDataSetId\": %d", CLIENT_DATA_SET_ID);
         console.log("  }");
         console.log("}");
 
@@ -410,9 +392,6 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("  SchedulePieceRemovals: [");
         console.log("    { name: 'clientDataSetId', type: 'uint256' },");
         console.log("    { name: 'pieceIds', type: 'uint256[]' }");
-        console.log("  ],");
-        console.log("  DeleteDataSet: [");
-        console.log("    { name: 'clientDataSetId', type: 'uint256' }");
         console.log("  ]");
     }
 
@@ -470,12 +449,6 @@ contract MetadataSignatureFixturesTest is Test {
 
     function generateSchedulePieceRemovalsSignature(uint256[] memory pieceIds) internal view returns (bytes memory) {
         bytes32 digest = testContract.getSchedulePieceRemovalsDigest(CLIENT_DATA_SET_ID, pieceIds);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
-        return abi.encodePacked(r, s, v);
-    }
-
-    function generateDeleteDataSetSignature() internal view returns (bytes memory) {
-        bytes32 digest = testContract.getDeleteDataSetDigest(CLIENT_DATA_SET_ID);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }

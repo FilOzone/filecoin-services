@@ -126,6 +126,15 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId; // DataSet ID
     }
 
+    enum DataSetStatus {
+        // Data set doesn't yet exist or has been deleted
+        NotFound,
+        // Data set is active
+        Active,
+        // Data set is in the process of being terminated
+        Terminating
+    }
+
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
         address payer;
@@ -136,7 +145,7 @@ contract FilecoinWarmStorageService is
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
@@ -162,7 +171,7 @@ contract FilecoinWarmStorageService is
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
 
     // Pricing constants
-    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
     uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
@@ -206,8 +215,6 @@ contract FilecoinWarmStorageService is
 
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
-
-    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
     // =========================================================================
     // Storage variables
@@ -314,7 +321,7 @@ contract FilecoinWarmStorageService is
         TOKEN_DECIMALS = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS); // 5 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
 
@@ -497,9 +504,7 @@ contract FilecoinWarmStorageService is
         // Check if provider is approved
         require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
-        ServiceProviderRegistry.ServiceProviderInfoView memory providerInfo =
-            serviceProviderRegistry.getProvider(providerId);
-        address payee = providerInfo.info.payee;
+        address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
         clientDataSets[createData.payer].push(dataSetId);
@@ -623,26 +628,21 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set deletion and terminates the payment rail
+     * @notice Handles data set deletion after the payment rails were terminated
      * @dev Called by the PDPVerifier contract when a data set is deleted
      * @param dataSetId The ID of the data set being deleted
-     * @param extraData Signature for authentication
      */
     function dataSetDeleted(
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
-        bytes calldata extraData
+        bytes calldata // extraData, - not used
     ) external onlyPDPVerifier {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
-        (bytes memory signature) = abi.decode(extraData, (bytes));
 
         // Get the payer address for this data set
         address payer = dataSetInfo[dataSetId].payer;
-
-        // Verify the client's signature
-        verifyDeleteDataSetSignature(payer, info.clientDataSetId, signature);
 
         // Check if the data set's payment rails have finalized
         require(
@@ -1549,32 +1549,6 @@ contract FilecoinWarmStorageService is
         require(
             sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH)
                 >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
-        );
-    }
-
-    /**
-     * @notice Verifies a signature for the DeleteDataSet operation
-     * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The ID of the data set
-     * @param signature The signature bytes (v, r, s)
-     */
-    function verifyDeleteDataSetSignature(address payer, uint256 clientDataSetId, bytes memory signature)
-        internal
-        view
-    {
-        // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, clientDataSetId));
-        bytes32 digest = _hashTypedDataV4(structHash);
-
-        // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(digest, signature);
-
-        if (payer == recoveredSigner) {
-            return;
-        }
-        require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, DELETE_DATA_SET_TYPEHASH) >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
     }
