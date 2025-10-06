@@ -594,7 +594,6 @@ contract FilecoinWarmStorageService is
             // Set lockup with 0.3 USDFC
             payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
-            // Create CDN payment rail with 0.7 USDFC lockup
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
