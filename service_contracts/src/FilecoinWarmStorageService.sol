@@ -590,7 +590,6 @@ contract FilecoinWarmStorageService is
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
-            // Set lockup with 0.3 USDFC
             payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
             cdnRailId = payments.createRail(
