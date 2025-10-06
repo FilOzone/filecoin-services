@@ -108,7 +108,6 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         info.clientDataSetId = uint256(info11[7]);
         info.pdpEndEpoch = uint256(info11[8]);
         info.providerId = uint256(info11[9]);
-        info.cdnEndEpoch = uint256(info11[10]);
         info.dataSetId = dataSetId;
     }
 
