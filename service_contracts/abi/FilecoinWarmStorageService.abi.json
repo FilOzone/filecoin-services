@@ -681,7 +681,7 @@
   },
   {
     "type": "function",
-    "name": "settleCDNPaymentRails",
+    "name": "settleFilBeamPaymentRails",
     "inputs": [
       {
         "name": "dataSetId",

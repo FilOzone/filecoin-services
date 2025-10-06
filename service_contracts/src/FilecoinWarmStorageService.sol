@@ -989,7 +989,7 @@ contract FilecoinWarmStorageService is
      * @param cdnAmount Amount to settle for CDN rail
      * @param cacheMissAmount Amount to settle for cache miss rail
      */
-    function settleCDNPaymentRails(uint256 dataSetId, uint256 cdnAmount, uint256 cacheMissAmount)
+    function settleFilBeamPaymentRails(uint256 dataSetId, uint256 cdnAmount, uint256 cacheMissAmount)
         external
         onlyFilBeamController
     {

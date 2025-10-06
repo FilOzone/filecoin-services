@@ -2811,7 +2811,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet.cdnRailId, 0, "CDN Rail ID should be zero");
     }
 
-    // Tests for settleCDNPaymentRails function
+    // Tests for settleFilBeamPaymentRails function
     function testSettleCDNPaymentRails_BothAmounts() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
@@ -2835,7 +2835,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_OnlyCdnAmount() public {
@@ -2859,7 +2859,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_OnlyCacheMissAmount() public {
@@ -2883,7 +2883,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_ZeroAmounts() public {
@@ -2891,7 +2891,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 0, 0);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 0, 0);
     }
 
     function testSettleCDNPaymentRails_OnlyfilBeamController() public {
@@ -2905,7 +2905,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectRevert();
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_RevertIfNotController() public {
@@ -2914,11 +2914,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, client));
         vm.prank(client);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 50000, 25000);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, sp1));
         vm.prank(sp1);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 50000, 25000);
     }
 
     function testSettleCDNPaymentRails_InvalidDataSetId() public {
@@ -2926,7 +2926,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, invalidDataSetId));
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(invalidDataSetId, 50000, 25000);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(invalidDataSetId, 50000, 25000);
     }
 
     function testSettleCDNPaymentRails_DataSetWithoutCDN() public {
@@ -2936,7 +2936,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, dataSetId));
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 50000, 25000);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 50000, 25000);
     }
 
     function testSettleCDNPaymentRails_DataSetWithEmptyCDNMetadata() public {
@@ -2956,7 +2956,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Empty CDN metadata still creates CDN rails and can be settled after top-up
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_EmitsCorrectEvents() public {
@@ -2982,7 +2982,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_NoEventsForZeroAmounts() public {
@@ -2991,7 +2991,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         vm.recordLogs();
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, 0, 0);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 0, 0);
 
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
@@ -3034,7 +3034,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Process the payments
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     // Tests for insufficient lockup failures
@@ -3050,7 +3050,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Expecting OneTimePaymentExceedsLockup error
         vm.expectRevert();
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_FailsWhenLockupLessThanSettlement() public {
@@ -3070,7 +3070,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Should fail due to insufficient lockup
         vm.expectRevert();
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_AfterTermination() public {
@@ -3102,7 +3102,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     function testSettleCDNPaymentRails_AfterServiceTermination() public {
@@ -3134,7 +3134,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
         vm.prank(filBeamController);
-        pdpServiceWithPayments.settleCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
     // Tests for topUpCDNPaymentRails function
