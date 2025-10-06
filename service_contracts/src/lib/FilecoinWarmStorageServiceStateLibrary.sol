@@ -144,9 +144,13 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (bool)
     {
-        return service.extsload(
-            keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT))))
-        ) != bytes32(0);
+        return uint256(
+            service.extsload(
+                keccak256(
+                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
+                )
+            )
+        ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
