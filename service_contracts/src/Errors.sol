@@ -79,6 +79,10 @@ library Errors {
     /// @param dataSetId The ID of the data set
     error DataSetNotRegistered(uint256 dataSetId);
 
+    /// @notice This client dataset ID has already been registered to a dataset
+    /// @param clientDataSetId The attempted but existing ID
+    error ClientDataSetAlreadyRegistered(uint256 clientDataSetId);
+
     /// @notice Only one proof of possession allowed per proving period
     /// @param dataSetId The data set ID
     error ProofAlreadySubmitted(uint256 dataSetId);

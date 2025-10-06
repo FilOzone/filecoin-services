@@ -137,10 +137,16 @@ contract FilecoinWarmStorageService is
 
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
+        // The address of the payer who should have signed the message
         address payer;
+        // the unique ID for the client's data set
+        uint256 clientDataSetId;
+        // Array of metadata keys
         string[] metadataKeys;
+        // Array of metadata values
         string[] metadataValues;
-        bytes signature; // Authentication signature
+        // The signature bytes (v, r, s)
+        bytes signature;
     }
 
     // Structure for service pricing information
@@ -240,8 +246,7 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
-    mapping(address payer => uint256) private clientDataSetIds;
-    mapping(address payer => uint256[]) private clientDataSets;
+    mapping(address payer => mapping(uint256 clientDataSetId => uint256)) private clientDataSets;
     mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
     // dataSetId => (key => value)
@@ -506,18 +511,14 @@ contract FilecoinWarmStorageService is
 
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
-        uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
-        clientDataSets[createData.payer].push(dataSetId);
+        require(
+            clientDataSets[createData.payer][createData.clientDataSetId] == 0,
+            Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
+        );
+        clientDataSets[createData.payer][createData.clientDataSetId] = dataSetId;
 
         // Verify the client's signature
-        verifyCreateDataSetSignature(
-            createData.payer,
-            clientDataSetId,
-            payee,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.signature
-        );
+        verifyCreateDataSetSignature(payee, createData);
 
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -525,7 +526,7 @@ contract FilecoinWarmStorageService is
         info.payee = payee; // Using payee address from registry
         info.serviceProvider = serviceProvider; // Set the service provider
         info.commissionBps = serviceCommissionBps;
-        info.clientDataSetId = clientDataSetId;
+        info.clientDataSetId = createData.clientDataSetId;
         info.providerId = providerId;
 
         // Store each metadata key-value entry for this data set
@@ -653,16 +654,7 @@ contract FilecoinWarmStorageService is
         // Complete cleanup - remove the dataset from all mappings
         delete dataSetInfo[dataSetId];
 
-        // Remove from client's dataset list
-        uint256[] storage clientDataSetList = clientDataSets[payer];
-        for (uint256 i = 0; i < clientDataSetList.length; i++) {
-            if (clientDataSetList[i] == dataSetId) {
-                // Remove this dataset from the array
-                clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
-                clientDataSetList.pop();
-                break;
-            }
-        }
+        // NOTE keep clientDataSets[payer][clientDataSetId] to prevent replay
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
@@ -1275,10 +1267,16 @@ contract FilecoinWarmStorageService is
      * @return decoded The decoded DataSetCreateData struct
      */
     function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (address payer, string[] memory keys, string[] memory values, bytes memory signature) =
-            abi.decode(extraData, (address, string[], string[], bytes));
+        (address payer, uint256 clientDataSetId, string[] memory keys, string[] memory values, bytes memory signature) =
+            abi.decode(extraData, (address, uint256, string[], string[], bytes));
 
-        return DataSetCreateData({payer: payer, metadataKeys: keys, metadataValues: values, signature: signature});
+        return DataSetCreateData({
+            payer: payer,
+            clientDataSetId: clientDataSetId,
+            metadataKeys: keys,
+            metadataValues: values,
+            signature: signature
+        });
     }
 
     /**
@@ -1432,37 +1430,28 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Verifies a signature for the CreateDataSet operation
-     * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The unique ID for the client's data set
+     * @param createData The decoded DataSetCreateData used to build the signature
      * @param payee The service provider address
-     * @param metadataKeys Array of metadata keys
-     * @param metadataValues Array of metadata values
-     * @param signature The signature bytes (v, r, s)
      */
-    function verifyCreateDataSetSignature(
-        address payer,
-        uint256 clientDataSetId,
-        address payee,
-        string[] memory metadataKeys,
-        string[] memory metadataValues,
-        bytes memory signature
-    ) internal view {
+    function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
         // Hash the metadata entries
-        bytes32 metadataHash = hashMetadataEntries(metadataKeys, metadataValues);
+        bytes32 metadataHash = hashMetadataEntries(createData.metadataKeys, createData.metadataValues);
 
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, metadataHash));
+        bytes32 structHash =
+            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, createData.clientDataSetId, payee, metadataHash));
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(digest, signature);
+        address recoveredSigner = recoverSigner(digest, createData.signature);
 
-        if (payer == recoveredSigner) {
+        if (createData.payer == recoveredSigner) {
             return;
         }
         require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
+            sessionKeyRegistry.authorizationExpiry(createData.payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH)
+                >= block.timestamp,
+            Errors.InvalidSignature(createData.payer, recoveredSigner)
         );
     }
 
