@@ -83,6 +83,8 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
+    event CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 totalCdnLockup, uint256 totalCacheMissLockup);
+
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
@@ -107,7 +109,6 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
     }
 
     // Storage for data set payment information with dataSetId
@@ -122,7 +123,6 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
-        uint256 cdnEndEpoch; // 0 if CDN rails are not terminated
         uint256 dataSetId; // DataSet ID
     }
 
@@ -145,7 +145,7 @@ contract FilecoinWarmStorageService is
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
@@ -179,9 +179,13 @@ contract FilecoinWarmStorageService is
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
 
     // Pricing constants
-    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
     uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+
+    // Fixed lockup amounts for CDN rails
+    uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
+    uint256 private immutable DEFAULT_CACHE_MISS_LOCKUP_AMOUNT; // 0.3 USDFC
 
     // Burn Address
     address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
@@ -235,8 +239,8 @@ contract FilecoinWarmStorageService is
     // Commission rate
     uint256 public serviceCommissionBps;
 
-    // Track which proving periods have valid proofs
-    mapping(uint256 dataSetId => mapping(uint256 periodId => bool)) private provenPeriods;
+    // Track which proving periods have valid proofs with bitmap
+    mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
 
@@ -329,9 +333,13 @@ contract FilecoinWarmStorageService is
         TOKEN_DECIMALS = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS); // 5 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
+
+        // Initialize the lockup constants based on the actual token decimals
+        DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
+        DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) / 10; // 0.3 USDFC
     }
 
     /**
@@ -603,25 +611,27 @@ contract FilecoinWarmStorageService is
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
                 payee, // payee address from registry
-                address(this), // this contract acts as the arbiter
+                address(0), // no validator
                 0, // no service commission
-                address(this)
+                address(this) // controller
             );
             info.cacheMissRailId = cacheMissRailId;
             railToDataSet[cacheMissRailId] = dataSetId;
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, 0);
+            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
                 filBeamBeneficiaryAddress, // to FilBeam beneficiary
-                address(this), // this contract acts as the arbiter
+                address(0), // no validator
                 0, // no service commission
-                address(this)
+                address(this) // controller
             );
             info.cdnRailId = cdnRailId;
             railToDataSet[cdnRailId] = dataSetId;
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, 0);
+            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
+
+            emit CDNPaymentRailsToppedUp(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
         }
 
         // Emit event for tracking
@@ -659,13 +669,7 @@ contract FilecoinWarmStorageService is
         // Check if the data set's payment rails have finalized
         require(
             info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
-            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch)
-        );
-
-        // Check CDN payment rail: either no CDN configured (cdnEndEpoch == 0) or past CDN end epoch
-        require(
-            info.cdnEndEpoch == 0 || block.number > info.cdnEndEpoch,
-            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch, info.cdnEndEpoch)
+            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
         // Complete cleanup - remove the dataset from all mappings
@@ -836,7 +840,7 @@ contract FilecoinWarmStorageService is
         }
         provenThisPeriod[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        provenPeriods[dataSetId][currentPeriod] = true;
+        provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
     }
 
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
@@ -911,12 +915,12 @@ contract FilecoinWarmStorageService is
         }
 
         // Record the status of the current/previous proving period that's ending
-        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE) {
+        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE && provenThisPeriod[dataSetId]) {
             // Determine the period ID that just completed
             uint256 completedPeriodId = getProvingPeriodForEpoch(dataSetId, provingDeadlines[dataSetId] - 1);
 
             // Record whether this period was proven
-            provenPeriods[dataSetId][completedPeriodId] = provenThisPeriod[dataSetId];
+            provenPeriods[dataSetId][completedPeriodId >> 8] |= 1 << (completedPeriodId & 255);
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
@@ -1000,10 +1004,46 @@ contract FilecoinWarmStorageService is
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
-    function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
-        // Check if already terminated
+    /**
+     * @notice Settles CDN payment rails with specified amounts
+     * @dev Only callable by FilCDN (Operator) contract
+     * @param dataSetId The ID of the data set
+     * @param cdnAmount Amount to settle for CDN rail
+     * @param cacheMissAmount Amount to settle for cache miss rail
+     */
+    function settleFilBeamPaymentRails(uint256 dataSetId, uint256 cdnAmount, uint256 cacheMissAmount)
+        external
+        onlyFilBeamController
+    {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.cdnEndEpoch == 0, Errors.FilBeamPaymentAlreadyTerminated(dataSetId));
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        // Check if CDN rails are configured (presence of rails indicates CDN was set up)
+        require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        if (cdnAmount > 0) {
+            payments.modifyRailPayment(info.cdnRailId, 0, cdnAmount);
+        }
+
+        if (cacheMissAmount > 0) {
+            payments.modifyRailPayment(info.cacheMissRailId, 0, cacheMissAmount);
+        }
+    }
+
+    /**
+     * @notice Allows users to add funds to their CDN-related payment rails
+     * @param dataSetId The ID of the data set
+     * @param cdnAmountToAdd Amount to add to CDN rail lockup
+     * @param cacheMissAmountToAdd Amount to add to cache miss rail lockup
+     */
+    function topUpCDNPaymentRails(uint256 dataSetId, uint256 cdnAmountToAdd, uint256 cacheMissAmountToAdd) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        // Check authorization - only payer can top up
+        require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
 
         // Check if CDN service is configured
         require(
@@ -1012,6 +1052,42 @@ contract FilecoinWarmStorageService is
         );
 
         // Check if cache miss and CDN rails are configured
+        require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
+
+        Payments payments = Payments(paymentsContractAddress);
+
+        // Both rails must be active for any top-up operation
+        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+
+        require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
+        require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
+
+        // Require at least one amount to be non-zero
+        if (cdnAmountToAdd == 0 && cacheMissAmountToAdd == 0) {
+            revert Errors.InvalidTopUpAmount(dataSetId);
+        }
+
+        // Calculate total lockup amounts
+        uint256 totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
+        uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
+
+        // Only modify rails if amounts are being added
+        payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
+        payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
+
+        emit CDNPaymentRailsToppedUp(dataSetId, totalCdnLockup, totalCacheMissLockup);
+    }
+
+    function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
+        // Check if CDN service is configured
+        require(
+            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
+            Errors.FilBeamServiceNotConfigured(dataSetId)
+        );
+
+        // Check if cache miss and CDN rails are configured
+        DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         Payments payments = Payments(paymentsContractAddress);
@@ -1136,8 +1212,8 @@ contract FilecoinWarmStorageService is
             return provenThisPeriod[dataSetId];
         }
 
-        // For past periods, check the provenPeriods mapping
-        return provenPeriods[dataSetId][periodId];
+        // For past periods, check the provenPeriods bitmapping
+        return 0 != provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -1617,9 +1693,6 @@ contract FilecoinWarmStorageService is
         if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
             info.pdpEndEpoch = endEpoch;
             emit PDPPaymentTerminated(dataSetId, endEpoch, info.pdpRailId);
-        } else if (info.cdnEndEpoch == 0 && (railId == info.cacheMissRailId || railId == info.cdnRailId)) {
-            info.cdnEndEpoch = endEpoch;
-            emit CDNPaymentTerminated(dataSetId, endEpoch, info.cacheMissRailId, info.cdnRailId);
         }
     }
 }

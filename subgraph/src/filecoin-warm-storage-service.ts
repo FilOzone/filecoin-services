@@ -290,7 +290,6 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   dataSet.withCDN = withCDN;
   dataSet.isActive = true;
   dataSet.pdpEndEpoch = BIGINT_ZERO;
-  dataSet.cdnEndEpoch = BIGINT_ZERO;
   dataSet.leafCount = BIGINT_ZERO;
   dataSet.challengeRange = BIGINT_ZERO;
   dataSet.lastProvenEpoch = BIGINT_ZERO;
@@ -625,7 +624,6 @@ export function handleCDNPaymentTerminated(event: CDNPaymentTerminatedEvent): vo
   }
   if (dataSet) {
     dataSet.isActive = false;
-    dataSet.cdnEndEpoch = endEpoch;
     dataSet.save();
   }
 }

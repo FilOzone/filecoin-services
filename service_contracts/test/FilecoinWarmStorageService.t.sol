@@ -9,7 +9,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
@@ -76,6 +76,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
     bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
 
+    // Expected lockup amounts for CDN rails
+    uint256 defaultCDNLockup;
+    uint256 defaultCacheMissLockup;
+    uint256 defaultTotalCDNLockup;
+
     // Structs
     struct PieceMetadataSetup {
         uint256 dataSetId;
@@ -95,6 +100,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         address serviceFeeRecipient,
         uint256 commissionRateBps
     );
+
+    event RailOneTimePaymentProcessed(uint256 indexed railId, uint256 netPayeeAmount, uint256 operatorCommission);
 
     // Service provider change event to verify
     event DataSetServiceProviderChanged(
@@ -239,6 +246,11 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Transfer tokens to client for payment
         mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
+
+        // Initialize expected lockup amounts
+        defaultCDNLockup = (7 * 10 ** mockUSDFC.decimals()) / 10; // 0.7 USDFC
+        defaultCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
+        defaultTotalCDNLockup = defaultCacheMissLockup + defaultCDNLockup;
 
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
@@ -560,12 +572,16 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for future payments
-        uint256 depositAmount = 1e5; // Sufficient funds for future operations
+        uint256 depositAmount = 10e6; // Sufficient funds for initial lockup and future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
-        // Expect DataSetCreated event when creating the data set
+        // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(1, defaultCDNLockup, defaultCacheMissLockup);
+
+        // Expect DataSetCreated event when creating the data set (with CDN rails)
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
             1, 1, 1, 2, 3, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
@@ -629,9 +645,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.from, client, "From address should be client");
         assertEq(cacheMissRail.to, serviceProvider, "To address should be service provider");
         assertEq(cacheMissRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(cacheMissRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(cacheMissRail.validator, address(0), "Validator should be empty");
         assertEq(cacheMissRail.commissionRateBps, 0, "No commission");
-        assertEq(cacheMissRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
         assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
         Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
@@ -639,9 +655,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cdnRail.from, client, "From address should be client");
         assertEq(cdnRail.to, filBeamBeneficiary, "To address should be FilBeamBeneficiary");
         assertEq(cdnRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
-        assertEq(cdnRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
+        assertEq(cdnRail.validator, address(0), "Validator should be empty");
         assertEq(cdnRail.commissionRateBps, 0, "No commission");
-        assertEq(cdnRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should be 0.7 USDFC");
         assertEq(cdnRail.paymentRate, 0, "Initial payment rate should be 0");
     }
 
@@ -674,12 +690,12 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
 
         // Client deposits funds to the Payments contract for future payments
-        uint256 depositAmount = 1e5; // Sufficient funds for future operations
+        uint256 depositAmount = 10e6; // Sufficient funds for initial lockup and future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
 
-        // Expect DataSetCreated event when creating the data set
+        // Expect DataSetCreated event when creating the data set (no CDN rails)
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
             1, 1, 1, 0, 0, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
@@ -752,7 +768,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             1000e6, // lockup allowance (1000 USDFC)
             365 days // max lockup period
         );
-        uint256 depositAmount = 1e5;
+        uint256 depositAmount = 10e6; // Sufficient funds for initial lockup and future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -863,11 +879,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
 
         uint256 decimals = 6; // MockUSDFC uses 6 decimals in tests
-        uint256 expectedNoCDN = 25 * 10 ** (decimals - 1); // 2.5 USDFC with 6 decimals
-        uint256 expectedWithCDN = 3 * 10 ** decimals; // 3 USDFC with 6 decimals (2.5 + 0.5 CDN)
+        uint256 expectedNoCDN = 5 * 10 ** decimals; // 5 USDFC with 6 decimals
+        uint256 expectedWithCDN = 55 * 10 ** (decimals - 1); // 5.5 USDFC with 6 decimals
 
-        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 2.5 * 10^decimals");
-        assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 3 * 10^decimals");
+        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 5 * 10^decimals");
+        assertEq(pricing.pricePerTiBPerMonthWithCDN, expectedWithCDN, "With CDN price should be 5.5 * 10^decimals");
         assertEq(address(pricing.tokenAddress), address(mockUSDFC), "Token address should match USDFC");
         assertEq(pricing.epochsPerMonth, 86400, "Epochs per month should be 86400");
 
@@ -881,16 +897,16 @@ contract FilecoinWarmStorageServiceTest is Test {
         (uint256 serviceFee, uint256 spPayment) = pdpServiceWithPayments.getEffectiveRates();
 
         uint256 decimals = 6; // MockUSDFC uses 6 decimals in tests
-        // Total is 2.5 USDFC with 6 decimals
-        uint256 expectedTotal = 25 * 10 ** (decimals - 1);
+        // Total is 5 USDFC with 6 decimals
+        uint256 expectedTotal = 5 * 10 ** decimals;
 
         // Test setup uses 0% commission
         uint256 expectedServiceFee = 0; // 0% commission
         uint256 expectedSpPayment = expectedTotal; // 100% goes to SP
 
         assertEq(serviceFee, expectedServiceFee, "Service fee should be 0 with 0% commission");
-        assertEq(spPayment, expectedSpPayment, "SP payment should be 2.5 * 10^6");
-        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 2.5 * 10^6");
+        assertEq(spPayment, expectedSpPayment, "SP payment should be 5 * 10^6");
+        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 5 * 10^6");
 
         // Verify the values are in expected range
         assert(serviceFee + spPayment < 10 ** 8); // Less than 10^8
@@ -1221,6 +1237,36 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet.payee, sp1, "Payee should remain unchanged");
     }
 
+    function testProvenPeriods() public {
+        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
+        for (uint256 i = 0; i < 2049; i++) {
+            assertFalse(viewContract.provenPeriods(testDataSetId, i));
+        }
+        (
+            uint64 maxProvingPeriod,
+            uint256 challengeWindowSize,
+            uint256 challengesPerProof,
+            uint256 initChallengeWindowStart
+        ) = viewContract.getPDPConfig();
+        vm.startPrank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+        vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
+        for (uint256 i = 0; i < 2049; i++) {
+            assertFalse(viewContract.provenPeriods(testDataSetId, i));
+            pdpServiceWithPayments.possessionProven(testDataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+            assertTrue(viewContract.provenPeriods(testDataSetId, i));
+
+            vm.roll(vm.getBlockNumber() + challengeWindowSize);
+            pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+            vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
+        }
+        vm.stopPrank();
+
+        for (uint256 i = 0; i < 2049; i++) {
+            assertTrue(viewContract.provenPeriods(testDataSetId, i));
+        }
+    }
+
     // Data Set Payment Termination Tests
 
     function testTerminateServiceLifecycle() public {
@@ -1315,9 +1361,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
         console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
-        // Check cdnEndEpoch is set
-        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
-        console.log("CDN termination successful. CDN end epoch:", info.cdnEndEpoch);
         // Check withCDN metadata is cleared
         (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN metadata should not exist after termination");
@@ -1343,11 +1386,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         console.log("Testing dataSetDeleted - should revert (in grace period)");
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.PaymentRailsNotFinalized.selector, dataSetId, info.pdpEndEpoch, info.cdnEndEpoch
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Errors.PaymentRailsNotFinalized.selector, dataSetId, info.pdpEndEpoch));
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         // Wait for payment end epoch to elapse
@@ -1507,12 +1546,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN metadata should not exist after termination");
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
-        assertTrue(info.cdnEndEpoch > 0, "cdnEndEpoch should be set after termination");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
-
-        (metadataKeys, metadataValues) = viewContract.getAllDataSetMetadata(dataSetId);
-        assertTrue(metadataKeys.length == 0, "Metadata keys should be empty after termination");
-        assertTrue(metadataValues.length == 0, "Metadata values should be empty after termination");
 
         Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
@@ -1524,7 +1558,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Ensure future CDN service termination reverts
         vm.prank(filBeamController);
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamPaymentAlreadyTerminated.selector, dataSetId));
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         console.log("\n=== Test completed successfully! ===");
@@ -1756,10 +1790,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 dataSetId1 = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
 
         // Test 2: Dataset with CDN metadata
-        string[] memory cdnKeys = new string[](1);
-        string[] memory cdnValues = new string[](1);
-        cdnKeys[0] = "withCDN";
-        cdnValues[0] = "true";
+        (string[] memory cdnKeys, string[] memory cdnValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId2 = createDataSetForClient(sp1, client, cdnKeys, cdnValues);
 
         // Test 3: Dataset with regular metadata
@@ -2723,37 +2754,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 0);
-    }
-
-    function testRailTerminated_SetsCdnEndEpochAndEmitsEvent_CdnRail() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 123, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cdnRailId, address(pdpServiceWithPayments), 123);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 0);
-        assertEq(info.cdnEndEpoch, 123);
-    }
-
-    function testRailTerminated_SetsCdnEndEpochAndEmitsEvent_CacheMissRail() public {
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 123, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 123);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 0);
-        assertEq(info.cdnEndEpoch, 123);
+        // CDN rails don't track endEpoch in DataSetInfo
     }
 
     function testRailTerminated_DoesNotOverwritePdpEndEpoch() public {
@@ -2768,43 +2769,762 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 0);
 
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 321, info.cacheMissRailId, info.cdnRailId);
         vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 321);
+        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 321);
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 321);
     }
 
-    function testRailTerminated_DoesNotOverwriteCdnEndEpoch() public {
+    function testCreateDataSetWithCDN_VerifyDefaultBehavior() public {
+        // Test that CDN datasets now have lockup values: 0.7 USDFC for CDN, 0.3 USDFC for cache-miss
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+
+        vm.startPrank(client);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        uint256 depositAmount = 1e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
+        vm.stopPrank();
+
+        // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(1, defaultCDNLockup, defaultCacheMissLockup);
+
+        makeSignaturePass(client);
+        vm.startPrank(serviceProvider);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+        vm.stopPrank();
+
+        // Verify CDN rails were created with default zero lockup
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
+        assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
+
+        // Verify lockup amounts are set to the expected values
+        Payments.RailView memory cacheMissRail = payments.getRail(dataSet.cacheMissRailId);
+        Payments.RailView memory cdnRail = payments.getRail(dataSet.cdnRailId);
+        assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
+        assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should be 0.7 USDFC");
+        // Verify that CDN rails have no validator
+        assertEq(cacheMissRail.validator, address(0), "Cache miss rail should have no validator");
+        assertEq(cdnRail.validator, address(0), "CDN rail should have no validator");
+    }
+
+    function testCreateDataSetWithCDN_EmitsCDNPaymentRailsToppedUp() public {
+        // Test that creating a dataset with CDN enabled emits CDNPaymentRailsToppedUp event
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+
+        vm.startPrank(client);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        uint256 depositAmount = 1e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
+        vm.stopPrank();
+
+        // Expect the CDNPaymentRailsToppedUp event with correct parameters
+        // Event signature: CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 totalCdnLockup, uint256 totalCacheMissLockup)
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            1, // dataSetId will be 1 (first dataset created)
+            defaultCDNLockup, // Should be 0.7 USDFC
+            defaultCacheMissLockup // Should be 0.3 USDFC
+        );
+
+        // Create the dataset
+        makeSignaturePass(client);
+        vm.startPrank(serviceProvider);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+        vm.stopPrank();
+
+        // Verify the dataset was created with CDN rails
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
+        assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
+    }
+
+    function testCreateDataSetWithoutCDN_NoCDNPaymentRailsToppedUpEvent() public {
+        // Test that creating a dataset without CDN does not emit CDNPaymentRailsToppedUp event
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client,
+            metadataKeys: metadataKeys,
+            metadataValues: metadataValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        extraData =
+            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+
+        vm.startPrank(client);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
+        uint256 depositAmount = 10e6;
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, client, depositAmount);
+        vm.stopPrank();
+
+        // Record logs to verify CDNPaymentRailsToppedUp event is NOT emitted
+        vm.recordLogs();
+
+        // Create the dataset
+        makeSignaturePass(client);
+        vm.startPrank(serviceProvider);
+        uint256 newDataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+        vm.stopPrank();
+
+        // Check that CDNPaymentRailsToppedUp event was NOT emitted
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 cdnEventSignature = keccak256("CDNPaymentRailsToppedUp(uint256,uint256,uint256)");
+        for (uint256 i = 0; i < logs.length; i++) {
+            assertNotEq(
+                logs[i].topics[0], cdnEventSignature, "CDNPaymentRailsToppedUp should not be emitted without CDN"
+            );
+        }
+
+        // Verify the dataset was created without CDN rails
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        assertEq(dataSet.cacheMissRailId, 0, "Cache Miss Rail ID should be zero");
+        assertEq(dataSet.cdnRailId, 0, "CDN Rail ID should be zero");
+    }
+
+    // Tests for settleFilBeamPaymentRails function
+    function testSettleFilBeamPaymentRails_BothAmounts() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNPaymentTerminated(dataSetId, 321, info.cacheMissRailId, info.cdnRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.cacheMissRailId, address(pdpServiceWithPayments), 321);
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
 
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 0);
-        assertEq(info.cdnEndEpoch, 321);
+        // Top up the rails first to allow for settlement
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
-        vm.prank(address(payments));
-        pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
+        // Now settle the payments
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
 
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpEndEpoch, 123);
-        assertEq(info.cdnEndEpoch, 321);
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
     }
 
-    // Utility
+    function testSettleFilBeamPaymentRails_OnlyCdnAmount() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 75000;
+        uint256 cacheMissAmount = 0;
+
+        // Top up only the CDN rail
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+
+        // Now settle only the CDN payment
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_OnlyCacheMissAmount() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 0;
+        uint256 cacheMissAmount = 30000;
+
+        // Top up only the cache miss rail
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+
+        // Now settle only the cache miss payment
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_ZeroAmounts() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 0, 0);
+    }
+
+    function testSettleFilBeamPaymentRails_OnlyfilBeamController() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Expecting the payment to fail due to insufficient lockup (OneTimePaymentExceedsLockup error)
+        // Try to settle more than the initial lockup
+        uint256 cdnAmount = defaultCDNLockup + 50000; // More than initial 0.7 USDFC
+        uint256 cacheMissAmount = defaultCacheMissLockup + 25000; // More than initial 0.3 USDFC
+
+        vm.expectRevert();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_RevertIfNotController() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, client));
+        vm.prank(client);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 50000, 25000);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyFilBeamControllerAllowed.selector, filBeamController, sp1));
+        vm.prank(sp1);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 50000, 25000);
+    }
+
+    function testSettleFilBeamPaymentRails_InvalidDataSetId() public {
+        uint256 invalidDataSetId = 999999;
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, invalidDataSetId));
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(invalidDataSetId, 50000, 25000);
+    }
+
+    function testSettleFilBeamPaymentRails_DataSetWithoutCDN() public {
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, dataSetId));
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 50000, 25000);
+    }
+
+    function testSettleFilBeamPaymentRails_DataSetWithEmptyCDNMetadata() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Top up the rails first
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+
+        // Empty CDN metadata still creates CDN rails and can be settled after top-up
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_EmitsCorrectEvents() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 100000;
+        uint256 cacheMissAmount = 50000;
+
+        // Top up the rails first
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+
+        // Verify correct events are emitted
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_NoEventsForZeroAmounts() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        vm.recordLogs();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, 0, 0);
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; i++) {
+            assertFalse(
+                logs[i].topics[0] == keccak256("RailOneTimePaymentProcessed(uint256,uint256,uint256)"),
+                "RailOneTimePaymentProcessed should not be emitted for zero amounts"
+            );
+        }
+    }
+
+    function testSettleFilBeamPaymentRails_ProcessesPaymentsCorrectly() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnAmount = 75000;
+        uint256 cacheMissAmount = 35000;
+
+        // Top up the rails first
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnAmount, defaultCacheMissLockup + cacheMissAmount
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+
+        // Verify rails have correct lockup before settlement (initial + top-up)
+        Payments.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
+        assertEq(
+            cdnRailBefore.lockupFixed,
+            defaultCDNLockup + cdnAmount,
+            "CDN rail should have lockup equal to initial plus top-up"
+        );
+        assertEq(
+            cacheMissRailBefore.lockupFixed,
+            defaultCacheMissLockup + cacheMissAmount,
+            "Cache miss rail should have lockup equal to initial plus top-up"
+        );
+
+        // Process the payments
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    // Tests for insufficient lockup failures
+    function testSettleFilBeamPaymentRails_FailsWithInsufficientLockup() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Try to settle more than the initial lockup amount
+        uint256 cdnAmount = defaultCDNLockup + 50000; // More than initial 0.7 USDFC
+        uint256 cacheMissAmount = defaultCacheMissLockup + 10000; // More than initial 0.3 USDFC
+
+        // Attempt to settle without additional top-up (only initial lockup available)
+        // Expecting OneTimePaymentExceedsLockup error
+        vm.expectRevert();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_FailsWhenLockupLessThanSettlement() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Top up with smaller amounts than we'll try to settle
+        uint256 topUpCdn = 10000;
+        uint256 topUpCacheMiss = 5000;
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, topUpCdn, topUpCacheMiss);
+
+        // Try to settle with amounts larger than initial plus top-up
+        uint256 cdnAmount = defaultCDNLockup + topUpCdn + 50000; // More than available lockup
+        uint256 cacheMissAmount = defaultCacheMissLockup + topUpCacheMiss + 10000; // More than available lockup
+
+        // Should fail due to insufficient lockup
+        vm.expectRevert();
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_AfterTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up CDN rails with sufficient funds
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
+
+        // Terminate the CDN service (this removes withCDN metadata)
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // Verify withCDN metadata is removed
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be removed after termination");
+
+        // Should still be able to settle CDN payment rails after termination
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Expect the correct events to be emitted for successful settlement
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    function testSettleFilBeamPaymentRails_AfterServiceTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up CDN rails with sufficient funds
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 100000, 50000);
+
+        // Terminate the entire service (this also removes withCDN metadata and terminates CDN rails)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Verify withCDN metadata is removed
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be removed after service termination");
+
+        // Should still be able to settle CDN payment rails after termination
+        uint256 cdnAmount = 50000;
+        uint256 cacheMissAmount = 25000;
+
+        // Expect the correct events to be emitted for successful settlement
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true);
+        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
+    }
+
+    // Tests for topUpCDNPaymentRails function
+    function testTopUpCDNPaymentRails_Success() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnTopUp = 100000;
+        uint256 cacheMissTopUp = 50000;
+
+        // Verify initial lockup matches expected values
+        Payments.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
+        assertEq(cdnRailBefore.lockupFixed, defaultCDNLockup, "CDN rail should start with 0.7 USDFC lockup");
+        assertEq(
+            cacheMissRailBefore.lockupFixed,
+            defaultCacheMissLockup,
+            "Cache miss rail should start with 0.3 USDFC lockup"
+        );
+
+        // Top up the rails
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+
+        // Verify lockup increased by top-up amount
+        Payments.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
+        assertEq(
+            cdnRailAfter.lockupFixed, defaultCDNLockup + cdnTopUp, "CDN rail lockup should equal initial plus top-up"
+        );
+        assertEq(
+            cacheMissRailAfter.lockupFixed,
+            defaultCacheMissLockup + cacheMissTopUp,
+            "Cache miss rail lockup should equal initial plus top-up"
+        );
+    }
+
+    function testTopUpCDNPaymentRails_OnlyPayerCanTopUp() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Try to top up as non-payer
+        vm.expectRevert();
+        vm.prank(sp1);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
+
+        // Try to top up as another random address
+        vm.expectRevert();
+        vm.prank(address(0x123));
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
+
+        // Should work as payer
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + 1000, defaultCacheMissLockup + 1000
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
+    }
+
+    function testTopUpCDNPaymentRails_RequiresCDNEnabled() public {
+        // Create dataset without CDN
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+        uint256 dataSetId = createDataSetForClient(sp1, client, emptyKeys, emptyValues);
+
+        // Should fail because CDN is not enabled
+        vm.expectRevert();
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
+    }
+
+    function testTopUpCDNPaymentRails_IncrementalTopUps() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // First top-up
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + 1000, defaultCacheMissLockup + 500
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 500);
+
+        Payments.RailView memory cdnRail1 = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRail1 = payments.getRail(info.cacheMissRailId);
+        assertEq(cdnRail1.lockupFixed, defaultCDNLockup + 1000);
+        assertEq(cacheMissRail1.lockupFixed, defaultCacheMissLockup + 500);
+
+        // Second top-up (should be additive)
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + 3000, defaultCacheMissLockup + 2000
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 2000, 1500);
+
+        Payments.RailView memory cdnRail2 = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRail2 = payments.getRail(info.cacheMissRailId);
+        assertEq(cdnRail2.lockupFixed, defaultCDNLockup + 3000, "CDN lockup should be initial plus cumulative top-ups");
+        assertEq(
+            cacheMissRail2.lockupFixed,
+            defaultCacheMissLockup + 2000,
+            "Cache miss lockup should be initial plus cumulative top-ups"
+        );
+    }
+
+    function testTopUpCDNPaymentRails_ZeroAmounts() public {
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up with zero amounts (should revert with InvalidTopUpAmount error)
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidTopUpAmount.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, 0);
+
+        // Verify lockup remains at initial values
+        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should remain at initial 0.7 USDFC");
+        assertEq(
+            cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should remain at initial 0.3 USDFC"
+        );
+    }
+
+    function testTopUpCDNPaymentRails_InvalidDataSetId() public {
+        uint256 invalidDataSetId = 99999999999999999;
+
+        vm.expectRevert();
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(invalidDataSetId, 1000, 1000);
+    }
+
+    function testTopUpCDNPaymentRails_RevertsAfterCDNTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Top up initially (should succeed)
+        uint256 cdnTopUp = 100000;
+        uint256 cacheMissTopUp = 50000;
+
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+
+        // Terminate CDN service
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // Attempt to top up again (should fail because withCDN metadata was removed)
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+    }
+
+    function testTopUpCDNPaymentRails_RevertsAfterServiceTermination() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Top up initially (should succeed)
+        uint256 cdnTopUp = 100000;
+        uint256 cacheMissTopUp = 50000;
+
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+
+        // Terminate entire service (including CDN rails)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Attempt to top up again (should fail because withCDN metadata was removed)
+        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+    }
+
+    function testTopUpCDNPaymentRails_RevertsForIndividuallyTerminatedRails() public {
+        // Create dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Top up initially (should succeed)
+        uint256 cdnTopUp = 100000;
+        uint256 cacheMissTopUp = 50000;
+
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
+        );
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+
+        // Directly terminate CDN rail through Payments contract (simulating edge case)
+        // Note: The service contract is the controller of the rails
+        vm.prank(address(pdpServiceWithPayments));
+        payments.terminateRail(info.cdnRailId);
+
+        // Attempt to top up only CDN rail (should fail since CDN rail is terminated)
+        vm.expectRevert(abi.encodeWithSelector(Errors.CDNPaymentAlreadyTerminated.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
+
+        // Attempt to top up only cache miss rail (should also fail since CDN rail is terminated)
+        vm.expectRevert(abi.encodeWithSelector(Errors.CDNPaymentAlreadyTerminated.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);
+
+        // Now terminate cache miss rail too
+        vm.prank(address(pdpServiceWithPayments));
+        payments.terminateRail(info.cacheMissRailId);
+
+        // Attempt to top up both (should fail on first check)
+        vm.expectRevert(abi.encodeWithSelector(Errors.CDNPaymentAlreadyTerminated.selector, dataSetId));
+        vm.prank(client);
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+    }
+
+    function testTopUpCDNPaymentRails_SucceedsBeforeTermination() public {
+        // Positive test to ensure normal functionality still works
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        uint256 cdnTopUp = 100000;
+        uint256 cacheMissTopUp = 50000;
+
+        // Multiple top-ups should all succeed before termination
+        vm.startPrank(client);
+
+        // First top-up
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp, defaultCacheMissLockup + cacheMissTopUp
+        );
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
+
+        // Second top-up
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp * 3, defaultCacheMissLockup + cacheMissTopUp * 3
+        );
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp * 2, cacheMissTopUp * 2);
+
+        // Third top-up (only CDN)
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp * 4, defaultCacheMissLockup + cacheMissTopUp * 3
+        );
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
+
+        // Fourth top-up (only cache miss)
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+            dataSetId, defaultCDNLockup + cdnTopUp * 4, defaultCacheMissLockup + cacheMissTopUp * 4
+        );
+        pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);
+
+        vm.stopPrank();
+
+        // Verify rails are still active and have correct lockup amounts
+        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+
+        // Rails should not be terminated
+        assertEq(cdnRail.endEpoch, 0, "CDN rail should not be terminated");
+        assertEq(cacheMissRail.endEpoch, 0, "Cache miss rail should not be terminated");
+
+        // Verify lockup amounts (initial lockup plus sum of all top-ups)
+        uint256 expectedCdnLockupTotal = defaultCDNLockup + (cdnTopUp * 4); // initial + (1 + 2 + 1 + 0 = 4x)
+        uint256 defaultCacheMissLockupTotal = defaultCacheMissLockup + (cacheMissTopUp * 4); // initial + (1 + 2 + 0 + 1 = 4x)
+        assertEq(cdnRail.lockupFixed, expectedCdnLockupTotal, "CDN rail lockup incorrect");
+        assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockupTotal, "Cache miss rail lockup incorrect");
+    }
+
     function _makeStringOfLength(uint256 len) internal pure returns (string memory s) {
         s = string(_makeBytesOfLength(len));
     }
