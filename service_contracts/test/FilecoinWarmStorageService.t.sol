@@ -697,6 +697,22 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 1));
         vm.prank(serviceProvider);
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(newDataSetId2);
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(newDataSetId2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
+        // Advance block number to be greater than the end epoch to allow deletion
+        vm.roll(terminatedInfo.pdpEndEpoch + 1);
+        vm.prank(serviceProvider);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, newDataSetId2, "");
+
+        // cannot recreate deleted dataset
+        extraData =
+            abi.encode(createData.payer, 1, createData.metadataKeys, createData.metadataValues, createData.signature);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 1));
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
 
     function testCreateDataSetAddPieces() public {
