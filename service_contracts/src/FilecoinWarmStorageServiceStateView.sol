@@ -154,4 +154,8 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     function railToDataSet(uint256 railId) external view returns (uint256) {
         return service.railToDataSet(railId);
     }
+
+    function serviceCommissionBps() external view returns (uint256) {
+        return service.serviceCommissionBps();
+    }
 }

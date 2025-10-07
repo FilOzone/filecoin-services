@@ -237,7 +237,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // Commission rate
-    uint256 public serviceCommissionBps;
+    uint256 private serviceCommissionBps;
 
     // Track which proving periods have valid proofs with bitmap
     mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;

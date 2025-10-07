@@ -309,7 +309,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
         assertEq(viewContract.filBeamControllerAddress(), filBeamController, "FilBeam address should be set correctly");
         assertEq(
-            pdpServiceWithPayments.serviceCommissionBps(),
+            viewContract.serviceCommissionBps(),
             0, // 0%
             "Service commission should be set correctly"
         );

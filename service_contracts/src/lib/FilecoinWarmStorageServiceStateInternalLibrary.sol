@@ -203,6 +203,10 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         initChallengeWindowStart = block.number + maxProvingPeriod - challengeWindowSize;
     }
 
+    function serviceCommissionBps(FilecoinWarmStorageService service) internal view returns (uint256) {
+        return uint256(service.extsload(StorageLayout.SERVICE_COMMISSION_BPS_SLOT));
+    }
+
     /**
      * @notice Returns the start of the next challenge window for a data set
      * @param service The service contract
