@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Changed
 
-## [0.2.0] - 2025-10-06 - M3 Calibration Network Deployment
+## [0.2.0] - 2025-10-07 - M3 Calibration Network Deployment
 
 ## Core Contracts
 
