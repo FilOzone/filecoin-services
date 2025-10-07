@@ -153,7 +153,9 @@ contract FilecoinWarmStorageService is
 
     // Used for announcing upgrades, packed into one slot
     struct PlannedUpgrade {
+        // Address of the new implementation contract
         address nextImplementation;
+        // Upgrade will not occur until at least this epoch
         uint96 afterEpoch;
     }
 
