@@ -481,14 +481,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -599,14 +605,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -682,12 +694,18 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
+            clientDataSetId: 0,
             metadataKeys: dsKeys,
             metadataValues: dsValues,
             signature: FAKE_SIGNATURE
         });
-        bytes memory encodedCreateData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Approvals and deposit
         vm.startPrank(client);
@@ -853,13 +871,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadataKeys: metadataKeys,
+            clientDataSetId: 0,
             metadataValues: metadataValues,
             payer: clientAddress,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1032,14 +1056,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: clientAddress,
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
-            payer: clientAddress,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1214,14 +1244,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: client,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -1388,14 +1424,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: client,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -1503,14 +1545,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: client,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -2713,14 +2761,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
@@ -2758,14 +2812,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
@@ -2801,14 +2861,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         string[] memory metadataValues = new string[](0);
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);

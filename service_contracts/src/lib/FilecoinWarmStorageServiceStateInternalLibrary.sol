@@ -78,8 +78,18 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return CHALLENGES_PER_PROOF;
     }
 
-    function clientDataSetIDs(FilecoinWarmStorageService service, address payer) internal view returns (uint256) {
-        return uint256(service.extsload(keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SET_IDS_SLOT))));
+    function clientDataSets(FilecoinWarmStorageService service, address payer, uint256 clientDataSetId)
+        internal
+        view
+        returns (uint256)
+    {
+        return uint256(
+            service.extsload(
+                keccak256(
+                    abi.encode(clientDataSetId, keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SETS_SLOT)))
+                )
+            )
+        );
     }
 
     function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {

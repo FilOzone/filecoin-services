@@ -642,9 +642,6 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
-        // Get the payer address for this data set
-        address payer = dataSetInfo[dataSetId].payer;
-
         // Check if the data set's payment rails have finalized
         require(
             info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
@@ -654,7 +651,7 @@ contract FilecoinWarmStorageService is
         // Complete cleanup - remove the dataset from all mappings
         delete dataSetInfo[dataSetId];
 
-        // NOTE keep clientDataSets[payer][clientDataSetId] to prevent replay
+        // NOTE keep clientDataSets[dataSetInfo[dataSetId].payer][clientDataSetId] to prevent replay
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
