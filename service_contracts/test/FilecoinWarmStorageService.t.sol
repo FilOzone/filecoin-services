@@ -690,6 +690,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        // cannot recreate dataset
+        extraData =
+            abi.encode(createData.payer, 1, createData.metadataKeys, createData.metadataValues, createData.signature);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 1));
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
 
     function testCreateDataSetAddPieces() public {
@@ -924,7 +931,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function deleteDataSetForClient(address provider, address clientAddress, uint256 dataSetId) internal {
         // Delete the data set as the provider
         vm.prank(provider);
-        mockPDPVerifier.deleteDataSet(address(pdpServiceWithPayments), dataSetId, bytes(""));
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
     }
 
     function testGetClientDataSets_EmptyClient() public view {
