@@ -151,6 +151,14 @@ contract FilecoinWarmStorageService is
         uint256 epochsPerMonth; // Number of epochs in a month
     }
 
+    // Used for announcing upgrades, packed into one slot
+    struct PlannedUpgrade {
+        // Address of the new implementation contract
+        address nextImplementation;
+        // Upgrade will not occur until at least this epoch
+        uint96 afterEpoch;
+    }
+
     // =========================================================================
     // Constants
 
@@ -229,7 +237,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // Commission rate
-    uint256 public serviceCommissionBps;
+    uint256 private serviceCommissionBps;
 
     // Track which proving periods have valid proofs with bitmap
     mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;
@@ -265,6 +273,10 @@ contract FilecoinWarmStorageService is
 
     // The address allowed to terminate CDN services
     address private filBeamControllerAddress;
+
+    PlannedUpgrade private nextUpgrade;
+
+    event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     // =========================================================================
 
@@ -374,7 +386,19 @@ contract FilecoinWarmStorageService is
         serviceCommissionBps = 0; // 0%
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
+        require(plannedUpgrade.nextImplementation.code.length > 3000);
+        require(plannedUpgrade.afterEpoch > block.number);
+        nextUpgrade = plannedUpgrade;
+        emit UpgradeAnnounced(plannedUpgrade);
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
+        // zero address already checked by ERC1967Utils._setImplementation
+        require(newImplementation == nextUpgrade.nextImplementation);
+        require(block.number >= nextUpgrade.afterEpoch);
+        delete nextUpgrade;
+    }
 
     /**
      * @notice Sets new proving period parameters
@@ -398,9 +422,7 @@ contract FilecoinWarmStorageService is
      * Only callable during proxy upgrade process
      * @param _viewContract Address of the view contract (optional, can be address(0))
      */
-    function migrate(address _viewContract) public onlyProxy reinitializer(4) {
-        require(msg.sender == address(this), Errors.OnlySelf(address(this), msg.sender));
-
+    function migrate(address _viewContract) public onlyProxy onlyOwner reinitializer(4) {
         // Set view contract if provided
         if (_viewContract != address(0)) {
             viewContractAddress = _viewContract;
