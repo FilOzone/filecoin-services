@@ -11,19 +11,23 @@
 # - PASSWORD: Keystore password
 # - NONCE: Transaction nonce (optional, will fetch if not provided)
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
 # Auto-detect chain ID from RPC if not already set
 if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
+  CHAIN_ID=$(cast chain-id)
   if [ -z "$CHAIN_ID" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
 fi
+
+# Mirror CHAIN_ID to CHAIN env var
+export CHAIN=${CHAIN:-$CHAIN_ID}
 
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
   echo "Error: WARM_STORAGE_SERVICE_ADDRESS is not set"
@@ -35,23 +39,23 @@ if [ -z "$WARM_STORAGE_VIEW_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
   exit 1
 fi
 
-# Get sender address
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+# Get sender address (cast will read ETH_KEYSTORE/ETH_PASSWORD)
+ADDR=$(cast wallet address)
 
 # Get nonce if not provided
+# Get nonce if not provided
 if [ -z "$NONCE" ]; then
-  NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+  NONCE="$(cast nonce "$ADDR")"
 fi
 
 echo "Setting view contract address on FilecoinWarmStorageService..."
 
-# Execute transaction and capture output, only show errors if it fails
-TX_OUTPUT=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --nonce $NONCE --chain-id $CHAIN_ID $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS 2>&1)
+TX_OUTPUT=$(cast send --nonce $NONCE $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS 2>&1)
 
 if [ $? -eq 0 ]; then
   echo "View contract address set successfully"

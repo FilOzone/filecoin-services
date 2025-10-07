@@ -8,13 +8,15 @@
 
 echo "Deploying Service Provider Registry Contract"
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+export CHAIN=314159
+
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
   exit 1
 fi
 
@@ -23,20 +25,20 @@ if [ -z "$PASSWORD" ]; then
   echo "Warning: PASSWORD is not set, using empty password"
 fi
 
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+ADDR=$(cast wallet address)
 echo "Deploying contracts from address $ADDR"
 
-# Get current balance
-BALANCE=$(cast balance --rpc-url "$RPC_URL" "$ADDR")
+# Get current balance and nonce (cast will use ETH_RPC_URL)
+BALANCE=$(cast balance "$ADDR")
 echo "Deployer balance: $BALANCE"
 
-NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+NONCE="$(cast nonce "$ADDR")"
 echo "Starting nonce: $NONCE"
 
 # Deploy ServiceProviderRegistry implementation
 echo ""
 echo "=== STEP 1: Deploying ServiceProviderRegistry Implementation ==="
-REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --broadcast --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract ServiceProviderRegistry implementation address"
   exit 1
@@ -51,7 +53,7 @@ echo "=== STEP 2: Deploying ServiceProviderRegistry Proxy ==="
 INIT_DATA=$(cast calldata "initialize()")
 echo "Initialization calldata: $INIT_DATA"
 
-REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+REGISTRY_PROXY_ADDRESS=$(forge create --broadcast --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_PROXY_ADDRESS" ]; then
   echo "Error: Failed to extract ServiceProviderRegistry proxy address"
   exit 1
@@ -61,7 +63,7 @@ echo "✓ ServiceProviderRegistry proxy deployed at: $REGISTRY_PROXY_ADDRESS"
 # Verify deployment by calling version() on the proxy
 echo ""
 echo "=== STEP 3: Verifying Deployment ==="
-VERSION=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "version()(string)")
+VERSION=$(cast call $REGISTRY_PROXY_ADDRESS "version()(string)")
 if [ -z "$VERSION" ]; then
   echo "Warning: Could not verify contract version"
 else
@@ -69,7 +71,7 @@ else
 fi
 
 # Get registration fee
-FEE=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "getRegistrationFee()(uint256)")
+FEE=$(cast call $REGISTRY_PROXY_ADDRESS "getRegistrationFee()(uint256)")
 if [ -z "$FEE" ]; then
   echo "Warning: Could not retrieve registration fee"
 else
@@ -79,7 +81,7 @@ else
 fi
 
 # Get burn actor address
-BURN_ACTOR=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "BURN_ACTOR()(address)")
+BURN_ACTOR=$(cast call $REGISTRY_PROXY_ADDRESS "BURN_ACTOR()(address)")
 if [ -z "$BURN_ACTOR" ]; then
   echo "Warning: Could not retrieve burn actor address"
 else
@@ -123,7 +125,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  CHAIN_ID=314159 verify_contracts_batch "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry,ServiceProviderRegistry Implementation"
+  verify_contracts_batch "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
   popd >/dev/null
 else
   echo

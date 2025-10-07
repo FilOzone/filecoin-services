@@ -11,9 +11,11 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 ## Environment Variables
 
 ### Required for all scripts:
-- `KEYSTORE` - Path to the Ethereum keystore file
-- `PASSWORD` - Password for the keystore (can be empty string if no password)
-- `RPC_URL` - RPC endpoint for Calibration testnet
+These scripts now follow forge/cast's environment variable conventions. Set the following environment variables instead of passing flags:
+- `ETH_KEYSTORE` - Path to the Ethereum keystore file (or keep using `KEYSTORE` and it will be mapped)
+- `ETH_PASSWORD` - Password for the keystore (can be empty string if no password)
+- `ETH_RPC_URL` - RPC endpoint for Calibration testnet (e.g. `https://api.calibration.node.glif.io/rpc/v1`)
+- `ETH_FROM` - Optional: address to use as deployer (forge/cast default is taken from the keystore)
 
 ### Required for specific scripts:
 - `deploy-warm-storage-calibnet.sh` requires:
@@ -35,9 +37,11 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 ### Fresh Deployment (All Contracts)
 
 ```bash
-export KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export ETH_KEYSTORE="/path/to/keystore.json"
+export ETH_PASSWORD="your-password"
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+# Optional: explicitly set the deployer address (overrides keystore default)
+export ETH_FROM="0xYourDeployerAddress"
 export CHALLENGE_FINALITY="900"
 
 # Optional: Custom proving periods

@@ -26,16 +26,24 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
 echo "Deploying all Warm Storage contracts"
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
+# Map legacy env var names to forge/cast's ETH_* names and export them for child processes
+export ETH_RPC_URL=${ETH_RPC_URL:-$RPC_URL}
+export ETH_KEYSTORE=${ETH_KEYSTORE:-$KEYSTORE}
+export ETH_PASSWORD=${ETH_PASSWORD:-$PASSWORD}
+export ETH_FROM=${ETH_FROM:-$FROM}
+
 # Auto-detect chain ID from RPC
-CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
 if [ -z "$CHAIN_ID" ]; then
-  echo "Error: Failed to detect chain ID from RPC"
-  exit 1
+  CHAIN_ID=$(cast chain-id)
+  if [ -z "$CHAIN_ID" ]; then
+    echo "Error: Failed to detect chain ID from RPC"
+    exit 1
+  fi
 fi
 
 # Set network-specific configuration based on chain ID
@@ -71,6 +79,9 @@ case "$CHAIN_ID" in
 esac
 
 echo "Detected Chain ID: $CHAIN_ID ($NETWORK_NAME)"
+
+# Mirror CHAIN_ID to CHAIN env var so forge/cast commands can use --chain
+export CHAIN=${CHAIN:-$CHAIN_ID}
 
 if [ "$DRY_RUN" != "true" ] && [ -z "$KEYSTORE" ]; then
   echo "Error: KEYSTORE is not set (required for actual deployment)"
@@ -172,13 +183,13 @@ if [ "$DRY_RUN" = "true" ]; then
         echo "🧪 Using dummy SessionKeyRegistry address: $SESSION_KEY_REGISTRY_ADDRESS"
     fi
 else
-    if [ -z "$KEYSTORE" ]; then
-        echo "Error: KEYSTORE is not set (required for actual deployment)"
+    if [ -z "$ETH_KEYSTORE" ]; then
+        echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
         exit 1
     fi
     
-    ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
-    NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+    ADDR=$(cast wallet address  --password "$ETH_PASSWORD")
+    NONCE="$(cast nonce "$ADDR")"
     BROADCAST_FLAG="--broadcast"
     echo "Deploying contracts from address $ADDR"
     echo "🚀 Will deploy and broadcast all transactions"
@@ -203,7 +214,8 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
+    # forge and cast will read ETH_RPC_URL, ETH_KEYSTORE, ETH_PASSWORD, ETH_FROM from the environment
+    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
     if [ -z "$VERIFIER_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract PDPVerifier contract address"
         exit 1
@@ -222,7 +234,7 @@ if [ "$DRY_RUN" = "true" ]; then
     PDP_VERIFIER_ADDRESS="0x2345678901234567890123456789012345678901"  # Dummy address for dry-run
     echo "✅ PDPVerifier proxy deployment planned"
 else
-    PDP_VERIFIER_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    PDP_VERIFIER_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
         echo "Error: Failed to extract PDPVerifier proxy address"
         exit 1
@@ -244,7 +256,7 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
+    PAYMENTS_CONTRACT_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
         echo "Error: Failed to extract Payments contract address"
         exit 1
@@ -266,7 +278,7 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
+    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
     if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract ServiceProviderRegistry implementation address"
         exit 1
@@ -285,7 +297,7 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x5678901234567890123456789012345678901234"  # Dummy address for dry-run
     echo "✅ ServiceProviderRegistry proxy deployment planned"
 else
-    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
         echo "Error: Failed to extract ServiceProviderRegistry proxy address"
         exit 1
@@ -307,7 +319,7 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService implementation deployment planned"
 else
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService contract address"
         exit 1
@@ -331,7 +343,7 @@ if [ "$DRY_RUN" = "true" ]; then
     WARM_STORAGE_SERVICE_ADDRESS="0x7890123456789012345678901234567890123456"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService proxy deployment planned"
 else
-    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    WARM_STORAGE_SERVICE_ADDRESS=$(forge create $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
         exit 1
@@ -398,15 +410,15 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
     pushd "$(dirname "$0")/.." >/dev/null
     source tools/verify-contracts.sh
     
-    CHAIN_ID=$CHAIN_ID verify_contracts_batch \
-        "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier,PDPVerifier Implementation" \
-        "$PDP_VERIFIER_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy,PDPVerifier Proxy" \
-        "$PAYMENTS_CONTRACT_ADDRESS,src/Payments.sol:Payments,Payments Contract" \
-        "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry,ServiceProviderRegistry Implementation" \
-        "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy,ServiceProviderRegistry Proxy" \
-        "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation" \
-        "$WARM_STORAGE_SERVICE_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy,FilecoinWarmStorageService Proxy" \
-        "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView,FilecoinWarmStorageServiceStateView"
+    verify_contracts_batch \
+        "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
+        "$PDP_VERIFIER_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
+        "$PAYMENTS_CONTRACT_ADDRESS,src/Payments.sol:Payments" \
+        "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
+        "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
+        "$WARM_STORAGE_SERVICE_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
     
     popd >/dev/null
 fi

@@ -10,29 +10,34 @@
 
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
 # Auto-detect chain ID from RPC
-CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
 if [ -z "$CHAIN_ID" ]; then
-  echo "Error: Failed to detect chain ID from RPC"
+  CHAIN_ID=$(cast chain-id)
+  if [ -z "$CHAIN_ID" ]; then
+    echo "Error: Failed to detect chain ID from RPC"
+    exit 1
+  fi
+fi
+
+# Mirror CHAIN_ID to CHAIN env var
+export CHAIN=${CHAIN:-$CHAIN_ID}
+
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
-  exit 1
-fi
-
-# Get deployer address
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+# Get deployer address and nonce (cast will read ETH_KEYSTORE/ETH_PASSWORD/ETH_RPC_URL)
+ADDR=$(cast wallet address)
 echo "Deploying from address: $ADDR"
 
 # Get current nonce
-NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+NONCE="$(cast nonce "$ADDR")"
 
 # Get required addresses from environment or use defaults
 if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
@@ -78,7 +83,7 @@ echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
@@ -96,7 +101,7 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
 
   # First check if we're the owner
   echo "Checking proxy ownership..."
-  PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null || echo "")
+  PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null || echo "")
 
   if [ -z "$PROXY_OWNER" ]; then
     echo "Warning: Could not determine proxy owner. Attempting upgrade anyway..."
@@ -115,7 +120,7 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
       echo "3. If the owner is a multisig, create a proposal"
       echo
       echo "To manually upgrade (as owner):"
-      echo "cast send $WARM_STORAGE_PROXY_ADDRESS \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL"
+    echo "cast send $WARM_STORAGE_PROXY_ADDRESS \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
       exit 1
     fi
   fi
@@ -149,11 +154,7 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
   # Call upgradeToAndCall on the proxy with migrate function
   echo "Upgrading proxy and calling migrate..."
   TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
-    --rpc-url "$RPC_URL" \
-    --keystore "$KEYSTORE" \
-    --password "$PASSWORD" \
-    --nonce "$NONCE" \
-    --chain-id "$CHAIN_ID" \
+  --nonce "$NONCE" \
     --json | jq -r '.transactionHash')
 
   if [ -z "$TX_HASH" ]; then
@@ -169,9 +170,9 @@ if [ -n "$WARM_STORAGE_PROXY_ADDRESS" ]; then
   echo "Waiting for confirmation..."
 
   # Wait for transaction receipt
-  cast receipt --rpc-url "$RPC_URL" "$TX_HASH" --confirmations 1 >/dev/null
+  cast receipt "$TX_HASH" --confirmations 1 >/dev/null
 
-  NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest --rpc-url "$RPC_URL" | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
+  NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
 
   if [ "$NEW_IMPL" = "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
     echo "✅ Upgrade successful! Proxy now points to: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
@@ -187,7 +188,7 @@ else
   echo "1. Export the proxy address: export WARM_STORAGE_PROXY_ADDRESS=<your_proxy_address>"
   echo "2. Run this script again, or"
   echo "3. Run manually:"
-  echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS --rpc-url \$RPC_URL --keystore \$KEYSTORE --password \$PASSWORD"
+  echo "   cast send <PROXY_ADDRESS> \"upgradeTo(address)\" $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
 fi
 
 # Automatic contract verification
@@ -197,7 +198,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  CHAIN_ID=$CHAIN_ID verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService,FilecoinWarmStorageService Implementation"
+  verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
   popd >/dev/null
 else
   echo
