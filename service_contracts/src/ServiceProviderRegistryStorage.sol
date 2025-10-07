@@ -44,6 +44,7 @@ contract ServiceProviderRegistryStorage {
         uint256 minProvingPeriodInEpochs; // Minimum proving period in epochs
         string location; // Geographic location of the service provider
         IERC20 paymentTokenAddress; // Token contract for payment (IERC20(address(0)) for FIL)
+        bytes ipniPeerId; // IPNI peer ID (max 128 bytes, can be empty)
     }
 
     /// @notice Combined provider and product information for detailed queries

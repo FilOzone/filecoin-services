@@ -48,7 +48,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             storagePricePerTibPerMonth: 100,
             minProvingPeriodInEpochs: 10,
             location: "US-WEST",
-            paymentTokenAddress: IERC20(address(0))
+            paymentTokenAddress: IERC20(address(0)),
+            ipniPeerId: hex""
         });
 
         encodedDefaultPDPData = abi.encode(defaultPDPData);
