@@ -3123,7 +3123,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Start recording logs
         vm.recordLogs();
 
-        // Simulate calling migrate during upgrade (called by proxy)
+        // Simulate calling migrate during upgrade
         vm.prank(warmStorageService.owner());
         warmStorageService.migrate(address(0));
 
