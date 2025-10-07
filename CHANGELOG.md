@@ -38,6 +38,7 @@ Configuration:
 - Service Description: "Calibration FWSS contracts for M3"
 
 ### Added
+- feat: announcePlannedUpgrade ([#260](https://github.com/FilOzone/filecoin-services/pull/260))
 - feat: Allow deletion of terminated dataset, Add getDataSetStatus ([#255](https://github.com/FilOzone/filecoin-services/pull/255))
 - feat(ServiceProviderRegistry): add getProvidersByIds batch lookup function ([251](https://github.com/FilOzone/filecoin-services/pull/251))
 - perf(ServiceProviderRegistry): getProviderPayee helper for dataSetCreated ([#249](https://github.com/FilOzone/filecoin-services/pull/249))
