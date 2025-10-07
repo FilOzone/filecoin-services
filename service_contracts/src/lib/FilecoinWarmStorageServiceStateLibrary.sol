@@ -74,7 +74,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         return CHALLENGES_PER_PROOF;
     }
 
-    function clientDataSets(FilecoinWarmStorageService service, address payer, uint256 clientDataSetId)
+    function clientDataSetIds(FilecoinWarmStorageService service, address payer, uint256 clientDataSetId)
         public
         view
         returns (uint256)
@@ -82,7 +82,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         return uint256(
             service.extsload(
                 keccak256(
-                    abi.encode(clientDataSetId, keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SETS_SLOT)))
+                    abi.encode(clientDataSetId, keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SET_IDS_SLOT)))
                 )
             )
         );

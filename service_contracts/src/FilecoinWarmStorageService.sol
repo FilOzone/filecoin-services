@@ -246,7 +246,8 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
-    mapping(address payer => mapping(uint256 clientDataSetId => uint256)) private clientDataSets;
+    mapping(address payer => mapping(uint256 clientDataSetId => uint256)) private clientDataSetIds;
+    mapping(address payer => uint256[]) private clientDataSets;
     mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
     // dataSetId => (key => value)
@@ -512,10 +513,11 @@ contract FilecoinWarmStorageService is
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
-            clientDataSets[createData.payer][createData.clientDataSetId] == 0,
+            clientDataSetIds[createData.payer][createData.clientDataSetId] == 0,
             Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
         );
-        clientDataSets[createData.payer][createData.clientDataSetId] = dataSetId;
+        clientDataSetIds[createData.payer][createData.clientDataSetId] = dataSetId;
+        clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
         verifyCreateDataSetSignature(payee, createData);
@@ -642,6 +644,9 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
+        // Get the payer address for this data set
+        address payer = dataSetInfo[dataSetId].payer;
+
         // Check if the data set's payment rails have finalized
         require(
             info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
@@ -651,7 +656,18 @@ contract FilecoinWarmStorageService is
         // Complete cleanup - remove the dataset from all mappings
         delete dataSetInfo[dataSetId];
 
-        // NOTE keep clientDataSets[dataSetInfo[dataSetId].payer][clientDataSetId] to prevent replay
+        // NOTE keep clientDataSetIds[payer][clientDataSetId] to prevent replay
+
+        // Remove from client's dataset list
+        uint256[] storage clientDataSetList = clientDataSets[payer];
+        for (uint256 i = 0; i < clientDataSetList.length; i++) {
+            if (clientDataSetList[i] == dataSetId) {
+                // Remove this dataset from the array
+                clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
+                clientDataSetList.pop();
+                break;
+            }
+        }
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];

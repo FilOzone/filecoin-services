@@ -348,8 +348,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit FilecoinWarmStorageService.FilecoinServiceDeployed(expectedName, expectedDescription);
 
         // Deploy the proxy which triggers the initialize function
-        MyERC1967Proxy newServiceProxy = new MyERC1967Proxy(address(newServiceImpl), initData);
-        FilecoinWarmStorageService newService = FilecoinWarmStorageService(address(newServiceProxy));
+        new MyERC1967Proxy(address(newServiceImpl), initData);
     }
 
     function testServiceNameAndDescriptionValidation() public {
@@ -668,6 +667,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
         makeSignaturePass(sessionKey1);
 
+        extraData =
+            abi.encode(createData.payer, 1, createData.metadataKeys, createData.metadataValues, createData.signature);
         vm.prank(serviceProvider);
         uint256 newDataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
 
@@ -675,6 +676,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet2.payer, client);
         assertEq(dataSet2.payee, serviceProvider);
 
+        extraData =
+            abi.encode(createData.payer, 2, createData.metadataKeys, createData.metadataValues, createData.signature);
         // ensure another session key would be denied
         makeSignaturePass(sessionKey2);
         vm.prank(serviceProvider);
@@ -861,6 +864,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assert(serviceFee + spPayment < 10 ** 8); // Less than 10^8
     }
 
+    uint256 nextClientDataSetId = 0;
+
     // Client-Data Set Tracking Tests
     function prepareDataSetForClient(
         address, /*provider*/
@@ -871,7 +876,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadataKeys: metadataKeys,
-            clientDataSetId: 0,
+            clientDataSetId: nextClientDataSetId++,
             metadataValues: metadataValues,
             payer: clientAddress,
             signature: FAKE_SIGNATURE
@@ -1057,7 +1062,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: clientAddress,
-            clientDataSetId: 0,
+            clientDataSetId: nextClientDataSetId++,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
@@ -1203,12 +1208,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         for (uint256 i = 0; i < 2049; i++) {
             assertFalse(viewContract.provenPeriods(testDataSetId, i));
         }
-        (
-            uint64 maxProvingPeriod,
-            uint256 challengeWindowSize,
-            uint256 challengesPerProof,
-            uint256 initChallengeWindowStart
-        ) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindowSize,,) = viewContract.getPDPConfig();
         vm.startPrank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
         vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
