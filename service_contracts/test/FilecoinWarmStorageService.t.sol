@@ -372,7 +372,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "Valid description"
         );
 
-        vm.expectRevert("Service name cannot be empty");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceNameLength.selector, 0));
         new MyERC1967Proxy(address(serviceImpl1), initDataEmptyName);
 
         // Test empty description validation
@@ -394,7 +394,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "" // empty description
         );
 
-        vm.expectRevert("Service description cannot be empty");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceDescriptionLength.selector, 0));
         new MyERC1967Proxy(address(serviceImpl2), initDataEmptyDesc);
 
         // Test name exceeding 256 characters
@@ -426,7 +426,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "Valid description"
         );
 
-        vm.expectRevert("Service name exceeds 256 characters");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceNameLength.selector, bytes(longName).length));
         new MyERC1967Proxy(address(serviceImpl3), initDataLongName);
 
         // Test description exceeding 256 characters
@@ -458,7 +458,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             longDesc
         );
 
-        vm.expectRevert("Service description exceeds 256 characters");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceDescriptionLength.selector, bytes(longDesc).length));
         new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
@@ -3779,7 +3779,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Test that it cannot be set again (one-time only)
         FilecoinWarmStorageServiceStateView newViewContract =
             new FilecoinWarmStorageServiceStateView(warmStorageService);
-        vm.expectRevert("View contract already set");
+        vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
         warmStorageService.setViewContract(address(newViewContract));
 
         // Test that zero address is rejected (would need a new contract to test this properly)
@@ -3858,7 +3858,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             if (logs[i].topics[0] == expectedTopic) {
                 // Decode and verify the event data
                 (string memory version, address implementation) = abi.decode(logs[i].data, (string, address));
-                assertEq(version, "0.1.0", "Version should be 0.1.0");
+                assertEq(version, "0.3.0", "Version should be 0.3.0");
                 assertTrue(implementation != address(0), "Implementation address should not be zero");
                 foundEvent = true;
                 break;
