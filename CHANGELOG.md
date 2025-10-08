@@ -24,7 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 6. ServiceProviderRegistry Proxy: [0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9](https://calibration.filfox.info/en/address/0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9)
 7. FilecoinWarmStorageService Implementation: [0x6B78a026309bc2659c5891559D412FA1BA6529A5](https://calibration.filfox.info/en/address/0x6B78a026309bc2659c5891559D412FA1BA6529A5)
 8. FilecoinWarmStorageService Proxy: [0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc](https://calibration.filfox.info/en/address/0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc)
-9. FilecoinWarmStorageServiceStateView: [TO_ADD_AFTER_DEPLOYMENT](https://calibration.filfox.info/en/address/0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F)
+9. FilecoinWarmStorageServiceStateView: [0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F](https://calibration.filfox.info/en/address/0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F)
 
 Configuration: 
 - USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
