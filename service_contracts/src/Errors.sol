@@ -65,6 +65,14 @@ library Errors {
     /// @param challengeWindowSize The provided challenge window size
     error InvalidChallengeWindowSize(uint256 maxProvingPeriod, uint256 challengeWindowSize);
 
+    /// @notice The service name length must be >0 and <= 256
+    /// @param length the attempted length
+    error InvalidServiceNameLength(uint256 length);
+
+    /// @notice The service description length must be >0 and <= 256
+    /// @param length the attempted length
+    error InvalidServiceDescriptionLength(uint256 length);
+
     /// @notice This function can only be called by the contract itself during upgrade
     /// @param expected The expected caller (the contract address)
     /// @param actual The actual caller address

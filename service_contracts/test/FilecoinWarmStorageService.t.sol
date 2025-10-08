@@ -372,7 +372,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "Valid description"
         );
 
-        vm.expectRevert("Service name cannot be empty");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceNameLength.selector, 0));
         new MyERC1967Proxy(address(serviceImpl1), initDataEmptyName);
 
         // Test empty description validation
@@ -394,7 +394,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "" // empty description
         );
 
-        vm.expectRevert("Service description cannot be empty");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceDescriptionLength.selector, 0));
         new MyERC1967Proxy(address(serviceImpl2), initDataEmptyDesc);
 
         // Test name exceeding 256 characters
@@ -426,7 +426,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             "Valid description"
         );
 
-        vm.expectRevert("Service name exceeds 256 characters");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceNameLength.selector, bytes(longName).length));
         new MyERC1967Proxy(address(serviceImpl3), initDataLongName);
 
         // Test description exceeding 256 characters
@@ -458,7 +458,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             longDesc
         );
 
-        vm.expectRevert("Service description exceeds 256 characters");
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidServiceDescriptionLength.selector, bytes(longDesc).length));
         new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
