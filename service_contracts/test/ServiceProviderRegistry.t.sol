@@ -33,7 +33,7 @@ contract ServiceProviderRegistryTest is Test {
 
     function testInitialState() public view {
         // Check version
-        assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
+        assertEq(registry.VERSION(), "0.3.0", "Version should be 0.3.0");
 
         // Check owner
         assertEq(registry.owner(), owner, "Service provider should be deployer");

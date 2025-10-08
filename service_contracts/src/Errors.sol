@@ -24,7 +24,9 @@ library Errors {
         /// ServiceProviderRegistry contract address
         ServiceProviderRegistry,
         /// FilBeam beneficiary address
-        FilBeamBeneficiary
+        FilBeamBeneficiary,
+        /// View contract address
+        View
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -38,6 +40,11 @@ library Errors {
     /// @dev Used for parameter validation when a non-zero address is required
     /// @param field The specific address field that was zero (see enum {AddressField})
     error ZeroAddress(AddressField field);
+
+    /// @notice Tried to set an address that can only be set once
+    /// @dev Used for parameter validation when a non-zero address is required
+    /// @param field The specific address field already set (see enum {AddressField})
+    error AddressAlreadySet(AddressField field);
 
     /// @notice Only the PDPVerifier contract can call this function
     /// @param expected The expected PDPVerifier address
@@ -57,6 +64,14 @@ library Errors {
     /// @param maxProvingPeriod The maximum allowed proving period
     /// @param challengeWindowSize The provided challenge window size
     error InvalidChallengeWindowSize(uint256 maxProvingPeriod, uint256 challengeWindowSize);
+
+    /// @notice The service name length must be >0 and <= 256
+    /// @param length the attempted length
+    error InvalidServiceNameLength(uint256 length);
+
+    /// @notice The service description length must be >0 and <= 256
+    /// @param length the attempted length
+    error InvalidServiceDescriptionLength(uint256 length);
 
     /// @notice This function can only be called by the contract itself during upgrade
     /// @param expected The expected caller (the contract address)

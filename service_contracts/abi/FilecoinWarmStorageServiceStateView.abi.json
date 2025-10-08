@@ -516,6 +516,24 @@
   },
   {
     "type": "function",
+    "name": "nextUpgrade",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "afterEpoch",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "provenPeriods",
     "inputs": [
       {
@@ -623,6 +641,19 @@
         "name": "",
         "type": "address",
         "internalType": "contract FilecoinWarmStorageService"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "serviceCommissionBps",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"

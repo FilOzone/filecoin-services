@@ -24,3 +24,4 @@ bytes32 constant APPROVED_PROVIDERS_SLOT = bytes32(uint256(15));
 bytes32 constant APPROVED_PROVIDER_IDS_SLOT = bytes32(uint256(16));
 bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(17));
 bytes32 constant FIL_BEAM_CONTROLLER_ADDRESS_SLOT = bytes32(uint256(18));
+bytes32 constant NEXT_UPGRADE_SLOT = bytes32(uint256(19));

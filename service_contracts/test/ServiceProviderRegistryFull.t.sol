@@ -106,7 +106,7 @@ contract ServiceProviderRegistryFullTest is Test {
     // ========== Initial State Tests ==========
 
     function testInitialState() public view {
-        assertEq(registry.VERSION(), "0.0.1", "Version should be 0.0.1");
+        assertEq(registry.VERSION(), "0.3.0", "Version should be 0.3.0");
         assertEq(registry.owner(), owner, "Service provider should be deployer");
         assertEq(registry.getNextProviderId(), 1, "Next provider ID should start at 1");
         assertEq(registry.REGISTRATION_FEE(), 5 ether, "Registration fee should be 5 FIL");
