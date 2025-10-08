@@ -6,17 +6,72 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
-- **Payments**: Added ERC-3009 support with new deposit authorization functions ([#223](https://github.com/FilOzone/filecoin-services/pull/223))
+
+### Changed
+
+## [0.2.0] - 2025-10-07 - M3 Calibration Network Deployment
+
+## Core Contracts
+
+### Calibration Network:
+1. Payments Contract: [0x6dB198201F900c17e86D267d7Df82567FB03df5E](https://calibration.filfox.info/en/address/0x6dB198201F900c17e86D267d7Df82567FB03df5E)
+  - From [Filecoin-Pay v0.6.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v0.6.0)
+2. PDPVerifier Implementation: [0xCa92b746a7af215e0AaC7D0F956d74B522b295b6](https://calibration.filfox.info/en/address/0xCa92b746a7af215e0AaC7D0F956d74B522b295b6)
+  - From [PDP v2.2.0](https://github.com/FilOzone/pdp/releases/tag/v2.2.0)
+3. PDPVerifier Proxy: [0x9ecb84bB617a6Fd9911553bE12502a1B091CdfD8](https://calibration.filfox.info/en/address/0x9ecb84bB617a6Fd9911553bE12502a1B091CdfD8)
+  - From [PDP v2.2.0](https://github.com/FilOzone/pdp/releases/tag/v2.2.0)
+4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+5. ServiceProviderRegistry Implementation: [0xEdc9A41371d69a736bEfBa7678007BDBA61425E5](https://calibration.filfox.info/en/address/0xEdc9A41371d69a736bEfBa7678007BDBA61425E5)
+6. ServiceProviderRegistry Proxy: [0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb](https://calibration.filfox.info/en/address/0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb)
+7. FilecoinWarmStorageService Implementation: [0x2d76e3A41fa4614D1840CEB73aa07c5d0af6a023](https://calibration.filfox.info/en/address/0x2d76e3A41fa4614D1840CEB73aa07c5d0af6a023)
+8. FilecoinWarmStorageService Proxy: [0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b](https://calibration.filfox.info/en/address/0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b)
+9. FilecoinWarmStorageServiceStateView: [0x7175a72479e2B0050ed310f1a49a517C03573547](https://calibration.filfox.info/en/address/0x7175a72479e2B0050ed310f1a49a517C03573547)
+
+Configuration: 
+- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- CHALLENGE_FINALITY: 10 epochs 
+- MAX_PROVING_PERIOD: 240 epochs
+- CHALLENGE_WINDOW_SIZE: 30 epochs
+- Service Name: "Filecoin Warm Storage Service - Calibration M3"
+- Service Description: "Calibration FWSS contracts for M3"
+
+### Added
+- feat: announcePlannedUpgrade ([#260](https://github.com/FilOzone/filecoin-services/pull/260))
+- feat: Allow deletion of terminated dataset, Add getDataSetStatus ([#255](https://github.com/FilOzone/filecoin-services/pull/255))
+- feat(ServiceProviderRegistry): add getProvidersByIds batch lookup function ([251](https://github.com/FilOzone/filecoin-services/pull/251))
+- perf(ServiceProviderRegistry): getProviderPayee helper for dataSetCreated ([#249](https://github.com/FilOzone/filecoin-services/pull/249))
+- Added ERC-3009 support with new deposit authorization functions ([#225](https://github.com/FilOzone/filecoin-services/pull/225))
   - `depositWithAuthorization()` for ERC-3009 compliant deposits
   - `depositWithAuthorizationAndApproveOperator()` for combined deposit and operator approval
   - `depositWithAuthorizationAndIncreaseOperatorApproval()` for combined deposit and operator allowance increase
+- feat: service registry: add providerId to ServiceInfo ([#209](https://github.com/FilOzone/filecoin-services/pull/209))
+- feat: owner beneficairy seperation without transfer ([#191](https://github.com/FilOzone/filecoin-services/pull/191))
+- feat: Add dataset termination and deletion status tracking for SDK usability ([#146](https://github.com/FilOzone/filecoin-services/pull/146))
+- Switch from PieceCIDv2 to v2 ([#123](https://github.com/FilOzone/filecoin-services/pull/123))
+- perf(provenPeriods): bitmap ([#258](https://github.com/FilOzone/filecoin-services/pull/258))
 
 ### Changed
+- Modify CDN payment rails and add methods for usage-based payments ([#237](https://github.com/FilOzone/filecoin-services/pull/237))
 - **BREAKING**: Updated Payments contract ABI with breaking changes ([#223](https://github.com/FilOzone/filecoin-services/pull/223))
-  - **BREAKING**: `DepositRecorded` event removes `usedPermit` parameter - event listeners must be updated
-  - **BREAKING**: `railCancel` function state mutability changed from `nonpayable` to `payable` - callers may need to handle potential token transfers
-  - **BREAKING**: `PermitRecipientMustBeMsgSender` error replaced with `SignerMustBeMsgSender` error - error handling code must be updated
-
+  - `DepositRecorded` event removes `usedPermit` parameter - event listeners must be updated
+  - `railCancel` function state mutability changed from `nonpayable` to `payable` - callers may need to handle potential token transfers
+  - `PermitRecipientMustBeMsgSender` error replaced with `SignerMustBeMsgSender` error - error handling code must be updated
+- feat: remove provierId from ServiceProviderInfo struct ([#247](https://github.com/FilOzone/filecoin-services/pull/247))
+  - Adds a `ServiceProviderInfoView` struct with `providerId` field for external consumption.
+- **Breaking**: feat!: FilCDN now is FilBeam ([#236](https://github.com/FilOzone/filecoin-services/pull/236))
+- **Breaking**: feat!: update service parameters ([#239](https://github.com/FilOzone/filecoin-services/pull/239))
+  - The price changes was [temporiarily reverted for this release](https://github.com/FilOzone/filecoin-services/pull/261) until a upcoming feature is landed that warranted this change.
+- feat: remove dataset creation fee ([#245](https://github.com/FilOzone/filecoin-services/pull/245))
+- feat: update getClientDataSets to return dataSetId ([#242](https://github.com/FilOzone/filecoin-services/pull/242))
+- fix: update FilCDN Controller & Beneficiary addresses ([#230](https://github.com/FilOzone/filecoin-services/pull/230))
+- feat(subgraph): updates based on KV metadata and service provider registry ([#189](https://github.com/FilOzone/filecoin-services/pull/189))
+- Add emit pieceCid in PieceAdded event ([#207](https://github.com/FilOzone/filecoin-services/pull/207))
+- fix: Clear withCDN flag when terminating service ([#208](https://github.com/FilOzone/filecoin-services/pull/208))
+- fix: remove serviceName and serviceDescription properties ([#199](https://github.com/FilOzone/filecoin-services/pull/199))
+- feat: rename datset termination and emit events for dataset termination and add extradata ([#129](https://github.com/FilOzone/filecoin-services/pull/129))
+- feat: remove service provider registry as we're moving it to it's own contract ([#135](https://github.com/FilOzone/filecoin-services/pull/135))
 
 ## [0.1.0] - 2025-01-24
 
@@ -105,5 +160,6 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/filozone/filecoin-services/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/filozone/filecoin-services/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.2.0
 [0.1.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.1.0

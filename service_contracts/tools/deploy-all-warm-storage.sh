@@ -130,6 +130,7 @@ if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
     echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for CHALLENGE_FINALITY ($CHALLENGE_FINALITY)"
     echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
     echo "       Either increase MAX_PROVING_PERIOD or decrease CHALLENGE_FINALITY"
+    echo "       See service_contracts/tools/README.md for deployment parameter guidelines."
     exit 1
 fi
 

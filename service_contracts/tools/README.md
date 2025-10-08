@@ -1,12 +1,53 @@
 # FilecoinWarmStorageService Deployment Scripts
 
-This directory contains scripts for deploying and upgrading the FilecoinWarmStorageService contract on Calibration testnet.
+This directory contains scripts for deploying and upgrading the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
 ## Scripts Overview
 
+### Available Scripts
+
 - `deploy-warm-storage-calibnet.sh` - Deploy FilecoinWarmStorageService only (requires existing PDPVerifier and Payments contracts)
-- `deploy-all-warm-storage-calibnet.sh` - Deploy all contracts (PDPVerifier, Payments, and FilecoinWarmStorageService)
+- `deploy-all-warm-storage.sh` - Deploy all contracts to either Calibnet or Mainnet
 - `upgrade-warm-storage-calibnet.sh` - Upgrade existing FilecoinWarmStorageService contract with new proving period parameters
+
+### Usage
+
+```bash
+# Deploy to Calibnet
+./tools/deploy-warm-storage-calibnet.sh
+
+# Deploy all contracts
+./tools/deploy-all-warm-storage.sh
+
+# Upgrade existing deployment
+./tools/upgrade-warm-storage-calibnet.sh
+```
+
+## Deployment Parameters
+
+The following parameters are critical for proof generation and validation. They differ between **Mainnet** (production) and **Calibnet** (testing/iteration).
+
+| Parameter | Mainnet (Production) | Calibnet (Testing) | Notes |
+|-----------|----------------------|---------------------|-------|
+| `DEFAULT_CHALLENGE_FINALITY` | `150` | `10` | **Security parameter.** Always set to `150` in production. Enforces that the challenge epoch is far enough in the future to prevent reorg-based attacks. See [PDP Implementation Design Doc](https://filoznotebook.notion.site/PDP-Implementation-Design-Doc-64a66516416441c69b9d8e5d63120f1c?pvs=21). |
+| `DEFAULT_MAX_PROVING_PERIOD` | `2880` | `240` | **Product parameter.** Defines how often proofs must be submitted. Mainnet default is 2880 epochs ≈ 24h (one proof/day). On Calibnet we use shorter proving periods for faster iteration. See [Simple PDP Service Fault Model](https://filoznotebook.notion.site/Simple-PDP-Service-Fault-Model-1a9dc41950c180c4bdc7ef2d91db73b6?pvs=21). |
+| `DEFAULT_CHALLENGE_WINDOW_SIZE` | `60` | `30` | **Security parameter.** Defines the grace window within the proving period. Typically ~2% of the proving period. On Mainnet: 60 epochs (≈2% of 2880). On Calibnet: 30 epochs. See [Simple PDP Service Fault Model](https://filoznotebook.notion.site/Simple-PDP-Service-Fault-Model-1a9dc41950c180c4bdc7ef2d91db73b6?pvs=21). |
+
+### Quick Reference
+
+- **Mainnet**
+  ```bash
+  DEFAULT_CHALLENGE_FINALITY="150"       # Production security value
+  DEFAULT_MAX_PROVING_PERIOD="2880"      # 2880 epochs (≈1 proof per day)
+  DEFAULT_CHALLENGE_WINDOW_SIZE="60"     # 60 epochs grace period
+  ```
+
+- **Calibnet**
+  ```bash
+  DEFAULT_CHALLENGE_FINALITY="10"        # Low value for fast testing (should be 150 in production)
+  DEFAULT_MAX_PROVING_PERIOD="240"       # 240 epochs
+  DEFAULT_CHALLENGE_WINDOW_SIZE="30"     # 30 epochs
+  ```
 
 ## Environment Variables
 
@@ -22,33 +63,29 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
   - `PDP_VERIFIER_ADDRESS` - Address of deployed PDPVerifier contract
   - `PAYMENTS_CONTRACT_ADDRESS` - Address of deployed Payments contract
 
-- `deploy-all-warm-storage-calibnet.sh` requires:
+- `deploy-all-warm-storage.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
 
 - `upgrade-warm-storage-calibnet.sh` requires:
   - `WARM_STORAGE_SERVICE_PROXY_ADDRESS` - Address of existing FilecoinWarmStorageService proxy to upgrade
-
-### Optional proving period configuration:
-- `MAX_PROVING_PERIOD` - Maximum epochs between proofs (default: 30 epochs = 15 minutes on calibnet)
-- `CHALLENGE_WINDOW_SIZE` - Challenge window size in epochs (default: 15 epochs)
 
 ## Usage Examples
 
 ### Fresh Deployment (All Contracts)
 
 ```bash
+
 export ETH_KEYSTORE="/path/to/keystore.json"
 export ETH_PASSWORD="your-password"
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-# Optional: explicitly set the deployer address (overrides keystore default)
-export ETH_FROM="0xYourDeployerAddress"
-export CHALLENGE_FINALITY="900"
+export CHALLENGE_FINALITY="10"  # Use "150" for mainnet
+
 
 # Optional: Custom proving periods
-export MAX_PROVING_PERIOD="60"        # 30 minutes instead of default 15 minutes
-export CHALLENGE_WINDOW_SIZE="20"     # 20 epochs instead of default 15
+export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
+export CHALLENGE_WINDOW_SIZE="30"      # 30 epochs for calibnet, 60 for mainnet
 
-./deploy-all-warm-storage-calibnet.sh
+./deploy-all-warm-storage.sh
 ```
 
 ### Deploy FilecoinWarmStorageService Only
@@ -71,9 +108,9 @@ export PASSWORD="your-password"
 export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export WARM_STORAGE_SERVICE_PROXY_ADDRESS="0x789..."
 
-# Optional: Set new proving period parameters
-export MAX_PROVING_PERIOD="120"       # 1 hour
-export CHALLENGE_WINDOW_SIZE="30"     # 30 epochs
+# Optional: Custom proving periods
+export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
+export CHALLENGE_WINDOW_SIZE="30"      # 30 epochs for calibnet, 60 for mainnet
 
 ./upgrade-warm-storage-calibnet.sh
 ```
@@ -84,23 +121,6 @@ The FilecoinWarmStorageService contract uses OpenZeppelin's upgradeable pattern.
 
 1. **Deploy new implementation**: The script deploys a new implementation contract
 2. **Upgrade proxy**: Uses `upgradeToAndCall` to point the proxy to the new implementation
-
-### Important Notes for Upgrades:
-
-- The original `initialize` function can only be called once during initial deployment
-- Use `configureProvingPeriod` to set the new proving period parameters
-- Storage layout is preserved - new variables are added at the end of existing storage
-
-## Proving Period Parameters
-
-- **Max Proving Period**: Maximum number of epochs between consecutive proofs
-  - Calibnet default: 30 epochs (≈15 minutes, since calibnet has ~30 second epochs)
-  - Mainnet typical: 2880 epochs (≈24 hours, since mainnet has ~30 second epochs)
-
-- **Challenge Window Size**: Number of epochs at the end of each proving period during which proofs can be submitted
-  - Calibnet default: 15 epochs
-  - Must be less than Max Proving Period
-  - Must be greater than 0
 
 ## Testing
 

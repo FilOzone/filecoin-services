@@ -281,11 +281,6 @@
             "internalType": "uint256"
           },
           {
-            "name": "cdnEndEpoch",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
@@ -367,11 +362,6 @@
             "internalType": "uint256"
           },
           {
-            "name": "cdnEndEpoch",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
             "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
@@ -433,6 +423,30 @@
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetStatus",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      },
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "status",
+        "type": "FilecoinWarmStorageService.DataSetStatus",
+        "internalType": "enum FilecoinWarmStorageService.DataSetStatus"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -576,6 +590,30 @@
   },
   {
     "type": "function",
+    "name": "nextUpgrade",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "afterEpoch",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "provenPeriods",
     "inputs": [
       {
@@ -688,6 +726,25 @@
         "name": "railId",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "serviceCommissionBps",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
       }
     ],
     "outputs": [

@@ -90,6 +90,14 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
 
+    function getDataSetStatus(uint256 dataSetId)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetStatus status)
+    {
+        return service.getDataSetStatus(dataSetId);
+    }
+
     function getMaxProvingPeriod() external view returns (uint64) {
         return service.getMaxProvingPeriod();
     }
@@ -123,6 +131,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.nextPDPChallengeWindowStart(setId);
     }
 
+    function nextUpgrade() external view returns (address nextImplementation, uint96 afterEpoch) {
+        return service.nextUpgrade();
+    }
+
     function provenPeriods(uint256 dataSetId, uint256 periodId) external view returns (bool) {
         return service.provenPeriods(dataSetId, periodId);
     }
@@ -141,5 +153,9 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 
     function railToDataSet(uint256 railId) external view returns (uint256) {
         return service.railToDataSet(railId);
+    }
+
+    function serviceCommissionBps() external view returns (uint256) {
+        return service.serviceCommissionBps();
     }
 }

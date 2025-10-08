@@ -76,6 +76,31 @@
   },
   {
     "type": "function",
+    "name": "announcePlannedUpgrade",
+    "inputs": [
+      {
+        "name": "plannedUpgrade",
+        "type": "tuple",
+        "internalType": "struct FilecoinWarmStorageService.PlannedUpgrade",
+        "components": [
+          {
+            "name": "nextImplementation",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "afterEpoch",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "calculateRatesPerEpoch",
     "inputs": [
       {
@@ -159,7 +184,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "extraData",
+        "name": "",
         "type": "bytes",
         "internalType": "bytes"
       }
@@ -629,19 +654,6 @@
   },
   {
     "type": "function",
-    "name": "serviceCommissionBps",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "serviceProviderRegistry",
     "inputs": [],
     "outputs": [
@@ -674,6 +686,29 @@
         "name": "_viewContract",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "settleFilBeamPaymentRails",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissAmount",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [],
@@ -726,6 +761,29 @@
     "inputs": [
       {
         "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "topUpCDNPaymentRails",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnAmountToAdd",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissAmountToAdd",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -871,6 +929,31 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "event",
+    "name": "CDNPaymentRailsToppedUp",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalCdnLockup",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalCacheMissLockup",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -1342,6 +1425,31 @@
   },
   {
     "type": "event",
+    "name": "UpgradeAnnounced",
+    "inputs": [
+      {
+        "name": "plannedUpgrade",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct FilecoinWarmStorageService.PlannedUpgrade",
+        "components": [
+          {
+            "name": "nextImplementation",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "afterEpoch",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Upgraded",
     "inputs": [
       {
@@ -1372,6 +1480,49 @@
     "inputs": [
       {
         "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CDNPaymentAlreadyTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CacheMissPaymentAlreadyTerminated",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CallerNotPayer",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedPayer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "caller",
         "type": "address",
         "internalType": "address"
       }
@@ -1564,17 +1715,6 @@
   },
   {
     "type": "error",
-    "name": "FilBeamPaymentAlreadyTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "FilBeamServiceNotConfigured",
     "inputs": [
       {
@@ -1706,6 +1846,17 @@
       },
       {
         "name": "actualLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidTopUpAmount",
+    "inputs": [
+      {
+        "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1882,22 +2033,6 @@
   },
   {
     "type": "error",
-    "name": "OnlySelf",
-    "inputs": [
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -1929,11 +2064,6 @@
       },
       {
         "name": "pdpEndEpoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnEndEpoch",
         "type": "uint256",
         "internalType": "uint256"
       }

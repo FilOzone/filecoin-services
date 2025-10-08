@@ -826,6 +826,88 @@
   },
   {
     "type": "function",
+    "name": "getProviderPayee",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "payee",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getProvidersByIds",
+    "inputs": [
+      {
+        "name": "providerIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "providerInfos",
+        "type": "tuple[]",
+        "internalType": "struct ServiceProviderRegistry.ServiceProviderInfoView[]",
+        "components": [
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "info",
+            "type": "tuple",
+            "internalType": "struct ServiceProviderRegistryStorage.ServiceProviderInfo",
+            "components": [
+              {
+                "name": "serviceProvider",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "payee",
+                "type": "address",
+                "internalType": "address"
+              },
+              {
+                "name": "name",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "description",
+                "type": "string",
+                "internalType": "string"
+              },
+              {
+                "name": "isActive",
+                "type": "bool",
+                "internalType": "bool"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "validIds",
+        "type": "bool[]",
+        "internalType": "bool[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getProvidersByProductType",
     "inputs": [
       {

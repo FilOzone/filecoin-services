@@ -122,20 +122,9 @@ Run `make help` to see all available targets:
 make help
 ```
 
-### Deployment
+## 🚀 Deployment
 
-Use the provided deployment scripts in the `tools/` directory:
-
-```bash
-# Deploy to Calibnet
-./tools/deploy-warm-storage-calibnet.sh
-
-# Deploy all contracts
-./tools/deploy-all-warm-storage-calibnet.sh
-
-# Upgrade existing deployment
-./tools/upgrade-warm-storage-calibnet.sh
-```
+For comprehensive deployment instructions, parameters, and scripts, see [service_contracts/tools/README.md](./service_contracts/tools/README.md).
 
 ## 🔗 Dependencies
 

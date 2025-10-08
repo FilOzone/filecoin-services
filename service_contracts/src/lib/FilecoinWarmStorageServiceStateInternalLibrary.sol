@@ -108,8 +108,22 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         info.clientDataSetId = uint256(info11[7]);
         info.pdpEndEpoch = uint256(info11[8]);
         info.providerId = uint256(info11[9]);
-        info.cdnEndEpoch = uint256(info11[10]);
         info.dataSetId = dataSetId;
+    }
+
+    function getDataSetStatus(FilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (FilecoinWarmStorageService.DataSetStatus status)
+    {
+        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+        if (info.pdpRailId == 0) {
+            return FilecoinWarmStorageService.DataSetStatus.NotFound;
+        }
+        if (info.pdpEndEpoch != 0) {
+            return FilecoinWarmStorageService.DataSetStatus.Terminating;
+        }
+        return FilecoinWarmStorageService.DataSetStatus.Active;
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
@@ -134,9 +148,13 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         view
         returns (bool)
     {
-        return service.extsload(
-            keccak256(abi.encode(periodId, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT))))
-        ) != bytes32(0);
+        return uint256(
+            service.extsload(
+                keccak256(
+                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
+                )
+            )
+        ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
@@ -183,6 +201,10 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         challengeWindowSize = challengeWindow(service);
         challengesPerProof = CHALLENGES_PER_PROOF;
         initChallengeWindowStart = block.number + maxProvingPeriod - challengeWindowSize;
+    }
+
+    function serviceCommissionBps(FilecoinWarmStorageService service) internal view returns (uint256) {
+        return uint256(service.extsload(StorageLayout.SERVICE_COMMISSION_BPS_SLOT));
     }
 
     /**
@@ -471,5 +493,21 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      */
     function filBeamControllerAddress(FilecoinWarmStorageService service) internal view returns (address) {
         return address(uint160(uint256(service.extsload(StorageLayout.FIL_BEAM_CONTROLLER_ADDRESS_SLOT))));
+    }
+
+    /**
+     * @notice Get information about the next contract upgrade
+     * @param service The service contract
+     * @return nextImplementation The next code for the contract
+     * @return afterEpoch The earliest the upgrade may complete
+     */
+    function nextUpgrade(FilecoinWarmStorageService service)
+        internal
+        view
+        returns (address nextImplementation, uint96 afterEpoch)
+    {
+        bytes32 upgradeInfo = service.extsload(StorageLayout.NEXT_UPGRADE_SLOT);
+        nextImplementation = address(uint160(uint256(upgradeInfo)));
+        afterEpoch = uint96(uint256(upgradeInfo) >> 160);
     }
 }
