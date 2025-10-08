@@ -672,9 +672,6 @@ contract FilecoinWarmStorageService is
             Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
-        // Complete cleanup - remove the dataset from all mappings
-        delete dataSetInfo[dataSetId];
-
         // Remove from client's dataset list
         uint256[] storage clientDataSetList = clientDataSets[payer];
         for (uint256 i = 0; i < clientDataSetList.length; i++) {
@@ -685,6 +682,8 @@ contract FilecoinWarmStorageService is
                 break;
             }
         }
+
+        // Remove the dataset from all mappings
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
@@ -704,6 +703,9 @@ contract FilecoinWarmStorageService is
             delete dataSetMetadata[dataSetId][metadataKeys[i]];
         }
         delete dataSetMetadataKeys[dataSetId];
+
+        // Complete cleanup
+        delete dataSetInfo[dataSetId];
     }
 
     /**
