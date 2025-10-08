@@ -16,16 +16,13 @@ if [ -z "$ETH_RPC_URL" ]; then
 fi
 
 # Auto-detect chain ID from RPC
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id)
-  if [ -z "$CHAIN_ID" ]; then
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
 fi
-
-# Mirror CHAIN_ID to CHAIN env var
-export CHAIN=${CHAIN:-$CHAIN_ID}
 
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
   echo "Error: WARM_STORAGE_SERVICE_ADDRESS is not set"
@@ -37,7 +34,7 @@ if [ -z "$ETH_KEYSTORE" ]; then
   exit 1
 fi
 
-ADDR=$(cast wallet address)
+ADDR=$(cast wallet address --password "$ETH_PASSWORD")
 echo "Deploying FilecoinWarmStorageServiceStateView from address $ADDR..."
 
 # Check if NONCE is already set (when called from main deploy script)

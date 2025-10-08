@@ -18,16 +18,13 @@ if [ -z "$ETH_RPC_URL" ]; then
 fi
 
 # Auto-detect chain ID from RPC if not already set
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id)
-  if [ -z "$CHAIN_ID" ]; then
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
 fi
-
-# Mirror CHAIN_ID to CHAIN env var
-export CHAIN=${CHAIN:-$CHAIN_ID}
 
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
   echo "Error: WARM_STORAGE_SERVICE_ADDRESS is not set"
@@ -45,7 +42,7 @@ if [ -z "$ETH_KEYSTORE" ]; then
 fi
 
 # Get sender address (cast will read ETH_KEYSTORE/ETH_PASSWORD)
-ADDR=$(cast wallet address)
+ADDR=$(cast wallet address --password "$ETH_PASSWORD")
 
 # Get nonce if not provided
 # Get nonce if not provided

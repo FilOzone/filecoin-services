@@ -5,8 +5,13 @@
 # Configuration
 FILFOX_VERIFIER_VERSION="v1.4.4"
 
-
-
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
+    echo "Error: Failed to detect chain ID from RPC"
+    exit 1
+  fi
+fi
 
 verify_filfox() {
   local address="$1"
@@ -18,8 +23,8 @@ verify_filfox() {
     display_name=$(echo "$contract_path" | cut -d ':' -f 2)
   fi
 
-  echo "Verifying $display_name on Filfox (chain ID: $CHAIN_ID)..."
-  if npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$address" "$contract_path" --chain "$CHAIN_ID"; then
+  echo "Verifying $display_name on Filfox (chain ID: $CHAIN)..."
+  if npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$address" "$contract_path" --chain "$CHAIN"; then
     echo "Filfox verification successful for $display_name"
     return 0
   else
@@ -40,7 +45,7 @@ verify_blockscout() {
 
   # Determine the correct Blockscout API URL based on chain ID
   local blockscout_url
-  case $CHAIN_ID in
+  case $CHAIN in
   314)
     blockscout_url="https://filecoin.blockscout.com/api/"
     ;;
@@ -48,7 +53,7 @@ verify_blockscout() {
     blockscout_url="https://filecoin-testnet.blockscout.com/api/"
     ;;
   *)
-    echo "Unknown chain ID $CHAIN_ID for Blockscout verification"
+    echo "Unknown chain ID $CHAIN for Blockscout verification"
     return 1
     ;;
   esac
@@ -73,7 +78,7 @@ verify_sourcify() {
     display_name=$(echo "$contract_path" | cut -d ':' -f 2)
   fi
 
-  echo "Verifying $display_name on Sourcify (chain ID: $CHAIN_ID)..."
+  echo "Verifying $display_name on Sourcify (chain ID: $CHAIN)..."
   if forge verify-contract "$address" "$contract_path" --chain "$CHAIN" --verifier sourcify 2>/dev/null; then
     echo "Sourcify verification successful for $display_name"
     return 0
@@ -97,7 +102,7 @@ verify_contracts_batch() {
   local sourcify_failures=()
   local all_success_contracts=()
 
-  echo "Starting batch verification of $total_contracts contracts on chain ID: $CHAIN_ID..."
+  echo "Starting batch verification of $total_contracts contracts on chain ID: $CHAIN..."
   echo
 
   # Process each contract

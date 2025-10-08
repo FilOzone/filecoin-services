@@ -15,16 +15,14 @@ if [ -z "$ETH_RPC_URL" ]; then
 fi
 
 # Auto-detect chain ID from RPC if not already set
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id)
-  if [ -z "$CHAIN_ID" ]; then
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
 fi
 
-# Mirror CHAIN_ID to CHAIN env var
-export CHAIN=${CHAIN:-$CHAIN_ID}
 
 if [ -z "$ETH_KEYSTORE" ]; then
   echo "Error: ETH_KEYSTORE is not set"

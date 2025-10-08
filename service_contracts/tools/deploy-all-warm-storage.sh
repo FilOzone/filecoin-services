@@ -31,16 +31,10 @@ if [ -z "$ETH_RPC_URL" ]; then
   exit 1
 fi
 
-# Map legacy env var names to forge/cast's ETH_* names and export them for child processes
-export ETH_RPC_URL=${ETH_RPC_URL:-$RPC_URL}
-export ETH_KEYSTORE=${ETH_KEYSTORE:-$KEYSTORE}
-export ETH_PASSWORD=${ETH_PASSWORD:-$PASSWORD}
-export ETH_FROM=${ETH_FROM:-$FROM}
-
 # Auto-detect chain ID from RPC
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id)
-  if [ -z "$CHAIN_ID" ]; then
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
@@ -49,7 +43,7 @@ fi
 # Set network-specific configuration based on chain ID
 # NOTE: CHALLENGE_FINALITY should always be 150 in production for security.
 # Calibnet uses lower values for faster testing and development.
-case "$CHAIN_ID" in
+case "$CHAIN" in
   "314159")
     NETWORK_NAME="calibnet"
     # Network-specific addresses for calibnet
@@ -73,15 +67,12 @@ case "$CHAIN_ID" in
     echo "  Supported networks:"
     echo "    314159 - Filecoin Calibration testnet"
     echo "    314    - Filecoin mainnet"
-    echo "  Detected chain ID: $CHAIN_ID"
+    echo "  Detected chain ID: $CHAIN"
     exit 1
     ;;
 esac
 
-echo "Detected Chain ID: $CHAIN_ID ($NETWORK_NAME)"
-
-# Mirror CHAIN_ID to CHAIN env var so forge/cast commands can use --chain
-export CHAIN=${CHAIN:-$CHAIN_ID}
+echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
 if [ "$DRY_RUN" != "true" ] && [ -z "$KEYSTORE" ]; then
   echo "Error: KEYSTORE is not set (required for actual deployment)"

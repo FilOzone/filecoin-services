@@ -21,11 +21,11 @@ if [ -z "$ETH_KEYSTORE" ]; then
 fi
 
 # Optional: Check if PASSWORD is set (some users might use empty password)
-if [ -z "$PASSWORD" ]; then
+if [ -z "$ETH_PASSWORD" ]; then
   echo "Warning: PASSWORD is not set, using empty password"
 fi
 
-ADDR=$(cast wallet address)
+ADDR=$(cast wallet address --password "$ETH_PASSWORD")
 echo "Deploying contracts from address $ADDR"
 
 # Get current balance and nonce (cast will use ETH_RPC_URL)
