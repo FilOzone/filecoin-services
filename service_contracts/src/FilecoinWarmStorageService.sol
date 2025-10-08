@@ -178,8 +178,10 @@ contract FilecoinWarmStorageService is
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
-    bytes32 private constant METADATA_KEY_WITH_CDN_HASH =
-        0x10d682e39bf70b0cd1672c8ab7ee64226a91dc8d5c0db08d130740d434cf4e2c; // keccak256("withCDN");
+    bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
+    // solidity storage representation of string "withCDN"
+    bytes32 private constant WITH_CDN_STRING_STORAGE_REPR =
+        0x7769746843444e0000000000000000000000000000000000000000000000000e;
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
@@ -1327,12 +1329,13 @@ contract FilecoinWarmStorageService is
         unchecked {
             uint256 len = metadataKeys.length;
             for (uint256 i = 0; i < len; i++) {
-                bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-                if (
-                    currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
-                        && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
-                ) {
-                    metadataKeys[i] = metadataKeys[len - 1];
+                string storage metadataKey = metadataKeys[i];
+                bytes32 repr;
+                assembly ("memory-safe") {
+                    repr := sload(metadataKey.slot)
+                }
+                if (repr == WITH_CDN_STRING_STORAGE_REPR) {
+                    metadataKey = metadataKeys[len - 1];
                     metadataKeys.pop();
                     return true;
                 }
