@@ -9,7 +9,7 @@ import {
 } from "../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { Provider, ProviderProduct } from "../generated/schema";
 import { BIGINT_ONE } from "./utils/constants";
-import { getServiceProviderInfo } from "./utils/contract-calls";
+import { decodePDPOfferingData, getProviderProductData, getServiceProviderInfo } from "./utils/contract-calls";
 import { createProviderProduct, initiateProvider } from "./utils/entity";
 import { getProviderProductEntityId } from "./utils/keys";
 
@@ -98,6 +98,7 @@ export function handleProductAdded(event: ProductAddedEvent): void {
  * @param event The ProductUpdated event.
  */
 export function handleProductUpdated(event: ProductUpdatedEvent): void {
+  const providerId = event.params.providerId;
   const productType = event.params.productType;
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
@@ -113,9 +114,13 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
     return;
   }
 
+  const productData = getProviderProductData(event.address, providerId, productType);
+  const decodedProductData = decodePDPOfferingData(event.address, productData);
+
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;
-  providerProduct.serviceUrl = serviceUrl;
+  providerProduct.productData = productData;
+  providerProduct.decodedProductData = decodedProductData.toJSON();
   providerProduct.isActive = true;
   providerProduct.save();
 }
