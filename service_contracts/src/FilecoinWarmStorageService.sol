@@ -39,7 +39,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "0.1.0";
+    string public constant VERSION = "0.3.0";
 
     // =========================================================================
     // Events

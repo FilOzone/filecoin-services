@@ -37,9 +37,12 @@ Configuration:
 - Service Description: "Calibration FWSS contracts for M3.1"
 
 ### Changed
+- **ServiceProviderRegistry full redeploy** - Required due to state compatibility issues with FilecoinWarmStorageService
+  - Previous FWSS release (0.2.0) used an old ServiceProviderRegistry; upgrading existing ServiceProviderRegistry would cause state mismatch with FWSS
+- **ServiceProviderRegistry VERSION updated to 0.3.0** to properly reflect inclusion of providerId struct fix from PR #247
+- **FilecoinWarmStorageService VERSION string updated to 0.3.0**.
 - **Changed PDPVerifier to v2.2.1** ([PDP v2.2.1 release notes](https://github.com/FilOzone/pdp/releases/tag/v2.2.1))
   - Restored `createDataSet()` function for enhanced flexibility in dataset initialization, enabling empty "bucket" creation, smoother Curio and synapse-sdk integration ([#219](https://github.com/FilOzone/pdp/pull/219))
-
 
 ## [0.2.0] - 2025-10-07 - M3 Calibration Network Deployment
 

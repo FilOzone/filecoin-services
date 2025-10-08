@@ -24,7 +24,7 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Version of the contract implementation
-    string public constant VERSION = "0.0.1";
+    string public constant VERSION = "0.3.0";
 
     /// @notice Maximum length for service URL
     uint256 private constant MAX_SERVICE_URL_LENGTH = 256;
