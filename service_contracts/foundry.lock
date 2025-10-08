@@ -1,0 +1,20 @@
+{
+  "lib/forge-std": {
+    "rev": "f46d8301cf732f4f83846565aa475628265e51e0"
+  },
+  "lib/fws-payments": {
+    "rev": "477228d2d1e93bf7b2aa7e24018e88994806ddba"
+  },
+  "lib/openzeppelin-contracts": {
+    "rev": "a6ae04acf8e38ed49a70fdce5389df2752e3ecc4"
+  },
+  "lib/openzeppelin-contracts-upgradeable": {
+    "rev": "3bfc52f2fbf5be95de632f346169dac6a669bd57"
+  },
+  "lib/pdp": {
+    "rev": "61681392933926fbccb142ab7767e037680850b4"
+  },
+  "lib/session-key-registry": {
+    "rev": "e472ca2b525fb2396832216182b64a0c165cb49c"
+  }
+}
