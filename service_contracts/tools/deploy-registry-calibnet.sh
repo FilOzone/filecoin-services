@@ -60,7 +60,7 @@ echo "✓ ServiceProviderRegistry proxy deployed at: $REGISTRY_PROXY_ADDRESS"
 # Verify deployment by calling version() on the proxy
 echo ""
 echo "=== STEP 3: Verifying Deployment ==="
-VERSION=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "version()(string)")
+VERSION=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "VERSION()(string)")
 if [ -z "$VERSION" ]; then
     echo "Warning: Could not verify contract version"
 else
@@ -68,13 +68,13 @@ else
 fi
 
 # Get registration fee
-FEE=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "getRegistrationFee()(uint256)")
+FEE=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "REGISTRATION_FEE()(uint256)")
 if [ -z "$FEE" ]; then
     echo "Warning: Could not retrieve registration fee"
+    FEE_IN_FIL="unknown"
 else
-    # Convert from wei to FIL (assuming 1 FIL = 10^18 attoFIL)
-    FEE_IN_FIL=$(echo "scale=2; $FEE / 1000000000000000000" | bc 2>/dev/null || echo "1")
-    echo "✓ Registration fee: $FEE attoFIL ($FEE_IN_FIL FIL)"
+    echo "✓ Registration fee: $FEE attoFIL"
+    FEE_IN_FIL="$FEE attoFIL"
 fi
 
 # Get burn actor address
@@ -83,6 +83,13 @@ if [ -z "$BURN_ACTOR" ]; then
     echo "Warning: Could not retrieve burn actor address"
 else
     echo "✓ Burn actor address: $BURN_ACTOR"
+fi
+
+# Get contract version (this should be used instead of hardcoded version)
+CONTRACT_VERSION=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "VERSION()(string)")
+if [ -z "$CONTRACT_VERSION" ]; then
+    echo "Warning: Could not retrieve contract version"
+    CONTRACT_VERSION="Unknown"
 fi
 
 # Summary of deployed contracts
@@ -95,15 +102,15 @@ echo "ServiceProviderRegistry Proxy: $REGISTRY_PROXY_ADDRESS"
 echo "=========================================="
 echo ""
 echo "Contract Details:"
-echo "  - Version: 1.0.0"
-echo "  - Registration Fee: 1 FIL (burned)"
-echo "  - Burn Actor: 0xff00000000000000000000000000000000000063"
+echo "  - Version: $CONTRACT_VERSION"
+echo "  - Registration Fee: $FEE_IN_FIL (burned)"
+echo "  - Burn Actor: $BURN_ACTOR"
 echo "  - Chain: Calibration testnet (314159)"
 echo ""
 echo "Next steps:"
 echo "1. Save the proxy address: export REGISTRY_ADDRESS=$REGISTRY_PROXY_ADDRESS"
 echo "2. Verify the deployment by calling getProviderCount() - should return 0"
-echo "3. Test registration with: cast send --value 1ether ..."
+echo "3. Test registration with: cast send --value <registration_fee>attoFIL ..."
 echo "4. Transfer ownership if needed using transferOwnership()"
 echo "5. The registry is ready for provider registrations"
 echo ""
@@ -111,7 +118,7 @@ echo "To interact with the registry:"
 echo "  View functions:"
 echo "    cast call $REGISTRY_PROXY_ADDRESS \"getProviderCount()(uint256)\""
 echo "    cast call $REGISTRY_PROXY_ADDRESS \"getAllActiveProviders()(uint256[])\""
-echo "  State changes (requires 1 FIL fee):"
+echo "  State changes (requires registration fee):"
 echo "    Register as provider (requires proper encoding of PDPData)"
 echo ""
 echo "=========================================="
