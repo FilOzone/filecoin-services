@@ -177,6 +177,9 @@ contract FilecoinWarmStorageService is
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
+    uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
+    bytes32 private constant METADATA_KEY_WITH_CDN_HASH =
+        0x10d682e39bf70b0cd1672c8ab7ee64226a91dc8d5c0db08d130740d434cf4e2c; // keccak256("withCDN");
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
@@ -606,7 +609,7 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
 
-        if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
+        if (hasCDNMetadataKey(createData.metadataKeys)) {
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -700,7 +703,7 @@ contract FilecoinWarmStorageService is
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             delete railToDataSet[info.cacheMissRailId];
             delete railToDataSet[info.cdnRailId];
         }
@@ -990,12 +993,12 @@ contract FilecoinWarmStorageService is
 
         payments.terminateRail(info.pdpRailId);
 
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             payments.terminateRail(info.cacheMissRailId);
             payments.terminateRail(info.cdnRailId);
 
             // Delete withCDN flag from metadata to prevent further CDN operations
-            dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
+            deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]);
             delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
             emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1046,10 +1049,7 @@ contract FilecoinWarmStorageService is
         require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
 
         // Check if CDN service is configured
-        require(
-            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilBeamServiceNotConfigured(dataSetId)
-        );
+        require(hasCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
 
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
@@ -1081,10 +1081,7 @@ contract FilecoinWarmStorageService is
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
         // Check if CDN service is configured
-        require(
-            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilBeamServiceNotConfigured(dataSetId)
-        );
+        require(hasCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
 
         // Check if cache miss and CDN rails are configured
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -1095,7 +1092,7 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.cdnRailId);
 
         // Delete withCDN flag from metadata to prevent further CDN operations
-        dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
+        deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1143,7 +1140,7 @@ contract FilecoinWarmStorageService is
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
 
         // Update the CDN rail payment rates, if applicable
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
 
             uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
@@ -1304,19 +1301,17 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Returns true if `key` exists in `metadataKeys`.
+     * @notice Returns true if key `withCDN` exists in `metadataKeys`.
      * @param metadataKeys The array of metadata keys
-     * @param key The metadata key to look up
      * @return True if key exists; false otherwise.
      */
-    function hasMetadataKey(string[] memory metadataKeys, string memory key) internal pure returns (bool) {
-        bytes memory keyBytes = bytes(key);
-        uint256 keyLength = keyBytes.length;
-        bytes32 keyHash = keccak256(keyBytes);
-
+    function hasCDNMetadataKey(string[] memory metadataKeys) internal pure returns (bool) {
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+            if (
+                currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
+                    && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
+            ) {
                 return true;
             }
         }
@@ -1327,36 +1322,23 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Deletes `key` if it exists in `metadataKeys`.
-     * @param metadataKeys The array of metadata keys
-     * @param key The metadata key to delete
-     * @return Modified array of metadata keys
+     * @param metadataKeys The array of metadata keys to modify
      */
-    function deleteMetadataKey(string[] memory metadataKeys, string memory key)
-        internal
-        pure
-        returns (string[] memory)
-    {
-        bytes memory keyBytes = bytes(key);
-        uint256 keyLength = keyBytes.length;
-        bytes32 keyHash = keccak256(keyBytes);
-
-        uint256 len = metadataKeys.length;
-        for (uint256 i = 0; i < len; i++) {
-            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
-                // Shift elements left to fill the gap
-                for (uint256 j = i; j < len - 1; j++) {
-                    metadataKeys[j] = metadataKeys[j + 1];
+    function deleteCDNMetadataKey(string[] storage metadataKeys) internal {
+        unchecked {
+            uint256 len = metadataKeys.length;
+            for (uint256 i = 0; i < len; i++) {
+                bytes memory currentKeyBytes = bytes(metadataKeys[i]);
+                if (
+                    currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
+                        && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
+                ) {
+                    metadataKeys[i] = metadataKeys[len - 1];
+                    metadataKeys.pop();
+                    break;
                 }
-
-                delete metadataKeys[len - 1];
-                assembly {
-                    mstore(metadataKeys, sub(len, 1))
-                }
-                break;
             }
         }
-        return metadataKeys;
     }
 
     /**
