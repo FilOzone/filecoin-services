@@ -993,12 +993,11 @@ contract FilecoinWarmStorageService is
 
         payments.terminateRail(info.pdpRailId);
 
-        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
+        if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             payments.terminateRail(info.cacheMissRailId);
             payments.terminateRail(info.cdnRailId);
 
             // Delete withCDN flag from metadata to prevent further CDN operations
-            deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]);
             delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
             emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1081,7 +1080,7 @@ contract FilecoinWarmStorageService is
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
         // Check if CDN service is configured
-        require(hasCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
+        require(deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
 
         // Check if cache miss and CDN rails are configured
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -1092,7 +1091,6 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.cdnRailId);
 
         // Delete withCDN flag from metadata to prevent further CDN operations
-        deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1321,10 +1319,11 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Deletes `key` if it exists in `metadataKeys`.
+     * @notice Deletes key `withCDN` if it exists in `metadataKeys`.
      * @param metadataKeys The array of metadata keys to modify
+     * @return found Whether the withCDN key was deleted
      */
-    function deleteCDNMetadataKey(string[] storage metadataKeys) internal {
+    function deleteCDNMetadataKey(string[] storage metadataKeys) internal returns (bool found) {
         unchecked {
             uint256 len = metadataKeys.length;
             for (uint256 i = 0; i < len; i++) {
@@ -1335,10 +1334,11 @@ contract FilecoinWarmStorageService is
                 ) {
                     metadataKeys[i] = metadataKeys[len - 1];
                     metadataKeys.pop();
-                    break;
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     /**
