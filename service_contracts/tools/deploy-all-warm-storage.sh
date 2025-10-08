@@ -404,7 +404,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
     verify_contracts_batch \
         "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
         "$PDP_VERIFIER_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
-        "$PAYMENTS_CONTRACT_ADDRESS,src/Payments.sol:Payments" \
+        "$PAYMENTS_CONTRACT_ADDRESS,lib/fws-payments/src/Payments.sol:Payments" \
         "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
