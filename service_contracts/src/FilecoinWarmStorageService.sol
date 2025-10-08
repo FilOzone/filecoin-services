@@ -441,8 +441,8 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract
      */
     function setViewContract(address _viewContract) external onlyOwner {
-        require(_viewContract != address(0), "Invalid view contract address");
-        require(viewContractAddress == address(0), "View contract already set");
+        require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
+        require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
         viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
     }

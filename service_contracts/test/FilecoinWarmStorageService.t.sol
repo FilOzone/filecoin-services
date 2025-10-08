@@ -3779,7 +3779,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Test that it cannot be set again (one-time only)
         FilecoinWarmStorageServiceStateView newViewContract =
             new FilecoinWarmStorageServiceStateView(warmStorageService);
-        vm.expectRevert("View contract already set");
+        vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
         warmStorageService.setViewContract(address(newViewContract));
 
         // Test that zero address is rejected (would need a new contract to test this properly)
