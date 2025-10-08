@@ -5,15 +5,19 @@
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
+
 echo "Deploying Warm Storage Service Contract"
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+export CHAIN=314159
+
+
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
   exit 1
 fi
 
@@ -78,15 +82,16 @@ echo "  Name: $SERVICE_NAME"
 echo "  Description: $SERVICE_DESCRIPTION"
 
 # Fixed constants for initialization
-USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address
+USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address
 
 # Proving period configuration - use defaults if not set
-MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"                      # Default 30 epochs (15 minutes on calibnet)
-CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}"                # Default 15 epochs
+MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"       # Default 30 epochs (15 minutes on calibnet)
+CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}" # Default 15 epochs
 
 # Query the actual challengeFinality from PDPVerifier
 echo "Querying PDPVerifier's challengeFinality..."
-CHALLENGE_FINALITY=$(cast call $PDP_VERIFIER_ADDRESS "getChallengeFinality()" --rpc-url "$RPC_URL" | cast --to-dec)
+# cast will use ETH_RPC_URL from environment
+CHALLENGE_FINALITY=$(cast call $PDP_VERIFIER_ADDRESS "getChallengeFinality()" | cast --to-dec)
 echo "PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
 
 # Validate that the configuration will work with PDPVerifier's challengeFinality
@@ -94,12 +99,12 @@ echo "PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
 # This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
 MIN_REQUIRED=$((CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE / 2))
 if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
-    echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for PDPVerifier's challengeFinality ($CHALLENGE_FINALITY)"
-    echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
-    echo "       To fix: Set MAX_PROVING_PERIOD to at least $MIN_REQUIRED"
-    echo ""
-    echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./deploy-warm-storage-calibnet.sh"
-    exit 1
+  echo "Error: MAX_PROVING_PERIOD ($MAX_PROVING_PERIOD) is too small for PDPVerifier's challengeFinality ($CHALLENGE_FINALITY)"
+  echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
+  echo "       To fix: Set MAX_PROVING_PERIOD to at least $MIN_REQUIRED"
+  echo ""
+  echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./deploy-warm-storage-calibnet.sh"
+  exit 1
 fi
 
 echo "Configuration validation passed:"
@@ -107,29 +112,31 @@ echo "  PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
 echo "  MAX_PROVING_PERIOD: $MAX_PROVING_PERIOD epochs"
 echo "  CHALLENGE_WINDOW_SIZE: $CHALLENGE_WINDOW_SIZE epochs"
 
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+# Use environment-provided keystore/password (ETH_KEYSTORE/ETH_PASSWORD)
+ADDR=$(cast wallet address)
 echo "Deploying contracts from address $ADDR"
 
-NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+NONCE="$(cast nonce "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to extract FilecoinWarmStorageService contract address"
-    exit 1
+  echo "Error: Failed to extract FilecoinWarmStorageService contract address"
+  exit 1
 fi
 echo "FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
+
 NONCE=$(expr $NONCE + "1")
 
 # Deploy FilecoinWarmStorageService proxy
 echo "Deploying FilecoinWarmStorageService proxy..."
 # Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
-WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id 314159 lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
-    echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
-    exit 1
+  echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
+  exit 1
 fi
 echo "FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
 
@@ -149,3 +156,17 @@ echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+  popd >/dev/null
+else
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi

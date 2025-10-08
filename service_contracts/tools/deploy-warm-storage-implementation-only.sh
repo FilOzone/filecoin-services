@@ -7,32 +7,32 @@
 
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
-  exit 1
-fi
-
-# Auto-detect chain ID from RPC if not already set
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-  if [ -z "$CHAIN_ID" ]; then
+# Auto-detect chain ID from RPC
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
 fi
 
-# Get deployer address
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
+  exit 1
+fi
+
+# Get deployer address and nonce (cast will read ETH_KEYSTORE/ETH_PASSWORD/ETH_RPC_URL)
+ADDR=$(cast wallet address --password "$ETH_PASSWORD" )
 echo "Deploying from address: $ADDR"
 
 # Get current nonce
-NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
-
+NONCE="$(cast nonce "$ADDR")"
 # Get required addresses from environment or use defaults
 if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
   echo "Error: PDP_VERIFIER_ADDRESS is not set"
@@ -64,7 +64,7 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
-USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"    # USDFC token address on calibnet
+USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address on calibnet
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
@@ -77,14 +77,29 @@ echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --broadcast --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
-    echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
-    exit 1
+  echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
+  exit 1
 fi
 
 echo ""
 echo "# DEPLOYMENT COMPLETE"
 echo "FilecoinWarmStorageService Implementation deployed at: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
 echo ""
+
+# Automatic contract verification
+if [ "${AUTO_VERIFY:-true}" = "true" ]; then
+  echo
+  echo "🔍 Starting automatic contract verification..."
+
+  pushd "$(dirname $0)/.." >/dev/null
+  source tools/verify-contracts.sh
+  verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+  popd >/dev/null
+else
+  echo
+  echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
+fi
+
