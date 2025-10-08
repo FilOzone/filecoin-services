@@ -691,19 +691,19 @@ contract FilecoinWarmStorageService is
         delete provenThisPeriod[dataSetId];
         delete provingActivationEpoch[dataSetId];
 
-        // Clean up metadata mappings
-        string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
-        for (uint256 i = 0; i < metadataKeys.length; i++) {
-            delete dataSetMetadata[dataSetId][metadataKeys[i]];
-        }
-        delete dataSetMetadataKeys[dataSetId];
-
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
         if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
             delete railToDataSet[info.cacheMissRailId];
             delete railToDataSet[info.cdnRailId];
         }
+
+        // Clean up metadata mappings
+        string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            delete dataSetMetadata[dataSetId][metadataKeys[i]];
+        }
+        delete dataSetMetadataKeys[dataSetId];
     }
 
     /**
