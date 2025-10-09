@@ -3624,6 +3624,197 @@ contract FilecoinWarmStorageServiceTest is Test {
             b[i] = "a";
         }
     }
+
+    /**
+     * @notice Regression test for: CDN data set clean up
+     * @dev Tests that railToDataSet mappings are properly cleaned up when dataSetDeleted is called
+     * This test ensures that the fix prevents rail mapping leaks after dataset deletion
+     */
+    function testRegression_CDNDataSetCleanup() public {
+        console.log("=== Regression Test: CDN Data Set Clean Up Fix ===");
+
+        // Test 1: CDN dataset cleanup
+        console.log("1. Testing CDN dataset rail mapping cleanup");
+        _testCDNDatasetRailMappingCleanup();
+
+        // Test 2: Non-CDN dataset cleanup
+        console.log("2. Testing non-CDN dataset rail mapping cleanup");
+        _testNonCDNDatasetRailMappingCleanup();
+
+        // Test 3: Complete dataSetDeleted cleanup verification
+        console.log("3. Testing complete dataSetDeleted cleanup verification");
+        _testCompleteDataSetDeletedCleanup();
+
+        console.log("=== Regression test completed successfully! ===");
+    }
+
+    function _testCDNDatasetRailMappingCleanup() internal {
+        // Create a dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Verify CDN rails were created
+        assertTrue(info.cacheMissRailId != 0, "Cache miss rail should be created for CDN dataset");
+        assertTrue(info.cdnRailId != 0, "CDN rail should be created for CDN dataset");
+
+        // Verify rail mappings exist before deletion
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+        assertTrue(
+            viewContract.railToDataSet(info.cacheMissRailId) == dataSetId, "Cache miss rail mapping should exist"
+        );
+        assertTrue(viewContract.railToDataSet(info.cdnRailId) == dataSetId, "CDN rail mapping should exist");
+
+        // Terminate the service
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get updated info after termination to get pdpEndEpoch
+        info = viewContract.getDataSet(dataSetId);
+
+        // Wait for payment end epoch to elapse
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Call dataSetDeleted to trigger cleanup
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
+        // Verify all rail mappings are cleaned up (this is the fix from issue #269)
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+        assertTrue(
+            viewContract.railToDataSet(info.cacheMissRailId) == 0, "Cache miss rail mapping should be cleaned up"
+        );
+        assertTrue(viewContract.railToDataSet(info.cdnRailId) == 0, "CDN rail mapping should be cleaned up");
+    }
+
+    function _testNonCDNDatasetRailMappingCleanup() internal {
+        // Create a dataset without CDN
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Verify CDN rails were NOT created
+        assertTrue(info.cacheMissRailId == 0, "Cache miss rail should NOT be created for non-CDN dataset");
+        assertTrue(info.cdnRailId == 0, "CDN rail should NOT be created for non-CDN dataset");
+
+        // Verify only PDP rail mapping exists before deletion
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+
+        // Terminate the service to set pdpEndEpoch
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get updated info after termination to get pdpEndEpoch
+        info = viewContract.getDataSet(dataSetId);
+
+        // Wait for payment end epoch to elapse
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Call dataSetDeleted to trigger cleanup
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
+        // Verify PDP rail mapping is cleaned up
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+    }
+
+    function _testCompleteDataSetDeletedCleanup() internal {
+        // Create a dataset with CDN and multiple metadata keys
+        string[] memory metadataKeys = new string[](3);
+        string[] memory metadataValues = new string[](3);
+        metadataKeys[0] = "withCDN";
+        metadataValues[0] = "";
+        metadataKeys[1] = "label";
+        metadataValues[1] = "test-dataset";
+        metadataKeys[2] = "description";
+        metadataValues[2] = "A test dataset for cleanup verification";
+
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
+
+        // Get initial dataset info
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Verify initial state exists
+        assertTrue(info.pdpRailId != 0, "PDP rail should exist");
+        assertTrue(info.cacheMissRailId != 0, "Cache miss rail should exist");
+        assertTrue(info.cdnRailId != 0, "CDN rail should exist");
+
+        // Verify rail mappings exist
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+        assertTrue(
+            viewContract.railToDataSet(info.cacheMissRailId) == dataSetId, "Cache miss rail mapping should exist"
+        );
+        assertTrue(viewContract.railToDataSet(info.cdnRailId) == dataSetId, "CDN rail mapping should exist");
+
+        // Verify metadata exists
+        (bool withCDNExists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool labelExists,) = viewContract.getDataSetMetadata(dataSetId, "label");
+        (bool descriptionExists,) = viewContract.getDataSetMetadata(dataSetId, "description");
+        assertTrue(withCDNExists, "withCDN metadata should exist");
+        assertTrue(labelExists, "label metadata should exist");
+        assertTrue(descriptionExists, "description metadata should exist");
+
+        // Verify dataset info exists
+        assertTrue(viewContract.getDataSet(dataSetId).pdpRailId != 0, "Dataset info should exist");
+
+        // Verify client dataset list includes this dataset
+        FilecoinWarmStorageService.DataSetInfoView[] memory clientDataSets = viewContract.getClientDataSets(client);
+        bool foundInList = false;
+        for (uint256 i = 0; i < clientDataSets.length; i++) {
+            if (clientDataSets[i].dataSetId == dataSetId) {
+                foundInList = true;
+                break;
+            }
+        }
+        assertTrue(foundInList, "Dataset should be in client dataset list");
+
+        // Terminate the service
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get updated info after termination
+        info = viewContract.getDataSet(dataSetId);
+
+        // Wait for payment end epoch to elapse
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Call dataSetDeleted to trigger complete cleanup
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
+        // Verify ALL mappings are cleaned up
+
+        // 1. Rail mappings should be cleaned up
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+        assertTrue(
+            viewContract.railToDataSet(info.cacheMissRailId) == 0, "Cache miss rail mapping should be cleaned up"
+        );
+        assertTrue(viewContract.railToDataSet(info.cdnRailId) == 0, "CDN rail mapping should be cleaned up");
+
+        // 2. Metadata mappings should be cleaned up
+        (bool withCDNExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool labelExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "label");
+        (bool descriptionExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "description");
+        assertTrue(!withCDNExistsAfter, "withCDN metadata should be cleaned up");
+        assertTrue(!labelExistsAfter, "label metadata should be cleaned up");
+        assertTrue(!descriptionExistsAfter, "description metadata should be cleaned up");
+
+        // 3. Dataset info should be cleaned up
+        assertTrue(viewContract.getDataSet(dataSetId).pdpRailId == 0, "Dataset info should be cleaned up");
+
+        // 4. Client dataset list should not include this dataset
+        clientDataSets = viewContract.getClientDataSets(client);
+        foundInList = false;
+        for (uint256 i = 0; i < clientDataSets.length; i++) {
+            if (clientDataSets[i].dataSetId == dataSetId) {
+                foundInList = true;
+                break;
+            }
+        }
+        assertTrue(!foundInList, "Dataset should be removed from client dataset list");
+    }
 }
 
 contract SignatureCheckingService is FilecoinWarmStorageService {

@@ -704,8 +704,10 @@ contract FilecoinWarmStorageService is
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
-        if (dataSetHasCDNMetadataKey(dataSetId)) {
+        if (info.cacheMissRailId != 0) {
             delete railToDataSet[info.cacheMissRailId];
+        }
+        if (info.cdnRailId != 0) {
             delete railToDataSet[info.cdnRailId];
         }
 
