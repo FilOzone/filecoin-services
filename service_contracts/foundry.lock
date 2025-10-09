@@ -13,8 +13,5 @@
   },
   "lib/pdp": {
     "rev": "61681392933926fbccb142ab7767e037680850b4"
-  },
-  "lib/session-key-registry": {
-    "rev": "e472ca2b525fb2396832216182b64a0c165cb49c"
   }
 }
