@@ -29,7 +29,7 @@ if [ -z "$ETH_KEYSTORE" ]; then
   exit 1
 fi
 
-ADDR=$(cast wallet address)
+ADDR=$(cast wallet address --password "$PASSWORD")
 echo "Deploying SessionKeyRegistry from address $ADDR..."
 
 # Check if NONCE is already set (when called from main deploy script)
