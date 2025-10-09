@@ -3195,7 +3195,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
             assertFalse(
-                logs[i].topics[0] == keccak256("RailOneTimePaymentProcessed(uint256,uint256,uint256,uint256)"),
+                logs[i].topics[0] == Payments.RailOneTimePaymentProcessed.selector,
                 "RailOneTimePaymentProcessed should not be emitted for zero amounts"
             );
         }
