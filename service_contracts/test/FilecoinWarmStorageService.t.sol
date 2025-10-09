@@ -733,7 +733,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client);
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = CREATE_DATA_SET_TYPEHASH;
-        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
         makeSignaturePass(sessionKey1);
 
         extraData =
@@ -875,7 +875,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = ADD_PIECES_TYPEHASH;
         vm.prank(client);
-        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
 
         makeSignaturePass(sessionKey1);
         mockPDPVerifier.addPieces(
