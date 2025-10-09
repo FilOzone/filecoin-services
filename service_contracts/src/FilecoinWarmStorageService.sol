@@ -1482,7 +1482,7 @@ contract FilecoinWarmStorageService is
         uint256 provenEpochCount = 0;
         uint256 lastProvenEpoch = fromEpoch;
 
-        (provenEpochCount, lastProvenEpoch) = findProvenEpochs(dataSetId, fromEpoch, toEpoch);
+        (provenEpochCount, lastProvenEpoch) = _findProvenEpochs(dataSetId, fromEpoch, toEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
@@ -1506,14 +1506,15 @@ contract FilecoinWarmStorageService is
         });
     }
 
-    function findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch)
-        public
+    function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch)
+        internal
         view
         returns (uint256, uint256)
     {
         uint256 provenEpochCount = 0;
         uint256 lastProvenEpoch = fromEpoch;
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
         if (toEpoch >= activationEpoch && toEpoch < block.number) {
             // if `toEpoch` lies after activation, and `fromEpoch` lies before activation, then update the `fromEpoch`, as follows :
             if (fromEpoch < activationEpoch) {
@@ -1528,25 +1529,25 @@ contract FilecoinWarmStorageService is
 
             if (toEpoch < startingPeriod_deadline) {
                 // alternative way to check the same : `startingPeriod == endingPeriod`
-                if (_isPeriodProven(dataSetId, startingPeriod)) {
+                if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
                     provenEpochCount = (toEpoch - fromEpoch);
                     lastProvenEpoch = toEpoch;
                 }
             } else {
-                if (_isPeriodProven(dataSetId, startingPeriod)) {
+                if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
                     provenEpochCount += (startingPeriod_deadline - fromEpoch);
                 }
 
                 // now loop through the proving periods between endingPeriod and startingPeriod.
                 for (uint256 period = startingPeriod + 1; period <= endingPeriod - 1; period++) {
-                    if (_isPeriodProven(dataSetId, period)) {
+                    if (_isPeriodProven(dataSetId, period, currentPeriod)) {
                         provenEpochCount += maxProvingPeriod;
                         lastProvenEpoch = _calcPeriodDeadline(dataSetId, period);
                     }
                 }
 
                 // now handle the last period separately
-                if (_isPeriodProven(dataSetId, endingPeriod)) {
+                if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
                     // then the epochs to add = `endingPeriod_starting` to `toEpoch`. But since `endingPeriod_starting` is simply the ending of its previous period, so
                     provenEpochCount += (toEpoch - _calcPeriodDeadline(dataSetId, endingPeriod - 1));
                     lastProvenEpoch = toEpoch;
@@ -1557,8 +1558,7 @@ contract FilecoinWarmStorageService is
         return (provenEpochCount, lastProvenEpoch);
     }
 
-    function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
+    function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
         if (periodId == currentPeriod) {
             return provenThisPeriod[dataSetId];
         }
