@@ -704,7 +704,7 @@ contract FilecoinWarmStorageService is
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
-        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
+        if (dataSetHasCDNMetadataKey(dataSetId)) {
             delete railToDataSet[info.cacheMissRailId];
             delete railToDataSet[info.cdnRailId];
         }
@@ -1059,7 +1059,7 @@ contract FilecoinWarmStorageService is
         require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
 
         // Check if CDN service is configured
-        require(hasCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
+        require(dataSetHasCDNMetadataKey(dataSetId), Errors.FilBeamServiceNotConfigured(dataSetId));
 
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
@@ -1149,7 +1149,7 @@ contract FilecoinWarmStorageService is
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
 
         // Update the CDN rail payment rates, if applicable
-        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
+        if (dataSetHasCDNMetadataKey(dataSetId)) {
             (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
 
             uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
@@ -1332,6 +1332,29 @@ contract FilecoinWarmStorageService is
         }
 
         // Key absence means disabled
+        return false;
+    }
+
+    /**
+     * @notice Returns true if key `withCDN` exists in the metadata keys of the data set.
+     * @param dataSetId The sequential data set identifier
+     * @return True if key exists; false otherwise.
+     */
+    function dataSetHasCDNMetadataKey(uint256 dataSetId) internal view returns (bool) {
+        string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
+        unchecked {
+            uint256 len = metadataKeys.length;
+            for (uint256 i = 0; i < len; i++) {
+                string storage metadataKey = metadataKeys[i];
+                bytes32 repr;
+                assembly ("memory-safe") {
+                    repr := sload(metadataKey.slot)
+                }
+                if (repr == WITH_CDN_STRING_STORAGE_REPR) {
+                    return true;
+                }
+            }
+        }
         return false;
     }
 
