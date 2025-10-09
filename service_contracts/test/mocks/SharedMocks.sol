@@ -122,9 +122,9 @@ contract MockPDPVerifier {
         return setId;
     }
 
-    function deleteDataSet(address listenerAddr, uint256 setId, bytes calldata extraData) public {
-        if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).dataSetDeleted(setId, 0, extraData);
+    function deleteDataSet(PDPListener listenerAddr, uint256 setId, bytes calldata extraData) public {
+        if (listenerAddr != PDPListener(address(0))) {
+            listenerAddr.dataSetDeleted(setId, 0, extraData);
         }
 
         delete dataSetServiceProviders[setId];

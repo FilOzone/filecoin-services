@@ -39,7 +39,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "0.1.0";
+    string public constant VERSION = "0.3.0";
 
     // =========================================================================
     // Events
@@ -137,10 +137,16 @@ contract FilecoinWarmStorageService is
 
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
+        // The address of the payer who should have signed the message
         address payer;
+        // the unique ID for the client's data set
+        uint256 clientDataSetId;
+        // Array of metadata keys
         string[] metadataKeys;
+        // Array of metadata values
         string[] metadataValues;
-        bytes signature; // Authentication signature
+        // The signature bytes (v, r, s)
+        bytes signature;
     }
 
     // Structure for service pricing information
@@ -177,6 +183,11 @@ contract FilecoinWarmStorageService is
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
+    uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
+    bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
+    // solidity storage representation of string "withCDN"
+    bytes32 private constant WITH_CDN_STRING_STORAGE_REPR =
+        0x7769746843444e0000000000000000000000000000000000000000000000000e;
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
@@ -248,7 +259,7 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
-    mapping(address payer => uint256) private clientDataSetIds;
+    mapping(address payer => mapping(uint256 clientDataSetId => uint256)) private clientDataSetIds;
     mapping(address payer => uint256[]) private clientDataSets;
     mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
@@ -370,11 +381,13 @@ contract FilecoinWarmStorageService is
         require(_filBeamControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
         filBeamControllerAddress = _filBeamControllerAddress;
 
-        // Validate name and description
-        require(bytes(_name).length > 0, "Service name cannot be empty");
-        require(bytes(_name).length <= 256, "Service name exceeds 256 characters");
-        require(bytes(_description).length > 0, "Service description cannot be empty");
-        require(bytes(_description).length <= 256, "Service description exceeds 256 characters");
+        uint256 serviceNameLength = bytes(_name).length;
+        require(serviceNameLength > 0, Errors.InvalidServiceNameLength(serviceNameLength));
+        require(serviceNameLength <= 256, Errors.InvalidServiceNameLength(serviceNameLength));
+
+        uint256 serviceDescriptionLength = bytes(_description).length;
+        require(serviceDescriptionLength > 0, Errors.InvalidServiceDescriptionLength(serviceDescriptionLength));
+        require(serviceDescriptionLength <= 256, Errors.InvalidServiceDescriptionLength(serviceDescriptionLength));
 
         // Emit the FilecoinServiceDeployed event
         emit FilecoinServiceDeployed(_name, _description);
@@ -441,8 +454,8 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract
      */
     function setViewContract(address _viewContract) external onlyOwner {
-        require(_viewContract != address(0), "Invalid view contract address");
-        require(viewContractAddress == address(0), "View contract already set");
+        require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
+        require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
         viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
     }
@@ -528,18 +541,15 @@ contract FilecoinWarmStorageService is
 
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
-        uint256 clientDataSetId = clientDataSetIds[createData.payer]++;
+        require(
+            clientDataSetIds[createData.payer][createData.clientDataSetId] == 0,
+            Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
+        );
+        clientDataSetIds[createData.payer][createData.clientDataSetId] = dataSetId;
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
-        verifyCreateDataSetSignature(
-            createData.payer,
-            clientDataSetId,
-            payee,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.signature
-        );
+        verifyCreateDataSetSignature(payee, createData);
 
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -547,7 +557,7 @@ contract FilecoinWarmStorageService is
         info.payee = payee; // Using payee address from registry
         info.serviceProvider = serviceProvider; // Set the service provider
         info.commissionBps = serviceCommissionBps;
-        info.clientDataSetId = clientDataSetId;
+        info.clientDataSetId = createData.clientDataSetId;
         info.providerId = providerId;
 
         // Store each metadata key-value entry for this data set
@@ -606,7 +616,7 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
 
-        if (hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN)) {
+        if (hasCDNMetadataKey(createData.metadataKeys)) {
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -672,8 +682,7 @@ contract FilecoinWarmStorageService is
             Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
-        // Complete cleanup - remove the dataset from all mappings
-        delete dataSetInfo[dataSetId];
+        // NOTE keep clientDataSetIds[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
         uint256[] storage clientDataSetList = clientDataSets[payer];
@@ -686,10 +695,19 @@ contract FilecoinWarmStorageService is
             }
         }
 
+        // Remove the dataset from all mappings
+
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
         delete provingActivationEpoch[dataSetId];
+
+        // Clean up rail mappings
+        delete railToDataSet[info.pdpRailId];
+        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
+            delete railToDataSet[info.cacheMissRailId];
+            delete railToDataSet[info.cdnRailId];
+        }
 
         // Clean up metadata mappings
         string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
@@ -698,12 +716,8 @@ contract FilecoinWarmStorageService is
         }
         delete dataSetMetadataKeys[dataSetId];
 
-        // Clean up rail mappings
-        delete railToDataSet[info.pdpRailId];
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
-            delete railToDataSet[info.cacheMissRailId];
-            delete railToDataSet[info.cdnRailId];
-        }
+        // Complete cleanup
+        delete dataSetInfo[dataSetId];
     }
 
     /**
@@ -990,12 +1004,11 @@ contract FilecoinWarmStorageService is
 
         payments.terminateRail(info.pdpRailId);
 
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+        if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             payments.terminateRail(info.cacheMissRailId);
             payments.terminateRail(info.cdnRailId);
 
             // Delete withCDN flag from metadata to prevent further CDN operations
-            dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
             delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
             emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1046,10 +1059,7 @@ contract FilecoinWarmStorageService is
         require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
 
         // Check if CDN service is configured
-        require(
-            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilBeamServiceNotConfigured(dataSetId)
-        );
+        require(hasCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
 
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
@@ -1081,10 +1091,7 @@ contract FilecoinWarmStorageService is
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
         // Check if CDN service is configured
-        require(
-            hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN),
-            Errors.FilBeamServiceNotConfigured(dataSetId)
-        );
+        require(deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
 
         // Check if cache miss and CDN rails are configured
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -1095,7 +1102,6 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.cdnRailId);
 
         // Delete withCDN flag from metadata to prevent further CDN operations
-        dataSetMetadataKeys[dataSetId] = deleteMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -1143,7 +1149,7 @@ contract FilecoinWarmStorageService is
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
 
         // Update the CDN rail payment rates, if applicable
-        if (hasMetadataKey(dataSetMetadataKeys[dataSetId], METADATA_KEY_WITH_CDN)) {
+        if (hasCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
 
             uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
@@ -1297,26 +1303,30 @@ contract FilecoinWarmStorageService is
      * @return decoded The decoded DataSetCreateData struct
      */
     function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (address payer, string[] memory keys, string[] memory values, bytes memory signature) =
-            abi.decode(extraData, (address, string[], string[], bytes));
+        (address payer, uint256 clientDataSetId, string[] memory keys, string[] memory values, bytes memory signature) =
+            abi.decode(extraData, (address, uint256, string[], string[], bytes));
 
-        return DataSetCreateData({payer: payer, metadataKeys: keys, metadataValues: values, signature: signature});
+        return DataSetCreateData({
+            payer: payer,
+            clientDataSetId: clientDataSetId,
+            metadataKeys: keys,
+            metadataValues: values,
+            signature: signature
+        });
     }
 
     /**
-     * @notice Returns true if `key` exists in `metadataKeys`.
+     * @notice Returns true if key `withCDN` exists in `metadataKeys`.
      * @param metadataKeys The array of metadata keys
-     * @param key The metadata key to look up
      * @return True if key exists; false otherwise.
      */
-    function hasMetadataKey(string[] memory metadataKeys, string memory key) internal pure returns (bool) {
-        bytes memory keyBytes = bytes(key);
-        uint256 keyLength = keyBytes.length;
-        bytes32 keyHash = keccak256(keyBytes);
-
+    function hasCDNMetadataKey(string[] memory metadataKeys) internal pure returns (bool) {
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
+            if (
+                currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
+                    && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
+            ) {
                 return true;
             }
         }
@@ -1326,37 +1336,27 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Deletes `key` if it exists in `metadataKeys`.
-     * @param metadataKeys The array of metadata keys
-     * @param key The metadata key to delete
-     * @return Modified array of metadata keys
+     * @notice Deletes key `withCDN` if it exists in `metadataKeys`.
+     * @param metadataKeys The array of metadata keys to modify
+     * @return found Whether the withCDN key was deleted
      */
-    function deleteMetadataKey(string[] memory metadataKeys, string memory key)
-        internal
-        pure
-        returns (string[] memory)
-    {
-        bytes memory keyBytes = bytes(key);
-        uint256 keyLength = keyBytes.length;
-        bytes32 keyHash = keccak256(keyBytes);
-
-        uint256 len = metadataKeys.length;
-        for (uint256 i = 0; i < len; i++) {
-            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (currentKeyBytes.length == keyLength && keccak256(currentKeyBytes) == keyHash) {
-                // Shift elements left to fill the gap
-                for (uint256 j = i; j < len - 1; j++) {
-                    metadataKeys[j] = metadataKeys[j + 1];
+    function deleteCDNMetadataKey(string[] storage metadataKeys) internal returns (bool found) {
+        unchecked {
+            uint256 len = metadataKeys.length;
+            for (uint256 i = 0; i < len; i++) {
+                string storage metadataKey = metadataKeys[i];
+                bytes32 repr;
+                assembly ("memory-safe") {
+                    repr := sload(metadataKey.slot)
                 }
-
-                delete metadataKeys[len - 1];
-                assembly {
-                    mstore(metadataKeys, sub(len, 1))
+                if (repr == WITH_CDN_STRING_STORAGE_REPR) {
+                    metadataKey = metadataKeys[len - 1];
+                    metadataKeys.pop();
+                    return true;
                 }
-                break;
             }
         }
-        return metadataKeys;
+        return false;
     }
 
     /**
@@ -1454,37 +1454,28 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Verifies a signature for the CreateDataSet operation
-     * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The unique ID for the client's data set
+     * @param createData The decoded DataSetCreateData used to build the signature
      * @param payee The service provider address
-     * @param metadataKeys Array of metadata keys
-     * @param metadataValues Array of metadata values
-     * @param signature The signature bytes (v, r, s)
      */
-    function verifyCreateDataSetSignature(
-        address payer,
-        uint256 clientDataSetId,
-        address payee,
-        string[] memory metadataKeys,
-        string[] memory metadataValues,
-        bytes memory signature
-    ) internal view {
+    function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
         // Hash the metadata entries
-        bytes32 metadataHash = hashMetadataEntries(metadataKeys, metadataValues);
+        bytes32 metadataHash = hashMetadataEntries(createData.metadataKeys, createData.metadataValues);
 
         // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, metadataHash));
+        bytes32 structHash =
+            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, createData.clientDataSetId, payee, metadataHash));
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(digest, signature);
+        address recoveredSigner = recoverSigner(digest, createData.signature);
 
-        if (payer == recoveredSigner) {
+        if (createData.payer == recoveredSigner) {
             return;
         }
         require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
+            sessionKeyRegistry.authorizationExpiry(createData.payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH)
+                >= block.timestamp,
+            Errors.InvalidSignature(createData.payer, recoveredSigner)
         );
     }
 

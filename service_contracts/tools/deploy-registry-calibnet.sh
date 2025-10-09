@@ -95,6 +95,13 @@ if [ -z "$CONTRACT_VERSION" ]; then
     CONTRACT_VERSION="Unknown"
 fi
 
+# Get contract version (this should be used instead of hardcoded version)
+CONTRACT_VERSION=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "VERSION()(string)")
+if [ -z "$CONTRACT_VERSION" ]; then
+    echo "Warning: Could not retrieve contract version"
+    CONTRACT_VERSION="Unknown"
+fi
+
 # Summary of deployed contracts
 echo ""
 echo "=========================================="

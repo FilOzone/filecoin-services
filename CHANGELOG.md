@@ -9,6 +9,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Changed
 
+## [0.3.0] - 2025-10-08 - M3.1 Calibration Network Deployment
+
+## Core Contracts
+
+1. Payments Contract: [0x6dB198201F900c17e86D267d7Df82567FB03df5E](https://calibration.filfox.info/en/address/0x6dB198201F900c17e86D267d7Df82567FB03df5E)
+  - From [Filecoin-Pay v0.6.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v0.6.0)
+2. PDPVerifier Implementation: [0x4EC9a8ae6e6A419056b6C332509deEA371b182EF](https://calibration.filfox.info/en/address/0x4EC9a8ae6e6A419056b6C332509deEA371b182EF)
+  - From [PDP v2.2.1](https://github.com/FilOzone/pdp/releases/tag/v2.2.1)
+3. PDPVerifier Proxy: [0x579dD9E561D4Cd1776CF3e52E598616E77D5FBcb](https://calibration.filfox.info/en/address/0x579dD9E561D4Cd1776CF3e52E598616E77D5FBcb)
+  - From [PDP v2.2.1](https://github.com/FilOzone/pdp/releases/tag/v2.2.1)
+4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+5. ServiceProviderRegistry Implementation: [0x5672fE3B5366819B4Bd2F538A2CAEA11f0b2Aff5](https://calibration.filfox.info/en/address/0x5672fE3B5366819B4Bd2F538A2CAEA11f0b2Aff5)
+6. ServiceProviderRegistry Proxy: [0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9](https://calibration.filfox.info/en/address/0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9)
+7. FilecoinWarmStorageService Implementation: [0x6B78a026309bc2659c5891559D412FA1BA6529A5](https://calibration.filfox.info/en/address/0x6B78a026309bc2659c5891559D412FA1BA6529A5)
+8. FilecoinWarmStorageService Proxy: [0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc](https://calibration.filfox.info/en/address/0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc)
+9. FilecoinWarmStorageServiceStateView: [0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F](https://calibration.filfox.info/en/address/0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F)
+
+Configuration:
+- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- CHALLENGE_FINALITY: 10 epochs 
+- MAX_PROVING_PERIOD: 240 epochs
+- CHALLENGE_WINDOW_SIZE: 30 epochs
+- Service Name: "Filecoin Warm Storage Service - Calibration M3.1"
+- Service Description: "Calibration FWSS contracts for M3.1"
+
+### Changed
+- **ServiceProviderRegistry full redeploy** - Required due to state compatibility issues with FilecoinWarmStorageService
+  - Previous FWSS release (0.2.0) used an old ServiceProviderRegistry; upgrading existing ServiceProviderRegistry would cause state mismatch with FWSS
+- **ServiceProviderRegistry VERSION updated to 0.3.0** to properly reflect inclusion of providerId struct fix from PR #247
+- **FilecoinWarmStorageService VERSION string updated to 0.3.0**.
+- **Changed PDPVerifier to v2.2.1** ([PDP v2.2.1 release notes](https://github.com/FilOzone/pdp/releases/tag/v2.2.1))
+  - Restored `createDataSet()` function for enhanced flexibility in dataset initialization, enabling empty "bucket" creation, smoother Curio and synapse-sdk integration ([#219](https://github.com/FilOzone/pdp/pull/219))
+
 ## [0.2.0] - 2025-10-07 - M3 Calibration Network Deployment
 
 ## Core Contracts
@@ -27,7 +62,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 8. FilecoinWarmStorageService Proxy: [0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b](https://calibration.filfox.info/en/address/0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b)
 9. FilecoinWarmStorageServiceStateView: [0x7175a72479e2B0050ed310f1a49a517C03573547](https://calibration.filfox.info/en/address/0x7175a72479e2B0050ed310f1a49a517C03573547)
 
-Configuration: 
+Configuration:
 - USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
 - FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
 - FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
