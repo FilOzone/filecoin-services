@@ -54,7 +54,7 @@ The following parameters are critical for proof generation and validation. They 
 ### Required for all scripts:
 These scripts now follow forge/cast's environment variable conventions. Set the following environment variables instead of passing flags:
 - `ETH_KEYSTORE` - Path to the Ethereum keystore file (or keep using `KEYSTORE` and it will be mapped)
-- `ETH_PASSWORD` - Password for the keystore (can be empty string if no password)
+- `PASSWORD` - Password for the keystore (can be empty string if no password)
 - `ETH_RPC_URL` - RPC endpoint for Calibration testnet (e.g. `https://api.calibration.node.glif.io/rpc/v1`)
 - `ETH_FROM` - Optional: address to use as deployer (forge/cast default is taken from the keystore)
 
@@ -76,7 +76,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 ```bash
 
 export ETH_KEYSTORE="/path/to/keystore.json"
-export ETH_PASSWORD="your-password"
+export PASSWORD="your-password"
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export CHALLENGE_FINALITY="10"  # Use "150" for mainnet
 

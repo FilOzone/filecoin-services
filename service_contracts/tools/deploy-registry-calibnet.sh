@@ -21,11 +21,11 @@ if [ -z "$ETH_KEYSTORE" ]; then
 fi
 
 # Optional: Check if PASSWORD is set (some users might use empty password)
-if [ -z "$ETH_PASSWORD" ]; then
+if [ -z "$PASSWORD" ]; then
   echo "Warning: PASSWORD is not set, using empty password"
 fi
 
-ADDR=$(cast wallet address --password "$ETH_PASSWORD")
+ADDR=$(cast wallet address --password "$PASSWORD")
 echo "Deploying contracts from address $ADDR"
 
 # Get current balance and nonce (cast will use ETH_RPC_URL)
@@ -38,7 +38,7 @@ echo "Starting nonce: $NONCE"
 # Deploy ServiceProviderRegistry implementation
 echo ""
 echo "=== STEP 1: Deploying ServiceProviderRegistry Implementation ==="
-REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract ServiceProviderRegistry implementation address"
   exit 1
@@ -53,7 +53,7 @@ echo "=== STEP 2: Deploying ServiceProviderRegistry Proxy ==="
 INIT_DATA=$(cast calldata "initialize()")
 echo "Initialization calldata: $INIT_DATA"
 
-REGISTRY_PROXY_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+REGISTRY_PROXY_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $INIT_DATA --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$REGISTRY_PROXY_ADDRESS" ]; then
   echo "Error: Failed to extract ServiceProviderRegistry proxy address"
   exit 1
@@ -71,13 +71,13 @@ else
 fi
 
 # Get registration fee
-FEE=$(cast call $REGISTRY_PROXY_ADDRESS "getRegistrationFee()(uint256)")
+FEE=$(cast call $REGISTRY_PROXY_ADDRESS "REGISTRATION_FEE()(uint256)")
 if [ -z "$FEE" ]; then
-  echo "Warning: Could not retrieve registration fee"
+    echo "Warning: Could not retrieve registration fee"
+    FEE_IN_FIL="unknown"
 else
-  # Convert from wei to FIL (assuming 1 FIL = 10^18 attoFIL)
-  FEE_IN_FIL=$(echo "scale=2; $FEE / 1000000000000000000" | bc 2>/dev/null || echo "1")
-  echo "✓ Registration fee: $FEE attoFIL ($FEE_IN_FIL FIL)"
+    echo "✓ Registration fee: $FEE attoFIL"
+    FEE_IN_FIL="$FEE attoFIL"
 fi
 
 # Get burn actor address
@@ -86,6 +86,13 @@ if [ -z "$BURN_ACTOR" ]; then
   echo "Warning: Could not retrieve burn actor address"
 else
   echo "✓ Burn actor address: $BURN_ACTOR"
+fi
+
+# Get contract version (this should be used instead of hardcoded version)
+CONTRACT_VERSION=$(cast call --rpc-url "$RPC_URL" $REGISTRY_PROXY_ADDRESS "VERSION()(string)")
+if [ -z "$CONTRACT_VERSION" ]; then
+    echo "Warning: Could not retrieve contract version"
+    CONTRACT_VERSION="Unknown"
 fi
 
 # Summary of deployed contracts
@@ -98,15 +105,15 @@ echo "ServiceProviderRegistry Proxy: $REGISTRY_PROXY_ADDRESS"
 echo "=========================================="
 echo ""
 echo "Contract Details:"
-echo "  - Version: 1.0.0"
-echo "  - Registration Fee: 1 FIL (burned)"
-echo "  - Burn Actor: 0xff00000000000000000000000000000000000063"
+echo "  - Version: $CONTRACT_VERSION"
+echo "  - Registration Fee: $FEE_IN_FIL (burned)"
+echo "  - Burn Actor: $BURN_ACTOR"
 echo "  - Chain: Calibration testnet (314159)"
 echo ""
 echo "Next steps:"
 echo "1. Save the proxy address: export REGISTRY_ADDRESS=$REGISTRY_PROXY_ADDRESS"
 echo "2. Verify the deployment by calling getProviderCount() - should return 0"
-echo "3. Test registration with: cast send --value 1ether ..."
+echo "3. Test registration with: cast send --value <registration_fee>attoFIL ..."
 echo "4. Transfer ownership if needed using transferOwnership()"
 echo "5. The registry is ready for provider registrations"
 echo ""
@@ -114,7 +121,7 @@ echo "To interact with the registry:"
 echo "  View functions:"
 echo "    cast call $REGISTRY_PROXY_ADDRESS \"getProviderCount()(uint256)\""
 echo "    cast call $REGISTRY_PROXY_ADDRESS \"getAllActiveProviders()(uint256[])\""
-echo "  State changes (requires 1 FIL fee):"
+echo "  State changes (requires registration fee):"
 echo "    Register as provider (requires proper encoding of PDPData)"
 echo ""
 

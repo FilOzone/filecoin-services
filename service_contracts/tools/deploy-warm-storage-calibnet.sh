@@ -112,7 +112,7 @@ echo "  PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
 echo "  MAX_PROVING_PERIOD: $MAX_PROVING_PERIOD epochs"
 echo "  CHALLENGE_WINDOW_SIZE: $CHALLENGE_WINDOW_SIZE epochs"
 
-# Use environment-provided keystore/password (ETH_KEYSTORE/ETH_PASSWORD)
+# Use environment-provided keystore/password (ETH_KEYSTORE/PASSWORD)
 ADDR=$(cast wallet address)
 echo "Deploying contracts from address $ADDR"
 
@@ -120,7 +120,7 @@ NONCE="$(cast nonce "$ADDR")"
 
 # Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
-SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract FilecoinWarmStorageService contract address"
   exit 1
@@ -133,7 +133,7 @@ NONCE=$(expr $NONCE + "1")
 echo "Deploying FilecoinWarmStorageService proxy..."
 # Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
-WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
 if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
   echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
   exit 1

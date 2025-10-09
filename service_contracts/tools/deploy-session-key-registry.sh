@@ -38,7 +38,7 @@ if [ -z "$NONCE" ]; then
   NONCE="$(cast nonce "$ADDR")"
 fi
 
-export SESSION_KEY_REGISTRY_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry | grep "Deployed to" | awk '{print $3}')
+export SESSION_KEY_REGISTRY_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry | grep "Deployed to" | awk '{print $3}')
 
 echo SessionKeyRegistry deployed at $SESSION_KEY_REGISTRY_ADDRESS
 

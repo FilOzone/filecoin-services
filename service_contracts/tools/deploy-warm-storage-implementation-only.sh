@@ -27,8 +27,8 @@ if [ -z "$ETH_KEYSTORE" ]; then
   exit 1
 fi
 
-# Get deployer address and nonce (cast will read ETH_KEYSTORE/ETH_PASSWORD/ETH_RPC_URL)
-ADDR=$(cast wallet address --password "$ETH_PASSWORD" )
+# Get deployer address and nonce (cast will read ETH_KEYSTORE/PASSWORD/ETH_RPC_URL)
+ADDR=$(cast wallet address --password "$PASSWORD" )
 echo "Deploying from address: $ADDR"
 
 # Get current nonce
@@ -77,7 +77,7 @@ echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"

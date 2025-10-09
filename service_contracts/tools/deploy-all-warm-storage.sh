@@ -180,7 +180,7 @@ else
         exit 1
     fi
     
-    ADDR=$(cast wallet address  --password "$ETH_PASSWORD")
+    ADDR=$(cast wallet address  --password "$PASSWORD")
     NONCE="$(cast nonce "$ADDR")"
     BROADCAST_FLAG="--broadcast"
     echo "Deploying contracts from address $ADDR"
@@ -206,8 +206,8 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    # forge and cast will read ETH_RPC_URL, ETH_KEYSTORE, ETH_PASSWORD, ETH_FROM from the environment
-    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
+    # forge and cast will read ETH_RPC_URL, ETH_KEYSTORE, PASSWORD, ETH_FROM from the environment
+    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
     if [ -z "$VERIFIER_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract PDPVerifier contract address"
         exit 1
@@ -226,7 +226,7 @@ if [ "$DRY_RUN" = "true" ]; then
     PDP_VERIFIER_ADDRESS="0x2345678901234567890123456789012345678901"  # Dummy address for dry-run
     echo "✅ PDPVerifier proxy deployment planned"
 else
-    PDP_VERIFIER_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    PDP_VERIFIER_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
         echo "Error: Failed to extract PDPVerifier proxy address"
         exit 1
@@ -248,7 +248,7 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    PAYMENTS_CONTRACT_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
+    PAYMENTS_CONTRACT_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
         echo "Error: Failed to extract Payments contract address"
         exit 1
@@ -270,7 +270,7 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
+    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
     if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract ServiceProviderRegistry implementation address"
         exit 1
@@ -289,7 +289,7 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x5678901234567890123456789012345678901234"  # Dummy address for dry-run
     echo "✅ ServiceProviderRegistry proxy deployment planned"
 else
-    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
         echo "Error: Failed to extract ServiceProviderRegistry proxy address"
         exit 1
@@ -311,7 +311,7 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService implementation deployment planned"
 else
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService contract address"
         exit 1
@@ -335,7 +335,7 @@ if [ "$DRY_RUN" = "true" ]; then
     WARM_STORAGE_SERVICE_ADDRESS="0x7890123456789012345678901234567890123456"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService proxy deployment planned"
 else
-    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$ETH_PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
         exit 1
