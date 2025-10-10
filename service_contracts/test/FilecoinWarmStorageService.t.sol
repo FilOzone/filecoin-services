@@ -3855,14 +3855,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Dataset info should be cleaned up
         FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
         assertTrue(dataSetInfo.pdpRailId == 0, "pdpRailId should be cleaned up");
-        assertTrue(
-            dataSetInfo.cacheMissRailId == 0,
-            "cacheMissRailId should be 0 because railToDataSet mapping for cdn rails is not being set anymore"
-        );
-        assertTrue(
-            dataSetInfo.cdnRailId == 0,
-            "cdnRailId should be 0 because railToDataSet mapping for cdn rails is not being set anymore"
-        );
+        assertTrue(dataSetInfo.cacheMissRailId == 0, "cacheMissRailId should be cleaned up in DataSetInfoView");
+        assertTrue(dataSetInfo.cdnRailId == 0, "cdnRailId should be cleaned up in DataSetInfoView");
         assertTrue(dataSetInfo.payer == address(0), "payer should be cleaned up");
         assertTrue(dataSetInfo.payee == address(0), "payee should be cleaned up");
         assertTrue(dataSetInfo.serviceProvider == address(0), "serviceProvider should be cleaned up");
