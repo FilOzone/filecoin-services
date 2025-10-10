@@ -68,7 +68,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         // Encode PDP data
@@ -111,7 +112,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         // Encode PDP data
@@ -182,7 +184,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         bytes memory encodedData = abi.encode(pdpData);
@@ -224,7 +227,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 500000000000000000,
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
-            paymentTokenAddress: IERC20(address(0))
+            paymentTokenAddress: IERC20(address(0)),
+            ipniPeerId: ""
         });
 
         bytes memory encodedData = abi.encode(pdpData);
@@ -259,7 +263,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 750000000000000000, // 0.75 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         bytes memory encodedData = abi.encode(pdpData);
@@ -323,7 +328,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         // Encode PDP data
@@ -561,7 +567,8 @@ contract ServiceProviderRegistryTest is Test {
             storagePricePerTibPerMonth: 1000,
             minProvingPeriodInEpochs: 1,
             location: "US",
-            paymentTokenAddress: IERC20(address(0))
+            paymentTokenAddress: IERC20(address(0)),
+            ipniPeerId: ""
         });
         return abi.encode(pdpOffering);
     }

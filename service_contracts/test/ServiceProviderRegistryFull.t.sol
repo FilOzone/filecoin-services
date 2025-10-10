@@ -82,7 +82,8 @@ contract ServiceProviderRegistryFullTest is Test {
             storagePricePerTibPerMonth: 1000000000000000000, // 1 FIL per TiB per month
             minProvingPeriodInEpochs: 2880, // 1 day in epochs (30 second blocks)
             location: "North America",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         updatedPDPData = ServiceProviderRegistryStorage.PDPOffering({
@@ -94,7 +95,8 @@ contract ServiceProviderRegistryFullTest is Test {
             storagePricePerTibPerMonth: 2000000000000000000, // 2 FIL per TiB per month
             minProvingPeriodInEpochs: 1440, // 12 hours in epochs
             location: "Europe",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+            paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+            ipniPeerId: ""
         });
 
         // Encode PDP data
@@ -1803,5 +1805,182 @@ contract ServiceProviderRegistryFullTest is Test {
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
         assertFalse(tierCleared, "Tier key should not exist after update");
         assertEq(clearedTier, "", "Tier key should be cleared after update");
+    }
+
+    // ========== IPNI Peer ID Validation Tests ==========
+    // ========== IPNI Peer ID Validation Tests ==========
+
+    function testRegisterWithEmptyIpniPeerId() public {
+        ServiceProviderRegistryStorage.PDPOffering memory validPDP = defaultPDPData;
+        validPDP.ipniPeerId = "";
+        bytes memory encodedPDP = abi.encode(validPDP);
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1,
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedPDP,
+            emptyKeys,
+            emptyValues
+        );
+        assertEq(providerId, 1, "Should succeed with empty ipniPeerId");
+
+        // Verify it was stored correctly
+        (ServiceProviderRegistryStorage.PDPOffering memory stored,,) = registry.getPDPService(providerId);
+        assertEq(bytes(stored.ipniPeerId).length, 0, "Empty IPNI peer ID should be stored");
+    }
+
+    function testRegisterWithMaxLengthIpniPeerId() public {
+        // Create a 256-character string (max length for CIDv1 base32)
+        string memory maxPeerId =
+            "bafzbeiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        require(bytes(maxPeerId).length == 256, "Test string should be exactly 256 chars");
+
+        ServiceProviderRegistryStorage.PDPOffering memory validPDP = defaultPDPData;
+        validPDP.ipniPeerId = maxPeerId;
+        bytes memory encodedPDP = abi.encode(validPDP);
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1,
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedPDP,
+            emptyKeys,
+            emptyValues
+        );
+        assertEq(providerId, 1, "Should succeed with 256-char ipniPeerId");
+
+        // Verify it was stored correctly
+        (ServiceProviderRegistryStorage.PDPOffering memory stored,,) = registry.getPDPService(providerId);
+        assertEq(bytes(stored.ipniPeerId).length, 256, "256-char IPNI peer ID should be stored");
+        assertEq(stored.ipniPeerId, maxPeerId, "IPNI peer ID should match");
+    }
+
+    function testRegisterWithTooLongIpniPeerId() public {
+        // Create a 257-character string (exceeds max)
+        string memory longPeerId =
+            "bafzbeiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        require(bytes(longPeerId).length == 257, "Test string should be exactly 257 chars");
+
+        ServiceProviderRegistryStorage.PDPOffering memory invalidPDP = defaultPDPData;
+        invalidPDP.ipniPeerId = longPeerId;
+        bytes memory encodedInvalidPDP = abi.encode(invalidPDP);
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        vm.expectRevert("IPNI peer ID too long");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1,
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedInvalidPDP,
+            emptyKeys,
+            emptyValues
+        );
+    }
+
+    function testRegisterWithRealisticIpniPeerId() public {
+        // Typical CIDv0 peer ID (base58btc) - 46 characters
+        string memory realisticPeerId = "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N";
+
+        ServiceProviderRegistryStorage.PDPOffering memory validPDP = defaultPDPData;
+        validPDP.ipniPeerId = realisticPeerId;
+        bytes memory encodedPDP = abi.encode(validPDP);
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1,
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedPDP,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Verify it was stored correctly
+        (ServiceProviderRegistryStorage.PDPOffering memory stored,,) = registry.getPDPService(providerId);
+        assertEq(stored.ipniPeerId, realisticPeerId, "IPNI peer ID should be stored correctly");
+        assertEq(bytes(stored.ipniPeerId).length, 46, "Realistic IPNI peer ID should be 46 chars");
+    }
+
+    function testUpdateIpniPeerId() public {
+        // Register with empty IPNI peer ID
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1,
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Verify initial state
+        (ServiceProviderRegistryStorage.PDPOffering memory initialStored,,) = registry.getPDPService(providerId);
+        assertEq(bytes(initialStored.ipniPeerId).length, 0, "Initial IPNI peer ID should be empty");
+
+        // Update with a peer ID (CIDv1 base32)
+        string memory newPeerId = "bafzbeic5w7yp4ha4g5dppc7wf4ha4g5dppc7wf4ha4g5d";
+        ServiceProviderRegistryStorage.PDPOffering memory updatedData = updatedPDPData;
+        updatedData.ipniPeerId = newPeerId;
+        bytes memory encodedUpdatedData = abi.encode(updatedData);
+
+        vm.prank(provider1);
+        registry.updateProduct(
+            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedData, emptyKeys, emptyValues
+        );
+
+        // Verify update
+        (ServiceProviderRegistryStorage.PDPOffering memory updatedStored,,) = registry.getPDPService(providerId);
+        assertEq(updatedStored.ipniPeerId, newPeerId, "IPNI peer ID should be updated");
+        assertEq(bytes(updatedStored.ipniPeerId).length, 46, "Updated IPNI peer ID should be 46 chars");
+    }
+
+    function testUpdateWithTooLongIpniPeerId() public {
+        // Register first
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        vm.prank(provider1);
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1,
+            "",
+            "Test provider",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            encodedDefaultPDPData,
+            emptyKeys,
+            emptyValues
+        );
+
+        // Try to update with too long peer ID (257 chars)
+        string memory longPeerId =
+            "bafzbeiaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+        ServiceProviderRegistryStorage.PDPOffering memory invalidData = updatedPDPData;
+        invalidData.ipniPeerId = longPeerId;
+        bytes memory encodedInvalidData = abi.encode(invalidData);
+
+        vm.prank(provider1);
+        vm.expectRevert("IPNI peer ID too long");
+        registry.updateProduct(
+            ServiceProviderRegistryStorage.ProductType.PDP, encodedInvalidData, emptyKeys, emptyValues
+        );
     }
 }

@@ -146,7 +146,8 @@ contract FilecoinWarmStorageServiceTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+                    ipniPeerId: ""
                 })
             ),
             new string[](0),
@@ -169,7 +170,8 @@ contract FilecoinWarmStorageServiceTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+                    ipniPeerId: ""
                 })
             ),
             new string[](0),
@@ -192,7 +194,8 @@ contract FilecoinWarmStorageServiceTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+                    ipniPeerId: ""
                 })
             ),
             new string[](0),
@@ -215,7 +218,8 @@ contract FilecoinWarmStorageServiceTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+                    ipniPeerId: ""
                 })
             ),
             new string[](0),

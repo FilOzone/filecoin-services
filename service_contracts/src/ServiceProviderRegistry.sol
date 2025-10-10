@@ -47,6 +47,9 @@ contract ServiceProviderRegistry is
     /// @notice Maximum length for location field
     uint256 private constant MAX_LOCATION_LENGTH = 128;
 
+    /// @notice Maximum length for IPNI peer ID string (supports at least CIDv1 base32 encoding over an expected 127 bytes max)
+    uint256 private constant MAX_IPNI_PEER_ID_LENGTH = 256;
+
     /// @notice Burn actor address for burning FIL
     address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
 
@@ -845,6 +848,7 @@ contract ServiceProviderRegistry is
         require(pdpOffering.minProvingPeriodInEpochs > 0, "Min proving period must be greater than 0");
         require(bytes(pdpOffering.location).length > 0, "Location cannot be empty");
         require(bytes(pdpOffering.location).length <= MAX_LOCATION_LENGTH, "Location too long");
+        require(bytes(pdpOffering.ipniPeerId).length <= MAX_IPNI_PEER_ID_LENGTH, "IPNI peer ID too long");
     }
 
     /// @notice Validate capability key-value pairs
