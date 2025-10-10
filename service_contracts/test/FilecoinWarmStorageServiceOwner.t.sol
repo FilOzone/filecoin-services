@@ -172,14 +172,20 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         metadataValues[0] = "Test Data Set";
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: payer,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup payment approval
         vm.startPrank(payer);

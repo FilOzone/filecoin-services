@@ -19,7 +19,20 @@
   },
   {
     "type": "function",
-    "name": "NETWORK_FEE",
+    "name": "NETWORK_FEE_DENOMINATOR",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "NETWORK_FEE_NUMERATOR",
     "inputs": [],
     "outputs": [
       {
@@ -68,6 +81,53 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "auctionInfo",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC20"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "startPrice",
+        "type": "uint88",
+        "internalType": "uint88"
+      },
+      {
+        "name": "startTime",
+        "type": "uint168",
+        "internalType": "uint168"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "burnForFees",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "requested",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
   },
   {
     "type": "function",
@@ -627,11 +687,21 @@
         "name": "token",
         "type": "address",
         "internalType": "contract IERC20"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "results",
         "type": "tuple[]",
         "internalType": "struct Payments.RailInfo[]",
         "components": [
@@ -651,6 +721,16 @@
             "internalType": "uint256"
           }
         ]
+      },
+      {
+        "name": "nextOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -668,11 +748,21 @@
         "name": "token",
         "type": "address",
         "internalType": "contract IERC20"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "results",
         "type": "tuple[]",
         "internalType": "struct Payments.RailInfo[]",
         "components": [
@@ -692,6 +782,16 @@
             "internalType": "uint256"
           }
         ]
+      },
+      {
+        "name": "nextOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -913,6 +1013,11 @@
         "internalType": "uint256"
       },
       {
+        "name": "totalNetworkFee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "finalSettledEpoch",
         "type": "uint256",
         "internalType": "uint256"
@@ -923,7 +1028,7 @@
         "internalType": "string"
       }
     ],
-    "stateMutability": "payable"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -952,6 +1057,11 @@
         "internalType": "uint256"
       },
       {
+        "name": "totalNetworkFee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
         "name": "finalSettledEpoch",
         "type": "uint256",
         "internalType": "uint256"
@@ -962,7 +1072,7 @@
         "internalType": "string"
       }
     ],
-    "stateMutability": "payable"
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1261,6 +1371,12 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "networkFee",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1314,6 +1430,12 @@
       },
       {
         "name": "operatorCommission",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "networkFee",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2039,32 +2161,6 @@
   },
   {
     "type": "error",
-    "name": "OnlyRailParticipantAllowed",
-    "inputs": [
-      {
-        "name": "expectedFrom",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expectedOperator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "expectedTo",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "caller",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OperatorLockupAllowanceExceeded",
     "inputs": [
       {
@@ -2108,6 +2204,38 @@
         "name": "attemptedUsage",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_MulDiv_Overflow",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "y",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "denominator",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PRBMath_UD60x18_Exp2_InputTooBig",
+    "inputs": [
+      {
+        "name": "x",
+        "type": "uint256",
+        "internalType": "UD60x18"
       }
     ]
   },
@@ -2256,6 +2384,27 @@
       },
       {
         "name": "attemptedEnd",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "WithdrawAmountExceedsAccumulatedFees",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "available",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "requested",
         "type": "uint256",
         "internalType": "uint256"
       }

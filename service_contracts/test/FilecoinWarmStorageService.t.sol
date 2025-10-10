@@ -89,25 +89,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes extraData;
     }
 
-    // Events from Payments contract to verify
-    event RailCreated(
-        uint256 indexed railId,
-        address indexed payer,
-        address indexed payee,
-        address token,
-        address operator,
-        address validator,
-        address serviceFeeRecipient,
-        uint256 commissionRateBps
-    );
-
-    event RailOneTimePaymentProcessed(uint256 indexed railId, uint256 netPayeeAmount, uint256 operatorCommission);
-
-    // Service provider change event to verify
-    event DataSetServiceProviderChanged(
-        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
-    );
-
     function setUp() public {
         // Setup test accounts
         deployer = address(this);
@@ -348,8 +329,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         emit FilecoinWarmStorageService.FilecoinServiceDeployed(expectedName, expectedDescription);
 
         // Deploy the proxy which triggers the initialize function
-        MyERC1967Proxy newServiceProxy = new MyERC1967Proxy(address(newServiceImpl), initData);
-        FilecoinWarmStorageService newService = FilecoinWarmStorageService(address(newServiceProxy));
+        new MyERC1967Proxy(address(newServiceImpl), initData);
     }
 
     function testServiceNameAndDescriptionValidation() public {
@@ -550,14 +530,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -668,14 +654,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
         // Encode the extra data
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
@@ -722,9 +714,11 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client);
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = CREATE_DATA_SET_TYPEHASH;
-        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
         makeSignaturePass(sessionKey1);
 
+        extraData =
+            abi.encode(createData.payer, 1, createData.metadataKeys, createData.metadataValues, createData.signature);
         vm.prank(serviceProvider);
         uint256 newDataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
 
@@ -732,6 +726,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet2.payer, client);
         assertEq(dataSet2.payee, serviceProvider);
 
+        extraData =
+            abi.encode(createData.payer, 2, createData.metadataKeys, createData.metadataValues, createData.signature);
         // ensure another session key would be denied
         makeSignaturePass(sessionKey2);
         vm.prank(serviceProvider);
@@ -744,6 +740,29 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        // cannot recreate dataset
+        extraData =
+            abi.encode(createData.payer, 1, createData.metadataKeys, createData.metadataValues, createData.signature);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 1));
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
+
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(newDataSetId2);
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(newDataSetId2);
+        assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
+        // Advance block number to be greater than the end epoch to allow deletion
+        vm.roll(terminatedInfo.pdpEndEpoch + 1);
+        vm.prank(serviceProvider);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, newDataSetId2, "");
+
+        // cannot recreate deleted dataset
+        extraData =
+            abi.encode(createData.payer, 1, createData.metadataKeys, createData.metadataValues, createData.signature);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 1));
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
     }
 
     function testCreateDataSetAddPieces() public {
@@ -751,12 +770,18 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: client,
+            clientDataSetId: 0,
             metadataKeys: dsKeys,
             metadataValues: dsValues,
             signature: FAKE_SIGNATURE
         });
-        bytes memory encodedCreateData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Approvals and deposit
         vm.startPrank(client);
@@ -831,7 +856,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = ADD_PIECES_TYPEHASH;
         vm.prank(client);
-        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
 
         makeSignaturePass(sessionKey1);
         mockPDPVerifier.addPieces(
@@ -912,6 +937,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assert(serviceFee + spPayment < 10 ** 8); // Less than 10^8
     }
 
+    uint256 nextClientDataSetId = 0;
+
     // Client-Data Set Tracking Tests
     function prepareDataSetForClient(
         address, /*provider*/
@@ -922,13 +949,19 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             metadataKeys: metadataKeys,
+            clientDataSetId: nextClientDataSetId++,
             metadataValues: metadataValues,
             payer: clientAddress,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -964,7 +997,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     function deleteDataSetForClient(address provider, address clientAddress, uint256 dataSetId) internal {
         // Delete the data set as the provider
         vm.prank(provider);
-        mockPDPVerifier.deleteDataSet(address(pdpServiceWithPayments), dataSetId, bytes(""));
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
     }
 
     function testGetClientDataSets_EmptyClient() public view {
@@ -1101,14 +1134,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: clientAddress,
+            clientDataSetId: nextClientDataSetId++,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
-            payer: clientAddress,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval if not already done
         vm.startPrank(clientAddress);
@@ -1134,7 +1173,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Change service provider from sp1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
+        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
@@ -1209,7 +1248,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Change service provider of ps1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(ps1, sp1, sp2);
+        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(ps1, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
         // ps1 service provider updated, ps2 service provider unchanged
@@ -1229,7 +1268,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Use arbitrary extra data
         bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
+        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
         FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(testDataSetId);
@@ -1242,12 +1281,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         for (uint256 i = 0; i < 2049; i++) {
             assertFalse(viewContract.provenPeriods(testDataSetId, i));
         }
-        (
-            uint64 maxProvingPeriod,
-            uint256 challengeWindowSize,
-            uint256 challengesPerProof,
-            uint256 initChallengeWindowStart
-        ) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindowSize,,) = viewContract.getPDPConfig();
         vm.startPrank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
         vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
@@ -1283,14 +1317,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: client,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -1457,14 +1497,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: client,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -1572,14 +1618,20 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             payer: client,
             signature: FAKE_SIGNATURE
         });
 
-        bytes memory encodedData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         // Setup client payment approval and deposit
         vm.startPrank(client);
@@ -2782,14 +2834,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
@@ -2827,14 +2885,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
@@ -2870,14 +2934,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         string[] memory metadataValues = new string[](0);
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
             signature: FAKE_SIGNATURE
         });
 
-        extraData =
-            abi.encode(createData.payer, createData.metadataKeys, createData.metadataValues, createData.signature);
+        extraData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
@@ -2928,10 +2998,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Now settle the payments
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2954,8 +3034,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Now settle only the CDN payment
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -2978,8 +3063,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Now settle only the cache miss payment
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3075,10 +3165,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Verify correct events are emitted
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3095,7 +3195,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
             assertFalse(
-                logs[i].topics[0] == keccak256("RailOneTimePaymentProcessed(uint256,uint256,uint256)"),
+                logs[i].topics[0] == Payments.RailOneTimePaymentProcessed.selector,
                 "RailOneTimePaymentProcessed should not be emitted for zero amounts"
             );
         }
@@ -3196,9 +3296,19 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect the correct events to be emitted for successful settlement
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3228,9 +3338,19 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect the correct events to be emitted for successful settlement
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);

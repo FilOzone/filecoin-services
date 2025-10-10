@@ -25,12 +25,17 @@
   },
   {
     "type": "function",
-    "name": "clientDataSetIDs",
+    "name": "clientDataSetIds",
     "inputs": [
       {
         "name": "payer",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "clientDataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [

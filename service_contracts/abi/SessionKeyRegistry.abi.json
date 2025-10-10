@@ -46,6 +46,11 @@
         "name": "permissions",
         "type": "bytes32[]",
         "internalType": "bytes32[]"
+      },
+      {
+        "name": "origin",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -69,6 +74,11 @@
         "name": "permissions",
         "type": "bytes32[]",
         "internalType": "bytes32[]"
+      },
+      {
+        "name": "origin",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
@@ -87,9 +97,51 @@
         "name": "permissions",
         "type": "bytes32[]",
         "internalType": "bytes32[]"
+      },
+      {
+        "name": "origin",
+        "type": "string",
+        "internalType": "string"
       }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "AuthorizationsUpdated",
+    "inputs": [
+      {
+        "name": "identity",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "signer",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "expiry",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "permissions",
+        "type": "bytes32[]",
+        "indexed": false,
+        "internalType": "bytes32[]"
+      },
+      {
+        "name": "origin",
+        "type": "string",
+        "indexed": false,
+        "internalType": "string"
+      }
+    ],
+    "anonymous": false
   }
 ]

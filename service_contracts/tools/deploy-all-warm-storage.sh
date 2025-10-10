@@ -26,21 +26,24 @@ SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
 echo "Deploying all Warm Storage contracts"
 
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set"
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
 # Auto-detect chain ID from RPC
-CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-if [ -z "$CHAIN_ID" ]; then
-  echo "Error: Failed to detect chain ID from RPC"
-  exit 1
+if [ -z "$CHAIN" ]; then
+  export CHAIN=$(cast chain-id)
+  if [ -z "$CHAIN" ]; then
+    echo "Error: Failed to detect chain ID from RPC"
+    exit 1
+  fi
 fi
 
 # Set network-specific configuration based on chain ID
-# See service_contracts/tools/README.md for deployment parameter documentation
-case "$CHAIN_ID" in
+# NOTE: CHALLENGE_FINALITY should always be 150 in production for security.
+# Calibnet uses lower values for faster testing and development.
+case "$CHAIN" in
   "314159")
     NETWORK_NAME="calibnet"
     # Network-specific addresses for calibnet
@@ -64,12 +67,12 @@ case "$CHAIN_ID" in
     echo "  Supported networks:"
     echo "    314159 - Filecoin Calibration testnet"
     echo "    314    - Filecoin mainnet"
-    echo "  Detected chain ID: $CHAIN_ID"
+    echo "  Detected chain ID: $CHAIN"
     exit 1
     ;;
 esac
 
-echo "Detected Chain ID: $CHAIN_ID ($NETWORK_NAME)"
+echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
 if [ "$DRY_RUN" != "true" ] && [ -z "$KEYSTORE" ]; then
   echo "Error: KEYSTORE is not set (required for actual deployment)"
@@ -172,13 +175,13 @@ if [ "$DRY_RUN" = "true" ]; then
         echo "🧪 Using dummy SessionKeyRegistry address: $SESSION_KEY_REGISTRY_ADDRESS"
     fi
 else
-    if [ -z "$KEYSTORE" ]; then
-        echo "Error: KEYSTORE is not set (required for actual deployment)"
+    if [ -z "$ETH_KEYSTORE" ]; then
+        echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
         exit 1
     fi
     
-    ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
-    NONCE="$(cast nonce --rpc-url "$RPC_URL" "$ADDR")"
+    ADDR=$(cast wallet address  --password "$PASSWORD")
+    NONCE="$(cast nonce "$ADDR")"
     BROADCAST_FLAG="--broadcast"
     echo "Deploying contracts from address $ADDR"
     echo "🚀 Will deploy and broadcast all transactions"
@@ -203,7 +206,8 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
+    # forge and cast will read ETH_RPC_URL, ETH_KEYSTORE, PASSWORD, ETH_FROM from the environment
+    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
     if [ -z "$VERIFIER_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract PDPVerifier contract address"
         exit 1
@@ -222,7 +226,7 @@ if [ "$DRY_RUN" = "true" ]; then
     PDP_VERIFIER_ADDRESS="0x2345678901234567890123456789012345678901"  # Dummy address for dry-run
     echo "✅ PDPVerifier proxy deployment planned"
 else
-    PDP_VERIFIER_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    PDP_VERIFIER_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
         echo "Error: Failed to extract PDPVerifier proxy address"
         exit 1
@@ -244,7 +248,7 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    PAYMENTS_CONTRACT_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
+    PAYMENTS_CONTRACT_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
         echo "Error: Failed to extract Payments contract address"
         exit 1
@@ -266,7 +270,7 @@ if [ "$DRY_RUN" = "true" ]; then
         exit 1
     fi
 else
-    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
+    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
     if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract ServiceProviderRegistry implementation address"
         exit 1
@@ -285,7 +289,7 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x5678901234567890123456789012345678901234"  # Dummy address for dry-run
     echo "✅ ServiceProviderRegistry proxy deployment planned"
 else
-    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
         echo "Error: Failed to extract ServiceProviderRegistry proxy address"
         exit 1
@@ -307,7 +311,7 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService implementation deployment planned"
 else
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService contract address"
         exit 1
@@ -331,7 +335,7 @@ if [ "$DRY_RUN" = "true" ]; then
     WARM_STORAGE_SERVICE_ADDRESS="0x7890123456789012345678901234567890123456"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService proxy deployment planned"
 else
-    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE --chain-id $CHAIN_ID lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
         exit 1
@@ -389,3 +393,24 @@ echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
 echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Contract verification
+if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
+    echo
+    echo "🔍 Starting automatic contract verification..."
+    
+    pushd "$(dirname "$0")/.." >/dev/null
+    source tools/verify-contracts.sh
+    
+    verify_contracts_batch \
+        "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
+        "$PDP_VERIFIER_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
+        "$PAYMENTS_CONTRACT_ADDRESS,lib/fws-payments/src/Payments.sol:Payments" \
+        "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
+        "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
+        "$WARM_STORAGE_SERVICE_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
+    
+    popd >/dev/null
+fi

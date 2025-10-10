@@ -1604,6 +1604,17 @@
   },
   {
     "type": "error",
+    "name": "ClientDataSetAlreadyRegistered",
+    "inputs": [
+      {
+        "name": "clientDataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "CommissionExceedsMaximum",
     "inputs": [
       {
