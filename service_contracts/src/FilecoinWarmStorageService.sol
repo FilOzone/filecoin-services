@@ -626,7 +626,6 @@ contract FilecoinWarmStorageService is
                 address(this) // controller
             );
             info.cacheMissRailId = cacheMissRailId;
-            railToDataSet[cacheMissRailId] = dataSetId;
             payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
             cdnRailId = payments.createRail(
@@ -638,7 +637,6 @@ contract FilecoinWarmStorageService is
                 address(this) // controller
             );
             info.cdnRailId = cdnRailId;
-            railToDataSet[cdnRailId] = dataSetId;
             payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
 
             emit CDNPaymentRailsToppedUp(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
@@ -704,10 +702,6 @@ contract FilecoinWarmStorageService is
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
-        if (dataSetHasCDNMetadataKey(dataSetId)) {
-            delete railToDataSet[info.cacheMissRailId];
-            delete railToDataSet[info.cdnRailId];
-        }
 
         // Clean up metadata mappings
         string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];

@@ -605,7 +605,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(clientDataSetIds[0], newDataSetId);
 
         assertEq(viewContract.railToDataSet(pdpRailId), newDataSetId);
-        assertEq(viewContract.railToDataSet(cdnRailId), newDataSetId);
 
         // Verify data set info
         FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(newDataSetId);
