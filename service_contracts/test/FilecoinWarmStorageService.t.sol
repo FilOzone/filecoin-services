@@ -3802,7 +3802,18 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(!descriptionExistsAfter, "description metadata should be cleaned up");
 
         // 3. Dataset info should be cleaned up
-        assertTrue(viewContract.getDataSet(dataSetId).pdpRailId == 0, "Dataset info should be cleaned up");
+        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
+        assertTrue(dataSetInfo.pdpRailId == 0, "pdpRailId should be cleaned up");
+        assertTrue(dataSetInfo.cacheMissRailId == 0, "cacheMissRailId should be cleaned up");
+        assertTrue(dataSetInfo.cdnRailId == 0, "cdnRailId should be cleaned up");
+        assertTrue(dataSetInfo.payer == address(0), "payer should be cleaned up");
+        assertTrue(dataSetInfo.payee == address(0), "payee should be cleaned up");
+        assertTrue(dataSetInfo.serviceProvider == address(0), "serviceProvider should be cleaned up");
+        assertTrue(dataSetInfo.commissionBps == 0, "commissionBps should be cleaned up");
+        assertTrue(dataSetInfo.clientDataSetId == 0, "clientDataSetId should be cleaned up");
+        assertTrue(dataSetInfo.pdpEndEpoch == 0, "pdpEndEpoch should be cleaned up");
+        assertTrue(dataSetInfo.providerId == 0, "providerId should be cleaned up");
+        assertTrue(dataSetInfo.dataSetId == dataSetId, "dataSetId should remain unchanged");
 
         // 4. Client dataset list should not include this dataset
         clientDataSets = viewContract.getClientDataSets(client);
