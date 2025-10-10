@@ -89,25 +89,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes extraData;
     }
 
-    // Events from Payments contract to verify
-    event RailCreated(
-        uint256 indexed railId,
-        address indexed payer,
-        address indexed payee,
-        address token,
-        address operator,
-        address validator,
-        address serviceFeeRecipient,
-        uint256 commissionRateBps
-    );
-
-    event RailOneTimePaymentProcessed(uint256 indexed railId, uint256 netPayeeAmount, uint256 operatorCommission);
-
-    // Service provider change event to verify
-    event DataSetServiceProviderChanged(
-        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
-    );
-
     function setUp() public {
         // Setup test accounts
         deployer = address(this);
@@ -624,7 +605,6 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(clientDataSetIds[0], newDataSetId);
 
         assertEq(viewContract.railToDataSet(pdpRailId), newDataSetId);
-        assertEq(viewContract.railToDataSet(cdnRailId), newDataSetId);
 
         // Verify data set info
         FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(newDataSetId);
@@ -733,7 +713,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client);
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = CREATE_DATA_SET_TYPEHASH;
-        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
         makeSignaturePass(sessionKey1);
 
         extraData =
@@ -875,7 +855,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = ADD_PIECES_TYPEHASH;
         vm.prank(client);
-        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
 
         makeSignaturePass(sessionKey1);
         mockPDPVerifier.addPieces(
@@ -1192,7 +1172,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Change service provider from sp1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
+        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
 
@@ -1267,7 +1247,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Change service provider of ps1 to sp2
         bytes memory testExtraData = new bytes(0);
         vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(ps1, sp1, sp2);
+        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(ps1, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
         // ps1 service provider updated, ps2 service provider unchanged
@@ -1287,7 +1267,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         // Use arbitrary extra data
         bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
         vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
+        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
         FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(testDataSetId);
@@ -3017,10 +2997,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Now settle the payments
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3043,8 +3033,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Now settle only the CDN payment
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3067,8 +3062,13 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Now settle only the cache miss payment
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3164,10 +3164,20 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Verify correct events are emitted
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
-        vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
+        vm.expectEmit(true, false, false, true, address(payments));
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3184,7 +3194,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
             assertFalse(
-                logs[i].topics[0] == keccak256("RailOneTimePaymentProcessed(uint256,uint256,uint256)"),
+                logs[i].topics[0] == Payments.RailOneTimePaymentProcessed.selector,
                 "RailOneTimePaymentProcessed should not be emitted for zero amounts"
             );
         }
@@ -3285,9 +3295,19 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect the correct events to be emitted for successful settlement
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
@@ -3317,9 +3337,19 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect the correct events to be emitted for successful settlement
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cdnRailId, cdnAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cdnRailId,
+            cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
         vm.expectEmit(true, false, false, true);
-        emit RailOneTimePaymentProcessed(info.cacheMissRailId, cacheMissAmount, 0);
+        emit Payments.RailOneTimePaymentProcessed(
+            info.cacheMissRailId,
+            cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
+            0,
+            cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR()
+        );
 
         vm.prank(filBeamController);
         pdpServiceWithPayments.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
