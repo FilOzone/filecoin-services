@@ -3691,10 +3691,6 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify rail mappings exist before deletion
         assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
-        assertTrue(
-            viewContract.railToDataSet(info.cacheMissRailId) == dataSetId, "Cache miss rail mapping should exist"
-        );
-        assertTrue(viewContract.railToDataSet(info.cdnRailId) == dataSetId, "CDN rail mapping should exist");
 
         // Terminate the service
         vm.prank(client);
@@ -3768,15 +3764,9 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify initial state exists
         assertTrue(info.pdpRailId != 0, "PDP rail should exist");
-        assertTrue(info.cacheMissRailId != 0, "Cache miss rail should exist");
-        assertTrue(info.cdnRailId != 0, "CDN rail should exist");
 
         // Verify rail mappings exist
         assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
-        assertTrue(
-            viewContract.railToDataSet(info.cacheMissRailId) == dataSetId, "Cache miss rail mapping should exist"
-        );
-        assertTrue(viewContract.railToDataSet(info.cdnRailId) == dataSetId, "CDN rail mapping should exist");
 
         // Verify metadata exists
         (bool withCDNExists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
@@ -3818,10 +3808,6 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // 1. Rail mappings should be cleaned up
         assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
-        assertTrue(
-            viewContract.railToDataSet(info.cacheMissRailId) == 0, "Cache miss rail mapping should be cleaned up"
-        );
-        assertTrue(viewContract.railToDataSet(info.cdnRailId) == 0, "CDN rail mapping should be cleaned up");
 
         // 2. Metadata mappings should be cleaned up
         (bool withCDNExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
@@ -3834,8 +3820,14 @@ contract FilecoinWarmStorageServiceTest is Test {
         // 3. Dataset info should be cleaned up
         FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
         assertTrue(dataSetInfo.pdpRailId == 0, "pdpRailId should be cleaned up");
-        assertTrue(dataSetInfo.cacheMissRailId == 0, "cacheMissRailId should be cleaned up");
-        assertTrue(dataSetInfo.cdnRailId == 0, "cdnRailId should be cleaned up");
+        assertTrue(
+            dataSetInfo.cacheMissRailId == 0,
+            "cacheMissRailId should be 0 because railToDataSet mapping for cdn rails is not being set anymore"
+        );
+        assertTrue(
+            dataSetInfo.cdnRailId == 0,
+            "cdnRailId should be 0 because railToDataSet mapping for cdn rails is not being set anymore"
+        );
         assertTrue(dataSetInfo.payer == address(0), "payer should be cleaned up");
         assertTrue(dataSetInfo.payee == address(0), "payee should be cleaned up");
         assertTrue(dataSetInfo.serviceProvider == address(0), "serviceProvider should be cleaned up");
