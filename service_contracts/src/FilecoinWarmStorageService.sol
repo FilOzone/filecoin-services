@@ -1367,7 +1367,7 @@ contract FilecoinWarmStorageService is
                     repr := sload(metadataKey.slot)
                 }
                 if (repr == WITH_CDN_STRING_STORAGE_REPR) {
-                    metadataKey = metadataKeys[len - 1];
+                    metadataKeys[i] = metadataKeys[len - 1];
                     metadataKeys.pop();
                     return true;
                 }
