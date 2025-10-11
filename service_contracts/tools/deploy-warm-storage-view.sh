@@ -3,7 +3,7 @@
 # env params:
 # RPC_URL
 # WARM_STORAGE_SERVICE_ADDRESS
-# KEYSTORE
+# ETH_KEYSTORE
 # PASSWORD
 
 # Assumes

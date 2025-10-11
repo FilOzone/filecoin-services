@@ -1,6 +1,6 @@
 #! /bin/bash
 # deploy-warm-storage-calibnet deploys the Warm Storage service contract to calibration net
-# Assumption: KEYSTORE, PASSWORD, RPC_URL env vars are set to an appropriate eth keystore path and password
+# Assumption: ETH_KEYSTORE, PASSWORD, RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid RPC_URL for the calibnet.
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out

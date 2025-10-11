@@ -7,8 +7,8 @@ if [ -z "$RPC_URL" ]; then
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set. Please set it to your Ethereum keystore path."
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set. Please set it to your Ethereum keystore path."
   exit 1
 fi
 
@@ -22,7 +22,7 @@ PAYMENTS_PROXY="0xdfD6960cB4221EcFf900A581f61156cb26EfDB84"
 USDFC_TOKEN="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"
 
 # Get wallet address from keystore
-MY_ADDRESS=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+MY_ADDRESS=$(cast wallet address --password "$PASSWORD")
 echo "Using wallet address: $MY_ADDRESS"
 
 # Get current nonce
@@ -46,7 +46,7 @@ echo "Internal account balance before: $ACCOUNT_INFO_BEFORE"
 
 # First, deposit USDFC into the Payments contract (this step is crucial!)
 echo "Approving USDFC to be spent by Payments contract..."
-APPROVE_TX=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" \
+APPROVE_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
     $USDFC_TOKEN "approve(address,uint256)" $PAYMENTS_PROXY "1000000000000000000" \
     --gas-limit 3000000000 --nonce "$CURRENT_NONCE")
 echo "Approval TX: $APPROVE_TX"
@@ -61,7 +61,7 @@ echo "Next nonce: $CURRENT_NONCE"
 
 # Actually deposit funds into the Payments contract
 echo "Depositing USDFC into the Payments contract..."
-DEPOSIT_TX=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" \
+DEPOSIT_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
     $PAYMENTS_PROXY "deposit(address,address,uint256)" \
     $USDFC_TOKEN "$MY_ADDRESS" "1000000000000000000" \
     --gas-limit 3000000000 --nonce $CURRENT_NONCE)
@@ -82,7 +82,7 @@ echo "Internal account balance after deposit: $ACCOUNT_INFO_AFTER_DEPOSIT"
 
 # Then set operator approval in the Payments contract for the PDP service
 echo "Setting operator approval for the PDP service..."
-OPERATOR_TX=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" \
+OPERATOR_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
     $PAYMENTS_PROXY "setOperatorApproval(address,address,bool,uint256,uint256)" \
     $USDFC_TOKEN $PDP_SERVICE_PROXY true "1000000000000000000" "1000000000000000000" \
     --gas-limit 3000000000 --nonce $CURRENT_NONCE)
@@ -99,7 +99,7 @@ echo "Next nonce: $CURRENT_NONCE"
 # Create the data set
 echo "Creating data set..."
 CALLDATA=$(cast calldata "createDataSet(address,bytes)" $PDP_SERVICE_PROXY "$EXTRA_DATA")
-CREATE_TX=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" \
+CREATE_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
     $PDP_VERIFIER_PROXY "$CALLDATA" --value "100000000000000000" --gas-limit 3000000000 --nonce $CURRENT_NONCE)
 echo "Create data set TX: $CREATE_TX"
 

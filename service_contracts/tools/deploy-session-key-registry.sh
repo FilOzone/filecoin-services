@@ -2,7 +2,7 @@
 
 # env params:
 # RPC_URL
-# KEYSTORE
+# ETH_KEYSTORE
 # PASSWORD
 
 # Assumes
