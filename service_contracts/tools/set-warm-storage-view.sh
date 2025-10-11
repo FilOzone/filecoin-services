@@ -7,7 +7,7 @@
 # - RPC_URL: RPC endpoint URL
 # - WARM_STORAGE_SERVICE_ADDRESS: Address of the deployed FilecoinWarmStorageService proxy
 # - WARM_STORAGE_VIEW_ADDRESS: Address of the deployed FilecoinWarmStorageServiceStateView
-# - KEYSTORE: Path to keystore file
+# - ETH_KEYSTORE: Path to keystore file
 # - PASSWORD: Keystore password
 # - NONCE: Transaction nonce (optional, will fetch if not provided)
 
@@ -17,9 +17,9 @@ if [ -z "$RPC_URL" ]; then
 fi
 
 # Auto-detect chain ID from RPC if not already set
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-  if [ -z "$CHAIN_ID" ]; then
+if [ -z "$CHAIN" ]; then
+  CHAIN=$(cast chain-id --rpc-url "$RPC_URL")
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
@@ -35,13 +35,13 @@ if [ -z "$WARM_STORAGE_VIEW_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
   exit 1
 fi
 
 # Get sender address
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+ADDR=$(cast wallet address --password "$PASSWORD")
 
 # Get nonce if not provided
 if [ -z "$NONCE" ]; then
@@ -51,7 +51,7 @@ fi
 echo "Setting view contract address on FilecoinWarmStorageService..."
 
 # Execute transaction and capture output, only show errors if it fails
-TX_OUTPUT=$(cast send --rpc-url "$RPC_URL" --keystore "$KEYSTORE" --password "$PASSWORD" --nonce $NONCE --chain-id $CHAIN_ID $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS 2>&1)
+TX_OUTPUT=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" --nonce $NONCE --chain-id $CHAIN $WARM_STORAGE_SERVICE_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS 2>&1)
 
 if [ $? -eq 0 ]; then
     echo "View contract address set successfully"

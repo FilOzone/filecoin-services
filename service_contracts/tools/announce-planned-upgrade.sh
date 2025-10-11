@@ -1,15 +1,15 @@
 #!/bin/bash
 
 # announce-planned-upgrade.sh: Completes a pending upgrade
-# Required args: RPC_URL, WARM_STORAGE_PROXY_ADDRESS, KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
+# Required args: RPC_URL, WARM_STORAGE_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
 
 if [ -z "$RPC_URL" ]; then
   echo "Error: RPC_URL is not set"
   exit 1
 fi
 
-if [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set"
+if [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set"
   exit 1
 fi
 
@@ -18,9 +18,9 @@ if [ -z "$PASSWORD" ]; then
   exit 1
 fi
 
-if [ -z "$CHAIN_ID" ]; then
-  CHAIN_ID=$(cast chain-id --rpc-url "$RPC_URL")
-  if [ -z "$CHAIN_ID" ]; then
+if [ -z "$CHAIN" ]; then
+  CHAIN=$(cast chain-id --rpc-url "$RPC_URL")
+  if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
   fi
@@ -46,7 +46,7 @@ else
 fi
 
 
-ADDR=$(cast wallet address --keystore "$KEYSTORE" --password "$PASSWORD")
+ADDR=$(cast wallet address --password "$PASSWORD")
 echo "Sending announcement from owner address: $ADDR"
 
 # Get current nonce
@@ -59,16 +59,14 @@ fi
 
 PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" --rpc-url "$RPC_URL" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then
-  echo "Supplied KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
+  echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
   exit 1
 fi
 
 TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "announcePlannedUpgrade((address,uint96))" "($NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)" \
   --rpc-url "$RPC_URL" \
-  --keystore "$KEYSTORE" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
-  --chain-id "$CHAIN_ID" \
   --json | jq -r '.transactionHash')
 
 if [ -z "$TX_HASH" ]; then

@@ -74,8 +74,8 @@ esac
 
 echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
-if [ "$DRY_RUN" != "true" ] && [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set (required for actual deployment)"
+if [ "$DRY_RUN" != "true" ] && [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
   exit 1
 fi
 
