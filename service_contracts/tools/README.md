@@ -91,9 +91,9 @@ export CHALLENGE_WINDOW_SIZE="30"      # 30 epochs for calibnet, 60 for mainnet
 ### Deploy FilecoinWarmStorageService Only
 
 ```bash
-export KEYSTORE="/path/to/keystore.json"
+export ETH_KEYSTORE="/path/to/keystore.json"
 export PASSWORD="your-password"
-export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export PDP_VERIFIER_ADDRESS="0x123..."
 export PAYMENTS_CONTRACT_ADDRESS="0x456..."
 
@@ -103,9 +103,9 @@ export PAYMENTS_CONTRACT_ADDRESS="0x456..."
 ### Upgrade Existing Contract
 
 ```bash
-export KEYSTORE="/path/to/keystore.json"
+export ETH_KEYSTORE="/path/to/keystore.json"
 export PASSWORD="your-password"
-export RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export WARM_STORAGE_SERVICE_PROXY_ADDRESS="0x789..."
 
 # Optional: Custom proving periods

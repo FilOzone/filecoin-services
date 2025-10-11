@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Check if required environment variables are set
-if [ -z "$RPC_URL" ]; then
-  echo "Error: RPC_URL is not set. Please set it to a valid Calibration testnet endpoint."
-  echo "Example: export RPC_URL=https://api.calibration.node.glif.io/rpc/v1"
+if [ -z "$ETH_RPC_URL" ]; then
+  echo "Error: ETH_RPC_URL is not set. Please set it to a valid Calibration testnet endpoint."
+  echo "Example: export ETH_RPC_URL=https://api.calibration.node.glif.io/rpc/v1"
   exit 1
 fi
 
@@ -13,7 +13,7 @@ if [ -z "$ETH_KEYSTORE" ]; then
 fi
 
 # Print the RPC URL being used
-echo "Using RPC URL: $RPC_URL"
+echo "Using RPC URL: $ETH_RPC_URL"
 
 # Set the contract addresses
 PDP_VERIFIER_PROXY="0xC1Ded64818C89d12D624aF40E8E56dfe70F3fd3c"
@@ -26,7 +26,7 @@ MY_ADDRESS=$(cast wallet address --password "$PASSWORD")
 echo "Using wallet address: $MY_ADDRESS"
 
 # Get current nonce
-CURRENT_NONCE=$(cast nonce --rpc-url "$RPC_URL" "$MY_ADDRESS")
+CURRENT_NONCE=$(cast nonce "$MY_ADDRESS")
 echo "Current nonce: $CURRENT_NONCE"
 
 # Prepare the extraData for data set creation (metadata and payer address)
@@ -36,17 +36,17 @@ EXTRA_DATA=$(cast abi-encode "f((string,address))" "($METADATA,$MY_ADDRESS)")
 
 # Check USDFC balance before
 echo "Checking USDFC balance before approval and data set creation..."
-BALANCE_BEFORE=$(cast call --rpc-url "$RPC_URL" $USDFC_TOKEN "balanceOf(address)" "$MY_ADDRESS")
+BALANCE_BEFORE=$(cast call $USDFC_TOKEN "balanceOf(address)" "$MY_ADDRESS")
 echo "USDFC Balance before: $BALANCE_BEFORE"
 
 # Check Payments contract internal balance before
 echo "Checking Payments contract internal balance before..."
-ACCOUNT_INFO_BEFORE=$(cast call --rpc-url "$RPC_URL" $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
+ACCOUNT_INFO_BEFORE=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
 echo "Internal account balance before: $ACCOUNT_INFO_BEFORE"
 
 # First, deposit USDFC into the Payments contract (this step is crucial!)
 echo "Approving USDFC to be spent by Payments contract..."
-APPROVE_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
+APPROVE_TX=$(cast send --password "$PASSWORD" \
     $USDFC_TOKEN "approve(address,uint256)" $PAYMENTS_PROXY "1000000000000000000" \
     --gas-limit 3000000000 --nonce "$CURRENT_NONCE")
 echo "Approval TX: $APPROVE_TX"
@@ -61,7 +61,7 @@ echo "Next nonce: $CURRENT_NONCE"
 
 # Actually deposit funds into the Payments contract
 echo "Depositing USDFC into the Payments contract..."
-DEPOSIT_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
+DEPOSIT_TX=$(cast send --password "$PASSWORD" \
     $PAYMENTS_PROXY "deposit(address,address,uint256)" \
     $USDFC_TOKEN "$MY_ADDRESS" "1000000000000000000" \
     --gas-limit 3000000000 --nonce $CURRENT_NONCE)
@@ -77,12 +77,12 @@ echo "Next nonce: $CURRENT_NONCE"
 
 # Check Payments contract internal balance after deposit
 echo "Checking Payments contract internal balance after deposit..."
-ACCOUNT_INFO_AFTER_DEPOSIT=$(cast call --rpc-url "$RPC_URL" $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
+ACCOUNT_INFO_AFTER_DEPOSIT=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
 echo "Internal account balance after deposit: $ACCOUNT_INFO_AFTER_DEPOSIT"
 
 # Then set operator approval in the Payments contract for the PDP service
 echo "Setting operator approval for the PDP service..."
-OPERATOR_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
+OPERATOR_TX=$(cast send --password "$PASSWORD" \
     $PAYMENTS_PROXY "setOperatorApproval(address,address,bool,uint256,uint256)" \
     $USDFC_TOKEN $PDP_SERVICE_PROXY true "1000000000000000000" "1000000000000000000" \
     --gas-limit 3000000000 --nonce $CURRENT_NONCE)
@@ -99,7 +99,7 @@ echo "Next nonce: $CURRENT_NONCE"
 # Create the data set
 echo "Creating data set..."
 CALLDATA=$(cast calldata "createDataSet(address,bytes)" $PDP_SERVICE_PROXY "$EXTRA_DATA")
-CREATE_TX=$(cast send --rpc-url "$RPC_URL" --password "$PASSWORD" \
+CREATE_TX=$(cast send --password "$PASSWORD" \
     $PDP_VERIFIER_PROXY "$CALLDATA" --value "100000000000000000" --gas-limit 3000000000 --nonce $CURRENT_NONCE)
 echo "Create data set TX: $CREATE_TX"
 
@@ -110,7 +110,7 @@ sleep 15
 # Get the latest data set ID and rail ID
 echo "Getting the latest data set ID and rail ID..."
 # Extract the DataSetRailsCreated event to get the IDs
-LATEST_EVENTS=$(cast logs --rpc-url "$RPC_URL" --from-block "latest-50" --to-block latest $PDP_SERVICE_PROXY)
+LATEST_EVENTS=$(cast logs --from-block "latest-50" --to-block latest $PDP_SERVICE_PROXY)
 DATASET_ID=$(echo "$LATEST_EVENTS" | grep "DataSetRailsCreated" | tail -1 | cut -d' ' -f3)
 PDP_RAIL_ID=$(echo "$LATEST_EVENTS" | grep "DataSetRailsCreated" | tail -1 | cut -d' ' -f4)
 echo "Latest DataSet ID: $DATASET_ID"
@@ -118,18 +118,18 @@ echo "Rail ID: $PDP_RAIL_ID"
 
 # Check USDFC balance after
 echo "Checking USDFC balance after data set creation..."
-BALANCE_AFTER=$(cast call --rpc-url "$RPC_URL" $USDFC_TOKEN "balanceOf(address)" "$MY_ADDRESS")
+BALANCE_AFTER=$(cast call $USDFC_TOKEN "balanceOf(address)" "$MY_ADDRESS")
 echo "USDFC Balance after: $BALANCE_AFTER"
 
 # Check Payments contract internal balance after data set creation
 echo "Checking Payments contract internal balance after data set creation..."
-ACCOUNT_INFO_AFTER=$(cast call --rpc-url "$RPC_URL" $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
+ACCOUNT_INFO_AFTER=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
 echo "Payer internal account balance after: $ACCOUNT_INFO_AFTER"
 
 # Get the rail information to check who the payee is
 echo "Getting pdp rail information..."
 if [ -n "$PDP_RAIL_ID" ]; then
-    RAIL_INFO=$(cast call --rpc-url "$RPC_URL" $PAYMENTS_PROXY "getRail(uint256)" "$PDP_RAIL_ID")
+    RAIL_INFO=$(cast call $PAYMENTS_PROXY "getRail(uint256)" "$PDP_RAIL_ID")
     echo "PDP rail info: $RAIL_INFO"
     PAYEE_ADDRESS=$(echo "$RAIL_INFO" | grep -A2 "to:" | tail -1 | tr -d ' ')
     echo "Payee address from rail: $PAYEE_ADDRESS"
@@ -137,7 +137,7 @@ if [ -n "$PDP_RAIL_ID" ]; then
     # Check payee's internal balance
     if [ -n "$PAYEE_ADDRESS" ]; then
         echo "Checking payee's internal balance in Payments contract..."
-        PAYEE_BALANCE=$(cast call --rpc-url "$RPC_URL" $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$PAYEE_ADDRESS")
+        PAYEE_BALANCE=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$PAYEE_ADDRESS")
         echo "Payee internal balance: $PAYEE_BALANCE"
     else
         echo "Could not determine payee address"

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # env params:
-# RPC_URL
+# ETH_RPC_URL
 # ETH_KEYSTORE
 # PASSWORD
 
