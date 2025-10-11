@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # env params:
-# RPC_URL
-# KEYSTORE
+# ETH_RPC_URL
+# ETH_KEYSTORE
 # PASSWORD
 
 # Assumes

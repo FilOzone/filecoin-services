@@ -1,8 +1,8 @@
 #! /bin/bash
 # deploy-all-warm-storage deploys the PDP verifier, Payments contract, and Warm Storage service
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
-# Assumption: KEYSTORE, PASSWORD, RPC_URL env vars are set to an appropriate eth keystore path and password
-# and to a valid RPC_URL for the target network.
+# Assumption: KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
+# and to a valid ETH_RPC_URL for the target network.
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
@@ -74,8 +74,8 @@ esac
 
 echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
-if [ "$DRY_RUN" != "true" ] && [ -z "$KEYSTORE" ]; then
-  echo "Error: KEYSTORE is not set (required for actual deployment)"
+if [ "$DRY_RUN" != "true" ] && [ -z "$ETH_KEYSTORE" ]; then
+  echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
   exit 1
 fi
 
