@@ -171,8 +171,7 @@ library SignatureVerificationLib {
             return;
         }
         require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH)
-                >= block.timestamp,
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
     }

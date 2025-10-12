@@ -1387,24 +1387,29 @@ contract FilecoinWarmStorageService is
     // ============ Metadata Hashing Functions ============
 
     /**
-    // ============ Signature Verification Functions ============
-    // Note: Metadata hashing functions (hashMetadataEntry, hashMetadataEntries, 
-    // hashPieceMetadata, hashAllPieceMetadata) have been moved to SignatureVerificationLib
-
-    /**
+     * // ============ Signature Verification Functions ============
+     * // Note: Metadata hashing functions (hashMetadataEntry, hashMetadataEntries, 
+     * // hashPieceMetadata, hashAllPieceMetadata) have been moved to SignatureVerificationLib
+     *
+     * /**
      * @notice Verifies a signature for the CreateDataSet operation
      * @param createData The decoded DataSetCreateData used to build the signature
      * @param payee The service provider address
      */
     function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
         // Compute the EIP-712 digest for the struct hash
-        bytes32 metadataHash = SignatureVerificationLib.hashMetadataEntries(createData.metadataKeys, createData.metadataValues);
-        bytes32 structHash = keccak256(abi.encode(
-            keccak256("CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"),
-            createData.clientDataSetId,
-            payee,
-            metadataHash
-        ));
+        bytes32 metadataHash =
+            SignatureVerificationLib.hashMetadataEntries(createData.metadataKeys, createData.metadataValues);
+        bytes32 structHash = keccak256(
+            abi.encode(
+                keccak256(
+                    "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
+                ),
+                createData.clientDataSetId,
+                payee,
+                metadataHash
+            )
+        );
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Delegate to library for verification
@@ -1449,7 +1454,9 @@ contract FilecoinWarmStorageService is
 
         bytes32 structHash = keccak256(
             abi.encode(
-                keccak256("AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)MetadataEntry(string key,string value)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"),
+                keccak256(
+                    "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)MetadataEntry(string key,string value)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
+                ),
                 clientDataSetId,
                 firstAdded,
                 keccak256(abi.encodePacked(cidHashes)),
@@ -1488,19 +1495,18 @@ contract FilecoinWarmStorageService is
     ) internal view {
         // Compute the EIP-712 digest
         bytes32 structHash = keccak256(
-            abi.encode(keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)"), clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
+            abi.encode(
+                keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)"),
+                clientDataSetId,
+                keccak256(abi.encodePacked(pieceIds))
+            )
         );
 
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Delegate to library for verification
         SignatureVerificationLib.verifySchedulePieceRemovalsSignature(
-            payer,
-            clientDataSetId,
-            pieceIds,
-            signature,
-            digest,
-            sessionKeyRegistry
+            payer, clientDataSetId, pieceIds, signature, digest, sessionKeyRegistry
         );
     }
 
