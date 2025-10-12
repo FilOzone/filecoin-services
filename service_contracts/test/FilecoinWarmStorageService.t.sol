@@ -12,6 +12,7 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
+import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {Payments} from "@fws-payments/Payments.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -22,6 +23,7 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
 contract FilecoinWarmStorageServiceTest is Test {
     using SafeERC20 for MockERC20;
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
     // Testing Constants
 
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
@@ -3654,6 +3656,227 @@ contract FilecoinWarmStorageServiceTest is Test {
         for (uint256 i = 0; i < len; i++) {
             b[i] = "a";
         }
+    }
+
+    /**
+     * @notice Regression test for: CDN data set clean up
+     * @dev Tests that railToDataSet mappings are properly cleaned up when dataSetDeleted is called
+     * This test ensures that the fix prevents rail mapping leaks after dataset deletion
+     */
+    function testRegression_CDNDataSetCleanup() public {
+        console.log("=== Regression Test: CDN Data Set Clean Up Fix ===");
+
+        // Test 1: CDN dataset cleanup
+        console.log("1. Testing CDN dataset rail mapping cleanup");
+        _testCDNDatasetRailMappingCleanup();
+
+        // Test 2: Non-CDN dataset cleanup
+        console.log("2. Testing non-CDN dataset rail mapping cleanup");
+        _testNonCDNDatasetRailMappingCleanup();
+
+        // Test 3: Complete dataSetDeleted cleanup verification
+        console.log("3. Testing complete dataSetDeleted cleanup verification");
+        _testCompleteDataSetDeletedCleanup();
+
+        console.log("=== Regression test completed successfully! ===");
+    }
+
+    function _testCDNDatasetRailMappingCleanup() internal {
+        // Create a dataset with CDN enabled
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Verify CDN rails were created
+        assertTrue(info.cacheMissRailId != 0, "Cache miss rail should be created for CDN dataset");
+        assertTrue(info.cdnRailId != 0, "CDN rail should be created for CDN dataset");
+
+        // Verify rail mappings exist before deletion
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+
+        // Terminate the service
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get updated info after termination to get pdpEndEpoch
+        info = viewContract.getDataSet(dataSetId);
+
+        // Wait for payment end epoch to elapse
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Call dataSetDeleted to trigger cleanup
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
+        // Verify all rail mappings are cleaned up (this is the fix from issue #269)
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+        assertTrue(
+            viewContract.railToDataSet(info.cacheMissRailId) == 0, "Cache miss rail mapping should be cleaned up"
+        );
+        assertTrue(viewContract.railToDataSet(info.cdnRailId) == 0, "CDN rail mapping should be cleaned up");
+    }
+
+    function _testNonCDNDatasetRailMappingCleanup() internal {
+        // Create a dataset without CDN
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Verify CDN rails were NOT created
+        assertTrue(info.cacheMissRailId == 0, "Cache miss rail should NOT be created for non-CDN dataset");
+        assertTrue(info.cdnRailId == 0, "CDN rail should NOT be created for non-CDN dataset");
+
+        // Verify only PDP rail mapping exists before deletion
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+
+        // Terminate the service to set pdpEndEpoch
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get updated info after termination to get pdpEndEpoch
+        info = viewContract.getDataSet(dataSetId);
+
+        // Wait for payment end epoch to elapse
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Call dataSetDeleted to trigger cleanup
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
+        // Verify PDP rail mapping is cleaned up
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+    }
+
+    function _testCompleteDataSetDeletedCleanup() internal {
+        // Create a dataset with CDN and multiple metadata keys
+        string[] memory metadataKeys = new string[](3);
+        string[] memory metadataValues = new string[](3);
+        metadataKeys[0] = "withCDN";
+        metadataValues[0] = "";
+        metadataKeys[1] = "label";
+        metadataValues[1] = "test-dataset";
+        metadataKeys[2] = "description";
+        metadataValues[2] = "A test dataset for cleanup verification";
+
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
+
+        // Get initial dataset info
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Verify initial state exists
+        assertTrue(info.pdpRailId != 0, "PDP rail should exist");
+
+        // Verify rail mappings exist
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+
+        // Verify metadata exists
+        (bool withCDNExists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool labelExists,) = viewContract.getDataSetMetadata(dataSetId, "label");
+        (bool descriptionExists,) = viewContract.getDataSetMetadata(dataSetId, "description");
+        assertTrue(withCDNExists, "withCDN metadata should exist");
+        assertTrue(labelExists, "label metadata should exist");
+        assertTrue(descriptionExists, "description metadata should exist");
+
+        // Verify dataset info exists
+        assertTrue(viewContract.getDataSet(dataSetId).pdpRailId != 0, "Dataset info should exist");
+
+        // Set up proving state to test cleanup by calling nextProvingPeriod via mock PDP verifier
+        // From setUp(): maxProvingPeriod = 2880, challengeWindowSize = 60
+        uint256 currentBlock = block.number;
+        uint256 firstDeadline = currentBlock + 2880; // maxProvingPeriod
+        uint256 validChallengeEpoch = firstDeadline - 60 + 1;
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, validChallengeEpoch, 10, bytes(""));
+
+        // Verify proving-related fields have non-zero values before deletion
+        uint256 provingDeadlineBefore = viewContract.provingDeadline(dataSetId);
+        bool provenThisPeriodBefore = viewContract.provenThisPeriod(dataSetId);
+        uint256 provingActivationEpochBefore = viewContract.provingActivationEpoch(dataSetId);
+
+        assertTrue(provingDeadlineBefore != 0, "provingDeadline should be non-zero after nextProvingPeriod");
+        assertFalse(provenThisPeriodBefore, "provenThisPeriod should be false after nextProvingPeriod");
+        assertTrue(
+            provingActivationEpochBefore != 0, "provingActivationEpoch should be non-zero after nextProvingPeriod"
+        );
+
+        // Verify client dataset list includes this dataset
+        FilecoinWarmStorageService.DataSetInfoView[] memory clientDataSets = viewContract.getClientDataSets(client);
+        bool foundInList = false;
+        for (uint256 i = 0; i < clientDataSets.length; i++) {
+            if (clientDataSets[i].dataSetId == dataSetId) {
+                foundInList = true;
+                break;
+            }
+        }
+        assertTrue(foundInList, "Dataset should be in client dataset list");
+
+        // Terminate the service
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get updated info after termination
+        info = viewContract.getDataSet(dataSetId);
+
+        // Wait for payment end epoch to elapse
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Call dataSetDeleted to trigger complete cleanup
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
+
+        // Verify ALL mappings are cleaned up
+
+        // Rail mappings should be cleaned up
+        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+
+        // Metadata mappings should be cleaned up
+        (bool withCDNExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool labelExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "label");
+        (bool descriptionExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "description");
+        assertFalse(withCDNExistsAfter, "withCDN metadata key should be cleaned up");
+        assertFalse(labelExistsAfter, "label metadata key should be cleaned up");
+        assertFalse(descriptionExistsAfter, "description metadata key should be cleaned up");
+
+        // Check that metadata values are also cleaned up from storage using internal function
+        string memory withCDNValueAfter = pdpServiceWithPayments._getDataSetMetadataValue(dataSetId, "withCDN");
+        string memory labelValueAfter = pdpServiceWithPayments._getDataSetMetadataValue(dataSetId, "label");
+        string memory descriptionValueAfter = pdpServiceWithPayments._getDataSetMetadataValue(dataSetId, "description");
+        assertEq(withCDNValueAfter, "", "withCDN metadata value should be cleaned up from storage");
+        assertEq(labelValueAfter, "", "label metadata value should be cleaned up from storage");
+        assertEq(descriptionValueAfter, "", "description metadata value should be cleaned up from storage");
+
+        // Proving-related fields should be cleaned up
+        assertTrue(viewContract.provingDeadline(dataSetId) == 0, "provingDeadline should be cleaned up");
+        assertFalse(viewContract.provenThisPeriod(dataSetId), "provenThisPeriod should be cleaned up");
+        assertTrue(viewContract.provingActivationEpoch(dataSetId) == 0, "provingActivationEpoch should be cleaned up");
+
+        // Dataset info should be cleaned up
+        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
+        assertTrue(dataSetInfo.pdpRailId == 0, "pdpRailId should be cleaned up");
+        assertTrue(dataSetInfo.cacheMissRailId == 0, "cacheMissRailId should be cleaned up in DataSetInfoView");
+        assertTrue(dataSetInfo.cdnRailId == 0, "cdnRailId should be cleaned up in DataSetInfoView");
+        assertTrue(dataSetInfo.payer == address(0), "payer should be cleaned up");
+        assertTrue(dataSetInfo.payee == address(0), "payee should be cleaned up");
+        assertTrue(dataSetInfo.serviceProvider == address(0), "serviceProvider should be cleaned up");
+        assertTrue(dataSetInfo.commissionBps == 0, "commissionBps should be cleaned up");
+        assertTrue(dataSetInfo.clientDataSetId == 0, "clientDataSetId should be cleaned up");
+        assertTrue(dataSetInfo.pdpEndEpoch == 0, "pdpEndEpoch should be cleaned up");
+        assertTrue(dataSetInfo.providerId == 0, "providerId should be cleaned up");
+        assertTrue(dataSetInfo.dataSetId == dataSetId, "dataSetId should remain unchanged");
+
+        // Client dataset list should not include this dataset
+        clientDataSets = viewContract.getClientDataSets(client);
+        foundInList = false;
+        for (uint256 i = 0; i < clientDataSets.length; i++) {
+            if (clientDataSets[i].dataSetId == dataSetId) {
+                foundInList = true;
+                break;
+            }
+        }
+        assertTrue(!foundInList, "Dataset should be removed from client dataset list");
     }
 }
 
