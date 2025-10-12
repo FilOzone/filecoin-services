@@ -142,20 +142,17 @@ library SignatureVerificationLib {
 
     /**
      * @notice Verifies a signature for the CreateDataSet operation
-     * @param payee The service provider address
-     * @param clientDataSetId The client's dataset ID
-     * @param metadataKeys Array of metadata keys
-     * @param metadataValues Array of metadata values
+     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
      * @param payer The address of the payer who should have signed
      * @param signature The signature bytes
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
      */
     function verifyCreateDataSetSignature(
-        address payee,
-        uint256 clientDataSetId,
-        string[] memory metadataKeys,
-        string[] memory metadataValues,
+        address, /* payee */
+        uint256, /* clientDataSetId */
+        string[] memory, /* metadataKeys */
+        string[] memory, /* metadataValues */
         address payer,
         bytes memory signature,
         bytes32 digest,
@@ -178,23 +175,19 @@ library SignatureVerificationLib {
 
     /**
      * @notice Verifies a signature for the AddPieces operation
+     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
      * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The ID of the data set
-     * @param pieceDataArray Array of piece CID structures
-     * @param firstAdded The first piece ID being added
-     * @param allKeys 2D array where allKeys[i] contains metadata keys for piece i
-     * @param allValues 2D array where allValues[i] contains metadata values for piece i
      * @param signature The signature bytes (v, r, s)
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
      */
     function verifyAddPiecesSignature(
         address payer,
-        uint256 clientDataSetId,
-        Cids.Cid[] memory pieceDataArray,
-        uint256 firstAdded,
-        string[][] memory allKeys,
-        string[][] memory allValues,
+        uint256, /* clientDataSetId */
+        Cids.Cid[] memory, /* pieceDataArray */
+        uint256, /* firstAdded */
+        string[][] memory, /* allKeys */
+        string[][] memory, /* allValues */
         bytes memory signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
@@ -216,17 +209,16 @@ library SignatureVerificationLib {
 
     /**
      * @notice Verifies a signature for the SchedulePieceRemovals operation
+     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
      * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The ID of the data set
-     * @param pieceIds Array of piece IDs to be removed
      * @param signature The signature bytes (v, r, s)
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
      */
     function verifySchedulePieceRemovalsSignature(
         address payer,
-        uint256 clientDataSetId,
-        uint256[] memory pieceIds,
+        uint256, /* clientDataSetId */
+        uint256[] memory, /* pieceIds */
         bytes memory signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry

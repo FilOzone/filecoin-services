@@ -1865,38 +1865,6 @@
   },
   {
     "type": "error",
-    "name": "InvalidSignature",
-    "inputs": [
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidSignatureLength",
-    "inputs": [
-      {
-        "name": "expectedLength",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "actualLength",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InvalidTopUpAmount",
     "inputs": [
       {
@@ -2250,17 +2218,6 @@
         "name": "slot",
         "type": "bytes32",
         "internalType": "bytes32"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "UnsupportedSignatureV",
-    "inputs": [
-      {
-        "name": "v",
-        "type": "uint8",
-        "internalType": "uint8"
       }
     ]
   },

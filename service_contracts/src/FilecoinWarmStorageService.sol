@@ -1388,7 +1388,7 @@ contract FilecoinWarmStorageService is
 
     /**
      * // ============ Signature Verification Functions ============
-     * // Note: Metadata hashing functions (hashMetadataEntry, hashMetadataEntries, 
+     * // Note: Metadata hashing functions (hashMetadataEntry, hashMetadataEntries,
      * // hashPieceMetadata, hashAllPieceMetadata) have been moved to SignatureVerificationLib
      *
      * /**
