@@ -161,14 +161,8 @@ library SignatureVerificationLib {
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view {
-        // Hash the metadata entries
-        bytes32 metadataHash = hashMetadataEntries(metadataKeys, metadataValues);
-
-        // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, metadataHash));
-
-        // Verify the struct hash matches what was expected
-        require(structHash == digest, "Struct hash mismatch");
+        // The digest is already computed by the calling contract
+        // Just use it directly for signature verification
 
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
@@ -206,28 +200,8 @@ library SignatureVerificationLib {
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view {
-        // Hash each PieceData struct
-        bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
-        for (uint256 i = 0; i < pieceDataArray.length; i++) {
-            // Hash the PieceCid struct
-            cidHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceDataArray[i].data)));
-        }
-
-        // Hash all piece metadata
-        bytes32 pieceMetadataHash = hashAllPieceMetadata(allKeys, allValues);
-
-        bytes32 structHash = keccak256(
-            abi.encode(
-                ADD_PIECES_TYPEHASH,
-                clientDataSetId,
-                firstAdded,
-                keccak256(abi.encodePacked(cidHashes)),
-                pieceMetadataHash
-            )
-        );
-
-        // Verify the struct hash matches what was expected
-        require(structHash == digest, "Struct hash mismatch");
+        // The digest is already computed by the calling contract
+        // Just use it directly for signature verification
 
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
@@ -258,13 +232,8 @@ library SignatureVerificationLib {
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view {
-        // Prepare the message hash that was signed
-        bytes32 structHash = keccak256(
-            abi.encode(SCHEDULE_PIECE_REMOVALS_TYPEHASH, clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
-        );
-
-        // Verify the struct hash matches what was expected
-        require(structHash == digest, "Struct hash mismatch");
+        // The digest is already computed by the calling contract
+        // Just use it directly for signature verification
 
         // Recover signer address from the signature
         address recoveredSigner = recoverSigner(digest, signature);
