@@ -184,7 +184,7 @@ contract ServiceProviderRegistry is
         // Extract serviceUrl for event
         string memory serviceUrl = "";
         if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            PDPOffering memory pdpOffering = decodePDPOffering(productData);
             serviceUrl = pdpOffering.serviceURL;
         }
 
@@ -234,7 +234,7 @@ contract ServiceProviderRegistry is
         // Extract serviceUrl for event
         string memory serviceUrl = "";
         if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            PDPOffering memory pdpOffering = decodePDPOffering(productData);
             serviceUrl = pdpOffering.serviceURL;
         }
 
@@ -337,7 +337,7 @@ contract ServiceProviderRegistry is
         // Extract serviceUrl for event
         string memory serviceUrl = "";
         if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            PDPOffering memory pdpOffering = decodePDPOffering(productData);
             serviceUrl = pdpOffering.serviceURL;
         }
 
@@ -825,7 +825,7 @@ contract ServiceProviderRegistry is
     /// @param productData The encoded product data
     function _validateProductData(ProductType productType, bytes memory productData) private pure {
         if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
+            PDPOffering memory pdpOffering = decodePDPOffering(productData);
             _validatePDPOffering(pdpOffering);
         } else {
             revert("Unsupported product type");
