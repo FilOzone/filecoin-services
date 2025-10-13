@@ -695,7 +695,6 @@ contract FilecoinWarmStorageService is
         delete dataSetInfo[dataSetId];
     }
 
-    // TODO calldata pieceData
     /**
      * @notice Handles pieces being added to a data set and stores associated metadata
      * @dev Called by the PDPVerifier contract when pieces are added to a data set
