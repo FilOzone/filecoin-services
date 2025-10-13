@@ -215,8 +215,6 @@ contract FilecoinWarmStorageService is
     SessionKeyRegistry public immutable sessionKeyRegistry;
 
     // =========================================================================
-    // Note: EIP-712 Type hashes are now defined in SignatureVerificationLib
-    // =========================================================================
     // Storage variables
     //
     // Each one of these variables is stored in its own storage slot and
