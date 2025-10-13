@@ -44,7 +44,7 @@ library SignatureVerificationLib {
      * @param value The metadata value
      * @return Hash of the metadata entry struct
      */
-    function hashMetadataEntry(string memory key, string memory value) internal pure returns (bytes32) {
+    function hashMetadataEntry(string calldata key, string calldata value) internal pure returns (bytes32) {
         return keccak256(abi.encode(METADATA_ENTRY_TYPEHASH, keccak256(bytes(key)), keccak256(bytes(value))));
     }
 
@@ -54,7 +54,7 @@ library SignatureVerificationLib {
      * @param values Array of metadata values
      * @return Hash of all metadata entries
      */
-    function hashMetadataEntries(string[] memory keys, string[] memory values) public pure returns (bytes32) {
+    function hashMetadataEntries(string[] calldata keys, string[] calldata values) public pure returns (bytes32) {
         require(keys.length == values.length, Errors.MetadataKeyAndValueLengthMismatch(keys.length, values.length));
 
         bytes32[] memory entryHashes = new bytes32[](keys.length);
@@ -71,7 +71,7 @@ library SignatureVerificationLib {
      * @param values Array of metadata values for this piece
      * @return Hash of the piece metadata struct
      */
-    function hashPieceMetadata(uint256 pieceIndex, string[] memory keys, string[] memory values)
+    function hashPieceMetadata(uint256 pieceIndex, string[] calldata keys, string[] calldata values)
         internal
         pure
         returns (bytes32)
@@ -86,7 +86,7 @@ library SignatureVerificationLib {
      * @param allValues 2D array where allValues[i] contains values for piece i
      * @return Hash of all piece metadata
      */
-    function hashAllPieceMetadata(string[][] memory allKeys, string[][] memory allValues)
+    function hashAllPieceMetadata(string[][] calldata allKeys, string[][] calldata allValues)
         public
         pure
         returns (bytes32)
@@ -110,7 +110,7 @@ library SignatureVerificationLib {
      * @param signature The signature bytes (v, r, s)
      * @return The address that signed the message
      */
-    function recoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
+    function recoverSigner(bytes32 messageHash, bytes calldata signature) public pure returns (address) {
         require(signature.length == 65, Errors.InvalidSignatureLength(65, signature.length));
 
         bytes32 r;
@@ -119,9 +119,9 @@ library SignatureVerificationLib {
 
         // Extract r, s, v from the signature
         assembly {
-            r := mload(add(signature, 32))
-            s := mload(add(signature, 64))
-            v := byte(0, mload(add(signature, 96)))
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
         }
         uint8 originalV = v;
 
@@ -151,10 +151,10 @@ library SignatureVerificationLib {
     function verifyCreateDataSetSignature(
         address, /* payee */
         uint256, /* clientDataSetId */
-        string[] memory, /* metadataKeys */
-        string[] memory, /* metadataValues */
+        string[] calldata, /* metadataKeys */
+        string[] calldata, /* metadataValues */
         address payer,
-        bytes memory signature,
+        bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view {
@@ -184,11 +184,11 @@ library SignatureVerificationLib {
     function verifyAddPiecesSignature(
         address payer,
         uint256, /* clientDataSetId */
-        Cids.Cid[] memory, /* pieceDataArray */
+        Cids.Cid[] calldata, /* pieceDataArray */
         uint256, /* firstAdded */
-        string[][] memory, /* allKeys */
-        string[][] memory, /* allValues */
-        bytes memory signature,
+        string[][] calldata, /* allKeys */
+        string[][] calldata, /* allValues */
+        bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view {
@@ -218,8 +218,8 @@ library SignatureVerificationLib {
     function verifySchedulePieceRemovalsSignature(
         address payer,
         uint256, /* clientDataSetId */
-        uint256[] memory, /* pieceIds */
-        bytes memory signature,
+        uint256[] calldata, /* pieceIds */
+        bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view {
