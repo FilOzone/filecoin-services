@@ -941,7 +941,19 @@
         "internalType": "uint256"
       },
       {
+        "name": "cdnAmountAdded",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
         "name": "totalCdnLockup",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissAmountAdded",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
