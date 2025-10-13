@@ -1401,14 +1401,7 @@ contract FilecoinWarmStorageService is
 
         // Delegate to library for verification
         SignatureVerificationLib.verifyCreateDataSetSignature(
-            payee,
-            createData.clientDataSetId,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.payer,
-            createData.signature,
-            digest,
-            sessionKeyRegistry
+            createData.payer, createData.signature, digest, sessionKeyRegistry
         );
     }
 
@@ -1439,17 +1432,7 @@ contract FilecoinWarmStorageService is
         );
 
         // Delegate to library for verification
-        SignatureVerificationLib.verifyAddPiecesSignature(
-            payer,
-            clientDataSetId,
-            pieceDataArray,
-            firstAdded,
-            allKeys,
-            allValues,
-            signature,
-            digest,
-            sessionKeyRegistry
-        );
+        SignatureVerificationLib.verifyAddPiecesSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**
@@ -1477,9 +1460,7 @@ contract FilecoinWarmStorageService is
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Delegate to library for verification
-        SignatureVerificationLib.verifySchedulePieceRemovalsSignature(
-            payer, clientDataSetId, pieceIds, signature, digest, sessionKeyRegistry
-        );
+        SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**

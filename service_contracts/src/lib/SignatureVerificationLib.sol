@@ -185,10 +185,6 @@ library SignatureVerificationLib {
      * @param sessionKeyRegistry The session key registry contract
      */
     function verifyCreateDataSetSignature(
-        address, /* payee */
-        uint256, /* clientDataSetId */
-        string[] calldata, /* metadataKeys */
-        string[] calldata, /* metadataValues */
         address payer,
         bytes calldata signature,
         bytes32 digest,
@@ -219,11 +215,6 @@ library SignatureVerificationLib {
      */
     function verifyAddPiecesSignature(
         address payer,
-        uint256, /* clientDataSetId */
-        Cids.Cid[] calldata, /* pieceDataArray */
-        uint256, /* firstAdded */
-        string[][] calldata, /* allKeys */
-        string[][] calldata, /* allValues */
         bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
@@ -253,8 +244,6 @@ library SignatureVerificationLib {
      */
     function verifySchedulePieceRemovalsSignature(
         address payer,
-        uint256, /* clientDataSetId */
-        uint256[] calldata, /* pieceIds */
         bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
