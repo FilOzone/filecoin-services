@@ -44,7 +44,7 @@ library SignatureVerificationLib {
      * @param value The metadata value
      * @return Hash of the metadata entry struct
      */
-    function hashMetadataEntry(string memory key, string memory value) public pure returns (bytes32) {
+    function hashMetadataEntry(string memory key, string memory value) internal pure returns (bytes32) {
         return keccak256(abi.encode(METADATA_ENTRY_TYPEHASH, keccak256(bytes(key)), keccak256(bytes(value))));
     }
 
@@ -72,7 +72,7 @@ library SignatureVerificationLib {
      * @return Hash of the piece metadata struct
      */
     function hashPieceMetadata(uint256 pieceIndex, string[] memory keys, string[] memory values)
-        public
+        internal
         pure
         returns (bytes32)
     {
