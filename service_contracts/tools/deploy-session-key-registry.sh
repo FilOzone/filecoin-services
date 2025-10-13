@@ -49,7 +49,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS,src/SessionKeyRegistry.sol:SessionKeyRegistry"
+  verify_contracts_batch "$SESSION_KEY_REGISTRY_ADDRESS,lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry"
   popd >/dev/null
 else
   echo
