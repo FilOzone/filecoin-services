@@ -83,7 +83,7 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
-    event CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 totalCdnLockup, uint256 totalCacheMissLockup);
+    event CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 cdnAmountAdded, uint256 totalCdnLockup, uint256 cacheMissAmountAdded, uint256 totalCacheMissLockup);
 
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
@@ -639,7 +639,7 @@ contract FilecoinWarmStorageService is
             info.cdnRailId = cdnRailId;
             payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
 
-            emit CDNPaymentRailsToppedUp(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
+            emit CDNPaymentRailsToppedUp(dataSetId, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CDN_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
         }
 
         // Emit event for tracking
@@ -1080,7 +1080,7 @@ contract FilecoinWarmStorageService is
         payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
         payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
 
-        emit CDNPaymentRailsToppedUp(dataSetId, totalCdnLockup, totalCacheMissLockup);
+        emit CDNPaymentRailsToppedUp(dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup);
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
