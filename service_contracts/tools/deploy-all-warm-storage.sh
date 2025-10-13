@@ -300,6 +300,27 @@ NONCE=$(expr $NONCE + "1")
 
 # Step 6: Deploy FilecoinWarmStorageService implementation
 echo "Deploying FilecoinWarmStorageService implementation..."
+# Step 6a: Deploy SignatureVerificationLib (external library)
+echo "Deploying SignatureVerificationLib library..."
+if [ "$DRY_RUN" = "true" ]; then
+    echo "🔍 Testing compilation of SignatureVerificationLib"
+    forge build src/lib/SignatureVerificationLib.sol > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        SIGNATURE_VERIFICATION_LIB_ADDRESS="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"  # Dummy address for dry-run
+        echo "✅ SignatureVerificationLib compilation successful"
+    else
+        echo "❌ SignatureVerificationLib compilation failed"
+        exit 1
+    fi
+else
+    SIGNATURE_VERIFICATION_LIB_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/lib/SignatureVerificationLib.sol:SignatureVerificationLib | grep "Deployed to" | awk '{print $3}')
+    if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
+        echo "Error: Failed to extract SignatureVerificationLib address"
+        exit 1
+    fi
+    echo "✅ SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+fi
+NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 Would deploy FilecoinWarmStorageService implementation with:"
     echo "   - PDP Verifier: $PDP_VERIFIER_ADDRESS"
@@ -311,7 +332,9 @@ if [ "$DRY_RUN" = "true" ]; then
     SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService implementation deployment planned"
 else
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE \
+        --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
+        src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
     if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService contract address"
         exit 1
