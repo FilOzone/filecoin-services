@@ -58,7 +58,7 @@ case "$CHAIN" in
   "31415926")
     NETWORK_NAME="devnet"
     # Network-specific addresses for devnet (using calibnet addresses as fallback)
-    USDFC_TOKEN_ADDRESS="0xfaf55ab906d6c6ecbad5faa240107c75457d152a"
+    USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS}"
     # Default challenge and proving configuration for devnet (fast testing values)
     # Devnet has ~15 second blocktimes, so epochs are much faster than mainnet
     DEFAULT_CHALLENGE_FINALITY="20"          # Reasonable security for testing (higher than calibnet)
