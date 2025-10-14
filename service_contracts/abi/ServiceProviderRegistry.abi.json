@@ -1539,16 +1539,10 @@
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
       {
-        "name": "serviceUrl",
-        "type": "string",
+        "name": "productData",
+        "type": "bytes",
         "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "serviceProvider",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
+        "internalType": "bytes"
       },
       {
         "name": "capabilityKeys",
@@ -1601,16 +1595,10 @@
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
       {
-        "name": "serviceUrl",
-        "type": "string",
+        "name": "productData",
+        "type": "bytes",
         "indexed": false,
-        "internalType": "string"
-      },
-      {
-        "name": "serviceProvider",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
+        "internalType": "bytes"
       },
       {
         "name": "capabilityKeys",
