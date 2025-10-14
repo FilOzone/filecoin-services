@@ -176,72 +176,6 @@
   },
   {
     "type": "function",
-    "name": "decodePDPOffering",
-    "inputs": [
-      {
-        "name": "data",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "tuple",
-        "internalType": "struct ServiceProviderRegistryStorage.PDPOffering",
-        "components": [
-          {
-            "name": "serviceURL",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "minPieceSizeInBytes",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "maxPieceSizeInBytes",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "ipniPiece",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "ipniIpfs",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "storagePricePerTibPerMonth",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "minProvingPeriodInEpochs",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "location",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "paymentTokenAddress",
-            "type": "address",
-            "internalType": "contract IERC20"
-          }
-        ]
-      }
-    ],
-    "stateMutability": "pure"
-  },
-  {
-    "type": "function",
     "name": "eip712Domain",
     "inputs": [],
     "outputs": [
@@ -282,72 +216,6 @@
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "encodePDPOffering",
-    "inputs": [
-      {
-        "name": "pdpOffering",
-        "type": "tuple",
-        "internalType": "struct ServiceProviderRegistryStorage.PDPOffering",
-        "components": [
-          {
-            "name": "serviceURL",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "minPieceSizeInBytes",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "maxPieceSizeInBytes",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "ipniPiece",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "ipniIpfs",
-            "type": "bool",
-            "internalType": "bool"
-          },
-          {
-            "name": "storagePricePerTibPerMonth",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "minProvingPeriodInEpochs",
-            "type": "uint256",
-            "internalType": "uint256"
-          },
-          {
-            "name": "location",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "paymentTokenAddress",
-            "type": "address",
-            "internalType": "contract IERC20"
-          }
-        ]
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes",
-        "internalType": "bytes"
-      }
-    ],
-    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -1539,6 +1407,12 @@
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
       {
+        "name": "serviceProvider",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
         "name": "productData",
         "type": "bytes",
         "indexed": false,
@@ -1593,6 +1467,12 @@
         "type": "uint8",
         "indexed": true,
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
+      },
+      {
+        "name": "serviceProvider",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       },
       {
         "name": "productData",

@@ -125,7 +125,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.expectEmit(true, true, false, true);
         emit ServiceProviderRegistry.ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, capKeys, capValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, capKeys, capValues
         );
 
         // Register provider
@@ -540,7 +540,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.expectEmit(true, true, false, true);
         emit ServiceProviderRegistry.ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
         registry.updateProduct(
@@ -1111,7 +1111,7 @@ contract ServiceProviderRegistryFullTest is Test {
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
         emit ServiceProviderRegistry.ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
         registry.updateProduct(
@@ -1273,7 +1273,7 @@ contract ServiceProviderRegistryFullTest is Test {
         emit ServiceProviderRegistry.ProviderRegistered(1, provider1, provider1);
         vm.expectEmit(true, true, true, true);
         emit ServiceProviderRegistry.ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, encodedDefaultPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, emptyKeys, emptyValues
         );
 
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1290,7 +1290,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
         emit ServiceProviderRegistry.ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues

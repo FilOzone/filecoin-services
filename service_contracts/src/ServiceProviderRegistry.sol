@@ -60,6 +60,7 @@ contract ServiceProviderRegistry is
     event ProductUpdated(
         uint256 indexed providerId,
         ProductType indexed productType,
+        address serviceProvider,
         bytes productData,
         string[] capabilityKeys,
         string[] capabilityValues
@@ -69,6 +70,7 @@ contract ServiceProviderRegistry is
     event ProductAdded(
         uint256 indexed providerId,
         ProductType indexed productType,
+        address serviceProvider,
         bytes productData,
         string[] capabilityKeys,
         string[] capabilityValues
@@ -179,7 +181,8 @@ contract ServiceProviderRegistry is
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        emit ProductAdded(providerId, productType, productData, capabilityKeys, capabilityValues);
+        // msg.sender is also providers[providerId].serviceProvider
+        emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
@@ -220,8 +223,8 @@ contract ServiceProviderRegistry is
         // Validate and store product
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        // Emit event
-        emit ProductAdded(providerId, productType, productData, capabilityKeys, capabilityValues);
+        // msg.sender is providers[providerId].serviceProvider, because onlyServiceProvider
+        emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Internal function to validate and store a product (used by both register and add)
@@ -314,8 +317,8 @@ contract ServiceProviderRegistry is
             capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
 
-        // Emit event
-        emit ProductUpdated(providerId, productType, productData, capabilityKeys, capabilityValues);
+        // msg.sender is also providers[providerId].serviceProvider, because onlyServiceProvider
+        emit ProductUpdated(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Remove a product from a provider
