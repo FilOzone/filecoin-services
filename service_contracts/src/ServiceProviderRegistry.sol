@@ -492,7 +492,7 @@ contract ServiceProviderRegistry is
         ServiceProduct memory product = providerProducts[providerId][ProductType.PDP];
 
         if (product.productData.length > 0) {
-            pdpOffering = decodePDPOffering(product.productData);
+            pdpOffering = abi.decode(product.productData, (PDPOffering));
             capabilityKeys = product.capabilityKeys;
             isActive = product.isActive;
         }
@@ -796,7 +796,7 @@ contract ServiceProviderRegistry is
     /// @param productData The encoded product data
     function _validateProductData(ProductType productType, bytes memory productData) private pure {
         if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = decodePDPOffering(productData);
+            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
             _validatePDPOffering(pdpOffering);
         } else {
             revert("Unsupported product type");
@@ -830,11 +830,6 @@ contract ServiceProviderRegistry is
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
             require(bytes(values[i]).length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
-    }
-
-    /// @notice Decode PDP offering from bytes
-    function decodePDPOffering(bytes memory data) public pure returns (PDPOffering memory) {
-        return abi.decode(data, (PDPOffering));
     }
 
     /// @notice Authorizes an upgrade to a new implementation
