@@ -1,0 +1,55 @@
+name: Subgraph Build Check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build:
+    name: Build Subgraph
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: |
+          cd subgraph
+          pnpm install --frozen-lockfile
+
+      - name: Generate subgraph precodegen
+        run: |
+          cd subgraph
+          pnpm run precodegen
+
+      - name: Generate subgraph codegen
+        run: |
+          cd subgraph
+          pnpm run codegen
+
+      - name: Build subgraph
+        run: |
+          cd subgraph
+          pnpm run build
+
+      - name: Verify build artifacts
+        run: |
+          cd subgraph
+          if [ ! -d "build" ]; then
+            echo "Error: Build directory not created!"
+            exit 1
+          fi
+          echo "✓ Subgraph built successfully"

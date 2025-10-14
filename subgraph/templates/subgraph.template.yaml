@@ -25,7 +25,7 @@ dataSources:
         - FaultRecord
       abis:
         - name: PDPVerifier
-          file: ./abis/PDPVerifier.json
+          file: ../service_contracts/abi/PDPVerifier.abi.json
       eventHandlers:
         - event: DataSetDeleted(indexed uint256,uint256)
           handler: handleDataSetDeleted
@@ -58,18 +58,16 @@ dataSources:
         - FaultRecord
       abis:
         - name: FilecoinWarmStorageService
-          file: ./abis/FilecoinWarmStorageService.json
+          file: ../service_contracts/abi/FilecoinWarmStorageService.abi.json
         - name: PDPVerifier
-          file: ./abis/PDPVerifier.json
+          file: ../service_contracts/abi/PDPVerifier.abi.json
         - name: ServiceProviderRegistry
-          file: ./abis/ServiceProviderRegistry.json
+          file: ../service_contracts/abi/ServiceProviderRegistry.abi.json
       eventHandlers:
         - event: "DataSetCreated(indexed uint256,indexed uint256,uint256,uint256,uint256,address,address,address,string[],string[])"
           handler: handleDataSetCreated
-        - event: "PieceAdded(indexed uint256,indexed uint256,string[],string[])"
-          handler: handlePieceAddedV1
         - event: "PieceAdded(indexed uint256,indexed uint256,(bytes),string[],string[])"
-          handler: handlePieceAddedV2
+          handler: handlePieceAdded
         - event: "DataSetServiceProviderChanged(indexed uint256,indexed address,indexed address)"
           handler: handleDataSetServiceProviderChanged
         - event: "RailRateUpdated(indexed uint256,uint256,uint256)"
@@ -87,6 +85,33 @@ dataSources:
         - event: "PaymentArbitrated(uint256,uint256,uint256,uint256,uint256)"
           handler: handlePaymentArbitrated
       file: ./src/filecoin-warm-storage-service.ts
+  # LEGACY DATA SOURCE: Indexes events from older contract versions so historical data isn’t lost
+  # Example: PieceAdded event was upgraded - old had (dataSetId, pieceId, keys[], values[]), new has pieceCid param
+  # Upgrade path: Export old ABI to ./abi/FilecoinWarmStorageServiceLegacy.abi.json → add here → define handler
+  - kind: ethereum
+    name: FilecoinWarmStorageServiceLegacy
+    network: {{name}}
+    source:
+      address: "{{FilecoinWarmStorageService.address}}"
+      abi: FilecoinWarmStorageServiceLegacy
+      startBlock: {{FilecoinWarmStorageService.startBlock}}
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - DataSet
+        - Piece
+        - Provider
+      abis:
+        - name: FilecoinWarmStorageServiceLegacy
+          file: ./abi/FilecoinWarmStorageServiceLegacy.abi.json
+        - name: PDPVerifier
+          file: ../service_contracts/abi/PDPVerifier.abi.json
+      eventHandlers:
+        - event: "PieceAdded(indexed uint256,indexed uint256,string[],string[])"
+          handler: handlePieceAdded
+      file: ./src/filecoin-warm-storage-service-legacy.ts
   - kind: ethereum
     name: ServiceProviderRegistry
     network: {{name}}
@@ -104,7 +129,7 @@ dataSources:
         - ProviderProduct
       abis:
         - name: ServiceProviderRegistry
-          file: ./abis/ServiceProviderRegistry.json
+          file: ../service_contracts/abi/ServiceProviderRegistry.abi.json
       eventHandlers:
         - event: "ProviderRegistered(indexed uint256,indexed address,indexed address)"
           handler: handleProviderRegistered
