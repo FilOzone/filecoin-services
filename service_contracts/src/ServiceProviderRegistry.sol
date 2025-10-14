@@ -369,7 +369,7 @@ contract ServiceProviderRegistry is
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        bytes memory encodedData = encodePDPOffering(pdpOffering);
+        bytes memory encodedData = abi.encode(pdpOffering);
         _updateProduct(providerId, ProductType.PDP, encodedData, capabilityKeys, capabilityValues);
     }
 
@@ -830,11 +830,6 @@ contract ServiceProviderRegistry is
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
             require(bytes(values[i]).length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
-    }
-
-    /// @notice Encode PDP offering to bytes
-    function encodePDPOffering(PDPOffering memory pdpOffering) public pure returns (bytes memory) {
-        return abi.encode(pdpOffering);
     }
 
     /// @notice Decode PDP offering from bytes
