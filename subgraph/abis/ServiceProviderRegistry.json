@@ -64,8 +64,8 @@
         "indexed": true,
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
-      { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
       { "name": "serviceProvider", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "productData", "type": "bytes", "indexed": false, "internalType": "bytes" },
       { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],
@@ -96,8 +96,8 @@
         "indexed": true,
         "internalType": "enum ServiceProviderRegistryStorage.ProductType"
       },
-      { "name": "serviceUrl", "type": "string", "indexed": false, "internalType": "string" },
       { "name": "serviceProvider", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "productData", "type": "bytes", "indexed": false, "internalType": "bytes" },
       { "name": "capabilityKeys", "type": "string[]", "indexed": false, "internalType": "string[]" },
       { "name": "capabilityValues", "type": "string[]", "indexed": false, "internalType": "string[]" }
     ],

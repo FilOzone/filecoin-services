@@ -45,13 +45,11 @@ export function createProviderProduct(event: ProductAddedEvent): void {
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
-  const serviceUrl = event.params.serviceUrl;
 
   const productId = getProviderProductEntityId(serviceProvider, productType);
   const providerProduct = new ProviderProduct(productId);
 
   providerProduct.provider = serviceProvider;
-  providerProduct.serviceUrl = serviceUrl;
   providerProduct.productData = getProviderProductData(event.address, providerId, productType);
   providerProduct.productType = BigInt.fromI32(productType);
   providerProduct.capabilityKeys = capabilityKeys;

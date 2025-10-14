@@ -102,7 +102,6 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
-  const serviceUrl = event.params.serviceUrl;
 
   const productId = getProviderProductEntityId(serviceProvider, productType);
 
@@ -115,7 +114,6 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
 
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;
-  providerProduct.serviceUrl = serviceUrl;
   providerProduct.isActive = true;
   providerProduct.save();
 }

@@ -106,7 +106,6 @@ type Provider @entity(immutable: false) {
 type ProviderProduct @entity(immutable: false) {
   id: ID!
   provider: Provider!
-  serviceUrl: String
   productData: Bytes!
   productType: BigInt!
   capabilityKeys: [String!]
