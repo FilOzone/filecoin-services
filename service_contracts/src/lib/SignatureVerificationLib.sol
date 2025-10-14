@@ -54,7 +54,7 @@ library SignatureVerificationLib {
      * @param values Array of metadata values
      * @return Hash of all metadata entries
      */
-    function hashMetadataEntries(string[] calldata keys, string[] calldata values) public pure returns (bytes32) {
+    function hashMetadataEntries(string[] calldata keys, string[] calldata values) internal pure returns (bytes32) {
         require(keys.length == values.length, Errors.MetadataKeyAndValueLengthMismatch(keys.length, values.length));
 
         bytes32[] memory entryHashes = new bytes32[](keys.length);
@@ -62,6 +62,42 @@ library SignatureVerificationLib {
             entryHashes[i] = hashMetadataEntry(keys[i], values[i]);
         }
         return keccak256(abi.encodePacked(entryHashes));
+    }
+
+    function createDataSetStructHash(
+        uint256 clientDataSetId,
+        address payee,
+        string[] calldata keys,
+        string[] calldata values
+    ) public pure returns (bytes32 structHash) {
+        return
+            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values)));
+    }
+
+    function hashAllCids(Cids.Cid[] calldata pieceDataArray) internal pure returns (bytes32 cidHashesHash) {
+        bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
+        for (uint256 i = 0; i < pieceDataArray.length; i++) {
+            cidHashes[i] = keccak256(abi.encode(keccak256("Cid(bytes data)"), keccak256(pieceDataArray[i].data)));
+        }
+        return keccak256(abi.encodePacked(cidHashes));
+    }
+
+    function addPiecesStructHash(
+        uint256 clientDataSetId,
+        uint256 firstAdded,
+        Cids.Cid[] calldata pieceDataArray,
+        string[][] calldata allKeys,
+        string[][] calldata allValues
+    ) public pure returns (bytes32 structHash) {
+        return keccak256(
+            abi.encode(
+                ADD_PIECES_TYPEHASH,
+                clientDataSetId,
+                firstAdded,
+                hashAllCids(pieceDataArray),
+                hashAllPieceMetadata(allKeys, allValues)
+            )
+        );
     }
 
     /**
@@ -149,10 +185,6 @@ library SignatureVerificationLib {
      * @param sessionKeyRegistry The session key registry contract
      */
     function verifyCreateDataSetSignature(
-        address, /* payee */
-        uint256, /* clientDataSetId */
-        string[] calldata, /* metadataKeys */
-        string[] calldata, /* metadataValues */
         address payer,
         bytes calldata signature,
         bytes32 digest,
@@ -183,11 +215,6 @@ library SignatureVerificationLib {
      */
     function verifyAddPiecesSignature(
         address payer,
-        uint256, /* clientDataSetId */
-        Cids.Cid[] calldata, /* pieceDataArray */
-        uint256, /* firstAdded */
-        string[][] calldata, /* allKeys */
-        string[][] calldata, /* allValues */
         bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
@@ -217,8 +244,6 @@ library SignatureVerificationLib {
      */
     function verifySchedulePieceRemovalsSignature(
         address payer,
-        uint256, /* clientDataSetId */
-        uint256[] calldata, /* pieceIds */
         bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry

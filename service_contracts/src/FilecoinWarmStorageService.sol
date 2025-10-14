@@ -215,8 +215,6 @@ contract FilecoinWarmStorageService is
     SessionKeyRegistry public immutable sessionKeyRegistry;
 
     // =========================================================================
-    // Note: EIP-712 Type hashes are now defined in SignatureVerificationLib
-    // =========================================================================
     // Storage variables
     //
     // Each one of these variables is stored in its own storage slot and
@@ -1387,41 +1385,21 @@ contract FilecoinWarmStorageService is
     // ============ Metadata Hashing Functions ============
 
     /**
-     * // ============ Signature Verification Functions ============
-     * // Note: Metadata hashing functions (hashMetadataEntry, hashMetadataEntries,
-     * // hashPieceMetadata, hashAllPieceMetadata) have been moved to SignatureVerificationLib
-     *
-     * /**
      * @notice Verifies a signature for the CreateDataSet operation
      * @param createData The decoded DataSetCreateData used to build the signature
      * @param payee The service provider address
      */
     function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
         // Compute the EIP-712 digest for the struct hash
-        bytes32 metadataHash =
-            SignatureVerificationLib.hashMetadataEntries(createData.metadataKeys, createData.metadataValues);
-        bytes32 structHash = keccak256(
-            abi.encode(
-                keccak256(
-                    "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
-                ),
-                createData.clientDataSetId,
-                payee,
-                metadataHash
+        bytes32 digest = _hashTypedDataV4(
+            SignatureVerificationLib.createDataSetStructHash(
+                createData.clientDataSetId, payee, createData.metadataKeys, createData.metadataValues
             )
         );
-        bytes32 digest = _hashTypedDataV4(structHash);
 
         // Delegate to library for verification
         SignatureVerificationLib.verifyCreateDataSetSignature(
-            payee,
-            createData.clientDataSetId,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.payer,
-            createData.signature,
-            digest,
-            sessionKeyRegistry
+            createData.payer, createData.signature, digest, sessionKeyRegistry
         );
     }
 
@@ -1445,39 +1423,14 @@ contract FilecoinWarmStorageService is
         bytes memory signature
     ) internal view {
         // Compute the EIP-712 digest
-        bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
-        for (uint256 i = 0; i < pieceDataArray.length; i++) {
-            cidHashes[i] = keccak256(abi.encode(keccak256("Cid(bytes data)"), keccak256(pieceDataArray[i].data)));
-        }
-
-        bytes32 pieceMetadataHash = SignatureVerificationLib.hashAllPieceMetadata(allKeys, allValues);
-
-        bytes32 structHash = keccak256(
-            abi.encode(
-                keccak256(
-                    "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)Cid(bytes data)MetadataEntry(string key,string value)PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
-                ),
-                clientDataSetId,
-                firstAdded,
-                keccak256(abi.encodePacked(cidHashes)),
-                pieceMetadataHash
+        bytes32 digest = _hashTypedDataV4(
+            SignatureVerificationLib.addPiecesStructHash(
+                clientDataSetId, firstAdded, pieceDataArray, allKeys, allValues
             )
         );
 
-        bytes32 digest = _hashTypedDataV4(structHash);
-
         // Delegate to library for verification
-        SignatureVerificationLib.verifyAddPiecesSignature(
-            payer,
-            clientDataSetId,
-            pieceDataArray,
-            firstAdded,
-            allKeys,
-            allValues,
-            signature,
-            digest,
-            sessionKeyRegistry
-        );
+        SignatureVerificationLib.verifyAddPiecesSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**
@@ -1505,13 +1458,8 @@ contract FilecoinWarmStorageService is
         bytes32 digest = _hashTypedDataV4(structHash);
 
         // Delegate to library for verification
-        SignatureVerificationLib.verifySchedulePieceRemovalsSignature(
-            payer, clientDataSetId, pieceIds, signature, digest, sessionKeyRegistry
-        );
+        SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
     }
-
-    // Note: Metadata hashing functions (hashMetadataEntry, hashMetadataEntries, etc.)
-    // and recoverSigner are now in SignatureVerificationLib and removed from this contract.
 
     /**
      * @notice Arbitrates payment based on faults in the given epoch range
