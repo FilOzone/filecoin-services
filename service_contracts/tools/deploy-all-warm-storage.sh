@@ -329,17 +329,17 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "   - FilBeam Beneficiary: $FILBEAM_BENEFICIARY_ADDRESS"
     echo "   - Service Provider Registry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
     echo "   - Session Key Registry: $SESSION_KEY_REGISTRY_ADDRESS"
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
+    FWS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService implementation deployment planned"
 else
-    SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE \
+    FWS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE \
         --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
         src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
+    if [ -z "$FWS_IMPLEMENTATION_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService contract address"
         exit 1
     fi
-    echo "✅ FilecoinWarmStorageService implementation deployed at: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
+    echo "✅ FilecoinWarmStorageService implementation deployed at: $FWS_IMPLEMENTATION_ADDRESS"
 fi
 NONCE=$(expr $NONCE + "1")
 
@@ -349,7 +349,7 @@ echo "Deploying FilecoinWarmStorageService proxy..."
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 Would deploy FilecoinWarmStorageService proxy with:"
-    echo "   - Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
+    echo "   - Implementation: $FWS_IMPLEMENTATION_ADDRESS"
     echo "   - Max Proving Period: $MAX_PROVING_PERIOD epochs"
     echo "   - Challenge Window Size: $CHALLENGE_WINDOW_SIZE epochs"
     echo "   - FilBeam Controller: $FILBEAM_CONTROLLER_ADDRESS"
@@ -358,7 +358,7 @@ if [ "$DRY_RUN" = "true" ]; then
     WARM_STORAGE_SERVICE_ADDRESS="0x7890123456789012345678901234567890123456"  # Dummy address for dry-run
     echo "✅ FilecoinWarmStorageService proxy deployment planned"
 else
-    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
+    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $FWS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
     if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
         echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
         exit 1
@@ -403,7 +403,7 @@ echo "PDPVerifier Proxy: $PDP_VERIFIER_ADDRESS"
 echo "Payments Contract: $PAYMENTS_CONTRACT_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
-echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
+echo "FilecoinWarmStorageService Implementation: $FWS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo "FilecoinWarmStorageServiceStateView: $WARM_STORAGE_VIEW_ADDRESS"
 echo
@@ -431,7 +431,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$PAYMENTS_CONTRACT_ADDRESS,lib/fws-payments/src/Payments.sol:Payments" \
         "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
-        "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
+        "$FWS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
         "$WARM_STORAGE_SERVICE_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
     
