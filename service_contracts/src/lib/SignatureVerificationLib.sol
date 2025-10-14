@@ -31,7 +31,7 @@ library SignatureVerificationLib {
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
 
-    bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
+    bytes32 internal constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
     // ============================================================================

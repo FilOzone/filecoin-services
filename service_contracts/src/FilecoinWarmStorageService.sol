@@ -1449,7 +1449,7 @@ contract FilecoinWarmStorageService is
         // Compute the EIP-712 digest
         bytes32 structHash = keccak256(
             abi.encode(
-                keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)"),
+                SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
                 clientDataSetId,
                 keccak256(abi.encodePacked(pieceIds))
             )
