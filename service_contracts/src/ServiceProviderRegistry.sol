@@ -60,8 +60,7 @@ contract ServiceProviderRegistry is
     event ProductUpdated(
         uint256 indexed providerId,
         ProductType indexed productType,
-        string serviceUrl,
-        address serviceProvider,
+        bytes productData,
         string[] capabilityKeys,
         string[] capabilityValues
     );
@@ -70,8 +69,7 @@ contract ServiceProviderRegistry is
     event ProductAdded(
         uint256 indexed providerId,
         ProductType indexed productType,
-        string serviceUrl,
-        address serviceProvider,
+        bytes productData,
         string[] capabilityKeys,
         string[] capabilityValues
     );
@@ -181,16 +179,7 @@ contract ServiceProviderRegistry is
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        // Extract serviceUrl for event
-        string memory serviceUrl = "";
-        if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = decodePDPOffering(productData);
-            serviceUrl = pdpOffering.serviceURL;
-        }
-
-        emit ProductAdded(
-            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
-        );
+        emit ProductAdded(providerId, productType, productData, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
@@ -231,17 +220,8 @@ contract ServiceProviderRegistry is
         // Validate and store product
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        // Extract serviceUrl for event
-        string memory serviceUrl = "";
-        if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = decodePDPOffering(productData);
-            serviceUrl = pdpOffering.serviceURL;
-        }
-
         // Emit event
-        emit ProductAdded(
-            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
-        );
+        emit ProductAdded(providerId, productType, productData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Internal function to validate and store a product (used by both register and add)
@@ -334,17 +314,8 @@ contract ServiceProviderRegistry is
             capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
 
-        // Extract serviceUrl for event
-        string memory serviceUrl = "";
-        if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = decodePDPOffering(productData);
-            serviceUrl = pdpOffering.serviceURL;
-        }
-
         // Emit event
-        emit ProductUpdated(
-            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
-        );
+        emit ProductUpdated(providerId, productType, productData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Remove a product from a provider
