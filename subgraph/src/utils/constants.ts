@@ -14,12 +14,4 @@ export const BIGINT_ONE = BigInt.fromI32(1);
 
 export const METADATA_KEY_WITH_CDN = "withCDN";
 
-/**
- * Constants for transaction parsing
- */
-export class TransactionConstants {
-  static readonly WORD_SIZE: i32 = 32;
-  static readonly ADDRESS_SIZE: i32 = 20;
-  static readonly SELECTOR_SIZE: i32 = 4;
-  static readonly MIN_ADD_SERVICE_PROVIDER_SIZE: i32 = 3 * 32; // 3 parameters * 32 bytes each
-}
+export const PDP_OFFERING_DEF = "(string,uint256,uint256,bool,bool,uint256,uint256,string,address)";

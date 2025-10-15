@@ -54,7 +54,7 @@ export function createProviderProduct(event: ProductAddedEvent): void {
 
   providerProduct.provider = serviceProvider;
   providerProduct.productData = productData;
-  providerProduct.decodedProductData = decodePDPOfferingData(event.address, productData).toJSON();
+  providerProduct.decodedProductData = decodePDPOfferingData(productData).toJSON();
   providerProduct.productType = BigInt.fromI32(productType);
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;

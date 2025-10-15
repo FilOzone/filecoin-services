@@ -103,7 +103,6 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
-  const serviceUrl = event.params.serviceUrl;
 
   const productId = getProviderProductEntityId(serviceProvider, productType);
 
@@ -115,7 +114,7 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
   }
 
   const productData = getProviderProductData(event.address, providerId, productType);
-  const decodedProductData = decodePDPOfferingData(event.address, productData);
+  const decodedProductData = decodePDPOfferingData(productData);
 
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;
