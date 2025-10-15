@@ -9,7 +9,8 @@ import {
 } from "../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { Provider, ProviderProduct } from "../generated/schema";
 import { BIGINT_ONE } from "./utils/constants";
-import { decodePDPOfferingData, getProviderProductData, getServiceProviderInfo } from "./utils/contract-calls";
+import { getProviderProductData, getServiceProviderInfo } from "./utils/contract-calls";
+import { decodePDPOfferingData } from "./utils/decoders";
 import { createProviderProduct, initiateProvider } from "./utils/entity";
 import { getProviderProductEntityId } from "./utils/keys";
 
