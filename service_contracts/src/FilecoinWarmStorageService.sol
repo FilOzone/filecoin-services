@@ -23,7 +23,7 @@ import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint64 constant CHALLENGES_PER_PROOF = 5;
-uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points 
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -1559,10 +1559,12 @@ contract FilecoinWarmStorageService is
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
-        if (periodId == currentPeriod) {
-            return provenThisPeriod[dataSetId];
-        }
-        return provenPeriods[dataSetId][periodId];
+        // if (periodId == currentPeriod) {
+        //     return provenThisPeriod[dataSetId];
+        // }
+        // return provenPeriods[dataSetId][periodId];
+
+        return false;
     }
 
     function _calcPeriodDeadline(uint256 dataSetId, uint256 periodId) private view returns (uint256) {
