@@ -206,9 +206,6 @@ contract FilecoinWarmStorageService is
     uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
     uint256 private immutable DEFAULT_CACHE_MISS_LOCKUP_AMOUNT; // 0.3 USDFC
 
-    // Burn Address
-    address payable private constant BURN_ADDRESS = payable(0xff00000000000000000000000000000000000063);
-
     // Token decimals
     uint8 private immutable TOKEN_DECIMALS;
 
