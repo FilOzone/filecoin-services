@@ -977,7 +977,7 @@ contract ServiceProviderRegistryFullTest is Test {
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
-            "",
+            "serviceURL",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -996,6 +996,21 @@ contract ServiceProviderRegistryFullTest is Test {
 
         // Verify product is removed
         assertFalse(registry.providerHasProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP));
+
+        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
+            registry.getPDPService(providerId);
+        assertFalse(isActive);
+        assertEq(keys.length, 0);
+        assertEq(bytes(pdpData.serviceURL).length, 0);
+        assertEq(bytes(pdpData.location).length, 0);
+        assertEq(pdpData.minPieceSizeInBytes, 0);
+        assertEq(pdpData.minPieceSizeInBytes, 0);
+        assertEq(pdpData.maxPieceSizeInBytes, 0);
+        assertFalse(pdpData.ipniPiece);
+        assertFalse(pdpData.ipniIpfs);
+        assertEq(pdpData.minProvingPeriodInEpochs, 0);
+        assertEq(pdpData.storagePricePerTibPerMonth, 0);
+        assertEq(address(pdpData.paymentTokenAddress), address(0));
     }
 
     // ========== Getter Tests ==========
