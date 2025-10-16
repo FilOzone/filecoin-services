@@ -60,7 +60,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 
 ### Required for specific scripts:
 - `deploy-warm-storage-calibnet.sh` requires:
-  - `PDP_VERIFIER_ADDRESS` - Address of deployed PDPVerifier contract
+  - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
   - `PAYMENTS_CONTRACT_ADDRESS` - Address of deployed Payments contract
 
 - `deploy-all-warm-storage.sh` requires:
