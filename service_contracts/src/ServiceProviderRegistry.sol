@@ -382,6 +382,8 @@ contract ServiceProviderRegistry is
         // Decrement active product type provider count
         activeProductTypeProviderCount[productType]--;
 
+        delete providerProducts[providerId][productType];
+
         // Emit event
         emit ProductRemoved(providerId, productType);
     }
