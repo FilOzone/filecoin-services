@@ -129,7 +129,7 @@ is linked at deploy time by the scripts in `tools/`.
 
 The project depends on:
 - PDP contracts from https://github.com/FilOzone/pdp.git (main branch)
-- Filecoin Services Payments from https://github.com/FilOzone/filecoin-services-payments
+- Filecoin Services FilecoinPayV1 from https://github.com/FilOzone/filecoin-services-payments
 - OpenZeppelin contracts (both standard and upgradeable)
 - Forge standard library
 

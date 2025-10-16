@@ -6,7 +6,7 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 
 ### Available Scripts
 
-- `deploy-warm-storage-calibnet.sh` - Deploy FilecoinWarmStorageService only (requires existing PDPVerifier and Payments contracts)
+- `deploy-warm-storage-calibnet.sh` - Deploy FilecoinWarmStorageService only (requires existing PDPVerifier and FilecoinPayV1 contracts)
 - `deploy-all-warm-storage.sh` - Deploy all contracts to either Calibnet or Mainnet
 - `upgrade-warm-storage-calibnet.sh` - Upgrade existing FilecoinWarmStorageService contract with new proving period parameters
 
@@ -61,7 +61,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 ### Required for specific scripts:
 - `deploy-warm-storage-calibnet.sh` requires:
   - `PDP_VERIFIER_ADDRESS` - Address of deployed PDPVerifier contract
-  - `PAYMENTS_CONTRACT_ADDRESS` - Address of deployed Payments contract
+  - `PAYMENTS_CONTRACT_ADDRESS` - Address of deployed FilecoinPayV1 contract
 
 - `deploy-all-warm-storage.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
