@@ -4,7 +4,6 @@ import { ProductAdded as ProductAddedEvent } from "../../generated/ServiceProvid
 import { BIGINT_ZERO, BIGINT_ONE, ContractAddresses, LeafSize } from "./constants";
 import { ProviderStatus } from "./types";
 import { getProviderProductEntityId, getPieceEntityId, getDataSetEntityId } from "./keys";
-import { getProviderProductData } from "./contract-calls";
 import { decodePDPOfferingData } from "./decoders";
 import { validateCommPv2, unpaddedSize } from "./cid";
 
@@ -42,16 +41,14 @@ export function createRails(
 }
 
 export function createProviderProduct(event: ProductAddedEvent): void {
-  const providerId = event.params.providerId;
   const productType = event.params.productType;
   const serviceProvider = event.params.serviceProvider;
+  const productData = event.params.productData;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
 
   const productId = getProviderProductEntityId(serviceProvider, productType);
   const providerProduct = new ProviderProduct(productId);
-
-  const productData = getProviderProductData(event.address, providerId, productType);
 
   providerProduct.provider = serviceProvider;
   providerProduct.productData = productData;

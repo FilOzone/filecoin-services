@@ -22,19 +22,6 @@ export function getServiceProviderInfo(registryAddress: Address, providerId: Big
   );
 }
 
-export function getProviderProductData(registryAddress: Address, providerId: BigInt, productType: number): Bytes {
-  const serviceProviderRegistryInstance = ServiceProviderRegistry.bind(registryAddress);
-
-  const productDataTry = serviceProviderRegistryInstance.try_getProduct(providerId, i32(productType));
-
-  if (productDataTry.reverted) {
-    log.warning("getProviderProductData: contract call reverted for providerId: {}", [providerId.toString()]);
-    return Bytes.empty();
-  }
-
-  return productDataTry.value.getProductData();
-}
-
 export function getPieceCidData(verifierAddress: Address, setId: BigInt, pieceId: BigInt): Bytes {
   const pdpVerifierInstance = PDPVerifier.bind(verifierAddress);
 
