@@ -9,8 +9,8 @@ library Errors {
     enum AddressField {
         /// PDPVerifier contract address
         PDPVerifier,
-        /// Payments contract address
-        Payments,
+        /// FilecoinPayV1 contract address
+        FilecoinPayV1,
         /// USDFC contract address
         USDFC,
         /// FilBeam controller address
@@ -206,7 +206,7 @@ library Errors {
     /// @param toEpoch The ending epoch (inclusive)
     error InvalidEpochRange(uint256 fromEpoch, uint256 toEpoch);
 
-    /// @notice Only the Payments contract can call this function
+    /// @notice Only the FilecoinPayV1 contract can call this function
     /// @param expected The expected payments contract address
     /// @param actual The caller's address
     error CallerNotPayments(address expected, address actual);

@@ -13,7 +13,7 @@ import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinW
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {Payments} from "@fws-payments/Payments.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
@@ -36,7 +36,7 @@ contract FilecoinWarmStorageServiceTest is Test {
     FilecoinWarmStorageService public pdpServiceWithPayments;
     FilecoinWarmStorageServiceStateView public viewContract;
     MockPDPVerifier public mockPDPVerifier;
-    Payments public payments;
+    FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
@@ -225,8 +225,8 @@ contract FilecoinWarmStorageServiceTest is Test {
             new string[](0)
         );
 
-        // Deploy Payments contract (no longer upgradeable)
-        payments = new Payments();
+        // Deploy FilecoinPayV1 contract (no longer upgradeable)
+        payments = new FilecoinPayV1();
 
         // Transfer tokens to client for payment
         mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
@@ -284,7 +284,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(
             pdpServiceWithPayments.paymentsContractAddress(),
             address(payments),
-            "Payments contract address should be set correctly"
+            "FilecoinPayV1 contract address should be set correctly"
         );
         assertEq(
             address(pdpServiceWithPayments.usdfcTokenAddress()),
@@ -550,7 +550,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
-        // Set operator approval for the PDP service in the Payments contract
+        // Set operator approval for the PDP service in the FilecoinPayV1 contract
         payments.setOperatorApproval(
             mockUSDFC,
             address(pdpServiceWithPayments),
@@ -560,7 +560,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             365 days // max lockup period
         );
 
-        // Client deposits funds to the Payments contract for future payments
+        // Client deposits funds to the FilecoinPayV1 contract for future payments
         uint256 depositAmount = 10e6; // Sufficient funds for initial lockup and future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
@@ -619,8 +619,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSetInfo.payer, client, "Payer should match");
         assertEq(dataSetInfo.payee, serviceProvider, "Payee should match");
 
-        // Verify the rails in the actual Payments contract
-        Payments.RailView memory pdpRail = payments.getRail(pdpRailId);
+        // Verify the rails in the actual FilecoinPayV1 contract
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(pdpRailId);
         assertEq(address(pdpRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(pdpRail.from, client, "From address should be client");
         assertEq(pdpRail.to, serviceProvider, "To address should be service provider");
@@ -630,7 +630,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(pdpRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
         assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
-        Payments.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
         assertEq(address(cacheMissRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cacheMissRail.from, client, "From address should be client");
         assertEq(cacheMissRail.to, serviceProvider, "To address should be service provider");
@@ -640,7 +640,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
         assertEq(cacheMissRail.paymentRate, 0, "Initial payment rate should be 0");
 
-        Payments.RailView memory cdnRail = payments.getRail(cdnRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(cdnRailId);
         assertEq(address(cdnRail.token), address(mockUSDFC), "Token should be USDFC");
         assertEq(cdnRail.from, client, "From address should be client");
         assertEq(cdnRail.to, filBeamBeneficiary, "To address should be FilBeamBeneficiary");
@@ -675,7 +675,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Client needs to approve the PDP Service to create a payment rail
         vm.startPrank(client);
-        // Set operator approval for the PDP service in the Payments contract
+        // Set operator approval for the PDP service in the FilecoinPayV1 contract
         payments.setOperatorApproval(
             mockUSDFC,
             address(pdpServiceWithPayments),
@@ -685,7 +685,7 @@ contract FilecoinWarmStorageServiceTest is Test {
             365 days // max lockup period
         );
 
-        // Client deposits funds to the Payments contract for future payments
+        // Client deposits funds to the FilecoinPayV1 contract for future payments
         uint256 depositAmount = 10e6; // Sufficient funds for initial lockup and future operations
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
@@ -708,7 +708,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(dataSet.payer, client);
         assertEq(dataSet.payee, serviceProvider);
         // Verify the commission rate was set correctly for basic service (no CDN)
-        Payments.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(dataSet.pdpRailId);
         assertEq(pdpRail.commissionRateBps, 0, "Commission rate should be 0% for basic service (no CDN)");
 
         assertEq(dataSet.cacheMissRailId, 0, "Cache miss rail ID should be 0 for basic service (no CDN)");
@@ -884,7 +884,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         );
     }
 
-    // Helper function to get account info from the Payments contract
+    // Helper function to get account info from the FilecoinPayV1 contract
     function getAccountInfo(IERC20 token, address owner) internal view returns (uint256 funds, uint256 lockupCurrent) {
         (funds, lockupCurrent,,) = payments.accounts(token, owner);
         return (funds, lockupCurrent);
@@ -1598,9 +1598,9 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
 
-        Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
-        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
 
         assertEq(pdpRail.endEpoch, 0, "PDP rail should NOT be terminated");
         assertTrue(cacheMissRail.endEpoch > 0, "Cache miss rail should be terminated");
@@ -1690,7 +1690,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         console.log("Proof submitted successfully");
 
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        Payments.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
+        FilecoinPayV1.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
 
         // 3. Try to terminate payment from FilBeam address
         console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
@@ -1729,8 +1729,8 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // 5. Assert that payment rate has remained unchanged
         console.log("\n5. Assert that payment rate has remained unchanged");
-        Payments.RailView memory pdpRail = payments.getRail(info.pdpRailId);
-        assertEq(pdpRailPreTermination.paymentRate, pdpRail.paymentRate, "Payments rate should remain unchanged");
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertEq(pdpRailPreTermination.paymentRate, pdpRail.paymentRate, "FilecoinPayV1 rate should remain unchanged");
 
         console.log("\n=== Test completed successfully! ===");
     }
@@ -2877,8 +2877,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
 
         // Verify lockup amounts are set to the expected values
-        Payments.RailView memory cacheMissRail = payments.getRail(dataSet.cacheMissRailId);
-        Payments.RailView memory cdnRail = payments.getRail(dataSet.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(dataSet.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(dataSet.cdnRailId);
         assertEq(cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should be 0.3 USDFC");
         assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should be 0.7 USDFC");
         // Verify that CDN rails have no validator
@@ -3011,14 +3011,14 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Now settle the payments
         vm.expectEmit(true, false, false, true, address(payments));
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cdnRailId,
             cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
             cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
         );
         vm.expectEmit(true, false, false, true, address(payments));
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cacheMissRailId,
             cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
@@ -3051,7 +3051,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Now settle only the CDN payment
         vm.expectEmit(true, false, false, true, address(payments));
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cdnRailId,
             cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
@@ -3084,7 +3084,7 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Now settle only the cache miss payment
         vm.expectEmit(true, false, false, true, address(payments));
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cacheMissRailId,
             cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
@@ -3194,14 +3194,14 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Verify correct events are emitted
         vm.expectEmit(true, false, false, true, address(payments));
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cdnRailId,
             cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
             cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
         );
         vm.expectEmit(true, false, false, true, address(payments));
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cacheMissRailId,
             cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
@@ -3223,7 +3223,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
             assertFalse(
-                logs[i].topics[0] == Payments.RailOneTimePaymentProcessed.selector,
+                logs[i].topics[0] == FilecoinPayV1.RailOneTimePaymentProcessed.selector,
                 "RailOneTimePaymentProcessed should not be emitted for zero amounts"
             );
         }
@@ -3250,8 +3250,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
         // Verify rails have correct lockup before settlement (initial + top-up)
-        Payments.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
         assertEq(
             cdnRailBefore.lockupFixed,
             defaultCDNLockup + cdnAmount,
@@ -3328,14 +3328,14 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect the correct events to be emitted for successful settlement
         vm.expectEmit(true, false, false, true);
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cdnRailId,
             cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
             cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
         );
         vm.expectEmit(true, false, false, true);
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cacheMissRailId,
             cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
@@ -3370,14 +3370,14 @@ contract FilecoinWarmStorageServiceTest is Test {
 
         // Expect the correct events to be emitted for successful settlement
         vm.expectEmit(true, false, false, true);
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cdnRailId,
             cdnAmount - cdnAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
             cdnAmount / payments.NETWORK_FEE_DENOMINATOR()
         );
         vm.expectEmit(true, false, false, true);
-        emit Payments.RailOneTimePaymentProcessed(
+        emit FilecoinPayV1.RailOneTimePaymentProcessed(
             info.cacheMissRailId,
             cacheMissAmount - cacheMissAmount / payments.NETWORK_FEE_DENOMINATOR(),
             0,
@@ -3398,8 +3398,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         uint256 cacheMissTopUp = 50000;
 
         // Verify initial lockup matches expected values
-        Payments.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRailBefore = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRailBefore = payments.getRail(info.cacheMissRailId);
         assertEq(cdnRailBefore.lockupFixed, defaultCDNLockup, "CDN rail should start with 0.7 USDFC lockup");
         assertEq(
             cacheMissRailBefore.lockupFixed,
@@ -3416,8 +3416,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
         // Verify lockup increased by top-up amount
-        Payments.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
         assertEq(
             cdnRailAfter.lockupFixed, defaultCDNLockup + cdnTopUp, "CDN rail lockup should equal initial plus top-up"
         );
@@ -3476,8 +3476,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 500);
 
-        Payments.RailView memory cdnRail1 = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRail1 = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail1 = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRail1 = payments.getRail(info.cacheMissRailId);
         assertEq(cdnRail1.lockupFixed, defaultCDNLockup + 1000);
         assertEq(cacheMissRail1.lockupFixed, defaultCacheMissLockup + 500);
 
@@ -3489,8 +3489,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 2000, 1500);
 
-        Payments.RailView memory cdnRail2 = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRail2 = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail2 = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRail2 = payments.getRail(info.cacheMissRailId);
         assertEq(cdnRail2.lockupFixed, defaultCDNLockup + 3000, "CDN lockup should be initial plus cumulative top-ups");
         assertEq(
             cacheMissRail2.lockupFixed,
@@ -3510,8 +3510,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, 0);
 
         // Verify lockup remains at initial values
-        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
         assertEq(cdnRail.lockupFixed, defaultCDNLockup, "CDN lockup should remain at initial 0.7 USDFC");
         assertEq(
             cacheMissRail.lockupFixed, defaultCacheMissLockup, "Cache miss lockup should remain at initial 0.3 USDFC"
@@ -3595,7 +3595,7 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
-        // Directly terminate CDN rail through Payments contract (simulating edge case)
+        // Directly terminate CDN rail through FilecoinPayV1 contract (simulating edge case)
         // Note: The service contract is the controller of the rails
         vm.prank(address(pdpServiceWithPayments));
         payments.terminateRail(info.cdnRailId);
@@ -3667,8 +3667,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         vm.stopPrank();
 
         // Verify rails are still active and have correct lockup amounts
-        Payments.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-        Payments.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
 
         // Rails should not be terminated
         assertEq(cdnRail.endEpoch, 0, "CDN rail should not be terminated");
@@ -3944,7 +3944,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
     // Contracts
     SignatureCheckingService public pdpService;
     MockPDPVerifier public mockPDPVerifier;
-    Payments public payments;
+    FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
     ServiceProviderRegistry public serviceProviderRegistry;
 
@@ -3987,8 +3987,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
 
-        // Deploy Payments contract (no longer upgradeable)
-        payments = new Payments();
+        // Deploy FilecoinPayV1 contract (no longer upgradeable)
+        payments = new FilecoinPayV1();
 
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService(
@@ -4069,7 +4069,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 contract FilecoinWarmStorageServiceUpgradeTest is Test {
     FilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
-    Payments public payments;
+    FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
     ServiceProviderRegistry public serviceProviderRegistry;
 
@@ -4094,8 +4094,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
 
-        // Deploy Payments contract (no longer upgradeable)
-        payments = new Payments();
+        // Deploy FilecoinPayV1 contract (no longer upgradeable)
+        payments = new FilecoinPayV1();
 
         // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
         // This simulates an existing deployed contract before the upgrade

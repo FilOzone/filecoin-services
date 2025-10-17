@@ -9,7 +9,8 @@ import {
 } from "../generated/ServiceProviderRegistry/ServiceProviderRegistry";
 import { Provider, ProviderProduct } from "../generated/schema";
 import { BIGINT_ONE } from "./utils/constants";
-import { decodePDPOfferingData, getProviderProductData, getServiceProviderInfo } from "./utils/contract-calls";
+import { getProviderProductData, getServiceProviderInfo } from "./utils/contract-calls";
+import { decodePDPOfferingData } from "./utils/decoders";
 import { createProviderProduct, initiateProvider } from "./utils/entity";
 import { getProviderProductEntityId } from "./utils/keys";
 
@@ -103,7 +104,6 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
-  const serviceUrl = event.params.serviceUrl;
 
   const productId = getProviderProductEntityId(serviceProvider, productType);
 
@@ -115,7 +115,7 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
   }
 
   const productData = getProviderProductData(event.address, providerId, productType);
-  const decodedProductData = decodePDPOfferingData(event.address, productData);
+  const decodedProductData = decodePDPOfferingData(productData);
 
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;

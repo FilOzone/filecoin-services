@@ -2,7 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {Payments} from "@fws-payments/Payments.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -24,7 +24,7 @@ contract ProviderValidationTest is Test {
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry;
     MockPDPVerifier public pdpVerifier;
-    Payments public payments;
+    FilecoinPayV1 public payments;
     MockERC20 public usdfc;
 
     address public owner;
@@ -63,8 +63,8 @@ contract ProviderValidationTest is Test {
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
         sessionKeyRegistry = new SessionKeyRegistry();
 
-        // Deploy Payments (no longer upgradeable)
-        payments = new Payments();
+        // Deploy FilecoinPayV1 (no longer upgradeable)
+        payments = new FilecoinPayV1();
 
         // Deploy FilecoinWarmStorageService
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(

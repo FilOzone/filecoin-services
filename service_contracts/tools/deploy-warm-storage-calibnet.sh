@@ -160,7 +160,7 @@ echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "PDPVerifier address: $PDP_VERIFIER_PROXY_ADDRESS"
-echo "Payments contract address: $PAYMENTS_CONTRACT_ADDRESS"
+echo "FilecoinPayV1 contract address: $PAYMENTS_CONTRACT_ADDRESS"
 echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
 echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "ServiceProviderRegistry address: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"

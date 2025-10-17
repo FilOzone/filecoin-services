@@ -607,7 +607,7 @@
       {
         "name": "",
         "type": "tuple",
-        "internalType": "struct Payments.RailView",
+        "internalType": "struct FilecoinPayV1.RailView",
         "components": [
           {
             "name": "token",
@@ -703,7 +703,7 @@
       {
         "name": "results",
         "type": "tuple[]",
-        "internalType": "struct Payments.RailInfo[]",
+        "internalType": "struct FilecoinPayV1.RailInfo[]",
         "components": [
           {
             "name": "railId",
@@ -764,7 +764,7 @@
       {
         "name": "results",
         "type": "tuple[]",
-        "internalType": "struct Payments.RailInfo[]",
+        "internalType": "struct FilecoinPayV1.RailInfo[]",
         "components": [
           {
             "name": "railId",

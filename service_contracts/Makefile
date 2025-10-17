@@ -103,7 +103,7 @@ fmt-check:
 	forge fmt --check
 
 # Coverage
-# Note: Using --ir-minimum due to "stack too deep" errors in Payments.sol
+# Note: Using --ir-minimum due to "stack too deep" errors in FilecoinPayV1.sol
 # This may result in less accurate source mappings but is necessary for coverage to run
 .PHONY: coverage
 coverage:
@@ -128,7 +128,7 @@ ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
-	Payments \
+	FilecoinPayV1 \
 	PDPVerifier \
 	ServiceProviderRegistry \
 	SessionKeyRegistry

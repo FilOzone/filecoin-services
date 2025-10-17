@@ -10,7 +10,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
-import {Payments} from "@fws-payments/Payments.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -30,7 +30,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
     FilecoinWarmStorageServiceStateView public viewContract;
     ServiceProviderRegistry public providerRegistry;
     MockPDPVerifier public pdpVerifier;
-    Payments public payments;
+    FilecoinPayV1 public payments;
     MockERC20 public usdfcToken;
     SessionKeyRegistry public sessionKeyRegistry;
 
@@ -86,7 +86,7 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         registerProvider(unauthorizedProvider, "Unauthorized Provider");
 
         // Deploy payments contract (no longer upgradeable)
-        payments = new Payments();
+        payments = new FilecoinPayV1();
 
         // Deploy service contract
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(

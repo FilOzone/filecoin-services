@@ -1,5 +1,5 @@
 #! /bin/bash
-# deploy-all-warm-storage deploys the PDP verifier, Payments contract, and Warm Storage service
+# deploy-all-warm-storage deploys the PDP verifier, FilecoinPayV1 contract, and Warm Storage service
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
 # Assumption: KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
@@ -235,25 +235,25 @@ else
 fi
 NONCE=$(expr $NONCE + "1")
 
-# Step 3: Deploy Payments contract Implementation
-echo "Deploying Payments contract..."
+# Step 3: Deploy FilecoinPayV1 contract Implementation
+echo "Deploying FilecoinPayV1 contract..."
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of Payments contract"
-    forge build lib/fws-payments/src/Payments.sol > /dev/null 2>&1
+    echo "🔍 Testing compilation of FilecoinPayV1 contract"
+    forge build lib/fws-payments/src/FilecoinPayV1.sol > /dev/null 2>&1
     if [ $? -eq 0 ]; then
         PAYMENTS_CONTRACT_ADDRESS="0x3456789012345678901234567890123456789012"  # Dummy address for dry-run
-        echo "✅ Payments contract compilation successful"
+        echo "✅ FilecoinPayV1 contract compilation successful"
     else
-        echo "❌ Payments contract compilation failed"
+        echo "❌ FilecoinPayV1 contract compilation failed"
         exit 1
     fi
 else
-    PAYMENTS_CONTRACT_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/Payments.sol:Payments | grep "Deployed to" | awk '{print $3}')
+    PAYMENTS_CONTRACT_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1 | grep "Deployed to" | awk '{print $3}')
     if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
-        echo "Error: Failed to extract Payments contract address"
+        echo "Error: Failed to extract FilecoinPayV1 contract address"
         exit 1
     fi
-    echo "✅ Payments contract deployed at: $PAYMENTS_CONTRACT_ADDRESS"
+    echo "✅ FilecoinPayV1 contract deployed at: $PAYMENTS_CONTRACT_ADDRESS"
 fi
 NONCE=$(expr $NONCE + "1")
 
@@ -324,7 +324,7 @@ NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 Would deploy FilecoinWarmStorageService implementation with:"
     echo "   - PDP Verifier: $PDP_VERIFIER_ADDRESS"
-    echo "   - Payments Contract: $PAYMENTS_CONTRACT_ADDRESS"
+    echo "   - FilecoinPayV1 Contract: $PAYMENTS_CONTRACT_ADDRESS"
     echo "   - USDFC Token: $USDFC_TOKEN_ADDRESS"
     echo "   - FilBeam Beneficiary: $FILBEAM_BENEFICIARY_ADDRESS"
     echo "   - Service Provider Registry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
@@ -400,7 +400,7 @@ fi
 
 echo "PDPVerifier Implementation: $VERIFIER_IMPLEMENTATION_ADDRESS"
 echo "PDPVerifier Proxy: $PDP_VERIFIER_ADDRESS"
-echo "Payments Contract: $PAYMENTS_CONTRACT_ADDRESS"
+echo "FilecoinPayV1 Contract: $PAYMENTS_CONTRACT_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWS_IMPLEMENTATION_ADDRESS"
@@ -428,7 +428,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
     verify_contracts_batch \
         "$VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
         "$PDP_VERIFIER_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
-        "$PAYMENTS_CONTRACT_ADDRESS,lib/fws-payments/src/Payments.sol:Payments" \
+        "$PAYMENTS_CONTRACT_ADDRESS,lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
         "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$FWS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \

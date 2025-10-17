@@ -60,8 +60,8 @@ contract ServiceProviderRegistry is
     event ProductUpdated(
         uint256 indexed providerId,
         ProductType indexed productType,
-        string serviceUrl,
         address serviceProvider,
+        bytes productData,
         string[] capabilityKeys,
         string[] capabilityValues
     );
@@ -70,8 +70,8 @@ contract ServiceProviderRegistry is
     event ProductAdded(
         uint256 indexed providerId,
         ProductType indexed productType,
-        string serviceUrl,
         address serviceProvider,
+        bytes productData,
         string[] capabilityKeys,
         string[] capabilityValues
     );
@@ -181,16 +181,8 @@ contract ServiceProviderRegistry is
         // Add the initial product using shared logic
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        // Extract serviceUrl for event
-        string memory serviceUrl = "";
-        if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
-            serviceUrl = pdpOffering.serviceURL;
-        }
-
-        emit ProductAdded(
-            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
-        );
+        // msg.sender is also providers[providerId].serviceProvider
+        emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
         (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
@@ -231,17 +223,8 @@ contract ServiceProviderRegistry is
         // Validate and store product
         _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
 
-        // Extract serviceUrl for event
-        string memory serviceUrl = "";
-        if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
-            serviceUrl = pdpOffering.serviceURL;
-        }
-
-        // Emit event
-        emit ProductAdded(
-            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
-        );
+        // msg.sender is providers[providerId].serviceProvider, because onlyServiceProvider
+        emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Internal function to validate and store a product (used by both register and add)
@@ -334,17 +317,8 @@ contract ServiceProviderRegistry is
             capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
 
-        // Extract serviceUrl for event
-        string memory serviceUrl = "";
-        if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
-            serviceUrl = pdpOffering.serviceURL;
-        }
-
-        // Emit event
-        emit ProductUpdated(
-            providerId, productType, serviceUrl, providers[providerId].serviceProvider, capabilityKeys, capabilityValues
-        );
+        // msg.sender is also providers[providerId].serviceProvider, because onlyServiceProvider
+        emit ProductUpdated(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Remove a product from a provider
@@ -382,6 +356,8 @@ contract ServiceProviderRegistry is
         // Decrement active product type provider count
         activeProductTypeProviderCount[productType]--;
 
+        delete providerProducts[providerId][productType];
+
         // Emit event
         emit ProductRemoved(providerId, productType);
     }
@@ -398,7 +374,7 @@ contract ServiceProviderRegistry is
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        bytes memory encodedData = encodePDPOffering(pdpOffering);
+        bytes memory encodedData = abi.encode(pdpOffering);
         _updateProduct(providerId, ProductType.PDP, encodedData, capabilityKeys, capabilityValues);
     }
 
@@ -521,7 +497,7 @@ contract ServiceProviderRegistry is
         ServiceProduct memory product = providerProducts[providerId][ProductType.PDP];
 
         if (product.productData.length > 0) {
-            pdpOffering = decodePDPOffering(product.productData);
+            pdpOffering = abi.decode(product.productData, (PDPOffering));
             capabilityKeys = product.capabilityKeys;
             isActive = product.isActive;
         }
@@ -859,16 +835,6 @@ contract ServiceProviderRegistry is
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
             require(bytes(values[i]).length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
-    }
-
-    /// @notice Encode PDP offering to bytes
-    function encodePDPOffering(PDPOffering memory pdpOffering) public pure returns (bytes memory) {
-        return abi.encode(pdpOffering);
-    }
-
-    /// @notice Decode PDP offering from bytes
-    function decodePDPOffering(bytes memory data) public pure returns (PDPOffering memory) {
-        return abi.decode(data, (PDPOffering));
     }
 
     /// @notice Authorizes an upgrade to a new implementation
