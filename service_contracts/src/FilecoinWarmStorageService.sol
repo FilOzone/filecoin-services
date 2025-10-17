@@ -1169,43 +1169,6 @@ contract FilecoinWarmStorageService is
         return (epoch - activationEpoch) / maxProvingPeriod;
     }
 
-    /**
-     * @notice Checks if a specific epoch has been proven
-     * @dev Returns true only if the epoch belongs to a proven proving period
-     * @param dataSetId The ID of the data set to check
-     * @param epoch The epoch to check
-     * @return True if the epoch has been proven, false otherwise
-     */
-    function isEpochProven(uint256 dataSetId, uint256 epoch) public view returns (bool) {
-        // Check if data set is active
-        if (provingActivationEpoch[dataSetId] == 0) {
-            return false;
-        }
-
-        // Check if this epoch is before activation
-        if (epoch < provingActivationEpoch[dataSetId]) {
-            return false;
-        }
-
-        // Check if this epoch is in the future (beyond current block)
-        if (epoch > block.number) {
-            return false;
-        }
-
-        // Get the period this epoch belongs to
-        uint256 periodId = getProvingPeriodForEpoch(dataSetId, epoch);
-
-        // Special case: current ongoing proving period
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        if (periodId == currentPeriod) {
-            // For the current period, check if it has been proven already
-            return provenThisPeriod[dataSetId];
-        }
-
-        // For past periods, check the provenPeriods bitmapping
-        return 0 != provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
-    }
-
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a : b;
     }
@@ -1590,11 +1553,14 @@ contract FilecoinWarmStorageService is
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
-        // if (periodId == currentPeriod) {
-        //     return provenThisPeriod[dataSetId];
-        // }
+        if (periodId == currentPeriod) {
+            return provenThisPeriod[dataSetId];
+        }
         // return provenPeriods[dataSetId][periodId];
-
+        uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
+        if(isProven == 1){
+            return true;
+        }
         return false;
     }
 
