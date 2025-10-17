@@ -149,7 +149,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
                     storagePricePerTibPerMonth: 5 * 10 ** 6, // 5 USDFC per TiB per month
                     minProvingPeriodInEpochs: 2880,
                     location: "US",
-                    paymentTokenAddress: IERC20(address(0))
+                    paymentTokenAddress: IERC20(address(0)),
+                    ipniPeerId: hex""
                 })
             ),
             capabilityKeys,

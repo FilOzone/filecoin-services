@@ -125,7 +125,8 @@ contract ProviderValidationTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-West",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+                    ipniPeerId: hex""
                 })
             ),
             new string[](0),
@@ -163,7 +164,8 @@ contract ProviderValidationTest is Test {
                     storagePricePerTibPerMonth: 1 ether,
                     minProvingPeriodInEpochs: 2880,
                     location: "US-West",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+                    paymentTokenAddress: IERC20(address(0)), // Payment in FIL
+                    ipniPeerId: hex""
                 })
             ),
             new string[](0),
