@@ -1527,10 +1527,7 @@ contract FilecoinWarmStorageService is
         }
         // return provenPeriods[dataSetId][periodId];
         uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
-        if(isProven == 1){
-            return true;
-        }
-        return false;
+        return isProven != 0;
     }
 
     function _calcPeriodDeadline(uint256 dataSetId, uint256 periodId) private view returns (uint256) {
