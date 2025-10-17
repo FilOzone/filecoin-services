@@ -60,8 +60,10 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 
 ### Required for specific scripts:
 - `deploy-warm-storage-calibnet.sh` requires:
-  - `PDP_VERIFIER_ADDRESS` - Address of deployed PDPVerifier contract
+
+  - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
   - `PAYMENTS_CONTRACT_ADDRESS` - Address of deployed FilecoinPayV1 contract
+
 
 - `deploy-all-warm-storage.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier

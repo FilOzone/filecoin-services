@@ -52,7 +52,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
             paymentTokenAddress: IERC20(address(0))
         });
 
-        encodedDefaultPDPData = registry.encodePDPOffering(defaultPDPData);
+        encodedDefaultPDPData = abi.encode(defaultPDPData);
 
         // Give providers ETH for registration
         vm.deal(provider1, 10 ether);

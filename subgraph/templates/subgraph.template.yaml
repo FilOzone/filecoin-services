@@ -137,9 +137,9 @@ dataSources:
           handler: handleProviderInfoUpdated
         - event: "ProviderRemoved(indexed uint256)"
           handler: handleProviderRemoved
-        - event: "ProductAdded(indexed uint256,indexed uint8,string,address,string[],string[])"
+        - event: "ProductAdded(indexed uint256,indexed uint8,address,bytes,string[],string[])"
           handler: handleProductAdded
-        - event: "ProductUpdated(indexed uint256,indexed uint8,string,address,string[],string[])"
+        - event: "ProductUpdated(indexed uint256,indexed uint8,address,bytes,string[],string[])"
           handler: handleProductUpdated
         - event: "ProductRemoved(indexed uint256,indexed uint8)"
           handler: handleProductRemoved

@@ -29,27 +29,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     bytes public encodedDefaultPDPData;
     bytes public encodedUpdatedPDPData;
 
-    event ProviderRegistered(uint256 indexed providerId, address indexed owner, address indexed beneficiary);
-    event ProductUpdated(
-        uint256 indexed providerId,
-        ServiceProviderRegistryStorage.ProductType indexed productType,
-        string serviceUrl,
-        address owner,
-        string[] capabilityKeys,
-        string[] capabilityValues
-    );
-    event ProductAdded(
-        uint256 indexed providerId,
-        ServiceProviderRegistryStorage.ProductType indexed productType,
-        string serviceUrl,
-        address owner,
-        string[] capabilityKeys,
-        string[] capabilityValues
-    );
-    event ProductRemoved(uint256 indexed providerId, ServiceProviderRegistryStorage.ProductType indexed productType);
-    event ProviderRemoved(uint256 indexed providerId);
-    event ProviderInfoUpdated(uint256 indexed providerId);
-
     function setUp() public override {
         super.setUp();
         owner = address(this);
@@ -131,7 +110,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Expect events
         vm.expectEmit(true, true, true, true);
-        emit ProviderRegistered(1, provider1, provider1);
+        emit ServiceProviderRegistry.ProviderRegistered(1, provider1, provider1);
 
         // Non-empty capability arrays
         string[] memory capKeys = new string[](4);
@@ -147,7 +126,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[3] = "ISO27001";
 
         vm.expectEmit(true, true, false, true);
-        emit ProductAdded(1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, capKeys, capValues);
+        emit ServiceProviderRegistry.ProductAdded(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, capKeys, capValues
+        );
 
         // Register provider
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
@@ -560,8 +541,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, false, true);
-        emit ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, UPDATED_SERVICE_URL, provider1, emptyKeys, emptyValues
+        emit ServiceProviderRegistry.ProductUpdated(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
         registry.updateProduct(
@@ -672,7 +653,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         vm.startPrank(provider1);
 
         vm.expectEmit(true, true, false, true);
-        emit ProviderRemoved(1);
+        emit ServiceProviderRegistry.ProviderRemoved(1);
 
         registry.removeProvider();
 
@@ -979,7 +960,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
-            "",
+            "serviceURL",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
             encodedDefaultPDPData,
@@ -993,11 +974,26 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Remove the only product - should succeed now
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
-        emit ProductRemoved(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        emit ServiceProviderRegistry.ProductRemoved(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         registry.removeProduct(ServiceProviderRegistryStorage.ProductType.PDP);
 
         // Verify product is removed
         assertFalse(registry.providerHasProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP));
+
+        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
+            registry.getPDPService(providerId);
+        assertFalse(isActive);
+        assertEq(keys.length, 0);
+        assertEq(bytes(pdpData.serviceURL).length, 0);
+        assertEq(bytes(pdpData.location).length, 0);
+        assertEq(pdpData.minPieceSizeInBytes, 0);
+        assertEq(pdpData.minPieceSizeInBytes, 0);
+        assertEq(pdpData.maxPieceSizeInBytes, 0);
+        assertFalse(pdpData.ipniPiece);
+        assertFalse(pdpData.ipniIpfs);
+        assertEq(pdpData.minProvingPeriodInEpochs, 0);
+        assertEq(pdpData.storagePricePerTibPerMonth, 0);
+        assertEq(address(pdpData.paymentTokenAddress), address(0));
     }
 
     // ========== Getter Tests ==========
@@ -1131,8 +1127,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
-        emit ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, UPDATED_SERVICE_URL, provider1, emptyKeys, emptyValues
+        emit ServiceProviderRegistry.ProductUpdated(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
 
         registry.updateProduct(
@@ -1172,7 +1168,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Update description
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
-        emit ProviderInfoUpdated(1);
+        emit ServiceProviderRegistry.ProviderInfoUpdated(1);
         registry.updateProviderInfo("Updated Name", "Updated description");
 
         // Verify updated description
@@ -1291,10 +1287,10 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Test ProviderRegistered and ProductAdded events
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit ProviderRegistered(1, provider1, provider1);
+        emit ServiceProviderRegistry.ProviderRegistered(1, provider1, provider1);
         vm.expectEmit(true, true, true, true);
-        emit ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, SERVICE_URL, provider1, emptyKeys, emptyValues
+        emit ServiceProviderRegistry.ProductAdded(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, emptyKeys, emptyValues
         );
 
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1310,8 +1306,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Test ProductUpdated event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
-        emit ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, UPDATED_SERVICE_URL, provider1, emptyKeys, emptyValues
+        emit ServiceProviderRegistry.ProductUpdated(
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
         );
         registry.updateProduct(
             ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
@@ -1320,7 +1316,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Test ProviderRemoved event
         vm.prank(provider1);
         vm.expectEmit(true, true, false, true);
-        emit ProviderRemoved(1);
+        emit ServiceProviderRegistry.ProviderRemoved(1);
         registry.removeProvider();
     }
 
