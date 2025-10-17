@@ -6,19 +6,6 @@
   },
   {
     "type": "function",
-    "name": "BURN_ACTOR",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "MAX_CAPABILITIES",
     "inputs": [],
     "outputs": [
