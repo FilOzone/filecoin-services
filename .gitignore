@@ -1,4 +1,5 @@
 # VIM
 *.swp
+
+# Foundry
 foundry.lock
-my-changes.txt
