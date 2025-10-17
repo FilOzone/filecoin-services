@@ -9,7 +9,7 @@ broadcast/
 node_modules/
 
 # Foundry dependencies
-lib/
+/lib
 
 # Ignore IDEs
 .idea
