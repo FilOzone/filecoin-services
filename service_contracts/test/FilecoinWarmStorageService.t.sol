@@ -14,7 +14,7 @@ import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinW
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
@@ -4216,5 +4216,291 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         warmStorageService.migrate(address(0));
+    }
+}
+
+/**
+ * @notice Tests for validatePayment function - ensures optimized implementation
+ * maintains same behavior as the original loop-based version
+ */
+
+
+contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
+    /**
+     * @notice Test: All epochs proven - should pay full amount
+     */
+    function testValidatePayment_AllEpochsProven() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+
+        // Capture activation epoch BEFORE calling nextProvingPeriod 
+
+        // uint256 _activationEpoch = block.number; // using this line is causing the activationEpoch variable to change every time we call vm.roll (some bug maybe) so better to do use the following line : 
+        uint256 _activationEpoch = 1; // because in testing environment, starting block number is 1
+        uint256 firstChallengeEpoch = _activationEpoch + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+
+        uint256 firstDeadline = _activationEpoch + maxProvingPeriod;
+
+        // Submit proof for period 0
+        vm.roll(firstChallengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Move just past the first deadline
+        vm.roll(firstDeadline + 1);
+
+        uint256 secondDeadline = firstDeadline + maxProvingPeriod;
+        uint256 challengeEpoch1 = secondDeadline - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+
+        // Submit proof for period 1
+        vm.roll(challengeEpoch1);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Move to period 2
+        vm.roll(secondDeadline + 1);
+        uint256 thirdDeadline = secondDeadline + maxProvingPeriod;
+        uint256 challengeEpoch2 = thirdDeadline - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+
+        // Submit proof for period 2
+        vm.roll(challengeEpoch2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Now validate payment for epochs within these proven periods
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = _activationEpoch - 1; // exclusive start
+        uint256 toEpoch = _activationEpoch + (maxProvingPeriod * 3) - 1; // inclusive end, all 3 periods
+        uint256 proposedAmount = 1000e6;
+
+        // Move past the periods we're validating, so that toEpoch becomes less than block.number 
+        vm.roll(toEpoch + 1);
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // Should pay full amount since all epochs are proven
+        assertEq(result.modifiedAmount, proposedAmount, "Should pay full amount");
+        assertEq(result.settleUpto, toEpoch, "Should settle to end epoch");
+    }
+
+    /**
+     * @notice Test: No epochs proven - should pay nothing
+     */
+    function testValidatePayment_NoEpochsProven() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving but don't submit any proofs
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = 1; // same reason as the above test
+
+        // Move forward 3 periods without submitting proofs
+        vm.roll(activationEpoch + (maxProvingPeriod * 3));
+
+        // Validate payment
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch - 1; // exclusive
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3) - 1;
+        uint256 proposedAmount = 1000e6;
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // Should pay nothing
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, fromEpoch, "Should not settle");
+        assertEq(result.note, "No proven epochs in the requested range");
+    }
+
+    /**
+     * @notice Test: Some epochs proven - should pay proportionally
+     */
+    function testValidatePayment_SomeEpochsProven() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+
+        uint256 activationEpoch = 1;
+
+        // Submit proof for period 0
+        vm.roll(firstChallengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Move to period 1 - DON'T submit proof
+        uint256 deadline0 = activationEpoch + maxProvingPeriod;
+        vm.roll(deadline0 + 1);
+        uint256 challengeEpoch1 = deadline0 + 1 + maxProvingPeriod - (challengeWindow / 2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+
+        // Skip proof for period 1
+
+        // Move to period 2 and submit proof
+        uint256 deadline1 = deadline0 + maxProvingPeriod;
+        vm.roll(deadline1 + 1);
+        uint256 challengeEpoch2 = deadline1 + 1 + maxProvingPeriod - (challengeWindow / 2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+
+        vm.roll(challengeEpoch2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Validate payment for all 3 periods
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch - 1;
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3) - 1;
+        uint256 proposedAmount = 3000e6;
+
+        vm.roll(toEpoch + 1);
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // Should pay 2/3 of amount (2 proven periods out of 3)
+        uint256 totalEpochs = toEpoch - fromEpoch;
+        uint256 provenEpochs = maxProvingPeriod * 2;
+        uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
+
+        assertEq(result.modifiedAmount, expectedAmount, "Should pay for 2/3 of epochs");
+        assertTrue(result.settleUpto > fromEpoch, "Should settle past start");
+    }
+
+    /**
+     * @notice Test: Proving never activated - should pay nothing
+     */
+    function testValidatePayment_ProvingNeverActivated() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Don't start proving at all
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = block.number;
+        uint256 toEpoch = block.number + 1000;
+        uint256 proposedAmount = 1000e6;
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, fromEpoch, "Should not settle");
+        assertEq(result.note, "Proving never activated for this data set");
+    }
+
+    /**
+     * @notice Test: Request range before activation - should pay nothing
+     */
+    function testValidatePayment_BeforeActivation() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Move forward to create some block height
+        vm.roll(block.number + 1000);
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = block.number;
+
+        // Try to validate for epochs before activation
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch - 500;
+        uint256 toEpoch = activationEpoch - 100;
+        uint256 proposedAmount = 1000e6;
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, 0, "Should pay nothing for pre-activation epochs");
+        assertEq(result.settleUpto, fromEpoch, "Should not settle");
+    }
+
+    /**
+     * @notice Test: Partial period coverage - epochs span within a proven period
+     */
+    function testValidatePayment_PartialPeriodCoverage() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = 1;
+
+        // Submit proof for period 0
+        vm.roll(challengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Validate payment for middle portion of period 0
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch + 100; // Start 100 epochs into period
+        uint256 toEpoch = activationEpoch + maxProvingPeriod - 100; // End 100 epochs before period ends
+        uint256 proposedAmount = 1000e6;
+
+        vm.roll(toEpoch + 1);
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // Since the period is proven, should pay full amount for the requested range
+        assertEq(result.modifiedAmount, proposedAmount, "Should pay full amount for proven period");
+        assertEq(result.settleUpto, toEpoch, "Should settle to end of range");
+    }
+
+    /**
+     * @notice Test: Invalid rail ID - should revert
+     */
+    function testValidatePayment_InvalidRailId() public {
+        uint256 invalidRailId = 999999;
+
+        vm.prank(address(payments));
+        vm.expectRevert(abi.encodeWithSelector(Errors.RailNotAssociated.selector, invalidRailId));
+        pdpServiceWithPayments.validatePayment(invalidRailId, 1000e6, 100, 200, 0);
+    }
+
+    /**
+     * @notice Test: Invalid epoch range - should revert
+     */
+    function testValidatePayment_InvalidEpochRange() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // fromEpoch >= toEpoch
+        vm.prank(address(payments));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidEpochRange.selector, 200, 200));
+        pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e6, 200, 200, 0);
     }
 }
