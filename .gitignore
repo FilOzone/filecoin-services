@@ -1,2 +1,18 @@
-# VIM
+# Compiler files
+cache/
+out/
+
+# Ignores development broadcast logs
+broadcast/
+
+# Node modules
+node_modules/
+
+# Foundry dependencies
+lib/
+
+# Ignore IDEs
+.idea
+
+# Ignore VIM
 *.swp

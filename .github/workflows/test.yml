@@ -11,8 +11,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -20,26 +18,21 @@ jobs:
           version: v1.3.5
 
       - name: Install Dependencies
-        run: |
-          cd service_contracts
-          make install
+        run: make install
 
       - name: Run build
         run: |
           export PATH="/home/runner/.config/.foundry/bin:$PATH"
-          cd service_contracts
           make build
 
       - name: Run tests
         run: |
           export PATH="/home/runner/.config/.foundry/bin:$PATH"
-          cd service_contracts
           make test
 
       - name: Generate coverage report
         run: |
           export PATH="/home/runner/.config/.foundry/bin:$PATH"
-          cd service_contracts
           echo "::warning::Coverage is currently disabled due to Solidity stack depth limitations"
           echo "The combination of complex nested mappings, Payments contract interactions, and coverage"
           echo "instrumentation exceeds Solidity's stack depth limits even with --ir-minimum flag."
@@ -52,6 +45,6 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          directory: ./service_contracts
+          directory: ./
           files: ./lcov.info
           fail_ci_if_error: false

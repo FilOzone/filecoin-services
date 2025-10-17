@@ -1,0 +1,84 @@
+{
+  "name": "@filoz/filecoin-services",
+  "version": "1.0.0",
+  "description": "Filecoin Services Monorepo - Smart contracts for Filecoin ecosystem services",
+  "private": true,
+  "workspaces": [
+    "packages/pay",
+    "packages/pdp", 
+    "packages/session-key-registry",
+    "packages/warm-storage"
+  ],
+  "scripts": {
+    "build": "make build",
+    "test": "make test",
+    "lint": "make lint",
+    "clean": "make clean",
+    "install:all": "make install",
+    
+    "forge:build": "forge build",
+    "forge:test": "forge test",
+    "forge:clean": "forge clean",
+    "forge:test:verbose": "forge test --verbosity 2",
+    "forge:test:gas": "forge test --gas-report",
+    "forge:coverage": "forge coverage",
+    
+    "pay:build": "forge build packages/pay",
+    "pay:test": "forge test --match-path 'packages/pay/**/*.t.sol'",
+    "pay:clean": "forge clean",
+    
+    "pdp:build": "forge build packages/pdp",
+    "pdp:test": "forge test --match-path 'packages/pdp/**/*.t.sol'",
+    "pdp:clean": "forge clean",
+    
+    "session-key:build": "forge build packages/session-key-registry",
+    "session-key:test": "forge test --match-path 'packages/session-key-registry/**/*.t.sol'",
+    "session-key:clean": "forge clean",
+    
+    "warm-storage:build": "forge build packages/warm-storage",
+    "warm-storage:test": "forge test --match-path 'packages/warm-storage/**/*.t.sol'",
+    "warm-storage:clean": "forge clean",
+    
+    "release": "release-please",
+    "release:create": "release-please create",
+    "release:tag": "release-please tag",
+    
+    "size": "forge build --sizes",
+    "size:check": "forge build --sizes",
+    
+    "deploy:all": "echo 'Deploy scripts to be implemented'",
+    "deploy:pay": "echo 'Deploy pay scripts to be implemented'",
+    "deploy:pdp": "echo 'Deploy pdp scripts to be implemented'",
+    "deploy:session-key": "echo 'Deploy session-key scripts to be implemented'",
+    "deploy:warm-storage": "echo 'Deploy warm-storage scripts to be implemented'"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.3.0",
+    "@openzeppelin/contracts-upgradeable": "^5.3.0",
+    "@pythnetwork/pyth-sdk-solidity": "^3.0.0",
+    "@prb/math": "^4.0.0",
+    "forge-std": "github:foundry-rs/forge-std#v1.9.7"
+  },
+  "devDependencies": {
+    "release-please": "^15.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FilOzone/filecoin-services.git"
+  },
+  "keywords": [
+    "filecoin",
+    "solidity",
+    "smart-contracts",
+    "blockchain",
+    "storage",
+    "pdp",
+    "payments"
+  ],
+  "author": "FilOzone",
+  "license": "Apache-2.0 OR MIT"
+}

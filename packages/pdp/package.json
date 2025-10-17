@@ -1,0 +1,30 @@
+{
+  "name": "@filoz/pdp",
+  "version": "1.0.0",
+  "description": "Filecoin PDP (Proof of Data Possession) - Smart contracts for data possession verification",
+  "main": "src/index.js",
+  "files": [
+    "src/**/*.sol",
+    "abi/**/*.json"
+  ],
+  "scripts": {
+    "build": "echo 'Use root forge build'",
+    "test": "echo 'Use root forge test'",
+    "clean": "echo 'Use root forge clean'",
+    "lint": "echo 'Use root forge fmt --check'",
+    "lint:fix": "echo 'Use root forge fmt'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FilOzone/pdp.git"
+  },
+  "keywords": [
+    "filecoin",
+    "pdp",
+    "proof-of-data-possession",
+    "solidity",
+    "smart-contracts"
+  ],
+  "author": "FilOzone",
+  "license": "Apache-2.0 OR MIT"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "@filoz/warm-storage",
+  "version": "1.0.0",
+  "description": "Filecoin Warm Storage Service - Comprehensive service contract combining PDP verification with integrated payment rails",
+  "main": "src/index.js",
+  "files": [
+    "src/**/*.sol",
+    "abi/**/*.json"
+  ],
+  "scripts": {
+    "build": "echo 'Use root forge build'",
+    "test": "echo 'Use root forge test'",
+    "clean": "echo 'Use root forge clean'",
+    "lint": "echo 'Use root forge fmt --check'",
+    "lint:fix": "echo 'Use root forge fmt'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FilOzone/filecoin-services.git"
+  },
+  "keywords": [
+    "filecoin",
+    "warm-storage",
+    "pdp",
+    "payments",
+    "solidity",
+    "smart-contracts"
+  ],
+  "author": "FilOzone",
+  "license": "Apache-2.0 OR MIT"
+}

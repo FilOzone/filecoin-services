@@ -12,8 +12,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -25,7 +23,6 @@ jobs:
 
       - name: Check generated files
         run: |
-          cd service_contracts
           make clean-gen
           make gen
           if [ -n "$(git status --porcelain)" ]; then
@@ -33,7 +30,7 @@ jobs:
             echo "Uncommitted changes detected:"
             git status --porcelain
             echo ""
-            echo "Please run 'make gen' in service_contracts/ and commit the changes."
+            echo "Please run 'make gen' and commit the changes."
             exit 1
           fi
           echo "Generated files are up to date ✓"
@@ -44,8 +41,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
@@ -54,11 +49,10 @@ jobs:
 
       - name: Check for ABI changes
         run: |
-          cd service_contracts
           if [ ! -d "abi" ]; then
             echo "Error: No ABI directory found!"
             echo "ABIs must be checked into the repository to track interface changes."
-            echo "Please run 'make update-abi' in service_contracts/ and commit the ABIs."
+            echo "Please run 'make update-abi' and commit the ABIs."
             exit 1
           fi
           make update-abi
@@ -70,7 +64,7 @@ jobs:
             echo "Diff:"
             git diff abi/
             echo ""
-            echo "Please run 'make update-abi' in service_contracts/ and commit the changes."
+            echo "Please run 'make update-abi' and commit the changes."
             exit 1
           fi
           echo "All ABIs are up to date ✓"

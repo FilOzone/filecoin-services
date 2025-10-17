@@ -20,22 +20,16 @@ jobs:
           version: v1.3.5
       
       - name: Install Dependencies
-        run: |
-          cd service_contracts 
-          forge install
+        run: make install
 
       - name: Install jq
         run: sudo apt-get install -y jq
 
       - name: Check contract size
-        run: |
-          cd service_contracts
-          make contract-size-check
+        run: make contract-size-check
 
       - name: Build current commit sizes
-        run: |
-          cd service_contracts
-          forge build --sizes --json > current_sizes.json
+        run: forge build --sizes --json > current_sizes.json
 
       - name: Build base branch sizes (PR only)
         if: github.event_name == 'pull_request'
@@ -43,22 +37,21 @@ jobs:
           git fetch origin main
           mkdir base_build
           git worktree add base_build origin/main
-          cd base_build/service_contracts
+          cd base_build
           if forge build --offline --sizes --json > ../base_sizes.json 2>/dev/null; then
             echo "Offline build succeeded"
           else
             echo "Offline build failed, installing dependencies"
-            forge install
+            make install
             forge build --sizes --json > ../base_sizes.json
           fi
-          cd ../..
+          cd ..
           git worktree remove --force base_build
 
       - name: Compare contract sizes
         run: |
-          cd service_contracts
           if [ -f base_sizes.json ]; then
-            ./tools/compare_contract_sizes.sh current_sizes.json base_sizes.json
+            ./packages/warm-storage/tools/compare_contract_sizes.sh current_sizes.json base_sizes.json
           else
             echo "No base size data found - skipping delta comparison."
           fi
