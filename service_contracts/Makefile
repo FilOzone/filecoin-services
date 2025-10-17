@@ -5,6 +5,7 @@ RPC_URL ?=
 KEYSTORE ?=
 PASSWORD ?=
 CHALLENGE_FINALITY ?=
+USDFC_PROXY_ADDRESS ?= 0x80B98d3aa09ffff255c3ba4A241111Ff1262F045
 
 # Default target
 .PHONY: default
@@ -134,7 +135,7 @@ ABI_CONTRACTS := \
 	SessionKeyRegistry
 
 # Generate ABI file targets
-ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
+ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS))) abi/Usdfc.abi.json
 
 # Define a template for ABI extraction; we use a template approach instead of
 # defining a global pattern rule because patterns for files that don't exist
@@ -152,6 +153,10 @@ endef
 
 # Generate rules for each contract using the template above
 $(foreach contract,$(ABI_CONTRACTS),$(eval $(call ABI_RULE,$(contract))))
+
+abi/Usdfc.abi.json:
+	@echo "Extracting ABI for Usdfc..."
+	@bash tools/fetch-usdfc-abi.sh $(USDFC_PROXY_ADDRESS) abi/Usdfc.abi.json
 
 # Directory for ABIs
 abi:
