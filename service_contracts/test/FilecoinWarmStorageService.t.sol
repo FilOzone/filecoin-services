@@ -4223,8 +4223,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
  * @notice Tests for validatePayment function - ensures optimized implementation
  * maintains same behavior as the original loop-based version
  */
-
-
 contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     /**
      * @notice Test: All epochs proven - should pay full amount
@@ -4235,10 +4233,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Start proving
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
 
-        // Capture activation epoch BEFORE calling nextProvingPeriod 
-
-        // uint256 _activationEpoch = block.number; // using this line is causing the activationEpoch variable to change every time we call vm.roll (some bug maybe) so better to do use the following line : 
-        uint256 _activationEpoch = 1; // because in testing environment, starting block number is 1
+        // Capture activation epoch BEFORE calling nextProvingPeriod
+        uint256 _activationEpoch = vm.getBlockNumber();
         uint256 firstChallengeEpoch = _activationEpoch + maxProvingPeriod - (challengeWindow / 2);
 
         vm.prank(address(mockPDPVerifier));
@@ -4284,7 +4280,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 toEpoch = _activationEpoch + (maxProvingPeriod * 3) - 1; // inclusive end, all 3 periods
         uint256 proposedAmount = 1000e6;
 
-        // Move past the periods we're validating, so that toEpoch becomes less than block.number 
+        // Move past the periods we're validating, so that toEpoch becomes less than block.number
         vm.roll(toEpoch + 1);
         vm.prank(address(payments));
         IValidator.ValidationResult memory result =
@@ -4308,7 +4304,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
-        uint256 activationEpoch = 1; // same reason as the above test
+        uint256 activationEpoch = vm.getBlockNumber();
 
         // Move forward 3 periods without submitting proofs
         vm.roll(activationEpoch + (maxProvingPeriod * 3));
@@ -4342,7 +4338,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
 
-        uint256 activationEpoch = 1;
+        uint256 activationEpoch = vm.getBlockNumber();
 
         // Submit proof for period 0
         vm.roll(firstChallengeEpoch);
@@ -4427,7 +4423,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
-        uint256 activationEpoch = block.number;
+        uint256 activationEpoch = vm.getBlockNumber();
 
         // Try to validate for epochs before activation
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
@@ -4456,7 +4452,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
 
-        uint256 activationEpoch = 1;
+        uint256 activationEpoch = vm.getBlockNumber();
 
         // Submit proof for period 0
         vm.roll(challengeEpoch);

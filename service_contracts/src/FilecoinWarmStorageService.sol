@@ -1481,7 +1481,7 @@ contract FilecoinWarmStorageService is
         if (toEpoch >= activationEpoch && toEpoch < block.number) {
             // if `toEpoch` lies after activation, and `fromEpoch` lies before activation, then update the `fromEpoch`, as follows :
             if (fromEpoch < activationEpoch - 1) {
-                fromEpoch = activationEpoch - 1; 
+                fromEpoch = activationEpoch - 1;
             }
 
             uint256 startingPeriod = getProvingPeriodForEpoch(dataSetId, fromEpoch + 1);
@@ -1490,11 +1490,10 @@ contract FilecoinWarmStorageService is
             // lets handle first period separately
             uint256 startingPeriod_deadline = _calcPeriodDeadline(dataSetId, startingPeriod);
 
-
             if (toEpoch < startingPeriod_deadline) {
                 // alternative way to check the same : `startingPeriod == endingPeriod`
                 if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
-                    provenEpochCount = (toEpoch - fromEpoch); // epochs : (`from + 1` -> `to`)  (both inclusive) 
+                    provenEpochCount = (toEpoch - fromEpoch); // epochs : (`from + 1` -> `to`)  (both inclusive)
                     lastProvenEpoch = toEpoch;
                 }
             } else {
@@ -1513,7 +1512,7 @@ contract FilecoinWarmStorageService is
                 // now handle the last period separately
                 if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
                     // then the epochs to add = `endingPeriod_starting` to `toEpoch`. But since `endingPeriod_starting` is simply the ending of its previous period + 1, so  epochs : (`deadline + 1` -> `to`)
-                    provenEpochCount += (toEpoch - _calcPeriodDeadline(dataSetId, endingPeriod - 1)); 
+                    provenEpochCount += (toEpoch - _calcPeriodDeadline(dataSetId, endingPeriod - 1));
                     lastProvenEpoch = toEpoch;
                 }
             }
