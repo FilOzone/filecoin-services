@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -16,7 +16,7 @@ import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStor
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract ProviderValidationTest is Test {
+contract ProviderValidationTest is MockFVMTest {
     using SafeERC20 for MockERC20;
 
     FilecoinWarmStorageService public warmStorage;
@@ -40,7 +40,8 @@ contract ProviderValidationTest is Test {
         uint8(27)
     );
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         owner = address(this);
         provider1 = address(0x1);
         provider2 = address(0x2);

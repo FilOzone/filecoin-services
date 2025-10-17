@@ -18,6 +18,7 @@ remappings = [
     '@fws-payments/=lib/fws-payments/src/',
     '@pdp/=lib/pdp/src/',
     '@session-key-registry/=lib/session-key-registry/src/',
+    '@fvm-solidity/=lib/pdp/lib/fvm-solidity/src/',
     '@pythnetwork/pyth-sdk-solidity/=lib/pdp/lib/pyth-sdk-solidity/',
 ]
 

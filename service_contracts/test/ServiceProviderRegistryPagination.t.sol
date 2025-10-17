@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 
-contract ServiceProviderRegistryPaginationTest is Test {
+contract ServiceProviderRegistryPaginationTest is MockFVMTest {
     ServiceProviderRegistry public registry;
 
     address public owner = address(0x1);
@@ -24,7 +24,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
     ServiceProviderRegistryStorage.PDPOffering public defaultPDPData;
     bytes public encodedDefaultPDPData;
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         vm.startPrank(owner);
 
         // Deploy implementation

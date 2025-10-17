@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {BURN_ADDRESS} from "@fvm-solidity/FVMActors.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract ServiceProviderRegistryFullTest is Test {
+contract ServiceProviderRegistryFullTest is MockFVMTest {
     ServiceProviderRegistry public implementation;
     ServiceProviderRegistry public registry;
 
@@ -49,7 +50,8 @@ contract ServiceProviderRegistryFullTest is Test {
     event ProviderRemoved(uint256 indexed providerId);
     event ProviderInfoUpdated(uint256 indexed providerId);
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         owner = address(this);
         provider1 = address(0x1);
         provider2 = address(0x2);
@@ -123,7 +125,7 @@ contract ServiceProviderRegistryFullTest is Test {
 
     function testRegisterProvider() public {
         // Check burn actor balance before
-        uint256 burnActorBalanceBefore = registry.BURN_ACTOR().balance;
+        uint256 burnActorBalanceBefore = BURN_ADDRESS.balance;
 
         vm.startPrank(provider1);
 
@@ -233,7 +235,7 @@ contract ServiceProviderRegistryFullTest is Test {
         assertEq(datacenterValue, "EU-WEST", "Product first value should be EU-WEST");
 
         // Verify fee was burned
-        uint256 burnActorBalanceAfter = registry.BURN_ACTOR().balance;
+        uint256 burnActorBalanceAfter = BURN_ADDRESS.balance;
         assertEq(burnActorBalanceAfter - burnActorBalanceBefore, REGISTRATION_FEE, "Fee should be burned");
     }
 
