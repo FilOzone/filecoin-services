@@ -97,11 +97,6 @@ contract FilecoinWarmStorageService is
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
 
-    // Event for validation
-    event PaymentArbitrated(
-        uint256 railId, uint256 dataSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
-    );
-
     // =========================================================================
     // Structs
 
@@ -1488,7 +1483,7 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 /* rate */
-    ) external override returns (ValidationResult memory result) {
+    ) external view override returns (ValidationResult memory result) {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
@@ -1534,9 +1529,6 @@ contract FilecoinWarmStorageService is
 
         // Calculate how many epochs were not proven (faulted)
         uint256 faultedEpochs = totalEpochsRequested - provenEpochCount;
-
-        // Emit event for logging
-        emit PaymentArbitrated(railId, dataSetId, proposedAmount, modifiedAmount, faultedEpochs);
 
         return ValidationResult({
             modifiedAmount: modifiedAmount,
