@@ -60,7 +60,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     // Test parameters
     bytes public extraData;
 
-    // Metadata size and count limits
+    // Metadata size and count limits 
     uint256 private constant MAX_KEY_LENGTH = 32;
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
@@ -128,7 +128,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         mockUSDFC = new MockERC20();
         mockPDPVerifier = new MockPDPVerifier();
 
-        // Deploy actual ServiceProviderRegistry
+        // Deploy actual ServiceProviderRegistry 
         ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
