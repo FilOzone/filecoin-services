@@ -426,6 +426,11 @@
             "name": "paymentTokenAddress",
             "type": "address",
             "internalType": "contract IERC20"
+          },
+          {
+            "name": "ipniPeerId",
+            "type": "bytes",
+            "internalType": "bytes"
           }
         ]
       },
@@ -1252,6 +1257,11 @@
             "name": "paymentTokenAddress",
             "type": "address",
             "internalType": "contract IERC20"
+          },
+          {
+            "name": "ipniPeerId",
+            "type": "bytes",
+            "internalType": "bytes"
           }
         ]
       },

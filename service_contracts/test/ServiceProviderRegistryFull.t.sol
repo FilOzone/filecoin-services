@@ -1939,7 +1939,9 @@ contract ServiceProviderRegistryFullTest is Test {
         bytes memory encodedUpdatedData = abi.encode(updatedData);
 
         vm.prank(provider1);
-        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedData, emptyKeys, emptyValues);
+        registry.updateProduct(
+            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedData, emptyKeys, emptyValues
+        );
 
         // Verify update
         (ServiceProviderRegistryStorage.PDPOffering memory updatedStored,,) = registry.getPDPService(providerId);
@@ -1975,6 +1977,8 @@ contract ServiceProviderRegistryFullTest is Test {
 
         vm.prank(provider1);
         vm.expectRevert("IPNI peer ID too long");
-        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, encodedInvalidData, emptyKeys, emptyValues);
+        registry.updateProduct(
+            ServiceProviderRegistryStorage.ProductType.PDP, encodedInvalidData, emptyKeys, emptyValues
+        );
     }
 }
