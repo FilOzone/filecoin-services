@@ -403,30 +403,6 @@
   },
   {
     "type": "function",
-    "name": "isEpochProven",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "epoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "migrate",
     "inputs": [
       {

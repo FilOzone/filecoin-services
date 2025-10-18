@@ -1169,43 +1169,6 @@ contract FilecoinWarmStorageService is
         return (epoch - activationEpoch) / maxProvingPeriod;
     }
 
-    /**
-     * @notice Checks if a specific epoch has been proven
-     * @dev Returns true only if the epoch belongs to a proven proving period
-     * @param dataSetId The ID of the data set to check
-     * @param epoch The epoch to check
-     * @return True if the epoch has been proven, false otherwise
-     */
-    function isEpochProven(uint256 dataSetId, uint256 epoch) public view returns (bool) {
-        // Check if data set is active
-        if (provingActivationEpoch[dataSetId] == 0) {
-            return false;
-        }
-
-        // Check if this epoch is before activation
-        if (epoch < provingActivationEpoch[dataSetId]) {
-            return false;
-        }
-
-        // Check if this epoch is in the future (beyond current block)
-        if (epoch > block.number) {
-            return false;
-        }
-
-        // Get the period this epoch belongs to
-        uint256 periodId = getProvingPeriodForEpoch(dataSetId, epoch);
-
-        // Special case: current ongoing proving period
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        if (periodId == currentPeriod) {
-            // For the current period, check if it has been proven already
-            return provenThisPeriod[dataSetId];
-        }
-
-        // For past periods, check the provenPeriods bitmapping
-        return 0 != provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
-    }
-
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
         return a > b ? a : b;
     }
@@ -1494,7 +1457,7 @@ contract FilecoinWarmStorageService is
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
 
         // Calculate the total number of epochs in the requested range
-        uint256 totalEpochsRequested = toEpoch - fromEpoch;
+        uint256 totalEpochsRequested = toEpoch - fromEpoch; // total epochs = (toEpoch) - (fromEpoch + 1) - 1 == toEpoch - fromEpoch
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
         // If proving wasn't ever activated for this data set, don't pay anything
@@ -1510,15 +1473,8 @@ contract FilecoinWarmStorageService is
         uint256 provenEpochCount = 0;
         uint256 lastProvenEpoch = fromEpoch;
 
-        // Check each epoch in the range
-        for (uint256 epoch = fromEpoch + 1; epoch <= toEpoch; epoch++) {
-            bool isProven = isEpochProven(dataSetId, epoch);
-
-            if (isProven) {
-                provenEpochCount++;
-                lastProvenEpoch = epoch;
-            }
-        }
+        (provenEpochCount, lastProvenEpoch) =
+            _findProvenEpochs(dataSetId, fromEpoch, toEpoch, provenEpochCount, lastProvenEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
@@ -1543,6 +1499,75 @@ contract FilecoinWarmStorageService is
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    function _findProvenEpochs(
+        uint256 dataSetId,
+        uint256 fromEpoch,
+        uint256 toEpoch,
+        uint256 provenEpochCount,
+        uint256 lastProvenEpoch
+    ) internal view returns (uint256, uint256) {
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        if (toEpoch < activationEpoch) {
+            revert Errors.InvalidEpochRange(fromEpoch, toEpoch);
+        }
+        if (toEpoch > block.number) {
+            revert Errors.InvalidEpochRange(fromEpoch, toEpoch);
+        }
+        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
+
+        // if `toEpoch` lies after activation, and `fromEpoch` lies before activation, then update the `fromEpoch`, as follows :
+        if (fromEpoch < activationEpoch - 1) {
+            fromEpoch = activationEpoch - 1;
+        }
+
+        uint256 startingPeriod = getProvingPeriodForEpoch(dataSetId, fromEpoch + 1);
+        uint256 endingPeriod = getProvingPeriodForEpoch(dataSetId, toEpoch);
+
+        // handle first period separately
+        uint256 startingPeriodDeadline = _calcPeriodDeadline(dataSetId, startingPeriod);
+
+        if (toEpoch < startingPeriodDeadline) {
+            // alternative way to check the same : `startingPeriod == endingPeriod`
+            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+                provenEpochCount = (toEpoch - fromEpoch); // epochs : (`from + 1` -> `to`)  (both inclusive)
+                lastProvenEpoch = toEpoch;
+            }
+        } else {
+            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+                provenEpochCount += (startingPeriodDeadline - fromEpoch); // epochs : (`from + 1` -> `deadline`)
+            }
+
+            // now loop through the proving periods between endingPeriod and startingPeriod.
+            for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
+                if (_isPeriodProven(dataSetId, period, currentPeriod)) {
+                    provenEpochCount += maxProvingPeriod;
+                    lastProvenEpoch = _calcPeriodDeadline(dataSetId, period);
+                }
+            }
+
+            // now handle the last period separately
+            if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
+                // then the epochs to add = `endingPeriodStarting` to `toEpoch`. But since `endingPeriodStarting` is simply the ending of its previous period + 1, so  epochs : (`deadline + 1` -> `to`)
+                provenEpochCount += (toEpoch - _calcPeriodDeadline(dataSetId, endingPeriod - 1));
+                lastProvenEpoch = toEpoch;
+            }
+        }
+
+        return (provenEpochCount, lastProvenEpoch);
+    }
+
+    function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
+        if (periodId == currentPeriod) {
+            return provenThisPeriod[dataSetId];
+        }
+        uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
+        return isProven != 0;
+    }
+
+    function _calcPeriodDeadline(uint256 dataSetId, uint256 periodId) private view returns (uint256) {
+        return provingActivationEpoch[dataSetId] + (periodId + 1) * maxProvingPeriod;
     }
 
     function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {

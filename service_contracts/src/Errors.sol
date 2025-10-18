@@ -201,7 +201,11 @@ library Errors {
     /// @param railId The rail ID
     error RailNotAssociated(uint256 railId);
 
-    /// @notice The epoch range is invalid (toEpoch must be > fromEpoch)
+    /// @notice The epoch range is invalid
+    /// @notice Will be emitted if any of the following conditions is NOT met :
+    /// @notice 1. fromEpoch must be less than toEpoch
+    /// @notice 2. toEpoch must be greater than block number
+    /// @notice 3. toEpoch must be greater than the activation epoch
     /// @param fromEpoch The starting epoch (exclusive)
     /// @param toEpoch The ending epoch (inclusive)
     error InvalidEpochRange(uint256 fromEpoch, uint256 toEpoch);
