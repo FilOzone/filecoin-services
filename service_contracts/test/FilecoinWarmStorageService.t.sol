@@ -4432,11 +4432,11 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 proposedAmount = 1000e6;
 
         vm.prank(address(payments));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidEpochRange.selector, fromEpoch, toEpoch));
         IValidator.ValidationResult memory result =
             pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
 
         assertEq(result.modifiedAmount, 0, "Should pay nothing for pre-activation epochs");
-        assertEq(result.settleUpto, fromEpoch, "Should not settle");
     }
 
     /**
