@@ -518,9 +518,6 @@ contract FilecoinWarmStorageService is
 
         require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
 
-        // Check if provider is approved
-        require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
-
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
@@ -953,14 +950,11 @@ contract FilecoinWarmStorageService is
         );
         require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
-        // Verify new service provider is registered and approved
+        // Verify new service provider is registered
         uint256 newProviderId = serviceProviderRegistry.getProviderIdByAddress(newServiceProvider);
 
         // Check if provider is registered
         require(newProviderId != 0, Errors.ProviderNotRegistered(newServiceProvider));
-
-        // Check if provider is approved
-        require(approvedProviders[newProviderId], Errors.ProviderNotApproved(newServiceProvider, newProviderId));
 
         // Update the data set service provider
         info.serviceProvider = newServiceProvider;
