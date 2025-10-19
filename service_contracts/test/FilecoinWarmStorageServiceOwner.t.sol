@@ -259,21 +259,20 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         console.log("Correctly reverted for unregistered provider");
     }
 
-    function testStorageProviderChangedRevertsForUnapprovedProvider() public {
-        console.log("=== Test: storageProviderChanged reverts for unapproved provider ===");
+    function testStorageProviderChangedSucceedsForAnyRegisteredProvider() public {
+        console.log("=== Test: storageProviderChanged succeeds for any registered provider ===");
 
         uint256 dataSetId = createDataSet(provider1, client);
 
-        uint256 unauthorizedProviderId = providerRegistry.getProviderIdByAddress(unauthorizedProvider);
-
-        // Try to change to unapproved provider
+        // Change to any registered provider should now succeed (no approval check)
         vm.prank(address(pdpVerifier));
-        vm.expectRevert(
-            abi.encodeWithSelector(Errors.ProviderNotApproved.selector, unauthorizedProvider, unauthorizedProviderId)
-        );
         serviceContract.storageProviderChanged(dataSetId, provider1, unauthorizedProvider, new bytes(0));
 
-        console.log("Correctly reverted for unapproved provider");
+        // Verify the service provider was changed
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertEq(info.serviceProvider, unauthorizedProvider, "Service provider should be updated");
+
+        console.log("Successfully changed to registered provider (approval not required)");
     }
 
     function testStorageProviderChangedRevertsForWrongOldOwner() public {
