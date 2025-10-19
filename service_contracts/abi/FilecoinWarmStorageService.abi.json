@@ -2117,22 +2117,6 @@
   },
   {
     "type": "error",
-    "name": "ProviderNotApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "ProviderNotInApprovedList",
     "inputs": [
       {
