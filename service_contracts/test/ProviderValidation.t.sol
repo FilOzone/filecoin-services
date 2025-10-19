@@ -158,7 +158,7 @@ contract ProviderValidationTest is MockFVMTest {
         vm.prank(provider1);
         // Dataset creation should now succeed for any registered provider
         uint256 dataSetId = pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
-        
+
         // Verify the dataset was created
         assertTrue(dataSetId > 0, "Dataset should be created");
     }
