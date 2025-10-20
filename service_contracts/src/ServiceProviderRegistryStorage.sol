@@ -28,22 +28,8 @@ contract ServiceProviderRegistryStorage {
     /// @notice Product offering of the Service Provider
     struct ServiceProduct {
         ProductType productType;
-        bytes productData; // ABI-encoded service-specific data
         string[] capabilityKeys; // Max MAX_CAPABILITY_KEY_LENGTH chars each
         bool isActive;
-    }
-
-    /// @notice PDP-specific service data
-    struct PDPOffering {
-        string serviceURL; // HTTP API endpoint
-        uint256 minPieceSizeInBytes; // Minimum piece size accepted in bytes
-        uint256 maxPieceSizeInBytes; // Maximum piece size accepted in bytes
-        bool ipniPiece; // Supports IPNI piece CID indexing
-        bool ipniIpfs; // Supports IPNI IPFS CID indexing
-        uint256 storagePricePerTibPerMonth; // Storage price per TiB per month (in token's smallest unit)
-        uint256 minProvingPeriodInEpochs; // Minimum proving period in epochs
-        string location; // Geographic location of the service provider
-        IERC20 paymentTokenAddress; // Token contract for payment (IERC20(address(0)) for FIL)
     }
 
     /// @notice Combined provider and product information for detailed queries
