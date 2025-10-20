@@ -204,7 +204,7 @@ library Errors {
     /// @notice The epoch range is invalid
     /// @notice Will be emitted if any of the following conditions is NOT met :
     /// @notice 1. fromEpoch must be less than toEpoch
-    /// @notice 2. toEpoch must be greater than block number
+    /// @notice 2. toEpoch must be less than block number
     /// @notice 3. toEpoch must be greater than the activation epoch
     /// @param fromEpoch The starting epoch (exclusive)
     /// @param toEpoch The ending epoch (inclusive)

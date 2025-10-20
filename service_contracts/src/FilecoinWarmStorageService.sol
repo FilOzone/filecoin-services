@@ -1486,7 +1486,6 @@ contract FilecoinWarmStorageService is
         }
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
 
-        // if `toEpoch` lies after activation, and `fromEpoch` lies before activation, then update the `fromEpoch`, as follows :
         if (fromEpoch < activationEpoch - 1) {
             fromEpoch = activationEpoch - 1;
         }
