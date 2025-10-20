@@ -1433,7 +1433,8 @@ contract FilecoinWarmStorageService is
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
         // If proving wasn't ever activated for this data set, don't pay anything
-        if (provingActivationEpoch[dataSetId] == 0) {
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        if (activationEpoch == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
                 settleUpto: fromEpoch,
@@ -1446,7 +1447,7 @@ contract FilecoinWarmStorageService is
         uint256 lastProvenEpoch = fromEpoch;
 
         (provenEpochCount, lastProvenEpoch) =
-            _findProvenEpochs(dataSetId, fromEpoch, toEpoch, provenEpochCount, lastProvenEpoch);
+            _findProvenEpochs(dataSetId, fromEpoch, toEpoch, provenEpochCount, lastProvenEpoch, activationEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
@@ -1475,9 +1476,9 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 provenEpochCount,
-        uint256 lastProvenEpoch
+        uint256 lastProvenEpoch,
+        uint256 activationEpoch
     ) internal view returns (uint256, uint256) {
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (toEpoch < activationEpoch) {
             revert Errors.InvalidEpochRange(fromEpoch, toEpoch);
         }
