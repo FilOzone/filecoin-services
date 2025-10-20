@@ -30,9 +30,6 @@ export function createRails(
     rail.arbiter = listenerAddr;
     rail.dataSet = dataSetId;
     rail.paymentRate = BIGINT_ZERO;
-    rail.settledUpto = BIGINT_ZERO;
-    rail.settledAmount = BIGINT_ZERO;
-    rail.totalFaultedEpochs = BIGINT_ZERO;
     rail.endEpoch = BIGINT_ZERO;
     rail.isActive = true;
     rail.queueLength = BIGINT_ZERO;

@@ -335,7 +335,6 @@ query AllRails($first: Int, $skip: Int) {
     operator
     arbiter
     paymentRate
-    settledUpto
     endEpoch
     queueLength
     dataSet {
@@ -359,7 +358,6 @@ query RailById($railId: ID!) {
     operator
     arbiter
     paymentRate
-    settledUpto
     endEpoch
     queueLength
     dataSet {
@@ -389,7 +387,6 @@ query RailsByClient($clientAddress: Bytes!) {
     token
     to
     paymentRate
-    settledUpto
     endEpoch
     dataSet {
       id
@@ -410,7 +407,6 @@ query RailsByProvider($providerAddress: Bytes!) {
     token
     from
     paymentRate
-    settledUpto
     endEpoch
     dataSet {
       id
@@ -432,7 +428,6 @@ query HighPaymentRails($minRate: BigInt!) {
     from
     to
     paymentRate
-    settledUpto
     endEpoch
     dataSet {
       id
