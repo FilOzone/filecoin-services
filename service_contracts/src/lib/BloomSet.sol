@@ -23,7 +23,7 @@ library BloomSet16 {
         }
         for (uint256 i = 0; i < 16; i++) {
             item |= 1 << (hash & 0xff);
-            hash >>= 16;
+            hash >>= 8;
         }
     }
 

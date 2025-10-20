@@ -10,7 +10,7 @@ import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.s
 import {BloomSet16} from "./lib/BloomSet.sol";
 import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
 
-uint256 constant REQUIRED_PDP_KEYS = 0x586f5ac60d105d3930cca32e603a0e938965087b7c1478068b04d25461c0a371;
+uint256 constant REQUIRED_PDP_KEYS = 0x5b6e96f24dd05fa9218c80c8422a0eb70947d833531db3c4db14504405c0e132;
 
 /// @title ServiceProviderRegistry
 /// @notice A registry contract for managing service providers across the Filecoin Services ecosystem
