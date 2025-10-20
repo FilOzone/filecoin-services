@@ -15,13 +15,15 @@ pragma solidity ^0.8.30;
 /// @dev 14: 0.000178789
 /// @dev 15: 0.000352341
 library BloomSet16 {
+    uint256 private constant K = 16;
+
     function compressed(string memory uncompressed) internal pure returns (uint256 item) {
         uint256 hash;
         assembly ("memory-safe") {
             hash := keccak256(add(32, uncompressed), mload(uncompressed))
             item := 0
         }
-        for (uint256 i = 0; i < 16; i++) {
+        for (uint256 i = 0; i < K; i++) {
             item |= 1 << (hash & 0xff);
             hash >>= 8;
         }
