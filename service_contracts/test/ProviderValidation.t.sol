@@ -109,6 +109,8 @@ contract ProviderValidationTest is MockFVMTest {
     }
 
     function testProviderRegisteredButNotApproved() public {
+        // NOTE: This operation is expected to pass.
+        // Approval is not required to perform onboarding actions.
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
