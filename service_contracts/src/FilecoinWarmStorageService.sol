@@ -921,12 +921,8 @@ contract FilecoinWarmStorageService is
     /**
      * @notice Handles data set service provider changes by updating internal state only
      * @dev Called by the PDPVerifier contract when data set service provider is transferred.
-     * NOTE: The PDPVerifier contract emits events and exposes methods in terms of "storage providers",
-     * because its scope is specifically the Proof-of-Data-Possession for storage services.
-     * In FilecoinWarmStorageService (and the broader service registry architecture), we use the term
-     * "service provider" to support a future where multiple types of services may exist (not just storage).
-     * As a result, some parameters and events reflect this terminology shift and this method represents
-     * a transition point in the language, from PDPVerifier to FilecoinWarmStorageService.
+     * NOTE: Storage provider changes are disabled for GA. This will be re-enabled post-GA
+     * with proper client authorization. See: https://github.com/FilOzone/filecoin-services/issues/203
      * @param dataSetId The ID of the data set whose service provider is changing
      * @param oldServiceProvider The previous service provider address
      * @param newServiceProvider The new service provider address (must be an approved provider)
@@ -937,25 +933,7 @@ contract FilecoinWarmStorageService is
         address newServiceProvider,
         bytes calldata // extraData - not used
     ) external override onlyPDPVerifier {
-        // Verify the data set exists and validate the old service provider
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(
-            info.serviceProvider == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.serviceProvider, oldServiceProvider)
-        );
-        require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
-
-        // Verify new service provider is registered
-        uint256 newProviderId = serviceProviderRegistry.getProviderIdByAddress(newServiceProvider);
-
-        // Check if provider is registered
-        require(newProviderId != 0, Errors.ProviderNotRegistered(newServiceProvider));
-
-        // Update the data set service provider
-        info.serviceProvider = newServiceProvider;
-
-        // Emit event for off-chain tracking
-        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
+        revert("Storage provider changes are not yet supported");
     }
 
     function terminateService(uint256 dataSetId) external {
