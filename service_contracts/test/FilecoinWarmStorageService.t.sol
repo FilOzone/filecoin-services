@@ -1184,26 +1184,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.expectRevert("Storage provider changes are not yet supported");
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
     }
-
-    /**
-     * @notice Test service provider change reverts if new service provider is not an approved provider
-     */
-    // NOTE: Disabled for GA - Storage provider changes are not permitted
-    // See: https://github.com/FilOzone/filecoin-services/issues/203
-    function testServiceProviderChangedNoLongerChecksApproval() public {
-        // Create a data set with sp1 as the service provider
-        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
-        address newProvider = address(0x9999);
-        bytes memory testExtraData = new bytes(0);
-
-        // The change should now revert before checking registration
-        vm.prank(newProvider);
-        vm.expectRevert("Storage provider changes are not yet supported");
-        mockPDPVerifier.changeDataSetServiceProvider(
-            testDataSetId, newProvider, address(pdpServiceWithPayments), testExtraData
-        );
-    }
-
+    
     /**
      * @notice Test service provider change reverts if new service provider is zero address
      */
