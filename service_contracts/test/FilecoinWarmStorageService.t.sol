@@ -1227,22 +1227,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     /**
-     * @notice Test multiple data sets per provider: only the targeted data set's payee is updated
-     */
-    // NOTE: Disabled for GA - Storage provider changes are not permitted
-    // See: https://github.com/FilOzone/filecoin-services/issues/203
-    function testMultipleDataSetsPerProviderServiceProviderChange() public {
-        // Create two data sets for sp1
-        uint256 ps1 = createDataSetForServiceProviderTest(sp1, client, "Data Set 1");
-        uint256 ps2 = createDataSetForServiceProviderTest(sp1, client, "Data Set 2");
-        // Change service provider of ps1 to sp2 should revert
-        bytes memory testExtraData = new bytes(0);
-        vm.prank(sp2);
-        vm.expectRevert("Storage provider changes are not yet supported");
-        mockPDPVerifier.changeDataSetServiceProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
-    }
-
-    /**
      * @notice Test service provider change works with arbitrary extra data
      */
     // NOTE: Disabled for GA - Storage provider changes are not permitted
