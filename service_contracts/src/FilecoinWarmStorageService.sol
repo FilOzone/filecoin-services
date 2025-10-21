@@ -284,6 +284,7 @@ contract FilecoinWarmStorageService is
         _;
     }
 
+
     /// @custom:oz-upgrades-unsafe-allow cstructor
     constructor(
         address _pdpVerifierAddress,
@@ -512,10 +513,11 @@ contract FilecoinWarmStorageService is
         onlyPDPVerifier
     {
         // Decode the extra data to get the metadata, payer address, and signature
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
         require(
-            extraData.length <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
-            Errors.ExtraDataSizeExceeded(MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE, extraData.length)
+            len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+            Errors.ExtraDataSizeExceeded(MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE, len)
         );
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
@@ -727,10 +729,11 @@ contract FilecoinWarmStorageService is
 
         // Get the payer address for this data set
         address payer = info.payer;
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
         require(
-            extraData.length <= MAX_PIECES_ADDED_EXTRA_DATA_SIZE,
-            Errors.ExtraDataSizeExceeded(MAX_PIECES_ADDED_EXTRA_DATA_SIZE, extraData.length)
+            len <= MAX_PIECES_ADDED_EXTRA_DATA_SIZE,
+            Errors.ExtraDataSizeExceeded(MAX_PIECES_ADDED_EXTRA_DATA_SIZE, len)
         );
         // Decode the extra data
         (bytes memory signature, string[][] memory metadataKeys, string[][] memory metadataValues) =
@@ -803,7 +806,12 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
 
         // Decode the signature from extraData
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(
+            len <= MAX_PIECES_SCHEDULED_REMOVE_EXTRA_DATA_SIZE,
+            Errors.ExtraDataSizeExceeded(MAX_PIECES_SCHEDULED_REMOVE_EXTRA_DATA_SIZE, len)
+        );
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
