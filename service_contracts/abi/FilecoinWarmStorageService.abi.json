@@ -719,17 +719,17 @@
     "name": "storageProviderChanged",
     "inputs": [
       {
-        "name": "dataSetId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "oldServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "newServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
