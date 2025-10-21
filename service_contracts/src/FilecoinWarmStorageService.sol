@@ -24,7 +24,8 @@ uint256 constant NO_PROVING_DEADLINE = 0;
 uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
-
+uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096;
+uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192;
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -510,7 +511,9 @@ contract FilecoinWarmStorageService is
         onlyPDPVerifier
     {
         // Decode the extra data to get the metadata, payer address, and signature
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE));
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
@@ -721,7 +724,9 @@ contract FilecoinWarmStorageService is
 
         // Get the payer address for this data set
         address payer = info.payer;
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(len <= MAX_ADD_PIECES_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_ADD_PIECES_EXTRA_DATA_SIZE));
         // Decode the extra data
         (bytes memory signature, string[][] memory metadataKeys, string[][] memory metadataValues) =
             abi.decode(extraData, (bytes, string[][], string[][]));
@@ -793,7 +798,9 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
 
         // Decode the signature from extraData
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(len <= MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE));
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature

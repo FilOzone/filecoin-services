@@ -282,4 +282,9 @@ library Errors {
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The end epoch when the PDP payment rail will finalize
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);
+
+    /// @notice Extra data size exceeds the maximum allowed limit
+    /// @param actualSize The size of the provided extra data
+    /// @param maxAllowedSize The maximum allowed size for extra data
+    error ExtraDataTooLarge(uint256 actualSize, uint256 maxAllowedSize);
 }
