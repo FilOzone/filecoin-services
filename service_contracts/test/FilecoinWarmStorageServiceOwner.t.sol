@@ -12,7 +12,7 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
-import {Errors} from "../src/Errors.sol";
+// import {Errors} from "../src/Errors.sol"; // Unused - commented out for lint
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 

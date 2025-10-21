@@ -919,18 +919,15 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set service provider changes by updating internal state only
-     * @dev Called by the PDPVerifier contract when data set service provider is transferred.
-     * NOTE: Storage provider changes are disabled for GA. This will be re-enabled post-GA
+     * @notice Handles data set service provider changes (currently disabled for GA)
+     * @dev Storage provider changes are disabled for GA. This will be re-enabled post-GA
      * with proper client authorization. See: https://github.com/FilOzone/filecoin-services/issues/203
-     * @param dataSetId The ID of the data set whose service provider is changing
-     * @param oldServiceProvider The previous service provider address
-     * @param newServiceProvider The new service provider address (must be an approved provider)
+     * Called by the PDPVerifier contract when data set service provider is transferred.
      */
     function storageProviderChanged(
-        uint256 dataSetId,
-        address oldServiceProvider,
-        address newServiceProvider,
+        uint256, // dataSetId
+        address, // oldServiceProvider
+        address, // newServiceProvider
         bytes calldata // extraData - not used
     ) external override onlyPDPVerifier {
         revert("Storage provider changes are not yet supported");
