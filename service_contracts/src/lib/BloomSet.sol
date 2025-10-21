@@ -16,6 +16,7 @@ pragma solidity ^0.8.30;
 /// @dev 15: 0.000352341
 library BloomSet16 {
     uint256 private constant K = 16;
+    uint256 internal constant EMPTY = 0;
 
     function compressed(string memory uncompressed) internal pure returns (uint256 item) {
         uint256 hash;

@@ -746,7 +746,7 @@ contract ServiceProviderRegistry is
         } else {
             revert("Unsupported product type");
         }
-        uint256 foundKeys = 0;
+        uint256 foundKeys = BloomSet16.EMPTY;
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
             uint256 key = BloomSet16.compressed(capabilityKeys[i]);
             if (BloomSet16.mayContain(requiredKeys, key)) {
