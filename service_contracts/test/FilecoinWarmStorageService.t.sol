@@ -1254,7 +1254,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create two data sets for sp1
         uint256 ps1 = createDataSetForServiceProviderTest(sp1, client, "Data Set 1");
         uint256 ps2 = createDataSetForServiceProviderTest(sp1, client, "Data Set 2");
-        // Change service provider of ps1 to sp2 should now revert
+        // Change service provider of ps1 to sp2 should revert
         bytes memory testExtraData = new bytes(0);
         vm.prank(sp2);
         vm.expectRevert("Storage provider changes are not yet supported");
