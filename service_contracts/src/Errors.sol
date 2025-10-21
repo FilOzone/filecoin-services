@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.27;
 
+import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
+
 /// @title Errors
 /// @notice Centralized library for custom error definitions across the protocol
 library Errors {
@@ -287,4 +289,8 @@ library Errors {
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The end epoch when the PDP payment rail will finalize
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);
+
+    /// @notice The supplied capability keys did not contain all of the required keys for the product type
+    /// @param productType The kind of service product attempted to be registered
+    error InsufficientCapabilitiesForProduct(ServiceProviderRegistryStorage.ProductType productType);
 }
