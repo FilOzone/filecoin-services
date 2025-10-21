@@ -9,7 +9,6 @@ import {
   DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
   PDPPaymentTerminated as PDPPaymentTerminatedEvent,
   CDNPaymentTerminated as CDNPaymentTerminatedEvent,
-  PaymentArbitrated as PaymentArbitratedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
@@ -534,29 +533,4 @@ export function handleCDNPaymentTerminated(event: CDNPaymentTerminatedEvent): vo
     dataSet.isActive = false;
     dataSet.save();
   }
-}
-
-/**
- * Handles the PaymentArbitrated event.
- * Arbitrates a storage payment.
- */
-export function handlePaymentArbitrated(event: PaymentArbitratedEvent): void {
-  const railId = event.params.railId;
-  const dataSetId = event.params.dataSetId;
-  const arbitratedAmount = event.params.modifiedAmount;
-  const faultedEpochs = event.params.faultedEpochs;
-
-  const rail = Rail.load(getRailEntityId(railId));
-  if (!rail) {
-    log.warning("PaymentArbitrated: Rail {} not found", [railId.toString()]);
-    return;
-  }
-
-  const dataSet = DataSet.load(getDataSetEntityId(dataSetId));
-
-  rail.settledAmount = rail.settledAmount.plus(arbitratedAmount);
-  rail.totalFaultedEpochs = rail.totalFaultedEpochs.plus(faultedEpochs);
-  rail.settledUpto = dataSet ? dataSet.lastProvenEpoch : rail.settledUpto;
-
-  rail.save();
 }

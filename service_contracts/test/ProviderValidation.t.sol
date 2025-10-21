@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -16,7 +16,7 @@ import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStor
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract ProviderValidationTest is Test {
+contract ProviderValidationTest is MockFVMTest {
     using SafeERC20 for MockERC20;
 
     FilecoinWarmStorageService public warmStorage;
@@ -40,7 +40,8 @@ contract ProviderValidationTest is Test {
         uint8(27)
     );
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         owner = address(this);
         provider1 = address(0x1);
         provider2 = address(0x2);
@@ -108,6 +109,8 @@ contract ProviderValidationTest is Test {
     }
 
     function testProviderRegisteredButNotApproved() public {
+        // NOTE: This operation is expected to pass.
+        // Approval is not required to perform onboarding actions.
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -132,7 +135,21 @@ contract ProviderValidationTest is Test {
             new string[](0)
         );
 
-        // Try to create dataset without approval
+        // Setup payment approvals for client
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            usdfc,
+            address(warmStorage),
+            true,
+            1000 * 10 ** 6, // rate allowance
+            1000 * 10 ** 6, // lockup allowance
+            365 days // max lockup period
+        );
+        usdfc.approve(address(payments), 100 * 10 ** 6);
+        payments.deposit(usdfc, client, 100 * 10 ** 6);
+        vm.stopPrank();
+
+        // Create dataset without approval should now succeed
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         bytes memory extraData = abi.encode(client, 0, metadataKeys, metadataValues, FAKE_SIGNATURE);
@@ -141,8 +158,11 @@ contract ProviderValidationTest is Test {
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
 
         vm.prank(provider1);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotApproved.selector, provider1, 1));
-        pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+        // Dataset creation shouldn't require provider be approved
+        uint256 dataSetId = pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+
+        // Verify the dataset was created
+        assertTrue(dataSetId > 0, "Dataset should be created");
     }
 
     function testProviderApprovedCanCreateDataset() public {

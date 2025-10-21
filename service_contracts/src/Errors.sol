@@ -222,11 +222,6 @@ library Errors {
     /// @param provider The provider address
     error ProviderNotRegistered(address provider);
 
-    /// @notice Provider is not approved for service
-    /// @param provider The provider address
-    /// @param providerId The provider ID from registry
-    error ProviderNotApproved(address provider, uint256 providerId);
-
     /// @notice Provider is already approved
     /// @param providerId The provider ID that is already approved
     error ProviderAlreadyApproved(uint256 providerId);

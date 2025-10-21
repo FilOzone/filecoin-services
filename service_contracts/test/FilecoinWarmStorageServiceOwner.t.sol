@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {console} from "forge-std/Test.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
@@ -11,11 +12,10 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
-import {Errors} from "../src/Errors.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract FilecoinWarmStorageServiceOwnerTest is Test {
+contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
     using SafeERC20 for MockERC20;
 
     // Constants
@@ -49,7 +49,8 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         // Setup accounts
         owner = address(this);
         client = address(0x1);
@@ -215,80 +216,63 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
         console.log("Service provider field correctly set to creator:", provider1);
     }
 
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
     function testStorageProviderChangedUpdatesOnlyOwnerField() public {
-        console.log("=== Test: storageProviderChanged updates only owner field ===");
+        console.log("=== Test: storageProviderChanged reverts (not yet supported) ===");
 
         uint256 dataSetId = createDataSet(provider1, client);
 
-        // Get initial state
-        FilecoinWarmStorageService.DataSetInfoView memory infoBefore = viewContract.getDataSet(dataSetId);
-        assertEq(infoBefore.serviceProvider, provider1, "Initial owner should be provider1");
-
-        // Change storage provider
-        vm.expectEmit(true, true, true, true);
-        emit DataSetServiceProviderChanged(dataSetId, provider1, provider2);
-
+        // Change storage provider should revert at FWSS listener
         vm.prank(provider2);
+        vm.expectRevert("Storage provider changes are not yet supported");
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
 
-        // Check updated state
-        FilecoinWarmStorageService.DataSetInfoView memory infoAfter = viewContract.getDataSet(dataSetId);
-
-        assertEq(infoAfter.serviceProvider, provider2, "Service provider should be updated to provider2");
-        assertEq(infoAfter.payee, provider1, "Payee should remain unchanged");
-        assertEq(infoAfter.payer, client, "Payer should remain unchanged");
-
-        console.log("Service provider updated from", provider1, "to", provider2);
-        console.log("Payee remained unchanged:", provider1);
+        console.log("Storage provider change correctly rejected");
     }
 
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
     function testStorageProviderChangedRevertsForUnregisteredProvider() public {
-        console.log("=== Test: storageProviderChanged reverts for unregistered provider ===");
+        console.log("=== Test: storageProviderChanged reverts (not yet supported) ===");
 
         uint256 dataSetId = createDataSet(provider1, client);
 
         address unregisteredAddress = address(0x999);
 
-        // Try to change to unregistered provider
+        // Try to change to unregistered provider, expect a revert
         vm.prank(address(pdpVerifier));
-        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, unregisteredAddress));
+        vm.expectRevert("Storage provider changes are not yet supported");
         serviceContract.storageProviderChanged(dataSetId, provider1, unregisteredAddress, new bytes(0));
 
-        console.log("Correctly reverted for unregistered provider");
+        console.log("Correctly reverted (feature not yet supported)");
     }
 
-    function testStorageProviderChangedRevertsForUnapprovedProvider() public {
-        console.log("=== Test: storageProviderChanged reverts for unapproved provider ===");
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
+    function testStorageProviderChangedSucceedsForAnyRegisteredProvider() public {
+        console.log("=== Test: storageProviderChanged reverts (not yet supported) ===");
 
         uint256 dataSetId = createDataSet(provider1, client);
 
-        uint256 unauthorizedProviderId = providerRegistry.getProviderIdByAddress(unauthorizedProvider);
-
-        // Try to change to unapproved provider
+        // Change to registered provider should revert
         vm.prank(address(pdpVerifier));
-        vm.expectRevert(
-            abi.encodeWithSelector(Errors.ProviderNotApproved.selector, unauthorizedProvider, unauthorizedProviderId)
-        );
+        vm.expectRevert("Storage provider changes are not yet supported");
         serviceContract.storageProviderChanged(dataSetId, provider1, unauthorizedProvider, new bytes(0));
 
-        console.log("Correctly reverted for unapproved provider");
+        console.log("Correctly reverted (feature not yet supported)");
     }
 
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
     function testStorageProviderChangedRevertsForWrongOldOwner() public {
-        console.log("=== Test: storageProviderChanged reverts for wrong old owner ===");
+        console.log("=== Test: storageProviderChanged reverts (not yet supported) ===");
 
         uint256 dataSetId = createDataSet(provider1, client);
 
-        // Try to change with wrong old owner
+        // Try to change with wrong old owner - now reverts before validation
         vm.prank(address(pdpVerifier));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.OldServiceProviderMismatch.selector,
-                dataSetId,
-                provider1, // actual owner
-                provider3 // wrong old owner passed
-            )
-        );
+        vm.expectRevert("Storage provider changes are not yet supported");
         serviceContract.storageProviderChanged(
             dataSetId,
             provider3, // wrong old owner
@@ -296,59 +280,6 @@ contract FilecoinWarmStorageServiceOwnerTest is Test {
             new bytes(0)
         );
 
-        console.log("Correctly reverted for wrong old owner");
-    }
-
-    function testTerminateServiceUsesOwnerForAuthorization() public {
-        console.log("=== Test: terminateService uses owner for authorization ===");
-
-        uint256 dataSetId = createDataSet(provider1, client);
-
-        // Change owner to provider2
-        vm.prank(provider2);
-        pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
-
-        // Provider1 (original creator but no longer owner) should not be able to terminate
-        vm.prank(provider1);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.CallerNotPayerOrPayee.selector,
-                dataSetId,
-                client, // payer
-                provider2, // current owner
-                provider1 // caller
-            )
-        );
-        serviceContract.terminateService(dataSetId);
-
-        // Provider2 (current owner) should be able to terminate
-        vm.prank(provider2);
-        serviceContract.terminateService(dataSetId);
-
-        console.log("Only current owner (provider2) could terminate, not original creator (provider1)");
-    }
-
-    function testMultipleOwnerChanges() public {
-        console.log("=== Test: Multiple owner changes ===");
-
-        uint256 dataSetId = createDataSet(provider1, client);
-
-        // First change: provider1 -> provider2
-        vm.prank(provider2);
-        pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
-
-        FilecoinWarmStorageService.DataSetInfoView memory info1 = viewContract.getDataSet(dataSetId);
-        assertEq(info1.serviceProvider, provider2, "Service provider should be provider2 after first change");
-
-        // Second change: provider2 -> provider3
-        vm.prank(provider3);
-        pdpVerifier.changeDataSetServiceProvider(dataSetId, provider3, address(serviceContract), new bytes(0));
-
-        FilecoinWarmStorageService.DataSetInfoView memory info2 = viewContract.getDataSet(dataSetId);
-        assertEq(info2.serviceProvider, provider3, "Service provider should be provider3 after second change");
-        assertEq(info2.payee, provider1, "Payee should still be original provider1");
-
-        console.log("Service provider changed successfully: provider1 -> provider2 -> provider3");
-        console.log("Payee remained as provider1 throughout");
+        console.log("Correctly reverted (feature not yet supported)");
     }
 }

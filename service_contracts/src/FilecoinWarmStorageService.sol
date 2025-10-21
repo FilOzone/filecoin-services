@@ -97,11 +97,6 @@ contract FilecoinWarmStorageService is
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
 
-    // Event for validation
-    event PaymentArbitrated(
-        uint256 railId, uint256 dataSetId, uint256 originalAmount, uint256 modifiedAmount, uint256 faultedEpochs
-    );
-
     // =========================================================================
     // Structs
 
@@ -436,8 +431,16 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract
      */
     function setViewContract(address _viewContract) external onlyOwner {
+        // Ensure the view contract address is not the zero address
         require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
-        require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+
+        // Require that the existing set address is still zero (one-time setup only)
+        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
+        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
+        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
+
+        // require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+
         viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
     }
@@ -517,9 +520,6 @@ contract FilecoinWarmStorageService is
         uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
 
         require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
-
-        // Check if provider is approved
-        require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
@@ -927,46 +927,18 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set service provider changes by updating internal state only
-     * @dev Called by the PDPVerifier contract when data set service provider is transferred.
-     * NOTE: The PDPVerifier contract emits events and exposes methods in terms of "storage providers",
-     * because its scope is specifically the Proof-of-Data-Possession for storage services.
-     * In FilecoinWarmStorageService (and the broader service registry architecture), we use the term
-     * "service provider" to support a future where multiple types of services may exist (not just storage).
-     * As a result, some parameters and events reflect this terminology shift and this method represents
-     * a transition point in the language, from PDPVerifier to FilecoinWarmStorageService.
-     * @param dataSetId The ID of the data set whose service provider is changing
-     * @param oldServiceProvider The previous service provider address
-     * @param newServiceProvider The new service provider address (must be an approved provider)
+     * @notice Handles data set service provider changes (currently disabled for GA)
+     * @dev Storage provider changes are disabled for GA. This will be re-enabled post-GA
+     * with proper client authorization. See: https://github.com/FilOzone/filecoin-services/issues/203
+     * Called by the PDPVerifier contract when data set service provider is transferred.
      */
     function storageProviderChanged(
-        uint256 dataSetId,
-        address oldServiceProvider,
-        address newServiceProvider,
+        uint256, // dataSetId
+        address, // oldServiceProvider
+        address, // newServiceProvider
         bytes calldata // extraData - not used
     ) external override onlyPDPVerifier {
-        // Verify the data set exists and validate the old service provider
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(
-            info.serviceProvider == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.serviceProvider, oldServiceProvider)
-        );
-        require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
-
-        // Verify new service provider is registered and approved
-        uint256 newProviderId = serviceProviderRegistry.getProviderIdByAddress(newServiceProvider);
-
-        // Check if provider is registered
-        require(newProviderId != 0, Errors.ProviderNotRegistered(newServiceProvider));
-
-        // Check if provider is approved
-        require(approvedProviders[newProviderId], Errors.ProviderNotApproved(newServiceProvider, newProviderId));
-
-        // Update the data set service provider
-        info.serviceProvider = newServiceProvider;
-
-        // Emit event for off-chain tracking
-        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
+        revert("Storage provider changes are not yet supported");
     }
 
     function terminateService(uint256 dataSetId) external {
@@ -1488,7 +1460,7 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 /* rate */
-    ) external override returns (ValidationResult memory result) {
+    ) external view override returns (ValidationResult memory result) {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
@@ -1534,9 +1506,6 @@ contract FilecoinWarmStorageService is
 
         // Calculate how many epochs were not proven (faulted)
         uint256 faultedEpochs = totalEpochsRequested - provenEpochCount;
-
-        // Emit event for logging
-        emit PaymentArbitrated(railId, dataSetId, proposedAmount, modifiedAmount, faultedEpochs);
 
         return ValidationResult({
             modifiedAmount: modifiedAmount,

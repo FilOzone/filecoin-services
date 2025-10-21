@@ -719,17 +719,17 @@
     "name": "storageProviderChanged",
     "inputs": [
       {
-        "name": "dataSetId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "oldServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "newServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
@@ -915,7 +915,7 @@
         ]
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1268,43 +1268,6 @@
   },
   {
     "type": "event",
-    "name": "PaymentArbitrated",
-    "inputs": [
-      {
-        "name": "railId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "originalAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "modifiedAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "faultedEpochs",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "PieceAdded",
     "inputs": [
       {
@@ -1485,17 +1448,6 @@
       }
     ],
     "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AddressAlreadySet",
-    "inputs": [
-      {
-        "name": "field",
-        "type": "uint8",
-        "internalType": "enum Errors.AddressField"
-      }
-    ]
   },
   {
     "type": "error",
@@ -2004,27 +1956,6 @@
   },
   {
     "type": "error",
-    "name": "OldServiceProviderMismatch",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OnlyFilBeamControllerAllowed",
     "inputs": [
       {
@@ -2108,22 +2039,6 @@
     "type": "error",
     "name": "ProviderAlreadyApproved",
     "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ProviderNotApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      },
       {
         "name": "providerId",
         "type": "uint256",

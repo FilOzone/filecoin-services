@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console, Vm} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {console, Test, Vm} from "forge-std/Test.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
@@ -21,7 +22,7 @@ import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
-contract FilecoinWarmStorageServiceTest is Test {
+contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
     using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
     // Testing Constants
@@ -92,7 +93,8 @@ contract FilecoinWarmStorageServiceTest is Test {
         bytes extraData;
     }
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         // Setup test accounts
         deployer = address(this);
         client = address(0xf1);
@@ -1170,44 +1172,23 @@ contract FilecoinWarmStorageServiceTest is Test {
      * @notice Test successful service provider change between two approved providers
      * @dev Verifies only the data set's payee is updated, event is emitted, and serviceProviderRegistry state is unchanged.
      */
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
     function testServiceProviderChangedSuccessDecoupled() public {
         // Create a data set with sp1 as the service provider
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
 
-        // Change service provider from sp1 to sp2
+        // Change service provider from sp1 to sp2 should revert
         bytes memory testExtraData = new bytes(0);
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
+        vm.expectRevert("Storage provider changes are not yet supported");
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-
-        // Only the data set's service provider is updated
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(testDataSetId);
-        assertEq(dataSet.serviceProvider, sp2, "Service provider should be updated to new service provider");
-        // Payee should remain unchanged (still sp1's beneficiary)
-        assertEq(dataSet.payee, sp1, "Payee should remain unchanged");
-    }
-
-    /**
-     * @notice Test service provider change reverts if new service provider is not an approved provider
-     */
-    function testServiceProviderChangedNoLongerChecksApproval() public {
-        // Create a data set with sp1 as the service provider
-        uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
-        address newProvider = address(0x9999);
-        bytes memory testExtraData = new bytes(0);
-
-        // The change should now fail because the new provider is not registered
-        vm.prank(newProvider);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, newProvider));
-        mockPDPVerifier.changeDataSetServiceProvider(
-            testDataSetId, newProvider, address(pdpServiceWithPayments), testExtraData
-        );
     }
 
     /**
      * @notice Test service provider change reverts if new service provider is zero address
      */
+    // NOTE: The mock PDPVerifier checks for zero address before calling the listener
     function testServiceProviderChangedRevertsIfNewServiceProviderZeroAddress() public {
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
@@ -1219,65 +1200,44 @@ contract FilecoinWarmStorageServiceTest is Test {
     }
 
     /**
-     * @notice Test service provider change reverts if old service provider mismatch
+     * @notice Test service provider change reverts (feature not yet supported)
      */
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
     function testServiceProviderChangedRevertsIfOldServiceProviderMismatch() public {
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
-        // Call directly as PDPVerifier with wrong old service provider
+        // Call directly as PDPVerifier - should now revert before validation
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(abi.encodeWithSelector(Errors.OldServiceProviderMismatch.selector, 1, sp1, sp2));
+        vm.expectRevert("Storage provider changes are not yet supported");
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp2, sp2, testExtraData);
     }
 
     /**
      * @notice Test service provider change reverts if called by unauthorized address
      */
+    // NOTE: This test for the onlyPDPVerifier modifier validation remains important
     function testServiceProviderChangedRevertsIfUnauthorizedCaller() public {
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         bytes memory testExtraData = new bytes(0);
-        // Call directly as sp2 (not PDPVerifier)
+        // Call directly as sp2 (not PDPVerifier) - should fail on modifier before main revert
         vm.prank(sp2);
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlyPDPVerifierAllowed.selector, address(mockPDPVerifier), sp2));
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp1, sp2, testExtraData);
     }
 
     /**
-     * @notice Test multiple data sets per provider: only the targeted data set's payee is updated
-     */
-    function testMultipleDataSetsPerProviderServiceProviderChange() public {
-        // Create two data sets for sp1
-        uint256 ps1 = createDataSetForServiceProviderTest(sp1, client, "Data Set 1");
-        uint256 ps2 = createDataSetForServiceProviderTest(sp1, client, "Data Set 2");
-        // Change service provider of ps1 to sp2
-        bytes memory testExtraData = new bytes(0);
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(ps1, sp1, sp2);
-        vm.prank(sp2);
-        mockPDPVerifier.changeDataSetServiceProvider(ps1, sp2, address(pdpServiceWithPayments), testExtraData);
-        // ps1 service provider updated, ps2 service provider unchanged
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet1 = viewContract.getDataSet(ps1);
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet2 = viewContract.getDataSet(ps2);
-        assertEq(dataSet1.serviceProvider, sp2, "ps1 service provider should be sp2");
-        assertEq(dataSet1.payee, sp1, "ps1 payee should remain sp1");
-        assertEq(dataSet2.serviceProvider, sp1, "ps2 service provider should remain sp1");
-        assertEq(dataSet2.payee, sp1, "ps2 payee should remain sp1");
-    }
-
-    /**
      * @notice Test service provider change works with arbitrary extra data
      */
+    // NOTE: Disabled for GA - Storage provider changes are not permitted
+    // See: https://github.com/FilOzone/filecoin-services/issues/203
     function testServiceProviderChangedWithArbitraryExtraData() public {
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         // Use arbitrary extra data
         bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetServiceProviderChanged(testDataSetId, sp1, sp2);
         vm.prank(sp2);
+        vm.expectRevert("Storage provider changes are not yet supported");
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(testDataSetId);
-        assertEq(dataSet.serviceProvider, sp2, "Service provider should be updated to new service provider");
-        assertEq(dataSet.payee, sp1, "Payee should remain unchanged");
     }
 
     function testProvenPeriods() public {
@@ -4154,10 +4114,14 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.setViewContract(address(0x456));
 
         // Test that it cannot be set again (one-time only)
-        FilecoinWarmStorageServiceStateView newViewContract =
-            new FilecoinWarmStorageServiceStateView(warmStorageService);
-        vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
-        warmStorageService.setViewContract(address(newViewContract));
+        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
+        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
+        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
+
+        // FilecoinWarmStorageServiceStateView newViewContract =
+        //     new FilecoinWarmStorageServiceStateView(warmStorageService);
+        // vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
+        // warmStorageService.setViewContract(address(newViewContract));
 
         // Test that zero address is rejected (would need a new contract to test this properly)
         // This is now unreachable in this test since view contract is already set

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+import {FVMPay} from "@fvm-solidity/FVMPay.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -46,9 +47,6 @@ contract ServiceProviderRegistry is
 
     /// @notice Maximum length for location field
     uint256 private constant MAX_LOCATION_LENGTH = 128;
-
-    /// @notice Burn actor address for burning FIL
-    address public constant BURN_ACTOR = 0xff00000000000000000000000000000000000063;
 
     /// @notice Registration fee in attoFIL (5 FIL = 5 * 10^18 attoFIL)
     uint256 public constant REGISTRATION_FEE = 5e18;
@@ -185,8 +183,7 @@ contract ServiceProviderRegistry is
         emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
-        (bool burnSuccess,) = BURN_ACTOR.call{value: REGISTRATION_FEE}("");
-        require(burnSuccess, "Burn failed");
+        require(FVMPay.burn(REGISTRATION_FEE), "Burn failed");
     }
 
     /// @notice Add a new product to an existing provider
