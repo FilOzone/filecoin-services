@@ -24,6 +24,8 @@ uint256 constant NO_PROVING_DEADLINE = 0;
 uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
+uint256 constant MAX_PIECES_ADDED_EXTRA_DATA_SIZE = 8192; // 8 KiB
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -511,6 +513,10 @@ contract FilecoinWarmStorageService is
     {
         // Decode the extra data to get the metadata, payer address, and signature
         require(extraData.length > 0, Errors.ExtraDataRequired());
+        require(
+            extraData.length <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+            Errors.ExtraDataSizeExceeded(MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE, extraData.length)
+        );
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
@@ -712,7 +718,7 @@ contract FilecoinWarmStorageService is
      */
     function piecesAdded(uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes calldata extraData)
         external
-        onlyPDPVerifier
+        onlyPDPVerifier 
     {
         requirePaymentNotTerminated(dataSetId);
         // Verify the data set exists in our mapping
@@ -722,6 +728,10 @@ contract FilecoinWarmStorageService is
         // Get the payer address for this data set
         address payer = info.payer;
         require(extraData.length > 0, Errors.ExtraDataRequired());
+        require(
+            extraData.length <= MAX_PIECES_ADDED_EXTRA_DATA_SIZE,
+            Errors.ExtraDataSizeExceeded(MAX_PIECES_ADDED_EXTRA_DATA_SIZE, extraData.length)
+        );
         // Decode the extra data
         (bytes memory signature, string[][] memory metadataKeys, string[][] memory metadataValues) =
             abi.decode(extraData, (bytes, string[][], string[][]));
