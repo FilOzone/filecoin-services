@@ -4114,10 +4114,14 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.setViewContract(address(0x456));
 
         // Test that it cannot be set again (one-time only)
-        FilecoinWarmStorageServiceStateView newViewContract =
-            new FilecoinWarmStorageServiceStateView(warmStorageService);
-        vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
-        warmStorageService.setViewContract(address(newViewContract));
+        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
+        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
+        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
+
+        // FilecoinWarmStorageServiceStateView newViewContract =
+        //     new FilecoinWarmStorageServiceStateView(warmStorageService);
+        // vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
+        // warmStorageService.setViewContract(address(newViewContract));
 
         // Test that zero address is rejected (would need a new contract to test this properly)
         // This is now unreachable in this test since view contract is already set

@@ -431,8 +431,16 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract
      */
     function setViewContract(address _viewContract) external onlyOwner {
+        // Ensure the view contract address is not the zero address
         require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
-        require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+
+        // Require that the existing set address is still zero (one-time setup only)
+        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
+        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
+        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
+
+        // require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+
         viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
     }
