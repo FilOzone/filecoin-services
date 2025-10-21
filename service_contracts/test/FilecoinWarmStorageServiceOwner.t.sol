@@ -241,7 +241,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         address unregisteredAddress = address(0x999);
 
-        // Try to change to unregistered provider - now reverts before checking registration
+        // Try to change to unregistered provider, expect a revert
         vm.prank(address(pdpVerifier));
         vm.expectRevert("Storage provider changes are not yet supported");
         serviceContract.storageProviderChanged(dataSetId, provider1, unregisteredAddress, new bytes(0));
