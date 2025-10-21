@@ -223,7 +223,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         uint256 dataSetId = createDataSet(provider1, client);
 
-        // Change storage provider should now revert at FWSS listener
+        // Change storage provider should revert at FWSS listener
         vm.prank(provider2);
         vm.expectRevert("Storage provider changes are not yet supported");
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
