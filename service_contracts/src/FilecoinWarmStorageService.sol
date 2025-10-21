@@ -1429,7 +1429,7 @@ contract FilecoinWarmStorageService is
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
 
         // Calculate the total number of epochs in the requested range
-        uint256 totalEpochsRequested = toEpoch - fromEpoch; // total epochs = (toEpoch) - (fromEpoch + 1) - 1 == toEpoch - fromEpoch
+        uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
         // If proving wasn't ever activated for this data set, don't pay anything
@@ -1518,7 +1518,7 @@ contract FilecoinWarmStorageService is
 
             // now handle the last period separately
             if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
-                // then the epochs to add = `endingPeriodStarting` to `toEpoch`. But since `endingPeriodStarting` is simply the ending of its previous period + 1, so epochs: (`deadline + 1` -> `to`)
+                // epochs to add: start from `start of current period` , go upto `toEpoch`. Note that `start of current period` is same as `deadline of previous period` + 1
                 provenEpochCount += (toEpoch - _calcPeriodDeadline(dataSetId, endingPeriod - 1));
                 lastProvenEpoch = toEpoch;
             }
