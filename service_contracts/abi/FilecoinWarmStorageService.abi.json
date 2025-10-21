@@ -1967,27 +1967,6 @@
   },
   {
     "type": "error",
-    "name": "OldServiceProviderMismatch",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OnlyFilBeamControllerAllowed",
     "inputs": [
       {
