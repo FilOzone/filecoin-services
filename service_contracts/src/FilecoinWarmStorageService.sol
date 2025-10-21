@@ -513,7 +513,10 @@ contract FilecoinWarmStorageService is
         // Decode the extra data to get the metadata, payer address, and signature
         uint256 len = extraData.length;
         require(len > 0, Errors.ExtraDataRequired());
-        require(len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE));
+        require(
+            len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+            Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
+        );
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
