@@ -1184,7 +1184,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.expectRevert("Storage provider changes are not yet supported");
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
     }
-    
+
     /**
      * @notice Test service provider change reverts if new service provider is zero address
      */
