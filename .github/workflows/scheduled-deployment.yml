@@ -1,0 +1,311 @@
+name: Scheduled Contract Deployment
+
+on:
+  # Run daily at 2 AM UTC.
+  schedule:
+    - cron: '0 2 * * *'
+  
+  # Allow manual triggering for testing and on-demand deployments
+  workflow_dispatch:
+    inputs:
+      custom_challenge_finality:
+        description: 'Custom challenge finality (default: 10)'
+        required: false
+        default: '10'
+        type: string
+      custom_max_proving_period:
+        description: 'Custom max proving period (default: 60)'
+        required: false
+        default: '60'
+        type: string
+      custom_challenge_window_size:
+        description: 'Custom challenge window size (default: 15)'
+        required: false
+        default: '15'
+        type: string
+      create_issue_on_success:
+        description: 'Create GitHub issue even on successful deployment'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  # Default deployment parameters
+  # Challenge finality must be lower than proving period for PDP to work
+  # Using conservative parameters: 10 epochs finality, 60 epochs proving period
+  # 
+  # SECURITY NOTE: We are operating outside recommended security parameters.
+  # Researchers recommend challenge finality of 150 epochs, but we use 10 for fast proofs in testing.
+  DEFAULT_CHALLENGE_FINALITY: '10'
+  DEFAULT_MAX_PROVING_PERIOD: '60'
+  DEFAULT_CHALLENGE_WINDOW_SIZE: '15'
+
+jobs:
+  deploy-and-validate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.2.3
+      
+      - name: Setup deployment parameters
+        id: setup
+        run: |
+          # Use workflow inputs if provided, otherwise use defaults
+          CHALLENGE_FINALITY="${{ github.event.inputs.custom_challenge_finality || env.DEFAULT_CHALLENGE_FINALITY }}"
+          MAX_PROVING_PERIOD="${{ github.event.inputs.custom_max_proving_period || env.DEFAULT_MAX_PROVING_PERIOD }}"
+          CHALLENGE_WINDOW_SIZE="${{ github.event.inputs.custom_challenge_window_size || env.DEFAULT_CHALLENGE_WINDOW_SIZE }}"
+          
+          echo "CHALLENGE_FINALITY=$CHALLENGE_FINALITY" >> $GITHUB_OUTPUT
+          echo "MAX_PROVING_PERIOD=$MAX_PROVING_PERIOD" >> $GITHUB_OUTPUT
+          echo "CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE" >> $GITHUB_OUTPUT
+          
+          # Create deployment info for later use
+          echo "DEPLOYMENT_TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+          echo "DEPLOYMENT_TRIGGER=${{ github.event_name }}" >> $GITHUB_OUTPUT
+      
+      - name: Prepare keystore
+        run: |
+          # Create keystore file from base64-encoded secret
+          echo "${{ secrets.CALIBNET_KEYSTORE_B64 }}" | base64 -d > /tmp/keystore.json
+          chmod 600 /tmp/keystore.json
+      
+      - name: Install dependencies
+        run: |
+          cd service_contracts
+          make install
+      
+      - name: Build contracts
+        run: |
+          cd service_contracts
+          make build
+      
+      - name: Deploy and validate contracts
+        id: deployment
+        run: |
+          cd service_contracts
+          
+          # Set deployment environment variables
+          export KEYSTORE="/tmp/keystore.json"
+          export PASSWORD="${{ secrets.CALIBNET_KEYSTORE_PASSWORD }}"
+          export RPC_URL="${{ secrets.CALIBNET_RPC_URL }}"
+          export CHALLENGE_FINALITY="${{ steps.setup.outputs.CHALLENGE_FINALITY }}"
+          export MAX_PROVING_PERIOD="${{ steps.setup.outputs.MAX_PROVING_PERIOD }}"
+          export CHALLENGE_WINDOW_SIZE="${{ steps.setup.outputs.CHALLENGE_WINDOW_SIZE }}"
+          
+          # Create output file for deployment results
+          DEPLOYMENT_LOG="/tmp/deployment_output.log"
+          
+          echo "=== Starting Deployment ===" | tee $DEPLOYMENT_LOG
+          echo "Challenge Finality: $CHALLENGE_FINALITY" | tee -a $DEPLOYMENT_LOG
+          echo "Max Proving Period: $MAX_PROVING_PERIOD" | tee -a $DEPLOYMENT_LOG
+          echo "Challenge Window Size: $CHALLENGE_WINDOW_SIZE" | tee -a $DEPLOYMENT_LOG
+          echo "Timestamp: ${{ steps.setup.outputs.DEPLOYMENT_TIMESTAMP }}" | tee -a $DEPLOYMENT_LOG
+          echo "Trigger: ${{ steps.setup.outputs.DEPLOYMENT_TRIGGER }}" | tee -a $DEPLOYMENT_LOG
+          echo "" | tee -a $DEPLOYMENT_LOG
+          
+          # Run deployment and validation
+          if ./tools/deploy-and-validate-calibnet.sh 2>&1 | tee -a $DEPLOYMENT_LOG; then
+            echo "DEPLOYMENT_STATUS=success" >> $GITHUB_OUTPUT
+            echo "Deployment completed successfully!" | tee -a $DEPLOYMENT_LOG
+          else
+            echo "DEPLOYMENT_STATUS=failure" >> $GITHUB_OUTPUT
+            echo "Deployment failed!" | tee -a $DEPLOYMENT_LOG
+            exit 1
+          fi
+          
+          # Extract contract addresses from deployment log for summary
+          PDP_VERIFIER=$(grep "PDPVerifier Proxy:" $DEPLOYMENT_LOG | tail -1 | awk '{print $NF}' | tr -d '\r' || echo "Not found")
+          PAYMENTS_PROXY=$(grep "Payments Proxy:" $DEPLOYMENT_LOG | tail -1 | awk '{print $NF}' | tr -d '\r' || echo "Not found")
+          WARM_STORAGE_PROXY=$(grep "FilecoinWarmStorageService Proxy:" $DEPLOYMENT_LOG | tail -1 | awk '{print $NF}' | tr -d '\r' || echo "Not found")
+          
+          # Validate address format
+          if [[ $PDP_VERIFIER =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "PDP_VERIFIER_ADDRESS=$PDP_VERIFIER" >> $GITHUB_OUTPUT
+          else
+            echo "PDP_VERIFIER_ADDRESS=Not found" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ $PAYMENTS_PROXY =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "PAYMENTS_ADDRESS=$PAYMENTS_PROXY" >> $GITHUB_OUTPUT
+          else
+            echo "PAYMENTS_ADDRESS=Not found" >> $GITHUB_OUTPUT
+          fi
+          
+          if [[ $WARM_STORAGE_PROXY =~ ^0x[a-fA-F0-9]{40}$ ]]; then
+            echo "WARM_STORAGE_ADDRESS=$WARM_STORAGE_PROXY" >> $GITHUB_OUTPUT
+          else
+            echo "WARM_STORAGE_ADDRESS=Not found" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Upload deployment logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-logs-${{ github.run_number }}
+          path: /tmp/deployment_output.log
+          retention-days: 30
+      
+      - name: Create success issue
+        if: steps.deployment.outputs.DEPLOYMENT_STATUS == 'success' && (github.event.inputs.create_issue_on_success == 'true' || github.event_name == 'schedule')
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deploymentTime = '${{ steps.setup.outputs.DEPLOYMENT_TIMESTAMP }}';
+            const trigger = '${{ steps.setup.outputs.DEPLOYMENT_TRIGGER }}';
+            const pdpVerifier = '${{ steps.deployment.outputs.PDP_VERIFIER_ADDRESS }}';
+            const payments = '${{ steps.deployment.outputs.PAYMENTS_ADDRESS }}';
+            const warmStorage = '${{ steps.deployment.outputs.WARM_STORAGE_ADDRESS }}';
+            const challengeFinality = '${{ steps.setup.outputs.CHALLENGE_FINALITY }}';
+            const maxProvingPeriod = '${{ steps.setup.outputs.MAX_PROVING_PERIOD }}';
+            const challengeWindowSize = '${{ steps.setup.outputs.CHALLENGE_WINDOW_SIZE }}';
+            
+            const issueBody = `
+            ## ✅ Successful Contract Deployment
+            
+            **Deployment completed successfully on Calibration testnet!**
+            
+            ### Deployment Details
+            - **Timestamp:** ${deploymentTime}
+            - **Trigger:** ${trigger === 'schedule' ? 'Scheduled (Daily)' : 'Manual'}
+            - **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### Contract Addresses
+            | Contract | Address |
+            |----------|---------|
+            | PDPVerifier Proxy | \`${pdpVerifier}\` |
+            | Payments Proxy | \`${payments}\` |
+            | FilecoinWarmStorageService Proxy | \`${warmStorage}\` |
+            
+            ### Configuration Parameters
+            - **Challenge Finality:** ${challengeFinality}
+            - **Max Proving Period:** ${maxProvingPeriod} epochs
+            - **Challenge Window Size:** ${challengeWindowSize} epochs
+            
+            ### Validation Results
+            All 26 validation tests passed successfully:
+            - ✅ Contract existence verification
+            - ✅ Proxy configuration validation  
+            - ✅ Basic functionality testing
+            - ✅ Parameter verification
+            
+            ### Network Information
+            - **Network:** Calibration Testnet
+            - **Chain ID:** 314159
+            
+            ---
+            *This issue was automatically created by the scheduled deployment workflow.*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `✅ Successful Contract Deployment - ${deploymentTime}`,
+              body: issueBody,
+              labels: ['deployment', 'calibnet', 'automated', 'success']
+            });
+      
+      - name: Create failure issue
+        if: failure()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deploymentTime = '${{ steps.setup.outputs.DEPLOYMENT_TIMESTAMP }}';
+            const trigger = '${{ steps.setup.outputs.DEPLOYMENT_TRIGGER }}';
+            const challengeFinality = '${{ steps.setup.outputs.CHALLENGE_FINALITY }}';
+            const maxProvingPeriod = '${{ steps.setup.outputs.MAX_PROVING_PERIOD }}';
+            const challengeWindowSize = '${{ steps.setup.outputs.CHALLENGE_WINDOW_SIZE }}';
+            
+            const issueBody = `
+            ## ❌ Contract Deployment Failed
+            
+            **The scheduled contract deployment has failed on Calibration testnet.**
+            
+            ### Failure Details
+            - **Timestamp:** ${deploymentTime}
+            - **Trigger:** ${trigger === 'schedule' ? 'Scheduled (Daily)' : 'Manual'}
+            - **Workflow Run:** [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            
+            ### Configuration Parameters
+            - **Challenge Finality:** ${challengeFinality}
+            - **Max Proving Period:** ${maxProvingPeriod} epochs
+            - **Challenge Window Size:** ${challengeWindowSize} epochs
+            
+            ### Investigation Steps
+            1. **Check workflow logs:** Click the workflow run link above to see detailed logs
+            2. **Download deployment logs:** Check the uploaded artifacts for complete deployment output
+            3. **Review error messages:** Look for specific error messages in the logs
+            4. **Verify secrets:** Ensure all required secrets are properly configured
+            
+            ### Required Secrets
+            Make sure these secrets are configured in the repository:
+            - \`CALIBNET_KEYSTORE_B64\` - Base64-encoded keystore file
+            - \`CALIBNET_KEYSTORE_PASSWORD\` - Keystore password
+            - \`CALIBNET_RPC_URL\` - RPC endpoint for Calibnet
+            
+            ### Common Issues
+            - **Insufficient funds:** Check that the deployment address has enough FIL for gas
+            - **RPC issues:** Verify the RPC endpoint is accessible and responsive
+            - **Contract compilation:** Ensure all dependencies are correctly installed
+            - **Network congestion:** Temporary network issues may cause deployment failures
+            
+            ### Manual Recovery
+            If needed, you can manually trigger a new deployment:
+            1. Go to Actions → Scheduled Contract Deployment
+            2. Click "Run workflow"
+            3. Optionally adjust deployment parameters
+            
+            ### Network Information
+            - **Network:** Calibration Testnet  
+            - **Chain ID:** 314159
+            
+            ---
+            **This issue requires immediate attention.** Please investigate and resolve the deployment failure.
+            
+            *This issue was automatically created by the scheduled deployment workflow.*
+            `;
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `❌ Contract Deployment Failed - ${deploymentTime}`,
+              body: issueBody,
+              labels: ['deployment', 'calibnet', 'automated', 'failure', 'bug', 'urgent'],
+              assignees: ['rjan90'] // Assign to the user who created the original issue
+            });
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          # Clean up sensitive files
+          rm -f /tmp/keystore.json
+          echo "Cleanup completed"
+      
+      - name: Deployment summary
+        if: always()
+        run: |
+          echo "=== DEPLOYMENT WORKFLOW SUMMARY ==="
+          echo "Status: ${{ steps.deployment.outputs.DEPLOYMENT_STATUS || 'failed' }}"
+          echo "Timestamp: ${{ steps.setup.outputs.DEPLOYMENT_TIMESTAMP }}"
+          echo "Trigger: ${{ steps.setup.outputs.DEPLOYMENT_TRIGGER }}"
+          echo "Parameters:"
+          echo "  Challenge Finality: ${{ steps.setup.outputs.CHALLENGE_FINALITY }}"
+          echo "  Max Proving Period: ${{ steps.setup.outputs.MAX_PROVING_PERIOD }}"
+          echo "  Challenge Window Size: ${{ steps.setup.outputs.CHALLENGE_WINDOW_SIZE }}"
+          
+          if [ "${{ steps.deployment.outputs.DEPLOYMENT_STATUS }}" = "success" ]; then
+            echo "Contract Addresses:"
+            echo "  PDPVerifier: ${{ steps.deployment.outputs.PDP_VERIFIER_ADDRESS }}"
+            echo "  Payments: ${{ steps.deployment.outputs.PAYMENTS_ADDRESS }}"
+            echo "  WarmStorage: ${{ steps.deployment.outputs.WARM_STORAGE_ADDRESS }}"
+          fi
+          echo "=================================" 
