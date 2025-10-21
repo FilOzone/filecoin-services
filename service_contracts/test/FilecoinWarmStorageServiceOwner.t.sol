@@ -264,7 +264,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         uint256 dataSetId = createDataSet(provider1, client);
 
-        // Change to any registered provider should now succeed (no approval check)
+        // Change to shouldn't require provider be approved
         vm.prank(address(pdpVerifier));
         serviceContract.storageProviderChanged(dataSetId, provider1, unauthorizedProvider, new bytes(0));
 
