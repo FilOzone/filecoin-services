@@ -158,7 +158,7 @@ contract ProviderValidationTest is MockFVMTest {
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
 
         vm.prank(provider1);
-        // Dataset creation should succeed for any registered provider
+        // Dataset creation shouldn't require provider be approved 
         uint256 dataSetId = pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
 
         // Verify the dataset was created
