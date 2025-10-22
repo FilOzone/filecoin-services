@@ -236,7 +236,7 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
-    mapping(address payer => mapping(uint256 clientDataSetId => uint256)) private clientDataSetIds;
+    mapping(address payer => mapping(uint256 nonce => uint256)) private clientNonces;
     mapping(address payer => uint256[]) private clientDataSets;
     mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
@@ -524,10 +524,10 @@ contract FilecoinWarmStorageService is
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
-            clientDataSetIds[createData.payer][createData.clientDataSetId] == 0,
+            clientNonces[createData.payer][createData.clientDataSetId] == 0,
             Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
         );
-        clientDataSetIds[createData.payer][createData.clientDataSetId] = dataSetId;
+        clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
@@ -668,7 +668,7 @@ contract FilecoinWarmStorageService is
             Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
-        // NOTE keep clientDataSetIds[payer][clientDataSetId] to prevent replay
+        // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
         uint256[] storage clientDataSetList = clientDataSets[payer];
@@ -704,11 +704,11 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Handles pieces being added to a data set and stores associated metadata
-     * @dev Called by the PDPVerifier contract when pieces are added to a data set
+     * @dev Called by the PDPVerifier contract when pieces are added to a data set.
      * @param dataSetId The ID of the data set
-     * @param firstAdded The ID of the first piece added
+     * @param firstAdded The ID of the first piece added (from PDPVerifier, used for piece ID assignment)
      * @param pieceData Array of piece data objects
-     * @param extraData Encoded metadata, and signature
+     * @param extraData Encoded (nonce, metadata keys, metadata values, signature)
      */
     function piecesAdded(uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes calldata extraData)
         external
@@ -723,8 +723,15 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         require(extraData.length > 0, Errors.ExtraDataRequired());
         // Decode the extra data
-        (bytes memory signature, string[][] memory metadataKeys, string[][] memory metadataValues) =
-            abi.decode(extraData, (bytes, string[][], string[][]));
+        (uint256 nonce, string[][] memory metadataKeys, string[][] memory metadataValues, bytes memory signature) =
+            abi.decode(extraData, (uint256, string[][], string[][], bytes));
+
+        // Validate nonce hasn't been used (replay protection)
+        require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
+        // Mark nonce as used and store dataset ID (lower 128 bits) and (firstAdded+1) (upper 128 bits)
+        // We add 1 to firstAdded to distinguish from CreateDataSet (which stores 0 in upper bits)
+        // This packing allows historical analysis: upper bits = 0 means CreateDataSet, >0 means AddPieces
+        clientNonces[payer][nonce] = ((firstAdded + 1) << 128) | dataSetId;
 
         // Check that we have metadata arrays for each piece
         require(
@@ -737,9 +744,7 @@ contract FilecoinWarmStorageService is
         );
 
         // Verify the signature
-        verifyAddPiecesSignature(
-            payer, info.clientDataSetId, pieceData, firstAdded, metadataKeys, metadataValues, signature
-        );
+        verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -1391,7 +1396,7 @@ contract FilecoinWarmStorageService is
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceDataArray Array of piece CID structures
-     * @param firstAdded The first piece ID being added
+     * @param nonce Client-chosen nonce for replay protection
      * @param allKeys 2D array where allKeys[i] contains metadata keys for piece i
      * @param allValues 2D array where allValues[i] contains metadata values for piece i
      * @param signature The signature bytes (v, r, s)
@@ -1400,16 +1405,14 @@ contract FilecoinWarmStorageService is
         address payer,
         uint256 clientDataSetId,
         Cids.Cid[] memory pieceDataArray,
-        uint256 firstAdded,
+        uint256 nonce,
         string[][] memory allKeys,
         string[][] memory allValues,
         bytes memory signature
     ) internal view {
         // Compute the EIP-712 digest
         bytes32 digest = _hashTypedDataV4(
-            SignatureVerificationLib.addPiecesStructHash(
-                clientDataSetId, firstAdded, pieceDataArray, allKeys, allValues
-            )
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
 
         // Delegate to library for verification
