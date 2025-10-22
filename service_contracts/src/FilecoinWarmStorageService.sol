@@ -1479,12 +1479,7 @@ contract FilecoinWarmStorageService is
         uint256 lastProvenEpoch,
         uint256 activationEpoch
     ) internal view returns (uint256, uint256) {
-        if (toEpoch < activationEpoch) {
-            revert Errors.InvalidEpochRange(fromEpoch, toEpoch);
-        }
-        if (toEpoch > block.number) {
-            revert Errors.InvalidEpochRange(fromEpoch, toEpoch);
-        }
+        require (toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
 
         if (fromEpoch < activationEpoch - 1) {
