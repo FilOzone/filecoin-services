@@ -131,6 +131,7 @@ ABI_CONTRACTS := \
 	FilecoinPayV1 \
 	PDPVerifier \
 	ServiceProviderRegistry \
+	ServiceProviderRegistryStorage \
 	SessionKeyRegistry
 
 # Generate ABI file targets

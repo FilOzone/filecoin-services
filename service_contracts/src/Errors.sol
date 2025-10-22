@@ -203,7 +203,11 @@ library Errors {
     /// @param railId The rail ID
     error RailNotAssociated(uint256 railId);
 
-    /// @notice The epoch range is invalid (toEpoch must be > fromEpoch)
+    /// @notice The epoch range is invalid
+    /// @notice Will be emitted if any of the following conditions is NOT met:
+    /// @notice 1. fromEpoch must be less than toEpoch
+    /// @notice 2. toEpoch must be less than block number
+    /// @notice 3. toEpoch must be greater than the activation epoch
     /// @param fromEpoch The starting epoch (exclusive)
     /// @param toEpoch The ending epoch (inclusive)
     error InvalidEpochRange(uint256 fromEpoch, uint256 toEpoch);
@@ -223,11 +227,6 @@ library Errors {
     /// @notice Provider is not registered in the ServiceProviderRegistry
     /// @param provider The provider address
     error ProviderNotRegistered(address provider);
-
-    /// @notice Provider is not approved for service
-    /// @param provider The provider address
-    /// @param providerId The provider ID from registry
-    error ProviderNotApproved(address provider, uint256 providerId);
 
     /// @notice Provider is already approved
     /// @param providerId The provider ID that is already approved

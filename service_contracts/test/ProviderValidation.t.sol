@@ -109,6 +109,8 @@ contract ProviderValidationTest is MockFVMTest {
     }
 
     function testProviderRegisteredButNotApproved() public {
+        // NOTE: This operation is expected to pass.
+        // Approval is not required to perform onboarding actions.
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -133,7 +135,21 @@ contract ProviderValidationTest is MockFVMTest {
             new string[](0)
         );
 
-        // Try to create dataset without approval
+        // Setup payment approvals for client
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            usdfc,
+            address(warmStorage),
+            true,
+            1000 * 10 ** 6, // rate allowance
+            1000 * 10 ** 6, // lockup allowance
+            365 days // max lockup period
+        );
+        usdfc.approve(address(payments), 100 * 10 ** 6);
+        payments.deposit(usdfc, client, 100 * 10 ** 6);
+        vm.stopPrank();
+
+        // Create dataset without approval should now succeed
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         bytes memory extraData = abi.encode(client, 0, metadataKeys, metadataValues, FAKE_SIGNATURE);
@@ -142,8 +158,11 @@ contract ProviderValidationTest is MockFVMTest {
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
 
         vm.prank(provider1);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotApproved.selector, provider1, 1));
-        pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+        // Dataset creation shouldn't require provider be approved
+        uint256 dataSetId = pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+
+        // Verify the dataset was created
+        assertTrue(dataSetId > 0, "Dataset should be created");
     }
 
     function testProviderApprovedCanCreateDataset() public {

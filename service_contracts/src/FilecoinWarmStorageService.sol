@@ -154,7 +154,7 @@ contract FilecoinWarmStorageService is
 
     // Structure for service pricing information
     struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (5 USDFC per TiB per month)
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
         uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
@@ -193,7 +193,7 @@ contract FilecoinWarmStorageService is
         0x7769746843444e0000000000000000000000000000000000000000000000000e;
 
     // Pricing constants
-    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 5 USDFC per TiB per month without CDN with correct decimals
+    uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
     uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
     uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
 
@@ -321,7 +321,7 @@ contract FilecoinWarmStorageService is
         TOKEN_DECIMALS = _usdfc.decimals();
 
         // Initialize the fee constants based on the actual token decimals
-        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS); // 5 USDFC
+        STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
         CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
         CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
 
@@ -431,8 +431,16 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract
      */
     function setViewContract(address _viewContract) external onlyOwner {
+        // Ensure the view contract address is not the zero address
         require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
-        require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+
+        // Require that the existing set address is still zero (one-time setup only)
+        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
+        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
+        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
+
+        // require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+
         viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
     }
@@ -512,9 +520,6 @@ contract FilecoinWarmStorageService is
         uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
 
         require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
-
-        // Check if provider is approved
-        require(approvedProviders[providerId], Errors.ProviderNotApproved(serviceProvider, providerId));
 
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
@@ -922,46 +927,18 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set service provider changes by updating internal state only
-     * @dev Called by the PDPVerifier contract when data set service provider is transferred.
-     * NOTE: The PDPVerifier contract emits events and exposes methods in terms of "storage providers",
-     * because its scope is specifically the Proof-of-Data-Possession for storage services.
-     * In FilecoinWarmStorageService (and the broader service registry architecture), we use the term
-     * "service provider" to support a future where multiple types of services may exist (not just storage).
-     * As a result, some parameters and events reflect this terminology shift and this method represents
-     * a transition point in the language, from PDPVerifier to FilecoinWarmStorageService.
-     * @param dataSetId The ID of the data set whose service provider is changing
-     * @param oldServiceProvider The previous service provider address
-     * @param newServiceProvider The new service provider address (must be an approved provider)
+     * @notice Handles data set service provider changes (currently disabled for GA)
+     * @dev Storage provider changes are disabled for GA. This will be re-enabled post-GA
+     * with proper client authorization. See: https://github.com/FilOzone/filecoin-services/issues/203
+     * Called by the PDPVerifier contract when data set service provider is transferred.
      */
     function storageProviderChanged(
-        uint256 dataSetId,
-        address oldServiceProvider,
-        address newServiceProvider,
+        uint256, // dataSetId
+        address, // oldServiceProvider
+        address, // newServiceProvider
         bytes calldata // extraData - not used
     ) external override onlyPDPVerifier {
-        // Verify the data set exists and validate the old service provider
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(
-            info.serviceProvider == oldServiceProvider,
-            Errors.OldServiceProviderMismatch(dataSetId, info.serviceProvider, oldServiceProvider)
-        );
-        require(newServiceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
-
-        // Verify new service provider is registered and approved
-        uint256 newProviderId = serviceProviderRegistry.getProviderIdByAddress(newServiceProvider);
-
-        // Check if provider is registered
-        require(newProviderId != 0, Errors.ProviderNotRegistered(newServiceProvider));
-
-        // Check if provider is approved
-        require(approvedProviders[newProviderId], Errors.ProviderNotApproved(newServiceProvider, newProviderId));
-
-        // Update the data set service provider
-        info.serviceProvider = newServiceProvider;
-
-        // Emit event for off-chain tracking
-        emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);
+        revert("Storage provider changes are not yet supported");
     }
 
     function terminateService(uint256 dataSetId) external {
@@ -1162,43 +1139,6 @@ contract FilecoinWarmStorageService is
         // - Epoch 3880-6759 is period 1
         // and so on
         return (epoch - activationEpoch) / maxProvingPeriod;
-    }
-
-    /**
-     * @notice Checks if a specific epoch has been proven
-     * @dev Returns true only if the epoch belongs to a proven proving period
-     * @param dataSetId The ID of the data set to check
-     * @param epoch The epoch to check
-     * @return True if the epoch has been proven, false otherwise
-     */
-    function isEpochProven(uint256 dataSetId, uint256 epoch) public view returns (bool) {
-        // Check if data set is active
-        if (provingActivationEpoch[dataSetId] == 0) {
-            return false;
-        }
-
-        // Check if this epoch is before activation
-        if (epoch < provingActivationEpoch[dataSetId]) {
-            return false;
-        }
-
-        // Check if this epoch is in the future (beyond current block)
-        if (epoch > block.number) {
-            return false;
-        }
-
-        // Get the period this epoch belongs to
-        uint256 periodId = getProvingPeriodForEpoch(dataSetId, epoch);
-
-        // Special case: current ongoing proving period
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        if (periodId == currentPeriod) {
-            // For the current period, check if it has been proven already
-            return provenThisPeriod[dataSetId];
-        }
-
-        // For past periods, check the provenPeriods bitmapping
-        return 0 != provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -1493,7 +1433,8 @@ contract FilecoinWarmStorageService is
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
         // If proving wasn't ever activated for this data set, don't pay anything
-        if (provingActivationEpoch[dataSetId] == 0) {
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        if (activationEpoch == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
                 settleUpto: fromEpoch,
@@ -1502,18 +1443,8 @@ contract FilecoinWarmStorageService is
         }
 
         // Count proven epochs and find the last proven epoch
-        uint256 provenEpochCount = 0;
-        uint256 lastProvenEpoch = fromEpoch;
-
-        // Check each epoch in the range
-        for (uint256 epoch = fromEpoch + 1; epoch <= toEpoch; epoch++) {
-            bool isProven = isEpochProven(dataSetId, epoch);
-
-            if (isProven) {
-                provenEpochCount++;
-                lastProvenEpoch = epoch;
-            }
-        }
+        (uint256 provenEpochCount, uint256 lastProvenEpoch) =
+            _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
@@ -1527,14 +1458,68 @@ contract FilecoinWarmStorageService is
         // Calculate the modified amount based on proven epochs
         uint256 modifiedAmount = (proposedAmount * provenEpochCount) / totalEpochsRequested;
 
-        // Calculate how many epochs were not proven (faulted)
-        uint256 faultedEpochs = totalEpochsRequested - provenEpochCount;
-
         return ValidationResult({
             modifiedAmount: modifiedAmount,
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
             note: ""
         });
+    }
+
+    function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
+        internal
+        view
+        returns (uint256 provenEpochCount, uint256 settledUpTo)
+    {
+        require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
+        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
+
+        if (fromEpoch < activationEpoch - 1) {
+            fromEpoch = activationEpoch - 1;
+        }
+
+        uint256 startingPeriod = getProvingPeriodForEpoch(dataSetId, fromEpoch + 1);
+
+        // handle first period separately
+        uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
+
+        if (toEpoch < startingPeriodDeadline) {
+            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+                provenEpochCount = toEpoch - fromEpoch;
+                settledUpTo = toEpoch;
+            }
+        } else {
+            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+                provenEpochCount += (startingPeriodDeadline - fromEpoch);
+            }
+
+            uint256 endingPeriod = getProvingPeriodForEpoch(dataSetId, toEpoch);
+            // loop through the proving periods between startingPeriod and endingPeriod
+            for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
+                if (_isPeriodProven(dataSetId, period, currentPeriod)) {
+                    provenEpochCount += maxProvingPeriod;
+                }
+            }
+            settledUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
+
+            // handle the last period separately
+            if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
+                provenEpochCount += (toEpoch - settledUpTo);
+                settledUpTo = toEpoch;
+            }
+        }
+        return (provenEpochCount, settledUpTo);
+    }
+
+    function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
+        if (periodId == currentPeriod) {
+            return provenThisPeriod[dataSetId];
+        }
+        uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
+        return isProven != 0;
+    }
+
+    function _calcPeriodDeadline(uint256 activationEpoch, uint256 periodId) private view returns (uint256) {
+        return activationEpoch + (periodId + 1) * maxProvingPeriod;
     }
 
     function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {

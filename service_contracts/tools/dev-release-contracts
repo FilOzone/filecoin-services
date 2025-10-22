@@ -1,0 +1,18 @@
+# DEPLOYMENT SUMMARY
+FilecoinWarmStorageService Implementation: 0x271b346F1282c3ab8C3CA3aBCD34c0aBF96Df9D0
+FilecoinWarmStorageService Proxy: 0xD3De778C05f89e1240ef70100Fb0d9e5b2eFD258
+FilecoinWarmStorageServiceStateView: 0x0295Ac959317391656fB7fFaA046046eF9C7E18F
+
+USDFC token address: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
+PDPVerifier address: 0x06279D540BDCd6CA33B073cEAeA1425B6C68c93d
+- from: https://github.com/FilOzone/pdp/releases/tag/v3.0.0 
+FilecoinPayV1 contract address: 0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0
+- from: https://github.com/FilOzone/filecoin-pay/releases/tag/v1.0.0 
+FilBeam controller address: 0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A
+FilBeam beneficiary address: 0x1D60d2F5960Af6341e842C539985FA297E10d6eA
+ServiceProviderRegistry address: 0xc758dB755f59189d8FB3C166Ee372b77d7CFA9D3
+SessionKeyRegistry address: 0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452
+Max proving period: 240 epochs
+Challenge window size: 30 epochs
+Service name: FWSS - M4 staging contracts
+Service description: Calibration FWSS - M4 staging contracts

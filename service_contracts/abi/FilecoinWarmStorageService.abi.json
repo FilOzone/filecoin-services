@@ -403,30 +403,6 @@
   },
   {
     "type": "function",
-    "name": "isEpochProven",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "epoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "migrate",
     "inputs": [
       {
@@ -719,17 +695,17 @@
     "name": "storageProviderChanged",
     "inputs": [
       {
-        "name": "dataSetId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "oldServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "newServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
@@ -1451,17 +1427,6 @@
   },
   {
     "type": "error",
-    "name": "AddressAlreadySet",
-    "inputs": [
-      {
-        "name": "field",
-        "type": "uint8",
-        "internalType": "enum Errors.AddressField"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "AddressEmptyCode",
     "inputs": [
       {
@@ -1967,27 +1932,6 @@
   },
   {
     "type": "error",
-    "name": "OldServiceProviderMismatch",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OnlyFilBeamControllerAllowed",
     "inputs": [
       {
@@ -2071,22 +2015,6 @@
     "type": "error",
     "name": "ProviderAlreadyApproved",
     "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ProviderNotApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      },
       {
         "name": "providerId",
         "type": "uint256",
