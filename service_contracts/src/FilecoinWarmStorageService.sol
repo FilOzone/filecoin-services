@@ -1482,6 +1482,8 @@ contract FilecoinWarmStorageService is
             if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
                 provenEpochCount = toEpoch - fromEpoch;
                 settledUpTo = toEpoch;
+            } else {
+                settledUpTo = fromEpoch;
             }
         } else {
             if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
