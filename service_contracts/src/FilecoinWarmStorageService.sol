@@ -803,7 +803,7 @@ contract FilecoinWarmStorageService is
         // Decode the signature from extraData
         uint256 len = extraData.length;
         require(len > 0, Errors.ExtraDataRequired());
-        require(len <= MAX_ADD_PIECES_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_ADD_PIECES_EXTRA_DATA_SIZE));
+        require(len <= MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE));
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
