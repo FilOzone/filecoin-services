@@ -121,18 +121,47 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         info.dataSetId = dataSetId;
     }
 
+    /**
+     * @notice Get the current status of a dataset
+     * @dev A dataset is Active when it has pieces being proven and is within lockup period
+     * @dev A dataset is Inactive when: no pieces (rate==0), terminated, or beyond lockup period
+     * @param service The service contract
+     * @param dataSetId The ID of the dataset
+     * @return status The current status
+     */
     function getDataSetStatus(FilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
         returns (FilecoinWarmStorageService.DataSetStatus status)
     {
         FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+        
+        // Non-existent datasets are inactive
         if (info.pdpRailId == 0) {
-            return FilecoinWarmStorageService.DataSetStatus.NotFound;
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
-        if (info.pdpEndEpoch != 0) {
-            return FilecoinWarmStorageService.DataSetStatus.Terminating;
+        
+        // Check if proving is activated (has pieces)
+        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
+        bool hasProving = activationEpoch != 0;
+        
+        // Check if terminated
+        bool isTerminated = info.pdpEndEpoch != 0;
+        
+        // Check if beyond lockup period
+        bool isBeyondLockup = false;
+        if (isTerminated) {
+            // DEFAULT_LOCKUP_PERIOD = 2880 * 30 (1 month in epochs)
+            uint256 DEFAULT_LOCKUP_PERIOD = 2880 * 30;
+            uint256 lockupEndEpoch = info.pdpEndEpoch + DEFAULT_LOCKUP_PERIOD;
+            isBeyondLockup = block.number > lockupEndEpoch;
         }
+        
+        // Inactive conditions: no proving, or beyond lockup
+        if (!hasProving || isBeyondLockup) {
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+        }
+        
         return FilecoinWarmStorageService.DataSetStatus.Active;
     }
 

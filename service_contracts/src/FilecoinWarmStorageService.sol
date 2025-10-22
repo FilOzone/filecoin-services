@@ -97,6 +97,11 @@ contract FilecoinWarmStorageService is
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
 
+    // Event for dataset status changes
+    event DataSetStatusChanged(
+        uint256 indexed dataSetId, DataSetStatus indexed oldStatus, DataSetStatus indexed newStatus, uint256 epoch
+    );
+
     // =========================================================================
     // Structs
 
@@ -130,12 +135,11 @@ contract FilecoinWarmStorageService is
     }
 
     enum DataSetStatus {
-        // Data set doesn't yet exist or has been deleted
-        NotFound,
-        // Data set is active
-        Active,
-        // Data set is in the process of being terminated
-        Terminating
+        // Dataset is inactive: created with no pieces (rate==0, no proving),
+        // terminated, or beyond lockup period
+        Inactive,
+        // Dataset has pieces being actively proven and within lockup period
+        Active
     }
 
     // Decode structure for data set creation extra data
@@ -643,6 +647,9 @@ contract FilecoinWarmStorageService is
             createData.metadataKeys,
             createData.metadataValues
         );
+
+        // Emit initial status as Inactive (no pieces yet)
+        emit DataSetStatusChanged(dataSetId, DataSetStatus.Inactive, DataSetStatus.Inactive, block.number);
     }
 
     /**
@@ -869,6 +876,9 @@ contract FilecoinWarmStorageService is
             // Update the payment rates
             updatePaymentRates(dataSetId, leafCount);
 
+            // Emit status change to Active when proving starts
+            emit DataSetStatusChanged(dataSetId, DataSetStatus.Inactive, DataSetStatus.Active, block.number);
+
             return;
         }
 
@@ -969,6 +979,9 @@ contract FilecoinWarmStorageService is
         }
 
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+
+        // Emit status change to Inactive when terminated
+        emit DataSetStatusChanged(dataSetId, DataSetStatus.Active, DataSetStatus.Inactive, block.number);
     }
 
     /**
