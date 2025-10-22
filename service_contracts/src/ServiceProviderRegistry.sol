@@ -11,17 +11,16 @@ import {BloomSet16} from "./lib/BloomSet.sol";
 import {Errors} from "./Errors.sol";
 import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
 
-/**
- * Required PDP Keys:
- * - serviceURL: the API endpoint
- * - minPieceSizeInBytes: minimum piece size in bytes
- * - maxPieceSizeInBytes: maximum piece size in bytes
- * - ipniPiece: Supports IPNI piece CID indexing
- * - ipniIpfs: Supports IPNI IPFS CID indexing
- * - storagePricePerTibPerDay: Storage price per TiB per day (in token's smallest unit)
- * - minProvingPeriodInEpochs: Minimum proving period in epochs
- * - paymentTokenAddress: Token contract for payment (IERC20(address(0)) for FIL)
- */
+/// @dev Required PDP Keys:
+/// - serviceURL: the API endpoint
+/// - minPieceSizeInBytes: minimum piece size in bytes
+/// - maxPieceSizeInBytes: maximum piece size in bytes
+/// - ipniPiece: Supports IPNI piece CID indexing
+/// - ipniIpfs: Supports IPNI IPFS CID indexing
+/// - storagePricePerTibPerDay: Storage price per TiB per day (in token's smallest unit)
+/// - minProvingPeriodInEpochs: Minimum proving period in epochs
+/// - paymentTokenAddress: Token contract for payment (IERC20(address(0)) for FIL)
+
 uint256 constant REQUIRED_PDP_KEYS = 0x5b6e96f24dd05fa9218c80c8422a0eb70947d833531db3c4db14504405c0e132;
 
 /// @title ServiceProviderRegistry
