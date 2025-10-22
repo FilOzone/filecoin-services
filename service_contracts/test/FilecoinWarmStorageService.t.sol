@@ -4312,16 +4312,42 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Validate payment
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch - 1; // exclusive
-        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3) - 1;
+        uint256 toEpoch = vm.getBlockNumber() - 1;
         uint256 proposedAmount = 1000e6;
 
-        vm.prank(address(payments));
         IValidator.ValidationResult memory result =
             pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
 
         // Should pay nothing
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, "");
+
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        toEpoch = activationEpoch + 1;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch, "Should not settle");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        fromEpoch = activationEpoch + maxProvingPeriod * 2 - 1;
+        toEpoch = activationEpoch + maxProvingPeriod * 2 + 1;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, fromEpoch, "Should not settle");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        fromEpoch = activationEpoch + maxProvingPeriod * 2 - 2;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + maxProvingPeriod * 2, "Should not settle into last period");
         assertEq(result.note, "No proven epochs in the requested range");
     }
 
