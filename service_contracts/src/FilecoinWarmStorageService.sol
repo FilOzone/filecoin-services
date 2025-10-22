@@ -159,6 +159,7 @@ contract FilecoinWarmStorageService is
         uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
+        uint256 minimumPricePerMonth; // Minimum monthly charge for any dataset size (0.06 USDFC)
     }
 
     // Used for announcing upgrades, packed into one slot
@@ -197,6 +198,7 @@ contract FilecoinWarmStorageService is
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
     uint256 private immutable CDN_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of CDN egress
     uint256 private immutable CACHE_MISS_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of cache miss egress
+    uint256 private immutable MINIMUM_STORAGE_RATE_PER_MONTH; // 0.06 USDFC per month minimum pricing floor
 
     // Fixed lockup amounts for CDN rails
     uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
@@ -331,6 +333,7 @@ contract FilecoinWarmStorageService is
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
         CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
         CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
+        MINIMUM_STORAGE_RATE_PER_MONTH = (6 * 10 ** TOKEN_DECIMALS) / 100; // 0.06 USDFC minimum
 
         // Initialize the lockup constants based on the actual token decimals
         DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
@@ -1177,21 +1180,29 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Calculate storage rate per epoch based on total storage size
-     * @dev Returns storage rate per TiB per month
+     * @dev Returns storage rate per TiB per month with minimum pricing floor applied
      * @param totalBytes Total size of the stored data in bytes
      * @return storageRate The PDP storage rate per epoch
      */
     function calculateRatesPerEpoch(uint256 totalBytes) external view returns (uint256 storageRate) {
-        storageRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
+        storageRate = _calculateStorageRate(totalBytes);
     }
 
     /**
      * @notice Calculate the storage rate per epoch (internal use)
+     * @dev Implements minimum pricing floor and returns the higher of the natural size-based rate or the minimum rate.
      * @param totalBytes Total size of the stored data in bytes
      * @return The storage rate per epoch
      */
     function _calculateStorageRate(uint256 totalBytes) internal view returns (uint256) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
+        // Calculate natural size-based rate
+        uint256 naturalRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
+
+        // Calculate minimum rate (floor price converted to per-epoch)
+        uint256 minimumRate = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
+
+        // Return whichever is higher: natural rate or minimum rate
+        return naturalRate > minimumRate ? naturalRate : minimumRate;
     }
 
     /**
@@ -1289,7 +1300,8 @@ contract FilecoinWarmStorageService is
             pricePerTiBCdnEgress: CDN_EGRESS_PRICE_PER_TIB,
             pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
             tokenAddress: usdfcTokenAddress,
-            epochsPerMonth: EPOCHS_PER_MONTH
+            epochsPerMonth: EPOCHS_PER_MONTH,
+            minimumPricePerMonth: MINIMUM_STORAGE_RATE_PER_MONTH
         });
     }
 

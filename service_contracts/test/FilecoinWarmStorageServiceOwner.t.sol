@@ -124,7 +124,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         serviceContract.addApprovedProvider(providerId3);
 
         // Setup USDFC tokens for client
-        usdfcToken.safeTransfer(client, 10000e6);
+        usdfcToken.safeTransfer(client, 10000e18);
 
         // Make signatures pass
         makeSignaturePass(client);
@@ -190,9 +190,9 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         // Setup payment approval
         vm.startPrank(payer);
-        payments.setOperatorApproval(usdfcToken, address(serviceContract), true, 1000e6, 1000e6, 365 days);
-        usdfcToken.approve(address(payments), 100e6);
-        payments.deposit(usdfcToken, payer, 100e6);
+        payments.setOperatorApproval(usdfcToken, address(serviceContract), true, 1000e18, 1000e18, 365 days);
+        usdfcToken.approve(address(payments), 100e18);
+        payments.deposit(usdfcToken, payer, 100e18);
         vm.stopPrank();
 
         // Create data set

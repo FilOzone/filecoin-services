@@ -357,6 +357,11 @@
             "name": "epochsPerMonth",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "minimumPricePerMonth",
+            "type": "uint256",
+            "internalType": "uint256"
           }
         ]
       }
@@ -1676,6 +1681,27 @@
     "inputs": [
       {
         "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFundsForMinimumRate",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "minimumRequired",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "available",
         "type": "uint256",
         "internalType": "uint256"
       }
