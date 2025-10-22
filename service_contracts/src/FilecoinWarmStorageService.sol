@@ -1443,14 +1443,14 @@ contract FilecoinWarmStorageService is
         }
 
         // Count proven epochs and find the last proven epoch
-        (uint256 provenEpochCount, uint256 lastProvenEpoch) =
+        (uint256 provenEpochCount, uint256 settledUpTo) =
             _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
-                settleUpto: fromEpoch,
+                settleUpto: settledUpTo,
                 note: "No proven epochs in the requested range"
             });
         }
@@ -1458,11 +1458,7 @@ contract FilecoinWarmStorageService is
         // Calculate the modified amount based on proven epochs
         uint256 modifiedAmount = (proposedAmount * provenEpochCount) / totalEpochsRequested;
 
-        return ValidationResult({
-            modifiedAmount: modifiedAmount,
-            settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
-            note: ""
-        });
+        return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settledUpTo, note: ""});
     }
 
     function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)

@@ -4321,7 +4321,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Should pay nothing
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
-        assertEq(result.settleUpto, fromEpoch, "Should not settle");
+        assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
     }
 
