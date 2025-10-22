@@ -9,9 +9,10 @@ import {
   DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
   PDPPaymentTerminated as PDPPaymentTerminatedEvent,
   CDNPaymentTerminated as CDNPaymentTerminatedEvent,
+  DataSetStatusChanged as DataSetStatusChangedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
-import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
+import { DataSet, DataSetStatusHistory, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
 import {
   BIGINT_ONE,
   BIGINT_ZERO,
@@ -284,7 +285,8 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   dataSet.payee = payee;
   dataSet.serviceProvider = serviceProvider;
   dataSet.withCDN = withCDN;
-  dataSet.isActive = true;
+  dataSet.isActive = true; // Deprecated: kept for backward compatibility
+  dataSet.status = "INACTIVE"; // Initially inactive (no pieces yet)
   dataSet.pdpEndEpoch = BIGINT_ZERO;
   dataSet.leafCount = BIGINT_ZERO;
   dataSet.challengeRange = BIGINT_ZERO;
@@ -496,6 +498,7 @@ export function handlePDPPaymentTerminated(event: PDPPaymentTerminatedEvent): vo
   }
   if (dataSet) {
     dataSet.isActive = false;
+    dataSet.status = "INACTIVE";
     dataSet.pdpEndEpoch = endEpoch;
     dataSet.save();
   }
@@ -531,6 +534,54 @@ export function handleCDNPaymentTerminated(event: CDNPaymentTerminatedEvent): vo
   }
   if (dataSet) {
     dataSet.isActive = false;
+    dataSet.status = "INACTIVE";
     dataSet.save();
   }
+}
+
+/**
+ * Handles the DataSetStatusChanged event.
+ * Updates the dataset status and creates a status history entry.
+ */
+export function handleDataSetStatusChanged(event: DataSetStatusChangedEvent): void {
+  const dataSetId = event.params.dataSetId;
+  const oldStatus = event.params.oldStatus;
+  const newStatus = event.params.newStatus;
+  const epoch = event.params.epoch;
+
+  const dataSetEntityId = getDataSetEntityId(dataSetId);
+  const dataSet = DataSet.load(dataSetEntityId);
+
+  if (!dataSet) {
+    log.warning("handleDataSetStatusChanged: DataSet {} not found", [dataSetId.toString()]);
+    return;
+  }
+
+  // Update dataset status
+  const statusString = newStatus === 0 ? "INACTIVE" : "ACTIVE";
+  dataSet.status = statusString;
+  dataSet.isActive = newStatus === 1; // Keep deprecated field in sync
+  dataSet.updatedAt = event.block.timestamp;
+  dataSet.blockNumber = event.block.number;
+  dataSet.save();
+
+  // Create status history entry
+  const historyId = event.transaction.hash.toHex() + "-" + event.logIndex.toString();
+  const history = new DataSetStatusHistory(historyId);
+  history.dataSet = dataSetEntityId;
+  history.dataSetId = dataSetId;
+  history.oldStatus = oldStatus === 0 ? "INACTIVE" : "ACTIVE";
+  history.newStatus = statusString;
+  history.epoch = epoch;
+  history.blockNumber = event.block.number;
+  history.timestamp = event.block.timestamp;
+  history.transactionHash = event.transaction.hash;
+  history.save();
+
+  log.info("DataSet {} status changed from {} to {} at epoch {}", [
+    dataSetId.toString(),
+    history.oldStatus,
+    history.newStatus,
+    epoch.toString(),
+  ]);
 }
