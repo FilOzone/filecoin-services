@@ -77,7 +77,7 @@ library SignatureVerificationLib {
     function hashAllCids(Cids.Cid[] calldata pieceDataArray) internal pure returns (bytes32 cidHashesHash) {
         bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
         for (uint256 i = 0; i < pieceDataArray.length; i++) {
-            cidHashes[i] = keccak256(abi.encode(keccak256("Cid(bytes data)"), keccak256(pieceDataArray[i].data)));
+            cidHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceDataArray[i].data)));
         }
         return keccak256(abi.encodePacked(cidHashes));
     }
