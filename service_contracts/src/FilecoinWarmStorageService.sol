@@ -1494,6 +1494,7 @@ contract FilecoinWarmStorageService is
             if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
                 provenEpochCount += (startingPeriodDeadline - fromEpoch);
             }
+
             uint256 endingPeriod = getProvingPeriodForEpoch(dataSetId, toEpoch);
             // loop through the proving periods between startingPeriod and endingPeriod
             for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
@@ -1503,9 +1504,8 @@ contract FilecoinWarmStorageService is
             }
             settledUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
 
-            // now handle the last period separately
+            // handle the last period separately
             if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
-                // epochs to add: start from `start of current period` , go upto `toEpoch`. Note that `start of current period` is same as `deadline of previous period` + 1
                 provenEpochCount += (toEpoch - settledUpTo);
                 settledUpTo = toEpoch;
             }
