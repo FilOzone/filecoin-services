@@ -1458,9 +1458,6 @@ contract FilecoinWarmStorageService is
         // Calculate the modified amount based on proven epochs
         uint256 modifiedAmount = (proposedAmount * provenEpochCount) / totalEpochsRequested;
 
-        // Calculate how many epochs were not proven (faulted)
-        uint256 faultedEpochs = totalEpochsRequested - provenEpochCount;
-
         return ValidationResult({
             modifiedAmount: modifiedAmount,
             settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
