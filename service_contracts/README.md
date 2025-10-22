@@ -29,6 +29,76 @@ This directory contains the smart contracts for different Filecoin services usin
   - `pdp` - PDP verifier contract (from main branch)
 
 
+## Dataset Status & Lifecycle
+
+Datasets have a simplified two-state lifecycle system to track their operational status:
+
+### Status States
+
+- **Active**: Dataset has pieces, PDP proving is running, and payment rails are operational (not terminated or within lockup period)
+- **Inactive**: Dataset is newly created with no pieces (rate = 0), has been terminated, or is beyond the lockup period
+
+### Querying Status
+
+**From Solidity:**
+```solidity
+import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageServiceStateLibrary.sol";
+
+// Check if active
+bool isActive = FilecoinWarmStorageServiceStateLibrary.isDataSetActive(service, dataSetId);
+
+// Get detailed status
+(
+    DataSetStatus status,
+    bool hasProving,
+    bool isTerminated,
+    bool isBeyondLockup
+) = FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(service, dataSetId);
+```
+
+**From Subgraph:**
+```graphql
+{
+  dataSet(id: "0x...") {
+    setId
+    status  # "ACTIVE" or "INACTIVE"
+    totalPieces
+    pdpEndEpoch
+  }
+}
+```
+
+**Via View Contract:**
+```solidity
+DataSetStatus status = viewContract.getDataSetStatus(dataSetId);
+// 0 = Inactive, 1 = Active
+```
+
+### Documentation
+
+For complete information on dataset lifecycle, status transitions, and integration examples:
+
+- [Dataset Lifecycle Documentation](./docs/dataset-lifecycle.md) - Complete lifecycle guide with state diagram
+- [Integration Guide](./docs/integration-guide.md) - How to integrate status checking into your application
+
+### Status Events
+
+The contract emits `DataSetStatusChanged` events when status transitions occur:
+
+```solidity
+event DataSetStatusChanged(
+    uint256 indexed dataSetId,
+    DataSetStatus indexed oldStatus,
+    DataSetStatus indexed newStatus,
+    uint256 epoch
+);
+```
+
+These events are emitted when:
+1. Dataset is created (initial Inactive status)
+2. First piece is added and proving starts (Inactive → Active)
+3. Service is terminated (Active → Inactive)
+
 ### Extsload
 The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.
 There are three recommended ways to access `view` methods.
