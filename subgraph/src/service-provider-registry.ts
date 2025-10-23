@@ -10,7 +10,6 @@ import {
 import { Provider, ProviderProduct } from "../generated/schema";
 import { BIGINT_ONE } from "./utils/constants";
 import { getServiceProviderInfo } from "./utils/contract-calls";
-import { decodePDPOfferingData } from "./utils/decoders";
 import { createProviderProduct, initiateProvider } from "./utils/entity";
 import { getProviderProductEntityId } from "./utils/keys";
 
@@ -101,7 +100,6 @@ export function handleProductAdded(event: ProductAddedEvent): void {
 export function handleProductUpdated(event: ProductUpdatedEvent): void {
   const productType = event.params.productType;
   const serviceProvider = event.params.serviceProvider;
-  const productData = event.params.productData;
   const capabilityKeys = event.params.capabilityKeys;
   const capabilityValues = event.params.capabilityValues;
 
@@ -114,12 +112,8 @@ export function handleProductUpdated(event: ProductUpdatedEvent): void {
     return;
   }
 
-  const decodedProductData = decodePDPOfferingData(productData);
-
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;
-  providerProduct.productData = productData;
-  providerProduct.decodedProductData = decodedProductData.toJSON();
   providerProduct.isActive = true;
   providerProduct.save();
 }
