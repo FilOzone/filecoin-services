@@ -1126,8 +1126,10 @@ contract FilecoinWarmStorageService is
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch);
+    }
 
+    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch) internal view returns (uint256) {
         // If proving wasn't activated or epoch is before activation
         if (activationEpoch == 0 || epoch < activationEpoch) {
             return type(uint256).max; // Invalid period
@@ -1467,13 +1469,13 @@ contract FilecoinWarmStorageService is
         returns (uint256 provenEpochCount, uint256 settleUpTo)
     {
         require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
+        uint256 currentPeriod = _provingPeriodForEpoch(activationEpoch, block.number);
 
         if (fromEpoch < activationEpoch - 1) {
             fromEpoch = activationEpoch - 1;
         }
 
-        uint256 startingPeriod = getProvingPeriodForEpoch(dataSetId, fromEpoch + 1);
+        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
 
         // handle first period separately
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
@@ -1490,7 +1492,7 @@ contract FilecoinWarmStorageService is
                 provenEpochCount += (startingPeriodDeadline - fromEpoch);
             }
 
-            uint256 endingPeriod = getProvingPeriodForEpoch(dataSetId, toEpoch);
+            uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
             // loop through the proving periods between startingPeriod and endingPeriod
             for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
                 if (_isPeriodProven(dataSetId, period, currentPeriod)) {
