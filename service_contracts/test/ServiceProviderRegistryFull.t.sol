@@ -3,13 +3,17 @@ pragma solidity ^0.8.20;
 
 import {BURN_ADDRESS} from "@fvm-solidity/FVMActors.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {PDPOffering} from "../src/PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract ServiceProviderRegistryFullTest is MockFVMTest {
-    ServiceProviderRegistry public implementation;
+    using PDPOffering for PDPOffering.Schema;
+    using PDPOffering for ServiceProviderRegistry;
+
+    ServiceProviderRegistry private implementation;
     ServiceProviderRegistry public registry;
 
     address public owner;
@@ -19,14 +23,13 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     address public user;
 
     string constant SERVICE_URL = "https://provider1.example.com";
-    string constant SERVICE_URL_2 = "https://provider2.example.com";
+    bytes constant SERVICE_URL_2 = "https://provider2.example.com";
     string constant UPDATED_SERVICE_URL = "https://provider1-updated.example.com";
 
     uint256 constant REGISTRATION_FEE = 5 ether; // 5 FIL in attoFIL
 
-    ServiceProviderRegistryStorage.PDPOffering public defaultPDPData;
-    ServiceProviderRegistryStorage.PDPOffering public updatedPDPData;
-    bytes public encodedDefaultPDPData;
+    PDPOffering.Schema public defaultPDPData;
+    PDPOffering.Schema public updatedPDPData;
     bytes public encodedUpdatedPDPData;
 
     function setUp() public override {
@@ -54,34 +57,29 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         registry = ServiceProviderRegistry(address(proxy));
 
         // Setup default PDP data
-        defaultPDPData = ServiceProviderRegistryStorage.PDPOffering({
+        defaultPDPData = PDPOffering.Schema({
             serviceURL: SERVICE_URL,
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 1000000000000000000, // 1 FIL per TiB per month
+            storagePricePerTibPerDay: 1000000000000000000, // 1 FIL per TiB per month
             minProvingPeriodInEpochs: 2880, // 1 day in epochs (30 second blocks)
             location: "North America",
             paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
-        updatedPDPData = ServiceProviderRegistryStorage.PDPOffering({
+        updatedPDPData = PDPOffering.Schema({
             serviceURL: UPDATED_SERVICE_URL,
             minPieceSizeInBytes: 512,
             maxPieceSizeInBytes: 2 * 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: true,
-            storagePricePerTibPerMonth: 2000000000000000000, // 2 FIL per TiB per month
+            storagePricePerTibPerDay: 2000000000000000000, // 2 FIL per TiB per month
             minProvingPeriodInEpochs: 1440, // 12 hours in epochs
             location: "Europe",
             paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
-
-        // Encode PDP data
-        encodedDefaultPDPData = abi.encode(defaultPDPData);
-
-        encodedUpdatedPDPData = abi.encode(updatedPDPData);
     }
 
     // ========== Initial State Tests ==========
@@ -113,21 +111,20 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         emit ServiceProviderRegistry.ProviderRegistered(1, provider1, provider1);
 
         // Non-empty capability arrays
-        string[] memory capKeys = new string[](4);
+        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(4);
         capKeys[0] = "datacenter";
         capKeys[1] = "redundancy";
         capKeys[2] = "latency";
         capKeys[3] = "cert";
 
-        string[] memory capValues = new string[](4);
-        capValues[0] = "EU-WEST";
-        capValues[1] = "3x";
-        capValues[2] = "low";
-        capValues[3] = "ISO27001";
+        capValues[0] = bytes("EU-WEST");
+        capValues[1] = bytes("3x");
+        capValues[2] = bytes("low");
+        capValues[3] = bytes("ISO27001");
 
         vm.expectEmit(true, true, false, true);
         emit ServiceProviderRegistry.ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, capKeys, capValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, capKeys, capValues
         );
 
         // Register provider
@@ -136,7 +133,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
@@ -162,15 +158,14 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertTrue(info.info.isActive, "Provider should be active");
 
         // Verify PDP service using getPDPService (including capabilities)
-        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
-            registry.getPDPService(1);
+        (PDPOffering.Schema memory pdpData, string[] memory keys, bool isActive) = registry.getPDPService(1);
         assertEq(pdpData.serviceURL, SERVICE_URL, "Service URL should match");
         assertEq(pdpData.minPieceSizeInBytes, defaultPDPData.minPieceSizeInBytes, "Min piece size should match");
         assertEq(pdpData.maxPieceSizeInBytes, defaultPDPData.maxPieceSizeInBytes, "Max piece size should match");
         assertEq(pdpData.ipniPiece, defaultPDPData.ipniPiece, "IPNI piece should match");
         assertEq(pdpData.ipniIpfs, defaultPDPData.ipniIpfs, "IPNI IPFS should match");
         assertEq(
-            pdpData.storagePricePerTibPerMonth, defaultPDPData.storagePricePerTibPerMonth, "Storage price should match"
+            pdpData.storagePricePerTibPerDay, defaultPDPData.storagePricePerTibPerDay, "Storage price should match"
         );
         assertEq(
             pdpData.minProvingPeriodInEpochs, defaultPDPData.minProvingPeriodInEpochs, "Min proving period should match"
@@ -179,7 +174,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertTrue(isActive, "PDP service should be active");
 
         // Verify capabilities
-        assertEq(keys.length, 4, "Should have 4 capability keys");
+        assertEq(keys.length, capKeys.length, "Should have 4 capability keys");
         assertEq(keys[0], "datacenter", "First key should be datacenter");
         assertEq(keys[1], "redundancy", "Second key should be redundancy");
         assertEq(keys[2], "latency", "Third key should be latency");
@@ -192,7 +187,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         queryKeys[2] = "latency";
         queryKeys[3] = "cert";
 
-        (bool[] memory exists, string[] memory values) =
+        (bool[] memory exists, bytes[] memory values) =
             registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, queryKeys);
         assertTrue(exists[0], "First key should exist");
         assertEq(values[0], "EU-WEST", "First value should be EU-WEST");
@@ -204,16 +199,16 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertEq(values[3], "ISO27001", "Fourth value should be ISO27001");
 
         // Also verify using getProduct
-        (bytes memory productData, string[] memory productKeys, bool productActive) =
+        (string[] memory productKeys, bool productActive) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         assertTrue(productActive, "Product should be active");
-        assertEq(productKeys.length, 4, "Product should have 4 capability keys");
+        assertEq(productKeys.length, capKeys.length, "Product should have 4 capability keys");
         assertEq(productKeys[0], "datacenter", "Product first key should be datacenter");
 
         // Verify value using direct mapping access
-        string memory datacenterValue =
+        bytes memory datacenterValue =
             registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "datacenter");
-        assertEq(datacenterValue, "EU-WEST", "Product first value should be EU-WEST");
+        assertEq(datacenterValue, bytes("EU-WEST"), "Product first value should be EU-WEST");
 
         // Verify fee was burned
         uint256 burnActorBalanceAfter = BURN_ADDRESS.balance;
@@ -221,9 +216,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testCannotRegisterTwice() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // First registration
         vm.prank(provider1);
@@ -232,9 +225,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Try to register again
@@ -245,19 +237,17 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
     }
 
     function testRegisterMultipleProviders() public {
         // Provider 1 capabilities
-        string[] memory capKeys1 = new string[](2);
+        (string[] memory capKeys1, bytes[] memory capValues1) = defaultPDPData.toCapabilities(2);
         capKeys1[0] = "region";
         capKeys1[1] = "performance";
 
-        string[] memory capValues1 = new string[](2);
         capValues1[0] = "US-EAST";
         capValues1[1] = "high";
 
@@ -268,26 +258,22 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Provider 1 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys1,
             capValues1
         );
 
         // Provider 2 capabilities
-        string[] memory capKeys2 = new string[](3);
+        (string[] memory capKeys2, bytes[] memory capValues2) = defaultPDPData.toCapabilities(3);
         capKeys2[0] = "region";
         capKeys2[1] = "storage";
         capKeys2[2] = "availability";
 
-        string[] memory capValues2 = new string[](3);
-        capValues2[0] = "ASIA-PAC";
-        capValues2[1] = "100TB";
-        capValues2[2] = "99.999%";
+        capValues2[0] = bytes("ASIA-PAC");
+        capValues2[1] = bytes("100TB");
+        capValues2[2] = bytes("99.999%");
+        capValues2[3] = SERVICE_URL_2;
 
         // Register provider 2
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData2 = defaultPDPData;
-        pdpData2.serviceURL = SERVICE_URL_2;
-        bytes memory encodedPDPData2 = abi.encode(pdpData2);
 
         vm.prank(provider2);
         uint256 id2 = registry.registerProvider{value: REGISTRATION_FEE}(
@@ -295,7 +281,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Provider 2 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData2,
             capKeys2,
             capValues2
         );
@@ -313,12 +298,12 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Verify provider 1 capabilities
         (, string[] memory keys1,) = registry.getPDPService(1);
-        assertEq(keys1.length, 2, "Provider 1 should have 2 capability keys");
+        assertEq(keys1.length, capKeys1.length, "Provider 1 should have as many capability keys as provided");
         assertEq(keys1[0], "region", "Provider 1 first key should be region");
         assertEq(keys1[1], "performance", "Provider 1 second key should be performance");
 
         // Query values for provider 1
-        (bool[] memory exists1, string[] memory values1) =
+        (bool[] memory exists1, bytes[] memory values1) =
             registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, keys1);
         assertTrue(exists1[0] && exists1[1], "All keys should exist for provider 1");
         assertEq(values1[0], "US-EAST", "Provider 1 first value should be US-EAST");
@@ -326,13 +311,13 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Verify provider 2 capabilities
         (, string[] memory keys2,) = registry.getPDPService(2);
-        assertEq(keys2.length, 3, "Provider 2 should have 3 capability keys");
+        assertEq(keys2.length, capKeys2.length, "Provider 2 should have as many capability keys as provided");
         assertEq(keys2[0], "region", "Provider 2 first key should be region");
         assertEq(keys2[1], "storage", "Provider 2 second key should be storage");
         assertEq(keys2[2], "availability", "Provider 2 third key should be availability");
 
         // Query values for provider 2
-        (bool[] memory exists2, string[] memory values2) =
+        (bool[] memory exists2, bytes[] memory values2) =
             registry.getProductCapabilities(2, ServiceProviderRegistryStorage.ProductType.PDP, keys2);
         assertTrue(exists2[0] && exists2[1], "All keys should exist for provider 2");
         assertEq(values2[0], "ASIA-PAC", "Provider 2 first value should be ASIA-PAC");
@@ -341,9 +326,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testRegisterWithInsufficientFee() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Try to register with less than 5 FIL
         vm.prank(provider1);
@@ -353,9 +336,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Try with 0 fee
@@ -366,16 +348,13 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
     }
 
     function testRegisterWithExcessFee() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Try to register with 2 FIL (less than 5 FIL) - should fail
         vm.prank(provider1);
@@ -385,9 +364,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Verify provider was not registered
@@ -397,30 +375,10 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testRegisterWithInvalidData() public {
-        // Test empty service URL
-        ServiceProviderRegistryStorage.PDPOffering memory invalidPDP = defaultPDPData;
-        invalidPDP.serviceURL = "";
-        bytes memory encodedInvalidPDP = abi.encode(invalidPDP);
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
-
-        vm.prank(provider1);
-        vm.expectRevert("Service URL cannot be empty");
-        registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // payee
-            "",
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
-        );
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Test service URL too long
-        string memory longURL = new string(257);
-        invalidPDP.serviceURL = longURL;
-        encodedInvalidPDP = abi.encode(invalidPDP);
+        values[0] = new bytes(129);
         vm.prank(provider1);
         vm.expectRevert("Service URL too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -428,83 +386,15 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
-        );
-
-        // Test invalid PDP data - min piece size 0
-        invalidPDP = defaultPDPData;
-        invalidPDP.minPieceSizeInBytes = 0;
-        encodedInvalidPDP = abi.encode(invalidPDP);
-        vm.prank(provider1);
-        vm.expectRevert("Min piece size must be greater than 0");
-        registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // payee
-            "",
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
-        );
-
-        // Test invalid PDP data - max < min
-        invalidPDP.minPieceSizeInBytes = 1024;
-        invalidPDP.maxPieceSizeInBytes = 512;
-        encodedInvalidPDP = abi.encode(invalidPDP);
-        vm.prank(provider1);
-        vm.expectRevert("Max piece size must be >= min piece size");
-        registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // payee
-            "",
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
-        );
-
-        // Test invalid PDP data - min proving period 0
-        invalidPDP = defaultPDPData;
-        invalidPDP.minProvingPeriodInEpochs = 0;
-        encodedInvalidPDP = abi.encode(invalidPDP);
-        vm.prank(provider1);
-        vm.expectRevert("Min proving period must be greater than 0");
-        registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // payee
-            "",
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
-        );
-
-        // Test invalid PDP data - empty location
-        invalidPDP = defaultPDPData;
-        invalidPDP.location = "";
-        encodedInvalidPDP = abi.encode(invalidPDP);
-        vm.prank(provider1);
-        vm.expectRevert("Location cannot be empty");
-        registry.registerProvider{value: REGISTRATION_FEE}(
-            provider1, // payee
-            "",
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Test invalid PDP data - location too long
-        invalidPDP = defaultPDPData;
-        bytes memory longLocation = new bytes(129);
-        for (uint256 i = 0; i < 129; i++) {
-            longLocation[i] = "a";
+        values[7] = new bytes(129);
+        for (uint256 i = 0; i < values.length; i++) {
+            values[7][i] = "a";
         }
-        invalidPDP.location = string(longLocation);
-        encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Location too long");
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -512,18 +402,15 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedInvalidPDP,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
     }
 
     // ========== Update Tests ==========
 
     function testUpdateProduct() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register provider
         vm.prank(provider1);
@@ -532,9 +419,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Update PDP service using new updateProduct function
@@ -542,27 +428,22 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.expectEmit(true, true, false, true);
         emit ServiceProviderRegistry.ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, keys, values
         );
 
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, keys, values);
 
         vm.stopPrank();
 
         // Verify update
-        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
-            registry.getPDPService(1);
+        (PDPOffering.Schema memory pdpData,, bool isActive) = registry.getPDPService(1);
         assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
         assertEq(pdpData.minPieceSizeInBytes, updatedPDPData.minPieceSizeInBytes, "Min piece size should be updated");
         assertEq(pdpData.maxPieceSizeInBytes, updatedPDPData.maxPieceSizeInBytes, "Max piece size should be updated");
         assertEq(pdpData.ipniPiece, updatedPDPData.ipniPiece, "IPNI piece should be updated");
         assertEq(pdpData.ipniIpfs, updatedPDPData.ipniIpfs, "IPNI IPFS should be updated");
         assertEq(
-            pdpData.storagePricePerTibPerMonth,
-            updatedPDPData.storagePricePerTibPerMonth,
-            "Storage price should be updated"
+            pdpData.storagePricePerTibPerDay, updatedPDPData.storagePricePerTibPerDay, "Storage price should be updated"
         );
         assertEq(
             pdpData.minProvingPeriodInEpochs,
@@ -574,9 +455,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testOnlyOwnerCanUpdate() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register provider
         vm.prank(provider1);
@@ -585,23 +464,18 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Try to update as non-owner
         vm.prank(provider2);
         vm.expectRevert("Provider not registered");
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, keys, values);
     }
 
     function testCannotUpdateRemovedProvider() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register and remove provider
         vm.prank(provider1);
@@ -610,9 +484,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         vm.prank(provider1);
@@ -621,9 +494,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Try to update
         vm.prank(provider1);
         vm.expectRevert("Provider not registered");
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, keys, values);
     }
 
     // ========== Ownership Tests (Transfer functionality removed) ==========
@@ -633,9 +504,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     // ========== Removal Tests ==========
 
     function testRemoveProvider() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register provider
         vm.prank(provider1);
@@ -644,9 +513,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Remove provider
@@ -682,9 +550,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testCannotRemoveAlreadyRemoved() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -692,9 +558,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         vm.prank(provider1);
@@ -706,9 +571,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testOnlyOwnerCanRemove() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -716,9 +579,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         vm.prank(provider2);
@@ -727,9 +589,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testCanReregisterAfterRemoval() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register, remove, then register again
         vm.prank(provider1);
@@ -738,23 +598,22 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Provider 1 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         vm.prank(provider1);
         registry.removeProvider();
 
+        (string[] memory updatedKeys, bytes[] memory updatedValues) = updatedPDPData.toCapabilities();
         vm.prank(provider1);
         uint256 id2 = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 2 description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedUpdatedPDPData,
-            emptyKeys,
-            emptyValues
+            updatedKeys,
+            updatedValues
         );
 
         // Should get new ID
@@ -767,9 +626,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     // ========== Multi-Product Tests ==========
 
     function testGetProvidersByProductType() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register 3 providers with PDP
         vm.prank(provider1);
@@ -778,37 +635,30 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData2 = defaultPDPData;
-        pdpData2.serviceURL = SERVICE_URL_2;
-        bytes memory encodedPDPData2 = abi.encode(pdpData2);
+        values[0] = SERVICE_URL_2;
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData2,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData3 = defaultPDPData;
-        pdpData3.serviceURL = "https://provider3.example.com";
-        bytes memory encodedPDPData3 = abi.encode(pdpData3);
+        values[0] = "https://provider3.example.com";
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData3,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Get providers by product type with pagination
@@ -822,9 +672,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testGetActiveProvidersByProductType() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register 3 providers with PDP
         vm.prank(provider1);
@@ -833,37 +681,30 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData2 = defaultPDPData;
-        pdpData2.serviceURL = SERVICE_URL_2;
-        bytes memory encodedPDPData2 = abi.encode(pdpData2);
+        values[0] = SERVICE_URL_2;
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData2,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData3 = defaultPDPData;
-        pdpData3.serviceURL = "https://provider3.example.com";
-        bytes memory encodedPDPData3 = abi.encode(pdpData3);
+        values[0] = "https://provider3.example.com";
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData3,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Remove provider 2
@@ -880,9 +721,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testProviderHasProduct() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -890,9 +729,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         assertTrue(
@@ -902,9 +740,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testGetProduct() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -912,26 +748,23 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        (bytes memory productData, string[] memory keys, bool isActive) =
+        (string[] memory getProductKeys, bool isActive) =
             registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertTrue(productData.length > 0, "Product data should exist");
         assertTrue(isActive, "Product should be active");
+        (, bytes[] memory getProductCapabilities) =
+            registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, getProductKeys);
 
         // Decode and verify
-        ServiceProviderRegistryStorage.PDPOffering memory decoded =
-            abi.decode(productData, (ServiceProviderRegistryStorage.PDPOffering));
+        PDPOffering.Schema memory decoded = PDPOffering.fromCapabilities(getProductKeys, getProductCapabilities);
         assertEq(decoded.serviceURL, SERVICE_URL, "Service URL should match");
     }
 
     function testCannotAddProductTwice() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -939,23 +772,19 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
+        (string[] memory updatedKeys, bytes[] memory updatedValues) = updatedPDPData.toCapabilities();
         // Try to add PDP again
         vm.prank(provider1);
         vm.expectRevert("Product already exists for this provider");
-        registry.addProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
-        );
+        registry.addProduct(ServiceProviderRegistryStorage.ProductType.PDP, updatedKeys, updatedValues);
     }
 
     function testCanRemoveLastProduct() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
@@ -963,9 +792,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "serviceURL",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Verify product exists before removal
@@ -980,10 +808,10 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Verify product is removed
         assertFalse(registry.providerHasProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP));
 
-        (ServiceProviderRegistryStorage.PDPOffering memory pdpData, string[] memory keys, bool isActive) =
+        (PDPOffering.Schema memory pdpData, string[] memory keysAfter, bool isActive) =
             registry.getPDPService(providerId);
         assertFalse(isActive);
-        assertEq(keys.length, 0);
+        assertEq(keysAfter.length, 0);
         assertEq(bytes(pdpData.serviceURL).length, 0);
         assertEq(bytes(pdpData.location).length, 0);
         assertEq(pdpData.minPieceSizeInBytes, 0);
@@ -992,16 +820,14 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertFalse(pdpData.ipniPiece);
         assertFalse(pdpData.ipniIpfs);
         assertEq(pdpData.minProvingPeriodInEpochs, 0);
-        assertEq(pdpData.storagePricePerTibPerMonth, 0);
+        assertEq(pdpData.storagePricePerTibPerDay, 0);
         assertEq(address(pdpData.paymentTokenAddress), address(0));
     }
 
     // ========== Getter Tests ==========
 
     function testGetAllActiveProviders() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register 3 providers
         vm.prank(provider1);
@@ -1010,37 +836,29 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData2 = defaultPDPData;
-        pdpData2.serviceURL = SERVICE_URL_2;
-        bytes memory encodedPDPData2 = abi.encode(pdpData2);
-        vm.prank(provider2);
+        values[0] = SERVICE_URL_2;
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData2,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData3 = defaultPDPData;
-        pdpData3.serviceURL = "https://provider3.example.com";
-        bytes memory encodedPDPData3 = abi.encode(pdpData3);
+        values[0] = "https://provider3.example.com";
         vm.prank(provider3);
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData3,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Remove provider 2
@@ -1057,9 +875,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     function testGetProviderCount() public {
         assertEq(registry.getProviderCount(), 0, "Initial count should be 0");
 
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1067,24 +883,20 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
         assertEq(registry.getProviderCount(), 1, "Count should be 1");
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData2 = defaultPDPData;
-        pdpData2.serviceURL = SERVICE_URL_2;
-        bytes memory encodedPDPData2 = abi.encode(pdpData2);
+        values[0] = SERVICE_URL_2;
         vm.prank(provider2);
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedPDPData2,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
         assertEq(registry.getProviderCount(), 2, "Count should be 2");
 
@@ -1108,9 +920,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     // ========== Edge Cases ==========
 
     function testMultipleUpdatesInSameBlock() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1118,35 +928,31 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         vm.startPrank(provider1);
 
+        (string[] memory updatedKeys, bytes[] memory updatedValues) = updatedPDPData.toCapabilities();
         // Expect the update event with timestamp
         vm.expectEmit(true, true, true, true);
         emit ServiceProviderRegistry.ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, updatedKeys, updatedValues
         );
 
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, keys, values);
         vm.stopPrank();
 
         // Verify the product was updated (check the actual data)
-        (ServiceProviderRegistryStorage.PDPOffering memory pdpData,,) = registry.getPDPService(1);
+        (PDPOffering.Schema memory pdpData,,) = registry.getPDPService(1);
         assertEq(pdpData.serviceURL, UPDATED_SERVICE_URL, "Service URL should be updated");
     }
 
     // ========== Provider Info Update Tests ==========
 
     function testUpdateProviderDescription() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register provider
         vm.prank(provider1);
@@ -1155,9 +961,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Verify initial description
@@ -1178,9 +983,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testCannotUpdateProviderDescriptionIfNotOwner() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register provider
         vm.prank(provider1);
@@ -1189,9 +992,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Try to update as non-owner
@@ -1201,9 +1003,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testCannotUpdateProviderDescriptionTooLong() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register provider
         vm.prank(provider1);
@@ -1212,9 +1012,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Try to update with description that's too long
@@ -1233,9 +1032,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             longName[i] = "a";
         }
 
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         vm.expectRevert("Name too long");
@@ -1244,16 +1041,13 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             string(longName),
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
     }
 
     function testNameTooLongOnUpdate() public {
-        // Register provider first
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1261,9 +1055,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "Initial Name",
             "Initial description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Create a name that's too long (129 chars, max is 128)
@@ -1280,9 +1073,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     // ========== Event Timestamp Tests ==========
 
     function testEventTimestampsEmittedCorrectly() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Test ProviderRegistered and ProductAdded events
         vm.prank(provider1);
@@ -1290,7 +1081,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         emit ServiceProviderRegistry.ProviderRegistered(1, provider1, provider1);
         vm.expectEmit(true, true, true, true);
         emit ServiceProviderRegistry.ProductAdded(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, keys, values
         );
 
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1298,20 +1089,18 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
+        (string[] memory updatedKeys, bytes[] memory updatedValues) = updatedPDPData.toCapabilities();
         // Test ProductUpdated event
         vm.prank(provider1);
         vm.expectEmit(true, true, true, true);
         emit ServiceProviderRegistry.ProductUpdated(
-            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedUpdatedPDPData, emptyKeys, emptyValues
+            1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, updatedKeys, updatedValues
         );
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, emptyKeys, emptyValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, updatedKeys, updatedValues);
 
         // Test ProviderRemoved event
         vm.prank(provider1);
@@ -1324,12 +1113,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
     function testRegisterWithCapabilities() public {
         // Create capability arrays
-        string[] memory capKeys = new string[](3);
+        (string[] memory capKeys, bytes[] memory capValues) = updatedPDPData.toCapabilities(3);
         capKeys[0] = "region";
         capKeys[1] = "bandwidth";
         capKeys[2] = "encryption";
 
-        string[] memory capValues = new string[](3);
         capValues[0] = "us-west-2";
         capValues[1] = "10Gbps";
         capValues[2] = "AES256";
@@ -1340,22 +1128,21 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
 
         // Get the product and verify capabilities
-        (bytes memory productData, string[] memory returnedKeys, bool isActive) =
+        (string[] memory returnedKeys, bool isActive) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
-        assertEq(returnedKeys.length, 3, "Should have 3 capability keys");
+        assertEq(returnedKeys.length, capKeys.length, "Should have same number of capability keys");
         assertEq(returnedKeys[0], "region", "First key should be region");
         assertEq(returnedKeys[1], "bandwidth", "Second key should be bandwidth");
         assertEq(returnedKeys[2], "encryption", "Third key should be encryption");
 
         // Query values using new methods
-        (bool[] memory existsReturned, string[] memory returnedValues) =
+        (bool[] memory existsReturned, bytes[] memory returnedValues) =
             registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, returnedKeys);
         assertTrue(existsReturned[0] && existsReturned[1] && existsReturned[2], "All keys should exist");
         assertEq(returnedValues[0], "us-west-2", "First value should be us-west-2");
@@ -1365,9 +1152,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testUpdateWithCapabilities() public {
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         // Register with empty capabilities
         vm.prank(provider1);
@@ -1376,43 +1161,38 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
+        (string[] memory updatedKeys, bytes[] memory updatedValues) = updatedPDPData.toCapabilities(2);
         // Update with capabilities
-        string[] memory capKeys = new string[](2);
-        capKeys[0] = "support";
-        capKeys[1] = "sla";
+        updatedKeys[0] = "support";
+        updatedKeys[1] = "sla";
 
-        string[] memory capValues = new string[](2);
-        capValues[0] = "24/7";
-        capValues[1] = "99.99%";
+        updatedValues[0] = bytes("24/7");
+        updatedValues[1] = bytes("99.99%");
 
         vm.prank(provider1);
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, capKeys, capValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, updatedKeys, updatedValues);
 
         // Verify capabilities updated
-        (, string[] memory returnedKeys,) = registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
+        (string[] memory returnedKeys,) = registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
 
-        assertEq(returnedKeys.length, 2, "Should have 2 capability keys");
+        assertEq(returnedKeys.length, updatedKeys.length, "Should have 2 capability keys");
         assertEq(returnedKeys[0], "support", "First key should be support");
 
         // Verify value using new method
-        (bool supExists, string memory supportVal) =
+        (bool supExists, bytes memory supportVal) =
             registry.getProductCapability(1, ServiceProviderRegistryStorage.ProductType.PDP, "support");
         assertTrue(supExists, "support capability should exist");
         assertEq(supportVal, "24/7", "First value should be 24/7");
     }
 
     function testInvalidCapabilityKeyTooLong() public {
-        string[] memory capKeys = new string[](1);
+        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(1);
         capKeys[0] = "thisKeyIsWayTooLongAndExceedsLimit"; // 35 chars, max is MAX_CAPABILITY_KEY_LENGTH (32)
 
-        string[] memory capValues = new string[](1);
         capValues[0] = "value";
 
         vm.prank(provider1);
@@ -1422,17 +1202,15 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
     }
 
     function testInvalidCapabilityValueTooLong() public {
-        string[] memory capKeys = new string[](1);
+        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(1);
         capKeys[0] = "key";
 
-        string[] memory capValues = new string[](1);
         capValues[0] =
             "This value is way too long and exceeds the maximum allowed length. It is specifically designed to be longer than 128 characters to test the validation of capability values"; // > MAX_CAPABILITY_VALUE_LENGTH (128) chars
 
@@ -1443,7 +1221,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
@@ -1454,7 +1231,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capKeys[0] = "key1";
         capKeys[1] = "key2";
 
-        string[] memory capValues = new string[](1);
+        bytes[] memory capValues = new bytes[](1);
         capValues[0] = "value1";
 
         vm.prank(provider1);
@@ -1464,7 +1241,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
@@ -1475,9 +1251,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string memory longDescription =
             "This is a very long description that exceeds the maximum allowed length of 256 characters. It just keeps going and going and going and going and going and going and going and going and going and going and going and going and going and going and going and characters limit!";
 
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
         vm.expectRevert("Description too long");
@@ -1486,9 +1260,8 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             longDescription,
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
     }
 
@@ -1496,7 +1269,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory capKeys = new string[](1);
         capKeys[0] = "";
 
-        string[] memory capValues = new string[](1);
+        bytes[] memory capValues = new bytes[](1);
         capValues[0] = "value";
 
         vm.prank(provider1);
@@ -1506,7 +1279,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
@@ -1515,11 +1287,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     function testTooManyCapabilities() public {
         // Create 11 capabilities (exceeds MAX_CAPABILITIES of 10)
         string[] memory capKeys = new string[](11);
-        string[] memory capValues = new string[](11);
+        bytes[] memory capValues = new bytes[](11);
 
-        for (uint256 i = 0; i < 11; i++) {
+        for (uint256 i = 0; i < 31; i++) {
             capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
-            capValues[i] = string(abi.encodePacked("value", vm.toString(i)));
+            capValues[i] = abi.encodePacked("value", vm.toString(i));
         }
 
         vm.prank(provider1);
@@ -1529,21 +1301,20 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
     }
 
     function testMaxCapabilitiesAllowed() public {
-        // Create exactly 10 capabilities (should succeed)
-        string[] memory capKeys = new string[](10);
-        string[] memory capValues = new string[](10);
+        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(24);
 
-        for (uint256 i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < 15; i++) {
             capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
-            capValues[i] = string(abi.encodePacked("value", vm.toString(i)));
+            capValues[i] = abi.encodePacked("value", vm.toString(i));
         }
+
+        assertEq(capKeys.length, registry.MAX_CAPABILITIES());
 
         vm.prank(provider1);
         uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1551,7 +1322,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
@@ -1559,9 +1329,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertEq(providerId, 1, "Should register successfully with 10 capabilities");
 
         // Verify all 10 capabilities were stored
-        (, string[] memory returnedKeys,) =
+        (string[] memory returnedKeys,) =
             registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertEq(returnedKeys.length, 10, "Should have exactly 10 capability keys");
+        assertEq(returnedKeys.length, capKeys.length, "Should have the same number of keys");
     }
 
     // ========== New Capability Query Methods Tests ==========
@@ -1573,7 +1343,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capKeys[1] = "tier";
         capKeys[2] = "storage";
 
-        string[] memory capValues = new string[](3);
+        bytes[] memory capValues = new bytes[](3);
         capValues[0] = "us-west-2";
         capValues[1] = "premium";
         capValues[2] = "100TB";
@@ -1584,29 +1354,28 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
 
         // Test single capability queries
-        (bool regionExists, string memory region) =
+        (bool regionExists, bytes memory region) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
         assertTrue(regionExists, "region capability should exist");
         assertEq(region, "us-west-2", "Region capability should match");
 
-        (bool tierExists, string memory tier) =
+        (bool tierExists, bytes memory tier) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
         assertTrue(tierExists, "tier capability should exist");
         assertEq(tier, "premium", "Tier capability should match");
 
-        (bool storageExists, string memory storageVal) =
+        (bool storageExists, bytes memory storageVal) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "storage");
         assertTrue(storageExists, "storage capability should exist");
         assertEq(storageVal, "100TB", "Storage capability should match");
 
         // Test querying non-existent capability
-        (bool nonExists, string memory nonExistent) =
+        (bool nonExists, bytes memory nonExistent) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "nonexistent");
         assertFalse(nonExists, "Non-existent capability should not exist");
         assertEq(nonExistent, "", "Non-existent capability should return empty string");
@@ -1620,7 +1389,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capKeys[2] = "storage";
         capKeys[3] = "compliance";
 
-        string[] memory capValues = new string[](4);
+        bytes[] memory capValues = new bytes[](4);
         capValues[0] = "eu-west-1";
         capValues[1] = "standard";
         capValues[2] = "50TB";
@@ -1632,7 +1401,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
@@ -1643,7 +1411,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         queryKeys[1] = "compliance";
         queryKeys[2] = "region";
 
-        (bool[] memory resultsExist, string[] memory results) =
+        (bool[] memory resultsExist, bytes[] memory results) =
             registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, queryKeys);
 
         assertEq(results.length, 3, "Should return 3 values");
@@ -1659,7 +1427,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         mixedKeys[2] = "storage";
         mixedKeys[3] = "nonexistent2";
 
-        (bool[] memory mixedExist, string[] memory mixedResults) =
+        (bool[] memory mixedExist, bytes[] memory mixedResults) =
             registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, mixedKeys);
 
         assertEq(mixedResults.length, 4, "Should return 4 values");
@@ -1674,12 +1442,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testDirectMappingAccess() public {
+        (string[] memory capKeys, bytes[] memory capValues) = updatedPDPData.toCapabilities(2);
         // Register provider with capabilities
-        string[] memory capKeys = new string[](2);
         capKeys[0] = "datacenter";
         capKeys[1] = "bandwidth";
 
-        string[] memory capValues = new string[](2);
         capValues[0] = "NYC-01";
         capValues[1] = "10Gbps";
 
@@ -1689,25 +1456,22 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             capKeys,
             capValues
         );
 
         // Test direct public mapping access
-        string memory datacenter =
+        bytes memory datacenter =
             registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "datacenter");
         assertEq(datacenter, "NYC-01", "Direct mapping access should work");
 
-        string memory bandwidth =
+        bytes memory bandwidth =
             registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "bandwidth");
         assertEq(bandwidth, "10Gbps", "Direct mapping access should work for bandwidth");
     }
 
     function testUpdateWithTooManyCapabilities() public {
-        // Register provider with empty capabilities first
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(25);
 
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -1715,35 +1479,30 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            emptyKeys,
-            emptyValues
+            capKeys,
+            capValues
         );
 
         // Try to update with 11 capabilities (exceeds MAX_CAPABILITIES of 10)
-        string[] memory capKeys = new string[](11);
-        string[] memory capValues = new string[](11);
-
         for (uint256 i = 0; i < 11; i++) {
             capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
-            capValues[i] = string(abi.encodePacked("value", vm.toString(i)));
+            capValues[i] = abi.encodePacked("value", vm.toString(i));
         }
+
+        assertEq(capKeys.length, registry.MAX_CAPABILITIES() + 2);
 
         vm.prank(provider1);
         vm.expectRevert("Too many capabilities");
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, capKeys, capValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, capKeys, capValues);
     }
 
     function testCapabilityUpdateClearsOldValues() public {
+        (string[] memory initialKeys, bytes[] memory initialValues) = updatedPDPData.toCapabilities(3);
         // Register provider with initial capabilities
-        string[] memory initialKeys = new string[](3);
         initialKeys[0] = "region";
         initialKeys[1] = "tier";
         initialKeys[2] = "oldkey";
 
-        string[] memory initialValues = new string[](3);
         initialValues[0] = "us-east-1";
         initialValues[1] = "basic";
         initialValues[2] = "oldvalue";
@@ -1754,50 +1513,46 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "",
             "Test provider",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
             initialKeys,
             initialValues
         );
 
         // Verify initial values
-        (bool oldExists, string memory oldValue) =
+        (bool oldExists, bytes memory oldValue) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "oldkey");
         assertTrue(oldExists, "Old key should exist initially");
         assertEq(oldValue, "oldvalue", "Old key should have value initially");
 
+        (string[] memory newKeys, bytes[] memory newValues) = updatedPDPData.toCapabilities(2);
         // Update with new capabilities (without oldkey)
-        string[] memory newKeys = new string[](2);
         newKeys[0] = "region";
         newKeys[1] = "newkey";
 
-        string[] memory newValues = new string[](2);
         newValues[0] = "eu-central-1";
         newValues[1] = "newvalue";
 
         vm.prank(provider1);
-        registry.updateProduct(
-            ServiceProviderRegistryStorage.ProductType.PDP, encodedUpdatedPDPData, newKeys, newValues
-        );
+        registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, newKeys, newValues);
 
         // Verify old key is cleared
-        (bool clearedExists, string memory clearedValue) =
+        (bool clearedExists, bytes memory clearedValue) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "oldkey");
         assertFalse(clearedExists, "Old key should not exist after update");
         assertEq(clearedValue, "", "Old key should be cleared after update");
 
         // Verify new values are set
-        (bool regionExists, string memory newRegion) =
+        (bool regionExists, bytes memory newRegion) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
         assertTrue(regionExists, "Region key should exist");
         assertEq(newRegion, "eu-central-1", "Region should be updated");
 
-        (bool newKeyExists, string memory newKey) =
+        (bool newKeyExists, bytes memory newKey) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "newkey");
         assertTrue(newKeyExists, "New key should exist");
         assertEq(newKey, "newvalue", "New key should have value");
 
         // Verify tier key is also cleared (was in initial but not in update)
-        (bool tierCleared, string memory clearedTier) =
+        (bool tierCleared, bytes memory clearedTier) =
             registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
         assertFalse(tierCleared, "Tier key should not exist after update");
         assertEq(clearedTier, "", "Tier key should be cleared after update");

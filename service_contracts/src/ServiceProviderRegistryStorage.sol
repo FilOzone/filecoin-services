@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 /// @title ServiceProviderRegistryStorage
 /// @notice Centralized storage contract for ServiceProviderRegistry
 /// @dev All storage variables are declared here to prevent storage slot collisions during upgrades

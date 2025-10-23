@@ -19,11 +19,13 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
+import {PDPOffering} from "../src/PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
 contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
+    using PDPOffering for PDPOffering.Schema;
     using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
     // Testing Constants
 
@@ -134,6 +136,19 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
 
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-Central",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
+
         // Register service providers in the serviceProviderRegistry
         vm.prank(serviceProvider);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -141,90 +156,41 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             "Service Provider",
             "Service Provider Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
+        values[0] = bytes("https://sp1.com");
         vm.prank(sp1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp1, // payee
             "SP1",
             "Storage Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://sp1.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
+        values[0] = bytes("https://sp2.com");
         vm.prank(sp2);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp2, // payee
             "SP2",
             "Storage Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://sp2.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
+        values[0] = bytes("https://sp3.com");
         vm.prank(sp3);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp3, // payee
             "SP3",
             "Storage Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://sp3.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Deploy FilecoinPayV1 contract (no longer upgradeable)
