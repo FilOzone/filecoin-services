@@ -1272,7 +1272,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // 0. Verify that DataSet with ID 1 is not found
         FilecoinWarmStorageService.DataSetStatus status = viewContract.getDataSetStatus(1);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.NotFound), "expected NotFound");
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive");
 
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
@@ -1370,9 +1370,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertFalse(exists, "withCDN metadata should not exist after termination");
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
 
-        // check status is terminating
+        // check status remains active (terminated datasets are still Active)
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Terminating), "expected Terminating");
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)");
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -1399,9 +1399,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Rolling to block:", info.pdpEndEpoch + 1);
         vm.roll(info.pdpEndEpoch + 1);
 
-        // check status is still Terminating as data set is not yet deleted from PDP
+        // check status is still Active as data set is not yet deleted from PDP
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Terminating), "expected Terminating");
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)");
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -1446,7 +1446,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.NotFound), "expected NotFound");
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)");
         console.log("\n=== Test completed successfully! ===");
     }
 

@@ -123,8 +123,8 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
 
     /**
      * @notice Get the current status of a dataset
-     * @dev A dataset is Active when it has pieces being proven and is within lockup period
-     * @dev A dataset is Inactive when: no pieces (rate==0), terminated, or beyond lockup period
+     * @dev A dataset is Active when it has pieces and proving history (including terminated datasets)
+     * @dev A dataset is Inactive when: non-existent or no pieces added yet
      * @param service The service contract
      * @param dataSetId The ID of the dataset
      * @return status The current status
@@ -145,20 +145,9 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
         bool hasProving = activationEpoch != 0;
         
-        // Check if terminated
-        bool isTerminated = info.pdpEndEpoch != 0;
-        
-        // Check if beyond lockup period
-        bool isBeyondLockup = false;
-        if (isTerminated) {
-            // DEFAULT_LOCKUP_PERIOD = 2880 * 30 (1 month in epochs)
-            uint256 DEFAULT_LOCKUP_PERIOD = 2880 * 30;
-            uint256 lockupEndEpoch = info.pdpEndEpoch + DEFAULT_LOCKUP_PERIOD;
-            isBeyondLockup = block.number > lockupEndEpoch;
-        }
-        
-        // Inactive conditions: no proving, or beyond lockup
-        if (!hasProving || isBeyondLockup) {
+        // Inactive only if no proving has started
+        // Everything else is Active (including terminated datasets)
+        if (!hasProving) {
             return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
         

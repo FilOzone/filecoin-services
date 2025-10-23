@@ -8,37 +8,29 @@ Datasets in the Filecoin Warm Storage Service have a simplified two-state lifecy
 
 ### Inactive
 
-A dataset is **Inactive** when it meets any of the following conditions:
+A dataset is **Inactive** when:
 
-1. **Newly Created**: Dataset has been created but no pieces have been added yet
+1. **Non-existent**: Dataset doesn't exist
+   - `pdpRailId` = 0
+   - Dataset has never been created or has been deleted
+
+2. **Newly Created**: Dataset has been created but no pieces have been added yet
+   - `provingActivationEpoch` = 0
    - Payment rate = 0
    - No PDP proving active
-   - `provingActivationEpoch` = 0
-
-2. **Terminated**: The service has been terminated by either the payer or service provider
-   - `pdpEndEpoch` > 0
-   - Payment rails are no longer accepting new payments
-
-3. **Beyond Lockup Period**: More than 1 month (86,400 epochs) has passed since termination
-   - Current epoch > (`pdpEndEpoch` + `DEFAULT_LOCKUP_PERIOD`)
-   - Payment rails are fully settled
-   - Dataset can be deleted
 
 ### Active
 
 A dataset is **Active** when:
 
 1. **Has Pieces**: At least one piece has been added to the dataset
-   - `leafCount` > 0
-   - PDP proving is active
-
-2. **Within Lockup**: Payment rails are operational
-   - Either not terminated (`pdpEndEpoch` = 0)
-   - Or within lockup period after termination
-
-3. **Proving Active**: Data is being actively proven
    - `provingActivationEpoch` > 0
-   - Regular PDP proofs are submitted
+   - PDP proving has been initialized
+
+2. **Including Terminated**: Even terminated datasets remain "Active"
+   - Terminated datasets still have data and proving history
+   - `pdpEndEpoch` > 0 indicates termination, but status is still Active
+   - Active status reflects that the dataset has real data, not operational state
 
 ## State Transitions
 
@@ -52,30 +44,19 @@ stateDiagram-v2
     
     Inactive --> Active: First Piece Added
     note right of Active
-        Proving starts
-        Payment rails active
+        Has data & proving history
+        Includes terminated datasets
     end note
     
     Active --> Active: Normal Operation
     note left of Active
         Pieces added/removed
         Proofs submitted
-        Payments flowing
+        Can be terminated
     end note
     
-    Active --> Inactive: Service Terminated
-    note left of Inactive
-        Payment rails terminated
-        Within lockup period
-    end note
-    
-    Inactive --> Inactive: Beyond Lockup
-    note right of Inactive
-        > 1 month after termination
-        Can be deleted
-    end note
-    
-    Inactive --> [*]: Dataset Deleted
+    Inactive --> [*]: Dataset Deleted (non-existent)
+    Active --> [*]: Dataset Deleted (after termination)
 ```
 
 ## State Transition Events
@@ -106,14 +87,7 @@ event DataSetStatusChanged(
    - Transition from Inactive to Active
    - Triggered in `nextProvingPeriod` when proving is first initialized
 
-3. **Service Terminated**:
-   ```solidity
-   emit DataSetStatusChanged(dataSetId, Active, Inactive, block.number);
-   ```
-   - Transition from Active to Inactive
-   - Triggered in `terminateService`
-
-**Note**: The transition from "within lockup" to "beyond lockup" does not emit an event because it's a time-based transition with no on-chain transaction trigger.
+**Note**: Service termination does NOT emit a `DataSetStatusChanged` event because the status remains Active (datasets with pieces are always Active, even when terminated). Use the `ServiceTerminated` event to track termination.
 
 ## Querying Dataset Status
 
@@ -150,8 +124,7 @@ contract MyContract {
     function checkStatus(uint256 dataSetId) public view returns (
         FilecoinWarmStorageService.DataSetStatus status,
         bool hasProving,
-        bool isTerminated,
-        bool isBeyondLockup
+        bool isTerminated
     ) {
         // Get detailed status information
         return FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(
@@ -264,7 +237,7 @@ console.log(`Dataset ${dataSetId} is ${status === 1 ? 'Active' : 'Inactive'}`);
 
 ### Status Calculation Logic
 
-The status is calculated based on multiple factors:
+The status is calculated based on two simple factors:
 
 ```solidity
 function getDataSetStatus(uint256 dataSetId) 
@@ -277,23 +250,13 @@ function getDataSetStatus(uint256 dataSetId)
         return DataSetStatus.Inactive;
     }
     
-    // Check if proving is activated
+    // Check if proving is activated (has pieces)
     uint256 activationEpoch = provingActivationEpoch(dataSetId);
     bool hasProving = activationEpoch != 0;
     
-    // Check if terminated
-    bool isTerminated = info.pdpEndEpoch != 0;
-    
-    // Check if beyond lockup period
-    bool isBeyondLockup = false;
-    if (isTerminated) {
-        uint256 DEFAULT_LOCKUP_PERIOD = 2880 * 30; // 1 month
-        uint256 lockupEndEpoch = info.pdpEndEpoch + DEFAULT_LOCKUP_PERIOD;
-        isBeyondLockup = block.number > lockupEndEpoch;
-    }
-    
-    // Inactive if: no proving OR beyond lockup
-    if (!hasProving || isBeyondLockup) {
+    // Inactive only if no proving has started
+    // Everything else is Active (including terminated datasets)
+    if (!hasProving) {
         return DataSetStatus.Inactive;
     }
     
@@ -301,13 +264,10 @@ function getDataSetStatus(uint256 dataSetId)
 }
 ```
 
-### Key Constants
-
-```solidity
-uint256 constant DEFAULT_LOCKUP_PERIOD = 2880 * 30;  // ~1 month (86,400 epochs)
-// Assuming 30-second epochs:
-// 2880 epochs/day * 30 days = 86,400 epochs
-```
+**Rationale**: 
+- Terminated datasets are still "Active" because they have data and proving history
+- The `ServiceTerminated` event and `pdpEndEpoch` field track operational termination
+- Status reflects data existence, not operational state
 
 ## Use Cases
 
@@ -327,7 +287,7 @@ function getStatusBadge(status) {
     return {
       text: 'Inactive',
       color: 'gray',
-      description: 'No pieces added, terminated, or beyond lockup'
+      description: 'Non-existent or no pieces added yet'
     };
   }
 }
@@ -397,38 +357,79 @@ contract DataMarketplace {
 }
 ```
 
+## Important: Terminated Datasets Remain Active
+
+⚠️ **Key Concept**: Termination does **NOT** change a dataset's status to Inactive. Terminated datasets remain Active until deleted.
+
+### Why?
+
+Status reflects **data existence**, not **operational state**:
+- **Active** = "This dataset has data and proving history"
+- **Inactive** = "This dataset doesn't exist or has no data"
+
+### Lifecycle of a Terminated Dataset:
+
+```
+Dataset Created (no pieces) → Inactive
+  ↓
+First Piece Added → Active
+  ↓
+Service Terminated → Active (still has data!)
+  ↓
+Dataset Deleted → Inactive (now it's gone)
+```
+
+### How to Check Operational State:
+
+```solidity
+(status, hasProving, isTerminated) = getDataSetStatusDetails(dataSetId);
+
+if (status == Active) {
+    if (isTerminated) {
+        // Dataset has data but service is terminated
+        // No new pieces can be added
+        // Payment rails have ended
+    } else {
+        // Dataset is operational
+    }
+} else {
+    // Dataset doesn't exist or has no pieces
+}
+```
+
 ## Edge Cases & Considerations
 
-### 1. Status During Termination
+### 1. Status During and After Termination
 
 When a dataset is terminated:
-- Status immediately becomes `Inactive`
+- Status remains `Active` (if it had pieces)
 - Dataset remains queryable and readable
-- PDP proving may continue during lockup period
-- Payment rails settle during lockup
+- `ServiceTerminated` event is emitted to track termination
+- `pdpEndEpoch` field indicates when termination occurred
+- Payment rails settle during lockup period
+- **Status only changes to `Inactive` when dataset is deleted**
 
-### 2. Beyond Lockup Period
-
-After the lockup period expires:
-- Status remains `Inactive`
-- No more payments can be settled
-- Dataset can be deleted by calling `dataSetDeleted`
-- Metadata and pieces remain accessible until deletion
-
-### 3. Empty Datasets
+### 2. Empty Datasets
 
 Datasets with no pieces:
 - Always `Inactive`
 - `provingActivationEpoch` = 0
 - Can add pieces to transition to `Active`
 
-### 4. Time-Based Transitions
+### 3. Non-Existent Datasets
 
-The "beyond lockup" condition is time-based:
-- No on-chain transaction triggers this transition
-- Status changes automatically based on `block.number`
-- No `DataSetStatusChanged` event is emitted for this transition
-- Clients should periodically check status for terminated datasets
+Datasets that don't exist or have been deleted:
+- Status is `Inactive`
+- `pdpRailId` = 0
+- Cannot be modified or queried for details
+
+### 4. Status Reflects Data, Not Operational State
+
+Important distinction:
+- `Active` means "has data and proving history"
+- Use `pdpEndEpoch` to check if terminated
+- Use `ServiceTerminated` event to track termination
+- Terminated datasets can still be `Active` if they have pieces
 
 ## Migration from Old Status System
 
@@ -456,16 +457,17 @@ enum DataSetStatus {
 | Old Status | New Status | Condition |
 |------------|------------|-----------|
 | `NotFound` | `Inactive` | Non-existent dataset |
-| `Active` | `Active` | Has proving, not beyond lockup |
-| `Active` | `Inactive` | No proving yet |
-| `Terminating` | `Inactive` | Terminated, within or beyond lockup |
+| `Active` | `Active` | Has pieces (proving activated) |
+| `Active` | `Inactive` | No pieces yet |
+| `Terminating` | `Active` | Terminated but has pieces |
 
 ### Breaking Changes
 
 ⚠️ **Important**: This is a breaking change for systems checking status:
 - Enum values have changed
 - `NotFound` and `Terminating` are removed
-- Both map to `Inactive`
+- `NotFound` → `Inactive`
+- `Terminating` → `Active` (if dataset has pieces)
 
 Update your code:
 ```solidity
@@ -475,12 +477,17 @@ if (status == DataSetStatus.Terminating) { ... }
 
 // NEW CODE ✅
 if (status == DataSetStatus.Inactive) {
-    // Check additional conditions if needed
-    (,, bool isTerminated, bool isBeyondLockup) = 
-        service.getDataSetStatusDetails(dataSetId);
-    
-    if (isTerminated) { ... }
-    if (isBeyondLockup) { ... }
+    // Non-existent or no pieces yet
+    // ...
+}
+
+// To check if terminated (regardless of status):
+(, bool hasProving, bool isTerminated) = 
+    service.getDataSetStatusDetails(dataSetId);
+
+if (isTerminated) {
+    // Dataset is terminated (but status is still Active if it has pieces)
+    // ...
 }
 ```
 
@@ -492,11 +499,11 @@ if (status == DataSetStatus.Inactive) {
 
 3. **Monitor Status Changes**: Subscribe to `DataSetStatusChanged` events or subgraph subscriptions
 
-4. **Cache Appropriately**: Status can change over time (especially when reaching beyond lockup)
+4. **Cache Appropriately**: Status can change over time (especially upon termination or deletion)
 
 5. **Batch Queries**: Use subgraph for querying multiple datasets efficiently
 
-6. **Handle Edge Cases**: Always check for edge cases like empty datasets or very old terminated datasets
+6. **Handle Edge Cases**: Always check for edge cases like empty datasets or terminated datasets
 
 ## See Also
 

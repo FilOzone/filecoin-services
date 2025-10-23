@@ -135,10 +135,10 @@ contract FilecoinWarmStorageService is
     }
 
     enum DataSetStatus {
-        // Dataset is inactive: created with no pieces (rate==0, no proving),
-        // terminated, or beyond lockup period
+        // Dataset is inactive: non-existent (pdpRailId==0) or no pieces added yet (rate==0, no proving)
         Inactive,
-        // Dataset has pieces being actively proven and within lockup period
+        // Dataset has pieces and proving history (includes terminated datasets)
+        // Note: Terminated datasets remain Active - use pdpEndEpoch to check termination status
         Active
     }
 
@@ -979,9 +979,9 @@ contract FilecoinWarmStorageService is
         }
 
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
-
-        // Emit status change to Inactive when terminated
-        emit DataSetStatusChanged(dataSetId, DataSetStatus.Active, DataSetStatus.Inactive, block.number);
+        
+        // Note: Status remains Active even when terminated (datasets with pieces are always Active)
+        // The ServiceTerminated event already captures the termination
     }
 
     /**
