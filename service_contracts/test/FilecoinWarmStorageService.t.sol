@@ -1828,7 +1828,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Created data set with ID:", dataSetId);
 
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (no pieces yet)");
+        assertEq(
+            uint256(status),
+            uint256(FilecoinWarmStorageService.DataSetStatus.Inactive),
+            "expected Inactive (no pieces yet)"
+        );
 
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
@@ -1882,7 +1886,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // check status remains active (terminated datasets are still Active)
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)");
+        assertEq(
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)"
+        );
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -1911,7 +1917,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // check status is still Active as data set is not yet deleted from PDP
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)");
+        assertEq(
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)"
+        );
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -1956,7 +1964,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)");
+        assertEq(
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)"
+        );
         console.log("\n=== Test completed successfully! ===");
     }
 

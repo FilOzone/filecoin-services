@@ -996,7 +996,7 @@ contract FilecoinWarmStorageService is
         }
 
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
-        
+
         // Note: Status remains Active even when terminated (datasets with pieces are always Active)
         // The ServiceTerminated event already captures the termination
     }
