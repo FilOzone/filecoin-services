@@ -236,7 +236,13 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
+
+    // Replay protection: tracks used nonces for both CreateDataSet and AddPieces operations.
+    // Stores packed data: upper 128 bits = cumulative piece count after AddPieces or 0 for CreateDataSet,
+    // lower 128 bits = dataSetId. For AddPieces, stores (firstAdded + pieceData.length) which is the
+    // next piece ID that would be assigned, providing historical data about dataset state after the operation.
     mapping(address payer => mapping(uint256 nonce => uint256)) private clientNonces;
+
     mapping(address payer => uint256[]) private clientDataSets;
     mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
@@ -728,10 +734,8 @@ contract FilecoinWarmStorageService is
 
         // Validate nonce hasn't been used (replay protection)
         require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
-        // Mark nonce as used and store dataset ID (lower 128 bits) and (firstAdded+1) (upper 128 bits)
-        // We add 1 to firstAdded to distinguish from CreateDataSet (which stores 0 in upper bits)
-        // This packing allows historical analysis: upper bits = 0 means CreateDataSet, >0 means AddPieces
-        clientNonces[payer][nonce] = ((firstAdded + 1) << 128) | dataSetId;
+        // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
+        clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
 
         // Check that we have metadata arrays for each piece
         require(
