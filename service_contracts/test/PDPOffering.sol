@@ -31,26 +31,19 @@ library PDPOffering {
                 schema.serviceURL = string(values[i]);
             } else if (hash == keccak256("minPieceSizeInBytes")) {
                 schema.minPieceSizeInBytes = abi.decode(values[i], (uint256));
-            }
-            if (hash == keccak256("maxPieceSizeInBytes")) {
+            } else if (hash == keccak256("maxPieceSizeInBytes")) {
                 schema.maxPieceSizeInBytes = abi.decode(values[i], (uint256));
-            }
-            if (hash == keccak256("ipniPiece")) {
+            } else if (hash == keccak256("ipniPiece")) {
                 schema.ipniPiece = abi.decode(values[i], (bool));
-            }
-            if (hash == keccak256("ipniIpfs")) {
+            } else if (hash == keccak256("ipniIpfs")) {
                 schema.ipniIpfs = abi.decode(values[i], (bool));
-            }
-            if (hash == keccak256("storagePricePerTibPerDay")) {
+            } else if (hash == keccak256("storagePricePerTibPerDay")) {
                 schema.storagePricePerTibPerDay = abi.decode(values[i], (uint256));
-            }
-            if (hash == keccak256("minProvingPeriodInEpochs")) {
+            } else if (hash == keccak256("minProvingPeriodInEpochs")) {
                 schema.minProvingPeriodInEpochs = abi.decode(values[i], (uint256));
-            }
-            if (hash == keccak256("location")) {
+            } else if (hash == keccak256("location")) {
                 schema.location = string(values[i]);
-            }
-            if (hash == keccak256("paymentTokenAddress")) {
+            } else if (hash == keccak256("paymentTokenAddress")) {
                 schema.paymentTokenAddress = abi.decode(values[i], (IERC20));
             }
         }
