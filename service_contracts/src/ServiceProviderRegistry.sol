@@ -15,13 +15,15 @@ import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.s
 /// - serviceURL: the API endpoint
 /// - minPieceSizeInBytes: minimum piece size in bytes
 /// - maxPieceSizeInBytes: maximum piece size in bytes
-/// - ipniPiece: Supports IPNI piece CID indexing
-/// - ipniIpfs: Supports IPNI IPFS CID indexing
 /// - storagePricePerTibPerDay: Storage price per TiB per day (in token's smallest unit)
 /// - minProvingPeriodInEpochs: Minimum proving period in epochs
 /// - paymentTokenAddress: Token contract for payment (IERC20(address(0)) for FIL)
+/// Optional PDP keys:
+/// - ipniPiece: Supports IPNI piece CID indexing
+/// - ipniIpfs: Supports IPNI IPFS CID indexing
+/// - ipniPeerId: IPNI peer ID
 
-uint256 constant REQUIRED_PDP_KEYS = 0x5b6e96f24dd05fa9218c80c8422a0eb70947d833531db3c4db14504405c0e132;
+uint256 constant REQUIRED_PDP_KEYS = 0x5b6a06f24dd05729018c808802020eb60947d813531db3c45b14504401400102;
 
 /// @title ServiceProviderRegistry
 /// @notice A registry contract for managing service providers across the Filecoin Services ecosystem
