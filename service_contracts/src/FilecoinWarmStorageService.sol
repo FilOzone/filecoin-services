@@ -860,7 +860,6 @@ contract FilecoinWarmStorageService is
                 revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
-            provenThisPeriod[dataSetId] = false;
 
             // Initialize the activation epoch when proving first starts
             // This marks when the data set became active for proving
@@ -908,15 +907,6 @@ contract FilecoinWarmStorageService is
         }
         if (faultPeriods > 0) {
             emit FaultRecord(dataSetId, faultPeriods, provingDeadlines[dataSetId]);
-        }
-
-        // Record the status of the current/previous proving period that's ending
-        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE && provenThisPeriod[dataSetId]) {
-            // Determine the period ID that just completed
-            uint256 completedPeriodId = getProvingPeriodForEpoch(dataSetId, provingDeadlines[dataSetId] - 1);
-
-            // Record whether this period was proven
-            provenPeriods[dataSetId][completedPeriodId >> 8] |= 1 << (completedPeriodId & 255);
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
@@ -1469,8 +1459,6 @@ contract FilecoinWarmStorageService is
         returns (uint256 provenEpochCount, uint256 settleUpTo)
     {
         require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
-        uint256 currentPeriod = _provingPeriodForEpoch(activationEpoch, block.number);
-
         if (fromEpoch < activationEpoch - 1) {
             fromEpoch = activationEpoch - 1;
         }
@@ -1481,28 +1469,28 @@ contract FilecoinWarmStorageService is
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
 
         if (toEpoch < startingPeriodDeadline) {
-            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount = toEpoch - fromEpoch;
                 settleUpTo = toEpoch;
             } else {
                 settleUpTo = fromEpoch;
             }
         } else {
-            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount += (startingPeriodDeadline - fromEpoch);
             }
 
             uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
             // loop through the proving periods between startingPeriod and endingPeriod
             for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
-                if (_isPeriodProven(dataSetId, period, currentPeriod)) {
+                if (_isPeriodProven(dataSetId, period)) {
                     provenEpochCount += maxProvingPeriod;
                 }
             }
             settleUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
 
             // handle the last period separately
-            if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, endingPeriod)) {
                 provenEpochCount += (toEpoch - settleUpTo);
                 settleUpTo = toEpoch;
             }
@@ -1510,10 +1498,7 @@ contract FilecoinWarmStorageService is
         return (provenEpochCount, settleUpTo);
     }
 
-    function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
-        if (periodId == currentPeriod) {
-            return provenThisPeriod[dataSetId];
-        }
+    function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
         uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
         return isProven != 0;
     }
