@@ -113,7 +113,9 @@ contract ProviderValidationTest is MockFVMTest {
         // Approval is not required to perform onboarding actions.
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
-        serviceProviderRegistry.registerProvider{value: 5 ether}(
+        serviceProviderRegistry.registerProvider{
+            value: 5 ether
+        }(
             provider1, // payee
             "Provider 1",
             "Provider 1 Description",
@@ -168,7 +170,9 @@ contract ProviderValidationTest is MockFVMTest {
     function testProviderApprovedCanCreateDataset() public {
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
-        serviceProviderRegistry.registerProvider{value: 5 ether}(
+        serviceProviderRegistry.registerProvider{
+            value: 5 ether
+        }(
             provider1, // payee
             "Provider 1",
             "Provider 1 Description",

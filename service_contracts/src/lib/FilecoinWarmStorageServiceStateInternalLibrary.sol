@@ -157,12 +157,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (bool)
     {
         return uint256(
-            service.extsload(
+                service.extsload(
                 keccak256(
-                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
-                )
+                abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
             )
-        ) & (1 << (periodId & 255)) != 0;
+            )
+            ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
@@ -383,11 +383,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @return exists True if the key exists
      * @return value The metadata value
      */
-    function getPieceMetadata(FilecoinWarmStorageService service, uint256 dataSetId, uint256 pieceId, string memory key)
-        internal
-        view
-        returns (bool exists, string memory value)
-    {
+    function getPieceMetadata(
+        FilecoinWarmStorageService service,
+        uint256 dataSetId,
+        uint256 pieceId,
+        string memory key
+    ) internal view returns (bool exists, string memory value) {
         // Check if key exists in the keys array
         string[] memory keys = getStringArray(
             service,

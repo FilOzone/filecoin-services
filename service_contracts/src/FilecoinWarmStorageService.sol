@@ -155,7 +155,8 @@ contract FilecoinWarmStorageService is
     // Structure for service pricing information
     struct ServicePricing {
         uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
-        uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
+        uint256 pricePerTiBCdnEgress; // CDN egress price per TiB (usage-based, not monthly)
+        uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based, not monthly)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
     }
@@ -194,8 +195,8 @@ contract FilecoinWarmStorageService is
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
-    uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
-    uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 private immutable CDN_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of CDN egress
+    uint256 private immutable CACHE_MISS_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of cache miss egress
 
     // Fixed lockup amounts for CDN rails
     uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
@@ -328,8 +329,8 @@ contract FilecoinWarmStorageService is
 
         // Initialize the fee constants based on the actual token decimals
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
-        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
+        CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB of egress
+        CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB of egress
 
         // Initialize the lockup constants based on the actual token decimals
         DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
@@ -660,7 +661,10 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
-    ) external onlyPDPVerifier {
+    )
+        external
+        onlyPDPVerifier
+    {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
@@ -818,7 +822,10 @@ contract FilecoinWarmStorageService is
         uint256, /*challengedLeafCount*/
         uint256, /*seed*/
         uint256 challengeCount
-    ) external onlyPDPVerifier {
+    )
+        external
+        onlyPDPVerifier
+    {
         requirePaymentNotBeyondEndEpoch(dataSetId);
 
         if (provenThisPeriod[dataSetId]) {
@@ -946,7 +953,11 @@ contract FilecoinWarmStorageService is
         address, // oldServiceProvider
         address, // newServiceProvider
         bytes calldata // extraData - not used
-    ) external override onlyPDPVerifier {
+    )
+        external
+        override
+        onlyPDPVerifier
+    {
         revert("Storage provider changes are not yet supported");
     }
 
@@ -1112,19 +1123,6 @@ contract FilecoinWarmStorageService is
             0 // No one-time payment during rate update
         );
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
-
-        // Update the CDN rail payment rates, if applicable
-        if (dataSetHasCDNMetadataKey(dataSetId)) {
-            (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
-
-            uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
-            payments.modifyRailPayment(cacheMissRailId, newCacheMissRatePerEpoch, 0);
-            emit RailRateUpdated(dataSetId, cacheMissRailId, newCacheMissRatePerEpoch);
-
-            uint256 cdnRailId = dataSetInfo[dataSetId].cdnRailId;
-            payments.modifyRailPayment(cdnRailId, newCDNRatePerEpoch, 0);
-            emit RailRateUpdated(dataSetId, cdnRailId, newCDNRatePerEpoch);
-        }
     }
 
     /**
@@ -1188,21 +1186,13 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Calculate all per-epoch rates based on total storage size
-     * @dev Returns storage, cache miss, and CDN rates per TiB per month
+     * @notice Calculate storage rate per epoch based on total storage size
+     * @dev Returns storage rate per TiB per month
      * @param totalBytes Total size of the stored data in bytes
      * @return storageRate The PDP storage rate per epoch
-     * @return cacheMissRate The cache miss rate per epoch
-     * @return cdnRate The CDN rate per epoch
      */
-    function calculateRatesPerEpoch(uint256 totalBytes)
-        external
-        view
-        returns (uint256 storageRate, uint256 cacheMissRate, uint256 cdnRate)
-    {
+    function calculateRatesPerEpoch(uint256 totalBytes) external view returns (uint256 storageRate) {
         storageRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
-        cacheMissRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
-        cdnRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
@@ -1212,17 +1202,6 @@ contract FilecoinWarmStorageService is
      */
     function _calculateStorageRate(uint256 totalBytes) internal view returns (uint256) {
         return calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
-    }
-
-    /**
-     * @notice Calculate the CDN rates per epoch (internal use)
-     * @param totalBytes Total size of the stored data in bytes
-     * @return cacheMissRate The cache miss rate per epoch
-     * @return cdnRate The CDN rate per epoch
-     */
-    function _calculateCDNRates(uint256 totalBytes) internal view returns (uint256 cacheMissRate, uint256 cdnRate) {
-        cacheMissRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
-        cdnRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
     }
 
     /**
@@ -1312,12 +1291,13 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Get the service pricing information
-     * @return pricing A struct containing pricing details for both CDN and non-CDN storage
+     * @return pricing A struct containing pricing details for storage and CDN/cache miss egress
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
             pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
-            pricePerTiBPerMonthWithCDN: STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH,
+            pricePerTiBCdnEgress: CDN_EGRESS_PRICE_PER_TIB,
+            pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH
         });
@@ -1430,7 +1410,12 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 /* rate */
-    ) external view override returns (ValidationResult memory result) {
+    )
+        external
+        view
+        override
+        returns (ValidationResult memory result)
+    {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
@@ -1443,9 +1428,7 @@ contract FilecoinWarmStorageService is
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
             return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: fromEpoch,
-                note: "Proving never activated for this data set"
+                modifiedAmount: 0, settleUpto: fromEpoch, note: "Proving never activated for this data set"
             });
         }
 
@@ -1456,9 +1439,7 @@ contract FilecoinWarmStorageService is
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: fromEpoch,
-                note: "No proven epochs in the requested range"
+                modifiedAmount: 0, settleUpto: fromEpoch, note: "No proven epochs in the requested range"
             });
         }
 

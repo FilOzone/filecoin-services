@@ -70,8 +70,9 @@ library SignatureVerificationLib {
         string[] calldata keys,
         string[] calldata values
     ) public pure returns (bytes32 structHash) {
-        return
-            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values)));
+        return keccak256(
+            abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values))
+        );
     }
 
     function hashAllCids(Cids.Cid[] calldata pieceDataArray) internal pure returns (bytes32 cidHashesHash) {

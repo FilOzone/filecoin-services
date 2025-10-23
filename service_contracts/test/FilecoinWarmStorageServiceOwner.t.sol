@@ -135,7 +135,9 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         string[] memory capabilityValues = new string[](0);
 
         vm.prank(provider);
-        providerRegistry.registerProvider{value: 5 ether}(
+        providerRegistry.registerProvider{
+            value: 5 ether
+        }(
             provider, // payee
             name,
             string.concat(name, " Description"),
