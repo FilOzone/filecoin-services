@@ -288,6 +288,11 @@
                     "internalType": "bool"
                   }
                 ]
+              },
+              {
+                "name": "productCapabilityValues",
+                "type": "bytes[]",
+                "internalType": "bytes[]"
               }
             ]
           },
@@ -326,6 +331,40 @@
         "name": "hasMore",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getAllProductCapabilities",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "productType",
+        "type": "uint8",
+        "internalType": "enum ServiceProviderRegistryStorage.ProductType"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "isActive",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "keys",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "values",
+        "type": "bytes[]",
+        "internalType": "bytes[]"
       }
     ],
     "stateMutability": "view"
@@ -720,6 +759,11 @@
                     "internalType": "bool"
                   }
                 ]
+              },
+              {
+                "name": "productCapabilityValues",
+                "type": "bytes[]",
+                "internalType": "bytes[]"
               }
             ]
           },
