@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - Use `getDataSetStatusDetails()` to check termination status separately from Active/Inactive status
 - Subgraph schema updated with status enum and history tracking
 - **Calibnet**: Reduced DEFAULT_CHALLENGE_WINDOW_SIZE from 30 epochs to 20 epochs for faster testing iteration
+- Made storage pricing and minimum rate mutable storage variables instead of immutable constants ([#306](https://github.com/FilOzone/filecoin-services/issues/306))
+  - `storagePricePerTibPerMonth` (initially 2.5 USDFC, max 10 USDFC)
+  - `minimumStorageRatePerMonth` (initially 0.06 USDFC, max 0.24 USDFC)
+- Added `updatePricing(uint256 newStoragePrice, uint256 newMinimumRate)` function to allow owner to update pricing rates without contract upgrades
+  - Pass 0 to keep existing value unchanged
+  - At least one price must be non-zero
+  - Validates against 4x upper bounds (10 USDFC storage, 0.24 USDFC minimum rate)
+  - Price updates apply immediately to existing payment rails when recalculated
+- Added `getCurrentPricingRates()` function to query current storage price and minimum rate
+- Added `PricingUpdated(uint256 storagePrice, uint256 minimumRate)` event to track pricing changes
+- Added `AtLeastOnePriceMustBeNonZero` and `PriceExceedsMaximum` errors for pricing validation
 
 ## [0.3.0] - 2025-10-08 - M3.1 Calibration Network Deployment
 
