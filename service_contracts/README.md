@@ -35,8 +35,10 @@ Datasets have a simplified two-state lifecycle system to track their operational
 
 ### Status States
 
-- **Active**: Dataset has pieces, PDP proving is running, and payment rails are operational (not terminated or within lockup period)
-- **Inactive**: Dataset is newly created with no pieces (rate = 0), has been terminated, or is beyond the lockup period
+- **Inactive**: Dataset doesn't exist or has no pieces added yet (rate = 0, no proving)
+- **Active**: Dataset has pieces and proving history (including terminated datasets)
+
+**Important**: Terminated datasets remain **Active** because they still have data. Status reflects data existence, not operational state. Use `pdpEndEpoch` to check if a dataset is terminated.
 
 ### Querying Status
 
@@ -51,8 +53,7 @@ bool isActive = FilecoinWarmStorageServiceStateLibrary.isDataSetActive(service, 
 (
     DataSetStatus status,
     bool hasProving,
-    bool isTerminated,
-    bool isBeyondLockup
+    bool isTerminated
 ) = FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(service, dataSetId);
 ```
 
@@ -97,7 +98,8 @@ event DataSetStatusChanged(
 These events are emitted when:
 1. Dataset is created (initial Inactive status)
 2. First piece is added and proving starts (Inactive → Active)
-3. Service is terminated (Active → Inactive)
+
+Note: Service termination does NOT emit a status change event (status remains Active for datasets with pieces). Use the `ServiceTerminated` event to track termination.
 
 ### Extsload
 The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.

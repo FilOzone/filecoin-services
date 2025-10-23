@@ -183,33 +183,21 @@ export const DataSetStatusBadge: React.FC<StatusBadgeProps> = ({
 }) => {
   const getStatusDetails = () => {
     if (status === 'ACTIVE') {
+      // Check if terminated to show different message
+      if (pdpEndEpoch && pdpEndEpoch > 0n) {
+        return {
+          label: 'Active (Terminated)',
+          color: 'bg-yellow-100 text-yellow-800',
+          icon: '⏸',
+          description: 'Has data, service terminated',
+        };
+      }
+      
       return {
         label: 'Active',
         color: 'bg-green-100 text-green-800',
         icon: '✓',
         description: 'Data is being actively proven',
-      };
-    }
-    
-    // Determine why it's inactive
-    if (pdpEndEpoch && pdpEndEpoch > 0n) {
-      const LOCKUP_PERIOD = 86400n; // ~1 month in epochs
-      const lockupEnd = pdpEndEpoch + LOCKUP_PERIOD;
-      
-      if (currentEpoch && currentEpoch > lockupEnd) {
-        return {
-          label: 'Expired',
-          color: 'bg-red-100 text-red-800',
-          icon: '⚠',
-          description: 'Beyond lockup period',
-        };
-      }
-      
-      return {
-        label: 'Terminated',
-        color: 'bg-yellow-100 text-yellow-800',
-        icon: '⏸',
-        description: 'Service terminated, within lockup',
       };
     }
     
@@ -326,7 +314,7 @@ const statusDescription = computed(() => statusDetails.value.description);
 
 ### Polling Strategy
 
-For applications that need to detect time-based status changes (e.g., beyond lockup):
+For applications that need to monitor dataset status changes:
 
 ```typescript
 class DataSetStatusMonitor {
@@ -426,8 +414,7 @@ contract DataMarketplace {
         returns (
             FilecoinWarmStorageService.DataSetStatus status,
             bool hasProving,
-            bool isTerminated,
-            bool isBeyondLockup
+            bool isTerminated
         ) 
     {
         return storageService.getDataSetStatusDetails(dataSetId);
@@ -782,25 +769,6 @@ class DataSetMonitoringService {
           timestamp: new Date().toISOString(),
         });
       }
-      
-      // Check if approaching lockup expiration
-      if (dataset.pdpEndEpoch > 0) {
-        const currentBlock = await this.provider.getBlockNumber();
-        const LOCKUP_PERIOD = 86400; // ~1 month
-        const lockupEnd = Number(dataset.pdpEndEpoch) + LOCKUP_PERIOD;
-        const blocksUntilExpiry = lockupEnd - currentBlock;
-        
-        // Alert if less than 7 days (20160 blocks) until expiry
-        if (blocksUntilExpiry > 0 && blocksUntilExpiry < 20160) {
-          await this.sendAlert(webhookUrl, {
-            type: 'LOCKUP_EXPIRING',
-            dataSetId: dataset.setId,
-            blocksUntilExpiry,
-            message: `Dataset ${dataset.setId} lockup expires in ${blocksUntilExpiry} blocks`,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
     }
   }
   
@@ -937,9 +905,9 @@ function formatTimestamp(timestamp: string): string {
 2. **Use Subgraph When Possible**: More efficient than direct RPC calls
 3. **Batch Queries**: Query multiple datasets in one request
 4. **Handle Errors Gracefully**: Network issues, contract upgrades, etc.
-5. **Monitor Time-Based Transitions**: Set up polling for lockup expiration
+5. **Monitor Status Changes**: Subscribe to status change events for real-time updates
 6. **Subscribe to Events**: Real-time updates are more efficient than polling
-7. **Test Edge Cases**: Empty datasets, terminated datasets, very old datasets
+7. **Test Edge Cases**: Empty datasets, terminated datasets, deleted datasets
 
 ## Troubleshooting
 
@@ -947,8 +915,8 @@ function formatTimestamp(timestamp: string): string {
 
 Check:
 1. Has proving started? (`provingActivationEpoch` > 0)
-2. Has service been terminated? (`pdpEndEpoch` > 0)
-3. Is it beyond lockup? (current epoch > `pdpEndEpoch + 86400`)
+2. If proving has started, the dataset should be ACTIVE
+3. If dataset is terminated (`pdpEndEpoch` > 0) but has pieces, it will still show as ACTIVE
 
 ### Status not updating in UI
 
