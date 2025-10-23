@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 // Code generated - DO NOT EDIT.
 // This file is a generated binding and any changes will be lost.
-// Generated with make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
+// Generated with make
 
 import {Errors} from "../Errors.sol";
 import {
@@ -133,23 +133,58 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (FilecoinWarmStorageService.DataSetStatus status)
     {
         FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
-        
+
         // Non-existent datasets are inactive
         if (info.pdpRailId == 0) {
             return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
-        
+
         // Check if proving is activated (has pieces)
         uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
         bool hasProving = activationEpoch != 0;
-        
+
         // Inactive only if no proving has started
         // Everything else is Active (including terminated datasets)
         if (!hasProving) {
             return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
-        
+
         return FilecoinWarmStorageService.DataSetStatus.Active;
+    }
+
+    /**
+     * @notice Check if a dataset is currently active
+     * @param service The service contract
+     * @param dataSetId The ID of the dataset
+     * @return True if dataset is active, false otherwise
+     */
+    function isDataSetActive(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
+        return getDataSetStatus(service, dataSetId) == FilecoinWarmStorageService.DataSetStatus.Active;
+    }
+
+    /**
+     * @notice Get detailed status information for a dataset
+     * @param service The service contract
+     * @param dataSetId The ID of the dataset
+     * @return status The current status
+     * @return hasProving Whether proving is activated
+     * @return isTerminated Whether the rail is terminated
+     */
+    function getDataSetStatusDetails(FilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (FilecoinWarmStorageService.DataSetStatus status, bool hasProving, bool isTerminated)
+    {
+        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+
+        // Check if proving is activated
+        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
+        hasProving = activationEpoch != 0;
+
+        // Check if terminated
+        isTerminated = info.pdpEndEpoch != 0;
+
+        status = getDataSetStatus(service, dataSetId);
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)

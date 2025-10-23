@@ -1828,7 +1828,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Created data set with ID:", dataSetId);
 
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active");
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (no pieces yet)");
 
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
