@@ -403,6 +403,35 @@
   },
   {
     "type": "function",
+    "name": "getDataSetStatusDetails",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum FilecoinWarmStorageService.DataSetStatus"
+      },
+      {
+        "name": "hasProving",
+        "type": "bool",
+        "internalType": "bool"
+      },
+      {
+        "name": "isTerminated",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getMaxProvingPeriod",
     "inputs": [],
     "outputs": [
@@ -472,6 +501,25 @@
         "name": "value",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isDataSetActive",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
