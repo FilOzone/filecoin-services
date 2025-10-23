@@ -130,7 +130,24 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (FilecoinWarmStorageService.DataSetStatus status)
     {
-        return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetStatus(service, dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+
+        // Non-existent datasets are inactive
+        if (info.pdpRailId == 0) {
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+        }
+
+        // Check if proving is activated (has pieces)
+        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
+        bool hasProving = activationEpoch != 0;
+
+        // Inactive only if no proving has started
+        // Everything else is Active (including terminated datasets)
+        if (!hasProving) {
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+        }
+
+        return FilecoinWarmStorageService.DataSetStatus.Active;
     }
 
     /**
@@ -156,12 +173,10 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (FilecoinWarmStorageService.DataSetStatus status, bool hasProving, bool isTerminated)
     {
-        FilecoinWarmStorageService.DataSetInfoView memory info =
-            FilecoinWarmStorageServiceStateInternalLibrary.getDataSet(service, dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
 
         // Check if proving is activated
-        uint256 activationEpoch =
-            FilecoinWarmStorageServiceStateInternalLibrary.provingActivationEpoch(service, dataSetId);
+        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
         hasProving = activationEpoch != 0;
 
         // Check if terminated

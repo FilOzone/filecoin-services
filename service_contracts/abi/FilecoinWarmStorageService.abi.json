@@ -1142,6 +1142,37 @@
   },
   {
     "type": "event",
+    "name": "DataSetStatusChanged",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "oldStatus",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum FilecoinWarmStorageService.DataSetStatus"
+      },
+      {
+        "name": "newStatus",
+        "type": "uint8",
+        "indexed": true,
+        "internalType": "enum FilecoinWarmStorageService.DataSetStatus"
+      },
+      {
+        "name": "epoch",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
     "anonymous": false
