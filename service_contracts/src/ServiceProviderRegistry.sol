@@ -236,11 +236,11 @@ contract ServiceProviderRegistry is
         string[] memory capabilityKeys,
         bytes[] calldata capabilityValues
     ) private {
-        // Validate product data
-        _validateProductKeys(productType, capabilityKeys);
-
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
+
+        // Validate product data
+        _validateProductKeys(productType, capabilityKeys);
 
         // Store product
         providerProducts[providerId][productType] =
