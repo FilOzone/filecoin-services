@@ -661,8 +661,25 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             registry.getProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, 0, 10);
         assertEq(result.providers.length, 3, "Should have 3 providers with PDP");
         assertEq(result.providers[0].providerId, 1, "First provider should be ID 1");
+        assertEq(result.providers[0].providerInfo.payee, provider1, "Unexpected provider payee");
+        assertTrue(result.providers[0].product.isActive, "product should be active");
+        assertEq(result.providers[0].product.capabilityKeys.length, keys.length, "capability key length mismatch ");
+        assertEq(result.providers[0].product.capabilityKeys[0], keys[0], "capability key mismatch ");
+        assertEq(
+            uint256(result.providers[0].product.productType),
+            uint256(ServiceProviderRegistryStorage.ProductType.PDP),
+            "unexpected product type"
+        );
+        assertEq(result.providers[0].productCapabilityValues.length, values.length, "capability values length mismatch");
+        assertEq(
+            result.providers[0].productCapabilityValues[0],
+            "https://provider1.example.com",
+            "incorrect capabilities value"
+        );
         assertEq(result.providers[1].providerId, 2, "Second provider should be ID 2");
+        assertEq(result.providers[1].providerInfo.payee, provider2, "Unexpected provider payee");
         assertEq(result.providers[2].providerId, 3, "Third provider should be ID 3");
+        assertEq(result.providers[2].providerInfo.payee, provider3, "Unexpected provider payee");
         assertFalse(result.hasMore, "Should not have more results");
     }
 
@@ -711,7 +728,23 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             registry.getActiveProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, 0, 10);
         assertEq(activeResult.providers.length, 2, "Should have 2 active providers with PDP");
         assertEq(activeResult.providers[0].providerId, 1, "First active should be ID 1");
+        assertEq(
+            activeResult.providers[0].providerInfo.description, "Test provider description", "description mismatch"
+        );
+        assertTrue(activeResult.providers[0].product.isActive, "should be active");
+        assertEq(
+            activeResult.providers[0].product.capabilityKeys.length, keys.length, "capability keys length mismatch"
+        );
+        assertEq(
+            activeResult.providers[1].productCapabilityValues.length, values.length, "capability values length mismatch"
+        );
         assertEq(activeResult.providers[1].providerId, 3, "Second active should be ID 3");
+        assertEq(
+            activeResult.providers[1].product.capabilityKeys.length, keys.length, "capability keys length mismatch"
+        );
+        assertEq(
+            activeResult.providers[1].productCapabilityValues.length, values.length, "capability values length mismatch"
+        );
         assertFalse(activeResult.hasMore, "Should not have more results");
     }
 
@@ -738,7 +771,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
-        registry.registerProvider{value: REGISTRATION_FEE}(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -748,7 +781,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         );
 
         (string[] memory getProductKeys, bool isActive) =
-            registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
+            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         assertTrue(isActive, "Product should be active");
         bytes[] memory getProductCapabilities =
             registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, getProductKeys);
@@ -756,6 +789,25 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Decode and verify
         PDPOffering.Schema memory decoded = PDPOffering.fromCapabilities(getProductKeys, getProductCapabilities);
         assertEq(decoded.serviceURL, SERVICE_URL, "Service URL should match");
+
+        // compare to getAllProductCapabilities
+        (
+            bool getAllProductCapabilitiesIsActive,
+            string[] memory getAllProductCapabilitiesKeys,
+            bytes[] memory getAllProductCapabilitiesValues
+        ) = registry.getAllProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP);
+        assertTrue(getAllProductCapabilitiesIsActive, "Product should be active");
+        assertEq(
+            getAllProductCapabilitiesKeys.length,
+            getAllProductCapabilitiesValues.length,
+            "keys and values length mismatch"
+        );
+        assertEq(getProductKeys.length, getAllProductCapabilitiesKeys.length, "key length mismatch");
+        assertEq(getProductCapabilities.length, getAllProductCapabilitiesValues.length, "key length mismatch");
+        for (uint256 i = 0; i < getProductCapabilities.length; i++) {
+            assertEq(getProductKeys[i], getAllProductCapabilitiesKeys[i], "key length mismatch");
+            assertEq(getProductCapabilities[i], getAllProductCapabilitiesValues[i], "key length mismatch");
+        }
     }
 
     function testCannotAddProductTwice() public {

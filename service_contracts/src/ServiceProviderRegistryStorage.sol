@@ -35,6 +35,7 @@ contract ServiceProviderRegistryStorage {
         uint256 providerId;
         ServiceProviderInfo providerInfo;
         ServiceProduct product;
+        bytes[] productCapabilityValues;
     }
 
     /// @notice Paginated result for provider queries

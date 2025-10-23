@@ -493,10 +493,12 @@ contract ServiceProviderRegistry is
             if (providerProducts[i][productType].isActive) {
                 if (currentIndex >= offset && currentIndex < offset + limit) {
                     ServiceProviderInfo storage provider = providers[i];
+                    ServiceProduct storage product = providerProducts[i][productType];
                     result.providers[resultIndex] = ProviderWithProduct({
                         providerId: i,
                         providerInfo: provider,
-                        product: providerProducts[i][productType]
+                        product: product,
+                        productCapabilityValues: getProductCapabilities(i, productType, product.capabilityKeys)
                     });
                     resultIndex++;
                 }
@@ -540,10 +542,12 @@ contract ServiceProviderRegistry is
             if (providers[i].isActive && providerProducts[i][productType].isActive) {
                 if (currentIndex >= offset && currentIndex < offset + limit) {
                     ServiceProviderInfo storage provider = providers[i];
+                    ServiceProduct storage product = providerProducts[i][productType];
                     result.providers[resultIndex] = ProviderWithProduct({
                         providerId: i,
                         providerInfo: provider,
-                        product: providerProducts[i][productType]
+                        product: product,
+                        productCapabilityValues: getProductCapabilities(i, productType, product.capabilityKeys)
                     });
                     resultIndex++;
                 }
@@ -709,8 +713,8 @@ contract ServiceProviderRegistry is
     /// @param productType The type of product
     /// @param keys Array of capability keys to query
     /// @return values Array of capability values corresponding to the keys (empty string for non-existent keys)
-    function getProductCapabilities(uint256 providerId, ProductType productType, string[] calldata keys)
-        external
+    function getProductCapabilities(uint256 providerId, ProductType productType, string[] memory keys)
+        public
         view
         providerExists(providerId)
         returns (bytes[] memory values)
@@ -720,6 +724,23 @@ contract ServiceProviderRegistry is
         // Cache the mapping reference
         mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
 
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = capabilities[keys[i]];
+        }
+    }
+
+    function getAllProductCapabilities(uint256 providerId, ProductType productType)
+        external
+        view
+        providerExists(providerId)
+        returns (bool isActive, string[] memory keys, bytes[] memory values)
+    {
+        ServiceProduct storage product = providerProducts[providerId][productType];
+        isActive = product.isActive;
+        keys = product.capabilityKeys;
+        values = new bytes[](keys.length);
+
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < keys.length; i++) {
             values[i] = capabilities[keys[i]];
         }
