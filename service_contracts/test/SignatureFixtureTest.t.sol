@@ -53,7 +53,7 @@ contract MetadataSignatureTestContract is EIP712 {
         keccak256("PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)");
 
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
         "Cid(bytes data)" "MetadataEntry(string key,string value)"
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
@@ -119,12 +119,12 @@ contract MetadataSignatureTestContract is EIP712 {
         address payer,
         uint256 clientDataSetId,
         Cids.Cid[] memory pieceCidsArray,
-        uint256 nonce,
+        uint256 firstAdded,
         string[][] memory metadataKeys,
         string[][] memory metadataValues,
         bytes memory signature
     ) public view returns (bool) {
-        bytes32 digest = getAddPiecesDigest(clientDataSetId, nonce, pieceCidsArray, metadataKeys, metadataValues);
+        bytes32 digest = getAddPiecesDigest(clientDataSetId, firstAdded, pieceCidsArray, metadataKeys, metadataValues);
         address signer = ECDSA.recover(digest, signature);
         return signer == payer;
     }
@@ -143,7 +143,7 @@ contract MetadataSignatureTestContract is EIP712 {
 
     function getAddPiecesDigest(
         uint256 clientDataSetId,
-        uint256 nonce,
+        uint256 firstAdded,
         Cids.Cid[] memory pieceCidsArray,
         string[][] memory metadataKeys,
         string[][] memory metadataValues
@@ -159,7 +159,7 @@ contract MetadataSignatureTestContract is EIP712 {
             abi.encode(
                 ADD_PIECES_TYPEHASH,
                 clientDataSetId,
-                nonce,
+                firstAdded,
                 keccak256(abi.encodePacked(pieceCidsHashes)),
                 pieceMetadataHash
             )
@@ -261,7 +261,7 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      signature: '%s',", vm.toString(addPiecesSig));
         console.log("      digest: '%s',", vm.toString(addPiecesDigest));
         console.log("      clientDataSetId: %d,", CLIENT_DATA_SET_ID);
-        console.log("      nonce: %d,", FIRST_ADDED);
+        console.log("      firstAdded: %d,", FIRST_ADDED);
         console.log(
             "      pieceCidBytes: ['%s', '%s'],",
             vm.toString(pieceCidsArray[0].data),
@@ -297,7 +297,7 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("  \"addPieces\": {");
         console.log("    \"signature\": \"%s\",", vm.toString(addPiecesSig));
         console.log("    \"clientDataSetId\": %d,", CLIENT_DATA_SET_ID);
-        console.log("    \"nonce\": %d,", FIRST_ADDED);
+        console.log("    \"firstAdded\": %d,", FIRST_ADDED);
         console.log("    \"pieceCidBytes\": [");
         console.log("      \"%s\",", vm.toString(pieceCidsArray[0].data));
         console.log("      \"%s\"", vm.toString(pieceCidsArray[1].data));
@@ -385,7 +385,7 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("  ],");
         console.log("  AddPieces: [");
         console.log("    { name: 'clientDataSetId', type: 'uint256' },");
-        console.log("    { name: 'nonce', type: 'uint256' },");
+        console.log("    { name: 'firstAdded', type: 'uint256' },");
         console.log("    { name: 'pieceData', type: 'Cid[]' },");
         console.log("    { name: 'pieceMetadata', type: 'PieceMetadata[]' }");
         console.log("  ],");
@@ -476,7 +476,7 @@ contract MetadataSignatureFixturesTest is Test {
     function testAddPiecesSignature(string memory json, address signer) internal view {
         string memory signature = vm.parseJsonString(json, ".addPieces.signature");
         uint256 clientDataSetId = vm.parseJsonUint(json, ".addPieces.clientDataSetId");
-        uint256 nonce = vm.parseJsonUint(json, ".addPieces.nonce");
+        uint256 firstAdded = vm.parseJsonUint(json, ".addPieces.firstAdded");
 
         // Parse piece data arrays
         bytes[] memory pieceCidBytes = vm.parseJsonBytesArray(json, ".addPieces.pieceCidBytes");
@@ -496,7 +496,7 @@ contract MetadataSignatureFixturesTest is Test {
         }
 
         bool isValid = testContract.verifyAddPiecesSignature(
-            signer, clientDataSetId, pieceData, nonce, keys, values, vm.parseBytes(signature)
+            signer, clientDataSetId, pieceData, firstAdded, keys, values, vm.parseBytes(signature)
         );
 
         assertTrue(isValid, "AddPieces signature verification failed");

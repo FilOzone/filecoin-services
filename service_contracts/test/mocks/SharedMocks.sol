@@ -136,7 +136,6 @@ contract MockPDPVerifier {
         uint256 dataSetId,
         uint256 firstAdded,
         Cids.Cid[] memory pieceData,
-        uint256 nonce,
         bytes memory signature,
         string[] memory metadataKeys,
         string[] memory metadataValues
@@ -149,7 +148,7 @@ contract MockPDPVerifier {
             allValues[i] = metadataValues;
         }
 
-        bytes memory extraData = abi.encode(nonce, allKeys, allValues, signature);
+        bytes memory extraData = abi.encode(signature, allKeys, allValues);
         listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
     }
 

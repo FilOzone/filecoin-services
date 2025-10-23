@@ -71,7 +71,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         "MetadataEntry(string key,string value)"
     );
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
+        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
         "Cid(bytes data)" "MetadataEntry(string key,string value)"
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
@@ -824,7 +824,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         keys1[0] = "meta";
         values1[0] = metadataShort;
         mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, 1, FAKE_SIGNATURE, keys1, values1
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData1, FAKE_SIGNATURE, keys1, values1
         );
         firstAdded += pieceData1.length;
 
@@ -837,7 +837,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         keys2[0] = "meta";
         values2[0] = metadataLong;
         mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, 2, FAKE_SIGNATURE, keys2, values2
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
         );
         firstAdded += pieceData2.length;
 
@@ -866,7 +866,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         makeSignaturePass(sessionKey1);
         mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, 3, FAKE_SIGNATURE, keys2, values2
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
         );
         firstAdded += pieceData2.length;
 
@@ -874,7 +874,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         makeSignaturePass(sessionKey2);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
         mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, 4, FAKE_SIGNATURE, keys2, values2
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
         );
 
         // expired session key reverts
@@ -882,7 +882,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         makeSignaturePass(sessionKey1);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
         mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, 5, FAKE_SIGNATURE, keys2, values2
+            pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, FAKE_SIGNATURE, keys2, values2
         );
     }
 
@@ -2051,9 +2051,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         allKeys[0] = keys;
         allValues[0] = values;
 
-        // Encode extraData: (nonce, metadataKeys, metadataValues, signature)
-        uint256 nonce = pieceId + 1000; // Use unique nonce based on pieceId
-        extraData = abi.encode(nonce, allKeys, allValues, signature);
+        // Encode extraData: (signature, metadataKeys, metadataValues)
+        extraData = abi.encode(signature, allKeys, allValues);
 
         if (caller == address(mockPDPVerifier)) {
             vm.expectEmit(true, false, false, true);
@@ -2124,7 +2123,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             string[][] memory allValues = new string[][](1);
             allKeys[0] = keys;
             allValues[0] = values;
-            bytes memory encodedData = abi.encode(pieceId + i + 3000, allKeys, allValues, FAKE_SIGNATURE);
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
             if (keyLength <= 32) {
                 // Should succeed for valid lengths
@@ -2189,7 +2188,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             string[][] memory allValues = new string[][](1);
             allKeys[0] = keys;
             allValues[0] = values;
-            bytes memory encodedData = abi.encode(pieceId + i + 4000, allKeys, allValues, FAKE_SIGNATURE);
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
             if (valueLength <= 128) {
                 // Should succeed for valid lengths
@@ -2255,7 +2254,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             string[][] memory allValues = new string[][](1);
             allKeys[0] = keys;
             allValues[0] = values;
-            bytes memory encodedData = abi.encode(pieceId + testIdx + 5000, allKeys, allValues, FAKE_SIGNATURE);
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
             if (keyCount <= MAX_KEYS_PER_PIECE) {
                 // Should succeed for valid counts
@@ -2306,16 +2305,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         PieceMetadataSetup memory setup =
             setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
 
-        // Try to add the same piece again with different nonce but same metadata (to test duplicate key detection)
-        string[][] memory allKeys = new string[][](1);
-        string[][] memory allValues = new string[][](1);
-        allKeys[0] = keys;
-        allValues[0] = values;
-        bytes memory extraDataWithNewNonce = abi.encode(pieceId + 2000, allKeys, allValues, FAKE_SIGNATURE);
-
         vm.expectRevert(abi.encodeWithSelector(Errors.DuplicateMetadataKey.selector, setup.dataSetId, keys[0]));
         vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.piecesAdded(setup.dataSetId, setup.pieceId, setup.pieceData, extraDataWithNewNonce);
+        pdpServiceWithPayments.piecesAdded(setup.dataSetId, setup.pieceId, setup.pieceData, setup.extraData);
     }
 
     function testPieceMetadataCannotBeAddedByNonPDPVerifier() public {
@@ -2360,7 +2352,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         allValues[0] = values;
 
         // Encode extraData with mismatched keys/values
-        bytes memory encodedData = abi.encode(pieceId + 6000, allKeys, allValues, FAKE_SIGNATURE);
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
         // Expect revert due to key/value mismatch
         vm.expectRevert(
@@ -2398,7 +2390,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         allValues[0] = values;
 
         // Encode extraData with mismatched keys/values
-        bytes memory encodedData = abi.encode(pieceId + 7000, allKeys, allValues, FAKE_SIGNATURE);
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
         // Expect revert due to key/value mismatch
         vm.expectRevert(
@@ -2540,7 +2532,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         allKeys[2][0] = "filename";
         allValues[2][0] = "data.json";
 
-        bytes memory encodedData = abi.encode(firstPieceId + 2000, allKeys, allValues, FAKE_SIGNATURE);
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
         // Expect events for each piece with their specific metadata
         vm.expectEmit(true, false, false, true);
@@ -2634,7 +2626,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         makeSignaturePass(client);
         uint256 pieceId = 0; // First piece in this dataset
         mockPDPVerifier.addPieces(
-            pdpServiceWithPayments, dataSetId, pieceId, pieces, 1, FAKE_SIGNATURE, pieceKeys, pieceValues
+            pdpServiceWithPayments, dataSetId, pieceId, pieces, FAKE_SIGNATURE, pieceKeys, pieceValues
         );
 
         // Test empty string in piece metadata
@@ -2671,7 +2663,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         correctValues[1] = new string[](1);
         correctValues[1][0] = "file2.txt";
 
-        bytes memory encodedData1 = abi.encode(pieceId + 9000, wrongKeys, correctValues, FAKE_SIGNATURE);
+        bytes memory encodedData1 = abi.encode(FAKE_SIGNATURE, wrongKeys, correctValues);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
         vm.prank(address(mockPDPVerifier));
@@ -2687,7 +2679,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         wrongValues[0] = new string[](1);
         wrongValues[0][0] = "file1.txt";
 
-        bytes memory encodedData2 = abi.encode(pieceId + 9001, correctKeys, wrongValues, FAKE_SIGNATURE);
+        bytes memory encodedData2 = abi.encode(FAKE_SIGNATURE, correctKeys, wrongValues);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
         vm.prank(address(mockPDPVerifier));
@@ -2712,7 +2704,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[][] memory allKeys = new string[][](numPieces); // Empty arrays
         string[][] memory allValues = new string[][](numPieces); // Empty arrays
 
-        bytes memory encodedData = abi.encode(firstPieceId + 8000, allKeys, allValues, FAKE_SIGNATURE);
+        bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
 
         // Expect events with empty metadata arrays
         vm.expectEmit(true, false, false, true);
@@ -3879,223 +3871,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             }
         }
         assertTrue(!foundInList, "Dataset should be removed from client dataset list");
-    }
-
-    // =========================================================================
-    // Nonce Tests
-    // =========================================================================
-
-    function testAddPiecesNonceReplayProtection() public {
-        // Setup: Create a dataset
-        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 100,
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
-        });
-        bytes memory encodedCreateData = abi.encode(
-            createData.payer,
-            createData.clientDataSetId,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.signature
-        );
-
-        // Setup approvals and deposit
-        vm.startPrank(client);
-        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
-        mockUSDFC.approve(address(payments), 10e6);
-        payments.deposit(mockUSDFC, client, 10e6);
-        vm.stopPrank();
-
-        // Create dataset
-        makeSignaturePass(client);
-        vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
-
-        // Prepare piece data
-        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece_1");
-        string[] memory keys = new string[](0);
-        string[] memory values = new string[](0);
-
-        // First add with nonce 1 should succeed
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, 1, FAKE_SIGNATURE, keys, values);
-
-        // Attempt to reuse nonce 1 should fail
-        makeSignaturePass(client);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 1));
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 1, pieceData, 1, FAKE_SIGNATURE, keys, values);
-    }
-
-    function testAddPiecesNonceIndependentFromFirstAdded() public {
-        // Setup: Create a dataset
-        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Independence");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 200,
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
-        });
-        bytes memory encodedCreateData = abi.encode(
-            createData.payer,
-            createData.clientDataSetId,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.signature
-        );
-
-        // Setup approvals and deposit
-        vm.startPrank(client);
-        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
-        mockUSDFC.approve(address(payments), 10e6);
-        payments.deposit(mockUSDFC, client, 10e6);
-        vm.stopPrank();
-
-        // Create dataset
-        makeSignaturePass(client);
-        vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
-
-        // Prepare piece data
-        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece");
-        string[] memory keys = new string[](0);
-        string[] memory values = new string[](0);
-
-        // Use nonce 999 with firstAdded 0 - should succeed
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, 999, FAKE_SIGNATURE, keys, values);
-
-        // Use nonce 1 with firstAdded 1 - should succeed (nonce != firstAdded is fine)
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 1, pieceData, 1, FAKE_SIGNATURE, keys, values);
-
-        // Verify pieces were added correctly
-        (bool exists0,) = viewContract.getPieceMetadata(dataSetId, 0, "");
-        (bool exists1,) = viewContract.getPieceMetadata(dataSetId, 1, "");
-        assertTrue(exists0 || !exists0); // Piece 0 exists (or doesn't based on metadata presence)
-        assertTrue(exists1 || !exists1); // Piece 1 exists (or doesn't based on metadata presence)
-    }
-
-    function testAddPiecesNonceUniquePerPayer() public {
-        // Setup approvals and deposit
-        vm.startPrank(client);
-        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
-        mockUSDFC.approve(address(payments), 20e6);
-        payments.deposit(mockUSDFC, client, 20e6);
-        vm.stopPrank();
-
-        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Dataset 1");
-        FilecoinWarmStorageService.DataSetCreateData memory createData1 = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 300,
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
-        });
-
-        FilecoinWarmStorageService.DataSetCreateData memory createData2 = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 301,
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
-        });
-
-        // Create first dataset
-        makeSignaturePass(client);
-        vm.prank(serviceProvider);
-        uint256 dataSetId1 = mockPDPVerifier.createDataSet(
-            pdpServiceWithPayments,
-            abi.encode(
-                createData1.payer,
-                createData1.clientDataSetId,
-                createData1.metadataKeys,
-                createData1.metadataValues,
-                createData1.signature
-            )
-        );
-
-        // Create second dataset
-        makeSignaturePass(client);
-        vm.prank(serviceProvider);
-        uint256 dataSetId2 = mockPDPVerifier.createDataSet(
-            pdpServiceWithPayments,
-            abi.encode(
-                createData2.payer,
-                createData2.clientDataSetId,
-                createData2.metadataKeys,
-                createData2.metadataValues,
-                createData2.signature
-            )
-        );
-
-        // Prepare piece data
-        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
-        string[] memory keys = new string[](0);
-        string[] memory values = new string[](0);
-
-        // Use nonce 42 on first dataset
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId1, 0, pieceData, 42, FAKE_SIGNATURE, keys, values);
-
-        // Attempt to reuse nonce 42 on second dataset (same client) - should fail
-        makeSignaturePass(client);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 42));
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId2, 0, pieceData, 42, FAKE_SIGNATURE, keys, values);
-    }
-
-    function testNonceCannotBeReusedAcrossOperations() public {
-        // Setup: Approvals and deposit
-        vm.startPrank(client);
-        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e6, 1000e6, 365 days);
-        mockUSDFC.approve(address(payments), 10e6);
-        payments.deposit(mockUSDFC, client, 10e6);
-        vm.stopPrank();
-
-        // Use nonce 777 to create a dataset
-        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Isolation Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 777, // This uses nonce 777 in the clientNonces mapping
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
-        });
-
-        makeSignaturePass(client);
-        vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(
-            pdpServiceWithPayments,
-            abi.encode(
-                createData.payer,
-                createData.clientDataSetId,
-                createData.metadataKeys,
-                createData.metadataValues,
-                createData.signature
-            )
-        );
-
-        // Prepare piece data
-        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
-        string[] memory keys = new string[](0);
-        string[] memory values = new string[](0);
-
-        // Attempt to use same nonce (777) for AddPieces - should fail
-        makeSignaturePass(client);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ClientDataSetAlreadyRegistered.selector, 777));
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, 777, FAKE_SIGNATURE, keys, values);
-
-        // Different nonce should work
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, 888, FAKE_SIGNATURE, keys, values);
     }
 }
 
