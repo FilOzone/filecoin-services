@@ -155,8 +155,8 @@ contract FilecoinWarmStorageService is
     // Structure for service pricing information
     struct ServicePricing {
         uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
-        uint256 pricePerTiBCdnEgress; // CDN egress price per TiB (usage-based, not monthly)
-        uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based, not monthly)
+        uint256 pricePerTiBCdnEgress; // CDN egress price per TiB (usage-based)
+        uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
     }
@@ -329,8 +329,8 @@ contract FilecoinWarmStorageService is
 
         // Initialize the fee constants based on the actual token decimals
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-        CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB of egress
-        CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB of egress
+        CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
+        CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
 
         // Initialize the lockup constants based on the actual token decimals
         DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
