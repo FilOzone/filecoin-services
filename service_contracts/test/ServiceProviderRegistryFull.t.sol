@@ -3,7 +3,7 @@ pragma solidity ^0.8.20;
 
 import {BURN_ADDRESS} from "@fvm-solidity/FVMActors.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
-import {PDPOffering} from "../src/PDPOffering.sol";
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";

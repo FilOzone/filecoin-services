@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.30;
 
-import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
-import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
+import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
+import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @notice PDP-specific service data
