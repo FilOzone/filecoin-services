@@ -1442,15 +1442,15 @@ contract FilecoinWarmStorageService is
             });
         }
 
-        // Count proven epochs and find the last proven epoch
-        (uint256 provenEpochCount, uint256 settledUpTo) =
+        // Count proven epochs up to toEpoch, possibly stopping earlier if unresolved
+        (uint256 provenEpochCount, uint256 settleUpTo) =
             _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
-                settleUpto: settledUpTo,
+                settleUpto: settleUpTo,
                 note: "No proven epochs in the requested range"
             });
         }
@@ -1458,13 +1458,13 @@ contract FilecoinWarmStorageService is
         // Calculate the modified amount based on proven epochs
         uint256 modifiedAmount = (proposedAmount * provenEpochCount) / totalEpochsRequested;
 
-        return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settledUpTo, note: ""});
+        return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settleUpTo, note: ""});
     }
 
     function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
         internal
         view
-        returns (uint256 provenEpochCount, uint256 settledUpTo)
+        returns (uint256 provenEpochCount, uint256 settleUpTo)
     {
         require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
@@ -1481,9 +1481,9 @@ contract FilecoinWarmStorageService is
         if (toEpoch < startingPeriodDeadline) {
             if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
                 provenEpochCount = toEpoch - fromEpoch;
-                settledUpTo = toEpoch;
+                settleUpTo = toEpoch;
             } else {
-                settledUpTo = fromEpoch;
+                settleUpTo = fromEpoch;
             }
         } else {
             if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
@@ -1497,15 +1497,15 @@ contract FilecoinWarmStorageService is
                     provenEpochCount += maxProvingPeriod;
                 }
             }
-            settledUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
+            settleUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
 
             // handle the last period separately
             if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
-                provenEpochCount += (toEpoch - settledUpTo);
-                settledUpTo = toEpoch;
+                provenEpochCount += (toEpoch - settleUpTo);
+                settleUpTo = toEpoch;
             }
         }
-        return (provenEpochCount, settledUpTo);
+        return (provenEpochCount, settleUpTo);
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
