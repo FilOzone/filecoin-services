@@ -105,7 +105,7 @@ type ProviderProduct @entity(immutable: false) {
   provider: Provider!
   productType: BigInt!
   capabilityKeys: [String!]
-  capabilityValues: [String!]
+  capabilityValues: [Bytes!]
   isActive: Boolean!
 }
 
