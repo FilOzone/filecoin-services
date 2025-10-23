@@ -131,9 +131,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         );
 
         // Register provider
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -229,9 +227,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // First registration
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -244,9 +240,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Try to register again
         vm.prank(provider1);
         vm.expectRevert("Address already registered");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -269,9 +263,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider 1
         vm.prank(provider1);
-        uint256 id1 = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 id1 = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 1 description",
@@ -298,9 +290,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
 
         vm.prank(provider2);
-        uint256 id2 = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 id2 = registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Provider 2 description",
@@ -358,9 +348,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Try to register with less than 5 FIL
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
-        registry.registerProvider{
-            value: 1 ether
-        }(
+        registry.registerProvider{value: 1 ether}(
             provider1, // payee
             "",
             "Test provider description",
@@ -373,9 +361,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Try with 0 fee
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
-        registry.registerProvider{
-            value: 0
-        }(
+        registry.registerProvider{value: 0}(
             provider1, // payee
             "",
             "Test provider description",
@@ -394,9 +380,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Try to register with 2 FIL (less than 5 FIL) - should fail
         vm.prank(provider1);
         vm.expectRevert("Incorrect fee amount");
-        registry.registerProvider{
-            value: 2 ether
-        }(
+        registry.registerProvider{value: 2 ether}(
             provider1, // payee
             "",
             "Test provider description",
@@ -423,9 +407,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Service URL cannot be empty");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -441,9 +423,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Service URL too long");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -459,9 +439,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Min piece size must be greater than 0");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -477,9 +455,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Max piece size must be >= min piece size");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -495,9 +471,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Min proving period must be greater than 0");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -513,9 +487,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Location cannot be empty");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -535,9 +507,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         encodedInvalidPDP = abi.encode(invalidPDP);
         vm.prank(provider1);
         vm.expectRevert("Location too long");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -557,9 +527,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -612,9 +580,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -639,9 +605,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register and remove provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -675,9 +639,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -725,9 +687,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -751,9 +711,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -775,9 +733,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register, remove, then register again
         vm.prank(provider1);
-        uint256 id1 = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 id1 = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 1 description",
@@ -791,9 +747,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         registry.removeProvider();
 
         vm.prank(provider1);
-        uint256 id2 = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 id2 = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 2 description",
@@ -819,9 +773,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register 3 providers with PDP
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -835,9 +787,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData2.serviceURL = SERVICE_URL_2;
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
@@ -851,9 +801,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData3.serviceURL = "https://provider3.example.com";
         bytes memory encodedPDPData3 = abi.encode(pdpData3);
         vm.prank(provider3);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Test provider description",
@@ -880,9 +828,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register 3 providers with PDP
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -896,9 +842,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData2.serviceURL = SERVICE_URL_2;
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
@@ -912,9 +856,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData3.serviceURL = "https://provider3.example.com";
         bytes memory encodedPDPData3 = abi.encode(pdpData3);
         vm.prank(provider3);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Test provider description",
@@ -943,9 +885,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -967,9 +907,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -996,9 +934,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1022,9 +958,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "serviceURL",
             "Test provider description",
@@ -1071,9 +1005,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register 3 providers
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1087,9 +1019,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData2.serviceURL = SERVICE_URL_2;
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
@@ -1103,9 +1033,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData3.serviceURL = "https://provider3.example.com";
         bytes memory encodedPDPData3 = abi.encode(pdpData3);
         vm.prank(provider3);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Test provider description",
@@ -1134,9 +1062,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1151,9 +1077,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         pdpData2.serviceURL = SERVICE_URL_2;
         bytes memory encodedPDPData2 = abi.encode(pdpData2);
         vm.prank(provider2);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Test provider description",
@@ -1189,9 +1113,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1228,9 +1150,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Initial description",
@@ -1264,9 +1184,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Initial description",
@@ -1289,9 +1207,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Initial description",
@@ -1323,9 +1239,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Name too long");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             string(longName),
             "Test provider description",
@@ -1342,9 +1256,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "Initial Name",
             "Initial description",
@@ -1381,9 +1293,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             1, ServiceProviderRegistryStorage.ProductType.PDP, provider1, encodedDefaultPDPData, emptyKeys, emptyValues
         );
 
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1425,9 +1335,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[2] = "AES256";
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1463,9 +1371,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Register with empty capabilities
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1511,9 +1417,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Capability key too long");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1534,9 +1438,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Capability value too long");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1557,9 +1459,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Keys and values arrays must have same length");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1581,9 +1481,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Description too long");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             longDescription,
@@ -1603,9 +1501,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Capability key cannot be empty");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1628,9 +1524,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         vm.prank(provider1);
         vm.expectRevert("Too many capabilities");
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1652,9 +1546,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         }
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1687,9 +1579,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[2] = "100TB";
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider",
@@ -1737,9 +1627,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[3] = "GDPR";
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider",
@@ -1796,9 +1684,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[1] = "10Gbps";
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider",
@@ -1824,9 +1710,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider description",
@@ -1865,9 +1749,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         initialValues[2] = "oldvalue";
 
         vm.prank(provider1);
-        uint256 providerId = registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        uint256 providerId = registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Test provider",

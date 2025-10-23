@@ -661,10 +661,7 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
-    )
-        external
-        onlyPDPVerifier
-    {
+    ) external onlyPDPVerifier {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
@@ -822,10 +819,7 @@ contract FilecoinWarmStorageService is
         uint256, /*challengedLeafCount*/
         uint256, /*seed*/
         uint256 challengeCount
-    )
-        external
-        onlyPDPVerifier
-    {
+    ) external onlyPDPVerifier {
         requirePaymentNotBeyondEndEpoch(dataSetId);
 
         if (provenThisPeriod[dataSetId]) {
@@ -953,11 +947,7 @@ contract FilecoinWarmStorageService is
         address, // oldServiceProvider
         address, // newServiceProvider
         bytes calldata // extraData - not used
-    )
-        external
-        override
-        onlyPDPVerifier
-    {
+    ) external override onlyPDPVerifier {
         revert("Storage provider changes are not yet supported");
     }
 
@@ -1410,12 +1400,7 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 /* rate */
-    )
-        external
-        view
-        override
-        returns (ValidationResult memory result)
-    {
+    ) external view override returns (ValidationResult memory result) {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
@@ -1428,7 +1413,9 @@ contract FilecoinWarmStorageService is
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
             return ValidationResult({
-                modifiedAmount: 0, settleUpto: fromEpoch, note: "Proving never activated for this data set"
+                modifiedAmount: 0,
+                settleUpto: fromEpoch,
+                note: "Proving never activated for this data set"
             });
         }
 
@@ -1439,7 +1426,9 @@ contract FilecoinWarmStorageService is
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
-                modifiedAmount: 0, settleUpto: fromEpoch, note: "No proven epochs in the requested range"
+                modifiedAmount: 0,
+                settleUpto: fromEpoch,
+                note: "No proven epochs in the requested range"
             });
         }
 

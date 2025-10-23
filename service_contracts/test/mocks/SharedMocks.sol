@@ -181,8 +181,9 @@ contract MockPDPVerifier {
 
         // Call the listener's storageProviderChanged function
         if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr)
-                .storageProviderChanged(dataSetId, oldServiceProvider, newServiceProvider, extraData);
+            PDPListener(listenerAddr).storageProviderChanged(
+                dataSetId, oldServiceProvider, newServiceProvider, extraData
+            );
         }
 
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);

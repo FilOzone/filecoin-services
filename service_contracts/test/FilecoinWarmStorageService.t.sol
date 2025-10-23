@@ -136,9 +136,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Register service providers in the serviceProviderRegistry
         vm.prank(serviceProvider);
-        serviceProviderRegistry.registerProvider{
-            value: 5 ether
-        }(
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
             serviceProvider, // payee
             "Service Provider",
             "Service Provider Description",
@@ -161,9 +159,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         vm.prank(sp1);
-        serviceProviderRegistry.registerProvider{
-            value: 5 ether
-        }(
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp1, // payee
             "SP1",
             "Storage Provider 1",
@@ -186,9 +182,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         vm.prank(sp2);
-        serviceProviderRegistry.registerProvider{
-            value: 5 ether
-        }(
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp2, // payee
             "SP2",
             "Storage Provider 2",
@@ -211,9 +205,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         vm.prank(sp3);
-        serviceProviderRegistry.registerProvider{
-            value: 5 ether
-        }(
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp3, // payee
             "SP3",
             "Storage Provider 3",
@@ -783,7 +775,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with metadataKeys/metadataValues
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client, clientDataSetId: 0, metadataKeys: dsKeys, metadataValues: dsValues, signature: FAKE_SIGNATURE
+            payer: client,
+            clientDataSetId: 0,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData = abi.encode(
             createData.payer,
@@ -1143,11 +1139,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
      * @param clientAddress The client address
      * @return The created data set ID
      */
-    function createDataSetForServiceProviderTest(
-        address provider,
-        address clientAddress,
-        string memory /*metadata*/
-    )
+    function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory /*metadata*/ )
         internal
         returns (uint256)
     {

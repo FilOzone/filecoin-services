@@ -80,9 +80,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             user1, // payee
             "Provider One",
             "Test provider description",
@@ -132,9 +130,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         capabilityValues[2] = "SOC2";
 
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             user1, // payee
             "Provider One",
             "Test provider description",
@@ -198,9 +194,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
         // Register with user2 as beneficiary
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             user2, // payee is different from owner
             "Provider One",
             "Test provider description",
@@ -241,9 +235,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         // Try to register with zero beneficiary
         vm.prank(user1);
         vm.expectRevert("Payee cannot be zero address");
-        registry.registerProvider{
-            value: 5 ether
-        }(
+        registry.registerProvider{value: 5 ether}(
             address(0), // zero beneficiary
             "Provider One",
             "Test provider description",
@@ -278,9 +270,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         vm.prank(user1);
-        registry.registerProvider{
-            value: 5 ether
-        }(
+        registry.registerProvider{value: 5 ether}(
             user1, // payee
             "Provider One",
             "Test provider description",
@@ -346,9 +336,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
         // Register provider with user2 as payee
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             user2,
             "Provider One",
             "Test provider description",
@@ -389,9 +377,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         // Register a provider first
         vm.deal(user1, 10 ether);
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             user1,
             "Test Provider",
             "Test Description",
@@ -423,9 +409,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         vm.deal(user2, 10 ether);
 
         vm.prank(user1);
-        uint256 providerId1 = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId1 = registry.registerProvider{value: 5 ether}(
             user1,
             "Provider 1",
             "Description 1",
@@ -436,9 +420,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         );
 
         vm.prank(user2);
-        uint256 providerId2 = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId2 = registry.registerProvider{value: 5 ether}(
             user2,
             "Provider 2",
             "Description 2",
@@ -500,9 +482,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         // Register one provider
         vm.deal(user1, 10 ether);
         vm.prank(user1);
-        uint256 validProviderId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 validProviderId = registry.registerProvider{value: 5 ether}(
             user1,
             "Valid Provider",
             "Valid Description",
@@ -543,9 +523,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         // Register a provider
         vm.deal(user1, 10 ether);
         vm.prank(user1);
-        uint256 providerId = registry.registerProvider{
-            value: 5 ether
-        }(
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
             user1,
             "Test Provider",
             "Test Description",

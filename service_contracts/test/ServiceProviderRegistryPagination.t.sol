@@ -85,9 +85,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
     function testPaginationSingleProvider() public {
         // Register one provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 1",
@@ -127,9 +125,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
         address[5] memory providers = [provider1, provider2, provider3, provider4, provider5];
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(providers[i]);
-            registry.registerProvider{
-                value: REGISTRATION_FEE
-            }(
+            registry.registerProvider{value: REGISTRATION_FEE}(
                 providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
@@ -180,9 +176,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
         address[5] memory providers = [provider1, provider2, provider3, provider4, provider5];
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(providers[i]);
-            registry.registerProvider{
-                value: REGISTRATION_FEE
-            }(
+            registry.registerProvider{value: REGISTRATION_FEE}(
                 providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
@@ -226,9 +220,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
     function testPaginationEdgeLimits() public {
         // Register 3 providers
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 1",
@@ -239,9 +231,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
         );
 
         vm.prank(provider2);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Provider 2",
@@ -252,9 +242,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
         );
 
         vm.prank(provider3);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Provider 3",
@@ -293,9 +281,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
         address[6] memory providers = [provider1, provider2, provider3, provider4, provider5, provider6];
         for (uint256 i = 0; i < 6; i++) {
             vm.prank(providers[i]);
-            registry.registerProvider{
-                value: REGISTRATION_FEE
-            }(
+            registry.registerProvider{value: REGISTRATION_FEE}(
                 providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
@@ -356,9 +342,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
 
         // Register first provider
         vm.prank(provider1);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 1",
@@ -371,9 +355,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
 
         // Register second provider
         vm.prank(provider2);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider2, // payee
             "",
             "Provider 2",
@@ -391,9 +373,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
 
         // Register third provider
         vm.prank(provider3);
-        registry.registerProvider{
-            value: REGISTRATION_FEE
-        }(
+        registry.registerProvider{value: REGISTRATION_FEE}(
             provider3, // payee
             "",
             "Provider 3",
@@ -443,9 +423,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
 
         for (uint256 i = 0; i < 10; i++) {
             vm.prank(providers[i]);
-            registry.registerProvider{
-                value: REGISTRATION_FEE
-            }(
+            registry.registerProvider{value: REGISTRATION_FEE}(
                 providers[i], // payee
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
