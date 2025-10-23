@@ -706,44 +706,21 @@ contract ServiceProviderRegistry is
     /// @param providerId The ID of the provider
     /// @param productType The type of product
     /// @param keys Array of capability keys to query
-    /// @return exists Array of booleans indicating whether each key exists
     /// @return values Array of capability values corresponding to the keys (empty string for non-existent keys)
     function getProductCapabilities(uint256 providerId, ProductType productType, string[] calldata keys)
         external
         view
         providerExists(providerId)
-        returns (bool[] memory exists, bytes[] memory values)
+        returns (bytes[] memory values)
     {
-        exists = new bool[](keys.length);
         values = new bytes[](keys.length);
 
         // Cache the mapping reference
         mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
 
         for (uint256 i = 0; i < keys.length; i++) {
-            bytes memory value = capabilities[keys[i]];
-            if (value.length > 0) {
-                exists[i] = true;
-                values[i] = value;
-            }
+            values[i] = capabilities[keys[i]];
         }
-    }
-
-    /// @notice Get a single capability value for a product
-    /// @param providerId The ID of the provider
-    /// @param productType The type of product
-    /// @param key The capability key to query
-    /// @return exists Whether the capability key exists
-    /// @return value The capability value (empty string if key doesn't exist)
-    function getProductCapability(uint256 providerId, ProductType productType, string calldata key)
-        external
-        view
-        providerExists(providerId)
-        returns (bool exists, bytes memory value)
-    {
-        // Directly check the mapping
-        value = productCapabilities[providerId][productType][key];
-        exists = bytes(value).length > 0;
     }
 
     /// @notice Validate product data based on product type

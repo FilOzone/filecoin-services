@@ -109,19 +109,19 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(returnedKeys[2], "compliance", "Third key should be compliance");
 
         // Use the new query methods to verify values
-        (bool existsRegion, bytes memory region) =
-            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
-        assertTrue(existsRegion, "region capability should exist");
-        assertEq(region, bytes("us-east-1"), "First value should be us-east-1");
+        bytes memory region =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertTrue(region.length > 0, "region capability should exist");
+        assertEq(region, "us-east-1", "First value should be us-east-1");
 
-        (bool existsTier, bytes memory tier) =
-            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
-        assertTrue(existsTier, "tier capability should exist");
+        bytes memory tier =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertTrue(tier.length > 0, "tier capability should exist");
         assertEq(tier, "premium", "Second value should be premium");
 
-        (bool existsCompliance, bytes memory compliance) =
-            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "compliance");
-        assertTrue(existsCompliance, "compliance capability should exist");
+        bytes memory compliance =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "compliance");
+        assertTrue(compliance.length > 0, "compliance capability should exist");
         assertEq(compliance, "SOC2", "Third value should be SOC2");
     }
 

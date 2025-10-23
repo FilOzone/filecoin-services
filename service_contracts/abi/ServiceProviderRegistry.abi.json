@@ -394,48 +394,9 @@
     ],
     "outputs": [
       {
-        "name": "exists",
-        "type": "bool[]",
-        "internalType": "bool[]"
-      },
-      {
         "name": "values",
         "type": "bytes[]",
         "internalType": "bytes[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getProductCapability",
-    "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "productType",
-        "type": "uint8",
-        "internalType": "enum ServiceProviderRegistryStorage.ProductType"
-      },
-      {
-        "name": "key",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "exists",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "value",
-        "type": "bytes",
-        "internalType": "bytes"
       }
     ],
     "stateMutability": "view"

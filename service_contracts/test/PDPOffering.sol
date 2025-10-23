@@ -94,8 +94,8 @@ library PDPOffering {
         returns (Schema memory schema, string[] memory keys, bool isActive)
     {
         (keys, isActive) = registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        (, bytes[] memory values) =
-            registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, keys);
-        schema = fromCapabilities(keys, values);
+        schema = fromCapabilities(
+            keys, registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, keys)
+        );
     }
 }
