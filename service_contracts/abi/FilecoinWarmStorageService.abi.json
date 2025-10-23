@@ -283,6 +283,29 @@
   },
   {
     "type": "function",
+    "name": "getCurrentPricingRates",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "storagePrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getEffectiveRates",
     "inputs": [],
     "outputs": [
@@ -795,6 +818,29 @@
   },
   {
     "type": "function",
+    "name": "updatePricing",
+    "inputs": [
+      {
+        "name": "newStoragePrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newCacheMissPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "newCdnPrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "updateServiceCommission",
     "inputs": [
       {
@@ -1282,6 +1328,31 @@
         "type": "string[]",
         "indexed": false,
         "internalType": "string[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "PricingUpdated",
+    "inputs": [
+      {
+        "name": "storagePrice",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissPrice",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnPrice",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
