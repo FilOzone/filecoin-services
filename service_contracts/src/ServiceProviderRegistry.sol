@@ -74,7 +74,7 @@ contract ServiceProviderRegistry is
         ProductType indexed productType,
         address serviceProvider,
         string[] capabilityKeys,
-        string[] capabilityValues
+        bytes[] capabilityValues
     );
 
     /// @notice Emitted when a product is added to an existing provider
@@ -83,7 +83,7 @@ contract ServiceProviderRegistry is
         ProductType indexed productType,
         address serviceProvider,
         string[] capabilityKeys,
-        string[] capabilityValues
+        bytes[] capabilityValues
     );
 
     /// @notice Emitted when a product is removed from a provider
@@ -146,7 +146,7 @@ contract ServiceProviderRegistry is
         string calldata description,
         ProductType productType,
         string[] calldata capabilityKeys,
-        string[] calldata capabilityValues
+        bytes[] calldata capabilityValues
     ) external payable returns (uint256 providerId) {
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
@@ -200,7 +200,7 @@ contract ServiceProviderRegistry is
     /// @param productType The type of product to add
     /// @param capabilityKeys Array of capability keys (max 32 chars each, max 10 keys)
     /// @param capabilityValues Array of capability values (max 128 chars each, max 10 values)
-    function addProduct(ProductType productType, string[] calldata capabilityKeys, string[] calldata capabilityValues)
+    function addProduct(ProductType productType, string[] calldata capabilityKeys, bytes[] calldata capabilityValues)
         external
     {
         // Only support PDP for now
@@ -217,7 +217,7 @@ contract ServiceProviderRegistry is
         uint256 providerId,
         ProductType productType,
         string[] memory capabilityKeys,
-        string[] memory capabilityValues
+        bytes[] calldata capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Check product doesn't already exist
         require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
@@ -234,7 +234,7 @@ contract ServiceProviderRegistry is
         uint256 providerId,
         ProductType productType,
         string[] memory capabilityKeys,
-        string[] memory capabilityValues
+        bytes[] calldata capabilityValues
     ) private {
         // Validate product data
         _validateProductKeys(productType, capabilityKeys);
@@ -247,7 +247,7 @@ contract ServiceProviderRegistry is
             ServiceProduct({productType: productType, capabilityKeys: capabilityKeys, isActive: true});
 
         // Store capability values in mapping
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
             capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
@@ -261,11 +261,9 @@ contract ServiceProviderRegistry is
     /// @param productType The type of product to update
     /// @param capabilityKeys Array of capability keys (max 32 chars each, max 10 keys)
     /// @param capabilityValues Array of capability values (max 128 chars each, max 10 values)
-    function updateProduct(
-        ProductType productType,
-        string[] calldata capabilityKeys,
-        string[] calldata capabilityValues
-    ) external {
+    function updateProduct(ProductType productType, string[] calldata capabilityKeys, bytes[] calldata capabilityValues)
+        external
+    {
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
@@ -280,7 +278,7 @@ contract ServiceProviderRegistry is
         uint256 providerId,
         ProductType productType,
         string[] memory capabilityKeys,
-        string[] memory capabilityValues
+        bytes[] calldata capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Cache product storage reference
         ServiceProduct storage product = providerProducts[providerId][productType];
@@ -295,7 +293,7 @@ contract ServiceProviderRegistry is
         _validateCapabilities(capabilityKeys, capabilityValues);
 
         // Clear old capabilities from mapping
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
             delete capabilities[product.capabilityKeys[i]];
         }
@@ -338,7 +336,7 @@ contract ServiceProviderRegistry is
 
         // Clear capabilities from mapping
         ServiceProduct storage product = providerProducts[providerId][productType];
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
             delete capabilities[product.capabilityKeys[i]];
         }
@@ -407,7 +405,7 @@ contract ServiceProviderRegistry is
             activeProductTypeProviderCount[ProductType.PDP]--;
 
             // Clear capabilities from mapping
-            mapping(string => string) storage capabilities = productCapabilities[providerId][ProductType.PDP];
+            mapping(string => bytes) storage capabilities = productCapabilities[providerId][ProductType.PDP];
             for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
                 delete capabilities[product.capabilityKeys[i]];
             }
@@ -714,17 +712,17 @@ contract ServiceProviderRegistry is
         external
         view
         providerExists(providerId)
-        returns (bool[] memory exists, string[] memory values)
+        returns (bool[] memory exists, bytes[] memory values)
     {
         exists = new bool[](keys.length);
-        values = new string[](keys.length);
+        values = new bytes[](keys.length);
 
         // Cache the mapping reference
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
 
         for (uint256 i = 0; i < keys.length; i++) {
-            string memory value = capabilities[keys[i]];
-            if (bytes(value).length > 0) {
+            bytes memory value = capabilities[keys[i]];
+            if (value.length > 0) {
                 exists[i] = true;
                 values[i] = value;
             }
@@ -741,7 +739,7 @@ contract ServiceProviderRegistry is
         external
         view
         providerExists(providerId)
-        returns (bool exists, string memory value)
+        returns (bool exists, bytes memory value)
     {
         // Directly check the mapping
         value = productCapabilities[providerId][productType][key];
@@ -771,14 +769,14 @@ contract ServiceProviderRegistry is
     /// @notice Validate capability key-value pairs
     /// @param keys Array of capability keys
     /// @param values Array of capability values
-    function _validateCapabilities(string[] memory keys, string[] memory values) private pure {
+    function _validateCapabilities(string[] memory keys, bytes[] calldata values) private pure {
         require(keys.length == values.length, "Keys and values arrays must have same length");
         require(keys.length <= MAX_CAPABILITIES, "Too many capabilities");
 
         for (uint256 i = 0; i < keys.length; i++) {
             require(bytes(keys[i]).length > 0, "Capability key cannot be empty");
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
-            require(bytes(values[i]).length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
+            require(values[i].length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
     }
 

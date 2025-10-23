@@ -61,7 +61,7 @@ contract ServiceProviderRegistryStorage {
     mapping(address providerAddress => uint256 providerId) public addressToProviderId;
 
     /// @notice Capability values mapping for efficient lookups
-    mapping(uint256 providerId => mapping(ProductType productType => mapping(string key => string value))) public
+    mapping(uint256 providerId => mapping(ProductType productType => mapping(string key => bytes value))) public
         productCapabilities;
 
     /// @notice Count of providers (including inactive) offering each product type
