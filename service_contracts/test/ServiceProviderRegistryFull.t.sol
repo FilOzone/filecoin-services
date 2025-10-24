@@ -1374,9 +1374,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testMaxCapabilitiesAllowed() public {
-        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(15);
+        (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(16);
 
-        for (uint256 i = 0; i < 15; i++) {
+        for (uint256 i = 0; i < 16; i++) {
             capKeys[i] = string(abi.encodePacked("key", vm.toString(i)));
             capValues[i] = abi.encodePacked("value", vm.toString(i));
         }

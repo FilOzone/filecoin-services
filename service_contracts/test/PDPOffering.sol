@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.30;
 
+import {BigEndian} from "../src/lib/BigEndian.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -30,21 +31,21 @@ library PDPOffering {
             if (hash == keccak256("serviceURL")) {
                 schema.serviceURL = string(values[i]);
             } else if (hash == keccak256("minPieceSizeInBytes")) {
-                schema.minPieceSizeInBytes = abi.decode(values[i], (uint256));
+                schema.minPieceSizeInBytes = BigEndian.decode(values[i]);
             } else if (hash == keccak256("maxPieceSizeInBytes")) {
-                schema.maxPieceSizeInBytes = abi.decode(values[i], (uint256));
+                schema.maxPieceSizeInBytes = BigEndian.decode(values[i]);
             } else if (hash == keccak256("ipniPiece")) {
-                schema.ipniPiece = abi.decode(values[i], (bool));
+                schema.ipniPiece = BigEndian.decode(values[i]) > 0;
             } else if (hash == keccak256("ipniIpfs")) {
-                schema.ipniIpfs = abi.decode(values[i], (bool));
+                schema.ipniIpfs = BigEndian.decode(values[i]) > 0;
             } else if (hash == keccak256("storagePricePerTibPerDay")) {
-                schema.storagePricePerTibPerDay = abi.decode(values[i], (uint256));
+                schema.storagePricePerTibPerDay = BigEndian.decode(values[i]);
             } else if (hash == keccak256("minProvingPeriodInEpochs")) {
-                schema.minProvingPeriodInEpochs = abi.decode(values[i], (uint256));
+                schema.minProvingPeriodInEpochs = BigEndian.decode(values[i]);
             } else if (hash == keccak256("location")) {
                 schema.location = string(values[i]);
             } else if (hash == keccak256("paymentTokenAddress")) {
-                schema.paymentTokenAddress = abi.decode(values[i], (IERC20));
+                schema.paymentTokenAddress = IERC20(address(uint160(BigEndian.decode(values[i]))));
             }
         }
         return schema;
@@ -55,26 +56,31 @@ library PDPOffering {
         pure
         returns (string[] memory keys, bytes[] memory values)
     {
-        keys = new string[](9 + extraSize);
-        values = new bytes[](9 + extraSize);
+        uint256 normalSize = 7 + (schema.ipniPiece ? 1 : 0) + (schema.ipniIpfs ? 1 : 0);
+        keys = new string[](normalSize + extraSize);
+        values = new bytes[](normalSize + extraSize);
         keys[extraSize] = "serviceURL";
         values[extraSize] = bytes(schema.serviceURL);
         keys[extraSize + 1] = "minPieceSizeInBytes";
-        values[extraSize + 1] = abi.encode(schema.minPieceSizeInBytes);
+        values[extraSize + 1] = BigEndian.encode(schema.minPieceSizeInBytes);
         keys[extraSize + 2] = "maxPieceSizeInBytes";
-        values[extraSize + 2] = abi.encode(schema.maxPieceSizeInBytes);
-        keys[extraSize + 3] = "ipniPiece";
-        values[extraSize + 3] = abi.encode(schema.ipniPiece);
-        keys[extraSize + 4] = "ipniIpfs";
-        values[extraSize + 4] = abi.encode(schema.ipniIpfs);
-        keys[extraSize + 5] = "storagePricePerTibPerDay";
-        values[extraSize + 5] = abi.encode(schema.storagePricePerTibPerDay);
-        keys[extraSize + 6] = "minProvingPeriodInEpochs";
-        values[extraSize + 6] = abi.encode(schema.minProvingPeriodInEpochs);
-        keys[extraSize + 7] = "location";
-        values[extraSize + 7] = bytes(schema.location);
-        keys[extraSize + 8] = "paymentTokenAddress";
-        values[extraSize + 8] = abi.encode(schema.paymentTokenAddress);
+        values[extraSize + 2] = BigEndian.encode(schema.maxPieceSizeInBytes);
+        keys[extraSize + 3] = "storagePricePerTibPerDay";
+        values[extraSize + 3] = BigEndian.encode(schema.storagePricePerTibPerDay);
+        keys[extraSize + 4] = "minProvingPeriodInEpochs";
+        values[extraSize + 4] = BigEndian.encode(schema.minProvingPeriodInEpochs);
+        keys[extraSize + 5] = "location";
+        values[extraSize + 5] = bytes(schema.location);
+        keys[extraSize + 6] = "paymentTokenAddress";
+        values[extraSize + 6] = abi.encodePacked(schema.paymentTokenAddress);
+        if (schema.ipniPiece) {
+            keys[extraSize + 7] = "ipniPiece";
+            values[extraSize + 7] = BigEndian.encode(1);
+        }
+        if (schema.ipniIpfs) {
+            keys[keys.length - 1] = "ipniIpfs";
+            values[keys.length - 1] = BigEndian.encode(1);
+        }
     }
 
     function toCapabilities(Schema memory schema) internal pure returns (string[] memory keys, bytes[] memory values) {
