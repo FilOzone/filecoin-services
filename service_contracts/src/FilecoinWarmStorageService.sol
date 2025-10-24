@@ -130,12 +130,11 @@ contract FilecoinWarmStorageService is
     }
 
     enum DataSetStatus {
-        // Data set doesn't yet exist or has been deleted
-        NotFound,
-        // Data set is active
-        Active,
-        // Data set is in the process of being terminated
-        Terminating
+        // Dataset is inactive: non-existent (pdpRailId==0) or no pieces added yet (rate==0, no proving)
+        Inactive,
+        // Dataset has pieces and proving history (includes datasets in process of being terminated)
+        // Note: Datasets being terminated remain Active - they become Inactive after deletion when data is wiped
+        Active
     }
 
     // Decode structure for data set creation extra data
@@ -155,9 +154,11 @@ contract FilecoinWarmStorageService is
     // Structure for service pricing information
     struct ServicePricing {
         uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
-        uint256 pricePerTiBPerMonthWithCDN; // Price with CDN add-on (3 USDFC per TiB per month)
+        uint256 pricePerTiBCdnEgress; // CDN egress price per TiB (usage-based)
+        uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
+        uint256 minimumPricePerMonth; // Minimum monthly charge for any dataset size (0.06 USDFC)
     }
 
     // Used for announcing upgrades, packed into one slot
@@ -194,8 +195,9 @@ contract FilecoinWarmStorageService is
 
     // Pricing constants
     uint256 private immutable STORAGE_PRICE_PER_TIB_PER_MONTH; // 2.5 USDFC per TiB per month without CDN with correct decimals
-    uint256 private immutable CACHE_MISS_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
-    uint256 private immutable CDN_PRICE_PER_TIB_PER_MONTH; // .5 USDFC per TiB per month for CDN with correct decimals
+    uint256 private immutable CDN_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of CDN egress
+    uint256 private immutable CACHE_MISS_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of cache miss egress
+    uint256 private immutable MINIMUM_STORAGE_RATE_PER_MONTH; // 0.06 USDFC per month minimum pricing floor
 
     // Fixed lockup amounts for CDN rails
     uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
@@ -236,7 +238,13 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) private dataSetInfo;
-    mapping(address payer => mapping(uint256 clientDataSetId => uint256)) private clientDataSetIds;
+
+    // Replay protection: tracks used nonces for both CreateDataSet and AddPieces operations.
+    // Stores packed data: upper 128 bits = cumulative piece count after AddPieces or 0 for CreateDataSet,
+    // lower 128 bits = dataSetId. For AddPieces, stores (firstAdded + pieceData.length) which is the
+    // next piece ID that would be assigned, providing historical data about dataset state after the operation.
+    mapping(address payer => mapping(uint256 nonce => uint256)) private clientNonces;
+
     mapping(address payer => uint256[]) private clientDataSets;
     mapping(uint256 pdpRailId => uint256) private railToDataSet;
 
@@ -322,8 +330,9 @@ contract FilecoinWarmStorageService is
 
         // Initialize the fee constants based on the actual token decimals
         STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-        CACHE_MISS_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
-        CDN_PRICE_PER_TIB_PER_MONTH = (1 * 10 ** TOKEN_DECIMALS) / 2; // 0.5 USDFC
+        CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
+        CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
+        MINIMUM_STORAGE_RATE_PER_MONTH = (6 * 10 ** TOKEN_DECIMALS) / 100; // 0.06 USDFC minimum
 
         // Initialize the lockup constants based on the actual token decimals
         DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
@@ -524,10 +533,10 @@ contract FilecoinWarmStorageService is
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
-            clientDataSetIds[createData.payer][createData.clientDataSetId] == 0,
+            clientNonces[createData.payer][createData.clientDataSetId] == 0,
             Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
         );
-        clientDataSetIds[createData.payer][createData.clientDataSetId] = dataSetId;
+        clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
@@ -577,6 +586,10 @@ contract FilecoinWarmStorageService is
 
         // Create the payment rails using the FilecoinPayV1 contract
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+
+        // Validate payer has sufficient funds and operator approvals for minimum pricing
+        validatePayerOperatorApprovalAndFunds(payments, createData.payer);
+
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
@@ -668,7 +681,7 @@ contract FilecoinWarmStorageService is
             Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
-        // NOTE keep clientDataSetIds[payer][clientDataSetId] to prevent replay
+        // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
         uint256[] storage clientDataSetList = clientDataSets[payer];
@@ -704,11 +717,11 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Handles pieces being added to a data set and stores associated metadata
-     * @dev Called by the PDPVerifier contract when pieces are added to a data set
+     * @dev Called by the PDPVerifier contract when pieces are added to a data set.
      * @param dataSetId The ID of the data set
-     * @param firstAdded The ID of the first piece added
+     * @param firstAdded The ID of the first piece added (from PDPVerifier, used for piece ID assignment)
      * @param pieceData Array of piece data objects
-     * @param extraData Encoded metadata, and signature
+     * @param extraData Encoded (nonce, metadata keys, metadata values, signature)
      */
     function piecesAdded(uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes calldata extraData)
         external
@@ -723,8 +736,13 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         require(extraData.length > 0, Errors.ExtraDataRequired());
         // Decode the extra data
-        (bytes memory signature, string[][] memory metadataKeys, string[][] memory metadataValues) =
-            abi.decode(extraData, (bytes, string[][], string[][]));
+        (uint256 nonce, string[][] memory metadataKeys, string[][] memory metadataValues, bytes memory signature) =
+            abi.decode(extraData, (uint256, string[][], string[][], bytes));
+
+        // Validate nonce hasn't been used (replay protection)
+        require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
+        // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
+        clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
 
         // Check that we have metadata arrays for each piece
         require(
@@ -737,9 +755,7 @@ contract FilecoinWarmStorageService is
         );
 
         // Verify the signature
-        verifyAddPiecesSignature(
-            payer, info.clientDataSetId, pieceData, firstAdded, metadataKeys, metadataValues, signature
-        );
+        verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -860,7 +876,6 @@ contract FilecoinWarmStorageService is
                 revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
-            provenThisPeriod[dataSetId] = false;
 
             // Initialize the activation epoch when proving first starts
             // This marks when the data set became active for proving
@@ -908,15 +923,6 @@ contract FilecoinWarmStorageService is
         }
         if (faultPeriods > 0) {
             emit FaultRecord(dataSetId, faultPeriods, provingDeadlines[dataSetId]);
-        }
-
-        // Record the status of the current/previous proving period that's ending
-        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE && provenThisPeriod[dataSetId]) {
-            // Determine the period ID that just completed
-            uint256 completedPeriodId = getProvingPeriodForEpoch(dataSetId, provingDeadlines[dataSetId] - 1);
-
-            // Record whether this period was proven
-            provenPeriods[dataSetId][completedPeriodId >> 8] |= 1 << (completedPeriodId & 255);
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
@@ -1086,6 +1092,57 @@ contract FilecoinWarmStorageService is
         }
     }
 
+    /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
+    /// @param payments The FilecoinPayV1 contract instance
+    /// @param payer The address of the payer
+    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer) internal view {
+        // Calculate required lockup for minimum pricing
+        uint256 minimumLockupRequired = (MINIMUM_STORAGE_RATE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+
+        // Check that payer has sufficient available funds
+        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
+        require(
+            availableFunds >= minimumLockupRequired,
+            Errors.InsufficientFundsForMinimumRate(payer, minimumLockupRequired, availableFunds)
+        );
+
+        // Check operator approval settings
+        (
+            bool isApproved,
+            uint256 rateAllowance,
+            uint256 lockupAllowance,
+            uint256 rateUsage,
+            uint256 lockupUsage,
+            uint256 maxLockupPeriod
+        ) = payments.operatorApprovals(usdfcTokenAddress, payer, address(this));
+
+        // Verify operator is approved
+        require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
+
+        // Calculate minimum rate per epoch
+        uint256 minimumRatePerEpoch = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
+
+        // Verify rate allowance is sufficient
+        require(
+            rateAllowance >= rateUsage + minimumRatePerEpoch,
+            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
+        );
+
+        // Verify lockup allowance is sufficient
+        require(
+            lockupAllowance >= lockupUsage + minimumLockupRequired,
+            Errors.InsufficientLockupAllowance(
+                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
+            )
+        );
+
+        // Verify max lockup period is sufficient
+        require(
+            maxLockupPeriod >= DEFAULT_LOCKUP_PERIOD,
+            Errors.InsufficientMaxLockupPeriod(payer, address(this), maxLockupPeriod, DEFAULT_LOCKUP_PERIOD)
+        );
+    }
+
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
         // Revert if no payment rail is configured for this data set
         require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
@@ -1093,8 +1150,7 @@ contract FilecoinWarmStorageService is
         uint256 totalBytes = leafCount * BYTES_PER_LEAF;
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Update the PDP rail payment rate with the new rate and no one-time
-        // payment
+        // Update the PDP rail payment rate with the new rate and no one-time payment
         uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
         uint256 newStorageRatePerEpoch = _calculateStorageRate(totalBytes);
         payments.modifyRailPayment(
@@ -1103,19 +1159,6 @@ contract FilecoinWarmStorageService is
             0 // No one-time payment during rate update
         );
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
-
-        // Update the CDN rail payment rates, if applicable
-        if (dataSetHasCDNMetadataKey(dataSetId)) {
-            (uint256 newCacheMissRatePerEpoch, uint256 newCDNRatePerEpoch) = _calculateCDNRates(totalBytes);
-
-            uint256 cacheMissRailId = dataSetInfo[dataSetId].cacheMissRailId;
-            payments.modifyRailPayment(cacheMissRailId, newCacheMissRatePerEpoch, 0);
-            emit RailRateUpdated(dataSetId, cacheMissRailId, newCacheMissRatePerEpoch);
-
-            uint256 cdnRailId = dataSetInfo[dataSetId].cdnRailId;
-            payments.modifyRailPayment(cdnRailId, newCDNRatePerEpoch, 0);
-            emit RailRateUpdated(dataSetId, cdnRailId, newCDNRatePerEpoch);
-        }
     }
 
     /**
@@ -1126,8 +1169,10 @@ contract FilecoinWarmStorageService is
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch);
+    }
 
+    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch) internal view returns (uint256) {
         // If proving wasn't activated or epoch is before activation
         if (activationEpoch == 0 || epoch < activationEpoch) {
             return type(uint256).max; // Invalid period
@@ -1179,41 +1224,30 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Calculate all per-epoch rates based on total storage size
-     * @dev Returns storage, cache miss, and CDN rates per TiB per month
+     * @notice Calculate storage rate per epoch based on total storage size
+     * @dev Returns storage rate per TiB per month with minimum pricing floor applied
      * @param totalBytes Total size of the stored data in bytes
      * @return storageRate The PDP storage rate per epoch
-     * @return cacheMissRate The cache miss rate per epoch
-     * @return cdnRate The CDN rate per epoch
      */
-    function calculateRatesPerEpoch(uint256 totalBytes)
-        external
-        view
-        returns (uint256 storageRate, uint256 cacheMissRate, uint256 cdnRate)
-    {
-        storageRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
-        cacheMissRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
-        cdnRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
+    function calculateRatePerEpoch(uint256 totalBytes) external view returns (uint256 storageRate) {
+        storageRate = _calculateStorageRate(totalBytes);
     }
 
     /**
      * @notice Calculate the storage rate per epoch (internal use)
+     * @dev Implements minimum pricing floor and returns the higher of the natural size-based rate or the minimum rate.
      * @param totalBytes Total size of the stored data in bytes
      * @return The storage rate per epoch
      */
     function _calculateStorageRate(uint256 totalBytes) internal view returns (uint256) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
-    }
+        // Calculate natural size-based rate
+        uint256 naturalRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, STORAGE_PRICE_PER_TIB_PER_MONTH);
 
-    /**
-     * @notice Calculate the CDN rates per epoch (internal use)
-     * @param totalBytes Total size of the stored data in bytes
-     * @return cacheMissRate The cache miss rate per epoch
-     * @return cdnRate The CDN rate per epoch
-     */
-    function _calculateCDNRates(uint256 totalBytes) internal view returns (uint256 cacheMissRate, uint256 cdnRate) {
-        cacheMissRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CACHE_MISS_PRICE_PER_TIB_PER_MONTH);
-        cdnRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, CDN_PRICE_PER_TIB_PER_MONTH);
+        // Calculate minimum rate (floor price converted to per-epoch)
+        uint256 minimumRate = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
+
+        // Return whichever is higher: natural rate or minimum rate
+        return naturalRate > minimumRate ? naturalRate : minimumRate;
     }
 
     /**
@@ -1303,14 +1337,16 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Get the service pricing information
-     * @return pricing A struct containing pricing details for both CDN and non-CDN storage
+     * @return pricing A struct containing pricing details for storage and CDN/cache miss egress
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
             pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
-            pricePerTiBPerMonthWithCDN: STORAGE_PRICE_PER_TIB_PER_MONTH + CDN_PRICE_PER_TIB_PER_MONTH,
+            pricePerTiBCdnEgress: CDN_EGRESS_PRICE_PER_TIB,
+            pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
             tokenAddress: usdfcTokenAddress,
-            epochsPerMonth: EPOCHS_PER_MONTH
+            epochsPerMonth: EPOCHS_PER_MONTH,
+            minimumPricePerMonth: MINIMUM_STORAGE_RATE_PER_MONTH
         });
     }
 
@@ -1354,7 +1390,7 @@ contract FilecoinWarmStorageService is
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceDataArray Array of piece CID structures
-     * @param firstAdded The first piece ID being added
+     * @param nonce Client-chosen nonce for replay protection
      * @param allKeys 2D array where allKeys[i] contains metadata keys for piece i
      * @param allValues 2D array where allValues[i] contains metadata values for piece i
      * @param signature The signature bytes (v, r, s)
@@ -1363,16 +1399,14 @@ contract FilecoinWarmStorageService is
         address payer,
         uint256 clientDataSetId,
         Cids.Cid[] memory pieceDataArray,
-        uint256 firstAdded,
+        uint256 nonce,
         string[][] memory allKeys,
         string[][] memory allValues,
         bytes memory signature
     ) internal view {
         // Compute the EIP-712 digest
         bytes32 digest = _hashTypedDataV4(
-            SignatureVerificationLib.addPiecesStructHash(
-                clientDataSetId, firstAdded, pieceDataArray, allKeys, allValues
-            )
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
 
         // Delegate to library for verification
@@ -1442,15 +1476,15 @@ contract FilecoinWarmStorageService is
             });
         }
 
-        // Count proven epochs and find the last proven epoch
-        (uint256 provenEpochCount, uint256 lastProvenEpoch) =
+        // Count proven epochs up to toEpoch, possibly stopping earlier if unresolved
+        (uint256 provenEpochCount, uint256 settleUpTo) =
             _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
-                settleUpto: fromEpoch,
+                settleUpto: settleUpTo,
                 note: "No proven epochs in the requested range"
             });
         }
@@ -1458,62 +1492,55 @@ contract FilecoinWarmStorageService is
         // Calculate the modified amount based on proven epochs
         uint256 modifiedAmount = (proposedAmount * provenEpochCount) / totalEpochsRequested;
 
-        return ValidationResult({
-            modifiedAmount: modifiedAmount,
-            settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
-            note: ""
-        });
+        return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settleUpTo, note: ""});
     }
 
     function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
         internal
         view
-        returns (uint256 provenEpochCount, uint256 settledUpTo)
+        returns (uint256 provenEpochCount, uint256 settleUpTo)
     {
         require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-
         if (fromEpoch < activationEpoch - 1) {
             fromEpoch = activationEpoch - 1;
         }
 
-        uint256 startingPeriod = getProvingPeriodForEpoch(dataSetId, fromEpoch + 1);
+        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
 
-        // handle first period separately
+        // handle first period separately; it may be partially settled already
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
 
         if (toEpoch < startingPeriodDeadline) {
-            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount = toEpoch - fromEpoch;
-                settledUpTo = toEpoch;
+                settleUpTo = toEpoch;
+            } else {
+                settleUpTo = fromEpoch;
             }
         } else {
-            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount += (startingPeriodDeadline - fromEpoch);
             }
 
-            uint256 endingPeriod = getProvingPeriodForEpoch(dataSetId, toEpoch);
+            uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
             // loop through the proving periods between startingPeriod and endingPeriod
             for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
-                if (_isPeriodProven(dataSetId, period, currentPeriod)) {
+                if (_isPeriodProven(dataSetId, period)) {
                     provenEpochCount += maxProvingPeriod;
                 }
             }
-            settledUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
+            settleUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
 
             // handle the last period separately
-            if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
-                provenEpochCount += (toEpoch - settledUpTo);
-                settledUpTo = toEpoch;
+            if (_isPeriodProven(dataSetId, endingPeriod)) {
+                provenEpochCount += (toEpoch - settleUpTo);
+                settleUpTo = toEpoch;
             }
         }
-        return (provenEpochCount, settledUpTo);
+        return (provenEpochCount, settleUpTo);
     }
 
-    function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
-        if (periodId == currentPeriod) {
-            return provenThisPeriod[dataSetId];
-        }
+    function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
         uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
         return isProven != 0;
     }

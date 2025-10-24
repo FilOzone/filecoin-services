@@ -25,30 +25,6 @@
   },
   {
     "type": "function",
-    "name": "clientDataSetIds",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "clientDataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "clientDataSets",
     "inputs": [
       {
@@ -62,6 +38,30 @@
         "name": "dataSetIds",
         "type": "uint256[]",
         "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "clientNonces",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"

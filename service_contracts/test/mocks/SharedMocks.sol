@@ -10,7 +10,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 contract MockERC20 is IERC20, IERC20Metadata {
     string private _name = "USD Filecoin";
     string private _symbol = "USDFC";
-    uint8 private _decimals = 6;
+    uint8 private _decimals = 18;
 
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -136,6 +136,7 @@ contract MockPDPVerifier {
         uint256 dataSetId,
         uint256 firstAdded,
         Cids.Cid[] memory pieceData,
+        uint256 nonce,
         bytes memory signature,
         string[] memory metadataKeys,
         string[] memory metadataValues
@@ -148,7 +149,7 @@ contract MockPDPVerifier {
             allValues[i] = metadataValues;
         }
 
-        bytes memory extraData = abi.encode(signature, allKeys, allValues);
+        bytes memory extraData = abi.encode(nonce, allKeys, allValues, signature);
         listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
     }
 
