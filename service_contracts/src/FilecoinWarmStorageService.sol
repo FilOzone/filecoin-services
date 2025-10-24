@@ -130,12 +130,11 @@ contract FilecoinWarmStorageService is
     }
 
     enum DataSetStatus {
-        // Data set doesn't yet exist or has been deleted
-        NotFound,
-        // Data set is active
-        Active,
-        // Data set is in the process of being terminated
-        Terminating
+        // Dataset is inactive: non-existent (pdpRailId==0) or no pieces added yet (rate==0, no proving)
+        Inactive,
+        // Dataset has pieces and proving history (includes datasets in process of being terminated)
+        // Note: Datasets being terminated remain Active - they become Inactive after deletion when data is wiped
+        Active
     }
 
     // Decode structure for data set creation extra data

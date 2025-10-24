@@ -1,3 +1,8 @@
+enum DataSetStatus {
+  INACTIVE
+  ACTIVE
+}
+
 type DataSet @entity(immutable: false) {
   id: Bytes! # setId
   setId: BigInt! # uint256
@@ -10,7 +15,8 @@ type DataSet @entity(immutable: false) {
   pdpEndEpoch: BigInt!
   leafCount: BigInt! # uint256
   challengeRange: BigInt! # uint256
-  isActive: Boolean!
+  isActive: Boolean! # Deprecated: use status field instead
+  status: DataSetStatus! # Current lifecycle status
   lastProvenEpoch: BigInt! # uint256
   nextChallengeEpoch: BigInt! # uint256
   totalPieces: BigInt! # uint256
