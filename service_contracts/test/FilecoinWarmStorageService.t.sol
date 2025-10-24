@@ -65,7 +65,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
-    uint256 private constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; 
+    uint256 private constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096;
     uint256 private constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192;
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
@@ -281,10 +281,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     function _generateKey(uint256 index) public pure returns (string memory) {
         bytes32 hash = keccak256(abi.encodePacked("base_salt", index));
-        
+
         // Convert hash to hex string
         string memory hexStr = Strings.toHexString(uint256(hash), 32); // 0x + 64 chars
-        
+
         // Remove the "0x" prefix and take only first 32 characters to make exactly 32 bytes
         bytes memory keyBytes = bytes(hexStr);
         bytes memory result = new bytes(32);
@@ -294,7 +294,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         return string(result); // exactly 32-byte unique string
     }
-
 
     function testInitialState() public view {
         assertEq(
@@ -794,11 +793,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with metadataKeys/metadataValues
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 0,
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
+            payer: client, clientDataSetId: 0, metadataKeys: dsKeys, metadataValues: dsValues, signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData = abi.encode(
             createData.payer,
@@ -1151,7 +1146,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
      * @param clientAddress The client address
      * @return The created data set ID
      */
-    function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory /*metadata*/ )
+    function createDataSetForServiceProviderTest(
+        address provider,
+        address clientAddress,
+        string memory /*metadata*/
+    )
         internal
         returns (uint256)
     {
@@ -2050,7 +2049,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         }
     }
 
-     function testDataSetMetaDataWithAllBoundaries() public {
+    function testDataSetMetaDataWithAllBoundaries() public {
         // Create metadata with max keys, each with max key and value lengths
         uint256[] memory keyCounts = new uint256[](3);
         keyCounts[0] = MAX_KEYS_PER_DATASET - 1; // Just below max
@@ -2066,7 +2065,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 //key must be unique with length 32 bytes
                 metadataKeys[i] = _generateKey(i);
                 assertEq(bytes(metadataKeys[i]).length, 32, "Key length should be 32 bytes");
-                 // Max key length
+                // Max key length
                 metadataValues[i] = _makeStringOfLength(128); // Max value length
             }
 
@@ -2090,7 +2089,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
                 vm.prank(sp1);
                 vm.expectRevert(
-                    abi.encodeWithSelector(Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
+                    abi.encodeWithSelector(
+                        Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE
+                    )
                 );
                 mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
             }
@@ -2431,11 +2432,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
             // Expect revert when at least one piece has too many keys or extraData becomes too large
             vm.prank(address(mockPDPVerifier));
-            vm.expectRevert(abi.encodeWithSelector(Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_ADD_PIECES_EXTRA_DATA_SIZE));
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_ADD_PIECES_EXTRA_DATA_SIZE
+                )
+            );
             pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + totalPieces, pieceData, encodedData);
             console.log("encodedData length (exceeding limits):", encodedData.length);
         }
-
     }
 
     function testPieceMetadataForSameKeyCannotRewrite() public {

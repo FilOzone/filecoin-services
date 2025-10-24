@@ -29,20 +29,19 @@ uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 * Maximum extraData for createDataSet
 * Supports: 10 metadata entries with max sizes
 */
-uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096;  // 4 KiB
+uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
 
 /*
 * Maximum extraData for addPieces
 * Supports: 5 pieces with full metadata, or 61 pieces with no metadata
 */
-uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192;  // 8 KiB
+uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
 
 /*
 * Maximum extraData for schedulePieceRemovals
 * Supports: signature (160 bytes needed)
 */
-uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256;  // 256 bytes
-
+uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -678,7 +677,10 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
-    ) external onlyPDPVerifier {
+    )
+        external
+        onlyPDPVerifier
+    {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
@@ -821,7 +823,10 @@ contract FilecoinWarmStorageService is
         // Decode the signature from extraData
         uint256 len = extraData.length;
         require(len > 0, Errors.ExtraDataRequired());
-        require(len <= MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE));
+        require(
+            len <= MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE,
+            Errors.ExtraDataTooLarge(len, MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE)
+        );
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
@@ -837,7 +842,10 @@ contract FilecoinWarmStorageService is
         uint256, /*challengedLeafCount*/
         uint256, /*seed*/
         uint256 challengeCount
-    ) external onlyPDPVerifier {
+    )
+        external
+        onlyPDPVerifier
+    {
         requirePaymentNotBeyondEndEpoch(dataSetId);
 
         if (provenThisPeriod[dataSetId]) {
@@ -965,7 +973,11 @@ contract FilecoinWarmStorageService is
         address, // oldServiceProvider
         address, // newServiceProvider
         bytes calldata // extraData - not used
-    ) external override onlyPDPVerifier {
+    )
+        external
+        override
+        onlyPDPVerifier
+    {
         revert("Storage provider changes are not yet supported");
     }
 
@@ -1488,7 +1500,12 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 /* rate */
-    ) external view override returns (ValidationResult memory result) {
+    )
+        external
+        view
+        override
+        returns (ValidationResult memory result)
+    {
         // Get the data set ID associated with this rail
         uint256 dataSetId = railToDataSet[railId];
         require(dataSetId != 0, Errors.RailNotAssociated(railId));
@@ -1500,9 +1517,7 @@ contract FilecoinWarmStorageService is
         // If proving wasn't ever activated for this data set, don't pay anything
         if (provingActivationEpoch[dataSetId] == 0) {
             return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: fromEpoch,
-                note: "Proving never activated for this data set"
+                modifiedAmount: 0, settleUpto: fromEpoch, note: "Proving never activated for this data set"
             });
         }
 
@@ -1523,9 +1538,7 @@ contract FilecoinWarmStorageService is
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: fromEpoch,
-                note: "No proven epochs in the requested range"
+                modifiedAmount: 0, settleUpto: fromEpoch, note: "No proven epochs in the requested range"
             });
         }
 
