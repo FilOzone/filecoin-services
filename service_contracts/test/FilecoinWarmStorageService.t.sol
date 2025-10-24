@@ -963,19 +963,19 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400; // Convert to per-epoch
 
         // Test 0 bytes
-        uint256 rateZero = pdpServiceWithPayments.calculateRatesPerEpoch(0);
+        uint256 rateZero = pdpServiceWithPayments.calculateRatePerEpoch(0);
         assertEq(rateZero, expectedMinPerEpoch, "0 bytes should return 0.06 USDFC/month minimum");
 
         // Test 1 GiB
-        uint256 rateOneGiB = pdpServiceWithPayments.calculateRatesPerEpoch(oneGiB);
+        uint256 rateOneGiB = pdpServiceWithPayments.calculateRatePerEpoch(oneGiB);
         assertEq(rateOneGiB, expectedMinPerEpoch, "1 GiB should return minimum rate");
 
         // Test 10 GiB
-        uint256 rateTenGiB = pdpServiceWithPayments.calculateRatesPerEpoch(10 * oneGiB);
+        uint256 rateTenGiB = pdpServiceWithPayments.calculateRatePerEpoch(10 * oneGiB);
         assertEq(rateTenGiB, expectedMinPerEpoch, "10 GiB should return minimum rate");
 
         // Test 24 GiB (below crossover)
-        uint256 rateTwentyFourGiB = pdpServiceWithPayments.calculateRatesPerEpoch(24 * oneGiB);
+        uint256 rateTwentyFourGiB = pdpServiceWithPayments.calculateRatePerEpoch(24 * oneGiB);
         assertEq(rateTwentyFourGiB, expectedMinPerEpoch, "24 GiB should return minimum rate");
     }
 
@@ -988,11 +988,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
 
         // 24 GiB: natural rate (0.0586) < minimum (0.06), so returns minimum
-        uint256 rate24GiB = pdpServiceWithPayments.calculateRatesPerEpoch(24 * oneGiB);
+        uint256 rate24GiB = pdpServiceWithPayments.calculateRatePerEpoch(24 * oneGiB);
         assertEq(rate24GiB, expectedMinPerEpoch, "24 GiB should use minimum floor");
 
         // 25 GiB: natural rate (0.0610) > minimum (0.06), so returns natural rate
-        uint256 rate25GiB = pdpServiceWithPayments.calculateRatesPerEpoch(25 * oneGiB);
+        uint256 rate25GiB = pdpServiceWithPayments.calculateRatePerEpoch(25 * oneGiB);
         assert(rate25GiB > expectedMinPerEpoch);
 
         // Verify it's actually proportional (not minimum)
@@ -1010,16 +1010,16 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
 
         // Test 48 GiB
-        uint256 rate48GiB = pdpServiceWithPayments.calculateRatesPerEpoch(48 * oneGiB);
+        uint256 rate48GiB = pdpServiceWithPayments.calculateRatePerEpoch(48 * oneGiB);
         assert(rate48GiB > expectedMinPerEpoch);
 
         // Test 100 GiB
-        uint256 rate100GiB = pdpServiceWithPayments.calculateRatesPerEpoch(100 * oneGiB);
+        uint256 rate100GiB = pdpServiceWithPayments.calculateRatePerEpoch(100 * oneGiB);
         assert(rate100GiB > rate48GiB);
 
         // Test 1 TiB
         uint256 oneTiB = oneGiB * 1024;
-        uint256 rateOneTiB = pdpServiceWithPayments.calculateRatesPerEpoch(oneTiB);
+        uint256 rateOneTiB = pdpServiceWithPayments.calculateRatePerEpoch(oneTiB);
         assert(rateOneTiB > rate100GiB);
 
         // Verify proportional scaling
@@ -1032,7 +1032,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 oneGiB = 1024 * 1024 * 1024;
 
         // Get rate per epoch for dataset below crossover point
-        uint256 ratePerEpoch = pdpServiceWithPayments.calculateRatesPerEpoch(oneGiB);
+        uint256 ratePerEpoch = pdpServiceWithPayments.calculateRatePerEpoch(oneGiB);
 
         // Convert to rate per month (86400 epochs per month)
         uint256 ratePerMonth = ratePerEpoch * 86400;

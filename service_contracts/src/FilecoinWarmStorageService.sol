@@ -1161,8 +1161,7 @@ contract FilecoinWarmStorageService is
         uint256 totalBytes = leafCount * BYTES_PER_LEAF;
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Update the PDP rail payment rate with the new rate and no one-time
-        // payment
+        // Update the PDP rail payment rate with the new rate and no one-time payment
         uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
         uint256 newStorageRatePerEpoch = _calculateStorageRate(totalBytes);
         payments.modifyRailPayment(
@@ -1239,7 +1238,7 @@ contract FilecoinWarmStorageService is
      * @param totalBytes Total size of the stored data in bytes
      * @return storageRate The PDP storage rate per epoch
      */
-    function calculateRatesPerEpoch(uint256 totalBytes) external view returns (uint256 storageRate) {
+    function calculateRatePerEpoch(uint256 totalBytes) external view returns (uint256 storageRate) {
         storageRate = _calculateStorageRate(totalBytes);
     }
 
