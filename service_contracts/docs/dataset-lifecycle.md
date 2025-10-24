@@ -59,36 +59,6 @@ stateDiagram-v2
     Active --> [*]: Dataset Deleted (after termination)
 ```
 
-## State Transition Events
-
-The contract emits a `DataSetStatusChanged` event whenever the status changes:
-
-```solidity
-event DataSetStatusChanged(
-    uint256 indexed dataSetId,
-    DataSetStatus indexed oldStatus,
-    DataSetStatus indexed newStatus,
-    uint256 epoch
-);
-```
-
-### When Events Are Emitted
-
-1. **Dataset Creation**: 
-   ```solidity
-   emit DataSetStatusChanged(dataSetId, Inactive, Inactive, block.number);
-   ```
-   - Initial status recorded as Inactive
-
-2. **First Piece Added** (Proving Starts):
-   ```solidity
-   emit DataSetStatusChanged(dataSetId, Inactive, Active, block.number);
-   ```
-   - Transition from Inactive to Active
-   - Triggered in `nextProvingPeriod` when proving is first initialized
-
-**Note**: Service termination does NOT emit a `DataSetStatusChanged` event because the status remains Active (datasets with pieces are always Active, even when terminated). Use the `ServiceTerminated` event to track termination.
-
 ## Querying Dataset Status
 
 ### 1. From Solidity (On-chain)
@@ -124,7 +94,7 @@ contract MyContract {
     function checkStatus(uint256 dataSetId) public view returns (
         FilecoinWarmStorageService.DataSetStatus status,
         bool hasProving,
-        bool isTerminated
+        bool isTerminating
     ) {
         // Get detailed status information
         return FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(
@@ -134,10 +104,9 @@ contract MyContract {
     }
     
     function isActive(uint256 dataSetId) public view returns (bool) {
-        return FilecoinWarmStorageServiceStateLibrary.isDataSetActive(
-            service,
-            dataSetId
-        );
+        FilecoinWarmStorageService.DataSetStatus status = 
+            FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
+        return status == FilecoinWarmStorageService.DataSetStatus.Active;
     }
 }
 ```
@@ -322,7 +291,7 @@ contract DataMarketplace {
     function purchaseData(uint256 dataSetId) external {
         // Only allow purchases for active datasets
         require(
-            service.isDataSetActive(dataSetId),
+            service.getDataSetStatus(dataSetId) == FilecoinWarmStorageService.DataSetStatus.Active,
             "Dataset must be active"
         );
         
@@ -382,13 +351,13 @@ Dataset Deleted → Inactive (now it's gone)
 ### How to Check Operational State:
 
 ```solidity
-(status, hasProving, isTerminated) = getDataSetStatusDetails(dataSetId);
+(status, hasProving, isTerminating) = getDataSetStatusDetails(dataSetId);
 
 if (status == Active) {
-    if (isTerminated) {
-        // Dataset has data but service is terminated
+    if (isTerminating) {
+        // Dataset has data but service is terminating
         // No new pieces can be added
-        // Payment rails have ended
+        // Payment rails are ending
     } else {
         // Dataset is operational
     }
@@ -481,12 +450,12 @@ if (status == DataSetStatus.Inactive) {
     // ...
 }
 
-// To check if terminated (regardless of status):
-(, bool hasProving, bool isTerminated) = 
+// To check if terminating (regardless of status):
+(, bool hasProving, bool isTerminating) = 
     service.getDataSetStatusDetails(dataSetId);
 
-if (isTerminated) {
-    // Dataset is terminated (but status is still Active if it has pieces)
+if (isTerminating) {
+    // Dataset is terminating (but status is still Active if it has pieces)
     // ...
 }
 ```

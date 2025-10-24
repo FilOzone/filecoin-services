@@ -46,14 +46,15 @@ Datasets have a simplified two-state lifecycle system to track their operational
 ```solidity
 import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageServiceStateLibrary.sol";
 
-// Check if active
-bool isActive = FilecoinWarmStorageServiceStateLibrary.isDataSetActive(service, dataSetId);
+// Get status
+DataSetStatus status = FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
+bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
 
 // Get detailed status
 (
     DataSetStatus status,
     bool hasProving,
-    bool isTerminated
+    bool isTerminating
 ) = FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(service, dataSetId);
 ```
 
@@ -81,25 +82,6 @@ For complete information on dataset lifecycle, status transitions, and integrati
 
 - [Dataset Lifecycle Documentation](./docs/dataset-lifecycle.md) - Complete lifecycle guide with state diagram
 - [Integration Guide](./docs/integration-guide.md) - How to integrate status checking into your application
-
-### Status Events
-
-The contract emits `DataSetStatusChanged` events when status transitions occur:
-
-```solidity
-event DataSetStatusChanged(
-    uint256 indexed dataSetId,
-    DataSetStatus indexed oldStatus,
-    DataSetStatus indexed newStatus,
-    uint256 epoch
-);
-```
-
-These events are emitted when:
-1. Dataset is created (initial Inactive status)
-2. First piece is added and proving starts (Inactive → Active)
-
-Note: Service termination does NOT emit a status change event (status remains Active for datasets with pieces). Use the `ServiceTerminated` event to track termination.
 
 ### Extsload
 The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.

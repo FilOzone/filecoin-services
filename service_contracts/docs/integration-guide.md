@@ -88,7 +88,7 @@ async function getDataSetDetails(dataSetId: number) {
     payee: info.payee,
     serviceProvider: info.serviceProvider,
     pdpEndEpoch: info.pdpEndEpoch.toString(),
-    isTerminated: info.pdpEndEpoch.gt(0),
+    isTerminating: info.pdpEndEpoch.gt(0),
   };
 }
 ```
@@ -134,33 +134,6 @@ client.subscribe({ query: subscription }).subscribe({
     handleStatusChange(change);
   },
 });
-```
-
-#### Using Contract Events
-
-```typescript
-// Listen for DataSetStatusChanged events
-const contract = new ethers.Contract(
-  SERVICE_CONTRACT_ADDRESS,
-  ServiceContractABI,
-  provider
-);
-
-contract.on(
-  'DataSetStatusChanged',
-  (dataSetId, oldStatus, newStatus, epoch, event) => {
-    console.log({
-      dataSetId: dataSetId.toString(),
-      oldStatus: oldStatus === 0 ? 'INACTIVE' : 'ACTIVE',
-      newStatus: newStatus === 0 ? 'INACTIVE' : 'ACTIVE',
-      epoch: epoch.toString(),
-      txHash: event.transactionHash,
-    });
-    
-    // Update your UI
-    updateDataSetInUI(dataSetId, newStatus);
-  }
-);
 ```
 
 ### UI Components
@@ -398,7 +371,7 @@ contract DataMarketplace {
     function purchaseDataAccess(uint256 dataSetId) external payable {
         // Only allow purchases for active datasets
         require(
-            storageService.isDataSetActive(dataSetId),
+            storageService.getDataSetStatus(dataSetId) == FilecoinWarmStorageService.DataSetStatus.Active,
             "Dataset must be active"
         );
         
@@ -414,7 +387,7 @@ contract DataMarketplace {
         returns (
             FilecoinWarmStorageService.DataSetStatus status,
             bool hasProving,
-            bool isTerminated
+            bool isTerminating
         ) 
     {
         return storageService.getDataSetStatusDetails(dataSetId);
@@ -497,7 +470,7 @@ contract BatchStatusChecker {
         returns (uint256 activeCount) 
     {
         for (uint256 i = 0; i < dataSetIds.length; i++) {
-            if (storageService.isDataSetActive(dataSetIds[i])) {
+            if (storageService.getDataSetStatus(dataSetIds[i]) == FilecoinWarmStorageService.DataSetStatus.Active) {
                 activeCount++;
             }
         }
@@ -578,7 +551,7 @@ contract DataSetStatusKeeper is AutomationCompatibleInterface {
         for (uint256 i = 0; i < monitoredDataSets.length; i++) {
             uint256 dataSetId = monitoredDataSets[i];
             
-            if (!storageService.isDataSetActive(dataSetId)) {
+            if (storageService.getDataSetStatus(dataSetId) != FilecoinWarmStorageService.DataSetStatus.Active) {
                 upkeepNeeded = true;
                 performData = abi.encode(dataSetId);
                 break;
@@ -591,7 +564,7 @@ contract DataSetStatusKeeper is AutomationCompatibleInterface {
         
         // Verify the dataset is indeed inactive
         require(
-            !storageService.isDataSetActive(dataSetId),
+            storageService.getDataSetStatus(dataSetId) != FilecoinWarmStorageService.DataSetStatus.Active,
             "Dataset is active"
         );
         
@@ -644,7 +617,7 @@ class DataSetStatusMonitor:
             "payee": info[4],
             "serviceProvider": info[5],
             "pdpEndEpoch": info[8],
-            "isTerminated": info[8] > 0,
+            "isTerminating": info[8] > 0,
         }
     
     def monitor_datasets(
