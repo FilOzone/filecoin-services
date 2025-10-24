@@ -102,7 +102,11 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
             registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
-        assertEq(providerWithProduct.product.capabilityKeys.length, capabilityKeys.length, "Should have expected capability keys count");
+        assertEq(
+            providerWithProduct.product.capabilityKeys.length,
+            capabilityKeys.length,
+            "Should have expected capability keys count"
+        );
 
         assertEq(providerWithProduct.product.capabilityKeys[0], "region", "First key should be region");
         assertEq(providerWithProduct.product.capabilityKeys[1], "tier", "Second key should be tier");

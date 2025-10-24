@@ -198,7 +198,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
             registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
         assertTrue(providerWithProduct.product.isActive, "Product should be active");
-        assertEq(providerWithProduct.product.capabilityKeys.length, capKeys.length, "Product should have 4 capability keys");
+        assertEq(
+            providerWithProduct.product.capabilityKeys.length, capKeys.length, "Product should have 4 capability keys"
+        );
         assertEq(providerWithProduct.product.capabilityKeys[0], "datacenter", "Product first key should be datacenter");
 
         // Verify value using direct mapping access
@@ -1396,7 +1398,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Verify all 10 capabilities were stored
         ServiceProviderRegistryStorage.ProviderWithProduct memory maxCapProviderWithProduct =
             registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertEq(maxCapProviderWithProduct.product.capabilityKeys.length, capKeys.length, "Should have the same number of keys");
+        assertEq(
+            maxCapProviderWithProduct.product.capabilityKeys.length,
+            capKeys.length,
+            "Should have the same number of keys"
+        );
     }
 
     // ========== New Capability Query Methods Tests ==========

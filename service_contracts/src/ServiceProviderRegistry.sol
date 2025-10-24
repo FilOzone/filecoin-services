@@ -477,9 +477,8 @@ contract ServiceProviderRegistry is
         view
         returns (PaginatedProviders memory result)
     {
-        uint256 totalCount = onlyActive
-            ? activeProductTypeProviderCount[productType]
-            : productTypeProviderCount[productType];
+        uint256 totalCount =
+            onlyActive ? activeProductTypeProviderCount[productType] : productTypeProviderCount[productType];
 
         // Handle edge cases
         if (offset >= totalCount || limit == 0) {
