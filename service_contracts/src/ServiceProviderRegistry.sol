@@ -782,6 +782,7 @@ contract ServiceProviderRegistry is
         for (uint256 i = 0; i < keys.length; i++) {
             require(bytes(keys[i]).length > 0, "Capability key cannot be empty");
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
+            require(values[i].length > 0, "Capability value cannot be empty");
             require(values[i].length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
     }

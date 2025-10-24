@@ -1329,6 +1329,25 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         );
     }
 
+    function testEmptyCapabilityValue() public {
+        (string[] memory capKeys, bytes[] memory capValues) = updatedPDPData.toCapabilities(1);
+        capKeys[0] = "key";
+
+        capValues[0] = "";
+
+        vm.prank(provider1);
+        vm.expectRevert("Capability value cannot be empty");
+        registry.registerProvider{value: REGISTRATION_FEE}(
+            provider1, // payee
+            "",
+            "Test provider description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            capKeys,
+            capValues
+        );
+    }
+
+
     function testTooManyCapabilities() public {
         (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(25);
 
