@@ -82,8 +82,6 @@ dataSources:
           handler: handlePDPPaymentTerminated
         - event: "CDNPaymentTerminated(indexed uint256,uint256,uint256,uint256)"
           handler: handleCDNPaymentTerminated
-        - event: "DataSetStatusChanged(indexed uint256,indexed uint8,indexed uint8,uint256)"
-          handler: handleDataSetStatusChanged
       file: ./src/filecoin-warm-storage-service.ts
   # LEGACY DATA SOURCE: Indexes events from older contract versions so historical data isn’t lost
   # Example: PieceAdded event was upgraded - old had (dataSetId, pieceId, keys[], values[]), new has pieceCid param
