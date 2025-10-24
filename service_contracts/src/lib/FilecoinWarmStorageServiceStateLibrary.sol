@@ -147,31 +147,6 @@ library FilecoinWarmStorageServiceStateLibrary {
         return FilecoinWarmStorageService.DataSetStatus.Active;
     }
 
-    /**
-     * @notice Get detailed status information for a dataset
-     * @param service The service contract
-     * @param dataSetId The ID of the dataset
-     * @return status The current status
-     * @return hasProving Whether proving is activated
-     * @return isTerminating Whether the rail is terminating
-     */
-    function getDataSetStatusDetails(FilecoinWarmStorageService service, uint256 dataSetId)
-        public
-        view
-        returns (FilecoinWarmStorageService.DataSetStatus status, bool hasProving, bool isTerminating)
-    {
-        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
-
-        // Check if proving is activated
-        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
-        hasProving = activationEpoch != 0;
-
-        // Check if terminating
-        isTerminating = info.pdpEndEpoch != 0;
-
-        status = getDataSetStatus(service, dataSetId);
-    }
-
     function clientDataSets(FilecoinWarmStorageService service, address payer)
         public
         view
