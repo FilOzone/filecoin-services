@@ -423,7 +423,7 @@
         "internalType": "bool"
       },
       {
-        "name": "isTerminated",
+        "name": "isTerminating",
         "type": "bool",
         "internalType": "bool"
       }
@@ -501,25 +501,6 @@
         "name": "value",
         "type": "string",
         "internalType": "string"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "isDataSetActive",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
