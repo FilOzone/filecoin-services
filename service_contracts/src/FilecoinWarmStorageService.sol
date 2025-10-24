@@ -490,10 +490,7 @@ contract FilecoinWarmStorageService is
      * @param newStoragePrice New storage price per TiB per month (0 = no change, max 10 USDFC)
      * @param newMinimumRate New minimum monthly storage rate (0 = no change, max 0.24 USDFC)
      */
-    function updatePricing(uint256 newStoragePrice, uint256 newMinimumRate)
-        external
-        onlyOwner
-    {
+    function updatePricing(uint256 newStoragePrice, uint256 newMinimumRate) external onlyOwner {
         if (newStoragePrice == 0 && newMinimumRate == 0) {
             revert Errors.AtLeastOnePriceMustBeNonZero();
         }
@@ -1402,11 +1399,7 @@ contract FilecoinWarmStorageService is
      * @return storagePrice Current storage price per TiB per month
      * @return minimumRate Current minimum monthly storage rate
      */
-    function getCurrentPricingRates()
-        external
-        view
-        returns (uint256 storagePrice, uint256 minimumRate)
-    {
+    function getCurrentPricingRates() external view returns (uint256 storagePrice, uint256 minimumRate) {
         return (storagePricePerTibPerMonth, minimumStorageRatePerMonth);
     }
 

@@ -292,12 +292,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "cacheMissPrice",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnPrice",
+        "name": "minimumRate",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -826,12 +821,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "newCacheMissPrice",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "newCdnPrice",
+        "name": "newMinimumRate",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1343,13 +1333,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "cacheMissPrice",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnPrice",
+        "name": "minimumRate",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"

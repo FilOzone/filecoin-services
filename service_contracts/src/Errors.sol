@@ -326,4 +326,13 @@ library Errors {
     error InsufficientMaxLockupPeriod(
         address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
     );
+
+    /// @notice At least one price parameter must be non-zero when updating pricing
+    error AtLeastOnePriceMustBeNonZero();
+
+    /// @notice Price update exceeds the maximum allowed value
+    /// @param priceType The type of price being updated (e.g., "storage", "minimumRate")
+    /// @param maxAllowed The maximum allowed value for this price type
+    /// @param actual The attempted value that exceeds the maximum
+    error PriceExceedsMaximum(string priceType, uint256 maxAllowed, uint256 actual);
 }
