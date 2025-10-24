@@ -99,14 +99,18 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
 
         // Verify capabilities were stored correctly
-        (string[] memory returnedKeys,) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
-        assertEq(returnedKeys.length, capabilityKeys.length, "Should have expected capability keys count");
+        assertEq(
+            providerWithProduct.product.capabilityKeys.length,
+            capabilityKeys.length,
+            "Should have expected capability keys count"
+        );
 
-        assertEq(returnedKeys[0], "region", "First key should be region");
-        assertEq(returnedKeys[1], "tier", "Second key should be tier");
-        assertEq(returnedKeys[2], "compliance", "Third key should be compliance");
+        assertEq(providerWithProduct.product.capabilityKeys[0], "region", "First key should be region");
+        assertEq(providerWithProduct.product.capabilityKeys[1], "tier", "Second key should be tier");
+        assertEq(providerWithProduct.product.capabilityKeys[2], "compliance", "Third key should be compliance");
 
         // Use the new query methods to verify values
         bytes memory region =

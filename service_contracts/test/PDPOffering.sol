@@ -86,9 +86,10 @@ library PDPOffering {
         view
         returns (Schema memory schema, string[] memory keys, bool isActive)
     {
-        (keys, isActive) = registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        schema = fromCapabilities(
-            keys, registry.getProductCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, keys)
-        );
+        ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        keys = providerWithProduct.product.capabilityKeys;
+        isActive = providerWithProduct.product.isActive;
+        schema = fromCapabilities(keys, providerWithProduct.productCapabilityValues);
     }
 }

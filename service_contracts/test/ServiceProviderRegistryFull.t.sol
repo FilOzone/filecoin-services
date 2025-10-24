@@ -194,12 +194,14 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertEq(values[2], "low", "Third value should be low");
         assertEq(values[3], "ISO27001", "Fourth value should be ISO27001");
 
-        // Also verify using getProduct
-        (string[] memory productKeys, bool productActive) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertTrue(productActive, "Product should be active");
-        assertEq(productKeys.length, capKeys.length, "Product should have 4 capability keys");
-        assertEq(productKeys[0], "datacenter", "Product first key should be datacenter");
+        // Also verify using getProviderWithProduct
+        ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        assertTrue(providerWithProduct.product.isActive, "Product should be active");
+        assertEq(
+            providerWithProduct.product.capabilityKeys.length, capKeys.length, "Product should have 4 capability keys"
+        );
+        assertEq(providerWithProduct.product.capabilityKeys[0], "datacenter", "Product first key should be datacenter");
 
         // Verify value using direct mapping access
         bytes memory datacenterValue =
@@ -658,7 +660,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Get providers by product type with pagination
         ServiceProviderRegistryStorage.PaginatedProviders memory result =
-            registry.getProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, 0, 10);
+            registry.getProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, false, 0, 10);
         assertEq(result.providers.length, 3, "Should have 3 providers with PDP");
         assertEq(result.providers[0].providerId, 1, "First provider should be ID 1");
         assertEq(result.providers[0].providerInfo.payee, provider1, "Unexpected provider payee");
@@ -725,7 +727,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Get active providers by product type with pagination
         ServiceProviderRegistryStorage.PaginatedProviders memory activeResult =
-            registry.getActiveProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, 0, 10);
+            registry.getProvidersByProductType(ServiceProviderRegistryStorage.ProductType.PDP, true, 0, 10);
         assertEq(activeResult.providers.length, 2, "Should have 2 active providers with PDP");
         assertEq(activeResult.providers[0].providerId, 1, "First active should be ID 1");
         assertEq(
@@ -780,11 +782,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             values
         );
 
-        (string[] memory getProductKeys, bool isActive) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertTrue(isActive, "Product should be active");
-        bytes[] memory getProductCapabilities =
-            registry.getProductCapabilities(1, ServiceProviderRegistryStorage.ProductType.PDP, getProductKeys);
+        ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        assertTrue(providerWithProduct.product.isActive, "Product should be active");
+        string[] memory getProductKeys = providerWithProduct.product.capabilityKeys;
+        bytes[] memory getProductCapabilities = providerWithProduct.productCapabilityValues;
 
         // Decode and verify
         PDPOffering.Schema memory decoded = PDPOffering.fromCapabilities(getProductKeys, getProductCapabilities);
@@ -959,7 +961,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         registry.getProvider(1);
 
         vm.expectRevert("Provider does not exist");
-        registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
+        registry.getProviderWithProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
 
         vm.expectRevert("Provider does not exist");
         registry.isProviderActive(1);
@@ -1181,8 +1183,10 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         );
 
         // Get the product and verify capabilities
-        (string[] memory returnedKeys, bool isActive) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        string[] memory returnedKeys = providerWithProduct.product.capabilityKeys;
+        bool isActive = providerWithProduct.product.isActive;
 
         assertEq(returnedKeys.length, capKeys.length, "Should have same number of capability keys");
         assertEq(returnedKeys[0], "region", "First key should be region");
@@ -1224,7 +1228,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, updatedKeys, updatedValues);
 
         // Verify capabilities updated
-        (string[] memory returnedKeys,) = registry.getProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
+        ServiceProviderRegistryStorage.ProviderWithProduct memory updatedProviderWithProduct =
+            registry.getProviderWithProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
+        string[] memory returnedKeys = updatedProviderWithProduct.product.capabilityKeys;
 
         assertEq(returnedKeys.length, updatedKeys.length, "Should have 2 capability keys");
         assertEq(returnedKeys[0], "support", "First key should be support");
@@ -1390,9 +1396,13 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertEq(providerId, 1, "Should register successfully with 10 capabilities");
 
         // Verify all 10 capabilities were stored
-        (string[] memory returnedKeys,) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertEq(returnedKeys.length, capKeys.length, "Should have the same number of keys");
+        ServiceProviderRegistryStorage.ProviderWithProduct memory maxCapProviderWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        assertEq(
+            maxCapProviderWithProduct.product.capabilityKeys.length,
+            capKeys.length,
+            "Should have the same number of keys"
+        );
     }
 
     // ========== New Capability Query Methods Tests ==========
