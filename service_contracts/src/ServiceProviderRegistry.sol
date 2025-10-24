@@ -729,6 +729,12 @@ contract ServiceProviderRegistry is
         }
     }
 
+    /// @notice Get all capability keys and values for a product
+    /// @param providerId The ID of the provider
+    /// @param productType The type of product
+    /// @return isActive Whether the product is active
+    /// @return keys Array of all capability keys of the product
+    /// @return values Array of capability values corresponding to the keys
     function getAllProductCapabilities(uint256 providerId, ProductType productType)
         external
         view
