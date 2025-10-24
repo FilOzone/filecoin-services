@@ -86,7 +86,7 @@ USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token a
 
 # Proving period configuration - use defaults if not set
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-240}"       # Default 240 epochs (120 minutes on calibnet)
-CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-30}" # Default 30 epochs
+CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-20}" # Default 20 epochs
 
 # Query the actual challengeFinality from PDPVerifier
 echo "Querying PDPVerifier's challengeFinality..."

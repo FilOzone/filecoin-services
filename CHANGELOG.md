@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
   - **Details**: `Inactive` represents non-existent datasets or datasets with no pieces yet. `Active` represents all datasets with pieces, including terminated ones.
   - Use `getDataSetStatusDetails()` to check termination status separately from Active/Inactive status
 - Subgraph schema updated with status enum and history tracking
+- **Calibnet**: Reduced DEFAULT_CHALLENGE_WINDOW_SIZE from 30 epochs to 20 epochs for faster testing iteration
 
 ## [0.3.0] - 2025-10-08 - M3.1 Calibration Network Deployment
 

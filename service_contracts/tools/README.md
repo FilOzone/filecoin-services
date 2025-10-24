@@ -31,7 +31,7 @@ The following parameters are critical for proof generation and validation. They 
 |-----------|----------------------|---------------------|-------|
 | `DEFAULT_CHALLENGE_FINALITY` | `150` | `10` | **Security parameter.** Always set to `150` in production. Enforces that the challenge epoch is far enough in the future to prevent reorg-based attacks. See [PDP Implementation Design Doc](https://filoznotebook.notion.site/PDP-Implementation-Design-Doc-64a66516416441c69b9d8e5d63120f1c?pvs=21). |
 | `DEFAULT_MAX_PROVING_PERIOD` | `2880` | `240` | **Product parameter.** Defines how often proofs must be submitted. Mainnet default is 2880 epochs ≈ 24h (one proof/day). On Calibnet we use shorter proving periods for faster iteration. See [Simple PDP Service Fault Model](https://filoznotebook.notion.site/Simple-PDP-Service-Fault-Model-1a9dc41950c180c4bdc7ef2d91db73b6?pvs=21). |
-| `DEFAULT_CHALLENGE_WINDOW_SIZE` | `60` | `30` | **Security parameter.** Defines the grace window within the proving period. Typically ~2% of the proving period. On Mainnet: 60 epochs (≈2% of 2880). On Calibnet: 30 epochs. See [Simple PDP Service Fault Model](https://filoznotebook.notion.site/Simple-PDP-Service-Fault-Model-1a9dc41950c180c4bdc7ef2d91db73b6?pvs=21). |
+| `DEFAULT_CHALLENGE_WINDOW_SIZE` | `60` | `20` | **Security parameter.** Defines the grace window within the proving period. On Mainnet: 60 epochs. On Calibnet: 20 epochs. See [Simple PDP Service Fault Model](https://filoznotebook.notion.site/Simple-PDP-Service-Fault-Model-1a9dc41950c180c4bdc7ef2d91db73b6?pvs=21). |
 
 ### Quick Reference
 
@@ -46,7 +46,7 @@ The following parameters are critical for proof generation and validation. They 
   ```bash
   DEFAULT_CHALLENGE_FINALITY="10"        # Low value for fast testing (should be 150 in production)
   DEFAULT_MAX_PROVING_PERIOD="240"       # 240 epochs
-  DEFAULT_CHALLENGE_WINDOW_SIZE="30"     # 30 epochs
+  DEFAULT_CHALLENGE_WINDOW_SIZE="20"     # 20 epochs
   ```
 
 ## Environment Variables
@@ -85,7 +85,7 @@ export CHALLENGE_FINALITY="10"  # Use "150" for mainnet
 
 # Optional: Custom proving periods
 export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
-export CHALLENGE_WINDOW_SIZE="30"      # 30 epochs for calibnet, 60 for mainnet
+export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
 
 ./deploy-all-warm-storage.sh
 ```
@@ -112,7 +112,7 @@ export WARM_STORAGE_SERVICE_PROXY_ADDRESS="0x789..."
 
 # Optional: Custom proving periods
 export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
-export CHALLENGE_WINDOW_SIZE="30"      # 30 epochs for calibnet, 60 for mainnet
+export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
 
 ./upgrade-warm-storage-calibnet.sh
 ```

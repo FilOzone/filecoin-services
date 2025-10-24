@@ -51,7 +51,7 @@ case "$CHAIN" in
     # Default challenge and proving configuration for calibnet (testing values)
     DEFAULT_CHALLENGE_FINALITY="10"          # Low value for fast testing (should be 150 in production)
     DEFAULT_MAX_PROVING_PERIOD="240"         # 240 epochs on calibnet
-    DEFAULT_CHALLENGE_WINDOW_SIZE="30"       # 30 epochs
+    DEFAULT_CHALLENGE_WINDOW_SIZE="20"       # 20 epochs
     ;;
   "314")
     NETWORK_NAME="mainnet"

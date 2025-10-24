@@ -13,6 +13,6 @@ FilBeam beneficiary address: 0x1D60d2F5960Af6341e842C539985FA297E10d6eA
 ServiceProviderRegistry address: 0xc758dB755f59189d8FB3C166Ee372b77d7CFA9D3
 SessionKeyRegistry address: 0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452
 Max proving period: 240 epochs
-Challenge window size: 30 epochs
+Challenge window size: 20 epochs
 Service name: FWSS - M4 staging contracts
 Service description: Calibration FWSS - M4 staging contracts
