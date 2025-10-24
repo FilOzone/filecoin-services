@@ -35,8 +35,10 @@ Datasets have a simplified two-state lifecycle system to track their operational
 
 ### Status States
 
-- **Active**: Dataset has pieces, PDP proving is running, and payment rails are operational (not terminated or within lockup period)
-- **Inactive**: Dataset is newly created with no pieces (rate = 0), has been terminated, or is beyond the lockup period
+- **Inactive**: Dataset doesn't exist or has no pieces added yet (rate = 0, no proving)
+- **Active**: Dataset has pieces and proving history (including terminated datasets)
+
+**Important**: Terminated datasets remain **Active** because they still have data. Status reflects data existence, not operational state. Use `pdpEndEpoch` to check if a dataset is terminated.
 
 ### Querying Status
 
@@ -44,16 +46,9 @@ Datasets have a simplified two-state lifecycle system to track their operational
 ```solidity
 import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageServiceStateLibrary.sol";
 
-// Check if active
-bool isActive = FilecoinWarmStorageServiceStateLibrary.isDataSetActive(service, dataSetId);
-
-// Get detailed status
-(
-    DataSetStatus status,
-    bool hasProving,
-    bool isTerminated,
-    bool isBeyondLockup
-) = FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(service, dataSetId);
+// Get status
+DataSetStatus status = FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
+bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
 ```
 
 **From Subgraph:**
@@ -73,31 +68,6 @@ bool isActive = FilecoinWarmStorageServiceStateLibrary.isDataSetActive(service, 
 DataSetStatus status = viewContract.getDataSetStatus(dataSetId);
 // 0 = Inactive, 1 = Active
 ```
-
-### Documentation
-
-For complete information on dataset lifecycle, status transitions, and integration examples:
-
-- [Dataset Lifecycle Documentation](./docs/dataset-lifecycle.md) - Complete lifecycle guide with state diagram
-- [Integration Guide](./docs/integration-guide.md) - How to integrate status checking into your application
-
-### Status Events
-
-The contract emits `DataSetStatusChanged` events when status transitions occur:
-
-```solidity
-event DataSetStatusChanged(
-    uint256 indexed dataSetId,
-    DataSetStatus indexed oldStatus,
-    DataSetStatus indexed newStatus,
-    uint256 epoch
-);
-```
-
-These events are emitted when:
-1. Dataset is created (initial Inactive status)
-2. First piece is added and proving starts (Inactive → Active)
-3. Service is terminated (Active → Inactive)
 
 ### Extsload
 The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.

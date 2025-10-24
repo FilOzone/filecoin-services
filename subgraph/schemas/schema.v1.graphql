@@ -36,19 +36,6 @@ type DataSet @entity(immutable: false) {
   pieces: [Piece!]! @derivedFrom(field: "dataSet")
   faultRecords: [FaultRecord!]! @derivedFrom(field: "dataSet")
   rails: [Rail!]! @derivedFrom(field: "dataSet")
-  statusHistory: [DataSetStatusHistory!]! @derivedFrom(field: "dataSet")
-}
-
-type DataSetStatusHistory @entity(immutable: true) {
-  id: ID! # txHash-logIndex
-  dataSet: DataSet!
-  dataSetId: BigInt!
-  oldStatus: DataSetStatus!
-  newStatus: DataSetStatus!
-  epoch: BigInt!
-  blockNumber: BigInt!
-  timestamp: BigInt!
-  transactionHash: Bytes!
 }
 
 enum RailType {

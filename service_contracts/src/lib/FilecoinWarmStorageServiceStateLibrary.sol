@@ -117,8 +117,8 @@ library FilecoinWarmStorageServiceStateLibrary {
 
     /**
      * @notice Get the current status of a dataset
-     * @dev A dataset is Active when it has pieces being proven and is within lockup period
-     * @dev A dataset is Inactive when: no pieces (rate==0), terminated, or beyond lockup period
+     * @dev A dataset is Active when it has pieces and proving history (including terminated datasets)
+     * @dev A dataset is Inactive when: non-existent or no pieces added yet
      * @param service The service contract
      * @param dataSetId The ID of the dataset
      * @return status The current status
@@ -128,54 +128,21 @@ library FilecoinWarmStorageServiceStateLibrary {
         view
         returns (FilecoinWarmStorageService.DataSetStatus status)
     {
-        return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetStatus(service, dataSetId);
-    }
+        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
 
-    /**
-     * @notice Check if a dataset is currently active
-     * @param service The service contract
-     * @param dataSetId The ID of the dataset
-     * @return True if dataset is active, false otherwise
-     */
-    function isDataSetActive(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
-        return getDataSetStatus(service, dataSetId) == FilecoinWarmStorageService.DataSetStatus.Active;
-    }
-
-    /**
-     * @notice Get detailed status information for a dataset
-     * @param service The service contract
-     * @param dataSetId The ID of the dataset
-     * @return status The current status
-     * @return hasProving Whether proving is activated
-     * @return isTerminated Whether the rail is terminated
-     * @return isBeyondLockup Whether beyond lockup period
-     */
-    function getDataSetStatusDetails(FilecoinWarmStorageService service, uint256 dataSetId)
-        public
-        view
-        returns (FilecoinWarmStorageService.DataSetStatus status, bool hasProving, bool isTerminated, bool isBeyondLockup)
-    {
-        FilecoinWarmStorageService.DataSetInfoView memory info =
-            FilecoinWarmStorageServiceStateInternalLibrary.getDataSet(service, dataSetId);
-
-        // Check if proving is activated
-        uint256 activationEpoch =
-            FilecoinWarmStorageServiceStateInternalLibrary.provingActivationEpoch(service, dataSetId);
-        hasProving = activationEpoch != 0;
-
-        // Check if terminated
-        isTerminated = info.pdpEndEpoch != 0;
-
-        // Check if beyond lockup period
-        if (isTerminated) {
-            uint256 DEFAULT_LOCKUP_PERIOD = 2880 * 30;
-            uint256 lockupEndEpoch = info.pdpEndEpoch + DEFAULT_LOCKUP_PERIOD;
-            isBeyondLockup = block.number > lockupEndEpoch;
-        } else {
-            isBeyondLockup = false;
+        // Non-existent datasets are inactive
+        if (info.pdpRailId == 0) {
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
 
-        status = getDataSetStatus(service, dataSetId);
+        // Check if proving is activated (has pieces)
+        // Inactive only if no proving has started, everything else is Active
+        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
+        if (activationEpoch == 0) {
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+        }
+
+        return FilecoinWarmStorageService.DataSetStatus.Active;
     }
 
     function clientDataSets(FilecoinWarmStorageService service, address payer)
