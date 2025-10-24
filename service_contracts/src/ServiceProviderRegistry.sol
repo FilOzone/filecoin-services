@@ -23,6 +23,7 @@ import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.s
 /// - ipniIpfs: Supports IPNI IPFS CID indexing
 /// - ipniPeerId: IPNI peer ID
 
+// Bloom filter representing the required keys for PDP
 uint256 constant REQUIRED_PDP_KEYS = 0x5b6a06f24dd05729018c808802020eb60947d813531db3c45b14504401400102;
 
 /// @title ServiceProviderRegistry
@@ -443,32 +444,41 @@ contract ServiceProviderRegistry is
         return providers[providerId].payee;
     }
 
-    /// @notice Get product data for a specific product type
+    /// @notice Get complete provider and product information
     /// @param providerId The ID of the provider
     /// @param productType The type of product to retrieve
-    /// @return capabilityKeys Array of capability keys
-    /// @return isActive Whether the product is active
-    function getProduct(uint256 providerId, ProductType productType)
+    /// @return Complete provider with product information
+    function getProviderWithProduct(uint256 providerId, ProductType productType)
         external
         view
         providerExists(providerId)
-        returns (string[] memory capabilityKeys, bool isActive)
+        returns (ProviderWithProduct memory)
     {
-        ServiceProduct memory product = providerProducts[providerId][productType];
-        return (product.capabilityKeys, product.isActive);
+        ServiceProviderInfo storage provider = providers[providerId];
+        ServiceProduct storage product = providerProducts[providerId][productType];
+
+        return ProviderWithProduct({
+            providerId: providerId,
+            providerInfo: provider,
+            product: product,
+            productCapabilityValues: getProductCapabilities(providerId, productType, product.capabilityKeys)
+        });
     }
 
-    /// @notice Get all providers that offer a specific product type with pagination
+    /// @notice Get providers that offer a specific product type with pagination
     /// @param productType The product type to filter by
+    /// @param onlyActive If true, return only active providers with active products
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return
     /// @return result Paginated result containing provider details and hasMore flag
-    function getProvidersByProductType(ProductType productType, uint256 offset, uint256 limit)
+    function getProvidersByProductType(ProductType productType, bool onlyActive, uint256 offset, uint256 limit)
         external
         view
         returns (PaginatedProviders memory result)
     {
-        uint256 totalCount = productTypeProviderCount[productType];
+        uint256 totalCount = onlyActive
+            ? activeProductTypeProviderCount[productType]
+            : productTypeProviderCount[productType];
 
         // Handle edge cases
         if (offset >= totalCount || limit == 0) {
@@ -490,56 +500,11 @@ contract ServiceProviderRegistry is
         uint256 resultIndex = 0;
 
         for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
-            if (providerProducts[i][productType].isActive) {
-                if (currentIndex >= offset && currentIndex < offset + limit) {
-                    ServiceProviderInfo storage provider = providers[i];
-                    ServiceProduct storage product = providerProducts[i][productType];
-                    result.providers[resultIndex] = ProviderWithProduct({
-                        providerId: i,
-                        providerInfo: provider,
-                        product: product,
-                        productCapabilityValues: getProductCapabilities(i, productType, product.capabilityKeys)
-                    });
-                    resultIndex++;
-                }
-                currentIndex++;
-            }
-        }
-    }
+            bool matches = onlyActive
+                ? (providers[i].isActive && providerProducts[i][productType].isActive)
+                : providerProducts[i][productType].isActive;
 
-    /// @notice Get all active providers that offer a specific product type with pagination
-    /// @param productType The product type to filter by
-    /// @param offset Starting index for pagination (0-based)
-    /// @param limit Maximum number of results to return
-    /// @return result Paginated result containing provider details and hasMore flag
-    function getActiveProvidersByProductType(ProductType productType, uint256 offset, uint256 limit)
-        external
-        view
-        returns (PaginatedProviders memory result)
-    {
-        uint256 totalCount = activeProductTypeProviderCount[productType];
-
-        // Handle edge cases
-        if (offset >= totalCount || limit == 0) {
-            result.providers = new ProviderWithProduct[](0);
-            result.hasMore = false;
-            return result;
-        }
-
-        // Calculate actual items to return
-        if (offset + limit > totalCount) {
-            limit = totalCount - offset;
-        }
-
-        result.providers = new ProviderWithProduct[](limit);
-        result.hasMore = (offset + limit) < totalCount;
-
-        // Collect active providers
-        uint256 currentIndex = 0;
-        uint256 resultIndex = 0;
-
-        for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
-            if (providers[i].isActive && providerProducts[i][productType].isActive) {
+            if (matches) {
                 if (currentIndex >= offset && currentIndex < offset + limit) {
                     ServiceProviderInfo storage provider = providers[i];
                     ServiceProduct storage product = providerProducts[i][productType];
