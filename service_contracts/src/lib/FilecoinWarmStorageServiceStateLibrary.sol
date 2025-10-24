@@ -138,26 +138,13 @@ library FilecoinWarmStorageServiceStateLibrary {
         }
 
         // Check if proving is activated (has pieces)
+        // Inactive only if no proving has started, everything else is Active
         uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
-        bool hasProving = activationEpoch != 0;
-
-        // Inactive only if no proving has started
-        // Everything else is Active (including terminated datasets)
-        if (!hasProving) {
+        if (activationEpoch == 0) {
             return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
 
         return FilecoinWarmStorageService.DataSetStatus.Active;
-    }
-
-    /**
-     * @notice Check if a dataset is currently active
-     * @param service The service contract
-     * @param dataSetId The ID of the dataset
-     * @return True if dataset is active, false otherwise
-     */
-    function isDataSetActive(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
-        return getDataSetStatus(service, dataSetId) == FilecoinWarmStorageService.DataSetStatus.Active;
     }
 
     /**
@@ -166,12 +153,12 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @param dataSetId The ID of the dataset
      * @return status The current status
      * @return hasProving Whether proving is activated
-     * @return isTerminated Whether the rail is terminated
+     * @return isTerminating Whether the rail is terminating
      */
     function getDataSetStatusDetails(FilecoinWarmStorageService service, uint256 dataSetId)
         public
         view
-        returns (FilecoinWarmStorageService.DataSetStatus status, bool hasProving, bool isTerminated)
+        returns (FilecoinWarmStorageService.DataSetStatus status, bool hasProving, bool isTerminating)
     {
         FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
 
@@ -179,8 +166,8 @@ library FilecoinWarmStorageServiceStateLibrary {
         uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
         hasProving = activationEpoch != 0;
 
-        // Check if terminated
-        isTerminated = info.pdpEndEpoch != 0;
+        // Check if terminating
+        isTerminating = info.pdpEndEpoch != 0;
 
         status = getDataSetStatus(service, dataSetId);
     }
