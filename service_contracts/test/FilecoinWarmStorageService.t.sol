@@ -65,6 +65,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
+    uint256 private constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; 
+    uint256 private constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192;
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)"
@@ -276,6 +278,23 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             abi.encode(signer)
         );
     }
+
+    function _generateKey(uint256 index) public pure returns (string memory) {
+        bytes32 hash = keccak256(abi.encodePacked("base_salt", index));
+        
+        // Convert hash to hex string
+        string memory hexStr = Strings.toHexString(uint256(hash), 32); // 0x + 64 chars
+        
+        // Remove the "0x" prefix and take only first 32 characters to make exactly 32 bytes
+        bytes memory keyBytes = bytes(hexStr);
+        bytes memory result = new bytes(32);
+        for (uint256 i = 0; i < 32; i++) {
+            result[i] = keyBytes[i + 2]; // skip '0x'
+        }
+
+        return string(result); // exactly 32-byte unique string
+    }
+
 
     function testInitialState() public view {
         assertEq(
@@ -2031,6 +2050,53 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         }
     }
 
+     function testDataSetMetaDataWithAllBoundaries() public {
+        // Create metadata with max keys, each with max key and value lengths
+        uint256[] memory keyCounts = new uint256[](3);
+        keyCounts[0] = MAX_KEYS_PER_DATASET - 1; // Just below max
+        keyCounts[1] = MAX_KEYS_PER_DATASET; // At max
+        keyCounts[2] = MAX_KEYS_PER_DATASET + 4; // Exceeds max
+
+        for (uint256 testIdx = 0; testIdx < keyCounts.length; testIdx++) {
+            uint256 keyCount = keyCounts[testIdx];
+            string[] memory metadataKeys = new string[](keyCount);
+            string[] memory metadataValues = new string[](keyCount);
+
+            for (uint256 i = 0; i < keyCount; i++) {
+                //key must be unique with length 32 bytes
+                metadataKeys[i] = _generateKey(i);
+                assertEq(bytes(metadataKeys[i]).length, 32, "Key length should be 32 bytes");
+                 // Max key length
+                metadataValues[i] = _makeStringOfLength(128); // Max value length
+            }
+
+            if (keyCount <= MAX_KEYS_PER_DATASET) {
+                // Should succeed for valid counts
+                uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+                // Verify all metadata keys and values
+                for (uint256 i = 0; i < metadataKeys.length; i++) {
+                    (bool exists, string memory storedMetadata) =
+                        viewContract.getDataSetMetadata(dataSetId, metadataKeys[i]);
+                    assertTrue(exists, string.concat("Key ", metadataKeys[i], " should exist"));
+                    assertEq(
+                        storedMetadata,
+                        metadataValues[i],
+                        string.concat("Stored metadata for ", metadataKeys[i], " should match")
+                    );
+                }
+            } else {
+                // Should fail for exceeding max
+                bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
+                vm.prank(sp1);
+                vm.expectRevert(
+                    abi.encodeWithSelector(Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
+                );
+                mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+            }
+        }
+    }
+
     function setupDataSetWithPieceMetadata(
         uint256 pieceId,
         string[] memory keys,
@@ -2289,6 +2355,87 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
             }
         }
+    }
+
+    function testPieceMetadataAllBoundaries() public {
+        uint256 pieceId = 42;
+
+        // Helper to create a dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Parameters
+        uint256 totalPieces = 5;
+
+        // --- Phase 1: all pieces within limits ---
+        {
+            Cids.Cid[] memory pieceData = new Cids.Cid[](totalPieces);
+            string[][] memory allKeys = new string[][](totalPieces);
+            string[][] memory allValues = new string[][](totalPieces);
+
+            for (uint256 p = 0; p < totalPieces; p++) {
+                pieceData[p] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file", Strings.toString(p))));
+
+                uint256 keyCount = MAX_KEYS_PER_PIECE; // at the limit
+                string[] memory keys = new string[](keyCount);
+                string[] memory values = new string[](keyCount);
+
+                for (uint256 k = 0; k < keyCount; k++) {
+                    // Generate globally unique keys by combining piece index and key index
+                    keys[k] = _generateKey(p * 1000 + k);
+                    assertEq(bytes(keys[k]).length, 32, "Key length should be 32 bytes");
+                    values[k] = _makeStringOfLength(128); // max value length
+                }
+
+                allKeys[p] = keys;
+                allValues[p] = values;
+            }
+
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+            // Expect success
+            vm.expectEmit(true, false, false, true);
+            emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], allKeys[0], allValues[0]);
+
+            vm.prank(address(mockPDPVerifier));
+            pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+            console.log("encodedData length (within limits):", encodedData.length);
+        }
+
+        // --- Phase 2: one piece exceeds key limit and must revert ---
+        {
+            Cids.Cid[] memory pieceData = new Cids.Cid[](totalPieces);
+            string[][] memory allKeys = new string[][](totalPieces);
+            string[][] memory allValues = new string[][](totalPieces);
+
+            for (uint256 p = 0; p < totalPieces; p++) {
+                pieceData[p] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file-ex", Strings.toString(p))));
+
+                // Make the last piece exceed the per-piece key limit
+                uint256 keyCount = (p == totalPieces - 1) ? (MAX_KEYS_PER_PIECE + 1) : MAX_KEYS_PER_PIECE;
+                string[] memory keys = new string[](keyCount);
+                string[] memory values = new string[](keyCount);
+
+                for (uint256 k = 0; k < keyCount; k++) {
+                    // Ensure uniqueness across all pieces
+                    keys[k] = _generateKey(p * 1000 + k + 1);
+                    values[k] = _makeStringOfLength(128);
+                }
+
+                allKeys[p] = keys;
+                allValues[p] = values;
+            }
+
+            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+
+            // Expect revert when at least one piece has too many keys or extraData becomes too large
+            vm.prank(address(mockPDPVerifier));
+            vm.expectRevert(abi.encodeWithSelector(Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_ADD_PIECES_EXTRA_DATA_SIZE));
+            pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + totalPieces, pieceData, encodedData);
+            console.log("encodedData length (exceeding limits):", encodedData.length);
+        }
+
     }
 
     function testPieceMetadataForSameKeyCannotRewrite() public {
