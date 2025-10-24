@@ -286,4 +286,10 @@ library Errors {
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The end epoch when the PDP payment rail will finalize
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);
+
+    /// @notice Payer has insufficient available funds to cover the minimum storage rate
+    /// @param payer The payer address
+    /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
+    /// @param available The available funds in the payer's account
+    error InsufficientFundsForMinimumRate(address payer, uint256 minimumRequired, uint256 available);
 }

@@ -587,6 +587,17 @@ contract FilecoinWarmStorageService is
 
         // Create the payment rails using the FilecoinPayV1 contract
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+
+        // Pre-check that payer has sufficient available funds to cover minimum storage rate
+        // This provides early feedback but doesn't guarantee funds will be available when SP calls nextProvingPeriod
+        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, createData.payer);
+        // Calculate required lockup: multiply first to preserve precision
+        uint256 minimumLockupRequired = (MINIMUM_STORAGE_RATE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+        require(
+            availableFunds >= minimumLockupRequired,
+            Errors.InsufficientFundsForMinimumRate(createData.payer, minimumLockupRequired, availableFunds)
+        );
+
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
