@@ -1347,7 +1347,6 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         );
     }
 
-
     function testTooManyCapabilities() public {
         (string[] memory capKeys, bytes[] memory capValues) = defaultPDPData.toCapabilities(25);
 
