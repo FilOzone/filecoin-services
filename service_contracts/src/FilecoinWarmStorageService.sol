@@ -588,15 +588,8 @@ contract FilecoinWarmStorageService is
         // Create the payment rails using the FilecoinPayV1 contract
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Pre-check that payer has sufficient available funds to cover minimum storage rate
-        // This provides early feedback but doesn't guarantee funds will be available when SP calls nextProvingPeriod
-        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, createData.payer);
-        // Calculate required lockup: multiply first to preserve precision
-        uint256 minimumLockupRequired = (MINIMUM_STORAGE_RATE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
-        require(
-            availableFunds >= minimumLockupRequired,
-            Errors.InsufficientFundsForMinimumRate(createData.payer, minimumLockupRequired, availableFunds)
-        );
+        // Validate payer has sufficient funds and operator approvals for minimum pricing
+        validatePayerOperatorApprovalAndFunds(payments, createData.payer);
 
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
@@ -1108,6 +1101,57 @@ contract FilecoinWarmStorageService is
                 Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.pdpEndEpoch, block.number)
             );
         }
+    }
+
+    /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
+    /// @param payments The FilecoinPayV1 contract instance
+    /// @param payer The address of the payer
+    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer) internal view {
+        // Calculate required lockup for minimum pricing
+        uint256 minimumLockupRequired = (MINIMUM_STORAGE_RATE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+
+        // Check that payer has sufficient available funds
+        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
+        require(
+            availableFunds >= minimumLockupRequired,
+            Errors.InsufficientFundsForMinimumRate(payer, minimumLockupRequired, availableFunds)
+        );
+
+        // Check operator approval settings
+        (
+            bool isApproved,
+            uint256 rateAllowance,
+            uint256 lockupAllowance,
+            uint256 rateUsage,
+            uint256 lockupUsage,
+            uint256 maxLockupPeriod
+        ) = payments.operatorApprovals(usdfcTokenAddress, payer, address(this));
+
+        // Verify operator is approved
+        require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
+
+        // Calculate minimum rate per epoch
+        uint256 minimumRatePerEpoch = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
+
+        // Verify rate allowance is sufficient
+        require(
+            rateAllowance >= rateUsage + minimumRatePerEpoch,
+            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
+        );
+
+        // Verify lockup allowance is sufficient
+        require(
+            lockupAllowance >= lockupUsage + minimumLockupRequired,
+            Errors.InsufficientLockupAllowance(
+                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
+            )
+        );
+
+        // Verify max lockup period is sufficient
+        require(
+            maxLockupPeriod >= DEFAULT_LOCKUP_PERIOD,
+            Errors.InsufficientMaxLockupPeriod(payer, address(this), maxLockupPeriod, DEFAULT_LOCKUP_PERIOD)
+        );
     }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
