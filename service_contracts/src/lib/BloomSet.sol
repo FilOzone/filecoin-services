@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 /// @notice Bloom Filter with fixed params:
 /// @notice k = 16 bits per item
 /// @notice m = 256 bits per set
-/// @dev probability of false positives by number of items: (via https://hur.st/bloomfilter/?m=256&k=32)
+/// @dev probability of false positives by number of items: (via https://hur.st/bloomfilter/?m=256&k=16)
 /// @dev  7: 0.000000062
 /// @dev  8: 0.00000033
 /// @dev  9: 0.000001377
