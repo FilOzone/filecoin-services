@@ -49,13 +49,6 @@ import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageS
 // Get status
 DataSetStatus status = FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
 bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
-
-// Get detailed status
-(
-    DataSetStatus status,
-    bool hasProving,
-    bool isTerminating
-) = FilecoinWarmStorageServiceStateLibrary.getDataSetStatusDetails(service, dataSetId);
 ```
 
 **From Subgraph:**
@@ -75,13 +68,6 @@ bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
 DataSetStatus status = viewContract.getDataSetStatus(dataSetId);
 // 0 = Inactive, 1 = Active
 ```
-
-### Documentation
-
-For complete information on dataset lifecycle, status transitions, and integration examples:
-
-- [Dataset Lifecycle Documentation](./docs/dataset-lifecycle.md) - Complete lifecycle guide with state diagram
-- [Integration Guide](./docs/integration-guide.md) - How to integrate status checking into your application
 
 ### Extsload
 The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.
