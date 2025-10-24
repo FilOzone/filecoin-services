@@ -1408,7 +1408,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // check status is still Active as data set is not yet deleted from PDP
         status = viewContract.getDataSetStatus(dataSetId);
         assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminated)"
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
         );
 
         // Ensure other functions also revert now
