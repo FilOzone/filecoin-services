@@ -4318,7 +4318,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         IValidator.ValidationResult memory result =
             pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
 
-        // Should pay nothing
+        // Should settle two unproven periods
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
@@ -4326,17 +4326,20 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, "");
 
+        // Should settle up to start of current period
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
 
+        // Never settle less than 1 proving period when that period is unproven
         toEpoch = activationEpoch + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, activationEpoch, "Should not settle");
         assertEq(result.note, "No proven epochs in the requested range");
 
+        // Never settle less than 1 proving period when that period is unproven
         fromEpoch = activationEpoch + maxProvingPeriod * 2 - 1;
         toEpoch = activationEpoch + maxProvingPeriod * 2 + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
@@ -4344,7 +4347,15 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.settleUpto, fromEpoch, "Should not settle");
         assertEq(result.note, "No proven epochs in the requested range");
 
+        // Settle only up to the start of current period
         fromEpoch = activationEpoch + maxProvingPeriod * 2 - 2;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + maxProvingPeriod * 2, "Should not settle into last period");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        // Settle only up to the start of current period
+        fromEpoch = activationEpoch + maxProvingPeriod / 2;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, activationEpoch + maxProvingPeriod * 2, "Should not settle into last period");
