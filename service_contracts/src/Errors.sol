@@ -201,7 +201,11 @@ library Errors {
     /// @param railId The rail ID
     error RailNotAssociated(uint256 railId);
 
-    /// @notice The epoch range is invalid (toEpoch must be > fromEpoch)
+    /// @notice The epoch range is invalid
+    /// @notice Will be emitted if any of the following conditions is NOT met:
+    /// @notice 1. fromEpoch must be less than toEpoch
+    /// @notice 2. toEpoch must be less than block number
+    /// @notice 3. toEpoch must be greater than the activation epoch
     /// @param fromEpoch The starting epoch (exclusive)
     /// @param toEpoch The ending epoch (inclusive)
     error InvalidEpochRange(uint256 fromEpoch, uint256 toEpoch);
@@ -287,4 +291,43 @@ library Errors {
     /// @param actualSize The size of the provided extra data
     /// @param maxAllowedSize The maximum allowed size for extra data
     error ExtraDataTooLarge(uint256 actualSize, uint256 maxAllowedSize);
+    /// @notice Payer has insufficient available funds to cover the minimum storage rate
+    /// @param payer The payer address
+    /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
+    /// @param available The available funds in the payer's account
+    error InsufficientFundsForMinimumRate(address payer, uint256 minimumRequired, uint256 available);
+
+    /// @notice Operator is not approved for the payer
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    error OperatorNotApproved(address payer, address operator);
+
+    /// @notice Operator has insufficient rate allowance for the minimum storage rate
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param rateAllowance The total rate allowance approved
+    /// @param rateUsage The current rate usage
+    /// @param minimumRateRequired The minimum rate required per epoch
+    error InsufficientRateAllowance(
+        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 minimumRateRequired
+    );
+
+    /// @notice Operator has insufficient lockup allowance for the minimum lockup
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param lockupAllowance The total lockup allowance approved
+    /// @param lockupUsage The current lockup usage
+    /// @param minimumLockupRequired The minimum lockup required
+    error InsufficientLockupAllowance(
+        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 minimumLockupRequired
+    );
+
+    /// @notice Operator's max lockup period is insufficient for the default lockup period
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param maxLockupPeriod The maximum lockup period approved
+    /// @param requiredLockupPeriod The required lockup period
+    error InsufficientMaxLockupPeriod(
+        address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
+    );
 }

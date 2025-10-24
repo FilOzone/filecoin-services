@@ -91,7 +91,7 @@ contract ProviderValidationTest is MockFVMTest {
         viewContract = new FilecoinWarmStorageServiceStateView(warmStorage);
 
         // Transfer tokens to client
-        usdfc.safeTransfer(client, 10000 * 10 ** 6);
+        usdfc.safeTransfer(client, 10000 * 10 ** 18);
     }
 
     function testProviderNotRegistered() public {
@@ -141,12 +141,12 @@ contract ProviderValidationTest is MockFVMTest {
             usdfc,
             address(warmStorage),
             true,
-            1000 * 10 ** 6, // rate allowance
-            1000 * 10 ** 6, // lockup allowance
+            1000 * 10 ** 18, // rate allowance
+            1000 * 10 ** 18, // lockup allowance
             365 days // max lockup period
         );
-        usdfc.approve(address(payments), 100 * 10 ** 6);
-        payments.deposit(usdfc, client, 100 * 10 ** 6);
+        usdfc.approve(address(payments), 100 * 10 ** 18);
+        payments.deposit(usdfc, client, 100 * 10 ** 18);
         vm.stopPrank();
 
         // Create dataset without approval should now succeed
@@ -195,15 +195,15 @@ contract ProviderValidationTest is MockFVMTest {
 
         // Approve USDFC spending, deposit and set operator
         vm.startPrank(client);
-        usdfc.approve(address(payments), 10000 * 10 ** 6);
-        payments.deposit(usdfc, client, 10000 * 10 ** 6); // Deposit funds
+        usdfc.approve(address(payments), 10000 * 10 ** 18);
+        payments.deposit(usdfc, client, 10000 * 10 ** 18); // Deposit funds
         payments.setOperatorApproval(
             usdfc, // token
             address(warmStorage), // operator
             true, // approved
-            10000 * 10 ** 6, // rateAllowance
-            10000 * 10 ** 6, // lockupAllowance
-            10000 * 10 ** 6 // allowance
+            10000 * 10 ** 18, // rateAllowance
+            10000 * 10 ** 18, // lockupAllowance
+            10000 * 10 ** 18 // allowance
         );
         vm.stopPrank();
 

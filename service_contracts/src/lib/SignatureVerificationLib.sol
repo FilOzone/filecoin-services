@@ -26,7 +26,7 @@ library SignatureVerificationLib {
         keccak256("PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)");
 
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 firstAdded,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
+        "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
         "Cid(bytes data)" "MetadataEntry(string key,string value)"
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
     );
@@ -78,14 +78,14 @@ library SignatureVerificationLib {
     function hashAllCids(Cids.Cid[] calldata pieceDataArray) internal pure returns (bytes32 cidHashesHash) {
         bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
         for (uint256 i = 0; i < pieceDataArray.length; i++) {
-            cidHashes[i] = keccak256(abi.encode(keccak256("Cid(bytes data)"), keccak256(pieceDataArray[i].data)));
+            cidHashes[i] = keccak256(abi.encode(CID_TYPEHASH, keccak256(pieceDataArray[i].data)));
         }
         return keccak256(abi.encodePacked(cidHashes));
     }
 
     function addPiecesStructHash(
         uint256 clientDataSetId,
-        uint256 firstAdded,
+        uint256 nonce,
         Cids.Cid[] calldata pieceDataArray,
         string[][] calldata allKeys,
         string[][] calldata allValues
@@ -94,7 +94,7 @@ library SignatureVerificationLib {
             abi.encode(
                 ADD_PIECES_TYPEHASH,
                 clientDataSetId,
-                firstAdded,
+                nonce,
                 hashAllCids(pieceDataArray),
                 hashAllPieceMetadata(allKeys, allValues)
             )

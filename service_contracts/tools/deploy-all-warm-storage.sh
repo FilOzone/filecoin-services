@@ -122,6 +122,154 @@ CHALLENGE_FINALITY="${CHALLENGE_FINALITY:-$DEFAULT_CHALLENGE_FINALITY}"
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-$DEFAULT_MAX_PROVING_PERIOD}"
 CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-$DEFAULT_CHALLENGE_WINDOW_SIZE}"
 
+# ========================================
+# Deployment Helper Functions
+# ========================================
+
+# ANSI formatting codes
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Deploy a contract implementation if address not already provided
+# Args: $1=var_name, $2=contract_path:contract_name, $3=description, $4...=constructor_args
+deploy_implementation_if_needed() {
+    local var_name="$1"
+    local contract="$2"
+    local description="$3"
+    shift 3
+    local constructor_args=("$@")
+
+    # Check if address already provided
+    if [ -n "${!var_name}" ]; then
+        echo -e "${BOLD}${description}${RESET}"
+        echo "  ✅ Using existing address: ${!var_name}"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying ${description}${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "  🔍 Testing compilation..."
+        forge build --contracts "$contract" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            # Generate a dummy address based on var name hash for consistency
+            local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
+            eval "$var_name='$dummy_addr'"
+            echo "  ✅ Compilation successful (dummy: ${!var_name})"
+        else
+            echo "  ❌ Compilation failed"
+            exit 1
+        fi
+    else
+        # Add libraries if LIBRARIES variable is set
+        if [ -n "$LIBRARIES" ]; then
+            echo "  📚 Using libraries: $LIBRARIES"
+        fi
+
+        # Add constructor args display if provided
+        if [ ${#constructor_args[@]} -gt 0 ]; then
+            echo "  🔧 Constructor args: ${#constructor_args[@]} arguments"
+        fi
+
+        # Build the forge create command
+        local forge_cmd=(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce "$NONCE")
+
+        if [ -n "$LIBRARIES" ]; then
+            forge_cmd+=(--libraries "$LIBRARIES")
+        fi
+
+        forge_cmd+=("$contract")
+
+        if [ ${#constructor_args[@]} -gt 0 ]; then
+            forge_cmd+=(--constructor-args "${constructor_args[@]}")
+        fi
+
+        local address=$("${forge_cmd[@]}" | grep "Deployed to" | awk '{print $3}')
+
+        if [ -z "$address" ]; then
+            echo "  ❌ Failed to extract address"
+            exit 1
+        fi
+
+        eval "$var_name='$address'"
+        echo "  ✅ Deployed at: ${!var_name}"
+    fi
+
+    NONCE=$(expr $NONCE + "1")
+    echo
+}
+
+# Deploy a proxy contract if address not already provided
+# Args: $1=var_name, $2=implementation_address, $3=init_data, $4=description
+deploy_proxy_if_needed() {
+    local var_name="$1"
+    local implementation="$2"
+    local init_data="$3"
+    local description="$4"
+
+    # Check if address already provided
+    if [ -n "${!var_name}" ]; then
+        echo -e "${BOLD}${description}${RESET}"
+        echo "  ✅ Using existing address: ${!var_name}"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying ${description}${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "  🔍 Testing proxy deployment..."
+        echo "  📦 Implementation: $implementation"
+        local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
+        eval "$var_name='$dummy_addr'"
+        echo "  ✅ Deployment planned (dummy: ${!var_name})"
+    else
+        echo "  📦 Implementation: $implementation"
+        local address=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE \
+            lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy \
+            --constructor-args "$implementation" "$init_data" | grep "Deployed to" | awk '{print $3}')
+
+        if [ -z "$address" ]; then
+            echo "  ❌ Failed to extract address"
+            exit 1
+        fi
+
+        eval "$var_name='$address'"
+        echo "  ✅ Deployed at: ${!var_name}"
+    fi
+
+    NONCE=$(expr $NONCE + "1")
+    echo
+}
+
+# Deploy session key registry if needed (uses ./deploy-session-key-registry.sh)
+deploy_session_key_registry_if_needed() {
+    if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
+        echo -e "${BOLD}SessionKeyRegistry${RESET}"
+        echo "  ✅ Using existing address: $SESSION_KEY_REGISTRY_ADDRESS"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying SessionKeyRegistry${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        SESSION_KEY_REGISTRY_ADDRESS="0x9012345678901234567890123456789012345678"
+        echo "  🧪 Using dummy address: $SESSION_KEY_REGISTRY_ADDRESS"
+    else
+        echo "  🔧 Using external deployment script..."
+        source "$SCRIPT_DIR/deploy-session-key-registry.sh"
+        NONCE=$(expr $NONCE + "1")
+        echo "  ✅ Deployed at: $SESSION_KEY_REGISTRY_ADDRESS"
+    fi
+    echo
+}
+
+# ========================================
+# Validation
+# ========================================
+
 # Validate that the configuration will work with PDPVerifier's challengeFinality
 # The calculation: (MAX_PROVING_PERIOD - CHALLENGE_WINDOW_SIZE) + (CHALLENGE_WINDOW_SIZE/2) must be >= CHALLENGE_FINALITY
 # This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
@@ -162,226 +310,126 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "✅ Core contract compilation tests passed"
 fi
 
+# ========================================
+# Initialize Deployment Environment
+# ========================================
+
 if [ "$DRY_RUN" = "true" ]; then
     ADDR="0x0000000000000000000000000000000000000000"  # Dummy address for dry-run
     NONCE="0"  # Use dummy nonce for dry-run
     BROADCAST_FLAG=""
     echo "Deploying contracts from address $ADDR (dry-run)"
     echo "🧪 Will simulate all deployments without broadcasting transactions"
-    
-    # Use dummy session key registry address for dry-run if not provided
-    if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
-        SESSION_KEY_REGISTRY_ADDRESS="0x9012345678901234567890123456789012345678"
-        echo "🧪 Using dummy SessionKeyRegistry address: $SESSION_KEY_REGISTRY_ADDRESS"
-    fi
 else
     if [ -z "$ETH_KEYSTORE" ]; then
         echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
         exit 1
     fi
-    
+
     ADDR=$(cast wallet address  --password "$PASSWORD")
     NONCE="$(cast nonce "$ADDR")"
     BROADCAST_FLAG="--broadcast"
     echo "Deploying contracts from address $ADDR"
     echo "🚀 Will deploy and broadcast all transactions"
-    
-    if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
-        # If existing session key registry not supplied, deploy another one
-        source "$SCRIPT_DIR/deploy-session-key-registry.sh"
-        NONCE=$(expr $NONCE + "1")
-    fi
 fi
 
-# Step 1: Deploy PDPVerifier implementation
-echo "Deploying PDPVerifier implementation..."
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of PDPVerifier implementation"
-    forge build lib/pdp/src/PDPVerifier.sol > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        VERIFIER_IMPLEMENTATION_ADDRESS="0x1234567890123456789012345678901234567890"  # Dummy address for dry-run
-        echo "✅ PDPVerifier implementation compilation successful"
-    else
-        echo "❌ PDPVerifier implementation compilation failed"
-        exit 1
-    fi
-else
-    # forge and cast will read ETH_RPC_URL, ETH_KEYSTORE, PASSWORD, ETH_FROM from the environment
-    VERIFIER_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/PDPVerifier.sol:PDPVerifier | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$VERIFIER_IMPLEMENTATION_ADDRESS" ]; then
-        echo "Error: Failed to extract PDPVerifier contract address"
-        exit 1
-    fi
-    echo "✅ PDPVerifier implementation deployed at: $VERIFIER_IMPLEMENTATION_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
+echo
+echo "========================================"
+echo "DEPLOYING..."
+echo "========================================"
+echo
 
-# Step 2: Deploy PDPVerifier proxy
-echo "Deploying PDPVerifier proxy..."
+# Step 0: Deploy or use existing SessionKeyRegistry
+deploy_session_key_registry_if_needed
+
+# Step 1: Deploy or use existing PDPVerifier implementation
+deploy_implementation_if_needed \
+    "VERIFIER_IMPLEMENTATION_ADDRESS" \
+    "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
+    "PDPVerifier implementation"
+
+# Step 2: Deploy or use existing PDPVerifier proxy
 INIT_DATA=$(cast calldata "initialize(uint256)" $CHALLENGE_FINALITY)
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would deploy PDPVerifier proxy with:"
-    echo "   - Implementation: $VERIFIER_IMPLEMENTATION_ADDRESS"
-    echo "   - Initialize with challenge finality: $CHALLENGE_FINALITY"
-    PDP_VERIFIER_ADDRESS="0x2345678901234567890123456789012345678901"  # Dummy address for dry-run
-    echo "✅ PDPVerifier proxy deployment planned"
-else
-    PDP_VERIFIER_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $VERIFIER_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
-        echo "Error: Failed to extract PDPVerifier proxy address"
-        exit 1
-    fi
-    echo "✅ PDPVerifier proxy deployed at: $PDP_VERIFIER_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
+deploy_proxy_if_needed \
+    "PDP_VERIFIER_ADDRESS" \
+    "$VERIFIER_IMPLEMENTATION_ADDRESS" \
+    "$INIT_DATA" \
+    "PDPVerifier proxy"
 
-# Step 3: Deploy FilecoinPayV1 contract Implementation
-echo "Deploying FilecoinPayV1 contract..."
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of FilecoinPayV1 contract"
-    forge build lib/fws-payments/src/FilecoinPayV1.sol > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        PAYMENTS_CONTRACT_ADDRESS="0x3456789012345678901234567890123456789012"  # Dummy address for dry-run
-        echo "✅ FilecoinPayV1 contract compilation successful"
-    else
-        echo "❌ FilecoinPayV1 contract compilation failed"
-        exit 1
-    fi
-else
-    PAYMENTS_CONTRACT_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1 | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
-        echo "Error: Failed to extract FilecoinPayV1 contract address"
-        exit 1
-    fi
-    echo "✅ FilecoinPayV1 contract deployed at: $PAYMENTS_CONTRACT_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
+# Step 3: Deploy or use existing FilecoinPayV1 contract
+deploy_implementation_if_needed \
+    "PAYMENTS_CONTRACT_ADDRESS" \
+    "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
+    "FilecoinPayV1"
 
-# Step 4: Deploy ServiceProviderRegistry implementation
-echo "Deploying ServiceProviderRegistry implementation..."
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of ServiceProviderRegistry implementation"
-    forge build src/ServiceProviderRegistry.sol > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        REGISTRY_IMPLEMENTATION_ADDRESS="0x4567890123456789012345678901234567890123"  # Dummy address for dry-run
-        echo "✅ ServiceProviderRegistry implementation compilation successful"
-    else
-        echo "❌ ServiceProviderRegistry implementation compilation failed"
-        exit 1
-    fi
-else
-    REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
-        echo "Error: Failed to extract ServiceProviderRegistry implementation address"
-        exit 1
-    fi
-    echo "✅ ServiceProviderRegistry implementation deployed at: $REGISTRY_IMPLEMENTATION_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
+# Step 4: Deploy or use existing ServiceProviderRegistry implementation
+deploy_implementation_if_needed \
+    "REGISTRY_IMPLEMENTATION_ADDRESS" \
+    "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
+    "ServiceProviderRegistry implementation"
 
-# Step 5: Deploy ServiceProviderRegistry proxy
-echo "Deploying ServiceProviderRegistry proxy..."
+# Step 5: Deploy or use existing ServiceProviderRegistry proxy
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would deploy ServiceProviderRegistry proxy with:"
-    echo "   - Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
-    echo "   - Initialize: empty initialization"
-    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x5678901234567890123456789012345678901234"  # Dummy address for dry-run
-    echo "✅ ServiceProviderRegistry proxy deployment planned"
-else
-    SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $REGISTRY_IMPLEMENTATION_ADDRESS $REGISTRY_INIT_DATA | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
-        echo "Error: Failed to extract ServiceProviderRegistry proxy address"
-        exit 1
-    fi
-    echo "✅ ServiceProviderRegistry proxy deployed at: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
+deploy_proxy_if_needed \
+    "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
+    "$REGISTRY_IMPLEMENTATION_ADDRESS" \
+    "$REGISTRY_INIT_DATA" \
+    "ServiceProviderRegistry proxy"
 
-# Step 6: Deploy FilecoinWarmStorageService implementation
-echo "Deploying FilecoinWarmStorageService implementation..."
-# Step 6a: Deploy SignatureVerificationLib (external library)
-echo "Deploying SignatureVerificationLib library..."
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of SignatureVerificationLib"
-    forge build src/lib/SignatureVerificationLib.sol > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-        SIGNATURE_VERIFICATION_LIB_ADDRESS="0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"  # Dummy address for dry-run
-        echo "✅ SignatureVerificationLib compilation successful"
-    else
-        echo "❌ SignatureVerificationLib compilation failed"
-        exit 1
-    fi
-else
-    SIGNATURE_VERIFICATION_LIB_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE src/lib/SignatureVerificationLib.sol:SignatureVerificationLib | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
-        echo "Error: Failed to extract SignatureVerificationLib address"
-        exit 1
-    fi
-    echo "✅ SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would deploy FilecoinWarmStorageService implementation with:"
-    echo "   - PDP Verifier: $PDP_VERIFIER_ADDRESS"
-    echo "   - FilecoinPayV1 Contract: $PAYMENTS_CONTRACT_ADDRESS"
-    echo "   - USDFC Token: $USDFC_TOKEN_ADDRESS"
-    echo "   - FilBeam Beneficiary: $FILBEAM_BENEFICIARY_ADDRESS"
-    echo "   - Service Provider Registry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
-    echo "   - Session Key Registry: $SESSION_KEY_REGISTRY_ADDRESS"
-    FWS_IMPLEMENTATION_ADDRESS="0x6789012345678901234567890123456789012345"  # Dummy address for dry-run
-    echo "✅ FilecoinWarmStorageService implementation deployment planned"
-else
-    FWS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE \
-        --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
-        src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$FWS_IMPLEMENTATION_ADDRESS" ]; then
-        echo "Error: Failed to extract FilecoinWarmStorageService contract address"
-        exit 1
-    fi
-    echo "✅ FilecoinWarmStorageService implementation deployed at: $FWS_IMPLEMENTATION_ADDRESS"
-fi
-NONCE=$(expr $NONCE + "1")
+# Step 6: Deploy or use existing SignatureVerificationLib
+deploy_implementation_if_needed \
+    "SIGNATURE_VERIFICATION_LIB_ADDRESS" \
+    "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
+    "SignatureVerificationLib"
 
-# Step 7: Deploy FilecoinWarmStorageService proxy
-echo "Deploying FilecoinWarmStorageService proxy..."
+# Step 7: Deploy or use existing FilecoinWarmStorageService implementation
+# Set LIBRARIES variable for the deployment helper (format: path:name:address)
+LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS"
+deploy_implementation_if_needed \
+    "FWS_IMPLEMENTATION_ADDRESS" \
+    "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
+    "FilecoinWarmStorageService implementation" \
+    "$PDP_VERIFIER_ADDRESS" \
+    "$PAYMENTS_CONTRACT_ADDRESS" \
+    "$USDFC_TOKEN_ADDRESS" \
+    "$FILBEAM_BENEFICIARY_ADDRESS" \
+    "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
+    "$SESSION_KEY_REGISTRY_ADDRESS"
+unset LIBRARIES
+
+# Step 8: Deploy or use existing FilecoinWarmStorageService proxy
 # Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
-if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would deploy FilecoinWarmStorageService proxy with:"
-    echo "   - Implementation: $FWS_IMPLEMENTATION_ADDRESS"
-    echo "   - Max Proving Period: $MAX_PROVING_PERIOD epochs"
-    echo "   - Challenge Window Size: $CHALLENGE_WINDOW_SIZE epochs"
-    echo "   - FilBeam Controller: $FILBEAM_CONTROLLER_ADDRESS"
-    echo "   - Service Name: $SERVICE_NAME"
-    echo "   - Service Description: $SERVICE_DESCRIPTION"
-    WARM_STORAGE_SERVICE_ADDRESS="0x7890123456789012345678901234567890123456"  # Dummy address for dry-run
-    echo "✅ FilecoinWarmStorageService proxy deployment planned"
-else
-    WARM_STORAGE_SERVICE_ADDRESS=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy --constructor-args $FWS_IMPLEMENTATION_ADDRESS $INIT_DATA | grep "Deployed to" | awk '{print $3}')
-    if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
-        echo "Error: Failed to extract FilecoinWarmStorageService proxy address"
-        exit 1
-    fi
-    echo "✅ FilecoinWarmStorageService proxy deployed at: $WARM_STORAGE_SERVICE_ADDRESS"
-fi
+deploy_proxy_if_needed \
+    "WARM_STORAGE_SERVICE_ADDRESS" \
+    "$FWS_IMPLEMENTATION_ADDRESS" \
+    "$INIT_DATA" \
+    "FilecoinWarmStorageService proxy"
 
-# Step 8: Deploy FilecoinWarmStorageServiceStateView
-NONCE=$(expr $NONCE + "1")
+# Step 9: Deploy FilecoinWarmStorageServiceStateView
+echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would deploy FilecoinWarmStorageServiceStateView (skipping in dry-run)"
+    echo "  🔍 Would deploy (skipping in dry-run)"
     WARM_STORAGE_VIEW_ADDRESS="0x8901234567890123456789012345678901234567"  # Dummy address for dry-run
+    echo "  ✅ Deployment planned (dummy: $WARM_STORAGE_VIEW_ADDRESS)"
 else
+    echo "  🔧 Using external deployment script..."
     source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
+    echo "  ✅ Deployed at: $WARM_STORAGE_VIEW_ADDRESS"
 fi
+echo
 
-# Step 9: Set the view contract address on the main contract
+# Step 10: Set the view contract address on the main contract
+echo -e "${BOLD}Setting view contract address${RESET}"
 NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would set view contract address on main contract (skipping in dry-run)"
+    echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
+    echo "  🔧 Setting view address on FilecoinWarmStorageService..."
     source "$SCRIPT_DIR/set-warm-storage-view.sh"
+    echo "  ✅ View address set"
 fi
+echo
 
 if [ "$DRY_RUN" = "true" ]; then
     echo

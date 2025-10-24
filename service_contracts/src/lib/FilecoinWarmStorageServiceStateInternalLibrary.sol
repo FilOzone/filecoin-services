@@ -78,16 +78,14 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return CHALLENGES_PER_PROOF;
     }
 
-    function clientDataSetIds(FilecoinWarmStorageService service, address payer, uint256 clientDataSetId)
+    function clientNonces(FilecoinWarmStorageService service, address payer, uint256 nonce)
         internal
         view
         returns (uint256)
     {
         return uint256(
             service.extsload(
-                keccak256(
-                    abi.encode(clientDataSetId, keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SET_IDS_SLOT)))
-                )
+                keccak256(abi.encode(nonce, keccak256(abi.encode(payer, StorageLayout.CLIENT_NONCES_SLOT))))
             )
         );
     }
