@@ -132,7 +132,8 @@ ABI_CONTRACTS := \
 	PDPVerifier \
 	ServiceProviderRegistry \
 	ServiceProviderRegistryStorage \
-	SessionKeyRegistry
+	SessionKeyRegistry \
+	Errors
 
 # Generate ABI file targets
 ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
