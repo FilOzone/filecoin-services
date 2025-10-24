@@ -1465,7 +1465,7 @@ contract FilecoinWarmStorageService is
 
         uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
 
-        // handle first period separately
+        // handle first period separately; it may be partially settled already
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
 
         if (toEpoch < startingPeriodDeadline) {
