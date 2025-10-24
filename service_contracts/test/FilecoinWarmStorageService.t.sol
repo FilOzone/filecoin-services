@@ -2904,8 +2904,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 allValues[p] = values;
             }
 
-            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
-
+            uint256 nonce = pieceId + 1000;
+            bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
             // Expect success
             vm.expectEmit(true, false, false, true);
             emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], allKeys[0], allValues[0]);
@@ -2939,7 +2939,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 allValues[p] = values;
             }
 
-            bytes memory encodedData = abi.encode(FAKE_SIGNATURE, allKeys, allValues);
+            uint256 nonce = pieceId + 2000;
+            bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
 
             // Expect revert when at least one piece has too many keys or extraData becomes too large
             vm.prank(address(mockPDPVerifier));
