@@ -6,8 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+- Dataset lifecycle tracking with `DataSetStatusChanged` event ([#169](https://github.com/FilOzone/filecoin-services/issues/169))
+- Convenience functions `isDataSetActive()` and `getDataSetStatusDetails()` for status checking
+- Comprehensive documentation: dataset lifecycle guide and integration guide
+- Subgraph status history tracking with `DataSetStatusHistory` entity
 
 ### Changed
+- **BREAKING**: Simplified `DataSetStatus` enum from 3 states to 2 states ([#169](https://github.com/FilOzone/filecoin-services/issues/169))
+  - **Old values**: `NotFound (0)`, `Active (1)`, `Terminating (2)`
+  - **New values**: `Inactive (0)`, `Active (1)`
+  - **Migration**: 
+    - `NotFound` → `Inactive` (non-existent datasets)
+    - `Terminating` → `Active` (terminated datasets with pieces are still Active)
+    - Use `pdpEndEpoch` to check if a dataset is terminated
+  - **Details**: `Inactive` represents non-existent datasets or datasets with no pieces yet. `Active` represents all datasets with pieces, including terminated ones.
+  - Use `getDataSetStatusDetails()` to check termination status separately from Active/Inactive status
+- Subgraph schema updated with status enum and history tracking
+- **Calibnet**: Reduced DEFAULT_CHALLENGE_WINDOW_SIZE from 30 epochs to 20 epochs for faster testing iteration
 
 ## [0.3.0] - 2025-10-08 - M3.1 Calibration Network Deployment
 

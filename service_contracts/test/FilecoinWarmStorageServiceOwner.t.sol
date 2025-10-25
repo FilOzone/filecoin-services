@@ -5,6 +5,7 @@ import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {console} from "forge-std/Test.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -16,6 +17,7 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
+    using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
     // Constants
@@ -131,8 +133,18 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
     }
 
     function registerProvider(address provider, string memory name) internal {
-        string[] memory capabilityKeys = new string[](0);
-        string[] memory capabilityValues = new string[](0);
+        PDPOffering.Schema memory schema = PDPOffering.Schema({
+            serviceURL: "https://provider.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: false,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 25 * 10 ** 5, // 2.5 USDFC per TiB per month
+            minProvingPeriodInEpochs: 2880,
+            location: "US",
+            paymentTokenAddress: IERC20(address(0))
+        });
+        (string[] memory capabilityKeys, bytes[] memory capabilityValues) = schema.toCapabilities();
 
         vm.prank(provider);
         providerRegistry.registerProvider{value: 5 ether}(
@@ -140,19 +152,6 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
             name,
             string.concat(name, " Description"),
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: false,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 25 * 10 ** 5, // 2.5 USDFC per TiB per month
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US",
-                    paymentTokenAddress: IERC20(address(0))
-                })
-            ),
             capabilityKeys,
             capabilityValues
         );

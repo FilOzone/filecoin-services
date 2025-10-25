@@ -257,6 +257,17 @@
   },
   {
     "type": "error",
+    "name": "InsufficientCapabilitiesForProduct",
+    "inputs": [
+      {
+        "name": "productType",
+        "type": "uint8",
+        "internalType": "enum ServiceProviderRegistryStorage.ProductType"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InsufficientFundsForMinimumRate",
     "inputs": [
       {

@@ -11,12 +11,14 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {Errors} from "../src/Errors.sol";
 
 contract ProviderValidationTest is MockFVMTest {
+    using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
     FilecoinWarmStorageService public warmStorage;
@@ -109,6 +111,18 @@ contract ProviderValidationTest is MockFVMTest {
     }
 
     function testProviderRegisteredButNotApproved() public {
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider1.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-West",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
         // NOTE: This operation is expected to pass.
         // Approval is not required to perform onboarding actions.
         // Register provider1 in serviceProviderRegistry
@@ -118,21 +132,8 @@ contract ProviderValidationTest is MockFVMTest {
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider1.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-West",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Setup payment approvals for client
@@ -166,6 +167,18 @@ contract ProviderValidationTest is MockFVMTest {
     }
 
     function testProviderApprovedCanCreateDataset() public {
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider1.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-West",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -173,21 +186,8 @@ contract ProviderValidationTest is MockFVMTest {
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider1.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-West",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Approve provider1

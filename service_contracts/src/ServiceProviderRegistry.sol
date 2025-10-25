@@ -7,7 +7,25 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {BloomSet16} from "./lib/BloomSet.sol";
+import {Errors} from "./Errors.sol";
 import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
+
+/// @dev Required PDP Keys (validated by REQUIRED_PDP_KEYS Bloom filter):
+/// - serviceURL: the API endpoint
+/// - minPieceSizeInBytes: minimum piece size in bytes
+/// - maxPieceSizeInBytes: maximum piece size in bytes
+/// - storagePricePerTibPerDay: Storage price per TiB per day (in token's smallest unit)
+/// - minProvingPeriodInEpochs: Minimum proving period in epochs
+/// - location: Geographic location of the service provider
+/// - paymentTokenAddress: Token contract for payment (IERC20(address(0)) for FIL)
+/// Optional PDP keys (not validated by Bloom filter):
+/// - ipniPiece: Supports IPNI piece CID indexing
+/// - ipniIpfs: Supports IPNI IPFS CID indexing
+/// - ipniPeerId: IPNI peer ID
+
+// Bloom filter representing the required keys for PDP
+uint256 constant REQUIRED_PDP_KEYS = 0x5b6a06f24dd05729018c808802020eb60947d813531db3c45b14504401400102;
 
 /// @title ServiceProviderRegistry
 /// @notice A registry contract for managing service providers across the Filecoin Services ecosystem
@@ -43,7 +61,7 @@ contract ServiceProviderRegistry is
     uint256 public constant MAX_CAPABILITY_VALUE_LENGTH = 128;
 
     /// @notice Maximum number of capability key-value pairs per product
-    uint256 public constant MAX_CAPABILITIES = 10;
+    uint256 public constant MAX_CAPABILITIES = 24;
 
     /// @notice Maximum length for location field
     uint256 private constant MAX_LOCATION_LENGTH = 128;
@@ -59,9 +77,8 @@ contract ServiceProviderRegistry is
         uint256 indexed providerId,
         ProductType indexed productType,
         address serviceProvider,
-        bytes productData,
         string[] capabilityKeys,
-        string[] capabilityValues
+        bytes[] capabilityValues
     );
 
     /// @notice Emitted when a product is added to an existing provider
@@ -69,9 +86,8 @@ contract ServiceProviderRegistry is
         uint256 indexed providerId,
         ProductType indexed productType,
         address serviceProvider,
-        bytes productData,
         string[] capabilityKeys,
-        string[] capabilityValues
+        bytes[] capabilityValues
     );
 
     /// @notice Emitted when a product is removed from a provider
@@ -125,7 +141,6 @@ contract ServiceProviderRegistry is
     /// @param name Provider name (optional, max 128 chars)
     /// @param description Provider description (max 256 chars)
     /// @param productType The type of product to register
-    /// @param productData The encoded product configuration data
     /// @param capabilityKeys Array of capability keys
     /// @param capabilityValues Array of capability values
     /// @return providerId The unique ID assigned to the provider
@@ -134,9 +149,8 @@ contract ServiceProviderRegistry is
         string calldata name,
         string calldata description,
         ProductType productType,
-        bytes calldata productData,
         string[] calldata capabilityKeys,
-        string[] calldata capabilityValues
+        bytes[] calldata capabilityValues
     ) external payable returns (uint256 providerId) {
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
@@ -177,10 +191,10 @@ contract ServiceProviderRegistry is
         emit ProviderRegistered(providerId, msg.sender, payee);
 
         // Add the initial product using shared logic
-        _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
+        _validateAndStoreProduct(providerId, productType, capabilityKeys, capabilityValues);
 
         // msg.sender is also providers[providerId].serviceProvider
-        emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
+        emit ProductAdded(providerId, productType, msg.sender, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
         require(FVMPay.burn(REGISTRATION_FEE), "Burn failed");
@@ -188,66 +202,56 @@ contract ServiceProviderRegistry is
 
     /// @notice Add a new product to an existing provider
     /// @param productType The type of product to add
-    /// @param productData The encoded product configuration data
     /// @param capabilityKeys Array of capability keys (max 32 chars each, max 10 keys)
     /// @param capabilityValues Array of capability values (max 128 chars each, max 10 values)
-    function addProduct(
-        ProductType productType,
-        bytes calldata productData,
-        string[] calldata capabilityKeys,
-        string[] calldata capabilityValues
-    ) external {
+    function addProduct(ProductType productType, string[] calldata capabilityKeys, bytes[] calldata capabilityValues)
+        external
+    {
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        _addProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
+        _addProduct(providerId, productType, capabilityKeys, capabilityValues);
     }
 
     /// @notice Internal function to add a product with validation
     function _addProduct(
         uint256 providerId,
         ProductType productType,
-        bytes memory productData,
         string[] memory capabilityKeys,
-        string[] memory capabilityValues
+        bytes[] calldata capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Check product doesn't already exist
         require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
 
         // Validate and store product
-        _validateAndStoreProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
+        _validateAndStoreProduct(providerId, productType, capabilityKeys, capabilityValues);
 
         // msg.sender is providers[providerId].serviceProvider, because onlyServiceProvider
-        emit ProductAdded(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
+        emit ProductAdded(providerId, productType, msg.sender, capabilityKeys, capabilityValues);
     }
 
     /// @notice Internal function to validate and store a product (used by both register and add)
     function _validateAndStoreProduct(
         uint256 providerId,
         ProductType productType,
-        bytes memory productData,
         string[] memory capabilityKeys,
-        string[] memory capabilityValues
+        bytes[] calldata capabilityValues
     ) private {
-        // Validate product data
-        _validateProductData(productType, productData);
-
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
 
+        // Validate product data
+        _validateProductKeys(productType, capabilityKeys);
+
         // Store product
-        providerProducts[providerId][productType] = ServiceProduct({
-            productType: productType,
-            productData: productData,
-            capabilityKeys: capabilityKeys,
-            isActive: true
-        });
+        providerProducts[providerId][productType] =
+            ServiceProduct({productType: productType, capabilityKeys: capabilityKeys, isActive: true});
 
         // Store capability values in mapping
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
             capabilities[capabilityKeys[i]] = capabilityValues[i];
         }
@@ -259,31 +263,26 @@ contract ServiceProviderRegistry is
 
     /// @notice Update an existing product configuration
     /// @param productType The type of product to update
-    /// @param productData The new encoded product configuration data
     /// @param capabilityKeys Array of capability keys (max 32 chars each, max 10 keys)
     /// @param capabilityValues Array of capability values (max 128 chars each, max 10 values)
-    function updateProduct(
-        ProductType productType,
-        bytes calldata productData,
-        string[] calldata capabilityKeys,
-        string[] calldata capabilityValues
-    ) external {
+    function updateProduct(ProductType productType, string[] calldata capabilityKeys, bytes[] calldata capabilityValues)
+        external
+    {
         // Only support PDP for now
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
 
-        _updateProduct(providerId, productType, productData, capabilityKeys, capabilityValues);
+        _updateProduct(providerId, productType, capabilityKeys, capabilityValues);
     }
 
     /// @notice Internal function to update a product
     function _updateProduct(
         uint256 providerId,
         ProductType productType,
-        bytes memory productData,
         string[] memory capabilityKeys,
-        string[] memory capabilityValues
+        bytes[] calldata capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Cache product storage reference
         ServiceProduct storage product = providerProducts[providerId][productType];
@@ -292,20 +291,19 @@ contract ServiceProviderRegistry is
         require(product.isActive, "Product does not exist for this provider");
 
         // Validate product data
-        _validateProductData(productType, productData);
+        _validateProductKeys(productType, capabilityKeys);
 
         // Validate capability k/v pairs
         _validateCapabilities(capabilityKeys, capabilityValues);
 
         // Clear old capabilities from mapping
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
             delete capabilities[product.capabilityKeys[i]];
         }
 
         // Update product
         product.productType = productType;
-        product.productData = productData;
         product.capabilityKeys = capabilityKeys;
         product.isActive = true;
 
@@ -315,7 +313,7 @@ contract ServiceProviderRegistry is
         }
 
         // msg.sender is also providers[providerId].serviceProvider, because onlyServiceProvider
-        emit ProductUpdated(providerId, productType, msg.sender, productData, capabilityKeys, capabilityValues);
+        emit ProductUpdated(providerId, productType, msg.sender, capabilityKeys, capabilityValues);
     }
 
     /// @notice Remove a product from a provider
@@ -342,7 +340,7 @@ contract ServiceProviderRegistry is
 
         // Clear capabilities from mapping
         ServiceProduct storage product = providerProducts[providerId][productType];
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
         for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
             delete capabilities[product.capabilityKeys[i]];
         }
@@ -357,22 +355,6 @@ contract ServiceProviderRegistry is
 
         // Emit event
         emit ProductRemoved(providerId, productType);
-    }
-
-    /// @notice Update PDP service configuration with capabilities
-    /// @param pdpOffering The new PDP service configuration
-    /// @param capabilityKeys Array of capability keys (max 32 chars each, max 10 keys)
-    /// @param capabilityValues Array of capability values (max 128 chars each, max 10 values)
-    function updatePDPServiceWithCapabilities(
-        PDPOffering memory pdpOffering,
-        string[] memory capabilityKeys,
-        string[] memory capabilityValues
-    ) external {
-        uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
-
-        bytes memory encodedData = abi.encode(pdpOffering);
-        _updateProduct(providerId, ProductType.PDP, encodedData, capabilityKeys, capabilityValues);
     }
 
     /// @notice Update provider information
@@ -421,20 +403,19 @@ contract ServiceProviderRegistry is
 
         // Mark all products as inactive and clear capabilities
         // For now just PDP, but this is extensible
-        if (providerProducts[providerId][ProductType.PDP].productData.length > 0) {
-            ServiceProduct storage product = providerProducts[providerId][ProductType.PDP];
-
+        ServiceProduct storage product = providerProducts[providerId][ProductType.PDP];
+        if (product.isActive) {
             // Decrement active count if product was active
-            if (product.isActive) {
-                activeProductTypeProviderCount[ProductType.PDP]--;
-            }
+            activeProductTypeProviderCount[ProductType.PDP]--;
 
             // Clear capabilities from mapping
-            mapping(string => string) storage capabilities = productCapabilities[providerId][ProductType.PDP];
+            mapping(string => bytes) storage capabilities = productCapabilities[providerId][ProductType.PDP];
             for (uint256 i = 0; i < product.capabilityKeys.length; i++) {
                 delete capabilities[product.capabilityKeys[i]];
             }
-            product.isActive = false;
+            delete product.productType;
+            delete product.capabilityKeys;
+            delete product.isActive;
         }
 
         // Clear address mapping
@@ -464,53 +445,40 @@ contract ServiceProviderRegistry is
         return providers[providerId].payee;
     }
 
-    /// @notice Get product data for a specific product type
+    /// @notice Get complete provider and product information
     /// @param providerId The ID of the provider
     /// @param productType The type of product to retrieve
-    /// @return productData The encoded product data
-    /// @return capabilityKeys Array of capability keys
-    /// @return isActive Whether the product is active
-    function getProduct(uint256 providerId, ProductType productType)
+    /// @return Complete provider with product information
+    function getProviderWithProduct(uint256 providerId, ProductType productType)
         external
         view
         providerExists(providerId)
-        returns (bytes memory productData, string[] memory capabilityKeys, bool isActive)
+        returns (ProviderWithProduct memory)
     {
-        ServiceProduct memory product = providerProducts[providerId][productType];
-        return (product.productData, product.capabilityKeys, product.isActive);
+        ServiceProviderInfo storage provider = providers[providerId];
+        ServiceProduct storage product = providerProducts[providerId][productType];
+
+        return ProviderWithProduct({
+            providerId: providerId,
+            providerInfo: provider,
+            product: product,
+            productCapabilityValues: getProductCapabilities(providerId, productType, product.capabilityKeys)
+        });
     }
 
-    /// @notice Get PDP service configuration for a provider (convenience function)
-    /// @param providerId The ID of the provider
-    /// @return pdpOffering The decoded PDP service data
-    /// @return capabilityKeys Array of capability keys
-    /// @return isActive Whether the PDP service is active
-    function getPDPService(uint256 providerId)
-        external
-        view
-        providerExists(providerId)
-        returns (PDPOffering memory pdpOffering, string[] memory capabilityKeys, bool isActive)
-    {
-        ServiceProduct memory product = providerProducts[providerId][ProductType.PDP];
-
-        if (product.productData.length > 0) {
-            pdpOffering = abi.decode(product.productData, (PDPOffering));
-            capabilityKeys = product.capabilityKeys;
-            isActive = product.isActive;
-        }
-    }
-
-    /// @notice Get all providers that offer a specific product type with pagination
+    /// @notice Get providers that offer a specific product type with pagination
     /// @param productType The product type to filter by
+    /// @param onlyActive If true, return only active providers with active products
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return
     /// @return result Paginated result containing provider details and hasMore flag
-    function getProvidersByProductType(ProductType productType, uint256 offset, uint256 limit)
+    function getProvidersByProductType(ProductType productType, bool onlyActive, uint256 offset, uint256 limit)
         external
         view
         returns (PaginatedProviders memory result)
     {
-        uint256 totalCount = productTypeProviderCount[productType];
+        uint256 totalCount =
+            onlyActive ? activeProductTypeProviderCount[productType] : productTypeProviderCount[productType];
 
         // Handle edge cases
         if (offset >= totalCount || limit == 0) {
@@ -532,63 +500,19 @@ contract ServiceProviderRegistry is
         uint256 resultIndex = 0;
 
         for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
-            if (providerProducts[i][productType].productData.length > 0) {
+            bool matches = onlyActive
+                ? (providers[i].isActive && providerProducts[i][productType].isActive)
+                : providerProducts[i][productType].isActive;
+
+            if (matches) {
                 if (currentIndex >= offset && currentIndex < offset + limit) {
                     ServiceProviderInfo storage provider = providers[i];
+                    ServiceProduct storage product = providerProducts[i][productType];
                     result.providers[resultIndex] = ProviderWithProduct({
                         providerId: i,
                         providerInfo: provider,
-                        product: providerProducts[i][productType]
-                    });
-                    resultIndex++;
-                }
-                currentIndex++;
-            }
-        }
-    }
-
-    /// @notice Get all active providers that offer a specific product type with pagination
-    /// @param productType The product type to filter by
-    /// @param offset Starting index for pagination (0-based)
-    /// @param limit Maximum number of results to return
-    /// @return result Paginated result containing provider details and hasMore flag
-    function getActiveProvidersByProductType(ProductType productType, uint256 offset, uint256 limit)
-        external
-        view
-        returns (PaginatedProviders memory result)
-    {
-        uint256 totalCount = activeProductTypeProviderCount[productType];
-
-        // Handle edge cases
-        if (offset >= totalCount || limit == 0) {
-            result.providers = new ProviderWithProduct[](0);
-            result.hasMore = false;
-            return result;
-        }
-
-        // Calculate actual items to return
-        if (offset + limit > totalCount) {
-            limit = totalCount - offset;
-        }
-
-        result.providers = new ProviderWithProduct[](limit);
-        result.hasMore = (offset + limit) < totalCount;
-
-        // Collect active providers
-        uint256 currentIndex = 0;
-        uint256 resultIndex = 0;
-
-        for (uint256 i = 1; i <= numProviders && resultIndex < limit; i++) {
-            if (
-                providers[i].isActive && providerProducts[i][productType].isActive
-                    && providerProducts[i][productType].productData.length > 0
-            ) {
-                if (currentIndex >= offset && currentIndex < offset + limit) {
-                    ServiceProviderInfo storage provider = providers[i];
-                    result.providers[resultIndex] = ProviderWithProduct({
-                        providerId: i,
-                        providerInfo: provider,
-                        product: providerProducts[i][productType]
+                        product: product,
+                        productCapabilityValues: getProductCapabilities(i, productType, product.capabilityKeys)
                     });
                     resultIndex++;
                 }
@@ -753,84 +677,78 @@ contract ServiceProviderRegistry is
     /// @param providerId The ID of the provider
     /// @param productType The type of product
     /// @param keys Array of capability keys to query
-    /// @return exists Array of booleans indicating whether each key exists
     /// @return values Array of capability values corresponding to the keys (empty string for non-existent keys)
-    function getProductCapabilities(uint256 providerId, ProductType productType, string[] calldata keys)
-        external
+    function getProductCapabilities(uint256 providerId, ProductType productType, string[] memory keys)
+        public
         view
         providerExists(providerId)
-        returns (bool[] memory exists, string[] memory values)
+        returns (bytes[] memory values)
     {
-        exists = new bool[](keys.length);
-        values = new string[](keys.length);
+        values = new bytes[](keys.length);
 
         // Cache the mapping reference
-        mapping(string => string) storage capabilities = productCapabilities[providerId][productType];
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
 
         for (uint256 i = 0; i < keys.length; i++) {
-            string memory value = capabilities[keys[i]];
-            if (bytes(value).length > 0) {
-                exists[i] = true;
-                values[i] = value;
-            }
+            values[i] = capabilities[keys[i]];
         }
     }
 
-    /// @notice Get a single capability value for a product
+    /// @notice Get all capability keys and values for a product
     /// @param providerId The ID of the provider
     /// @param productType The type of product
-    /// @param key The capability key to query
-    /// @return exists Whether the capability key exists
-    /// @return value The capability value (empty string if key doesn't exist)
-    function getProductCapability(uint256 providerId, ProductType productType, string calldata key)
+    /// @return isActive Whether the product is active
+    /// @return keys Array of all capability keys of the product
+    /// @return values Array of capability values corresponding to the keys
+    function getAllProductCapabilities(uint256 providerId, ProductType productType)
         external
         view
         providerExists(providerId)
-        returns (bool exists, string memory value)
+        returns (bool isActive, string[] memory keys, bytes[] memory values)
     {
-        // Directly check the mapping
-        value = productCapabilities[providerId][productType][key];
-        exists = bytes(value).length > 0;
+        ServiceProduct storage product = providerProducts[providerId][productType];
+        isActive = product.isActive;
+        keys = product.capabilityKeys;
+        values = new bytes[](keys.length);
+
+        mapping(string => bytes) storage capabilities = productCapabilities[providerId][productType];
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = capabilities[keys[i]];
+        }
     }
 
     /// @notice Validate product data based on product type
     /// @param productType The type of product
-    /// @param productData The encoded product data
-    function _validateProductData(ProductType productType, bytes memory productData) private pure {
+    function _validateProductKeys(ProductType productType, string[] memory capabilityKeys) private pure {
+        uint256 requiredKeys;
         if (productType == ProductType.PDP) {
-            PDPOffering memory pdpOffering = abi.decode(productData, (PDPOffering));
-            _validatePDPOffering(pdpOffering);
+            requiredKeys = REQUIRED_PDP_KEYS;
         } else {
             revert("Unsupported product type");
         }
-    }
-
-    /// @notice Validate PDP offering
-    function _validatePDPOffering(PDPOffering memory pdpOffering) private pure {
-        require(bytes(pdpOffering.serviceURL).length > 0, "Service URL cannot be empty");
-        require(bytes(pdpOffering.serviceURL).length <= MAX_SERVICE_URL_LENGTH, "Service URL too long");
-        require(pdpOffering.minPieceSizeInBytes > 0, "Min piece size must be greater than 0");
-        require(
-            pdpOffering.maxPieceSizeInBytes >= pdpOffering.minPieceSizeInBytes,
-            "Max piece size must be >= min piece size"
-        );
-        // Validate new fields
-        require(pdpOffering.minProvingPeriodInEpochs > 0, "Min proving period must be greater than 0");
-        require(bytes(pdpOffering.location).length > 0, "Location cannot be empty");
-        require(bytes(pdpOffering.location).length <= MAX_LOCATION_LENGTH, "Location too long");
+        uint256 foundKeys = BloomSet16.EMPTY;
+        for (uint256 i = 0; i < capabilityKeys.length; i++) {
+            uint256 key = BloomSet16.compressed(capabilityKeys[i]);
+            if (BloomSet16.mayContain(requiredKeys, key)) {
+                foundKeys |= key;
+            }
+        }
+        // Enforce minimum schema
+        require(BloomSet16.mayContain(foundKeys, requiredKeys), Errors.InsufficientCapabilitiesForProduct(productType));
     }
 
     /// @notice Validate capability key-value pairs
     /// @param keys Array of capability keys
     /// @param values Array of capability values
-    function _validateCapabilities(string[] memory keys, string[] memory values) private pure {
+    function _validateCapabilities(string[] memory keys, bytes[] calldata values) private pure {
         require(keys.length == values.length, "Keys and values arrays must have same length");
         require(keys.length <= MAX_CAPABILITIES, "Too many capabilities");
 
         for (uint256 i = 0; i < keys.length; i++) {
             require(bytes(keys[i]).length > 0, "Capability key cannot be empty");
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
-            require(bytes(values[i]).length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
+            require(values[i].length > 0, "Capability value cannot be empty");
+            require(values[i].length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
     }
 

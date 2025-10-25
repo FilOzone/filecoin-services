@@ -130,12 +130,11 @@ contract FilecoinWarmStorageService is
     }
 
     enum DataSetStatus {
-        // Data set doesn't yet exist or has been deleted
-        NotFound,
-        // Data set is active
-        Active,
-        // Data set is in the process of being terminated
-        Terminating
+        // Dataset is inactive: non-existent (pdpRailId==0) or no pieces added yet (rate==0, no proving)
+        Inactive,
+        // Dataset has pieces and proving history (includes datasets in process of being terminated)
+        // Note: Datasets being terminated remain Active - they become Inactive after deletion when data is wiped
+        Active
     }
 
     // Decode structure for data set creation extra data
@@ -906,7 +905,6 @@ contract FilecoinWarmStorageService is
                 revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
-            provenThisPeriod[dataSetId] = false;
 
             // Initialize the activation epoch when proving first starts
             // This marks when the data set became active for proving
@@ -954,15 +952,6 @@ contract FilecoinWarmStorageService is
         }
         if (faultPeriods > 0) {
             emit FaultRecord(dataSetId, faultPeriods, provingDeadlines[dataSetId]);
-        }
-
-        // Record the status of the current/previous proving period that's ending
-        if (provingDeadlines[dataSetId] != NO_PROVING_DEADLINE && provenThisPeriod[dataSetId]) {
-            // Determine the period ID that just completed
-            uint256 completedPeriodId = getProvingPeriodForEpoch(dataSetId, provingDeadlines[dataSetId] - 1);
-
-            // Record whether this period was proven
-            provenPeriods[dataSetId][completedPeriodId >> 8] |= 1 << (completedPeriodId & 255);
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
@@ -1209,8 +1198,10 @@ contract FilecoinWarmStorageService is
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch);
+    }
 
+    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch) internal view returns (uint256) {
         // If proving wasn't activated or epoch is before activation
         if (activationEpoch == 0 || epoch < activationEpoch) {
             return type(uint256).max; // Invalid period
@@ -1514,15 +1505,15 @@ contract FilecoinWarmStorageService is
             });
         }
 
-        // Count proven epochs and find the last proven epoch
-        (uint256 provenEpochCount, uint256 lastProvenEpoch) =
+        // Count proven epochs up to toEpoch, possibly stopping earlier if unresolved
+        (uint256 provenEpochCount, uint256 settleUpTo) =
             _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
 
         // If no epochs are proven, we can't settle anything
         if (provenEpochCount == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
-                settleUpto: fromEpoch,
+                settleUpto: settleUpTo,
                 note: "No proven epochs in the requested range"
             });
         }
@@ -1530,62 +1521,55 @@ contract FilecoinWarmStorageService is
         // Calculate the modified amount based on proven epochs
         uint256 modifiedAmount = (proposedAmount * provenEpochCount) / totalEpochsRequested;
 
-        return ValidationResult({
-            modifiedAmount: modifiedAmount,
-            settleUpto: lastProvenEpoch, // Settle up to the last proven epoch
-            note: ""
-        });
+        return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settleUpTo, note: ""});
     }
 
     function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
         internal
         view
-        returns (uint256 provenEpochCount, uint256 settledUpTo)
+        returns (uint256 provenEpochCount, uint256 settleUpTo)
     {
         require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
-        uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-
         if (fromEpoch < activationEpoch - 1) {
             fromEpoch = activationEpoch - 1;
         }
 
-        uint256 startingPeriod = getProvingPeriodForEpoch(dataSetId, fromEpoch + 1);
+        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
 
-        // handle first period separately
+        // handle first period separately; it may be partially settled already
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
 
         if (toEpoch < startingPeriodDeadline) {
-            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount = toEpoch - fromEpoch;
-                settledUpTo = toEpoch;
+                settleUpTo = toEpoch;
+            } else {
+                settleUpTo = fromEpoch;
             }
         } else {
-            if (_isPeriodProven(dataSetId, startingPeriod, currentPeriod)) {
+            if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount += (startingPeriodDeadline - fromEpoch);
             }
 
-            uint256 endingPeriod = getProvingPeriodForEpoch(dataSetId, toEpoch);
+            uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
             // loop through the proving periods between startingPeriod and endingPeriod
             for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
-                if (_isPeriodProven(dataSetId, period, currentPeriod)) {
+                if (_isPeriodProven(dataSetId, period)) {
                     provenEpochCount += maxProvingPeriod;
                 }
             }
-            settledUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
+            settleUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
 
             // handle the last period separately
-            if (_isPeriodProven(dataSetId, endingPeriod, currentPeriod)) {
-                provenEpochCount += (toEpoch - settledUpTo);
-                settledUpTo = toEpoch;
+            if (_isPeriodProven(dataSetId, endingPeriod)) {
+                provenEpochCount += (toEpoch - settleUpTo);
+                settleUpTo = toEpoch;
             }
         }
-        return (provenEpochCount, settledUpTo);
+        return (provenEpochCount, settleUpTo);
     }
 
-    function _isPeriodProven(uint256 dataSetId, uint256 periodId, uint256 currentPeriod) private view returns (bool) {
-        if (periodId == currentPeriod) {
-            return provenThisPeriod[dataSetId];
-        }
+    function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
         uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
         return isProven != 0;
     }

@@ -19,11 +19,13 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
 contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
+    using PDPOffering for PDPOffering.Schema;
     using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
     // Testing Constants
 
@@ -134,6 +136,19 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
 
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-Central",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
+
         // Register service providers in the serviceProviderRegistry
         vm.prank(serviceProvider);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -141,90 +156,41 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             "Service Provider",
             "Service Provider Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
+        values[0] = bytes("https://sp1.com");
         vm.prank(sp1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp1, // payee
             "SP1",
             "Storage Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://sp1.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
+        values[0] = bytes("https://sp2.com");
         vm.prank(sp2);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp2, // payee
             "SP2",
             "Storage Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://sp2.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
+        values[0] = bytes("https://sp3.com");
         vm.prank(sp3);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             sp3, // payee
             "SP3",
             "Storage Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://sp3.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-Central",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Deploy FilecoinPayV1 contract (no longer upgradeable)
@@ -1798,7 +1764,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // 0. Verify that DataSet with ID 1 is not found
         FilecoinWarmStorageService.DataSetStatus status = viewContract.getDataSetStatus(1);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.NotFound), "expected NotFound");
+        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive");
 
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
@@ -1844,7 +1810,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Created data set with ID:", dataSetId);
 
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active");
+        assertEq(
+            uint256(status),
+            uint256(FilecoinWarmStorageService.DataSetStatus.Inactive),
+            "expected Inactive (no pieces yet)"
+        );
 
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
@@ -1896,9 +1866,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertFalse(exists, "withCDN metadata should not exist after termination");
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
 
-        // check status is terminating
+        // check status remains active (terminated datasets are still Active)
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Terminating), "expected Terminating");
+        assertEq(
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
+        );
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -1925,9 +1897,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Rolling to block:", info.pdpEndEpoch + 1);
         vm.roll(info.pdpEndEpoch + 1);
 
-        // check status is still Terminating as data set is not yet deleted from PDP
+        // check status is still Active as data set is not yet deleted from PDP
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Terminating), "expected Terminating");
+        assertEq(
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
+        );
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -1972,7 +1946,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         status = viewContract.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.NotFound), "expected NotFound");
+        assertEq(
+            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)"
+        );
         console.log("\n=== Test completed successfully! ===");
     }
 
@@ -5202,16 +5178,53 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Validate payment
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch - 1; // exclusive
-        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3) - 1;
+        uint256 toEpoch = vm.getBlockNumber() - 1;
         uint256 proposedAmount = 1000e6;
 
-        vm.prank(address(payments));
         IValidator.ValidationResult memory result =
             pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
 
-        // Should pay nothing
+        // Should settle two unproven periods
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, "");
+
+        // Should settle up to start of current period
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        // Never settle less than 1 proving period when that period is unproven
+        toEpoch = activationEpoch + 1;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch, "Should not settle");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        // Never settle less than 1 proving period when that period is unproven
+        fromEpoch = activationEpoch + maxProvingPeriod * 2 - 1;
+        toEpoch = activationEpoch + maxProvingPeriod * 2 + 1;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, fromEpoch, "Should not settle");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        // Settle only up to the start of current period
+        fromEpoch = activationEpoch + maxProvingPeriod * 2 - 2;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + maxProvingPeriod * 2, "Should not settle into last period");
+        assertEq(result.note, "No proven epochs in the requested range");
+
+        // Settle only up to the start of current period
+        fromEpoch = activationEpoch + maxProvingPeriod / 2;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, activationEpoch + maxProvingPeriod * 2, "Should not settle into last period");
         assertEq(result.note, "No proven epochs in the requested range");
     }
 

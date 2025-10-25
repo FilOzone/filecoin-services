@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.27;
 
+import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
+
 /// @title Errors
 /// @notice Centralized library for custom error definitions across the protocol
 library Errors {
@@ -291,6 +293,10 @@ library Errors {
     /// @param actualSize The size of the provided extra data
     /// @param maxAllowedSize The maximum allowed size for extra data
     error ExtraDataTooLarge(uint256 actualSize, uint256 maxAllowedSize);
+    /// @notice The supplied capability keys did not contain all of the required keys for the product type
+    /// @param productType The kind of service product attempted to be registered
+    error InsufficientCapabilitiesForProduct(ServiceProviderRegistryStorage.ProductType productType);
+
     /// @notice Payer has insufficient available funds to cover the minimum storage rate
     /// @param payer The payer address
     /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
