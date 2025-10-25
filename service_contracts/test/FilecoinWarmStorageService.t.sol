@@ -65,8 +65,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
-    uint256 private constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096;
-    uint256 private constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192;
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)"
@@ -2600,7 +2598,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 vm.prank(sp1);
                 vm.expectRevert(
                     abi.encodeWithSelector(
-                        Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE
+                        Errors.ExtraDataTooLarge.selector,
+                        encodedData.length,
+                        pdpServiceWithPayments.MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE()
                     )
                 );
                 mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
@@ -2943,13 +2943,16 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
 
             // Expect revert when at least one piece has too many keys or extraData becomes too large
-            vm.prank(address(mockPDPVerifier));
+            vm.startPrank(address(mockPDPVerifier));
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_ADD_PIECES_EXTRA_DATA_SIZE
+                    Errors.ExtraDataTooLarge.selector,
+                    encodedData.length,
+                    pdpServiceWithPayments.MAX_ADD_PIECES_EXTRA_DATA_SIZE()
                 )
             );
             pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + totalPieces, pieceData, encodedData);
+            vm.stopPrank();
             console.log("encodedData length (exceeding limits):", encodedData.length);
         }
     }

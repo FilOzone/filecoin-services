@@ -25,24 +25,6 @@ uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 
-/*
-* Maximum extraData for createDataSet
-* Supports: 10 metadata entries with max sizes
-*/
-uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
-
-/*
-* Maximum extraData for addPieces
-* Supports: 5 pieces with full metadata, or 61 pieces with no metadata
-*/
-uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
-
-/*
-* Maximum extraData for schedulePieceRemovals
-* Supports: signature (160 bytes needed)
-*/
-uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
-
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -190,6 +172,23 @@ contract FilecoinWarmStorageService is
 
     // =========================================================================
     // Constants
+    /*
+    * Maximum extraData for createDataSet
+    * Supports: 10 metadata entries with max sizes
+    */
+    uint256 public constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
+
+    /*
+    * Maximum extraData for addPieces
+    * Supports: 5 pieces with full metadata, or 61 pieces with no metadata
+    */
+    uint256 public constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
+
+    /*
+    * Maximum extraData for schedulePieceRemovals
+    * Supports: signature (160 bytes needed)
+    */
+    uint256 public constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
