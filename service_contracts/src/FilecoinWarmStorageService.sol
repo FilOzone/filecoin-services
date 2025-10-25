@@ -171,6 +171,23 @@ contract FilecoinWarmStorageService is
 
     // =========================================================================
     // Constants
+    /*
+    * Maximum extraData for createDataSet
+    * Supports: 10 metadata entries with max sizes
+    */
+    uint256 public constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
+
+    /*
+    * Maximum extraData for addPieces
+    * Supports: 5 pieces with full metadata, or 61 pieces with no metadata
+    */
+    uint256 public constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
+
+    /*
+    * Maximum extraData for schedulePieceRemovals
+    * Supports: signature (160 bytes needed)
+    */
+    uint256 public constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
@@ -519,7 +536,12 @@ contract FilecoinWarmStorageService is
         onlyPDPVerifier
     {
         // Decode the extra data to get the metadata, payer address, and signature
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(
+            len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+            Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
+        );
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
 
         // Validate the addresses
@@ -734,7 +756,9 @@ contract FilecoinWarmStorageService is
 
         // Get the payer address for this data set
         address payer = info.payer;
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(len <= MAX_ADD_PIECES_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_ADD_PIECES_EXTRA_DATA_SIZE));
         // Decode the extra data
         (uint256 nonce, string[][] memory metadataKeys, string[][] memory metadataValues, bytes memory signature) =
             abi.decode(extraData, (uint256, string[][], string[][], bytes));
@@ -809,7 +833,12 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
 
         // Decode the signature from extraData
-        require(extraData.length > 0, Errors.ExtraDataRequired());
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(
+            len <= MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE,
+            Errors.ExtraDataTooLarge(len, MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE)
+        );
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
