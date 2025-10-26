@@ -496,8 +496,7 @@ contract FilecoinWarmStorageService is
         }
 
         if (newStoragePrice > 0) {
-            if (newStoragePrice > MAX_STORAGE_PRICE_PER_TIB_PER_MONTH) {
-                revert Errors.PriceExceedsMaximum("storage", MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, newStoragePrice);
+            require(newStoragePrice <= MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, Errors.PriceExceedsMaximum("storage", MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, newStoragePrice));
             }
             storagePricePerTibPerMonth = newStoragePrice;
         }
