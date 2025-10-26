@@ -533,4 +533,20 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         nextImplementation = address(uint160(uint256(upgradeInfo)));
         afterEpoch = uint96(uint256(upgradeInfo) >> 160);
     }
+
+    /**
+     * @notice Get the current pricing rates
+     * @return storagePrice Current storage price per TiB per month
+     * @return minimumRate Current minimum monthly storage rate
+     */
+    function getCurrentPricingRates(FilecoinWarmStorageService service)
+        internal
+        view
+        returns (uint256 storagePrice, uint256 minimumRate)
+    {
+        return (
+            uint256(service.extsload(StorageLayout.STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT)),
+            uint256(service.extsload(StorageLayout.MINIMUM_STORAGE_RATE_PER_MONTH_SLOT))
+        );
+    }
 }

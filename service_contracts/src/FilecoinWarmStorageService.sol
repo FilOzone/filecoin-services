@@ -1399,15 +1399,6 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Get the current pricing rates
-     * @return storagePrice Current storage price per TiB per month
-     * @return minimumRate Current minimum monthly storage rate
-     */
-    function getCurrentPricingRates() external view returns (uint256 storagePrice, uint256 minimumRate) {
-        return (storagePricePerTibPerMonth, minimumStorageRatePerMonth);
-    }
-
-    /**
      * @notice Get the effective rates after commission for both service types
      * @return serviceFee Service fee (per TiB per month)
      * @return spPayment SP payment (per TiB per month)
