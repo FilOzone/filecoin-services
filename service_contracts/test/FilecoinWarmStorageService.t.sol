@@ -10,7 +10,12 @@ import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
-import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {
+    CHALLENGES_PER_PROOF,
+    MAX_ADD_PIECES_EXTRA_DATA_SIZE,
+    MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+    FilecoinWarmStorageService
+} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
@@ -67,8 +72,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     uint256 private constant MAX_VALUE_LENGTH = 128;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
     uint256 private constant MAX_KEYS_PER_PIECE = 5;
-    uint256 private constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096;
-    uint256 private constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192;
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)"
