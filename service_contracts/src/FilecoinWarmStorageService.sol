@@ -492,16 +492,23 @@ contract FilecoinWarmStorageService is
      */
     function updatePricing(uint256 newStoragePrice, uint256 newMinimumRate) external onlyOwner {
         require(newStoragePrice > 0 || newMinimumRate > 0, Errors.AtLeastOnePriceMustBeNonZero());
-        }
 
         if (newStoragePrice > 0) {
-            require(newStoragePrice <= MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, Errors.PriceExceedsMaximum("storage", MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, newStoragePrice));
-            }
+            require(
+                newStoragePrice <= MAX_STORAGE_PRICE_PER_TIB_PER_MONTH,
+                Errors.PriceExceedsMaximum(
+                    Errors.PriceType.Storage, MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, newStoragePrice
+                )
+            );
             storagePricePerTibPerMonth = newStoragePrice;
         }
         if (newMinimumRate > 0) {
-            require(newMinimumRate <= MAX_MINIMUM_STORAGE_RATE_PER_MONTH, Errors.PriceExceedsMaximum("minimumRate", MAX_MINIMUM_STORAGE_RATE_PER_MONTH, newMinimumRate));
-            }
+            require(
+                newMinimumRate <= MAX_MINIMUM_STORAGE_RATE_PER_MONTH,
+                Errors.PriceExceedsMaximum(
+                    Errors.PriceType.MinimumRate, MAX_MINIMUM_STORAGE_RATE_PER_MONTH, newMinimumRate
+                )
+            );
             minimumStorageRatePerMonth = newMinimumRate;
         }
 

@@ -2191,8 +2191,8 @@
     "inputs": [
       {
         "name": "priceType",
-        "type": "string",
-        "internalType": "string"
+        "type": "uint8",
+        "internalType": "enum Errors.PriceType"
       },
       {
         "name": "maxAllowed",
