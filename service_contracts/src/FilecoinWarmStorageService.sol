@@ -491,8 +491,7 @@ contract FilecoinWarmStorageService is
      * @param newMinimumRate New minimum monthly storage rate (0 = no change, max 0.24 USDFC)
      */
     function updatePricing(uint256 newStoragePrice, uint256 newMinimumRate) external onlyOwner {
-        if (newStoragePrice == 0 && newMinimumRate == 0) {
-            revert Errors.AtLeastOnePriceMustBeNonZero();
+        require(newStoragePrice > 0 || newMinimumRate > 0, Errors.AtLeastOnePriceMustBeNonZero());
         }
 
         if (newStoragePrice > 0) {
