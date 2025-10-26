@@ -297,6 +297,30 @@
   },
   {
     "type": "function",
+    "name": "getCurrentPricingRates",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "storagePrice",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minimumRate",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getDataSet",
     "inputs": [
       {
