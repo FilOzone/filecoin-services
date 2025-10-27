@@ -1,21 +1,25 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 
-contract ServiceProviderRegistryTest is Test {
+contract ServiceProviderRegistryTest is MockFVMTest {
     ServiceProviderRegistry public implementation;
     ServiceProviderRegistry public registry;
     address public owner;
     address public user1;
     address public user2;
 
-    function setUp() public {
+    using PDPOffering for PDPOffering.Schema;
+
+    function setUp() public override {
+        super.setUp();
         owner = address(this);
         user1 = address(0x1);
         user2 = address(0x2);
@@ -54,79 +58,33 @@ contract ServiceProviderRegistryTest is Test {
         assertFalse(registry.isRegisteredProvider(user2), "Should return false for unregistered address");
     }
 
-    function testRegisterProviderWithEmptyCapabilities() public {
-        // Give user1 some ETH for registration fee
-        vm.deal(user1, 10 ether);
-
-        // Prepare PDP data
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
-            serviceURL: "https://example.com",
-            minPieceSizeInBytes: 1024,
-            maxPieceSizeInBytes: 1024 * 1024,
-            ipniPiece: true,
-            ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
-            minProvingPeriodInEpochs: 2880,
-            location: "US-East",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-        });
-
-        // Encode PDP data
-        bytes memory encodedData = abi.encode(pdpData);
-
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
-
-        vm.prank(user1);
-        uint256 providerId = registry.registerProvider{value: 5 ether}(
-            user1, // payee
-            "Provider One",
-            "Test provider description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedData,
-            emptyKeys,
-            emptyValues
-        );
-        assertEq(providerId, 1, "Should register with ID 1");
-        assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
-
-        // Verify empty capabilities
-        (, string[] memory returnedKeys,) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
-        assertEq(returnedKeys.length, 0, "Should have no capability keys");
-    }
-
     function testRegisterProviderWithCapabilities() public {
         // Give user1 some ETH for registration fee
         vm.deal(user1, 10 ether);
 
         // Prepare PDP data
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            storagePricePerTibPerDay: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
             paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
         // Encode PDP data
-        bytes memory encodedData = abi.encode(pdpData);
-
         // Non-empty capability arrays
-        string[] memory capabilityKeys = new string[](3);
+        (string[] memory capabilityKeys, bytes[] memory capabilityValues) = pdpData.toCapabilities(3);
         capabilityKeys[0] = "region";
         capabilityKeys[1] = "tier";
         capabilityKeys[2] = "compliance";
 
-        string[] memory capabilityValues = new string[](3);
-        capabilityValues[0] = "us-east-1";
-        capabilityValues[1] = "premium";
-        capabilityValues[2] = "SOC2";
+        capabilityValues[0] = bytes("us-east-1");
+        capabilityValues[1] = bytes("premium");
+        capabilityValues[2] = bytes("SOC2");
 
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
@@ -134,7 +92,6 @@ contract ServiceProviderRegistryTest is Test {
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedData,
             capabilityKeys,
             capabilityValues
         );
@@ -142,29 +99,33 @@ contract ServiceProviderRegistryTest is Test {
         assertTrue(registry.isRegisteredProvider(user1), "Should be registered");
 
         // Verify capabilities were stored correctly
-        (, string[] memory returnedKeys,) =
-            registry.getProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
+        ServiceProviderRegistryStorage.ProviderWithProduct memory providerWithProduct =
+            registry.getProviderWithProduct(providerId, ServiceProviderRegistryStorage.ProductType.PDP);
 
-        assertEq(returnedKeys.length, 3, "Should have 3 capability keys");
+        assertEq(
+            providerWithProduct.product.capabilityKeys.length,
+            capabilityKeys.length,
+            "Should have expected capability keys count"
+        );
 
-        assertEq(returnedKeys[0], "region", "First key should be region");
-        assertEq(returnedKeys[1], "tier", "Second key should be tier");
-        assertEq(returnedKeys[2], "compliance", "Third key should be compliance");
+        assertEq(providerWithProduct.product.capabilityKeys[0], "region", "First key should be region");
+        assertEq(providerWithProduct.product.capabilityKeys[1], "tier", "Second key should be tier");
+        assertEq(providerWithProduct.product.capabilityKeys[2], "compliance", "Third key should be compliance");
 
         // Use the new query methods to verify values
-        (bool existsRegion, string memory region) =
-            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
-        assertTrue(existsRegion, "region capability should exist");
+        bytes memory region =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "region");
+        assertTrue(region.length > 0, "region capability should exist");
         assertEq(region, "us-east-1", "First value should be us-east-1");
 
-        (bool existsTier, string memory tier) =
-            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
-        assertTrue(existsTier, "tier capability should exist");
+        bytes memory tier =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "tier");
+        assertTrue(tier.length > 0, "tier capability should exist");
         assertEq(tier, "premium", "Second value should be premium");
 
-        (bool existsCompliance, string memory compliance) =
-            registry.getProductCapability(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "compliance");
-        assertTrue(existsCompliance, "compliance capability should exist");
+        bytes memory compliance =
+            registry.productCapabilities(providerId, ServiceProviderRegistryStorage.ProductType.PDP, "compliance");
+        assertTrue(compliance.length > 0, "compliance capability should exist");
         assertEq(compliance, "SOC2", "Third value should be SOC2");
     }
 
@@ -173,23 +134,20 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 10 ether);
 
         // Register a provider with user2 as beneficiary
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            storagePricePerTibPerDay: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
             paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
-        bytes memory encodedData = abi.encode(pdpData);
-
         // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
 
         // Register with user2 as beneficiary
         vm.prank(user1);
@@ -198,9 +156,8 @@ contract ServiceProviderRegistryTest is Test {
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Verify provider info
@@ -215,23 +172,19 @@ contract ServiceProviderRegistryTest is Test {
         // Give user1 some ETH for registration fee
         vm.deal(user1, 10 ether);
 
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000,
+            storagePricePerTibPerDay: 500000000000000000,
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
             paymentTokenAddress: IERC20(address(0))
         });
 
-        bytes memory encodedData = abi.encode(pdpData);
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
-
-        // Try to register with zero beneficiary
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
         vm.prank(user1);
         vm.expectRevert("Payee cannot be zero address");
         registry.registerProvider{value: 5 ether}(
@@ -239,9 +192,8 @@ contract ServiceProviderRegistryTest is Test {
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
     }
 
@@ -250,23 +202,19 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 10 ether);
 
         // Register a provider first
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 750000000000000000, // 0.75 FIL per TiB per month
+            storagePricePerTibPerDay: 750000000000000000, // 0.75 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
             paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
-        bytes memory encodedData = abi.encode(pdpData);
-
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
 
         vm.prank(user1);
         registry.registerProvider{value: 5 ether}(
@@ -274,9 +222,8 @@ contract ServiceProviderRegistryTest is Test {
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Now get provider should work
@@ -314,24 +261,20 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 10 ether);
 
         // Prepare PDP data
-        ServiceProviderRegistryStorage.PDPOffering memory pdpData = ServiceProviderRegistryStorage.PDPOffering({
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
             serviceURL: "https://example.com",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 500000000000000000, // 0.5 FIL per TiB per month
+            storagePricePerTibPerDay: 500000000000000000, // 0.5 FIL per TiB per month
             minProvingPeriodInEpochs: 2880,
             location: "US-East",
             paymentTokenAddress: IERC20(address(0)) // Payment in FIL
         });
 
         // Encode PDP data
-        bytes memory encodedData = abi.encode(pdpData);
-
-        // Empty capability arrays
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
 
         // Register provider with user2 as payee
         vm.prank(user1);
@@ -340,9 +283,8 @@ contract ServiceProviderRegistryTest is Test {
             "Provider One",
             "Test provider description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedData,
-            emptyKeys,
-            emptyValues
+            keys,
+            values
         );
 
         // Verify helper returns the payee address
@@ -375,15 +317,12 @@ contract ServiceProviderRegistryTest is Test {
     function testGetProvidersByIdsSingleValidProvider() public {
         // Register a provider first
         vm.deal(user1, 10 ether);
+
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
-            user1,
-            "Test Provider",
-            "Test Description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            _createValidPDPOffering(),
-            new string[](0),
-            new string[](0)
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
         uint256[] memory ids = new uint256[](1);
@@ -407,26 +346,15 @@ contract ServiceProviderRegistryTest is Test {
         vm.deal(user1, 10 ether);
         vm.deal(user2, 10 ether);
 
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
         uint256 providerId1 = registry.registerProvider{value: 5 ether}(
-            user1,
-            "Provider 1",
-            "Description 1",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            _createValidPDPOffering(),
-            new string[](0),
-            new string[](0)
+            user1, "Provider 1", "Description 1", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
         vm.prank(user2);
         uint256 providerId2 = registry.registerProvider{value: 5 ether}(
-            user2,
-            "Provider 2",
-            "Description 2",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            _createValidPDPOffering(),
-            new string[](0),
-            new string[](0)
+            user2, "Provider 2", "Description 2", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
         uint256[] memory ids = new uint256[](2);
@@ -480,15 +408,10 @@ contract ServiceProviderRegistryTest is Test {
     function testGetProvidersByIdsMixedValidAndInvalid() public {
         // Register one provider
         vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
         uint256 validProviderId = registry.registerProvider{value: 5 ether}(
-            user1,
-            "Valid Provider",
-            "Valid Description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            _createValidPDPOffering(),
-            new string[](0),
-            new string[](0)
+            user1, "Valid Provider", "Valid Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
         uint256[] memory ids = new uint256[](4);
@@ -521,15 +444,10 @@ contract ServiceProviderRegistryTest is Test {
     function testGetProvidersByIdsInactiveProvider() public {
         // Register a provider
         vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
         uint256 providerId = registry.registerProvider{value: 5 ether}(
-            user1,
-            "Test Provider",
-            "Test Description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            _createValidPDPOffering(),
-            new string[](0),
-            new string[](0)
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
         // Remove the provider (make it inactive)
@@ -551,18 +469,18 @@ contract ServiceProviderRegistryTest is Test {
     }
 
     // Helper function to create a valid PDP offering for tests
-    function _createValidPDPOffering() internal pure returns (bytes memory) {
-        ServiceProviderRegistryStorage.PDPOffering memory pdpOffering = ServiceProviderRegistryStorage.PDPOffering({
+    function _createValidPDPOffering() internal pure returns (PDPOffering.Schema memory schema) {
+        PDPOffering.Schema memory pdpOffering = PDPOffering.Schema({
             serviceURL: "https://example.com/api",
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1024 * 1024,
             ipniPiece: true,
             ipniIpfs: true,
-            storagePricePerTibPerMonth: 1000,
+            storagePricePerTibPerDay: 1000,
             minProvingPeriodInEpochs: 1,
             location: "US",
             paymentTokenAddress: IERC20(address(0))
         });
-        return abi.encode(pdpOffering);
+        return pdpOffering;
     }
 }

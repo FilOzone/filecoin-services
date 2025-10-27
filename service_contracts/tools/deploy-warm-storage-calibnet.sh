@@ -26,8 +26,8 @@ if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
-  echo "Error: PDP_VERIFIER_ADDRESS is not set"
+if [ -z "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
+  echo "Error: PDP_VERIFIER_PROXY_ADDRESS is not set"
   exit 1
 fi
 
@@ -85,13 +85,13 @@ echo "  Description: $SERVICE_DESCRIPTION"
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address
 
 # Proving period configuration - use defaults if not set
-MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-30}"       # Default 30 epochs (15 minutes on calibnet)
-CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-15}" # Default 15 epochs
+MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-240}"       # Default 240 epochs (120 minutes on calibnet)
+CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-20}" # Default 20 epochs
 
 # Query the actual challengeFinality from PDPVerifier
 echo "Querying PDPVerifier's challengeFinality..."
 # cast will use ETH_RPC_URL from environment
-CHALLENGE_FINALITY=$(cast call $PDP_VERIFIER_ADDRESS "getChallengeFinality()" | cast --to-dec)
+CHALLENGE_FINALITY=$(cast call $PDP_VERIFIER_PROXY_ADDRESS "getChallengeFinality()" | cast --to-dec)
 echo "PDPVerifier challengeFinality: $CHALLENGE_FINALITY"
 
 # Validate that the configuration will work with PDPVerifier's challengeFinality
@@ -132,7 +132,7 @@ NONCE=$(expr $NONCE + "1")
 
 SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE \
   --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
-  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract FilecoinWarmStorageService contract address"
   exit 1
@@ -159,8 +159,8 @@ echo "FilecoinWarmStorageService Implementation: $SERVICE_PAYMENTS_IMPLEMENTATIO
 echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
 echo
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
-echo "PDPVerifier address: $PDP_VERIFIER_ADDRESS"
-echo "Payments contract address: $PAYMENTS_CONTRACT_ADDRESS"
+echo "PDPVerifier address: $PDP_VERIFIER_PROXY_ADDRESS"
+echo "FilecoinPayV1 contract address: $PAYMENTS_CONTRACT_ADDRESS"
 echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
 echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "ServiceProviderRegistry address: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"

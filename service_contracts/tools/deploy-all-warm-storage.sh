@@ -1,5 +1,5 @@
 #! /bin/bash
-# deploy-all-warm-storage deploys the PDP verifier, Payments contract, and Warm Storage service
+# deploy-all-warm-storage deploys the PDP verifier, FilecoinPayV1 contract, and Warm Storage service
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
 #
 # Supported Networks:
@@ -72,7 +72,7 @@ case "$CHAIN" in
     # Default challenge and proving configuration for calibnet (testing values)
     DEFAULT_CHALLENGE_FINALITY="10"          # Low value for fast testing (should be 150 in production)
     DEFAULT_MAX_PROVING_PERIOD="240"         # 240 epochs on calibnet
-    DEFAULT_CHALLENGE_WINDOW_SIZE="30"       # 30 epochs
+    DEFAULT_CHALLENGE_WINDOW_SIZE="20"       # 20 epochs
     ;;
   "314")
     NETWORK_NAME="mainnet"
@@ -158,6 +158,154 @@ CHALLENGE_FINALITY="${CHALLENGE_FINALITY:-$DEFAULT_CHALLENGE_FINALITY}"
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-$DEFAULT_MAX_PROVING_PERIOD}"
 CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-$DEFAULT_CHALLENGE_WINDOW_SIZE}"
 
+# ========================================
+# Deployment Helper Functions
+# ========================================
+
+# ANSI formatting codes
+BOLD='\033[1m'
+RESET='\033[0m'
+
+# Deploy a contract implementation if address not already provided
+# Args: $1=var_name, $2=contract_path:contract_name, $3=description, $4...=constructor_args
+deploy_implementation_if_needed() {
+    local var_name="$1"
+    local contract="$2"
+    local description="$3"
+    shift 3
+    local constructor_args=("$@")
+
+    # Check if address already provided
+    if [ -n "${!var_name}" ]; then
+        echo -e "${BOLD}${description}${RESET}"
+        echo "  ✅ Using existing address: ${!var_name}"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying ${description}${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "  🔍 Testing compilation..."
+        forge build --contracts "$contract" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            # Generate a dummy address based on var name hash for consistency
+            local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
+            eval "$var_name='$dummy_addr'"
+            echo "  ✅ Compilation successful (dummy: ${!var_name})"
+        else
+            echo "  ❌ Compilation failed"
+            exit 1
+        fi
+    else
+        # Add libraries if LIBRARIES variable is set
+        if [ -n "$LIBRARIES" ]; then
+            echo "  📚 Using libraries: $LIBRARIES"
+        fi
+
+        # Add constructor args display if provided
+        if [ ${#constructor_args[@]} -gt 0 ]; then
+            echo "  🔧 Constructor args: ${#constructor_args[@]} arguments"
+        fi
+
+        # Build the forge create command
+        local forge_cmd=(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce "$NONCE")
+
+        if [ -n "$LIBRARIES" ]; then
+            forge_cmd+=(--libraries "$LIBRARIES")
+        fi
+
+        forge_cmd+=("$contract")
+
+        if [ ${#constructor_args[@]} -gt 0 ]; then
+            forge_cmd+=(--constructor-args "${constructor_args[@]}")
+        fi
+
+        local address=$("${forge_cmd[@]}" | grep "Deployed to" | awk '{print $3}')
+
+        if [ -z "$address" ]; then
+            echo "  ❌ Failed to extract address"
+            exit 1
+        fi
+
+        eval "$var_name='$address'"
+        echo "  ✅ Deployed at: ${!var_name}"
+    fi
+
+    NONCE=$(expr $NONCE + "1")
+    echo
+}
+
+# Deploy a proxy contract if address not already provided
+# Args: $1=var_name, $2=implementation_address, $3=init_data, $4=description
+deploy_proxy_if_needed() {
+    local var_name="$1"
+    local implementation="$2"
+    local init_data="$3"
+    local description="$4"
+
+    # Check if address already provided
+    if [ -n "${!var_name}" ]; then
+        echo -e "${BOLD}${description}${RESET}"
+        echo "  ✅ Using existing address: ${!var_name}"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying ${description}${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "  🔍 Testing proxy deployment..."
+        echo "  📦 Implementation: $implementation"
+        local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
+        eval "$var_name='$dummy_addr'"
+        echo "  ✅ Deployment planned (dummy: ${!var_name})"
+    else
+        echo "  📦 Implementation: $implementation"
+        local address=$(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce $NONCE \
+            lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy \
+            --constructor-args "$implementation" "$init_data" | grep "Deployed to" | awk '{print $3}')
+
+        if [ -z "$address" ]; then
+            echo "  ❌ Failed to extract address"
+            exit 1
+        fi
+
+        eval "$var_name='$address'"
+        echo "  ✅ Deployed at: ${!var_name}"
+    fi
+
+    NONCE=$(expr $NONCE + "1")
+    echo
+}
+
+# Deploy session key registry if needed (uses ./deploy-session-key-registry.sh)
+deploy_session_key_registry_if_needed() {
+    if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
+        echo -e "${BOLD}SessionKeyRegistry${RESET}"
+        echo "  ✅ Using existing address: $SESSION_KEY_REGISTRY_ADDRESS"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying SessionKeyRegistry${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        SESSION_KEY_REGISTRY_ADDRESS="0x9012345678901234567890123456789012345678"
+        echo "  🧪 Using dummy address: $SESSION_KEY_REGISTRY_ADDRESS"
+    else
+        echo "  🔧 Using external deployment script..."
+        source "$SCRIPT_DIR/deploy-session-key-registry.sh"
+        NONCE=$(expr $NONCE + "1")
+        echo "  ✅ Deployed at: $SESSION_KEY_REGISTRY_ADDRESS"
+    fi
+    echo
+}
+
+# ========================================
+# Validation
+# ========================================
+
 # Validate that the configuration will work with PDPVerifier's challengeFinality
 # The calculation: (MAX_PROVING_PERIOD - CHALLENGE_WINDOW_SIZE) + (CHALLENGE_WINDOW_SIZE/2) must be >= CHALLENGE_FINALITY
 # This ensures initChallengeWindowStart() + buffer will meet PDPVerifier requirements
@@ -202,16 +350,16 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "✅ Contract compilation successful"
 fi
 
+# ========================================
+# Initialize Deployment Environment
+# ========================================
 
 if [ "$DRY_RUN" = "true" ]; then
     ADDR="0x0000000000000000000000000000000000000000"  # Dummy address for dry-run
     NONCE="0"  # Use dummy nonce for dry-run
     BROADCAST_FLAG=""
-    
-    # Use dummy session key registry address for dry-run if not provided
-    if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
-        SESSION_KEY_REGISTRY_ADDRESS="0x9012345678901234567890123456789012345678"
-    fi
+    echo "Deploying contracts from address $ADDR (dry-run)"
+    echo "🧪 Will simulate all deployments without broadcasting transactions"
 else
     # Get deployer address based on authentication method
     if [ -n "$PRIVATE_KEY" ]; then
@@ -410,6 +558,7 @@ NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
     echo "🔍 Would deploy FilecoinWarmStorageServiceStateView (skipping in dry-run)"
     WARM_STORAGE_VIEW_ADDRESS="0x8901234567890123456789012345678901234567"  # Dummy address for dry-run
+    echo "  ✅ Deployment planned (dummy: $WARM_STORAGE_VIEW_ADDRESS)"
 else
     # Deploy view contract using same authentication method
     if [ -n "$PRIVATE_KEY" ]; then
@@ -423,11 +572,13 @@ else
     fi
     echo "FilecoinWarmStorageServiceStateView: $WARM_STORAGE_VIEW_ADDRESS"
 fi
+echo
 
-# Step 9: Set the view contract address on the main contract
+# Step 10: Set the view contract address on the main contract
+echo -e "${BOLD}Setting view contract address${RESET}"
 NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Would set view contract address on main contract (skipping in dry-run)"
+    echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
     # Set view contract address using same authentication method
     if [ -n "$PRIVATE_KEY" ]; then

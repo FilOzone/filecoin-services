@@ -9,7 +9,6 @@ import {
   DataSetServiceProviderChanged as DataSetServiceProviderChangedEvent,
   PDPPaymentTerminated as PDPPaymentTerminatedEvent,
   CDNPaymentTerminated as CDNPaymentTerminatedEvent,
-  PaymentArbitrated as PaymentArbitratedEvent,
 } from "../generated/FilecoinWarmStorageService/FilecoinWarmStorageService";
 import { PDPVerifier } from "../generated/PDPVerifier/PDPVerifier";
 import { DataSet, FaultRecord, Piece, Provider, Rail, RateChangeQueue } from "../generated/schema";
@@ -285,7 +284,8 @@ export function handleDataSetCreated(event: DataSetCreatedEvent): void {
   dataSet.payee = payee;
   dataSet.serviceProvider = serviceProvider;
   dataSet.withCDN = withCDN;
-  dataSet.isActive = true;
+  dataSet.isActive = true; // Deprecated: kept for backward compatibility
+  dataSet.status = "INACTIVE"; // Initially inactive (no pieces yet)
   dataSet.pdpEndEpoch = BIGINT_ZERO;
   dataSet.leafCount = BIGINT_ZERO;
   dataSet.challengeRange = BIGINT_ZERO;
@@ -497,6 +497,7 @@ export function handlePDPPaymentTerminated(event: PDPPaymentTerminatedEvent): vo
   }
   if (dataSet) {
     dataSet.isActive = false;
+    dataSet.status = "INACTIVE";
     dataSet.pdpEndEpoch = endEpoch;
     dataSet.save();
   }
@@ -532,31 +533,8 @@ export function handleCDNPaymentTerminated(event: CDNPaymentTerminatedEvent): vo
   }
   if (dataSet) {
     dataSet.isActive = false;
+    dataSet.status = "INACTIVE";
     dataSet.save();
   }
 }
 
-/**
- * Handles the PaymentArbitrated event.
- * Arbitrates a storage payment.
- */
-export function handlePaymentArbitrated(event: PaymentArbitratedEvent): void {
-  const railId = event.params.railId;
-  const dataSetId = event.params.dataSetId;
-  const arbitratedAmount = event.params.modifiedAmount;
-  const faultedEpochs = event.params.faultedEpochs;
-
-  const rail = Rail.load(getRailEntityId(railId));
-  if (!rail) {
-    log.warning("PaymentArbitrated: Rail {} not found", [railId.toString()]);
-    return;
-  }
-
-  const dataSet = DataSet.load(getDataSetEntityId(dataSetId));
-
-  rail.settledAmount = rail.settledAmount.plus(arbitratedAmount);
-  rail.totalFaultedEpochs = rail.totalFaultedEpochs.plus(faultedEpochs);
-  rail.settledUpto = dataSet ? dataSet.lastProvenEpoch : rail.settledUpto;
-
-  rail.save();
-}

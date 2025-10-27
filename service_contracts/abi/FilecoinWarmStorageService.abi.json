@@ -101,7 +101,7 @@
   },
   {
     "type": "function",
-    "name": "calculateRatesPerEpoch",
+    "name": "calculateRatePerEpoch",
     "inputs": [
       {
         "name": "totalBytes",
@@ -112,16 +112,6 @@
     "outputs": [
       {
         "name": "storageRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cacheMissRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnRate",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -349,7 +339,12 @@
             "internalType": "uint256"
           },
           {
-            "name": "pricePerTiBPerMonthWithCDN",
+            "name": "pricePerTiBCdnEgress",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pricePerTiBCacheMissEgress",
             "type": "uint256",
             "internalType": "uint256"
           },
@@ -360,6 +355,11 @@
           },
           {
             "name": "epochsPerMonth",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "minimumPricePerMonth",
             "type": "uint256",
             "internalType": "uint256"
           }
@@ -400,30 +400,6 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "isEpochProven",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "epoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -719,17 +695,17 @@
     "name": "storageProviderChanged",
     "inputs": [
       {
-        "name": "dataSetId",
+        "name": "",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "oldServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "newServiceProvider",
+        "name": "",
         "type": "address",
         "internalType": "address"
       },
@@ -915,7 +891,7 @@
         ]
       }
     ],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1268,43 +1244,6 @@
   },
   {
     "type": "event",
-    "name": "PaymentArbitrated",
-    "inputs": [
-      {
-        "name": "railId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "originalAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "modifiedAmount",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "faultedEpochs",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "PieceAdded",
     "inputs": [
       {
@@ -1485,17 +1424,6 @@
       }
     ],
     "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AddressAlreadySet",
-    "inputs": [
-      {
-        "name": "field",
-        "type": "uint8",
-        "internalType": "enum Errors.AddressField"
-      }
-    ]
   },
   {
     "type": "error",
@@ -1744,6 +1672,22 @@
   },
   {
     "type": "error",
+    "name": "ExtraDataTooLarge",
+    "inputs": [
+      {
+        "name": "actualSize",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "maxAllowedSize",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "FailedCall",
     "inputs": []
   },
@@ -1753,6 +1697,115 @@
     "inputs": [
       {
         "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientFundsForMinimumRate",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "minimumRequired",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "available",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLockupAllowance",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "lockupAllowance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "lockupUsage",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minimumLockupRequired",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientMaxLockupPeriod",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "maxLockupPeriod",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "requiredLockupPeriod",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientRateAllowance",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "rateAllowance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "rateUsage",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minimumRateRequired",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -2004,27 +2057,6 @@
   },
   {
     "type": "error",
-    "name": "OldServiceProviderMismatch",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OnlyFilBeamControllerAllowed",
     "inputs": [
       {
@@ -2050,6 +2082,22 @@
       },
       {
         "name": "actual",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OperatorNotApproved",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "operator",
         "type": "address",
         "internalType": "address"
       }
@@ -2108,22 +2156,6 @@
     "type": "error",
     "name": "ProviderAlreadyApproved",
     "inputs": [
-      {
-        "name": "providerId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "ProviderNotApproved",
-    "inputs": [
-      {
-        "name": "provider",
-        "type": "address",
-        "internalType": "address"
-      },
       {
         "name": "providerId",
         "type": "uint256",

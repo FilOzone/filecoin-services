@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.27;
 
+import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
+
 /// @title Errors
 /// @notice Centralized library for custom error definitions across the protocol
 library Errors {
@@ -9,8 +11,8 @@ library Errors {
     enum AddressField {
         /// PDPVerifier contract address
         PDPVerifier,
-        /// Payments contract address
-        Payments,
+        /// FilecoinPayV1 contract address
+        FilecoinPayV1,
         /// USDFC contract address
         USDFC,
         /// FilBeam controller address
@@ -201,12 +203,16 @@ library Errors {
     /// @param railId The rail ID
     error RailNotAssociated(uint256 railId);
 
-    /// @notice The epoch range is invalid (toEpoch must be > fromEpoch)
+    /// @notice The epoch range is invalid
+    /// @notice Will be emitted if any of the following conditions is NOT met:
+    /// @notice 1. fromEpoch must be less than toEpoch
+    /// @notice 2. toEpoch must be less than block number
+    /// @notice 3. toEpoch must be greater than the activation epoch
     /// @param fromEpoch The starting epoch (exclusive)
     /// @param toEpoch The ending epoch (inclusive)
     error InvalidEpochRange(uint256 fromEpoch, uint256 toEpoch);
 
-    /// @notice Only the Payments contract can call this function
+    /// @notice Only the FilecoinPayV1 contract can call this function
     /// @param expected The expected payments contract address
     /// @param actual The caller's address
     error CallerNotPayments(address expected, address actual);
@@ -221,11 +227,6 @@ library Errors {
     /// @notice Provider is not registered in the ServiceProviderRegistry
     /// @param provider The provider address
     error ProviderNotRegistered(address provider);
-
-    /// @notice Provider is not approved for service
-    /// @param provider The provider address
-    /// @param providerId The provider ID from registry
-    error ProviderNotApproved(address provider, uint256 providerId);
 
     /// @notice Provider is already approved
     /// @param providerId The provider ID that is already approved
@@ -287,4 +288,52 @@ library Errors {
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The end epoch when the PDP payment rail will finalize
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);
+
+    /// @notice Extra data size exceeds the maximum allowed limit
+    /// @param actualSize The size of the provided extra data
+    /// @param maxAllowedSize The maximum allowed size for extra data
+    error ExtraDataTooLarge(uint256 actualSize, uint256 maxAllowedSize);
+    /// @notice The supplied capability keys did not contain all of the required keys for the product type
+    /// @param productType The kind of service product attempted to be registered
+    error InsufficientCapabilitiesForProduct(ServiceProviderRegistryStorage.ProductType productType);
+
+    /// @notice Payer has insufficient available funds to cover the minimum storage rate
+    /// @param payer The payer address
+    /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
+    /// @param available The available funds in the payer's account
+    error InsufficientFundsForMinimumRate(address payer, uint256 minimumRequired, uint256 available);
+
+    /// @notice Operator is not approved for the payer
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    error OperatorNotApproved(address payer, address operator);
+
+    /// @notice Operator has insufficient rate allowance for the minimum storage rate
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param rateAllowance The total rate allowance approved
+    /// @param rateUsage The current rate usage
+    /// @param minimumRateRequired The minimum rate required per epoch
+    error InsufficientRateAllowance(
+        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 minimumRateRequired
+    );
+
+    /// @notice Operator has insufficient lockup allowance for the minimum lockup
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param lockupAllowance The total lockup allowance approved
+    /// @param lockupUsage The current lockup usage
+    /// @param minimumLockupRequired The minimum lockup required
+    error InsufficientLockupAllowance(
+        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 minimumLockupRequired
+    );
+
+    /// @notice Operator's max lockup period is insufficient for the default lockup period
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param maxLockupPeriod The maximum lockup period approved
+    /// @param requiredLockupPeriod The required lockup period
+    error InsufficientMaxLockupPeriod(
+        address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
+    );
 }

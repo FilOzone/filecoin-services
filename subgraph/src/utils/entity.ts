@@ -4,7 +4,6 @@ import { ProductAdded as ProductAddedEvent } from "../../generated/ServiceProvid
 import { BIGINT_ZERO, BIGINT_ONE, ContractAddresses, LeafSize } from "./constants";
 import { ProviderStatus } from "./types";
 import { getProviderProductEntityId, getPieceEntityId, getDataSetEntityId } from "./keys";
-import { decodePDPOfferingData, getProviderProductData } from "./contract-calls";
 import { validateCommPv2, unpaddedSize } from "./cid";
 
 export function createRails(
@@ -30,9 +29,6 @@ export function createRails(
     rail.arbiter = listenerAddr;
     rail.dataSet = dataSetId;
     rail.paymentRate = BIGINT_ZERO;
-    rail.settledUpto = BIGINT_ZERO;
-    rail.settledAmount = BIGINT_ZERO;
-    rail.totalFaultedEpochs = BIGINT_ZERO;
     rail.endEpoch = BIGINT_ZERO;
     rail.isActive = true;
     rail.queueLength = BIGINT_ZERO;
@@ -41,7 +37,6 @@ export function createRails(
 }
 
 export function createProviderProduct(event: ProductAddedEvent): void {
-  const providerId = event.params.providerId;
   const productType = event.params.productType;
   const serviceProvider = event.params.serviceProvider;
   const capabilityKeys = event.params.capabilityKeys;
@@ -50,11 +45,7 @@ export function createProviderProduct(event: ProductAddedEvent): void {
   const productId = getProviderProductEntityId(serviceProvider, productType);
   const providerProduct = new ProviderProduct(productId);
 
-  const productData = getProviderProductData(event.address, providerId, productType);
-
   providerProduct.provider = serviceProvider;
-  providerProduct.productData = productData;
-  providerProduct.decodedProductData = decodePDPOfferingData(event.address, productData).toJSON();
   providerProduct.productType = BigInt.fromI32(productType);
   providerProduct.capabilityKeys = capabilityKeys;
   providerProduct.capabilityValues = capabilityValues;

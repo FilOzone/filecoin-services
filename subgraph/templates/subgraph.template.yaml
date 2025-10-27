@@ -82,8 +82,6 @@ dataSources:
           handler: handlePDPPaymentTerminated
         - event: "CDNPaymentTerminated(indexed uint256,uint256,uint256,uint256)"
           handler: handleCDNPaymentTerminated
-        - event: "PaymentArbitrated(uint256,uint256,uint256,uint256,uint256)"
-          handler: handlePaymentArbitrated
       file: ./src/filecoin-warm-storage-service.ts
   # LEGACY DATA SOURCE: Indexes events from older contract versions so historical data isn’t lost
   # Example: PieceAdded event was upgraded - old had (dataSetId, pieceId, keys[], values[]), new has pieceCid param
@@ -137,9 +135,9 @@ dataSources:
           handler: handleProviderInfoUpdated
         - event: "ProviderRemoved(indexed uint256)"
           handler: handleProviderRemoved
-        - event: "ProductAdded(indexed uint256,indexed uint8,string,address,string[],string[])"
+        - event: "ProductAdded(indexed uint256,indexed uint8,address,string[],bytes[])"
           handler: handleProductAdded
-        - event: "ProductUpdated(indexed uint256,indexed uint8,string,address,string[],string[])"
+        - event: "ProductUpdated(indexed uint256,indexed uint8,address,string[],bytes[])"
           handler: handleProductUpdated
         - event: "ProductRemoved(indexed uint256,indexed uint8)"
           handler: handleProductRemoved

@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 
-contract ServiceProviderRegistryPaginationTest is Test {
+contract ServiceProviderRegistryPaginationTest is MockFVMTest {
+    using PDPOffering for PDPOffering.Schema;
+
     ServiceProviderRegistry public registry;
 
     address public owner = address(0x1);
@@ -21,10 +24,10 @@ contract ServiceProviderRegistryPaginationTest is Test {
     uint256 public constant REGISTRATION_FEE = 5 ether;
     string public constant SERVICE_URL = "https://test-service.com";
 
-    ServiceProviderRegistryStorage.PDPOffering public defaultPDPData;
-    bytes public encodedDefaultPDPData;
+    PDPOffering.Schema public defaultPDPData;
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         vm.startPrank(owner);
 
         // Deploy implementation
@@ -39,19 +42,17 @@ contract ServiceProviderRegistryPaginationTest is Test {
         vm.stopPrank();
 
         // Set up default PDP data
-        defaultPDPData = ServiceProviderRegistryStorage.PDPOffering({
+        defaultPDPData = PDPOffering.Schema({
             serviceURL: SERVICE_URL,
             minPieceSizeInBytes: 1024,
             maxPieceSizeInBytes: 1048576,
             ipniPiece: true,
             ipniIpfs: false,
-            storagePricePerTibPerMonth: 100,
+            storagePricePerTibPerDay: 100,
             minProvingPeriodInEpochs: 10,
             location: "US-WEST",
             paymentTokenAddress: IERC20(address(0))
         });
-
-        encodedDefaultPDPData = registry.encodePDPOffering(defaultPDPData);
 
         // Give providers ETH for registration
         vm.deal(provider1, 10 ether);
@@ -84,14 +85,14 @@ contract ServiceProviderRegistryPaginationTest is Test {
     function testPaginationSingleProvider() public {
         // Register one provider
         vm.prank(provider1);
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Get with limit larger than count
@@ -122,6 +123,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
     function testPaginationPageBoundaries() public {
         // Register 5 providers
         address[5] memory providers = [provider1, provider2, provider3, provider4, provider5];
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(providers[i]);
             registry.registerProvider{value: REGISTRATION_FEE}(
@@ -129,9 +131,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
-                encodedDefaultPDPData,
-                new string[](0),
-                new string[](0)
+                keys,
+                values
             );
         }
 
@@ -173,6 +174,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
     function testPaginationWithInactiveProviders() public {
         // Register 5 providers
         address[5] memory providers = [provider1, provider2, provider3, provider4, provider5];
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         for (uint256 i = 0; i < 5; i++) {
             vm.prank(providers[i]);
             registry.registerProvider{value: REGISTRATION_FEE}(
@@ -180,9 +182,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
-                encodedDefaultPDPData,
-                new string[](0),
-                new string[](0)
+                keys,
+                values
             );
         }
 
@@ -217,6 +218,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
     // ========== Test Edge Cases with Limits ==========
 
     function testPaginationEdgeLimits() public {
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         // Register 3 providers
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -224,9 +226,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             "",
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         vm.prank(provider2);
@@ -235,9 +236,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             "",
             "Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         vm.prank(provider3);
@@ -246,9 +246,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             "",
             "Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Test with limit 0 (should return empty)
@@ -276,6 +275,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
     // ========== Test Consistency with getAllActiveProviders ==========
 
     function testPaginationConsistencyWithGetAll() public {
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         // Register 6 providers
         address[6] memory providers = [provider1, provider2, provider3, provider4, provider5, provider6];
         for (uint256 i = 0; i < 6; i++) {
@@ -285,9 +285,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
-                encodedDefaultPDPData,
-                new string[](0),
-                new string[](0)
+                keys,
+                values
             );
         }
 
@@ -339,6 +338,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
         // Initially should be 0
         assertEq(registry.activeProviderCount(), 0);
 
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         // Register first provider
         vm.prank(provider1);
         registry.registerProvider{value: REGISTRATION_FEE}(
@@ -346,9 +346,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             "",
             "Provider 1",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
         assertEq(registry.activeProviderCount(), 1);
 
@@ -359,9 +358,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             "",
             "Provider 2",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
         assertEq(registry.activeProviderCount(), 2);
 
@@ -377,9 +375,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
             "",
             "Provider 3",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            encodedDefaultPDPData,
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
         assertEq(registry.activeProviderCount(), 2);
 
@@ -396,6 +393,7 @@ contract ServiceProviderRegistryPaginationTest is Test {
     // ========== Test Sequential Pages ==========
 
     function testSequentialPagination() public {
+        (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
         // Register 10 providers (need 4 more addresses)
         address provider7 = address(0x8);
         address provider8 = address(0x9);
@@ -427,9 +425,8 @@ contract ServiceProviderRegistryPaginationTest is Test {
                 "",
                 string.concat("Provider ", vm.toString(i + 1)),
                 ServiceProviderRegistryStorage.ProductType.PDP,
-                encodedDefaultPDPData,
-                new string[](0),
-                new string[](0)
+                keys,
+                values
             );
         }
 

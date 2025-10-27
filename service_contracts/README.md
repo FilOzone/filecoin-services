@@ -29,6 +29,46 @@ This directory contains the smart contracts for different Filecoin services usin
   - `pdp` - PDP verifier contract (from main branch)
 
 
+## Dataset Status & Lifecycle
+
+Datasets have a simplified two-state lifecycle system to track their operational status:
+
+### Status States
+
+- **Inactive**: Dataset doesn't exist or has no pieces added yet (rate = 0, no proving)
+- **Active**: Dataset has pieces and proving history (including terminated datasets)
+
+**Important**: Terminated datasets remain **Active** because they still have data. Status reflects data existence, not operational state. Use `pdpEndEpoch` to check if a dataset is terminated.
+
+### Querying Status
+
+**From Solidity:**
+```solidity
+import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageServiceStateLibrary.sol";
+
+// Get status
+DataSetStatus status = FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
+bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
+```
+
+**From Subgraph:**
+```graphql
+{
+  dataSet(id: "0x...") {
+    setId
+    status  # "ACTIVE" or "INACTIVE"
+    totalPieces
+    pdpEndEpoch
+  }
+}
+```
+
+**Via View Contract:**
+```solidity
+DataSetStatus status = viewContract.getDataSetStatus(dataSetId);
+// 0 = Inactive, 1 = Active
+```
+
 ### Extsload
 The allow for many view methods within the 24 KiB contract size constraint, viewing is done with `extsload` and `extsloadStruct`.
 There are three recommended ways to access `view` methods.
@@ -129,7 +169,7 @@ is linked at deploy time by the scripts in `tools/`.
 
 The project depends on:
 - PDP contracts from https://github.com/FilOzone/pdp.git (main branch)
-- Filecoin Services Payments from https://github.com/FilOzone/filecoin-services-payments
+- Filecoin Services FilecoinPayV1 from https://github.com/FilOzone/filecoin-services-payments
 - OpenZeppelin contracts (both standard and upgradeable)
 - Forge standard library
 

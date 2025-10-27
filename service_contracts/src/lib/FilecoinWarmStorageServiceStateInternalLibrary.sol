@@ -78,16 +78,14 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return CHALLENGES_PER_PROOF;
     }
 
-    function clientDataSetIds(FilecoinWarmStorageService service, address payer, uint256 clientDataSetId)
+    function clientNonces(FilecoinWarmStorageService service, address payer, uint256 nonce)
         internal
         view
         returns (uint256)
     {
         return uint256(
             service.extsload(
-                keccak256(
-                    abi.encode(clientDataSetId, keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SET_IDS_SLOT)))
-                )
+                keccak256(abi.encode(nonce, keccak256(abi.encode(payer, StorageLayout.CLIENT_NONCES_SLOT))))
             )
         );
     }
@@ -121,18 +119,33 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         info.dataSetId = dataSetId;
     }
 
+    /**
+     * @notice Get the current status of a dataset
+     * @dev A dataset is Active when it has pieces and proving history (including terminated datasets)
+     * @dev A dataset is Inactive when: non-existent or no pieces added yet
+     * @param service The service contract
+     * @param dataSetId The ID of the dataset
+     * @return status The current status
+     */
     function getDataSetStatus(FilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
         returns (FilecoinWarmStorageService.DataSetStatus status)
     {
         FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+
+        // Non-existent datasets are inactive
         if (info.pdpRailId == 0) {
-            return FilecoinWarmStorageService.DataSetStatus.NotFound;
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
-        if (info.pdpEndEpoch != 0) {
-            return FilecoinWarmStorageService.DataSetStatus.Terminating;
+
+        // Check if proving is activated (has pieces)
+        // Inactive only if no proving has started, everything else is Active
+        uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
+        if (activationEpoch == 0) {
+            return FilecoinWarmStorageService.DataSetStatus.Inactive;
         }
+
         return FilecoinWarmStorageService.DataSetStatus.Active;
     }
 

@@ -39,13 +39,13 @@ echo "Checking USDFC balance before approval and data set creation..."
 BALANCE_BEFORE=$(cast call $USDFC_TOKEN "balanceOf(address)" "$MY_ADDRESS")
 echo "USDFC Balance before: $BALANCE_BEFORE"
 
-# Check Payments contract internal balance before
-echo "Checking Payments contract internal balance before..."
+# Check FilecoinPayV1 contract internal balance before
+echo "Checking FilecoinPayV1 contract internal balance before..."
 ACCOUNT_INFO_BEFORE=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
 echo "Internal account balance before: $ACCOUNT_INFO_BEFORE"
 
-# First, deposit USDFC into the Payments contract (this step is crucial!)
-echo "Approving USDFC to be spent by Payments contract..."
+# First, deposit USDFC into the FilecoinPayV1 contract (this step is crucial!)
+echo "Approving USDFC to be spent by FilecoinPayV1 contract..."
 APPROVE_TX=$(cast send --password "$PASSWORD" \
     $USDFC_TOKEN "approve(address,uint256)" $PAYMENTS_PROXY "1000000000000000000" \
     --gas-limit 3000000000 --nonce "$CURRENT_NONCE")
@@ -59,8 +59,8 @@ sleep 15
 CURRENT_NONCE=$((CURRENT_NONCE + 1))
 echo "Next nonce: $CURRENT_NONCE"
 
-# Actually deposit funds into the Payments contract
-echo "Depositing USDFC into the Payments contract..."
+# Actually deposit funds into the FilecoinPayV1 contract
+echo "Depositing USDFC into the FilecoinPayV1 contract..."
 DEPOSIT_TX=$(cast send --password "$PASSWORD" \
     $PAYMENTS_PROXY "deposit(address,address,uint256)" \
     $USDFC_TOKEN "$MY_ADDRESS" "1000000000000000000" \
@@ -75,12 +75,12 @@ sleep 15
 CURRENT_NONCE=$((CURRENT_NONCE + 1))
 echo "Next nonce: $CURRENT_NONCE"
 
-# Check Payments contract internal balance after deposit
-echo "Checking Payments contract internal balance after deposit..."
+# Check FilecoinPayV1 contract internal balance after deposit
+echo "Checking FilecoinPayV1 contract internal balance after deposit..."
 ACCOUNT_INFO_AFTER_DEPOSIT=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
 echo "Internal account balance after deposit: $ACCOUNT_INFO_AFTER_DEPOSIT"
 
-# Then set operator approval in the Payments contract for the PDP service
+# Then set operator approval in the FilecoinPayV1 contract for the PDP service
 echo "Setting operator approval for the PDP service..."
 OPERATOR_TX=$(cast send --password "$PASSWORD" \
     $PAYMENTS_PROXY "setOperatorApproval(address,address,bool,uint256,uint256)" \
@@ -121,8 +121,8 @@ echo "Checking USDFC balance after data set creation..."
 BALANCE_AFTER=$(cast call $USDFC_TOKEN "balanceOf(address)" "$MY_ADDRESS")
 echo "USDFC Balance after: $BALANCE_AFTER"
 
-# Check Payments contract internal balance after data set creation
-echo "Checking Payments contract internal balance after data set creation..."
+# Check FilecoinPayV1 contract internal balance after data set creation
+echo "Checking FilecoinPayV1 contract internal balance after data set creation..."
 ACCOUNT_INFO_AFTER=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$MY_ADDRESS")
 echo "Payer internal account balance after: $ACCOUNT_INFO_AFTER"
 
@@ -136,7 +136,7 @@ if [ -n "$PDP_RAIL_ID" ]; then
 
     # Check payee's internal balance
     if [ -n "$PAYEE_ADDRESS" ]; then
-        echo "Checking payee's internal balance in Payments contract..."
+        echo "Checking payee's internal balance in FilecoinPayV1 contract..."
         PAYEE_BALANCE=$(cast call $PAYMENTS_PROXY "accounts(address,address)" $USDFC_TOKEN "$PAYEE_ADDRESS")
         echo "Payee internal balance: $PAYEE_BALANCE"
     else

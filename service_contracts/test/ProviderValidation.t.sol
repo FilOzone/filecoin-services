@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test} from "forge-std/Test.sol";
-import {Payments} from "@fws-payments/Payments.sol";
+import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -11,12 +11,14 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
+import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract ProviderValidationTest is Test {
+contract ProviderValidationTest is MockFVMTest {
+    using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
     FilecoinWarmStorageService public warmStorage;
@@ -24,7 +26,7 @@ contract ProviderValidationTest is Test {
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry;
     MockPDPVerifier public pdpVerifier;
-    Payments public payments;
+    FilecoinPayV1 public payments;
     MockERC20 public usdfc;
 
     address public owner;
@@ -40,7 +42,8 @@ contract ProviderValidationTest is Test {
         uint8(27)
     );
 
-    function setUp() public {
+    function setUp() public override {
+        super.setUp();
         owner = address(this);
         provider1 = address(0x1);
         provider2 = address(0x2);
@@ -63,8 +66,8 @@ contract ProviderValidationTest is Test {
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
         sessionKeyRegistry = new SessionKeyRegistry();
 
-        // Deploy Payments (no longer upgradeable)
-        payments = new Payments();
+        // Deploy FilecoinPayV1 (no longer upgradeable)
+        payments = new FilecoinPayV1();
 
         // Deploy FilecoinWarmStorageService
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
@@ -90,7 +93,7 @@ contract ProviderValidationTest is Test {
         viewContract = new FilecoinWarmStorageServiceStateView(warmStorage);
 
         // Transfer tokens to client
-        usdfc.safeTransfer(client, 10000 * 10 ** 6);
+        usdfc.safeTransfer(client, 10000 * 10 ** 18);
     }
 
     function testProviderNotRegistered() public {
@@ -108,6 +111,20 @@ contract ProviderValidationTest is Test {
     }
 
     function testProviderRegisteredButNotApproved() public {
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider1.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-West",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
+        // NOTE: This operation is expected to pass.
+        // Approval is not required to perform onboarding actions.
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -115,24 +132,25 @@ contract ProviderValidationTest is Test {
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider1.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-West",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
-        // Try to create dataset without approval
+        // Setup payment approvals for client
+        vm.startPrank(client);
+        payments.setOperatorApproval(
+            usdfc,
+            address(warmStorage),
+            true,
+            1000 * 10 ** 18, // rate allowance
+            1000 * 10 ** 18, // lockup allowance
+            365 days // max lockup period
+        );
+        usdfc.approve(address(payments), 100 * 10 ** 18);
+        payments.deposit(usdfc, client, 100 * 10 ** 18);
+        vm.stopPrank();
+
+        // Create dataset without approval should now succeed
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         bytes memory extraData = abi.encode(client, 0, metadataKeys, metadataValues, FAKE_SIGNATURE);
@@ -141,11 +159,26 @@ contract ProviderValidationTest is Test {
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
 
         vm.prank(provider1);
-        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotApproved.selector, provider1, 1));
-        pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+        // Dataset creation shouldn't require provider be approved
+        uint256 dataSetId = pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+
+        // Verify the dataset was created
+        assertTrue(dataSetId > 0, "Dataset should be created");
     }
 
     function testProviderApprovedCanCreateDataset() public {
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider1.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-West",
+            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
         // Register provider1 in serviceProviderRegistry
         vm.prank(provider1);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
@@ -153,21 +186,8 @@ contract ProviderValidationTest is Test {
             "Provider 1",
             "Provider 1 Description",
             ServiceProviderRegistryStorage.ProductType.PDP,
-            abi.encode(
-                ServiceProviderRegistryStorage.PDPOffering({
-                    serviceURL: "https://provider1.com",
-                    minPieceSizeInBytes: 1024,
-                    maxPieceSizeInBytes: 1024 * 1024,
-                    ipniPiece: true,
-                    ipniIpfs: false,
-                    storagePricePerTibPerMonth: 1 ether,
-                    minProvingPeriodInEpochs: 2880,
-                    location: "US-West",
-                    paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-                })
-            ),
-            new string[](0),
-            new string[](0)
+            keys,
+            values
         );
 
         // Approve provider1
@@ -175,15 +195,15 @@ contract ProviderValidationTest is Test {
 
         // Approve USDFC spending, deposit and set operator
         vm.startPrank(client);
-        usdfc.approve(address(payments), 10000 * 10 ** 6);
-        payments.deposit(usdfc, client, 10000 * 10 ** 6); // Deposit funds
+        usdfc.approve(address(payments), 10000 * 10 ** 18);
+        payments.deposit(usdfc, client, 10000 * 10 ** 18); // Deposit funds
         payments.setOperatorApproval(
             usdfc, // token
             address(warmStorage), // operator
             true, // approved
-            10000 * 10 ** 6, // rateAllowance
-            10000 * 10 ** 6, // lockupAllowance
-            10000 * 10 ** 6 // allowance
+            10000 * 10 ** 18, // rateAllowance
+            10000 * 10 ** 18, // lockupAllowance
+            10000 * 10 ** 18 // allowance
         );
         vm.stopPrank();
 
