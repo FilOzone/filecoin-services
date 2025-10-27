@@ -3,16 +3,56 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [1.0.0] - 2025-10-27 - FWSS GA Release
+
+This is the General Availability (GA) release of the Filecoin Warm Storage Service (FWSS) contracts.
+
+## Core Contracts - Calibration Network
+
+1. Payments Contract: [0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0](https://calibration.filfox.info/en/address/0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0)
+  - From [Filecoin-Pay v1.0.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v1.0.0)
+2. PDPVerifier Implementation: [0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42](https://calibration.filfox.info/en/address/0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42)
+  - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
+3. PDPVerifier Proxy: [0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C](https://calibration.filfox.info/en/address/0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C)
+  - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
+4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+5. ServiceProviderRegistry Implementation: [TODO](https://calibration.filfox.info/en/address/)
+6. ServiceProviderRegistry Proxy: [TOD](https://calibration.filfox.info/en/address/)
+7. FilecoinWarmStorageService Implementation: [TODO](https://calibration.filfox.info/en/address/)
+8. FilecoinWarmStorageService Proxy: [TODO](https://calibration.filfox.info/en/address/)
+9. FilecoinWarmStorageServiceStateView: [TODO](https://calibration.filfox.info/en/address/)
+
+Configuration:
+- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- CHALLENGE_FINALITY: 10 epochs 
+- MAX_PROVING_PERIOD: 240 epochs
+- CHALLENGE_WINDOW_SIZE: 20 epochs
+- Service Name: "Filecoin Warm Storage Service - Calibration GA Release"
+- Service Description: "Calibration FWSS GA contracts"
+
+## Core Contracts - Mainnet
+
+This section will be filled in once E2E testing in Calibration Network with the GA release has been completed.
 
 ### Added
-- Dataset lifecycle tracking with `DataSetStatusChanged` event ([#169](https://github.com/FilOzone/filecoin-services/issues/169))
-- Convenience functions `isDataSetActive()` and `getDataSetStatusDetails()` for status checking
-- Comprehensive documentation: dataset lifecycle guide and integration guide
-- Subgraph status history tracking with `DataSetStatusHistory` entity
+- Dataset lifecycle tracking with `DataSetStatusChanged` event ([#314](https://github.com/FilOzone/filecoin-services/pull/314))
+- EXTRA_DATA size limits for enhanced security ([#313](https://github.com/FilOzone/filecoin-services/pull/313))
+- ServiceProviderRegistry capability key-value store with bloom filter validation ([#308](https://github.com/FilOzone/filecoin-services/pull/308))
+  - New utility libraries: `BigEndian.sol` and `BloomSet.sol`
+  - `getAllProductCapabilities()` function to retrieve all product key-value pairs
+  - `productCapabilities()` mapping for flexible product metadata storage
+- Floor price set to 0.06 USDFC/month ([#320](https://github.com/FilOzone/filecoin-services/pull/320))
+- Mutable pricing configuration ([#325](https://github.com/FilOzone/filecoin-services/pull/325))
+- Random nonces for AddPieces operations ([#317](https://github.com/FilOzone/filecoin-services/pull/317))
+- Relaxed constraints on `setViewContract` ([#310](https://github.com/FilOzone/filecoin-services/pull/310))
+- Auto-verify contracts after deployment ([#272](https://github.com/FilOzone/filecoin-services/pull/272))
+- Regression tests for dataset cleanup ([#276](https://github.com/FilOzone/filecoin-services/pull/276))
+- Export Errors ABI ([#329](https://github.com/FilOzone/filecoin-services/pull/329))
 
 ### Changed
-- **BREAKING**: Simplified `DataSetStatus` enum from 3 states to 2 states ([#169](https://github.com/FilOzone/filecoin-services/issues/169))
+- **BREAKING**: Simplified `DataSetStatus` enum from 3 states to 2 states ([#314](https://github.com/FilOzone/filecoin-services/pull/314))
   - **Old values**: `NotFound (0)`, `Active (1)`, `Terminating (2)`
   - **New values**: `Inactive (0)`, `Active (1)`
   - **Migration**: 
@@ -21,19 +61,55 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
     - Use `pdpEndEpoch` to check if a dataset is terminated
   - **Details**: `Inactive` represents non-existent datasets or datasets with no pieces yet. `Active` represents all datasets with pieces, including terminated ones.
   - Use `getDataSetStatusDetails()` to check termination status separately from Active/Inactive status
-- Subgraph schema updated with status enum and history tracking
-- **Calibnet**: Reduced DEFAULT_CHALLENGE_WINDOW_SIZE from 30 epochs to 20 epochs for faster testing iteration
-- Made storage pricing and minimum rate mutable storage variables instead of immutable constants ([#306](https://github.com/FilOzone/filecoin-services/issues/306))
-  - `storagePricePerTibPerMonth` (initially 2.5 USDFC, max 10 USDFC)
-  - `minimumStorageRatePerMonth` (initially 0.06 USDFC, max 0.24 USDFC)
-- Added `updatePricing(uint256 newStoragePrice, uint256 newMinimumRate)` function to allow owner to update pricing rates without contract upgrades
-  - Pass 0 to keep existing value unchanged
-  - At least one price must be non-zero
-  - Validates against 4x upper bounds (10 USDFC storage, 0.24 USDFC minimum rate)
-  - Price updates apply immediately to existing payment rails when recalculated
-- Added `getCurrentPricingRates()` function to query current storage price and minimum rate
-- Added `PricingUpdated(uint256 storagePrice, uint256 minimumRate)` event to track pricing changes
-- Added `AtLeastOnePriceMustBeNonZero` and `PriceExceedsMaximum` errors for pricing validation
+- **BREAKING**: ServiceProviderRegistry Bloom Schema refactor ([#308](https://github.com/FilOzone/filecoin-services/pull/308))
+  - **Removed** encoded `productData`; all product attributes now use capability key-value store
+  - **Keys** are `string`, **values** are `bytes`
+  - **Migration for synapse and curio**:
+    1. All `productInfo` previously ABI-encoded is removed. Use capability key-value store instead. Encode unsigned integers as big-endian, addresses as `bytes[20]`, strings as UTF-8.
+    2. Replace `getPDPOffering()` with `getAllProductCapabilities()` to retrieve product info
+    3. `getActiveProvidersByProductType()` and `getProvidersByProductType()` now return `productCapabilityValues` in `ProviderWithProduct[]`
+    4. `getProductCapabilities()` no longer returns `exists` bool array
+    5. `getProductCapability()` is removed; use `productCapabilities` mapping instead
+    6. `updatePDPServiceWithCapabilities()` is removed; use `updateProduct()` instead
+    7. Capability values cannot be empty; exclude the key if product lacks the capability
+  - Contract size reduced from 21,290 to 17,751 bytes (-3,539 bytes)
+- **BREAKING**: Non-sequential `clientDataSetId` ([#265](https://github.com/FilOzone/filecoin-services/pull/265))
+  - **Changed** from sequential counter to mapping-based non-sequential IDs
+  - **Migration**: Clients can now create datasets with any unique `clientDataSetId` value, removing the sequential bottleneck
+  - Added `DataSetIdAlreadyExists` error for duplicate IDs
+- **BREAKING**: Renamed Payments contract to FilecoinPayV1 ([#293](https://github.com/FilOzone/filecoin-services/pull/293))
+  - **Migration**: Update all contract references from `Payments` to `FilecoinPayV1`
+  - ABI file renamed: `Payments.abi.json` → `FilecoinPayV1.abi.json`
+  - Deployment scripts and documentation updated
+- **BREAKING**: ServiceProviderRegistry events now emit raw productData ([#294](https://github.com/FilOzone/filecoin-services/pull/294))
+  - **Removed** `serviceUrl` argument from Product events
+  - **Migration**: Parse `serviceUrl` from raw `productData` if needed
+  - Events now more portable and forward-compatible with future product types
+- **BREAKING**: ServiceProviderRegistry deletes removed product data ([#295](https://github.com/FilOzone/filecoin-services/pull/295))
+  - **Changed** behavior: Product data is now properly cleaned up when removed
+  - **Migration**: Use `isActive` to detect if product exists, not presence of data fields
+- **Calibnet**: Reduced `DEFAULT_CHALLENGE_WINDOW_SIZE` from 30 epochs to 20 epochs for faster testing iteration ([#327](https://github.com/FilOzone/filecoin-services/pull/327))
+- Made storage pricing and minimum rate mutable storage variables instead of immutable constants ([#325](https://github.com/FilOzone/filecoin-services/pull/325))
+- Made FWSS permissionless by removing provider approval checks ([#302](https://github.com/FilOzone/filecoin-services/pull/302))
+- CDN pricing changed from monthly to usage-based egress model ([#324](https://github.com/FilOzone/filecoin-services/pull/324))
+- Use constant typehash instead of rehashing for EIP-712 signatures ([#315](https://github.com/FilOzone/filecoin-services/pull/315))
+- Burn mechanism now uses FVMPay ([#296](https://github.com/FilOzone/filecoin-services/pull/296))
+- SignatureVerificationLib refactored to use delegate pattern ([#282](https://github.com/FilOzone/filecoin-services/pull/282))
+- Subgraph now uses productData from events directly ([#298](https://github.com/FilOzone/filecoin-services/pull/298))
+- Subgraph decodes PDP offering using ethereum.decode ([#290](https://github.com/FilOzone/filecoin-services/pull/290))
+- CDNPaymentRailsToppedUp event refactored ([#284](https://github.com/FilOzone/filecoin-services/pull/284))
+- Environment variable renamed to PDP_VERIFIER_PROXY_ADDRESS ([#292](https://github.com/FilOzone/filecoin-services/pull/292))
+- Updated lib/pdp to v3.1.0 with improved validator support for forward progress despite missing proofs ([#321](https://github.com/FilOzone/filecoin-services/pull/321))
+
+### Removed
+- **BREAKING**: `PaymentArbitrated` event removed from contract and subgraph ([#301](https://github.com/FilOzone/filecoin-services/pull/301))
+
+### Performance Improvements
+- Optimized payment validation to loop over proving periods ([#267](https://github.com/FilOzone/filecoin-services/pull/267))
+- Removed railToDataSet mapping for CDN rails ([#278](https://github.com/FilOzone/filecoin-services/pull/278))
+- Optimized withCDN metadata key handling ([#271](https://github.com/FilOzone/filecoin-services/pull/271))
+- Added dataSetHasCDNMetadataKey optimization ([#274](https://github.com/FilOzone/filecoin-services/pull/274))
+- Replaced error strings with custom errors ([#270](https://github.com/FilOzone/filecoin-services/pull/270))
 
 ## [0.3.0] - 2025-10-08 - M3.1 Calibration Network Deployment
 
@@ -221,6 +297,8 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/filozone/filecoin-services/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/filozone/filecoin-services/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/filozone/filecoin-services/compare/v0.3.0...v1.0.0
+[0.3.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.3.0
 [0.2.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.2.0
 [0.1.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.1.0
