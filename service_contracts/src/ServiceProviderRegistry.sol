@@ -638,6 +638,66 @@ contract ServiceProviderRegistry is
         }
     }
 
+    /// @notice Get multiple providers with product information by their IDs
+    /// @param providerIds Array of provider IDs to retrieve
+    /// @param productType The type of product to include in the response
+    /// @return providersWithProducts Array of provider and product information corresponding to the input IDs
+    /// @return validIds Array of booleans indicating whether each ID is valid (exists, is active, and has the product)
+    /// @dev Returns empty ProviderWithProduct structs for invalid IDs, with corresponding validIds[i] = false
+    function getProvidersWithProductByIds(uint256[] calldata providerIds, ProductType productType)
+        external
+        view
+        returns (ProviderWithProduct[] memory providersWithProducts, bool[] memory validIds)
+    {
+        uint256 length = providerIds.length;
+        providersWithProducts = new ProviderWithProduct[](length);
+        validIds = new bool[](length);
+
+        uint256 _numProviders = numProviders;
+
+        for (uint256 i = 0; i < length; i++) {
+            uint256 providerId = providerIds[i];
+
+            if (providerId > 0 && providerId <= _numProviders) {
+                ServiceProviderInfo storage provider = providers[providerId];
+                ServiceProduct storage product = providerProducts[providerId][productType];
+
+                if (provider.serviceProvider != address(0) && provider.isActive && product.isActive) {
+                    providersWithProducts[i] = ProviderWithProduct({
+                        providerId: providerId,
+                        providerInfo: provider,
+                        product: product,
+                        productCapabilityValues: getProductCapabilities(providerId, productType, product.capabilityKeys)
+                    });
+                    validIds[i] = true;
+                } else {
+                    providersWithProducts[i] = _getEmptyProviderWithProduct();
+                    validIds[i] = false;
+                }
+            } else {
+                providersWithProducts[i] = _getEmptyProviderWithProduct();
+                validIds[i] = false;
+            }
+        }
+    }
+
+    /// @notice Internal helper to create an empty ProviderWithProduct
+    /// @return Empty ProviderWithProduct struct
+    function _getEmptyProviderWithProduct() internal pure returns (ProviderWithProduct memory) {
+        return ProviderWithProduct({
+            providerId: 0,
+            providerInfo: ServiceProviderInfo({
+                serviceProvider: address(0),
+                payee: address(0),
+                name: "",
+                description: "",
+                isActive: false
+            }),
+            product: ServiceProduct({productType: ProductType.PDP, capabilityKeys: new string[](0), isActive: false}),
+            productCapabilityValues: new bytes[](0)
+        });
+    }
+
     /// @notice Internal helper to create an empty ServiceProviderInfoView
     /// @return Empty ServiceProviderInfoView struct
     function _getEmptyProviderInfoView() internal pure returns (ServiceProviderInfoView memory) {
