@@ -37,8 +37,14 @@ Configuration:
 This section will be filled in once E2E testing in Calibration Network with the GA release has been completed.
 
 ### Added
+- Dataset lifecycle tracking with `DataSetStatusChanged` event ([#314](https://github.com/FilOzone/filecoin-services/pull/314))
 - EXTRA_DATA size limits for enhanced security ([#313](https://github.com/FilOzone/filecoin-services/pull/313))
+- ServiceProviderRegistry capability key-value store with bloom filter validation ([#308](https://github.com/FilOzone/filecoin-services/pull/308))
+  - New utility libraries: `BigEndian.sol` and `BloomSet.sol`
+  - `getAllProductCapabilities()` function to retrieve all product key-value pairs
+  - `productCapabilities()` mapping for flexible product metadata storage
 - Floor price set to 0.06 USDFC/month ([#320](https://github.com/FilOzone/filecoin-services/pull/320))
+- Mutable pricing configuration ([#325](https://github.com/FilOzone/filecoin-services/pull/325))
 - Random nonces for AddPieces operations ([#317](https://github.com/FilOzone/filecoin-services/pull/317))
 - Relaxed constraints on `setViewContract` ([#310](https://github.com/FilOzone/filecoin-services/pull/310))
 - Auto-verify contracts after deployment ([#272](https://github.com/FilOzone/filecoin-services/pull/272))
@@ -92,6 +98,7 @@ This section will be filled in once E2E testing in Calibration Network with the 
 - Subgraph now uses productData from events directly ([#298](https://github.com/FilOzone/filecoin-services/pull/298))
 - Subgraph decodes PDP offering using ethereum.decode ([#290](https://github.com/FilOzone/filecoin-services/pull/290))
 - CDNPaymentRailsToppedUp event refactored ([#284](https://github.com/FilOzone/filecoin-services/pull/284))
+- Environment variable renamed to PDP_VERIFIER_PROXY_ADDRESS ([#292](https://github.com/FilOzone/filecoin-services/pull/292))
 - Updated lib/pdp to v3.1.0 with improved validator support for forward progress despite missing proofs ([#321](https://github.com/FilOzone/filecoin-services/pull/321))
 
 ### Removed
