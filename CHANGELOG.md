@@ -16,11 +16,11 @@ This is the General Availability (GA) release of the Filecoin Warm Storage Servi
 3. PDPVerifier Proxy: [0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C](https://calibration.filfox.info/en/address/0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C)
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
 4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
-5. ServiceProviderRegistry Implementation: [TODO](https://calibration.filfox.info/en/address/)
-6. ServiceProviderRegistry Proxy: [TOD](https://calibration.filfox.info/en/address/)
-7. FilecoinWarmStorageService Implementation: [TODO](https://calibration.filfox.info/en/address/)
-8. FilecoinWarmStorageService Proxy: [TODO](https://calibration.filfox.info/en/address/)
-9. FilecoinWarmStorageServiceStateView: [TODO](https://calibration.filfox.info/en/address/)
+5. ServiceProviderRegistry Implementation: [0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3](https://calibration.filfox.info/en/address/0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3)
+6. ServiceProviderRegistry Proxy: [0x839e5c9988e4e9977d40708d0094103c0839Ac9D](https://calibration.filfox.info/en/address/0x839e5c9988e4e9977d40708d0094103c0839Ac9D)
+7. FilecoinWarmStorageService Implementation: [0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA](https://calibration.filfox.info/en/address/0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA)
+8. FilecoinWarmStorageService Proxy: [0x02925630df557F957f70E112bA06e50965417CA0](https://calibration.filfox.info/en/address/0x02925630df557F957f70E112bA06e50965417CA0)
+9. FilecoinWarmStorageServiceStateView: [0xA5D87b04086B1d591026cCE10255351B5AA4689B](https://calibration.filfox.info/en/address/0xA5D87b04086B1d591026cCE10255351B5AA4689B)
 
 Configuration:
 - USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)

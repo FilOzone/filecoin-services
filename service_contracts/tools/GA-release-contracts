@@ -1,0 +1,51 @@
+## FWSS GA Release - Calibration Network:
+
+DEPLOYING...
+========================================
+SessionKeyRegistry
+  ✅ Using existing address: 0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452
+PDPVerifier implementation
+  ✅ Using existing address: 0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42
+PDPVerifier proxy
+  ✅ Using existing address: 0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C
+FilecoinPayV1
+  ✅ Using existing address: 0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0
+Deploying ServiceProviderRegistry implementation
+  ✅ Deployed at: 0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3
+Deploying ServiceProviderRegistry proxy
+  📦 Implementation: 0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3
+  ✅ Deployed at: 0x839e5c9988e4e9977d40708d0094103c0839Ac9D
+Deploying SignatureVerificationLib
+  ✅ Deployed at: 0x3fD7BFFAcAfdf35083d1424c1feC6481c85087F6
+Deploying FilecoinWarmStorageService implementation
+  📚 Using libraries: src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:0x3fD7BFFAcAfdf35083d1424c1feC6481c85087F6
+  🔧 Constructor args: 6 arguments
+    ✅ Deployed at: 0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA
+Deploying FilecoinWarmStorageService proxy
+  📦 Implementation: 0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA
+   ✅ Deployed at: 0x02925630df557F957f70E112bA06e50965417CA0
+FilecoinWarmStorageServiceStateView
+  🔧 Using external deployment script...
+  FilecoinWarmStorageServiceStateView deployed at 0xA5D87b04086B1d591026cCE10255351B5AA4689B
+---
+✅ Deployment completed successfully!
+
+# DEPLOYMENT SUMMARY (calibnet)
+PDPVerifier Implementation: 0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42
+PDPVerifier Proxy: 0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C
+FilecoinPayV1 Contract: 0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0
+ServiceProviderRegistry Implementation: 0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3
+ServiceProviderRegistry Proxy: 0x839e5c9988e4e9977d40708d0094103c0839Ac9D
+FilecoinWarmStorageService Implementation: 0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA
+FilecoinWarmStorageService Proxy: 0x02925630df557F957f70E112bA06e50965417CA0
+FilecoinWarmStorageServiceStateView: 0xA5D87b04086B1d591026cCE10255351B5AA4689B
+
+Network Configuration (calibnet):
+Challenge finality: 10 epochs
+Max proving period: 240 epochs
+Challenge window size: 20 epochs
+USDFC token address: 0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0
+FilBeam controller address: 0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A
+FilBeam beneficiary address: 0x1D60d2F5960Af6341e842C539985FA297E10d6eA
+Service name: Filecoin Warm Storage Service - Calibration GA Release
+Service description: Calibration FWSS GA contracts
