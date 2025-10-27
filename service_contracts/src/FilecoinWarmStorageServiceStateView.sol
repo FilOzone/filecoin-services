@@ -70,6 +70,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getClientDataSets(client);
     }
 
+    function getCurrentPricingRates() external view returns (uint256 storagePrice, uint256 minimumRate) {
+        return service.getCurrentPricingRates();
+    }
+
     function getDataSet(uint256 dataSetId)
         external
         view
