@@ -246,7 +246,7 @@ contract FilecoinWarmStorageService is
 
     // Proving period constants - set during initialization
     uint64 private maxProvingPeriod;
-    uint256 private challengeWindowSize;
+    uint256 public challengeWindowSize;
 
     // Commission rate
     uint256 private serviceCommissionBps;

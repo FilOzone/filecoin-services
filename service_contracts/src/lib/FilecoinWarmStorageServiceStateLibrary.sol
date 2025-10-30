@@ -192,11 +192,11 @@ library FilecoinWarmStorageServiceStateLibrary {
         return uint64(uint256(service.extsload(StorageLayout.MAX_PROVING_PERIOD_SLOT)));
     }
 
-    // Number of epochs at the end of a proving period during which a
-    // proof of possession can be submitted
-    function challengeWindow(FilecoinWarmStorageService service) public view returns (uint256) {
-        return uint256(service.extsload(StorageLayout.CHALLENGE_WINDOW_SIZE_SLOT));
-    }
+    // // Number of epochs at the end of a proving period during which a
+    // // proof of possession can be submitted
+    // function challengeWindow(FilecoinWarmStorageService service) public view returns (uint256) {
+    //     return uint256(service.extsload(StorageLayout.CHALLENGE_WINDOW_SIZE_SLOT));
+    // }
 
     /**
      * @notice Returns PDP configuration values
@@ -217,7 +217,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         )
     {
         maxProvingPeriod = getMaxProvingPeriod(service);
-        challengeWindowSize = challengeWindow(service);
+        challengeWindowSize = service.challengeWindowSize();
         challengesPerProof = CHALLENGES_PER_PROOF;
         initChallengeWindowStart = block.number + maxProvingPeriod - challengeWindowSize;
     }
@@ -267,7 +267,7 @@ library FilecoinWarmStorageServiceStateLibrary {
     {
         uint256 deadline = provingDeadline(service, setId);
         uint64 maxProvingPeriod = getMaxProvingPeriod(service);
-        uint256 challengeWindowSize = challengeWindow(service);
+        uint256 challengeWindowSize = service.challengeWindowSize();
 
         uint256 periodsSkipped;
         // Proving period is open 0 skipped periods
