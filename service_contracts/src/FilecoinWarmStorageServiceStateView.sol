@@ -18,7 +18,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         service = _service;
     }
 
-    /// @notice Deprecated: use getPDPConfig().challengeWindowSize instead
     function challengeWindow() external view returns (uint256) {
         return service.challengeWindow();
     }
