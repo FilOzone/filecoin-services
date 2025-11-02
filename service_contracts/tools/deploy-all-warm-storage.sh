@@ -60,7 +60,7 @@ case "$CHAIN" in
     # Default challenge and proving configuration for mainnet (production values)
     DEFAULT_CHALLENGE_FINALITY="150"         # Production security value
     DEFAULT_MAX_PROVING_PERIOD="2880"        # 2880 epochs on mainnet
-    DEFAULT_CHALLENGE_WINDOW_SIZE="60"       # 60 epochs
+    DEFAULT_CHALLENGE_WINDOW_SIZE="20"       # 60 epochs
     ;;
   *)
     echo "Error: Unsupported network"

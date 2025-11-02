@@ -7,6 +7,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 This is the General Availability (GA) release of the Filecoin Warm Storage Service (FWSS) contracts.
 
+## Core Contracts - Mainnet
+
+1. Payments Contract: [0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa](https://filfox.info/en/address/0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa)
+  - From [Filecoin-Pay v1.0.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v1.0.0)
+2. PDPVerifier Implementation: [0xe2Dc211BffcA499761570E04e8143Be2BA66095f](https://filfox.info/en/address/0xe2Dc211BffcA499761570E04e8143Be2BA66095f)
+  - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
+3. PDPVerifier Proxy: [0xBADd0B92C1c71d02E7d520f64c0876538fa2557F](https://filfox.info/en/address/0xBADd0B92C1c71d02E7d520f64c0876538fa2557F)
+  - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
+4. SessionKeyRegistry: [0x74FD50525A958aF5d484601E252271f9625231aB](https://filfox.info/en/address/0x74FD50525A958aF5d484601E252271f9625231aB)
+5. ServiceProviderRegistry Implementation: [0xe255D3a89D6B326b48bc0fC94a472A839471D6B0](https://filfox.info/en/address/0xe255D3a89D6B326b48bc0fC94a472A839471D6B0)
+6. ServiceProviderRegistry Proxy: [0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB](https://filfox.info/en/address/0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB)
+7. FilecoinWarmStorageService Implementation: [0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61](https://filfox.info/en/address/0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61)
+8. FilecoinWarmStorageService Proxy: [0x8408502033C418E1bbC97cE9ac48E5528F371A9f](https://filfox.info/en/address/0x8408502033C418E1bbC97cE9ac48E5528F371A9f)
+9. FilecoinWarmStorageServiceStateView: [0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46](https://filfox.info/en/address/0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46)
+
+Configuration:
+- USDFC Token: [0x80B98d3aa09ffff255c3ba4A241111Ff1262F045](https://filfox.info/en/address/0x80B98d3aa09ffff255c3ba4A241111Ff1262F045)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- CHALLENGE_FINALITY: 150 epochs
+- MAX_PROVING_PERIOD: 2880 epochs
+- CHALLENGE_WINDOW_SIZE: 20 epochs
+- Service Name: "Filecoin Warm Storage Service - Mainnet GA Release"
+- Service Description: "Mainnet FWSS GA contracts"
+
 ## Core Contracts - Calibration Network
 
 1. Payments Contract: [0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0](https://calibration.filfox.info/en/address/0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0)
@@ -31,10 +56,6 @@ Configuration:
 - CHALLENGE_WINDOW_SIZE: 20 epochs
 - Service Name: "Filecoin Warm Storage Service - Calibration GA Release"
 - Service Description: "Calibration FWSS GA contracts"
-
-## Core Contracts - Mainnet
-
-This section will be filled in once E2E testing in Calibration Network with the GA release has been completed.
 
 ### Added
 - EXTRA_DATA size limits for enhanced security ([#313](https://github.com/FilOzone/filecoin-services/pull/313))
