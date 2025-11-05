@@ -658,8 +658,12 @@ contract FilecoinWarmStorageService is
         // Create the payment rails using the FilecoinPayV1 contract
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
+        // Determine once whether CDN is enabled in metadata and reuse the result
+        bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
+
         // Validate payer has sufficient funds and operator approvals for minimum pricing
-        validatePayerOperatorApprovalAndFunds(payments, createData.payer);
+        // If CDN is enabled, validation must account for the additional fixed lockup amounts
+        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN);
 
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
@@ -682,7 +686,7 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
 
-        if (hasCDNMetadataKey(createData.metadataKeys)) {
+        if (hasCDN) {
             cacheMissRailId = payments.createRail(
                 usdfcTokenAddress, // token address
                 createData.payer, // from (payer)
@@ -1173,15 +1177,26 @@ contract FilecoinWarmStorageService is
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
     /// @param payments The FilecoinPayV1 contract instance
     /// @param payer The address of the payer
-    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer) internal view {
+    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer, bool includeCDN)
+        internal
+        view
+    {
         // Calculate required lockup for minimum pricing
         uint256 minimumLockupRequired = (minimumStorageRatePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+
+        // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
+        uint256 extraCdnLockup = 0;
+        if (includeCDN) {
+            extraCdnLockup = DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
+        }
+
+        uint256 totalMinimumLockup = minimumLockupRequired + extraCdnLockup;
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
         require(
-            availableFunds >= minimumLockupRequired,
-            Errors.InsufficientFundsForMinimumRate(payer, minimumLockupRequired, availableFunds)
+            availableFunds >= totalMinimumLockup,
+            Errors.InsufficientFundsForMinimumRate(payer, totalMinimumLockup, availableFunds)
         );
 
         // Check operator approval settings
@@ -1206,12 +1221,10 @@ contract FilecoinWarmStorageService is
             Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
         );
 
-        // Verify lockup allowance is sufficient
+        // Verify lockup allowance is sufficient (include CDN extras when applicable)
         require(
-            lockupAllowance >= lockupUsage + minimumLockupRequired,
-            Errors.InsufficientLockupAllowance(
-                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
-            )
+            lockupAllowance >= lockupUsage + totalMinimumLockup,
+            Errors.InsufficientLockupAllowance(payer, address(this), lockupAllowance, lockupUsage, totalMinimumLockup)
         );
 
         // Verify max lockup period is sufficient
