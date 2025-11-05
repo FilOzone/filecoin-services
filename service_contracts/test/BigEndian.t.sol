@@ -22,6 +22,19 @@ contract BigEndianTest is Test {
         assertEq(test.decode(), 4352);
         test = hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
         assertEq(test.decode(), 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+        test = hex"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        assertEq(test.decode(), 0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef);
+        // size too large
+        test =
+            hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+        assertEq(address(uint160(test.decode())), address(0x0000000000000000000000000000000000000000));
+        test = hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        assertEq(address(uint160(test.decode())), address(0x0000000000000000000000000000000000000000));
+        test = hex"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+        assertEq(address(uint160(test.decode())), address(0x0000000000000000000000000000000000000000));
+        // leading zeros
+        test = hex"00ff";
+        assertEq(address(uint160(test.decode())), address(0x00000000000000000000000000000000000000ff));
     }
 
     using BigEndian for uint256;
