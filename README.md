@@ -71,15 +71,10 @@ service_contracts/
 ## 🌐 Deployed Contracts
 
 ### Calibnet (Testnet)
-- **Warm Storage Service**: [`0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5`](https://calibration.filfox.info/en/address/0xf49ba5eaCdFD5EE3744efEdf413791935FE4D4c5)
-  - Warm Storage service implements `UUPSUpgradeable` & `EIP712Upgradeable` and this is the proxy contract address - it is relatively stable at this point.
-- **Latest Implementation**: [`0xA970e9517425FA4C09d9ECAf7d24a5677170392a`](https://calibration.filfox.info/en/address/0xA970e9517425FA4C09d9ECAf7d24a5677170392a)
+- Contract Addresses listed in: https://github.com/FilOzone/filecoin-services/releases/tag/v1.0.0 
 
 ### Mainnet
-🚧 **Coming Soon** - Mainnet deployment is in progress
-
-### Version History
-Check the [latest tags](https://github.com/your-org/filecoin-services/tags) to find specific commit hashes and corresponding contract addresses for each deployment.
+- Contract Addresses listed in: https://github.com/FilOzone/filecoin-services/releases/tag/v1.0.0 
 
 ## 🔧 Development
 
