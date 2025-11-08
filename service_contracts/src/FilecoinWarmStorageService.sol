@@ -1185,18 +1185,15 @@ contract FilecoinWarmStorageService is
         uint256 minimumLockupRequired = (minimumStorageRatePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
-        uint256 extraCdnLockup = 0;
         if (includeCDN) {
-            extraCdnLockup = DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
+            minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
-
-        uint256 totalMinimumLockup = minimumLockupRequired + extraCdnLockup;
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
         require(
-            availableFunds >= totalMinimumLockup,
-            Errors.InsufficientFundsForMinimumRate(payer, totalMinimumLockup, availableFunds)
+            availableFunds >= minimumLockupRequired,
+            Errors.InsufficientLockupFunds(payer, minimumLockupRequired, availableFunds)
         );
 
         // Check operator approval settings
@@ -1223,8 +1220,10 @@ contract FilecoinWarmStorageService is
 
         // Verify lockup allowance is sufficient (include CDN extras when applicable)
         require(
-            lockupAllowance >= lockupUsage + totalMinimumLockup,
-            Errors.InsufficientLockupAllowance(payer, address(this), lockupAllowance, lockupUsage, totalMinimumLockup)
+            lockupAllowance >= lockupUsage + minimumLockupRequired,
+            Errors.InsufficientLockupAllowance(
+                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
+            )
         );
 
         // Verify max lockup period is sufficient

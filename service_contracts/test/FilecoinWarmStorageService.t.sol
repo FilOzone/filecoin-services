@@ -1068,11 +1068,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Expected minimum: (0.06 USDFC * 86400) / 86400 = 0.06 USDFC = 6e16
         uint256 minimumRequired = 6e16;
 
-        // Expect revert with InsufficientFundsForMinimumRate error
+        // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.InsufficientFundsForMinimumRate.selector, insufficientClient, minimumRequired, insufficientAmount
+                Errors.InsufficientLockupFunds.selector, insufficientClient, minimumRequired, insufficientAmount
             )
         );
         vm.prank(serviceProvider);

@@ -308,7 +308,7 @@ library Errors {
     /// @param payer The payer address
     /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
     /// @param available The available funds in the payer's account
-    error InsufficientFundsForMinimumRate(address payer, uint256 minimumRequired, uint256 available);
+    error InsufficientLockupFunds(address payer, uint256 minimumRequired, uint256 available);
 
     /// @notice Operator is not approved for the payer
     /// @param payer The payer address
