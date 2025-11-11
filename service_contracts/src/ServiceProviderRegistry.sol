@@ -175,11 +175,7 @@ contract ServiceProviderRegistry is
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({
-            serviceProvider: msg.sender,
-            payee: payee,
-            name: name,
-            description: description,
-            isActive: true
+            serviceProvider: msg.sender, payee: payee, name: name, description: description, isActive: true
         });
 
         // Update address mapping
@@ -537,11 +533,7 @@ contract ServiceProviderRegistry is
     /// @notice Get provider info by address
     /// @param providerAddress The address of the service provider
     /// @return info The provider information (empty struct if not registered)
-    function getProviderByAddress(address providerAddress)
-        external
-        view
-        returns (ServiceProviderInfoView memory info)
-    {
+    function getProviderByAddress(address providerAddress) external view returns (ServiceProviderInfoView memory info) {
         uint256 providerId = addressToProviderId[providerAddress];
         if (providerId == 0) {
             return _getEmptyProviderInfoView();
@@ -644,11 +636,7 @@ contract ServiceProviderRegistry is
         return ServiceProviderInfoView({
             providerId: 0,
             info: ServiceProviderInfo({
-                serviceProvider: address(0),
-                payee: address(0),
-                name: "",
-                description: "",
-                isActive: false
+                serviceProvider: address(0), payee: address(0), name: "", description: "", isActive: false
             })
         });
     }

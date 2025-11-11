@@ -9,48 +9,48 @@ This is the General Availability (GA) release of the Filecoin Warm Storage Servi
 
 ## Core Contracts - Mainnet
 
-1. Payments Contract: [0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa](https://filfox.info/en/address/0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa)
+1. Payments Contract: [0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa](https://filecoin.blockscout.com/address/0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa)
   - From [Filecoin-Pay v1.0.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v1.0.0)
-2. PDPVerifier Implementation: [0xe2Dc211BffcA499761570E04e8143Be2BA66095f](https://filfox.info/en/address/0xe2Dc211BffcA499761570E04e8143Be2BA66095f)
+2. PDPVerifier Implementation: [0xe2Dc211BffcA499761570E04e8143Be2BA66095f](https://filecoin.blockscout.com/address/0xe2Dc211BffcA499761570E04e8143Be2BA66095f)
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
-3. PDPVerifier Proxy: [0xBADd0B92C1c71d02E7d520f64c0876538fa2557F](https://filfox.info/en/address/0xBADd0B92C1c71d02E7d520f64c0876538fa2557F)
+3. PDPVerifier Proxy: [0xBADd0B92C1c71d02E7d520f64c0876538fa2557F](https://filecoin.blockscout.com/address/0xBADd0B92C1c71d02E7d520f64c0876538fa2557F)
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
-4. SessionKeyRegistry: [0x74FD50525A958aF5d484601E252271f9625231aB](https://filfox.info/en/address/0x74FD50525A958aF5d484601E252271f9625231aB)
-5. ServiceProviderRegistry Implementation: [0xe255D3a89D6B326b48bc0fC94a472A839471D6B0](https://filfox.info/en/address/0xe255D3a89D6B326b48bc0fC94a472A839471D6B0)
-6. ServiceProviderRegistry Proxy: [0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB](https://filfox.info/en/address/0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB)
-7. FilecoinWarmStorageService Implementation: [0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61](https://filfox.info/en/address/0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61)
-8. FilecoinWarmStorageService Proxy: [0x8408502033C418E1bbC97cE9ac48E5528F371A9f](https://filfox.info/en/address/0x8408502033C418E1bbC97cE9ac48E5528F371A9f)
-9. FilecoinWarmStorageServiceStateView: [0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46](https://filfox.info/en/address/0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46)
+4. SessionKeyRegistry: [0x74FD50525A958aF5d484601E252271f9625231aB](https://filecoin.blockscout.com/address/0x74FD50525A958aF5d484601E252271f9625231aB)
+5. ServiceProviderRegistry Implementation: [0xe255D3a89D6B326b48bc0fC94a472A839471D6B0](https://filecoin.blockscout.com/address/0xe255D3a89D6B326b48bc0fC94a472A839471D6B0)
+6. ServiceProviderRegistry Proxy: [0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB](https://filecoin.blockscout.com/address/0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB)
+7. FilecoinWarmStorageService Implementation: [0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61](https://filecoin.blockscout.com/address/0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61)
+8. FilecoinWarmStorageService Proxy: [0x8408502033C418E1bbC97cE9ac48E5528F371A9f](https://filecoin.blockscout.com/address/0x8408502033C418E1bbC97cE9ac48E5528F371A9f)
+9. FilecoinWarmStorageServiceStateView: [0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46](https://filecoin.blockscout.com/address/0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46)
 
 Configuration:
-- USDFC Token: [0x80B98d3aa09ffff255c3ba4A241111Ff1262F045](https://filfox.info/en/address/0x80B98d3aa09ffff255c3ba4A241111Ff1262F045)
-- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
-- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- USDFC Token: [0x80B98d3aa09ffff255c3ba4A241111Ff1262F045](https://filecoin.blockscout.com/address/0x80B98d3aa09ffff255c3ba4A241111Ff1262F045)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://filecoin-testnet.blockscout.com/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://filecoin-testnet.blockscout.com/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
 - CHALLENGE_FINALITY: 150 epochs
 - MAX_PROVING_PERIOD: 2880 epochs
 - CHALLENGE_WINDOW_SIZE: 20 epochs
 - Service Name: "Filecoin Warm Storage Service - Mainnet GA Release"
 - Service Description: "Mainnet FWSS GA contracts"
 
-## Core Contracts - Calibration Network
+## Core Contracts - Calibration Network 
 
-1. Payments Contract: [0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0](https://calibration.filfox.info/en/address/0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0)
+1. Payments Contract: [0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0](https://filecoin-testnet.blockscout.com/address/0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0)
   - From [Filecoin-Pay v1.0.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v1.0.0)
-2. PDPVerifier Implementation: [0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42](https://calibration.filfox.info/en/address/0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42)
+2. PDPVerifier Implementation: [0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42](https://filecoin-testnet.blockscout.com/address/0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42)
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
-3. PDPVerifier Proxy: [0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C](https://calibration.filfox.info/en/address/0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C)
+3. PDPVerifier Proxy: [0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C](https://filecoin-testnet.blockscout.com/address/0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C)
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
-4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
-5. ServiceProviderRegistry Implementation: [0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3](https://calibration.filfox.info/en/address/0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3)
-6. ServiceProviderRegistry Proxy: [0x839e5c9988e4e9977d40708d0094103c0839Ac9D](https://calibration.filfox.info/en/address/0x839e5c9988e4e9977d40708d0094103c0839Ac9D)
-7. FilecoinWarmStorageService Implementation: [0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA](https://calibration.filfox.info/en/address/0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA)
-8. FilecoinWarmStorageService Proxy: [0x02925630df557F957f70E112bA06e50965417CA0](https://calibration.filfox.info/en/address/0x02925630df557F957f70E112bA06e50965417CA0)
-9. FilecoinWarmStorageServiceStateView: [0xA5D87b04086B1d591026cCE10255351B5AA4689B](https://calibration.filfox.info/en/address/0xA5D87b04086B1d591026cCE10255351B5AA4689B)
+4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://filecoin-testnet.blockscout.com/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+5. ServiceProviderRegistry Implementation: [0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3](https://filecoin-testnet.blockscout.com/address/0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3)
+6. ServiceProviderRegistry Proxy: [0x839e5c9988e4e9977d40708d0094103c0839Ac9D](https://filecoin-testnet.blockscout.com/address/0x839e5c9988e4e9977d40708d0094103c0839Ac9D)
+7. FilecoinWarmStorageService Implementation: [0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA](https://filecoin-testnet.blockscout.com/address/0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA)
+8. FilecoinWarmStorageService Proxy: [0x02925630df557F957f70E112bA06e50965417CA0](https://filecoin-testnet.blockscout.com/address/0x02925630df557F957f70E112bA06e50965417CA0)
+9. FilecoinWarmStorageServiceStateView: [0xA5D87b04086B1d591026cCE10255351B5AA4689B](https://filecoin-testnet.blockscout.com/address/0xA5D87b04086B1d591026cCE10255351B5AA4689B)
 
 Configuration:
-- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
-- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
-- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://filecoin-testnet.blockscout.com/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://filecoin-testnet.blockscout.com/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://filecoin-testnet.blockscout.com/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
 - CHALLENGE_FINALITY: 10 epochs 
 - MAX_PROVING_PERIOD: 240 epochs
 - CHALLENGE_WINDOW_SIZE: 20 epochs
@@ -129,23 +129,23 @@ Configuration:
 
 ## Core Contracts
 
-1. Payments Contract: [0x6dB198201F900c17e86D267d7Df82567FB03df5E](https://calibration.filfox.info/en/address/0x6dB198201F900c17e86D267d7Df82567FB03df5E)
+1. Payments Contract: [0x6dB198201F900c17e86D267d7Df82567FB03df5E](https://filecoin-testnet.blockscout.com/address/0x6dB198201F900c17e86D267d7Df82567FB03df5E)
   - From [Filecoin-Pay v0.6.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v0.6.0)
-2. PDPVerifier Implementation: [0x4EC9a8ae6e6A419056b6C332509deEA371b182EF](https://calibration.filfox.info/en/address/0x4EC9a8ae6e6A419056b6C332509deEA371b182EF)
+2. PDPVerifier Implementation: [0x4EC9a8ae6e6A419056b6C332509deEA371b182EF](https://filecoin-testnet.blockscout.com/address/0x4EC9a8ae6e6A419056b6C332509deEA371b182EF)
   - From [PDP v2.2.1](https://github.com/FilOzone/pdp/releases/tag/v2.2.1)
-3. PDPVerifier Proxy: [0x579dD9E561D4Cd1776CF3e52E598616E77D5FBcb](https://calibration.filfox.info/en/address/0x579dD9E561D4Cd1776CF3e52E598616E77D5FBcb)
+3. PDPVerifier Proxy: [0x579dD9E561D4Cd1776CF3e52E598616E77D5FBcb](https://filecoin-testnet.blockscout.com/address/0x579dD9E561D4Cd1776CF3e52E598616E77D5FBcb)
   - From [PDP v2.2.1](https://github.com/FilOzone/pdp/releases/tag/v2.2.1)
-4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
-5. ServiceProviderRegistry Implementation: [0x5672fE3B5366819B4Bd2F538A2CAEA11f0b2Aff5](https://calibration.filfox.info/en/address/0x5672fE3B5366819B4Bd2F538A2CAEA11f0b2Aff5)
-6. ServiceProviderRegistry Proxy: [0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9](https://calibration.filfox.info/en/address/0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9)
-7. FilecoinWarmStorageService Implementation: [0x6B78a026309bc2659c5891559D412FA1BA6529A5](https://calibration.filfox.info/en/address/0x6B78a026309bc2659c5891559D412FA1BA6529A5)
-8. FilecoinWarmStorageService Proxy: [0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc](https://calibration.filfox.info/en/address/0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc)
-9. FilecoinWarmStorageServiceStateView: [0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F](https://calibration.filfox.info/en/address/0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F)
+4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://filecoin-testnet.blockscout.com/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+5. ServiceProviderRegistry Implementation: [0x5672fE3B5366819B4Bd2F538A2CAEA11f0b2Aff5](https://filecoin-testnet.blockscout.com/address/0x5672fE3B5366819B4Bd2F538A2CAEA11f0b2Aff5)
+6. ServiceProviderRegistry Proxy: [0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9](https://filecoin-testnet.blockscout.com/address/0x1096ba1e7BB912136DA8524A22bF71091dc4FDd9)
+7. FilecoinWarmStorageService Implementation: [0x6B78a026309bc2659c5891559D412FA1BA6529A5](https://filecoin-testnet.blockscout.com/address/0x6B78a026309bc2659c5891559D412FA1BA6529A5)
+8. FilecoinWarmStorageService Proxy: [0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc](https://filecoin-testnet.blockscout.com/address/0x468342072e0dc86AFFBe15519bc5B1A1aa86e4dc)
+9. FilecoinWarmStorageServiceStateView: [0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F](https://filecoin-testnet.blockscout.com/address/0xE4587AAdB97d7B8197aa08E432bAD0D9Cfe3a17F)
 
 Configuration:
-- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
-- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
-- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://filecoin-testnet.blockscout.com/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://filecoin-testnet.blockscout.com/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://filecoin-testnet.blockscout.com/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
 - CHALLENGE_FINALITY: 10 epochs 
 - MAX_PROVING_PERIOD: 240 epochs
 - CHALLENGE_WINDOW_SIZE: 30 epochs
@@ -165,23 +165,23 @@ Configuration:
 ## Core Contracts
 
 ### Calibration Network:
-1. Payments Contract: [0x6dB198201F900c17e86D267d7Df82567FB03df5E](https://calibration.filfox.info/en/address/0x6dB198201F900c17e86D267d7Df82567FB03df5E)
+1. Payments Contract: [0x6dB198201F900c17e86D267d7Df82567FB03df5E](https://filecoin-testnet.blockscout.com/address/0x6dB198201F900c17e86D267d7Df82567FB03df5E)
   - From [Filecoin-Pay v0.6.0](https://github.com/FilOzone/filecoin-pay/releases/tag/v0.6.0)
-2. PDPVerifier Implementation: [0xCa92b746a7af215e0AaC7D0F956d74B522b295b6](https://calibration.filfox.info/en/address/0xCa92b746a7af215e0AaC7D0F956d74B522b295b6)
+2. PDPVerifier Implementation: [0xCa92b746a7af215e0AaC7D0F956d74B522b295b6](https://filecoin-testnet.blockscout.com/address/0xCa92b746a7af215e0AaC7D0F956d74B522b295b6)
   - From [PDP v2.2.0](https://github.com/FilOzone/pdp/releases/tag/v2.2.0)
-3. PDPVerifier Proxy: [0x9ecb84bB617a6Fd9911553bE12502a1B091CdfD8](https://calibration.filfox.info/en/address/0x9ecb84bB617a6Fd9911553bE12502a1B091CdfD8)
+3. PDPVerifier Proxy: [0x9ecb84bB617a6Fd9911553bE12502a1B091CdfD8](https://filecoin-testnet.blockscout.com/address/0x9ecb84bB617a6Fd9911553bE12502a1B091CdfD8)
   - From [PDP v2.2.0](https://github.com/FilOzone/pdp/releases/tag/v2.2.0)
-4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://calibration.filfox.info/en/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
-5. ServiceProviderRegistry Implementation: [0xEdc9A41371d69a736bEfBa7678007BDBA61425E5](https://calibration.filfox.info/en/address/0xEdc9A41371d69a736bEfBa7678007BDBA61425E5)
-6. ServiceProviderRegistry Proxy: [0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb](https://calibration.filfox.info/en/address/0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb)
-7. FilecoinWarmStorageService Implementation: [0x2d76e3A41fa4614D1840CEB73aa07c5d0af6a023](https://calibration.filfox.info/en/address/0x2d76e3A41fa4614D1840CEB73aa07c5d0af6a023)
-8. FilecoinWarmStorageService Proxy: [0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b](https://calibration.filfox.info/en/address/0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b)
-9. FilecoinWarmStorageServiceStateView: [0x7175a72479e2B0050ed310f1a49a517C03573547](https://calibration.filfox.info/en/address/0x7175a72479e2B0050ed310f1a49a517C03573547)
+4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://filecoin-testnet.blockscout.com/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+5. ServiceProviderRegistry Implementation: [0xEdc9A41371d69a736bEfBa7678007BDBA61425E5](https://filecoin-testnet.blockscout.com/address/0xEdc9A41371d69a736bEfBa7678007BDBA61425E5)
+6. ServiceProviderRegistry Proxy: [0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb](https://filecoin-testnet.blockscout.com/address/0xA8a7e2130C27e4f39D1aEBb3D538D5937bCf8ddb)
+7. FilecoinWarmStorageService Implementation: [0x2d76e3A41fa4614D1840CEB73aa07c5d0af6a023](https://filecoin-testnet.blockscout.com/address/0x2d76e3A41fa4614D1840CEB73aa07c5d0af6a023)
+8. FilecoinWarmStorageService Proxy: [0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b](https://filecoin-testnet.blockscout.com/address/0x9ef4cAb0aD0D19b8Df28791Df80b29bC784bE91b)
+9. FilecoinWarmStorageServiceStateView: [0x7175a72479e2B0050ed310f1a49a517C03573547](https://filecoin-testnet.blockscout.com/address/0x7175a72479e2B0050ed310f1a49a517C03573547)
 
 Configuration:
-- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://calibration.filfox.info/en/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
-- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://calibration.filfox.info/en/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
-- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://calibration.filfox.info/en/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
+- USDFC Token: [0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0](https://filecoin-testnet.blockscout.com/address/0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0)
+- FILBEAM_BENEFICIARY_ADDRESS: [0x1D60d2F5960Af6341e842C539985FA297E10d6eA](https://filecoin-testnet.blockscout.com/address/0x1D60d2F5960Af6341e842C539985FA297E10d6eA)
+- FILBEAM_CONTROLLER_ADDRESS: [0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A](https://filecoin-testnet.blockscout.com/address/0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A)
 - CHALLENGE_FINALITY: 10 epochs 
 - MAX_PROVING_PERIOD: 240 epochs
 - CHALLENGE_WINDOW_SIZE: 30 epochs

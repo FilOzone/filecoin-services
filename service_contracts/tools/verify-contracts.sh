@@ -1,9 +1,6 @@
 #!/bin/bash
 
-# Supports Filfox, Blockscout, and Sourcify verification with proper error handling
-
-# Configuration
-FILFOX_VERIFIER_VERSION="v1.4.4"
+# Supports Blockscout, and Sourcify verification with proper error handling
 
 if [ -z "$CHAIN" ]; then
   export CHAIN=$(cast chain-id)
@@ -12,26 +9,6 @@ if [ -z "$CHAIN" ]; then
     exit 1
   fi
 fi
-
-verify_filfox() {
-  local address="$1"
-  local contract_path="$2"
-  local display_name="$3"
-  
-  # Use display_name if provided, otherwise extract from contract_path
-  if [ -z "$display_name" ]; then
-    display_name=$(echo "$contract_path" | cut -d ':' -f 2)
-  fi
-
-  echo "Verifying $display_name on Filfox (chain ID: $CHAIN)..."
-  if npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$address" "$contract_path" --chain "$CHAIN"; then
-    echo "Filfox verification successful for $display_name"
-    return 0
-  else
-    echo "Filfox verification failed for $display_name"
-    return 1
-  fi
-}
 
 verify_blockscout() {
   local address="$1"
@@ -95,9 +72,7 @@ verify_contracts_batch() {
   local contract_specs=("$@")
   local total_contracts=${#contract_specs[@]}
   local success_count=0
-  
-  # Arrays to track verification results
-  local filfox_failures=()
+
   local blockscout_failures=()
   local sourcify_failures=()
   local all_success_contracts=()
@@ -122,13 +97,7 @@ verify_contracts_batch() {
     echo "Processing: $display_name ($address)"
     
     # Track individual verification results
-    local filfox_ok=0 blockscout_ok=0 sourcify_ok=0
-    
-    if verify_filfox "$address" "$contract_path" "$display_name" ; then
-      filfox_ok=1
-    else
-      filfox_failures+=("$display_name ($address)")
-    fi
+    local blockscout_ok=0 sourcify_ok=0
     
     if verify_blockscout "$address" "$contract_path" "$display_name" ; then
       blockscout_ok=1
@@ -143,7 +112,7 @@ verify_contracts_batch() {
     fi
     
     # Track fully successful verifications
-    if [ $filfox_ok -eq 1 ] && [ $blockscout_ok -eq 1 ] && [ $sourcify_ok -eq 1 ]; then
+    if [ $blockscout_ok -eq 1 ] && [ $sourcify_ok -eq 1 ]; then
       all_success_contracts+=("$display_name")
       success_count=$((success_count + 1))
     fi
@@ -157,12 +126,6 @@ verify_contracts_batch() {
   if [ ${#all_success_contracts[@]} -gt 0 ]; then
     echo "Successfully verified on all platforms (${#all_success_contracts[@]}/$total_contracts):"
     printf ' - %s\n' "${all_success_contracts[@]}"
-  fi
-  
-  # Show Filfox failures
-  if [ ${#filfox_failures[@]} -gt 0 ]; then
-    echo "Filfox verification failed for (${#filfox_failures[@]}):"
-    printf ' - %s\n' "${filfox_failures[@]}"
   fi
   
   # Show Blockscout failures
