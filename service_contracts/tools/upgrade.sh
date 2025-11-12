@@ -43,18 +43,18 @@ if [ -z "$WARM_STORAGE_PROXY_ADDRESS" ]; then
   exit 1
 fi
 
-PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then
   echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
   exit 1
 fi
 
 if [ -z "$WARM_STORAGE_VIEW_ADDRESS" ]; then
-  WARM_STORAGE_VIEW_ADDRESS=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
+  WARM_STORAGE_VIEW_ADDRESS=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
 fi
 
 # Get the upgrade plan
-UPGRADE_PLAN=($(cast call "$WARM_STORAGE_VIEW_ADDRESS" "nextUpgrade()(address,uint96)" 2>/dev/null))
+UPGRADE_PLAN=($(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_VIEW_ADDRESS" "nextUpgrade()(address,uint96)" 2>/dev/null))
 
 PLANNED_WARM_STORAGE_IMPLEMENTATION_ADDRESS=${UPGRADE_PLAN[0]}
 AFTER_EPOCH=${UPGRADE_PLAN[1]}
