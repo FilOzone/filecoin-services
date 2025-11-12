@@ -25,7 +25,7 @@ if [ -z "$PASSWORD" ]; then
 fi
 
 if [ -z "$CHAIN" ]; then
-  CHAIN=$(cast chain-id")
+  CHAIN=$(cast chain-id)
   if [ -z "$CHAIN" ]; then
     echo "Error: Failed to detect chain ID from RPC"
     exit 1
