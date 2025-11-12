@@ -71,13 +71,11 @@ if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
     exit 1
   fi
   echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+  # Increment nonce for the next deployment
+  NONCE=$((NONCE + 1))
 else
   echo "Using SignatureVerificationLib at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 fi
-
-
-# Increment nonce for the next deployment
-NONCE=$((NONCE + 1))
 
 echo ""
 echo "Deploying FilecoinWarmStorageService implementation..."
