@@ -1068,11 +1068,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Expected minimum: (0.06 USDFC * 86400) / 86400 = 0.06 USDFC = 6e16
         uint256 minimumRequired = 6e16;
 
-        // Expect revert with InsufficientFundsForMinimumRate error
+        // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.InsufficientFundsForMinimumRate.selector, insufficientClient, minimumRequired, insufficientAmount
+                Errors.InsufficientLockupFunds.selector, insufficientClient, minimumRequired, insufficientAmount
             )
         );
         vm.prank(serviceProvider);
@@ -3464,7 +3464,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        uint256 depositAmount = 1e18;
+        uint256 depositAmount = 1e18 + defaultTotalCDNLockup;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -3517,7 +3517,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        uint256 depositAmount = 1e18;
+        uint256 depositAmount = 1e18 + defaultTotalCDNLockup;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();

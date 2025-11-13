@@ -44,11 +44,6 @@ if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$FILBEAM_CONTROLLER_ADDRESS" ]; then
-  echo "Warning: FILBEAM_CONTROLLER_ADDRESS not set, using default"
-  FILBEAM_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
-fi
-
 if [ -z "$FILBEAM_BENEFICIARY_ADDRESS" ]; then
   echo "Warning: FILBEAM_BENEFICIARY_ADDRESS not set, using default"
   FILBEAM_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
@@ -66,19 +61,21 @@ fi
 
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address on calibnet
 
-# Deploy SignatureVerificationLib first so we can link it into the implementation
-echo "Deploying SignatureVerificationLib..."
-SIGNATURE_VERIFICATION_LIB_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/lib/SignatureVerificationLib.sol:SignatureVerificationLib | grep "Deployed to" | awk '{print $3}')
-
 if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
-  echo "Error: Failed to deploy SignatureVerificationLib"
-  exit 1
+  # Deploy SignatureVerificationLib first so we can link it into the implementation
+  echo "Deploying SignatureVerificationLib..."
+  export SIGNATURE_VERIFICATION_LIB_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/lib/SignatureVerificationLib.sol:SignatureVerificationLib | grep "Deployed to" | awk '{print $3}')
+
+  if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
+    echo "Error: Failed to deploy SignatureVerificationLib"
+    exit 1
+  fi
+  echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+  # Increment nonce for the next deployment
+  NONCE=$((NONCE + 1))
+else
+  echo "Using SignatureVerificationLib at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 fi
-
-echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
-
-# Increment nonce for the next deployment
-NONCE=$((NONCE + 1))
 
 echo ""
 echo "Deploying FilecoinWarmStorageService implementation..."
@@ -86,12 +83,11 @@ echo "Constructor arguments:"
 echo "  PDPVerifier: $PDP_VERIFIER_ADDRESS"
 echo "  FilecoinPayV1: $PAYMENTS_CONTRACT_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
-echo "  FilBeam Controller Address: $FILBEAM_CONTROLLER_ADDRESS"
 echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"

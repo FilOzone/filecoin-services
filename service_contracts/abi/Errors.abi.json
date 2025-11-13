@@ -273,27 +273,6 @@
   },
   {
     "type": "error",
-    "name": "InsufficientFundsForMinimumRate",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "minimumRequired",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "available",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InsufficientLockupAllowance",
     "inputs": [
       {
@@ -318,6 +297,27 @@
       },
       {
         "name": "minimumLockupRequired",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientLockupFunds",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "minimumRequired",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "available",
         "type": "uint256",
         "internalType": "uint256"
       }

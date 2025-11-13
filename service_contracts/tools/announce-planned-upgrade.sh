@@ -57,7 +57,7 @@ if [ -z "$WARM_STORAGE_PROXY_ADDRESS" ]; then
   exit 1
 fi
 
-PROXY_OWNER=$(cast call "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then
   echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
   exit 1
