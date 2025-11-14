@@ -803,9 +803,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First batch (3 pieces) with key "meta" => metadataShort
         Cids.Cid[] memory pieceData1 = new Cids.Cid[](3);
-        pieceData1[0].data = bytes("1_0:1111");
-        pieceData1[1].data = bytes("1_1:111100000");
-        pieceData1[2].data = bytes("1_2:11110000000000");
+        pieceData1[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_0:1111")));
+        pieceData1[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_1:111100000")));
+        pieceData1[2] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_2:11110000000000")));
         string[] memory keys1 = new string[](1);
         string[] memory values1 = new string[](1);
         keys1[0] = "meta";
@@ -817,8 +817,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Second batch (2 pieces) with key "meta" => metadataLong
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
-        pieceData2[0].data = bytes("2_0:22222222222222222222");
-        pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+        pieceData2[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("2_0:22222222222222222222")));
+        pieceData2[1] = Cids.CommPv2FromDigest(
+            0, 4, keccak256(abi.encodePacked("2_1:222222222222222222220000000000000000000000000000000000000000000"))
+        );
         string[] memory keys2 = new string[](1);
         string[] memory values2 = new string[](1);
         keys2[0] = "meta";
@@ -1160,6 +1162,65 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Verify dataset was created
         assertEq(dataSetId, 1, "Dataset should be created with above-minimum funds");
     }
+
+    // function testInsufficientFunds_AddPieces() public {
+    //     // Setup: Client with exactly the minimum funds (0.06 USDFC)
+    //     address exactClient = makeAddr("exactClient");
+    //     uint256 exactAmount = 6e16; // Exactly 0.06 USDFC
+
+    //     // Transfer tokens from test contract to the test client
+    //     mockUSDFC.safeTransfer(exactClient, exactAmount);
+
+    //     vm.startPrank(exactClient);
+    //     payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+    //     mockUSDFC.approve(address(payments), exactAmount);
+    //     payments.deposit(mockUSDFC, exactClient, exactAmount);
+    //     vm.stopPrank();
+
+    //     // Prepare dataset creation data
+    //     (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Exact Minimum Test");
+    //     FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+    //         payer: exactClient,
+    //         clientDataSetId: 1000,
+    //         metadataKeys: dsKeys,
+    //         metadataValues: dsValues,
+    //         signature: FAKE_SIGNATURE
+    //     });
+
+    //     bytes memory encodedCreateData = abi.encode(
+    //         createData.payer,
+    //         createData.clientDataSetId,
+    //         createData.metadataKeys,
+    //         createData.metadataValues,
+    //         createData.signature
+    //     );
+
+    //     // Should succeed with exact minimum
+    //     makeSignaturePass(exactClient);
+    //     vm.prank(serviceProvider);
+    //     uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+    //     vm.prank(exactClient);
+    //     payments.withdraw(mockUSDFC, 59999999999961600); // Withdraw all funds, leaving 0 balance
+
+    //     // Prepare piece addition data
+    //     Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+    //     pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("piece:belowMinimum")));
+    //     string[] memory keys = new string[](0);
+    //     string[] memory values = new string[](0);
+    //     uint256 firstAdded = 0;
+    //     // Expect revert when adding pieces due to insufficient funds
+    //     makeSignaturePass(exactClient);
+    //     vm.expectRevert(
+    //         abi.encodeWithSelector(
+    //             Errors.InsufficientLockupFunds.selector, exactClient, 6e16, 5e16
+    //         )
+    //     );
+    //     vm.prank(serviceProvider);
+    //     mockPDPVerifier.addPieces(
+    //         pdpServiceWithPayments, dataSetId, firstAdded, pieceData, 0, FAKE_SIGNATURE, keys, values
+    //     );
+    // }
 
     // Operator Approval Validation Tests
     function testOperatorApproval_NotApproved() public {
@@ -4558,7 +4619,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece_1");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4604,7 +4665,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4678,7 +4739,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4725,7 +4786,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
