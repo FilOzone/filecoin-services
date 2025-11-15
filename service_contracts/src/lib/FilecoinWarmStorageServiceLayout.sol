@@ -27,4 +27,3 @@ bytes32 constant FIL_BEAM_CONTROLLER_ADDRESS_SLOT = bytes32(uint256(18));
 bytes32 constant NEXT_UPGRADE_SLOT = bytes32(uint256(19));
 bytes32 constant STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT = bytes32(uint256(20));
 bytes32 constant MINIMUM_STORAGE_RATE_PER_MONTH_SLOT = bytes32(uint256(21));
-
