@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FilecoinWarmStorageService Dataset Metadata Schema",
+  "description": "Metadata schema for datasets in the Filecoin Warm Storage Service",
+  "type": "object",
+  "required": ["version", "created_at"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Schema version (semantic versioning)",
+      "example": "1.0.0"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 creation timestamp"
+    },
+    "ttl": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0,
+      "description": "Time-to-live in seconds (0 = no expiry)"
+    },
+    "withCDN": {
+      "type": "boolean",
+      "default": false,
+      "description": "Get FilCDN add-on"
+    },
+    "IndexIPFSandPublish": {
+      "type": "boolean",
+      "default": false,
+      "description": "Index IPFS CIDs and publish to IPNI"
+    }
+  },
+  "additionalProperties": false
+}
