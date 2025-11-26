@@ -783,11 +783,20 @@ contract ServiceProviderRegistry is
 
     /// @notice Authorizes an upgrade to a new implementation
     /// @dev Can only be called by the contract owner
+    /// @dev Supports both one-step (legacy) and two-step (announcePlannedUpgrade) upgrade mechanisms
     /// @param newImplementation Address of the new implementation contract
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
         // zero address already checked by ERC1967Utils._setImplementation
-        require(newImplementation == nextUpgrade.nextImplementation);
-        require(block.number >= nextUpgrade.afterEpoch);
+
+        // If no planned upgrade is set (nextUpgrade.nextImplementation is zero), allow direct upgrade
+        // This supports the legacy one-step upgrade mechanism for contracts deployed before announcePlannedUpgrade
+        if (nextUpgrade.nextImplementation == address(0)) {
+            return;
+        }
+
+        // Two-step mechanism: require planned upgrade to match and epoch to be reached
+        require(newImplementation == nextUpgrade.nextImplementation, "Upgrade must match planned implementation");
+        require(block.number >= nextUpgrade.afterEpoch, "Upgrade epoch not reached");
         delete nextUpgrade;
     }
 
