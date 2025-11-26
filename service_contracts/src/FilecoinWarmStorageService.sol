@@ -897,7 +897,17 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
 
-        // Additional logic for scheduling removals can be added here
+        mapping(uint256 => string[]) storage pieceMetadataKeys = dataSetPieceMetadataKeys[dataSetId];
+        mapping(uint256 => mapping(string => string)) storage pieceMetadata = dataSetPieceMetadata[dataSetId];
+        for (uint256 i = 0; i < pieceIds.length; i++) {
+            uint256 pieceId = pieceIds[i];
+            string[] storage metadataKeys = pieceMetadataKeys[pieceId];
+            mapping(string => string) storage metadata = pieceMetadata[pieceId];
+            for (uint256 j = 0; j < metadataKeys.length; j++) {
+                delete metadata[metadataKeys[i]];
+            }
+            delete pieceMetadataKeys[pieceId];
+        }
     }
 
     // possession proven checks for correct challenge count and reverts if too low
