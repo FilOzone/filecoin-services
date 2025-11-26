@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {Vm} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -50,6 +51,99 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         // Attempt to reinitialize should fail
         vm.expectRevert();
         registry.initialize();
+    }
+
+    function testAnnouncePlannedUpgrade() public {
+        // Initially, no upgrade is planned
+        (address nextImplementation, uint96 afterEpoch) = registry.getNextUpgrade();
+        assertEq(nextImplementation, address(0));
+        assertEq(afterEpoch, uint96(0));
+
+        // Deploy new implementation
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+
+        // Announce upgrade
+        ServiceProviderRegistry.PlannedUpgrade memory plan;
+        plan.nextImplementation = address(newImplementation);
+        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+
+        vm.expectEmit(false, false, false, true);
+        emit ServiceProviderRegistry.UpgradeAnnounced(plan);
+        registry.announcePlannedUpgrade(plan);
+
+        // Verify upgrade plan is stored
+        (nextImplementation, afterEpoch) = registry.getNextUpgrade();
+        assertEq(nextImplementation, plan.nextImplementation);
+        assertEq(afterEpoch, plan.afterEpoch);
+
+        // Cannot upgrade before afterEpoch
+        bytes memory migrateData =
+            abi.encodeWithSelector(ServiceProviderRegistry.migrate.selector, newImplementation.VERSION());
+        vm.expectRevert();
+        registry.upgradeToAndCall(plan.nextImplementation, migrateData);
+
+        // Still cannot upgrade at afterEpoch - 1
+        vm.roll(plan.afterEpoch - 1);
+        vm.expectRevert();
+        registry.upgradeToAndCall(plan.nextImplementation, migrateData);
+
+        // Can upgrade at afterEpoch
+        vm.roll(plan.afterEpoch);
+        // Note: reinitializer(2) emits Initialized event first, then ContractUpgraded
+        // We use recordLogs to capture all events and verify ContractUpgraded is present
+        vm.recordLogs();
+        registry.upgradeToAndCall(plan.nextImplementation, migrateData);
+
+        // Verify ContractUpgraded event was emitted
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 expectedTopic = keccak256("ContractUpgraded(string,address)");
+        bool foundEvent = false;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == expectedTopic) {
+                (string memory version, address impl) = abi.decode(logs[i].data, (string, address));
+                assertEq(version, newImplementation.VERSION(), "Version should match");
+                assertEq(impl, plan.nextImplementation, "Implementation should match");
+                foundEvent = true;
+                break;
+            }
+        }
+        assertTrue(foundEvent, "ContractUpgraded event should be emitted");
+
+        // After upgrade, nextUpgrade should be cleared
+        (nextImplementation, afterEpoch) = registry.getNextUpgrade();
+        assertEq(nextImplementation, address(0));
+        assertEq(afterEpoch, uint96(0));
+    }
+
+    function testAnnouncePlannedUpgradeOnlyOwner() public {
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry.PlannedUpgrade memory plan;
+        plan.nextImplementation = address(newImplementation);
+        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+
+        // Non-owner cannot announce upgrade
+        vm.prank(user1);
+        vm.expectRevert();
+        registry.announcePlannedUpgrade(plan);
+    }
+
+    function testAnnouncePlannedUpgradeInvalidImplementation() public {
+        ServiceProviderRegistry.PlannedUpgrade memory plan;
+        plan.nextImplementation = address(0x123); // Invalid address with no code
+        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+
+        vm.expectRevert();
+        registry.announcePlannedUpgrade(plan);
+    }
+
+    function testAnnouncePlannedUpgradeInvalidEpoch() public {
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry.PlannedUpgrade memory plan;
+        plan.nextImplementation = address(newImplementation);
+        plan.afterEpoch = uint96(vm.getBlockNumber()); // Must be in the future
+
+        vm.expectRevert();
+        registry.announcePlannedUpgrade(plan);
     }
 
     function testIsRegisteredProviderReturnsFalse() public view {
@@ -241,13 +335,22 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         // Deploy new implementation
         ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
 
-        // Non-owner cannot upgrade
+        // Non-owner cannot upgrade (will fail in _authorizeUpgrade due to onlyOwner)
         vm.prank(user1);
         vm.expectRevert();
         registry.upgradeToAndCall(address(newImplementation), "");
 
-        // Owner can upgrade
-        registry.upgradeToAndCall(address(newImplementation), "");
+        // Owner can upgrade (but needs to announce first or it will fail in _authorizeUpgrade)
+        // Since we're testing the onlyOwner check, we need to announce the upgrade first
+        ServiceProviderRegistry.PlannedUpgrade memory plan;
+        plan.nextImplementation = address(newImplementation);
+        plan.afterEpoch = uint96(vm.getBlockNumber()) + 1;
+        registry.announcePlannedUpgrade(plan);
+
+        vm.roll(plan.afterEpoch);
+        bytes memory migrateData =
+            abi.encodeWithSelector(ServiceProviderRegistry.migrate.selector, newImplementation.VERSION());
+        registry.upgradeToAndCall(address(newImplementation), migrateData);
     }
 
     function testTransferOwnership() public {

@@ -102,6 +102,18 @@ contract ServiceProviderRegistry is
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
 
+    // Used for announcing upgrades, packed into one slot
+    struct PlannedUpgrade {
+        // Address of the new implementation contract
+        address nextImplementation;
+        // Upgrade will not occur until at least this epoch
+        uint96 afterEpoch;
+    }
+
+    PlannedUpgrade private nextUpgrade;
+
+    event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
+
     /// @notice Ensures the caller is the service provider
     modifier onlyServiceProvider(uint256 providerId) {
         require(providers[providerId].serviceProvider == msg.sender, "Only service provider can call this function");
@@ -752,18 +764,38 @@ contract ServiceProviderRegistry is
         }
     }
 
+    /// @notice Announce a planned upgrade
+    /// @dev Can only be called by the contract owner
+    /// @param plannedUpgrade The planned upgrade details
+    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
+        require(plannedUpgrade.nextImplementation.code.length > 3000);
+        require(plannedUpgrade.afterEpoch > block.number);
+        nextUpgrade = plannedUpgrade;
+        emit UpgradeAnnounced(plannedUpgrade);
+    }
+
+    /// @notice Get information about the next contract upgrade
+    /// @return nextImplementation The next implementation address
+    /// @return afterEpoch The earliest epoch the upgrade may complete
+    function getNextUpgrade() external view returns (address nextImplementation, uint96 afterEpoch) {
+        return (nextUpgrade.nextImplementation, nextUpgrade.afterEpoch);
+    }
+
     /// @notice Authorizes an upgrade to a new implementation
     /// @dev Can only be called by the contract owner
     /// @param newImplementation Address of the new implementation contract
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
-        // Authorization logic is handled by the onlyOwner modifier
+        // zero address already checked by ERC1967Utils._setImplementation
+        require(newImplementation == nextUpgrade.nextImplementation);
+        require(block.number >= nextUpgrade.afterEpoch);
+        delete nextUpgrade;
     }
 
     /// @notice Migration function for contract upgrades
     /// @dev This function should be called during upgrades to emit version tracking events
+    /// Only callable during proxy upgrade process
     /// @param newVersion The version string for the new implementation
-    function migrate(string memory newVersion) public onlyProxy reinitializer(2) {
-        require(msg.sender == address(this), "Only self can call migrate");
+    function migrate(string memory newVersion) public onlyProxy onlyOwner reinitializer(2) {
         emit ContractUpgraded(newVersion, ERC1967Utils.getImplementation());
     }
 }
