@@ -55,7 +55,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     function testAnnouncePlannedUpgrade() public {
         // Initially, no upgrade is planned
-        (address nextImplementation, uint96 afterEpoch) = registry.getNextUpgrade();
+        (address nextImplementation, uint96 afterEpoch) = registry.nextUpgrade();
         assertEq(nextImplementation, address(0));
         assertEq(afterEpoch, uint96(0));
 
@@ -72,7 +72,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         registry.announcePlannedUpgrade(plan);
 
         // Verify upgrade plan is stored
-        (nextImplementation, afterEpoch) = registry.getNextUpgrade();
+        (nextImplementation, afterEpoch) = registry.nextUpgrade();
         assertEq(nextImplementation, plan.nextImplementation);
         assertEq(afterEpoch, plan.afterEpoch);
 
@@ -110,7 +110,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertTrue(foundEvent, "ContractUpgraded event should be emitted");
 
         // After upgrade, nextUpgrade should be cleared
-        (nextImplementation, afterEpoch) = registry.getNextUpgrade();
+        (nextImplementation, afterEpoch) = registry.nextUpgrade();
         assertEq(nextImplementation, address(0));
         assertEq(afterEpoch, uint96(0));
     }

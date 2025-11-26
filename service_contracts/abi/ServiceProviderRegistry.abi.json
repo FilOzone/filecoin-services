@@ -302,24 +302,6 @@
   },
   {
     "type": "function",
-    "name": "getNextUpgrade",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "nextImplementation",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "afterEpoch",
-        "type": "uint96",
-        "internalType": "uint96"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getProductCapabilities",
     "inputs": [
       {
@@ -836,6 +818,24 @@
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "nextUpgrade",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "afterEpoch",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
