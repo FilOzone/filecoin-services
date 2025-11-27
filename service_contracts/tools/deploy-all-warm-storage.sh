@@ -47,10 +47,18 @@ fi
 # NOTE: CHALLENGE_FINALITY should always be 150 in production for security.
 # Calibnet uses lower values for faster testing and development.
 case "$CHAIN" in
+  "31415926")
+    NETWORK_NAME="devnet"
+    # USDFC_TOKEN_ADDRESS must be provided via environment variable for devnet
+    # Default challenge and proving configuration for devnet (fastest for testing)
+    DEFAULT_CHALLENGE_FINALITY="5"           # Minimal value for fast local testing
+    DEFAULT_MAX_PROVING_PERIOD="120"         # 120 epochs on devnet
+    DEFAULT_CHALLENGE_WINDOW_SIZE="10"       # 10 epochs
+    ;;
   "314159")
     NETWORK_NAME="calibnet"
     # Network-specific addresses for calibnet
-    USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0"
+    USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0}"
     # Default challenge and proving configuration for calibnet (testing values)
     DEFAULT_CHALLENGE_FINALITY="10"          # Low value for fast testing (should be 150 in production)
     DEFAULT_MAX_PROVING_PERIOD="240"         # 240 epochs on calibnet
@@ -59,7 +67,7 @@ case "$CHAIN" in
   "314")
     NETWORK_NAME="mainnet"
     # Network-specific addresses for mainnet
-    USDFC_TOKEN_ADDRESS="0x80B98d3aa09ffff255c3ba4A241111Ff1262F045"
+    USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0x80B98d3aa09ffff255c3ba4A241111Ff1262F045}"
     # Default challenge and proving configuration for mainnet (production values)
     DEFAULT_CHALLENGE_FINALITY="150"         # Production security value
     DEFAULT_MAX_PROVING_PERIOD="2880"        # 2880 epochs on mainnet
@@ -68,6 +76,7 @@ case "$CHAIN" in
   *)
     echo "Error: Unsupported network"
     echo "  Supported networks:"
+    echo "    31415926 - Filecoin local development network"
     echo "    314159 - Filecoin Calibration testnet"
     echo "    314    - Filecoin mainnet"
     echo "  Detected chain ID: $CHAIN"
@@ -79,6 +88,13 @@ echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
 # Load deployment addresses from deployments.json
 load_deployment_addresses "$CHAIN"
+
+# Devnet requires USDFC_TOKEN_ADDRESS to be provided
+if [ "$CHAIN" = "31415926" ] && [ -z "$USDFC_TOKEN_ADDRESS" ]; then
+  echo "Error: USDFC_TOKEN_ADDRESS is not set (required for devnet)"
+  echo "Please set USDFC_TOKEN_ADDRESS environment variable to your deployed MockUSDFC address"
+  exit 1
+fi
 
 if [ "$DRY_RUN" != "true" ] && [ -z "$ETH_KEYSTORE" ]; then
   echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
