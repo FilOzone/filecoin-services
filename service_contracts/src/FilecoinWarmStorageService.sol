@@ -877,6 +877,8 @@ contract FilecoinWarmStorageService is
                 dataSetPieceMetadata[dataSetId][pieceId][key] = string(value);
                 dataSetPieceMetadataKeys[dataSetId][pieceId].push(key);
             }
+            uint256 leaves = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
+            updatePaymentRates(dataSetId, leaves);
             emit PieceAdded(dataSetId, pieceId, pieceData[i], pieceKeys, pieceValues);
         }
     }
@@ -1022,9 +1024,6 @@ contract FilecoinWarmStorageService is
             // This marks when the data set became active for proving
             provingActivationEpoch[dataSetId] = block.number;
 
-            // Update the payment rates
-            updatePaymentRates(dataSetId, leafCount);
-
             return;
         }
 
@@ -1068,9 +1067,6 @@ contract FilecoinWarmStorageService is
 
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
-
-        // Update the payment rates based on current data set size
-        updatePaymentRates(dataSetId, leafCount);
     }
 
     /**
