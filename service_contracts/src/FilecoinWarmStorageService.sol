@@ -664,7 +664,7 @@ contract FilecoinWarmStorageService is
 
         // Validate payer has sufficient funds and operator approvals for minimum pricing
         // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN , 0 , new Cids.Cid[](0));
+        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN, 0, new Cids.Cid[](0));
 
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
@@ -840,7 +840,7 @@ contract FilecoinWarmStorageService is
         // to cover the increased per-epoch rate and the 30-day lockup implied by the
         // new total leaf count after adding these pieces.
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-        validatePayerOperatorApprovalAndFunds(payments, payer, false , dataSetId , pieceData);
+        validatePayerOperatorApprovalAndFunds(payments, payer, false, dataSetId, pieceData);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {

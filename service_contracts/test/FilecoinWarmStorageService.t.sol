@@ -1068,7 +1068,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Expected minimum: (0.06 USDFC * 86400) / 86400 = 0.06 USDFC = 6e16
-        uint256 minimumRequiredPerEpoch = (uint256(6e16) / (2880*30));
+        uint256 minimumRequiredPerEpoch = (uint256(6e16) / (2880 * 30));
         uint256 minimumRequired = minimumRequiredPerEpoch * (2880 * 30);
 
         // Expect revert with InsufficientLockupFunds error
@@ -1170,7 +1170,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test 1: Insufficient funds with small piece (below minimum rate)
         address client1 = makeAddr("client1");
         mockUSDFC.safeTransfer(client1, minimumAmount);
-        
+
         vm.startPrank(client1);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
         mockUSDFC.approve(address(payments), minimumAmount);
@@ -1214,11 +1214,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         }
         uint256 lockupRequired1 = pdpServiceWithPayments.calculateRatePerEpoch(leafCount1 * 32) * 2880 * 30;
         (uint256 availableFunds1,) = getAccountInfo(mockUSDFC, client1);
-        
+
         vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.InsufficientLockupFunds.selector, client1, lockupRequired1, availableFunds1
-            )
+            abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, client1, lockupRequired1, availableFunds1)
         );
         vm.prank(serviceProvider);
         mockPDPVerifier.addPieces(
@@ -1228,7 +1226,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test 2: Sufficient funds with small piece (below minimum rate)
         address client2 = makeAddr("client2");
         mockUSDFC.safeTransfer(client2, minimumAmount);
-        
+
         vm.startPrank(client2);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
         mockUSDFC.approve(address(payments), minimumAmount);
@@ -1260,7 +1258,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test 3: Insufficient funds with large pieces (above minimum rate)
         address client3 = makeAddr("client3");
         mockUSDFC.safeTransfer(client3, minimumAmount);
-        
+
         vm.startPrank(client3);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
         mockUSDFC.approve(address(payments), minimumAmount);
@@ -1288,11 +1286,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory values3 = new string[](MAX_KEYS_PER_PIECE);
 
         for (uint256 p = 0; p < totalPieces; p++) {
-            pieceData3[p] = Cids.CommPv2FromDigest(
-                0,
-                28,
-                keccak256(abi.encodePacked("file", Strings.toString(p)))
-            );
+            pieceData3[p] = Cids.CommPv2FromDigest(0, 28, keccak256(abi.encodePacked("file", Strings.toString(p))));
         }
         for (uint256 k = 0; k < MAX_KEYS_PER_PIECE; k++) {
             keys3[k] = _generateKey(k);
@@ -1309,32 +1303,18 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         uint256 lockupRequired3 = pdpServiceWithPayments.calculateRatePerEpoch(leafCount3 * 32) * 2880 * 30;
         (uint256 availableFunds3,) = getAccountInfo(mockUSDFC, client3);
-        
+
         vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.InsufficientLockupFunds.selector,
-                client3,
-                lockupRequired3,
-                availableFunds3
-            )
+            abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, client3, lockupRequired3, availableFunds3)
         );
         vm.prank(serviceProvider);
-        mockPDPVerifier.addPieces(
-            pdpServiceWithPayments,
-            dataSetId3,
-            0,
-            pieceData3,
-            0,
-            FAKE_SIGNATURE,
-            keys3,
-            values3
-        );
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId3, 0, pieceData3, 0, FAKE_SIGNATURE, keys3, values3);
 
         // Test 4: Sufficient funds with large pieces (above minimum rate)
         address client4 = makeAddr("client4");
         uint256 sufficientAmount = 10e16; // 0.10 USDFC
         mockUSDFC.safeTransfer(client4, sufficientAmount);
-        
+
         vm.startPrank(client4);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
         mockUSDFC.approve(address(payments), sufficientAmount);
@@ -1360,11 +1340,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory values4 = new string[](MAX_KEYS_PER_PIECE);
 
         for (uint256 p = 0; p < totalPieces; p++) {
-            pieceData4[p] = Cids.CommPv2FromDigest(
-                0,
-                28,
-                keccak256(abi.encodePacked("file", Strings.toString(p)))
-            );
+            pieceData4[p] = Cids.CommPv2FromDigest(0, 28, keccak256(abi.encodePacked("file", Strings.toString(p))));
         }
         for (uint256 k = 0; k < MAX_KEYS_PER_PIECE; k++) {
             keys4[k] = _generateKey(k);
@@ -1373,18 +1349,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         makeSignaturePass(client4);
         vm.prank(serviceProvider);
-        mockPDPVerifier.addPieces(
-            pdpServiceWithPayments,
-            dataSetId4,
-            0,
-            pieceData4,
-            0,
-            FAKE_SIGNATURE,
-            keys4,
-            values4
-        );
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId4, 0, pieceData4, 0, FAKE_SIGNATURE, keys4, values4);
     }
-
 
     // Operator Approval Validation Tests
     function testOperatorApproval_NotApproved() public {
@@ -1502,7 +1468,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // DEFAULT_LOCKUP_PERIOD = 86400
         // EPOCHS_PER_MONTH = 86400
         // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        uint256 minimumLockupRatePerEpoch = (uint256(6e16) / (2880*30));
+        uint256 minimumLockupRatePerEpoch = (uint256(6e16) / (2880 * 30));
         uint256 minimumLockupRequired = minimumLockupRatePerEpoch * (2880 * 30);
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
