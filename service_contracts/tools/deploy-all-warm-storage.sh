@@ -24,6 +24,9 @@ fi
 # in the same directory, regardless of where this script is executed from
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 
+# Source the shared deployments script
+source "$SCRIPT_DIR/deployments.sh"
+
 echo "Deploying all Warm Storage contracts"
 
 if [ -z "$ETH_RPC_URL" ]; then
@@ -73,6 +76,9 @@ case "$CHAIN" in
 esac
 
 echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
+
+# Load deployment addresses from deployments.json
+load_deployment_addresses "$CHAIN"
 
 if [ "$DRY_RUN" != "true" ] && [ -z "$ETH_KEYSTORE" ]; then
   echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
@@ -194,6 +200,11 @@ deploy_implementation_if_needed() {
 
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
+        
+        # Update deployments.json if this is an actual deployment
+        if [ "$DRY_RUN" != "true" ]; then
+            update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
+        fi
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -237,6 +248,11 @@ deploy_proxy_if_needed() {
 
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
+        
+        # Update deployments.json if this is an actual deployment
+        if [ "$DRY_RUN" != "true" ]; then
+            update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
+        fi
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -262,6 +278,11 @@ deploy_session_key_registry_if_needed() {
         source "$SCRIPT_DIR/deploy-session-key-registry.sh"
         NONCE=$(expr $NONCE + "1")
         echo "  ✅ Deployed at: $SESSION_KEY_REGISTRY_ADDRESS"
+        
+        # Update deployments.json
+        if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
+            update_deployment_address "$CHAIN" "SESSION_KEY_REGISTRY_ADDRESS" "$SESSION_KEY_REGISTRY_ADDRESS"
+        fi
     fi
     echo
 }
@@ -416,6 +437,11 @@ else
     echo "  🔧 Using external deployment script..."
     source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
     echo "  ✅ Deployed at: $WARM_STORAGE_VIEW_ADDRESS"
+    
+    # Update deployments.json
+    if [ -n "$WARM_STORAGE_VIEW_ADDRESS" ]; then
+        update_deployment_address "$CHAIN" "WARM_STORAGE_VIEW_ADDRESS" "$WARM_STORAGE_VIEW_ADDRESS"
+    fi
 fi
 echo
 
@@ -484,4 +510,11 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
     
     popd >/dev/null
+fi
+
+# Update deployment metadata if this was an actual deployment
+if [ "$DRY_RUN" != "true" ]; then
+    echo
+    echo "📝 Updating deployment metadata..."
+    update_deployment_metadata "$CHAIN"
 fi

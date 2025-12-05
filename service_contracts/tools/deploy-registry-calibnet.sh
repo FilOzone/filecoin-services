@@ -6,9 +6,16 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
+# Get script directory and source deployments.sh
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
+
 echo "Deploying Service Provider Registry Contract"
 
 export CHAIN=314159
+
+# Load deployment addresses from deployments.json
+load_deployment_addresses "$CHAIN"
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
@@ -110,6 +117,17 @@ echo "=========================================="
 echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $REGISTRY_PROXY_ADDRESS"
 echo "=========================================="
+
+# Update deployments.json
+if [ -n "$REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
+    update_deployment_address "$CHAIN" "REGISTRY_IMPLEMENTATION_ADDRESS" "$REGISTRY_IMPLEMENTATION_ADDRESS"
+fi
+if [ -n "$REGISTRY_PROXY_ADDRESS" ]; then
+    update_deployment_address "$CHAIN" "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "$REGISTRY_PROXY_ADDRESS"
+fi
+if [ -n "$REGISTRY_IMPLEMENTATION_ADDRESS" ] || [ -n "$REGISTRY_PROXY_ADDRESS" ]; then
+    update_deployment_metadata "$CHAIN"
+fi
 echo ""
 echo "Contract Details:"
 echo "  - Version: $CONTRACT_VERSION"
