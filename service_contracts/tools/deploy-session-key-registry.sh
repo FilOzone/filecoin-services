@@ -9,6 +9,10 @@
 # - called from service_contracts directory
 # - PATH has forge and cast
 
+# Get script directory and source deployments.sh
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
+
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
   exit 1
@@ -22,6 +26,9 @@ if [ -z "$CHAIN" ]; then
     exit 1
   fi
 fi
+
+# Load deployment addresses from deployments.json
+load_deployment_addresses "$CHAIN"
 
 
 if [ -z "$ETH_KEYSTORE" ]; then
@@ -41,6 +48,12 @@ fi
 export SESSION_KEY_REGISTRY_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry | grep "Deployed to" | awk '{print $3}')
 
 echo SessionKeyRegistry deployed at $SESSION_KEY_REGISTRY_ADDRESS
+
+# Update deployments.json
+if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
+    update_deployment_address "$CHAIN" "SESSION_KEY_REGISTRY_ADDRESS" "$SESSION_KEY_REGISTRY_ADDRESS"
+    update_deployment_metadata "$CHAIN"
+fi
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then

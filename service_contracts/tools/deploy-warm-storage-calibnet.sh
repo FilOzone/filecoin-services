@@ -6,10 +6,16 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
+# Get script directory and source deployments.sh
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
+
 echo "Deploying Warm Storage Service Contract"
 
 export CHAIN=314159
 
+# Load deployment addresses from deployments.json
+load_deployment_addresses "$CHAIN"
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
@@ -168,6 +174,20 @@ echo "Max proving period: $MAX_PROVING_PERIOD epochs"
 echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "Service name: $SERVICE_NAME"
 echo "Service description: $SERVICE_DESCRIPTION"
+
+# Update deployments.json
+if [ -n "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
+    update_deployment_address "$CHAIN" "FWS_IMPLEMENTATION_ADDRESS" "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS"
+fi
+if [ -n "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
+    update_deployment_address "$CHAIN" "WARM_STORAGE_SERVICE_ADDRESS" "$WARM_STORAGE_SERVICE_ADDRESS"
+fi
+if [ -n "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
+    update_deployment_address "$CHAIN" "SIGNATURE_VERIFICATION_LIB_ADDRESS" "$SIGNATURE_VERIFICATION_LIB_ADDRESS"
+fi
+if [ -n "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ] || [ -n "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
+    update_deployment_metadata "$CHAIN"
+fi
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then

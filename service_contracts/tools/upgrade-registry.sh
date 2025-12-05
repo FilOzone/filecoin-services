@@ -1,9 +1,13 @@
 #!/bin/bash
 
 # upgrade-registry.sh: Completes a pending upgrade for ServiceProviderRegistry
-# Required args: ETH_RPC_URL, REGISTRY_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_REGISTRY_IMPLEMENTATION_ADDRESS
+# Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_REGISTRY_IMPLEMENTATION_ADDRESS
 # Optional args: NEW_VERSION
 # Calculated if unset: CHAIN
+
+# Get script directory and source deployments.sh
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
@@ -28,18 +32,21 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
+# Load deployment addresses from deployments.json
+load_deployment_addresses "$CHAIN"
+
 ADDR=$(cast wallet address --password "$PASSWORD")
 echo "Using owner address: $ADDR"
 
 # Get current nonce
 NONCE=$(cast nonce "$ADDR")
 
-if [ -z "$REGISTRY_PROXY_ADDRESS" ]; then
-  echo "Error: REGISTRY_PROXY_ADDRESS is not set"
+if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+  echo "Error: SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS is not set"
   exit 1
 fi
 
-PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$REGISTRY_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then
   echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
   exit 1
@@ -47,7 +54,7 @@ fi
 
 # Get the upgrade plan (if any)
 # Try to call nextUpgrade() - this will fail if the method doesn't exist (old contracts)
-UPGRADE_PLAN_OUTPUT=$(cast call -f 0x0000000000000000000000000000000000000000 "$REGISTRY_PROXY_ADDRESS" "nextUpgrade()(address,uint96)" 2>&1)
+UPGRADE_PLAN_OUTPUT=$(cast call -f 0x0000000000000000000000000000000000000000 "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "nextUpgrade()(address,uint96)" 2>&1)
 CAST_CALL_EXIT_CODE=$?
 
 ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
@@ -103,7 +110,7 @@ fi
 
 # Call upgradeToAndCall on the proxy with migrate function
 echo "Upgrading proxy and calling migrate..."
-TX_HASH=$(cast send "$REGISTRY_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
+TX_HASH=$(cast send "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
   --json | jq -r '.transactionHash')
@@ -125,13 +132,19 @@ cast receipt "$TX_HASH" --confirmations 1 > /dev/null
 
 # Verify the upgrade by checking the implementation address
 echo "Verifying upgrade..."
-NEW_IMPL=$(cast rpc eth_getStorageAt "$REGISTRY_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
+NEW_IMPL=$(cast rpc eth_getStorageAt "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
 
 # Compare to lowercase
 export EXPECTED_IMPL=$(echo $NEW_REGISTRY_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')
 
 if [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
     echo "✅ Upgrade successful! Proxy now points to: $NEW_REGISTRY_IMPLEMENTATION_ADDRESS"
+    
+    # Update deployments.json with new implementation address
+    if [ -n "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
+        update_deployment_address "$CHAIN" "REGISTRY_IMPLEMENTATION_ADDRESS" "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS"
+    fi
+    update_deployment_metadata "$CHAIN"
 else
     echo "⚠️  Warning: Could not verify upgrade. Please check manually."
     echo "Expected: $NEW_REGISTRY_IMPLEMENTATION_ADDRESS"
