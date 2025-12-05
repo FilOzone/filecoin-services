@@ -1068,7 +1068,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Expected minimum: (0.06 USDFC * 86400) / 86400 = 0.06 USDFC = 6e16
-        uint256 minimumRequired = 6e16;
+        uint256 minimumRequiredPerEpoch = (uint256(6e16) / (2880*30));
+        uint256 minimumRequired = minimumRequiredPerEpoch * (2880 * 30);
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1163,64 +1164,227 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(dataSetId, 1, "Dataset should be created with above-minimum funds");
     }
 
-    // function testInsufficientFunds_AddPieces() public {
-    //     // Setup: Client with exactly the minimum funds (0.06 USDFC)
-    //     address exactClient = makeAddr("exactClient");
-    //     uint256 exactAmount = 6e16; // Exactly 0.06 USDFC
+    function testAddPiecesFundingValidation() public {
+        uint256 minimumAmount = 6e16; // 0.06 USDFC
 
-    //     // Transfer tokens from test contract to the test client
-    //     mockUSDFC.safeTransfer(exactClient, exactAmount);
+        // Test 1: Insufficient funds with small piece (below minimum rate)
+        address client1 = makeAddr("client1");
+        mockUSDFC.safeTransfer(client1, minimumAmount);
+        
+        vm.startPrank(client1);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minimumAmount);
+        payments.deposit(mockUSDFC, client1, minimumAmount);
+        vm.stopPrank();
 
-    //     vm.startPrank(exactClient);
-    //     payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-    //     mockUSDFC.approve(address(payments), exactAmount);
-    //     payments.deposit(mockUSDFC, exactClient, exactAmount);
-    //     vm.stopPrank();
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test");
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client1,
+            clientDataSetId: 1001,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
 
-    //     // Prepare dataset creation data
-    //     (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Exact Minimum Test");
-    //     FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-    //         payer: exactClient,
-    //         clientDataSetId: 1000,
-    //         metadataKeys: dsKeys,
-    //         metadataValues: dsValues,
-    //         signature: FAKE_SIGNATURE
-    //     });
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
 
-    //     bytes memory encodedCreateData = abi.encode(
-    //         createData.payer,
-    //         createData.clientDataSetId,
-    //         createData.metadataKeys,
-    //         createData.metadataValues,
-    //         createData.signature
-    //     );
+        makeSignaturePass(client1);
+        vm.prank(serviceProvider);
+        uint256 dataSetId1 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
 
-    //     // Should succeed with exact minimum
-    //     makeSignaturePass(exactClient);
-    //     vm.prank(serviceProvider);
-    //     uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+        vm.prank(client1);
+        payments.withdraw(mockUSDFC, 59999999999961600); // Withdraw almost all funds
 
-    //     vm.prank(exactClient);
-    //     payments.withdraw(mockUSDFC, 59999999999961600); // Withdraw all funds, leaving 0 balance
+        Cids.Cid[] memory pieceData1 = new Cids.Cid[](1);
+        pieceData1[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("piece1")));
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
 
-    //     // Prepare piece addition data
-    //     Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-    //     pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("piece:belowMinimum")));
-    //     string[] memory keys = new string[](0);
-    //     string[] memory values = new string[](0);
-    //     uint256 firstAdded = 0;
-    //     // Expect revert when adding pieces due to insufficient funds
-    //     makeSignaturePass(exactClient);
-    //     vm.expectRevert(
-    //         abi.encodeWithSelector(
-    //             Errors.InsufficientLockupFunds.selector, exactClient, 6e16, 5e16
-    //         )
-    //     );
-    //     vm.prank(serviceProvider);
-    //     mockPDPVerifier.addPieces(
-    //         pdpServiceWithPayments, dataSetId, firstAdded, pieceData, 0, FAKE_SIGNATURE, keys, values
-    //     );
-    // }
+        makeSignaturePass(client1);
+        uint256 leafCount1 = 0;
+        for (uint256 i = 0; i < pieceData1.length; i++) {
+            (uint256 padding, uint8 height,) = Cids.validateCommPv2(pieceData1[i]);
+            leafCount1 += Cids.leafCount(padding, height);
+        }
+        uint256 lockupRequired1 = pdpServiceWithPayments.calculateRatePerEpoch(leafCount1 * 32) * 2880 * 30;
+        (uint256 availableFunds1,) = getAccountInfo(mockUSDFC, client1);
+        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InsufficientLockupFunds.selector, client1, lockupRequired1, availableFunds1
+            )
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId1, 0, pieceData1, 0, FAKE_SIGNATURE, emptyKeys, emptyValues
+        );
+
+        // Test 2: Sufficient funds with small piece (below minimum rate)
+        address client2 = makeAddr("client2");
+        mockUSDFC.safeTransfer(client2, minimumAmount);
+        
+        vm.startPrank(client2);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minimumAmount);
+        payments.deposit(mockUSDFC, client2, minimumAmount);
+        vm.stopPrank();
+
+        createData.payer = client2;
+        createData.clientDataSetId = 1002;
+        encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client2);
+        vm.prank(serviceProvider);
+        uint256 dataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        Cids.Cid[] memory pieceData2 = new Cids.Cid[](1);
+        pieceData2[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("piece2")));
+
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId2, 0, pieceData2, 0, FAKE_SIGNATURE, emptyKeys, emptyValues
+        );
+
+        // Test 3: Insufficient funds with large pieces (above minimum rate)
+        address client3 = makeAddr("client3");
+        mockUSDFC.safeTransfer(client3, minimumAmount);
+        
+        vm.startPrank(client3);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minimumAmount);
+        payments.deposit(mockUSDFC, client3, minimumAmount);
+        vm.stopPrank();
+
+        createData.payer = client3;
+        createData.clientDataSetId = 1003;
+        encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client3);
+        vm.prank(serviceProvider);
+        uint256 dataSetId3 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        // Construct 5 large pieces
+        uint256 totalPieces = 5;
+        Cids.Cid[] memory pieceData3 = new Cids.Cid[](totalPieces);
+        string[] memory keys3 = new string[](MAX_KEYS_PER_PIECE);
+        string[] memory values3 = new string[](MAX_KEYS_PER_PIECE);
+
+        for (uint256 p = 0; p < totalPieces; p++) {
+            pieceData3[p] = Cids.CommPv2FromDigest(
+                0,
+                28,
+                keccak256(abi.encodePacked("file", Strings.toString(p)))
+            );
+        }
+        for (uint256 k = 0; k < MAX_KEYS_PER_PIECE; k++) {
+            keys3[k] = _generateKey(k);
+            values3[k] = _makeStringOfLength(128);
+        }
+
+        makeSignaturePass(client3);
+
+        uint256 leafCount3 = 0;
+        for (uint256 i = 0; i < pieceData3.length; i++) {
+            (uint256 padding, uint8 height,) = Cids.validateCommPv2(pieceData3[i]);
+            leafCount3 += Cids.leafCount(padding, height);
+        }
+
+        uint256 lockupRequired3 = pdpServiceWithPayments.calculateRatePerEpoch(leafCount3 * 32) * 2880 * 30;
+        (uint256 availableFunds3,) = getAccountInfo(mockUSDFC, client3);
+        
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InsufficientLockupFunds.selector,
+                client3,
+                lockupRequired3,
+                availableFunds3
+            )
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId3,
+            0,
+            pieceData3,
+            0,
+            FAKE_SIGNATURE,
+            keys3,
+            values3
+        );
+
+        // Test 4: Sufficient funds with large pieces (above minimum rate)
+        address client4 = makeAddr("client4");
+        uint256 sufficientAmount = 10e16; // 0.10 USDFC
+        mockUSDFC.safeTransfer(client4, sufficientAmount);
+        
+        vm.startPrank(client4);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), sufficientAmount);
+        payments.deposit(mockUSDFC, client4, sufficientAmount);
+        vm.stopPrank();
+
+        createData.payer = client4;
+        createData.clientDataSetId = 1004;
+        encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client4);
+        vm.prank(serviceProvider);
+        uint256 dataSetId4 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        Cids.Cid[] memory pieceData4 = new Cids.Cid[](totalPieces);
+        string[] memory keys4 = new string[](MAX_KEYS_PER_PIECE);
+        string[] memory values4 = new string[](MAX_KEYS_PER_PIECE);
+
+        for (uint256 p = 0; p < totalPieces; p++) {
+            pieceData4[p] = Cids.CommPv2FromDigest(
+                0,
+                28,
+                keccak256(abi.encodePacked("file", Strings.toString(p)))
+            );
+        }
+        for (uint256 k = 0; k < MAX_KEYS_PER_PIECE; k++) {
+            keys4[k] = _generateKey(k);
+            values4[k] = _makeStringOfLength(128);
+        }
+
+        makeSignaturePass(client4);
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId4,
+            0,
+            pieceData4,
+            0,
+            FAKE_SIGNATURE,
+            keys4,
+            values4
+        );
+    }
+
 
     // Operator Approval Validation Tests
     function testOperatorApproval_NotApproved() public {
@@ -1338,7 +1502,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // DEFAULT_LOCKUP_PERIOD = 86400
         // EPOCHS_PER_MONTH = 86400
         // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        uint256 minimumLockupRequired = 6e16;
+        uint256 minimumLockupRatePerEpoch = (uint256(6e16) / (2880*30));
+        uint256 minimumLockupRequired = minimumLockupRatePerEpoch * (2880 * 30);
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals

@@ -157,15 +157,6 @@ contract MockPDPVerifier {
 
         bytes memory extraData = abi.encode(nonce, allKeys, allValues, signature);
 
-        // // Update simple leaf count estimate for each piece using bytes length -> 32-byte leaves
-        // uint256 addedLeaves = 0;
-        // for (uint256 i = 0; i < pieceData.length; i++) {
-        //     uint256 dataLen = pieceData[i].data.length;
-        //     // estimate leaf count as ceil(dataLen / 32), minimum 1
-        //     uint256 leaves = dataLen == 0 ? 1 : (dataLen + 31) / 32;
-        //     addedLeaves += leaves;
-        // }
-        // dataSetLeafCount[dataSetId] += addedLeaves;
         uint256 leafCount = 0;
         for (uint256 i = 0; i < pieceData.length; i++) {
             (uint256 padding, uint8 height,) = Cids.validateCommPv2(pieceData[i]);
