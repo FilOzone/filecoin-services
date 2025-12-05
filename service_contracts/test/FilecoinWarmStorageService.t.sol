@@ -803,9 +803,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First batch (3 pieces) with key "meta" => metadataShort
         Cids.Cid[] memory pieceData1 = new Cids.Cid[](3);
-        pieceData1[0].data = bytes("1_0:1111");
-        pieceData1[1].data = bytes("1_1:111100000");
-        pieceData1[2].data = bytes("1_2:11110000000000");
+        pieceData1[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_0:1111")));
+        pieceData1[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_1:111100000")));
+        pieceData1[2] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_2:11110000000000")));
         string[] memory keys1 = new string[](1);
         string[] memory values1 = new string[](1);
         keys1[0] = "meta";
@@ -817,8 +817,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Second batch (2 pieces) with key "meta" => metadataLong
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
-        pieceData2[0].data = bytes("2_0:22222222222222222222");
-        pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+        pieceData2[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("2_0:22222222222222222222")));
+        pieceData2[1] = Cids.CommPv2FromDigest(
+            0, 4, keccak256(abi.encodePacked("2_1:222222222222222222220000000000000000000000000000000000000000000"))
+        );
         string[] memory keys2 = new string[](1);
         string[] memory values2 = new string[](1);
         keys2[0] = "meta";
@@ -1066,7 +1068,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Expected minimum: (0.06 USDFC * 86400) / 86400 = 0.06 USDFC = 6e16
-        uint256 minimumRequired = 6e16;
+        uint256 minimumRequiredPerEpoch = (uint256(6e16) / (2880 * 30));
+        uint256 minimumRequired = minimumRequiredPerEpoch * (2880 * 30);
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1159,6 +1162,194 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Verify dataset was created
         assertEq(dataSetId, 1, "Dataset should be created with above-minimum funds");
+    }
+
+    function testAddPiecesFundingValidation() public {
+        uint256 minimumAmount = 6e16; // 0.06 USDFC
+
+        // Test 1: Insufficient funds with small piece (below minimum rate)
+        address client1 = makeAddr("client1");
+        mockUSDFC.safeTransfer(client1, minimumAmount);
+
+        vm.startPrank(client1);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minimumAmount);
+        payments.deposit(mockUSDFC, client1, minimumAmount);
+        vm.stopPrank();
+
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test");
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: client1,
+            clientDataSetId: 1001,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client1);
+        vm.prank(serviceProvider);
+        uint256 dataSetId1 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        vm.prank(client1);
+        payments.withdraw(mockUSDFC, 59999999999961600); // Withdraw almost all funds
+
+        Cids.Cid[] memory pieceData1 = new Cids.Cid[](1);
+        pieceData1[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("piece1")));
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+
+        makeSignaturePass(client1);
+        uint256 leafCount1 = 0;
+        for (uint256 i = 0; i < pieceData1.length; i++) {
+            (uint256 padding, uint8 height,) = Cids.validateCommPv2(pieceData1[i]);
+            leafCount1 += Cids.leafCount(padding, height);
+        }
+        uint256 lockupRequired1 = pdpServiceWithPayments.calculateRatePerEpoch(leafCount1 * 32) * 2880 * 30;
+        (uint256 availableFunds1,) = getAccountInfo(mockUSDFC, client1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, client1, lockupRequired1, availableFunds1)
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId1, 0, pieceData1, 0, FAKE_SIGNATURE, emptyKeys, emptyValues
+        );
+
+        // Test 2: Sufficient funds with small piece (below minimum rate)
+        address client2 = makeAddr("client2");
+        mockUSDFC.safeTransfer(client2, minimumAmount);
+
+        vm.startPrank(client2);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minimumAmount);
+        payments.deposit(mockUSDFC, client2, minimumAmount);
+        vm.stopPrank();
+
+        createData.payer = client2;
+        createData.clientDataSetId = 1002;
+        encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client2);
+        vm.prank(serviceProvider);
+        uint256 dataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        Cids.Cid[] memory pieceData2 = new Cids.Cid[](1);
+        pieceData2[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("piece2")));
+
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId2, 0, pieceData2, 0, FAKE_SIGNATURE, emptyKeys, emptyValues
+        );
+
+        // Test 3: Insufficient funds with large pieces (above minimum rate)
+        address client3 = makeAddr("client3");
+        mockUSDFC.safeTransfer(client3, minimumAmount);
+
+        vm.startPrank(client3);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minimumAmount);
+        payments.deposit(mockUSDFC, client3, minimumAmount);
+        vm.stopPrank();
+
+        createData.payer = client3;
+        createData.clientDataSetId = 1003;
+        encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client3);
+        vm.prank(serviceProvider);
+        uint256 dataSetId3 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        // Construct 5 large pieces
+        uint256 totalPieces = 5;
+        Cids.Cid[] memory pieceData3 = new Cids.Cid[](totalPieces);
+        string[] memory keys3 = new string[](MAX_KEYS_PER_PIECE);
+        string[] memory values3 = new string[](MAX_KEYS_PER_PIECE);
+
+        for (uint256 p = 0; p < totalPieces; p++) {
+            pieceData3[p] = Cids.CommPv2FromDigest(0, 28, keccak256(abi.encodePacked("file", Strings.toString(p))));
+        }
+        for (uint256 k = 0; k < MAX_KEYS_PER_PIECE; k++) {
+            keys3[k] = _generateKey(k);
+            values3[k] = _makeStringOfLength(128);
+        }
+
+        makeSignaturePass(client3);
+
+        uint256 leafCount3 = 0;
+        for (uint256 i = 0; i < pieceData3.length; i++) {
+            (uint256 padding, uint8 height,) = Cids.validateCommPv2(pieceData3[i]);
+            leafCount3 += Cids.leafCount(padding, height);
+        }
+
+        uint256 lockupRequired3 = pdpServiceWithPayments.calculateRatePerEpoch(leafCount3 * 32) * 2880 * 30;
+        (uint256 availableFunds3,) = getAccountInfo(mockUSDFC, client3);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, client3, lockupRequired3, availableFunds3)
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId3, 0, pieceData3, 0, FAKE_SIGNATURE, keys3, values3);
+
+        // Test 4: Sufficient funds with large pieces (above minimum rate)
+        address client4 = makeAddr("client4");
+        uint256 sufficientAmount = 10e16; // 0.10 USDFC
+        mockUSDFC.safeTransfer(client4, sufficientAmount);
+
+        vm.startPrank(client4);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), sufficientAmount);
+        payments.deposit(mockUSDFC, client4, sufficientAmount);
+        vm.stopPrank();
+
+        createData.payer = client4;
+        createData.clientDataSetId = 1004;
+        encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(client4);
+        vm.prank(serviceProvider);
+        uint256 dataSetId4 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        Cids.Cid[] memory pieceData4 = new Cids.Cid[](totalPieces);
+        string[] memory keys4 = new string[](MAX_KEYS_PER_PIECE);
+        string[] memory values4 = new string[](MAX_KEYS_PER_PIECE);
+
+        for (uint256 p = 0; p < totalPieces; p++) {
+            pieceData4[p] = Cids.CommPv2FromDigest(0, 28, keccak256(abi.encodePacked("file", Strings.toString(p))));
+        }
+        for (uint256 k = 0; k < MAX_KEYS_PER_PIECE; k++) {
+            keys4[k] = _generateKey(k);
+            values4[k] = _makeStringOfLength(128);
+        }
+
+        makeSignaturePass(client4);
+        vm.prank(serviceProvider);
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId4, 0, pieceData4, 0, FAKE_SIGNATURE, keys4, values4);
     }
 
     // Operator Approval Validation Tests
@@ -1277,7 +1468,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // DEFAULT_LOCKUP_PERIOD = 86400
         // EPOCHS_PER_MONTH = 86400
         // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        uint256 minimumLockupRequired = 6e16;
+        uint256 minimumLockupRatePerEpoch = (uint256(6e16) / (2880 * 30));
+        uint256 minimumLockupRequired = minimumLockupRatePerEpoch * (2880 * 30);
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
@@ -4558,7 +4750,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece_1");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4604,7 +4796,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4678,7 +4870,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4725,7 +4917,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 

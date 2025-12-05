@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {PDPListener} from "@pdp/PDPVerifier.sol";
+import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -663,7 +664,7 @@ contract FilecoinWarmStorageService is
 
         // Validate payer has sufficient funds and operator approvals for minimum pricing
         // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN);
+        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN, 0, new Cids.Cid[](0));
 
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
@@ -833,6 +834,13 @@ contract FilecoinWarmStorageService is
 
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
+
+        // Validate payer/operator approvals and available funds for the new pieces
+        // This checks the payer has sufficient available funds and operator allowances
+        // to cover the increased per-epoch rate and the 30-day lockup implied by the
+        // new total leaf count after adding these pieces.
+        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+        validatePayerOperatorApprovalAndFunds(payments, payer, false, dataSetId, pieceData);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -1177,14 +1185,22 @@ contract FilecoinWarmStorageService is
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
     /// @param payments The FilecoinPayV1 contract instance
     /// @param payer The address of the payer
-    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer, bool includeCDN)
-        internal
-        view
-    {
-        // Calculate required lockup for minimum pricing
-        uint256 minimumLockupRequired = (minimumStorageRatePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+    function validatePayerOperatorApprovalAndFunds(
+        FilecoinPayV1 payments,
+        address payer,
+        bool includeCDN,
+        uint256 dataSetId,
+        Cids.Cid[] memory pieceData
+    ) internal view {
+        uint256 totalBytes = 0;
+        if (dataSetId != 0 && pieceData.length != 0) {
+            totalBytes = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId) * BYTES_PER_LEAF;
+        }
 
-        // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
+        // Calculate the minimum storage rate per epoch based on total bytes
+        uint256 minimumStorageRatePerEpoch = _calculateStorageRate(totalBytes);
+        // Calculate the minimum lockup required for the payer
+        uint256 minimumLockupRequired = minimumStorageRatePerEpoch * DEFAULT_LOCKUP_PERIOD;
         if (includeCDN) {
             minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
@@ -1208,14 +1224,10 @@ contract FilecoinWarmStorageService is
 
         // Verify operator is approved
         require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
-
-        // Calculate minimum rate per epoch
-        uint256 minimumRatePerEpoch = minimumStorageRatePerMonth / EPOCHS_PER_MONTH;
-
         // Verify rate allowance is sufficient
         require(
-            rateAllowance >= rateUsage + minimumRatePerEpoch,
-            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
+            rateAllowance >= rateUsage + minimumStorageRatePerEpoch,
+            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumStorageRatePerEpoch)
         );
 
         // Verify lockup allowance is sufficient (include CDN extras when applicable)
