@@ -975,7 +975,7 @@ contract FilecoinWarmStorageService is
 
             // Note: updatePaymentRates is now called in piecesAdded to enforce
             // payment validation immediately when pieces are added
-            
+
             return;
         }
 
