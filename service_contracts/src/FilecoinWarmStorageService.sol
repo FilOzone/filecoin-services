@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {PDPListener} from "@pdp/PDPVerifier.sol";
+import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
@@ -255,6 +256,9 @@ contract FilecoinWarmStorageService is
     mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;
     // Track when proving was first activated for each data set
     mapping(uint256 dataSetId => uint256) private provingActivationEpoch;
+
+    // Track the last leaf count we used for rate calculations
+    mapping(uint256 dataSetId => uint256) private lastRateLeafCount;
 
     mapping(uint256 dataSetId => uint256) private provingDeadlines;
     mapping(uint256 dataSetId => bool) private provenThisPeriod;
@@ -834,6 +838,12 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
 
+        // Update payment rates immediately to enforce payment validation
+        // Get the current leaf count from PDPVerifier (updated before this call)
+        uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
+        updatePaymentRates(dataSetId, currentLeafCount);
+        lastRateLeafCount[dataSetId] = currentLeafCount;
+
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
             uint256 pieceId = firstAdded + i;
@@ -963,9 +973,9 @@ contract FilecoinWarmStorageService is
             // This marks when the data set became active for proving
             provingActivationEpoch[dataSetId] = block.number;
 
-            // Update the payment rates
-            updatePaymentRates(dataSetId, leafCount);
-
+            // Note: updatePaymentRates is now called in piecesAdded to enforce
+            // payment validation immediately when pieces are added
+            
             return;
         }
 
@@ -1010,8 +1020,12 @@ contract FilecoinWarmStorageService is
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Update the payment rates based on current data set size
-        updatePaymentRates(dataSetId, leafCount);
+        // Update payment rates only if leaf count changed (deletions were processed)
+        // Piece additions already trigger rate updates in piecesAdded
+        if (leafCount < lastRateLeafCount[dataSetId]) {
+            updatePaymentRates(dataSetId, leafCount);
+            lastRateLeafCount[dataSetId] = leafCount;
+        }
     }
 
     /**
