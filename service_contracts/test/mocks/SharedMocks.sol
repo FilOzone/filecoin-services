@@ -99,6 +99,8 @@ contract MockPDPVerifier {
 
     // Track data set service providers for testing
     mapping(uint256 => address) public dataSetServiceProviders;
+    // Track simple leaf counts per data set for tests (approximate via bytes length)
+    mapping(uint256 => uint256) public dataSetLeafCount;
 
     event DataSetCreated(uint256 indexed setId, address indexed owner);
     event DataSetServiceProviderChanged(
@@ -118,6 +120,9 @@ contract MockPDPVerifier {
         // Track service provider
         dataSetServiceProviders[setId] = msg.sender;
 
+        // initialize leaf count to 0
+        dataSetLeafCount[setId] = 0;
+
         emit DataSetCreated(setId, msg.sender);
         return setId;
     }
@@ -128,6 +133,7 @@ contract MockPDPVerifier {
         }
 
         delete dataSetServiceProviders[setId];
+        delete dataSetLeafCount[setId];
         emit DataSetDeleted(setId, 0);
     }
 
@@ -150,7 +156,20 @@ contract MockPDPVerifier {
         }
 
         bytes memory extraData = abi.encode(nonce, allKeys, allValues, signature);
+
+        uint256 leafCount = 0;
+        for (uint256 i = 0; i < pieceData.length; i++) {
+            (uint256 padding, uint8 height,) = Cids.validateCommPv2(pieceData[i]);
+            leafCount += Cids.leafCount(padding, height);
+        }
+        dataSetLeafCount[dataSetId] += leafCount;
+
         listenerAddr.piecesAdded(dataSetId, firstAdded, pieceData, extraData);
+    }
+
+    // Expose leaf count similar to real PDPVerifier
+    function getDataSetLeafCount(uint256 setId) external view returns (uint256) {
+        return dataSetLeafCount[setId];
     }
 
     /**

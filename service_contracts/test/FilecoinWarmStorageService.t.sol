@@ -803,9 +803,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First batch (3 pieces) with key "meta" => metadataShort
         Cids.Cid[] memory pieceData1 = new Cids.Cid[](3);
-        pieceData1[0].data = bytes("1_0:1111");
-        pieceData1[1].data = bytes("1_1:111100000");
-        pieceData1[2].data = bytes("1_2:11110000000000");
+        pieceData1[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_0:1111")));
+        pieceData1[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_1:111100000")));
+        pieceData1[2] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_2:11110000000000")));
         string[] memory keys1 = new string[](1);
         string[] memory values1 = new string[](1);
         keys1[0] = "meta";
@@ -817,8 +817,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Second batch (2 pieces) with key "meta" => metadataLong
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
-        pieceData2[0].data = bytes("2_0:22222222222222222222");
-        pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+        pieceData2[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("2_0:22222222222222222222")));
+        pieceData2[1] = Cids.CommPv2FromDigest(
+            0, 4, keccak256(abi.encodePacked("2_1:222222222222222222220000000000000000000000000000000000000000000"))
+        );
         string[] memory keys2 = new string[](1);
         string[] memory values2 = new string[](1);
         keys2[0] = "meta";
@@ -4558,7 +4560,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece_1");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4604,7 +4606,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4678,7 +4680,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4725,7 +4727,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
