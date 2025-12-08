@@ -803,9 +803,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First batch (3 pieces) with key "meta" => metadataShort
         Cids.Cid[] memory pieceData1 = new Cids.Cid[](3);
-        pieceData1[0].data = bytes("1_0:1111");
-        pieceData1[1].data = bytes("1_1:111100000");
-        pieceData1[2].data = bytes("1_2:11110000000000");
+        pieceData1[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_0:1111")));
+        pieceData1[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_1:111100000")));
+        pieceData1[2] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("1_2:11110000000000")));
         string[] memory keys1 = new string[](1);
         string[] memory values1 = new string[](1);
         keys1[0] = "meta";
@@ -817,8 +817,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Second batch (2 pieces) with key "meta" => metadataLong
         Cids.Cid[] memory pieceData2 = new Cids.Cid[](2);
-        pieceData2[0].data = bytes("2_0:22222222222222222222");
-        pieceData2[1].data = bytes("2_1:222222222222222222220000000000000000000000000000000000000000");
+        pieceData2[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("2_0:22222222222222222222")));
+        pieceData2[1] = Cids.CommPv2FromDigest(
+            0, 4, keccak256(abi.encodePacked("2_1:222222222222222222220000000000000000000000000000000000000000000"))
+        );
         string[] memory keys2 = new string[](1);
         string[] memory values2 = new string[](1);
         keys2[0] = "meta";
@@ -1159,6 +1161,123 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Verify dataset was created
         assertEq(dataSetId, 1, "Dataset should be created with above-minimum funds");
+    }
+
+    function testInsufficientFunds_AddPiecesFailsImmediately() public {
+        // Test that adding pieces fails immediately when client has insufficient funds
+        // for the new lockup amount. This validates that updatePaymentRates is called
+        // in piecesAdded rather than waiting until nextProvingPeriod.
+
+        // Setup: Client with minimal funds - just enough to create an empty dataset
+        address limitedClient = makeAddr("limitedClient");
+        uint256 limitedAmount = 7e16; // 0.07 USDFC (just above 0.06 minimum)
+
+        mockUSDFC.safeTransfer(limitedClient, limitedAmount);
+
+        vm.startPrank(limitedClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), limitedAmount);
+        payments.deposit(mockUSDFC, limitedClient, limitedAmount);
+        vm.stopPrank();
+
+        // Create dataset - should succeed with minimal funds (uses minimum floor rate)
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Limited Funds Test");
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: limitedClient,
+            clientDataSetId: 1001,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(limitedClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+        assertEq(dataSetId, 1, "Dataset should be created successfully");
+
+        // Prepare a large piece - 1 TiB would cost 2.5 USDFC/month, way more than client has
+        // height=35 means 2^35 leaves × 32 bytes = 1 TiB
+        Cids.Cid[] memory largePieceData = new Cids.Cid[](1);
+        largePieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256(abi.encodePacked("large_piece")));
+        string[] memory keys = new string[](0);
+        string[] memory values = new string[](0);
+
+        // Attempt to add piece should fail immediately due to insufficient funds
+        // The error comes from FilecoinPayV1's modifyRailPayment when lockup check fails
+        makeSignaturePass(limitedClient);
+        vm.expectRevert(); // Reverts with "invariant failure: insufficient funds to cover lockup after function execution"
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, largePieceData, 1, FAKE_SIGNATURE, keys, values);
+    }
+
+    function testAddPieces_RateUpdatedImmediately() public {
+        // Test that payment rates are updated immediately when pieces are added,
+        // not deferred to nextProvingPeriod.
+
+        // Setup: Client with sufficient funds
+        address testClient = makeAddr("rateUpdateClient");
+        uint256 depositAmount = 100e18; // 100 USDFC - plenty of funds
+
+        mockUSDFC.safeTransfer(testClient, depositAmount);
+
+        vm.startPrank(testClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, testClient, depositAmount);
+        vm.stopPrank();
+
+        // Create dataset
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Rate Update Test");
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 1002,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        makeSignaturePass(testClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
+
+        // Get initial rail info (should be at minimum rate for empty dataset)
+        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
+        uint256 railId = dataSetInfo.pdpRailId;
+
+        // Get initial rate
+        FilecoinPayV1.RailView memory initialRail = payments.getRail(railId);
+        uint256 initialRate = initialRail.paymentRate;
+
+        // Add a large piece (1 TiB = height 35)
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256(abi.encodePacked("1tib_piece")));
+        string[] memory keys = new string[](0);
+        string[] memory values = new string[](0);
+
+        makeSignaturePass(testClient);
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, 1, FAKE_SIGNATURE, keys, values);
+
+        // Get rate after adding piece - should be updated immediately, not waiting for nextProvingPeriod
+        FilecoinPayV1.RailView memory railAfterAdd = payments.getRail(railId);
+        uint256 rateAfterAdd = railAfterAdd.paymentRate;
+
+        // Rate should have increased (1 TiB costs ~2.5 USDFC/month, much more than minimum 0.06)
+        assertGt(rateAfterAdd, initialRate, "Rate should increase immediately after adding piece");
     }
 
     // Operator Approval Validation Tests
@@ -4558,7 +4677,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece_1");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4604,7 +4723,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test_piece");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4678,7 +4797,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
@@ -4725,7 +4844,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare piece data
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
-        pieceData[0].data = bytes("test");
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("test_piece_1")));
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
 
