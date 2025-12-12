@@ -422,7 +422,7 @@ unset LIBRARIES
 # Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 deploy_proxy_if_needed \
-    "WARM_STORAGE_SERVICE_ADDRESS" \
+    "WARM_STORAGE_PROXY_ADDRESS" \
     "$FWS_IMPLEMENTATION_ADDRESS" \
     "$INIT_DATA" \
     "FilecoinWarmStorageService proxy"
@@ -478,7 +478,7 @@ echo "FilecoinPayV1 Contract: $PAYMENTS_CONTRACT_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWS_IMPLEMENTATION_ADDRESS"
-echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_SERVICE_ADDRESS"
+echo "FilecoinWarmStorageService Proxy: $WARM_STORAGE_PROXY_ADDRESS"
 echo "FilecoinWarmStorageServiceStateView: $WARM_STORAGE_VIEW_ADDRESS"
 echo
 echo "Network Configuration ($NETWORK_NAME):"
@@ -506,7 +506,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$FWS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
-        "$WARM_STORAGE_SERVICE_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$WARM_STORAGE_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$WARM_STORAGE_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
     
     popd >/dev/null

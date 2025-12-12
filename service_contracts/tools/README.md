@@ -62,7 +62,7 @@ The `deployments.json` file stores deployment addresses organized by chain ID:
   "314": {
     "PDP_VERIFIER_PROXY_ADDRESS": "0x...",
     "PAYMENTS_CONTRACT_ADDRESS": "0x...",
-    "WARM_STORAGE_SERVICE_ADDRESS": "0x...",
+    "WARM_STORAGE_PROXY_ADDRESS": "0x...",
     "metadata": {
       "commit": "abc123...",
       "deployed_at": "2024-01-01T00:00:00Z"
@@ -98,7 +98,7 @@ You can query addresses using `jq`:
 jq '.["314"]' deployments.json
 
 # Get a specific address
-jq -r '.["314"].WARM_STORAGE_SERVICE_ADDRESS' deployments.json
+jq -r '.["314"].WARM_STORAGE_PROXY_ADDRESS' deployments.json
 ```
 
 ### Version Control

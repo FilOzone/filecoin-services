@@ -123,7 +123,7 @@ update_deployment_address() {
        --arg contract "$contract_name" \
        --arg addr "$address" \
        'if .[$chain] then .[$chain][$contract] = $addr else .[$chain] = {($contract): $addr} end' \
-       "$DEPLOYMENTS_JSON_PATH" > "$temp_file" && mv "$temp_file" "$DEPLOYMENTS_JSON_PATH"
+       "$DEPLOYMENTS_JSON_PATH" > "$temp_file"
     
     if [ $? -ne 0 ]; then
         echo "Error: Failed to update deployments.json"
@@ -131,6 +131,7 @@ update_deployment_address() {
         return 1
     fi
     
+    mv "$temp_file" "$DEPLOYMENTS_JSON_PATH"
     echo "  ✓ Updated $contract_name=$address for chain $chain_id"
 }
 
@@ -169,13 +170,15 @@ update_deployment_metadata() {
     
     jq_cmd="$jq_cmd | .[\"$chain_id\"].metadata.deployed_at = \"$deployed_at\""
     
-    jq "$jq_cmd" "$DEPLOYMENTS_JSON_PATH" > "$temp_file" && mv "$temp_file" "$DEPLOYMENTS_JSON_PATH"
+    jq "$jq_cmd" "$DEPLOYMENTS_JSON_PATH" > "$temp_file"
     
     if [ $? -ne 0 ]; then
         echo "Error: Failed to update deployment metadata"
         rm -f "$temp_file"
         return 1
     fi
+    
+    mv "$temp_file" "$DEPLOYMENTS_JSON_PATH"
     
     if [ -n "$commit_hash" ]; then
         echo "  ✓ Updated metadata: commit=$commit_hash, deployed_at=$deployed_at"

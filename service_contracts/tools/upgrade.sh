@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # upgrade.sh: Completes a pending upgrade
-# Required args: ETH_RPC_URL, WARM_STORAGE_SERVICE_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
+# Required args: ETH_RPC_URL, WARM_STORAGE_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
 # Optional args: NEW_WARM_STORAGE_VIEW_ADDRESS
 # Calculated if unset: CHAIN, WARM_STORAGE_VIEW_ADDRESS
 
@@ -45,19 +45,19 @@ echo "Using owner address: $ADDR"
 # Get current nonce
 NONCE=$(cast nonce "$ADDR")
 
-if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
-  echo "Error: WARM_STORAGE_SERVICE_ADDRESS is not set"
+if [ -z "$WARM_STORAGE_PROXY_ADDRESS" ]; then
+  echo "Error: WARM_STORAGE_PROXY_ADDRESS is not set"
   exit 1
 fi
 
-PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_SERVICE_ADDRESS" "owner()(address)" 2>/dev/null)
+PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then
   echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
   exit 1
 fi
 
 if [ -z "$WARM_STORAGE_VIEW_ADDRESS" ]; then
-  WARM_STORAGE_VIEW_ADDRESS=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_SERVICE_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
+  WARM_STORAGE_VIEW_ADDRESS=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
 fi
 
 # Get the upgrade plan
@@ -92,7 +92,7 @@ fi
 
 # Call upgradeToAndCall on the proxy with migrate function
 echo "Upgrading proxy and calling migrate..."
-TX_HASH=$(cast send "$WARM_STORAGE_SERVICE_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
+TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
   --json | jq -r '.transactionHash')
@@ -114,7 +114,7 @@ cast receipt "$TX_HASH" --confirmations 1 > /dev/null
 
 # Verify the upgrade by checking the implementation address
 echo "Verifying upgrade..."
-NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_SERVICE_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
+NEW_IMPL=$(cast rpc eth_getStorageAt "$WARM_STORAGE_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
 
 # Compare to lowercase
 export EXPECTED_IMPL=$(echo $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')

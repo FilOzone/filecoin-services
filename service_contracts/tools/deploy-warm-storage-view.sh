@@ -2,7 +2,7 @@
 
 # env params:
 # ETH_RPC_URL
-# WARM_STORAGE_SERVICE_ADDRESS
+# WARM_STORAGE_PROXY_ADDRESS
 # ETH_KEYSTORE
 # PASSWORD
 
@@ -24,8 +24,8 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
-if [ -z "$WARM_STORAGE_SERVICE_ADDRESS" ]; then
-  echo "Error: WARM_STORAGE_SERVICE_ADDRESS is not set"
+if [ -z "$WARM_STORAGE_PROXY_ADDRESS" ]; then
+  echo "Error: WARM_STORAGE_PROXY_ADDRESS is not set"
   exit 1
 fi
 
@@ -43,7 +43,7 @@ if [ -z "$NONCE" ]; then
   NONCE="$(cast nonce "$ADDR")"
 fi
 
-export WARM_STORAGE_VIEW_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --constructor-args $WARM_STORAGE_SERVICE_ADDRESS | grep "Deployed to" | awk '{print $3}')
+export WARM_STORAGE_VIEW_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --constructor-args $WARM_STORAGE_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 echo FilecoinWarmStorageServiceStateView deployed at $WARM_STORAGE_VIEW_ADDRESS
 
