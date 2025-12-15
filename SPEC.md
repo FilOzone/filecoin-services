@@ -33,7 +33,7 @@ The default minimum floor ensures datasets below ~24.58 GiB still generate the m
 
 Only the contract owner can update pricing by calling `updatePricing(newStoragePrice, newMinimumRate)`. Maximum allowed values are 10 USDFC for storage price and 0.24 USDFC for minimum rate.
 
-Price changes take effect on existing rails when their rates are recalculated (e.g., when pieces are added or removed from a data set).
+Rate recalculation occurs when the provider calls `nextProvingPeriod()` to prepare proofs. Size changes from adding or removing pieces are batched until this point.
 
 ### Top-Up and Renewal
 
