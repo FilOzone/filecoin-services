@@ -27,7 +27,7 @@ minimumRate   = minimumStorageRatePerMonth ÷ EPOCHS_PER_MONTH
 finalRate     = max(sizeBasedRate, minimumRate)
 ```
 
-The minimum floor ensures small data sets still generate meaningful payments.
+The default minimum floor ensures datasets below ~24.58 GiB still generate the minimum payment of 0.06 USDFC/month.
 
 ### Pricing Updates
 
