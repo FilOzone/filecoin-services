@@ -13,9 +13,18 @@ Providers may advertise their own prices in the ServiceProviderRegistry, but the
 The payment rate per epoch is calculated from the total data size in bytes:
 
 ```
-sizeBasedRate = totalBytes × pricePerTiB ÷ TiB ÷ EPOCHS_PER_MONTH
-minimumRate = minimumStorageRatePerMonth ÷ EPOCHS_PER_MONTH
-finalRate = max(sizeBasedRate, minimumRate)
+# Constants
+EPOCHS_PER_MONTH              = 86400         # 2880 epochs/day × 30 days
+TiB                           = 1099511627776 # bytes
+
+# Default pricing (owner-adjustable)
+pricePerTiBPerMonth           = 2.5 USDFC
+minimumStorageRatePerMonth    = 0.06 USDFC
+
+# Per-epoch rate calculation
+sizeBasedRate = totalBytes × pricePerTiBPerMonth ÷ TiB ÷ EPOCHS_PER_MONTH
+minimumRate   = minimumStorageRatePerMonth ÷ EPOCHS_PER_MONTH
+finalRate     = max(sizeBasedRate, minimumRate)
 ```
 
 The minimum floor ensures small data sets still generate meaningful payments.
