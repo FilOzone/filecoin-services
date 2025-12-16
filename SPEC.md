@@ -35,12 +35,24 @@ Only the contract owner can update pricing by calling `updatePricing(newStorageP
 
 Rate recalculation occurs when the provider calls `nextProvingPeriod()` to prepare proofs. Size changes from adding or removing pieces are batched until this point.
 
-### Top-Up and Renewal
+### Funding and Top-Up
 
-Clients extend storage duration by depositing additional funds to their account. The relationship is:
+Clients pay for storage by depositing USDFC into the Filecoin Pay contract. These funds flow to providers over time based on the storage rate.
+
+**Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.
 
 ```
-storageDuration = availableFunds ÷ railPaymentRate
+lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-Adding funds increases duration; the rail rate remains unchanged until the data set size changes or global pricing is updated.
+At minimum pricing, this equals 0.06 USDFC. For larger datasets, the lockup equals one month's storage cost.
+
+**Storage duration** extends as clients deposit additional funds:
+
+```
+storageDuration = availableFunds ÷ finalRate
+```
+
+Deposits extend the duration without changing the rate (unless data size changes trigger a rate recalculation during `nextProvingPeriod()`).
+
+**Delinquency**: When a client's funded epoch falls below the current epoch, the payment rail can no longer be settled—no further payments flow to the provider. The provider may terminate the service to claim payment from the locked funds, guaranteeing up to 30 days of payment from the last funded epoch.
