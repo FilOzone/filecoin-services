@@ -40,10 +40,10 @@ Configuration:
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
 3. PDPVerifier Proxy: [0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C](https://filecoin-testnet.blockscout.com/address/0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C)
   - From [PDP v3.1.0](https://github.com/FilOzone/pdp/releases/tag/v3.1.0)
-4. SessionKeyRegistry: [0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452](https://filecoin-testnet.blockscout.com/address/0x97Dd879F5a97A8c761B94746d7F5cfF50AAd4452)
+4. SessionKeyRegistry: [0x518411c2062E119Aaf7A8B12A2eDf9a939347655](https://filecoin-testnet.blockscout.com/address/0x518411c2062E119Aaf7A8B12A2eDf9a939347655)
 5. ServiceProviderRegistry Implementation: [0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3](https://filecoin-testnet.blockscout.com/address/0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3)
 6. ServiceProviderRegistry Proxy: [0x839e5c9988e4e9977d40708d0094103c0839Ac9D](https://filecoin-testnet.blockscout.com/address/0x839e5c9988e4e9977d40708d0094103c0839Ac9D)
-7. FilecoinWarmStorageService Implementation: [0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA](https://filecoin-testnet.blockscout.com/address/0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA)
+7. FilecoinWarmStorageService Implementation: [0x1cAeE5EfCfc3681C2bBF689Ccb30d70c6e45F49f](https://filecoin-testnet.blockscout.com/address/0x1cAeE5EfCfc3681C2bBF689Ccb30d70c6e45F49f)
 8. FilecoinWarmStorageService Proxy: [0x02925630df557F957f70E112bA06e50965417CA0](https://filecoin-testnet.blockscout.com/address/0x02925630df557F957f70E112bA06e50965417CA0)
 9. FilecoinWarmStorageServiceStateView: [0xA5D87b04086B1d591026cCE10255351B5AA4689B](https://filecoin-testnet.blockscout.com/address/0xA5D87b04086B1d591026cCE10255351B5AA4689B)
 
