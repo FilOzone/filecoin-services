@@ -33,7 +33,14 @@ The default minimum floor ensures datasets below ~24.58 GiB still generate the m
 
 Only the contract owner can update pricing by calling `updatePricing(newStoragePrice, newMinimumRate)`. Maximum allowed values are 10 USDFC for storage price and 0.24 USDFC for minimum rate.
 
-Rate recalculation occurs when the provider calls `nextProvingPeriod()` to prepare proofs. Size changes from adding or removing pieces are batched until this point.
+### Rate Update Timing
+
+Rate recalculation timing differs for additions and deletions:
+
+- **Adding pieces**: The rate updates immediately when `piecesAdded()` is called. If the client lacks sufficient funds for the new lockup, the transaction fails before the provider commits resources.
+- **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized.
+
+This asymmetry protects providers: additions fail fast on insufficient funds, while deletions batch to proving boundaries for technical correctness.
 
 ### Funding and Top-Up
 
@@ -53,6 +60,6 @@ At minimum pricing, this equals 0.06 USDFC. For larger datasets, the lockup equa
 storageDuration = availableFunds ÷ finalRate
 ```
 
-Deposits extend the duration without changing the rate (unless data size changes trigger a rate recalculation during `nextProvingPeriod()`).
+Deposits extend the duration without changing the rate (unless adding pieces triggers an immediate rate recalculation, or scheduled deletions take effect at the next proving boundary).
 
 **Delinquency**: When a client's funded epoch falls below the current epoch, the payment rail can no longer be settled—no further payments flow to the provider. The provider may terminate the service to claim payment from the locked funds, guaranteeing up to 30 days of payment from the last funded epoch.
