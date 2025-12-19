@@ -5402,4 +5402,127 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidEpochRange.selector, 200, 200));
         pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e6, 200, 200, 0);
     }
+
+    /**
+     * @notice Test: Piece metadata removal is deferred until nextProvingPeriod
+     * @dev Verifies that:
+     *      1. Metadata persists after piecesScheduledRemove
+     *      2. Metadata is cleaned up after nextProvingPeriod
+     */
+    function testPieceMetadataRemovalDeferredToNextProvingPeriod() public {
+        // Setup: Create dataset with piece metadata
+        uint256 pieceId = 0;
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "test.txt";
+        keys[1] = "size";
+        values[1] = "1024";
+
+        PieceMetadataSetup memory setup =
+            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+
+        // Verify metadata exists
+        (string[] memory storedKeys, string[] memory storedValues) =
+            viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+        assertEq(storedKeys.length, 2, "Should have 2 metadata keys");
+        assertEq(storedKeys[0], keys[0], "Key 0 should match");
+        assertEq(storedValues[0], values[0], "Value 0 should match");
+
+        // Get proving period config
+        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
+
+        // Start proving period
+        uint256 firstDeadline = block.number + provingPeriod;
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(setup.dataSetId, firstDeadline, 100, "");
+
+        // Schedule piece removal
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = pieceId;
+        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            setup.dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData
+        );
+
+        // Metadata should STILL exist (deferred cleanup)
+        (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+        assertEq(storedKeys.length, 2, "Metadata should persist after piecesScheduledRemove");
+
+        // Move to next proving period
+        vm.roll(block.number + provingPeriod + 1);
+
+        // Call nextProvingPeriod to trigger cleanup
+        uint256 nextDeadline = firstDeadline + provingPeriod;
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(setup.dataSetId, nextDeadline, 100, "");
+
+        // Metadata should now be cleaned up
+        (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
+        assertEq(storedKeys.length, 0, "Metadata should be removed after nextProvingPeriod");
+    }
+
+    /**
+     * @notice Test: Multiple pieces scheduled for removal are all cleaned up
+     */
+    function testMultiplePieceMetadataRemovalAtNextProvingPeriod() public {
+        // Create dataset
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Dataset");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        // Add 3 pieces with metadata
+        uint256 numPieces = 3;
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        string[][] memory allKeys = new string[][](numPieces);
+        string[][] memory allValues = new string[][](numPieces);
+
+        for (uint256 i = 0; i < numPieces; i++) {
+            pieceData[i] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file", i)));
+            allKeys[i] = new string[](1);
+            allValues[i] = new string[](1);
+            allKeys[i][0] = "index";
+            allValues[i][0] = vm.toString(i);
+        }
+
+        uint256 nonce = 5000;
+        bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieceData, encodedData);
+
+        // Get proving period config
+        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
+
+        // Start proving period
+        uint256 firstDeadline = block.number + provingPeriod;
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline, 100, "");
+
+        // Schedule removal of all pieces
+        uint256[] memory pieceIds = new uint256[](numPieces);
+        for (uint256 i = 0; i < numPieces; i++) {
+            pieceIds[i] = i;
+        }
+        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
+
+        // Verify all metadata still exists
+        for (uint256 i = 0; i < numPieces; i++) {
+            (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, i);
+            assertEq(storedKeys.length, 1, "Metadata should persist for each piece");
+        }
+
+        // Move to next proving period and trigger cleanup
+        vm.roll(block.number + provingPeriod + 1);
+        uint256 nextDeadline = firstDeadline + provingPeriod;
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, nextDeadline, 0, "");
+
+        // Verify all metadata is now cleaned up
+        for (uint256 i = 0; i < numPieces; i++) {
+            (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, i);
+            assertEq(storedKeys.length, 0, "Metadata should be removed for each piece");
+        }
+    }
 }
