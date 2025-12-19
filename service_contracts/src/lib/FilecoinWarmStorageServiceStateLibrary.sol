@@ -70,10 +70,6 @@ library FilecoinWarmStorageServiceStateLibrary {
         return leafCount * BYTES_PER_LEAF;
     }
 
-    function getChallengesPerProof() public pure returns (uint64) {
-        return CHALLENGES_PER_PROOF;
-    }
-
     function clientNonces(FilecoinWarmStorageService service, address payer, uint256 nonce)
         public
         view
@@ -188,13 +184,13 @@ library FilecoinWarmStorageServiceStateLibrary {
         return uint256(service.extsload(keccak256(abi.encode(setId, StorageLayout.PROVING_DEADLINES_SLOT))));
     }
 
-    function getMaxProvingPeriod(FilecoinWarmStorageService service) public view returns (uint64) {
+    function getMaxProvingPeriod(FilecoinWarmStorageService service) internal view returns (uint64) {
         return uint64(uint256(service.extsload(StorageLayout.MAX_PROVING_PERIOD_SLOT)));
     }
 
     // Number of epochs at the end of a proving period during which a
     // proof of possession can be submitted
-    function challengeWindow(FilecoinWarmStorageService service) public view returns (uint256) {
+    function challengeWindow(FilecoinWarmStorageService service) internal view returns (uint256) {
         return uint256(service.extsload(StorageLayout.CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
