@@ -299,6 +299,9 @@ contract FilecoinWarmStorageService is
     uint256 private storagePricePerTibPerMonth;
     uint256 private minimumStorageRatePerMonth;
 
+    // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
+    mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
+
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     // =========================================================================
@@ -902,7 +905,11 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
 
-        // Additional logic for scheduling removals can be added here
+        // Queue piece IDs for metadata cleanup at nextProvingPeriod
+        uint256[] storage scheduled = scheduledPieceMetadataRemovals[dataSetId];
+        for (uint256 i = 0; i < pieceIds.length; i++) {
+            scheduled.push(pieceIds[i]);
+        }
     }
 
     // possession proven checks for correct challenge count and reverts if too low
@@ -971,6 +978,9 @@ contract FilecoinWarmStorageService is
             // Apply rate for initial data set size
             updatePaymentRates(dataSetId, leafCount);
 
+            // Scheduled piece removals unlikely on first period, but not impossible
+            processScheduledPieceMetadataRemovals(dataSetId);
+
             return;
         }
 
@@ -1018,6 +1028,8 @@ contract FilecoinWarmStorageService is
         // Additions are handled when added; deletions are processed before this callback, so the
         // rate can only decrease or stay the same here
         updatePaymentRates(dataSetId, leafCount);
+
+        processScheduledPieceMetadataRemovals(dataSetId);
     }
 
     /**
@@ -1255,6 +1267,30 @@ contract FilecoinWarmStorageService is
             0 // No one-time payment during rate update
         );
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
+    }
+
+    function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal {
+        uint256[] storage pieceIds = scheduledPieceMetadataRemovals[dataSetId];
+        uint256 len = pieceIds.length;
+        if (len == 0) {
+            return;
+        }
+
+        mapping(uint256 => string[]) storage pieceMetadataKeys = dataSetPieceMetadataKeys[dataSetId];
+        mapping(uint256 => mapping(string => string)) storage pieceMetadata = dataSetPieceMetadata[dataSetId];
+
+        for (uint256 i = 0; i < len; i++) {
+            uint256 pieceId = pieceIds[i];
+            string[] storage metadataKeys = pieceMetadataKeys[pieceId];
+            mapping(string => string) storage metadata = pieceMetadata[pieceId];
+            uint256 keyLen = metadataKeys.length;
+            for (uint256 j = 0; j < keyLen; j++) {
+                delete metadata[metadataKeys[j]];
+            }
+            delete pieceMetadataKeys[pieceId];
+        }
+
+        delete scheduledPieceMetadataRemovals[dataSetId];
     }
 
     /**
