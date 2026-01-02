@@ -44,7 +44,7 @@ fi
 # NOTE: CHALLENGE_FINALITY should always be 150 in production for security.
 # Calibnet uses lower values for faster testing and development.
 case "$CHAIN" in
-  "31415926")
+  "1414")
     NETWORK_NAME="localnet"
     # USDFC_TOKEN_ADDRESS must be provided via environment variable for localnet
     # Default challenge and proving configuration for localnet (fastest for testing)
@@ -73,7 +73,7 @@ case "$CHAIN" in
   *)
     echo "Error: Unsupported network"
     echo "  Supported networks:"
-    echo "    31415926 - Filecoin local development network"
+    echo "    1414 - Filecoin local development network"
     echo "    314159 - Filecoin Calibration testnet"
     echo "    314    - Filecoin mainnet"
     echo "  Detected chain ID: $CHAIN"
@@ -84,7 +84,7 @@ esac
 echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
 # Localnet requires USDFC_TOKEN_ADDRESS to be provided
-if [ "$CHAIN" = "31415926" ] && [ -z "$USDFC_TOKEN_ADDRESS" ]; then
+if [ "$CHAIN" = "1414" ] && [ -z "$USDFC_TOKEN_ADDRESS" ]; then
   echo "Error: USDFC_TOKEN_ADDRESS is not set (required for localnet)"
   echo "Please set USDFC_TOKEN_ADDRESS environment variable to your deployed MockUSDFC address"
   exit 1
