@@ -35,12 +35,21 @@ Only the contract owner can update pricing by calling `updatePricing(newStorageP
 
 ### Rate Update Timing
 
-Rate recalculation timing differs for additions and deletions:
+Rate recalculation timing differs for additions and deletions due to proving semantics:
 
-- **Adding pieces**: The rate updates immediately when `piecesAdded()` is called. If the client lacks sufficient funds for the new lockup, the transaction fails before the provider commits resources.
-- **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized.
+- **Adding pieces**: The rate updates immediately when `piecesAdded()` is called. The client begins paying for new pieces right away, even though those pieces won't be included in proof challenges until the next proving period. This fail-fast behavior protects providers: if the client lacks sufficient funds for the new lockup, the transaction fails before the provider commits resources.
 
-This asymmetry protects providers: additions fail fast on insufficient funds, while deletions batch to proving boundaries for technical correctness.
+- **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized. This deferral is required because proofs may challenge any portion of the current data set during the proving period—the provider must continue storing and proving all existing data until the period ends.
+
+**Why the asymmetry?**
+
+During each proving period, proofs are generated over a fixed data set. The prover must maintain the complete data set because challenges can target any leaf:
+
+- **Additions expand the proof space** but don't affect existing challenges. New pieces simply won't be challenged until the next period. Payment starts immediately because storage resources are committed.
+
+- **Deletions would shrink the proof space** mid-period, potentially invalidating challenges. The data must remain intact until `nextProvingPeriod()` finalizes the removal. Only then does the rate decrease.
+
+This ensures proof integrity while providing fair payment semantics: you pay when you add, and continue paying for deletions until the proving period boundary.
 
 ### Funding and Top-Up
 
