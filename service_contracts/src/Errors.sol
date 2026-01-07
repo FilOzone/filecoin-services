@@ -296,6 +296,13 @@ library Errors {
     /// @param pdpEndEpoch The end epoch when the PDP payment rail will finalize
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);
 
+    /// @notice Payment rail is not fully settled, so the data set can't be deleted
+    /// @dev Settlement must complete before deletion to preserve validatePayment state
+    /// @param railId The rail ID
+    /// @param settledUpTo The epoch the rail is settled up to
+    /// @param endEpoch The end epoch of the rail (must be <= settledUpTo)
+    error RailNotFullySettled(uint256 railId, uint256 settledUpTo, uint256 endEpoch);
+
     /// @notice Extra data size exceeds the maximum allowed limit
     /// @param actualSize The size of the provided extra data
     /// @param maxAllowedSize The maximum allowed size for extra data

@@ -745,8 +745,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.terminateService(newDataSetId2);
         FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(newDataSetId2);
         assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
-        // Advance block number to be greater than the end epoch to allow deletion
+        // Advance block number past end epoch to allow settlement and deletion
         vm.roll(terminatedInfo.pdpEndEpoch + 1);
+        // Settle the rail before deletion
+        FilecoinPayV1.RailView memory rail = payments.getRail(terminatedInfo.pdpRailId);
+        payments.settleRail(terminatedInfo.pdpRailId, rail.endEpoch);
         vm.prank(serviceProvider);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, newDataSetId2, "");
 
@@ -1726,6 +1729,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Advance block number to be greater than the end epoch to allow deletion
         vm.roll(terminatedInfo.pdpEndEpoch + 1);
 
+        // Settle the rail before deletion (required by the settlement check)
+        FilecoinPayV1.RailView memory rail = payments.getRail(terminatedInfo.pdpRailId);
+        payments.settleRail(terminatedInfo.pdpRailId, rail.endEpoch);
+
         // Delete the second dataset (dataSet2) - this should completely remove it
         deleteDataSetForClient(sp2, client, dataSet2);
 
@@ -2065,6 +2072,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
         console.log("[OK] nextProvingPeriod correctly reverted");
+
+        // Roll past the last period deadline to allow settlement
+        vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
+
+        // Settle the rail before deletion
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, rail.endEpoch);
+
         console.log("\n7. Testring dataSetDeleted");
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
@@ -4467,6 +4482,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Wait for payment end epoch to elapse
         vm.roll(info.pdpEndEpoch + 1);
 
+        // Settle the rail before deletion
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, pdpRail.endEpoch);
+
         // Call dataSetDeleted to trigger cleanup
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
@@ -4502,6 +4521,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Wait for payment end epoch to elapse
         vm.roll(info.pdpEndEpoch + 1);
+
+        // Settle the rail before deletion
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, pdpRail.endEpoch);
 
         // Call dataSetDeleted to trigger cleanup
         vm.prank(address(mockPDPVerifier));
@@ -4582,8 +4605,13 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Get updated info after termination
         info = viewContract.getDataSet(dataSetId);
 
-        // Wait for payment end epoch to elapse
-        vm.roll(info.pdpEndEpoch + 1);
+        // Wait for payment end epoch to elapse plus extra for proving deadline
+        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
+
+        // Settle the rail before deletion
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, pdpRail.endEpoch);
 
         // Call dataSetDeleted to trigger complete cleanup
         vm.prank(address(mockPDPVerifier));
@@ -5317,11 +5345,12 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
 
-        // Never settle less than 1 proving period when that period is unproven
+        // For partial first period, settlement doesn't advance even if deadline passed
+        // (caller should request a full period or use the multi-period path)
         toEpoch = activationEpoch + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
-        assertEq(result.settleUpto, activationEpoch, "Should not settle");
+        assertEq(result.settleUpto, activationEpoch, "Should not settle partial first period");
         assertEq(result.note, "No proven epochs in the requested range");
 
         // Never settle less than 1 proving period when that period is unproven
@@ -5643,5 +5672,250 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, i);
             assertEq(storedKeys.length, 0, "Metadata should be removed for each piece");
         }
+    }
+
+    // ===== Settlement with Passed Deadlines Tests =====
+
+    /**
+     * @notice Test: Settlement advances past unproven periods when deadlines have passed
+     * @dev Verifies that validatePayment advances settleUpTo for periods with passed deadlines
+     */
+    function testValidatePayment_AdvancesPastUnprovenPeriodsWithPassedDeadlines() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        // Move forward 3 periods without submitting any proofs
+        // All 3 period deadlines will have passed
+        vm.roll(activationEpoch + (maxProvingPeriod * 3) + 1);
+
+        // Validate payment - should advance settleUpTo to cover all passed periods
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch - 1;
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
+        uint256 proposedAmount = 1000e6;
+
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // With the fix, settlement should advance to toEpoch even with no proofs
+        // because all period deadlines have passed
+        assertEq(result.modifiedAmount, 0, "Should pay nothing for unproven epochs");
+        assertEq(result.settleUpto, toEpoch, "Should advance settleUpTo to toEpoch since all deadlines passed");
+    }
+
+    /**
+     * @notice Test: Settlement blocks on current period if deadline hasn't passed
+     * @dev Verifies that validatePayment blocks on unproven period if deadline is still open
+     */
+    function testValidatePayment_BlocksOnUnprovenPeriodWithOpenDeadline() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        // Move forward only halfway through the first period (deadline hasn't passed)
+        vm.roll(activationEpoch + (maxProvingPeriod / 2));
+
+        // Validate payment - should NOT advance because deadline hasn't passed
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch - 1;
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod / 2);
+        uint256 proposedAmount = 1000e6;
+
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // Settlement should block because the period isn't proven and deadline hasn't passed
+        assertEq(result.modifiedAmount, 0, "Should pay nothing");
+        assertEq(result.settleUpto, fromEpoch, "Should not advance since deadline hasn't passed");
+    }
+
+    /**
+     * @notice Test: Mixed proven and unproven periods with passed deadlines
+     * @dev Verifies correct payment calculation when some periods are proven and others have passed deadlines
+     */
+    function testValidatePayment_MixedProvenAndUnprovenWithPassedDeadlines() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        // Submit proof for period 0 only
+        vm.roll(firstChallengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Move forward past 3 periods (only period 0 is proven)
+        vm.roll(activationEpoch + (maxProvingPeriod * 3) + 1);
+
+        // Validate payment
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch - 1;
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
+        uint256 proposedAmount = 3000e6; // 1000 per period
+
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        // Should pay for period 0 only, but advance to toEpoch since all deadlines passed
+        // Note: provenEpochs is maxProvingPeriod + 1 because of how the first period calculation
+        // includes epochs from (fromEpoch, startingPeriodDeadline] which is M + 1 epochs
+        uint256 totalEpochs = toEpoch - fromEpoch;
+        uint256 provenEpochs = maxProvingPeriod + 1; // Period 0 from (A-1, A+M]
+        uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
+
+        assertEq(result.modifiedAmount, expectedAmount, "Should pay for proven period only");
+        assertEq(result.settleUpto, toEpoch, "Should advance to toEpoch since all deadlines passed");
+    }
+
+    // ===== Dataset Deletion with Settlement Check Tests =====
+
+    /**
+     * @notice Test: Dataset deletion reverts if rail is not fully settled
+     * @dev Verifies that dataSetDeleted requires rail.settledUpTo >= rail.endEpoch
+     */
+    function testDataSetDeleted_RevertsIfRailNotSettled() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Terminate the dataset
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get termination info
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertTrue(info.pdpEndEpoch > 0, "Dataset should be terminated");
+
+        // Advance past the lockup period but DON'T settle the rail
+        vm.roll(info.pdpEndEpoch + 1);
+
+        // Get rail info to check settlement status
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        assertTrue(rail.settledUpTo < rail.endEpoch, "Rail should not be fully settled yet");
+
+        // Attempt to delete - should revert because rail is not settled
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.RailNotFullySettled.selector, info.pdpRailId, rail.settledUpTo, rail.endEpoch)
+        );
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
+    }
+
+    /**
+     * @notice Test: Dataset deletion succeeds after rail is fully settled
+     * @dev Verifies that dataSetDeleted succeeds when rail.settledUpTo >= rail.endEpoch
+     */
+    function testDataSetDeleted_SucceedsAfterRailSettled() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving so we can settle with validated payments
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        // Submit proof for first period
+        vm.roll(challengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Terminate the dataset
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get termination info
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertTrue(info.pdpEndEpoch > 0, "Dataset should be terminated");
+
+        // Advance past the lockup period AND past the last proving period deadline
+        // Settlement requires all period deadlines to have passed for unproven periods
+        vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
+
+        // Settle the rail to completion
+        // After full settlement, the rail gets finalized and zeroed out, so we can't access it via getRail()
+        FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, railBefore.endEpoch);
+
+        // Deletion should succeed (rail is either fully settled or finalized)
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
+
+        // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
+        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
+        assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
+    }
+
+    /**
+     * @notice Test: Full flow - SP abandons service, client can still settle and cleanup
+     * @dev Simulates the scenario from issue #375 where SP fails to prove
+     */
+    function testFullFlow_SPAbandonsService_ClientCanSettleAndCleanup() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        // SP abandons - no proofs submitted
+        // Move past the first period deadline
+        vm.roll(activationEpoch + maxProvingPeriod + 1);
+
+        // Terminate the dataset (by client since SP abandoned)
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // Get termination info
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // Advance past the lockup period AND past the last proving period deadline
+        // Settlement requires all period deadlines to have passed for unproven periods
+        vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
+
+        // With the fix, client can now settle the rail even with no proofs
+        // because all proving deadlines have passed
+        FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);
+        (, uint256 clientBalanceBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, client);
+
+        // Settle the rail - should succeed and pay nothing (no proofs)
+        // After full settlement, the rail gets finalized and zeroed out
+        payments.settleRail(info.pdpRailId, railBefore.endEpoch);
+
+        (, uint256 clientBalanceAfter,,) = payments.getAccountInfoIfSettled(mockUSDFC, client);
+
+        // Client should not have lost money (SP got nothing because no proofs)
+        assertGe(clientBalanceAfter, clientBalanceBefore, "Client should not have paid for unproven service");
+
+        // SP can delete the dataset (rail is fully settled/finalized)
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
+
+        // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
+        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
+        assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
     }
 }

@@ -84,3 +84,52 @@ storageDuration = availableFunds ÷ finalRate
 Deposits extend the duration without changing the rate (unless adding pieces triggers an immediate rate recalculation, or scheduled deletions take effect at the next proving boundary).
 
 **Delinquency**: When a client's funded epoch falls below the current epoch, the payment rail can no longer be settled—no further payments flow to the provider. The provider may terminate the service to claim payment from the locked funds, guaranteeing up to 30 days of payment from the last funded epoch.
+
+## Settlement and Payment Validation
+
+### Proving Period Deadlines and Settlement
+
+Settlement progress (`settledUpTo`) tracks the epoch up to which payments have been processed. The validator callback `validatePayment()` determines how far settlement can advance and how much payment is due.
+
+**Key principle**: Settlement advancement is decoupled from payment amount.
+
+- **Proven periods**: Both settlement advancement and payment proceed normally.
+- **Unproven periods with open deadline**: Settlement is blocked until the period is resolved (proven or deadline passes).
+- **Unproven periods with passed deadline**: Settlement advances (the SP can never prove this period), but payment for those epochs is zero.
+
+This design ensures:
+1. Clients are not stuck waiting indefinitely for a provider who has abandoned the service
+2. Providers are not paid for periods they failed to prove
+3. Settlement can complete even if the provider disappears after termination
+
+### Settlement During Lockup
+
+After termination, the payment rail enters a lockup period. Settlement continues normally during this time:
+
+- If the provider proves all periods, they receive full payment
+- If the provider fails to prove some periods, those epochs receive zero payment
+- If the provider abandons entirely, settlement advances with zero payment once all deadlines pass
+
+The client's locked funds are released proportionally as settlement progresses. Unproven epochs result in funds returning to the client rather than flowing to the provider.
+
+### Dataset Deletion Requirements
+
+Dataset deletion (`dataSetDeleted`) requires the payment rail to be fully settled before the dataset can be removed:
+
+```
+require(settledUpTo >= endEpoch, RailNotFullySettled)
+```
+
+**Rationale**: The `validatePayment()` callback reads dataset state (proving status, periods proven) to calculate payment amounts. If the dataset is deleted before settlement completes, `validatePayment()` cannot function, forcing clients to use `settleTerminatedRailWithoutValidation()` which pays the full amount regardless of proof status.
+
+**Implications**:
+
+- Providers must wait for settlement to complete before deleting datasets
+- Clients can always settle rails (with zero payment for unproven periods) once deadlines pass
+- Dataset deletion timing is controlled by proving period deadlines, not just the lockup period
+
+**Timing**: To delete a dataset after termination:
+1. Wait for `block.number > pdpEndEpoch` (lockup period elapsed)
+2. Wait for all proving period deadlines within the lockup to pass
+3. Call `settleRail()` to complete settlement (rail may auto-finalize)
+4. Call `deleteDataSet()` to remove the dataset

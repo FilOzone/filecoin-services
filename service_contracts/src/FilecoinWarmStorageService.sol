@@ -760,6 +760,20 @@ contract FilecoinWarmStorageService is
             Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
         );
 
+        // Check if the rail is fully settled before allowing deletion.
+        // This ensures validatePayment() can still read dataset state during settlement.
+        // If deleted before settlement, clients would be forced to use
+        // settleTerminatedRailWithoutValidation() which pays full amount for unproven epochs.
+        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+        try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
+            require(
+                rail.settledUpTo >= rail.endEpoch,
+                Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
+            );
+        } catch {
+            // Rail is finalized (zeroed out), meaning it was already fully settled
+        }
+
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
@@ -1612,7 +1626,7 @@ contract FilecoinWarmStorageService is
         (uint256 provenEpochCount, uint256 settleUpTo) =
             _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
 
-        // If no epochs are proven, we can't settle anything
+        // If no epochs are proven, no payment is due (but settlement may still advance)
         if (provenEpochCount == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
@@ -1661,13 +1675,18 @@ contract FilecoinWarmStorageService is
                     provenEpochCount += maxProvingPeriod;
                 }
             }
-            settleUpTo = _calcPeriodDeadline(activationEpoch, endingPeriod - 1);
+            uint256 endingPeriodDeadline = _calcPeriodDeadline(activationEpoch, endingPeriod);
+            settleUpTo = endingPeriodDeadline - maxProvingPeriod;
 
             // handle the last period separately
             if (_isPeriodProven(dataSetId, endingPeriod)) {
                 provenEpochCount += (toEpoch - settleUpTo);
                 settleUpTo = toEpoch;
+            } else if (endingPeriodDeadline < block.number) {
+                // Period deadline passed but unproven - advance settlement with zero payment
+                settleUpTo = toEpoch;
             }
+            // else: period still open - settlement blocked at previous settleUpTo
         }
         return (provenEpochCount, settleUpTo);
     }
