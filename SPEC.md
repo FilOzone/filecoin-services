@@ -29,6 +29,8 @@ finalRate     = max(sizeBasedRate, minimumRate)
 
 The default minimum floor ensures datasets below ~24.58 GiB still generate the minimum payment of 0.06 USDFC/month.
 
+**Precision note**: Integer division when computing `minimumRate` causes minor precision loss. The actual monthly payment (`minimumRate × EPOCHS_PER_MONTH`) is slightly less than `minimumStorageRatePerMonth`—under 0.0001% for typical floor prices. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+
 ### Pricing Updates
 
 Only the contract owner can update pricing by calling `updatePricing(newStoragePrice, newMinimumRate)`. Maximum allowed values are 10 USDFC for storage price and 0.24 USDFC for minimum rate.
@@ -52,7 +54,9 @@ Clients pay for storage by depositing USDFC into the Filecoin Pay contract. Thes
 lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-At minimum pricing, this equals 0.06 USDFC. For larger datasets, the lockup equals one month's storage cost.
+At minimum pricing, this equals `minimumStorageRatePerMonth` (0.06 USDFC at default settings). For larger datasets, the lockup equals one month's storage cost.
+
+**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(minimumStorageRatePerMonth × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages (the configured floor price rather than a value with precision loss artifacts) and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
 
 **Storage duration** extends as clients deposit additional funds:
 

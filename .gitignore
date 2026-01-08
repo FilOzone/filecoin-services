@@ -1,2 +1,5 @@
 # VIM
 *.swp
+
+# git worktrees
+.trees/

@@ -1199,7 +1199,12 @@ contract FilecoinWarmStorageService is
         internal
         view
     {
-        // Calculate required lockup for minimum pricing
+        // Calculate required lockup for minimum pricing.
+        // We use multiply-first here to preserve the exact monthly value for cleaner error messages
+        // (a round number like the configured floor price, rather than a value with many trailing digits
+        // from precision loss). This is slightly more conservative than the actual rail lockup (which
+        // uses the truncated per-epoch rate), but the difference is under 0.0001% and always in the
+        // user's favor - they are never required to have less than what the rail will actually lock.
         uint256 minimumLockupRequired = (minimumStorageRatePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
@@ -1375,7 +1380,11 @@ contract FilecoinWarmStorageService is
         // Calculate natural size-based rate
         uint256 naturalRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, storagePricePerTibPerMonth);
 
-        // Calculate minimum rate (floor price converted to per-epoch)
+        // Calculate minimum rate (floor price converted to per-epoch).
+        // Integer division truncates, so (minimumRate × EPOCHS_PER_MONTH) yields slightly less than
+        // minimumStorageRatePerMonth. For typical floor prices this precision loss is under 0.0001%.
+        // The pre-flight lockup check in validatePayerOperatorApprovalAndFunds uses a multiply-first
+        // formula that preserves the full monthly value, ensuring users always have sufficient funds.
         uint256 minimumRate = minimumStorageRatePerMonth / EPOCHS_PER_MONTH;
 
         // Return whichever is higher: natural rate or minimum rate
