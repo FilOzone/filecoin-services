@@ -2293,6 +2293,27 @@
   },
   {
     "type": "error",
+    "name": "RailNotFullySettled",
+    "inputs": [
+      {
+        "name": "railId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "settledUpTo",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "endEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ServiceContractMustTerminateRail",
     "inputs": []
   },
