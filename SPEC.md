@@ -35,6 +35,8 @@ The default minimum floor ensures datasets below ~24.58 GiB still generate the m
 
 Only the contract owner can update pricing by calling `updatePricing(newStoragePrice, newMinimumRate)`. Maximum allowed values are 10 USDFC for storage price and 0.24 USDFC for minimum rate.
 
+**Effect on existing datasets**: Pricing changes do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
+
 ### Rate Update Timing
 
 Rate recalculation timing differs for additions and deletions due to proving semantics:

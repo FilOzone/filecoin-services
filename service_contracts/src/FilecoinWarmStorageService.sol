@@ -989,11 +989,10 @@ contract FilecoinWarmStorageService is
             // This marks when the data set became active for proving
             provingActivationEpoch[dataSetId] = block.number;
 
-            // Apply rate for initial data set size
-            updatePaymentRates(dataSetId, leafCount);
-
-            // Scheduled piece removals unlikely on first period, but not impossible
-            processScheduledPieceMetadataRemovals(dataSetId);
+            // Rate was already set in piecesAdded; only update if pieces were removed
+            if (processScheduledPieceMetadataRemovals(dataSetId)) {
+                updatePaymentRates(dataSetId, leafCount);
+            }
 
             return;
         }
@@ -1039,11 +1038,10 @@ contract FilecoinWarmStorageService is
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Additions are handled when added; deletions are processed before this callback, so the
-        // rate can only decrease or stay the same here
-        updatePaymentRates(dataSetId, leafCount);
-
-        processScheduledPieceMetadataRemovals(dataSetId);
+        // Additions update rate immediately in piecesAdded; only update here if pieces were removed
+        if (processScheduledPieceMetadataRemovals(dataSetId)) {
+            updatePaymentRates(dataSetId, leafCount);
+        }
     }
 
     /**
@@ -1288,11 +1286,11 @@ contract FilecoinWarmStorageService is
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
     }
 
-    function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal {
+    function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal returns (bool hadRemovals) {
         uint256[] storage pieceIds = scheduledPieceMetadataRemovals[dataSetId];
         uint256 len = pieceIds.length;
         if (len == 0) {
-            return;
+            return false;
         }
 
         mapping(uint256 => string[]) storage pieceMetadataKeys = dataSetPieceMetadataKeys[dataSetId];
@@ -1310,6 +1308,7 @@ contract FilecoinWarmStorageService is
         }
 
         delete scheduledPieceMetadataRemovals[dataSetId];
+        return true;
     }
 
     /**
