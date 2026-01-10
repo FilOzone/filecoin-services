@@ -232,6 +232,7 @@ contract FilecoinWarmStorageService is
     // External contract addresses
     address public immutable pdpVerifierAddress;
     address public immutable paymentsContractAddress;
+    FilecoinPayV1 private immutable payments;
     IERC20Metadata public immutable usdfcTokenAddress;
     address public immutable filBeamBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
@@ -323,7 +324,7 @@ contract FilecoinWarmStorageService is
     /// @custom:oz-upgrades-unsafe-allow cstructor
     constructor(
         address _pdpVerifierAddress,
-        address _paymentsContractAddress,
+        FilecoinPayV1 _payments,
         IERC20Metadata _usdfc,
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
@@ -334,8 +335,9 @@ contract FilecoinWarmStorageService is
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
         pdpVerifierAddress = _pdpVerifierAddress;
 
-        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
-        paymentsContractAddress = _paymentsContractAddress;
+        require(_payments != FilecoinPayV1(address(0)), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
+        payments = _payments;
+        paymentsContractAddress = address(_payments);
 
         require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
@@ -659,16 +661,14 @@ contract FilecoinWarmStorageService is
 
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
 
-        // Create the payment rails using the FilecoinPayV1 contract
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
         // Determine once whether CDN is enabled in metadata and reuse the result
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
 
         // Validate payer has sufficient funds and operator approvals for minimum pricing
         // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN);
+        validatePayerOperatorApprovalAndFunds(createData.payer, hasCDN);
 
+        // Create the payment rails using the FilecoinPayV1 contract
         uint256 pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
             createData.payer, // from (payer)
@@ -764,7 +764,6 @@ contract FilecoinWarmStorageService is
         // This ensures validatePayment() can still read dataset state during settlement.
         // If deleted before settlement, clients would be forced to use
         // settleTerminatedRailWithoutValidation() which pays full amount for unproven epochs.
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
         try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
             require(
                 rail.settledUpTo >= rail.endEpoch,
@@ -1072,8 +1071,6 @@ contract FilecoinWarmStorageService is
             Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
         );
 
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
@@ -1106,8 +1103,6 @@ contract FilecoinWarmStorageService is
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
         if (cdnAmount > 0) {
             payments.modifyRailPayment(info.cdnRailId, 0, cdnAmount);
         }
@@ -1135,8 +1130,6 @@ contract FilecoinWarmStorageService is
 
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
         // Both rails must be active for any top-up operation
         FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
@@ -1171,7 +1164,6 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
         payments.terminateRail(info.cacheMissRailId);
         payments.terminateRail(info.cdnRailId);
 
@@ -1205,12 +1197,8 @@ contract FilecoinWarmStorageService is
     }
 
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
-    /// @param payments The FilecoinPayV1 contract instance
     /// @param payer The address of the payer
-    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer, bool includeCDN)
-        internal
-        view
-    {
+    function validatePayerOperatorApprovalAndFunds(address payer, bool includeCDN) internal view {
         // Calculate required lockup for minimum pricing.
         // We use multiply-first here to preserve the exact monthly value for cleaner error messages
         // (a round number like the configured floor price, rather than a value with many trailing digits
@@ -1273,7 +1261,6 @@ contract FilecoinWarmStorageService is
         require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         uint256 totalBytes = leafCount * BYTES_PER_LEAF;
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
         // Update the PDP rail payment rate with the new rate and no one-time payment
         uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;

@@ -212,7 +212,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Deploy FilecoinWarmStorageService with proxy
         FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -296,7 +296,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Deploy a new service instance to test the event
         FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -328,7 +328,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test empty name validation
         FilecoinWarmStorageService serviceImpl1 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -350,7 +350,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test empty description validation
         FilecoinWarmStorageService serviceImpl2 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -372,7 +372,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test name exceeding 256 characters
         FilecoinWarmStorageService serviceImpl3 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -404,7 +404,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test description exceeding 256 characters
         FilecoinWarmStorageService serviceImpl4 = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -437,7 +437,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testUpgrade() public {
         FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -474,7 +474,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -4890,7 +4890,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 contract SignatureCheckingService is FilecoinWarmStorageService {
     constructor(
         address _pdpVerifierAddress,
-        address _paymentsContractAddress,
+        FilecoinPayV1 _payments,
         IERC20Metadata _usdfcTokenAddress,
         address _filBeamAddressBeneficiary,
         ServiceProviderRegistry _serviceProviderRegistry,
@@ -4898,7 +4898,7 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
     )
         FilecoinWarmStorageService(
             _pdpVerifierAddress,
-            _paymentsContractAddress,
+            _payments,
             _usdfcTokenAddress,
             _filBeamAddressBeneficiary,
             _serviceProviderRegistry,
@@ -4966,7 +4966,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         // Deploy and initialize the service
         SignatureCheckingService serviceImpl = new SignatureCheckingService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
@@ -5074,7 +5074,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // This simulates an existing deployed contract before the upgrade
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
-            address(payments),
+            payments,
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,

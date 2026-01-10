@@ -71,12 +71,7 @@ contract ProviderValidationTest is MockFVMTest {
 
         // Deploy FilecoinWarmStorageService
         FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier),
-            address(payments),
-            usdfc,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry
+            address(pdpVerifier), payments, usdfc, filBeamBeneficiary, serviceProviderRegistry, sessionKeyRegistry
         );
         bytes memory warmStorageInitData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
