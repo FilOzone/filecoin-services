@@ -95,7 +95,7 @@ contract ProviderIdSet is Ownable {
                     }
 
                     // find the last item
-                    // NOTE: can binary search instead
+                    // could binary search for k but average performance is worse
                     for (uint256 k = 224; k != 0; k -= 32) {
                         uint256 last = lastFew >> k;
                         if (last == 0) {
