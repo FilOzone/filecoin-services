@@ -88,6 +88,7 @@ contract ProviderIdSetTest is Test {
     function testRemoveFIFO() public {
         for (uint256 resets = 0; resets < 2; resets++) {
             for (uint256 i = 0; i < 36; i++) {
+                assertEq(set.getProviderIds().length, i);
                 set.addProviderId(36 - i);
             }
             unchecked {
@@ -115,6 +116,7 @@ contract ProviderIdSetTest is Test {
     function testRemoveLIFO() public {
         for (uint256 resets = 0; resets < 2; resets++) {
             for (uint256 i = 0; i < 36; i++) {
+                assertEq(set.getProviderIds().length, i);
                 set.addProviderId(i + 1);
             }
             unchecked {
