@@ -35,6 +35,19 @@ contract ProviderIdSet is Ownable {
         return providers;
     }
 
+    function containsProviderId(uint256 providerId) public view returns (bool) {
+        for (uint256 i = 0; i < list.length; i++) {
+            uint256 word = list[i];
+            while (word != 0) {
+                if (word & 0xffffffff == providerId) {
+                    return true;
+                }
+                word >>= 32;
+            }
+        }
+        return false;
+    }
+
     /**
      * No-op if providerId is 0 or if providerId is already in the set
      */
