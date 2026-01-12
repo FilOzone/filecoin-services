@@ -60,7 +60,8 @@ contract ProviderIdSet is Ownable {
     }
 
     function removeProviderId(uint256 providerId) external onlyOwner {
-        for (uint256 i = 0; i < list.length; i++) {
+        uint256 length = list.length;
+        for (uint256 i = 0; i < length; i++) {
             uint256 read = list[i];
             uint256 iteration = read;
             for (uint256 j = 0; j < 8; j++) {
@@ -74,11 +75,11 @@ contract ProviderIdSet is Ownable {
 
                 unchecked {
                     uint256 lastFew;
-                    if (i == list.length - 1) {
+                    if (i == length - 1) {
                         // can skip sload
                         lastFew = read;
                     } else {
-                        lastFew = list[list.length - 1];
+                        lastFew = list[length - 1];
                     }
                     if (lastFew < 0x100000000) {
                         // special case: lastFew contains one item
@@ -97,12 +98,12 @@ contract ProviderIdSet is Ownable {
                         }
                         // move last to i,j
                         read ^= (last ^ providerId) << j * 32;
-                        if (i == list.length - 1) {
+                        if (i == length - 1) {
                             read &= (1 << k) - 1;
                         } else {
                             // pop last
                             lastFew &= (1 << k) - 1;
-                            list[list.length - 1] = lastFew;
+                            list[length - 1] = lastFew;
                         }
                         list[i] = read;
                         return;
