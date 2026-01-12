@@ -16,18 +16,20 @@ contract ProviderIdSet is Ownable {
     function getProviderIds() public view returns (uint256[] memory) {
         uint256[] memory providers = new uint256[](list.length * 8);
 
-        uint256 size = 0;
-        for (uint256 i = 0; i < list.length; i++) {
-            uint256 iteration = list[i];
-            while (iteration > 0) {
-                providers[size++] = iteration & 0xffffffff;
-                iteration >>= 32;
+        unchecked {
+            uint256 size = 0;
+            for (uint256 i = 0; i < list.length; i++) {
+                uint256 iteration = list[i];
+                while (iteration > 0) {
+                    providers[size++] = iteration & 0xffffffff;
+                    iteration >>= 32;
+                }
             }
-        }
 
-        // truncate length
-        assembly ("memory-safe") {
-            mstore(providers, size)
+            // truncate length
+            assembly ("memory-safe") {
+                mstore(providers, size)
+            }
         }
 
         return providers;
