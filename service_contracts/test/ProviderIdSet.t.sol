@@ -140,4 +140,28 @@ contract ProviderIdSetTest is Test {
             }
         }
     }
+
+    function testAddRemoveLargeIds() public {
+        for (uint256 shift = 0; shift < 32; shift++) {
+            assertEq(set.getProviderIds().length, shift);
+            set.addProviderId(1 << shift);
+        }
+        uint256 removed = 0;
+        for (uint256 shift = 0; shift < 32; shift++) {
+            uint256[] memory providerIds = set.getProviderIds();
+            assertEq(providerIds.length, 32 - shift);
+            uint256 found = 0;
+            for (uint256 i = 0; i < providerIds.length; i++) {
+                // only one bit is set in these providerIds
+                assertEq(providerIds[i] & (providerIds[i] - 1), 0);
+
+                found ^= providerIds[i];
+            }
+            assertEq(found ^ removed, 0xffffffff);
+
+            set.removeProviderId(1 << shift);
+            removed |= 1 << shift;
+        }
+        assertEq(set.getProviderIds().length, 0);
+    }
 }

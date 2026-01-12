@@ -61,6 +61,9 @@ contract ProviderIdSet is Ownable {
         list.push(providerId);
     }
 
+    /**
+     * Reverts if providerId is not in the set
+     */
     function removeProviderId(uint256 providerId) external onlyOwner {
         uint256 length = list.length;
         for (uint256 i = 0; i < length; i++) {
