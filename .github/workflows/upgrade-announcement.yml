@@ -1,0 +1,177 @@
+name: Create Upgrade Announcement
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Target network'
+        required: true
+        type: choice
+        options:
+          - Calibnet
+          - Mainnet
+      upgrade_type:
+        description: 'Type of upgrade'
+        required: true
+        type: choice
+        options:
+          - Routine
+          - Breaking Change
+      contract:
+        description: 'Contract being upgraded'
+        required: true
+        type: choice
+        options:
+          - FilecoinWarmStorageService
+          - ServiceProviderRegistry
+          - PDPVerifier
+      after_epoch:
+        description: 'AFTER_EPOCH (block number after which upgrade can execute)'
+        required: true
+        type: string
+      new_implementation_address:
+        description: 'New implementation contract address'
+        required: true
+        type: string
+      changes_summary:
+        description: 'Summary of changes (use | for multiple lines)'
+        required: true
+        type: string
+      release_tag:
+        description: 'Release tag if already created (usually added after upgrade completes)'
+        required: false
+        type: string
+      action_required:
+        description: 'Action required by integrators (leave empty if none)'
+        required: false
+        type: string
+
+jobs:
+  create-announcement:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Calculate estimated execution time
+        id: calc_time
+        run: |
+          # Filecoin has ~30 second block times
+          # Get current epoch from RPC (approximate)
+          if [ "${{ inputs.network }}" = "Mainnet" ]; then
+            RPC_URL="https://api.node.glif.io/rpc/v1"
+          else
+            RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+          fi
+          
+          CURRENT_EPOCH=$(curl -s -X POST "$RPC_URL" \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+            | jq -r '.result' | xargs printf "%d")
+          
+          AFTER_EPOCH=${{ inputs.after_epoch }}
+          EPOCHS_REMAINING=$((AFTER_EPOCH - CURRENT_EPOCH))
+          
+          if [ $EPOCHS_REMAINING -lt 0 ]; then
+            echo "estimate=Immediately (epoch already passed)" >> $GITHUB_OUTPUT
+          else
+            SECONDS_REMAINING=$((EPOCHS_REMAINING * 30))
+            HOURS=$((SECONDS_REMAINING / 3600))
+            MINUTES=$(((SECONDS_REMAINING % 3600) / 60))
+            
+            FUTURE_DATE=$(date -u -d "+${SECONDS_REMAINING} seconds" "+%Y-%m-%d %H:%M UTC" 2>/dev/null || \
+                          date -u -v+${SECONDS_REMAINING}S "+%Y-%m-%d %H:%M UTC" 2>/dev/null || \
+                          echo "~${HOURS}h ${MINUTES}m from now")
+            
+            echo "estimate=~${FUTURE_DATE} (~${HOURS}h ${MINUTES}m from current epoch ${CURRENT_EPOCH})" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Format changes summary
+        id: format_changes
+        run: |
+          # Convert pipe-separated changes to bullet points
+          CHANGES=$(echo "${{ inputs.changes_summary }}" | sed 's/|/\n/g' | sed 's/^/- /' | sed '/^- $/d')
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create announcement issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const network = '${{ inputs.network }}';
+            const upgradeType = '${{ inputs.upgrade_type }}';
+            const contract = '${{ inputs.contract }}';
+            const afterEpoch = '${{ inputs.after_epoch }}';
+            const implAddress = '${{ inputs.new_implementation_address }}';
+            const releaseTag = '${{ inputs.release_tag }}';
+            const actionRequired = '${{ inputs.action_required }}' || 'None';
+            const timeEstimate = `${{ steps.calc_time.outputs.estimate }}`;
+            const changes = `${{ steps.format_changes.outputs.changes }}`;
+            
+            const releaseLink = releaseTag 
+              ? `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${releaseTag}`
+              : null;
+            
+            const changelogLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CHANGELOG.md`;
+            
+            const body = `## ${contract} Upgrade Announcement
+
+            **Network**: ${network}
+            **Upgrade Type**: ${upgradeType}
+            **Scheduled Execution**: After epoch ${afterEpoch} (${timeEstimate})
+
+            ### Changes
+            ${changes}
+
+            ### New Implementation Address
+            \`${implAddress}\`
+
+            ### Action Required
+            ${actionRequired}
+
+            ### Resources
+            ${releaseLink ? `- Release: ${releaseLink}` : ''}
+            - Changelog: ${changelogLink}
+            - Upgrade Process: [UPGRADE-PROCESS.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md)
+
+            ---
+            
+            ### Checklist
+            - [ ] New implementation deployed (address above)
+            - [ ] Upgrade announced on-chain via \`announce-planned-upgrade.sh\`
+            - [ ] Stakeholders notified
+            - [ ] Upgrade executed after AFTER_EPOCH
+            - [ ] Upgrade verified on block explorer
+            - [ ] \`deployments.json\` updated and committed
+            - [ ] Release tagged (post-upgrade)
+            `.split('\n').map(line => line.trim()).join('\n');
+
+            const labels = ['upgrade'];
+            if (upgradeType === 'Breaking Change') {
+              labels.push('breaking-change');
+            }
+            
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Upgrade] ${contract} - ${network} - Epoch ${afterEpoch}`,
+              body: body,
+              labels: labels
+            });
+            
+            console.log(`Created issue #${issue.data.number}: ${issue.data.html_url}`);
+            core.setOutput('issue_number', issue.data.number);
+            core.setOutput('issue_url', issue.data.html_url);
+
+      - name: Summary
+        run: |
+          echo "## Upgrade Announcement Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Contract**: ${{ inputs.contract }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Network**: ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
+          echo "**After Epoch**: ${{ inputs.after_epoch }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "See the created issue for full details." >> $GITHUB_STEP_SUMMARY
