@@ -1077,17 +1077,9 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            // Query rail states before attempting termination
-            FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-            FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-
-            // Only terminate if rail is active (not finalized AND not terminated)
-            if (cacheMissRail.from != address(0) && cacheMissRail.endEpoch == 0) {
-                payments.terminateRail(info.cacheMissRailId);
-            }
-            if (cdnRail.from != address(0) && cdnRail.endEpoch == 0) {
-                payments.terminateRail(info.cdnRailId);
-            }
+            // Attempt to terminate CDN rails, ignoring failures if already terminated or finalized
+            try payments.terminateRail(info.cacheMissRailId) {} catch {}
+            try payments.terminateRail(info.cdnRailId) {} catch {}
 
             // Delete withCDN flag from metadata to prevent further CDN operations
             delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
@@ -1182,17 +1174,9 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Query rail states before attempting termination
-        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-
-        // Only terminate if rail is active (not finalized AND not terminated)
-        if (cacheMissRail.from != address(0) && cacheMissRail.endEpoch == 0) {
-            payments.terminateRail(info.cacheMissRailId);
-        }
-        if (cdnRail.from != address(0) && cdnRail.endEpoch == 0) {
-            payments.terminateRail(info.cdnRailId);
-        }
+        // Attempt to terminate CDN rails, ignoring failures if already terminated or finalized
+        try payments.terminateRail(info.cacheMissRailId) {} catch {}
+        try payments.terminateRail(info.cdnRailId) {} catch {}
 
         // Delete withCDN flag from metadata to prevent further CDN operations
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
