@@ -2349,6 +2349,79 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.terminateCDNService(dataSetId);
     }
 
+    function testTerminateService_AfterExternalCDNRailTermination() public {
+        console.log("=== Test: terminateService after external CDN rail termination ===");
+
+        // 1. Create dataset with CDN
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // 2. Externally terminate CDN rails (simulating payer calling FilecoinPayV1.terminateRail directly)
+        console.log("Externally terminating CDN rails via FilecoinPayV1...");
+        vm.prank(address(pdpServiceWithPayments));
+        payments.terminateRail(info.cacheMissRailId);
+
+        vm.prank(address(pdpServiceWithPayments));
+        payments.terminateRail(info.cdnRailId);
+
+        // Verify CDN rails are terminated
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        assertTrue(cacheMissRail.endEpoch > 0, "Cache miss rail should be terminated");
+        assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
+
+        // 3. Call terminateService - should succeed without reverting
+        console.log("Calling terminateService - should succeed...");
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        // 4. Verify PDP rail is terminated
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertTrue(pdpRail.endEpoch > 0, "PDP rail should be terminated");
+
+        // 5. Verify CDN metadata is cleaned up
+        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN flag should be deleted");
+
+        console.log("=== Test completed successfully! ===");
+    }
+
+    function testTerminateCDNService_AfterExternalCDNRailTermination() public {
+        console.log("=== Test: terminateCDNService after external CDN rail termination ===");
+
+        // 1. Create dataset with CDN
+        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // 2. Externally terminate only one CDN rail
+        console.log("Externally terminating cacheMissRailId only...");
+        vm.prank(address(pdpServiceWithPayments));
+        payments.terminateRail(info.cacheMissRailId);
+
+        // Verify cache miss rail is terminated
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
+        assertTrue(cacheMissRail.endEpoch > 0, "Cache miss rail should be terminated");
+
+        // 3. Call terminateCDNService - should succeed and terminate the other rail
+        console.log("Calling terminateCDNService - should succeed...");
+        vm.prank(filBeamController);
+        pdpServiceWithPayments.terminateCDNService(dataSetId);
+
+        // 4. Verify both CDN rails are now terminated
+        cacheMissRail = payments.getRail(info.cacheMissRailId);
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
+        assertTrue(cacheMissRail.endEpoch > 0, "Cache miss rail should still be terminated");
+        assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
+
+        // 5. Verify CDN metadata is cleaned up
+        (bool exists2,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists2, "withCDN flag should be deleted");
+
+        console.log("=== Test completed successfully! ===");
+    }
+
     function testTransferCDNController() public {
         address newController = address(0xDEADBEEF);
         vm.prank(filBeamController);
