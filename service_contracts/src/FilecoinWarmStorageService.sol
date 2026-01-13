@@ -1077,7 +1077,8 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            // Attempt to terminate CDN rails, ignoring failures if already terminated or finalized
+            // Attempt rail termination regardless of current state (already terminated/finalized)
+            // NOTE: Catch-all error handling is used instead of specific error matching to stay within contract size limits
             try payments.terminateRail(info.cacheMissRailId) {} catch {}
             try payments.terminateRail(info.cdnRailId) {} catch {}
 
@@ -1174,7 +1175,8 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Attempt to terminate CDN rails, ignoring failures if already terminated or finalized
+        // Attempt rail termination regardless of current state (already terminated/finalized)
+        // NOTE: Catch-all error handling is used instead of specific error matching to stay within contract size limits
         try payments.terminateRail(info.cacheMissRailId) {} catch {}
         try payments.terminateRail(info.cdnRailId) {} catch {}
 
