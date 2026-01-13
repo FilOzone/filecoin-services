@@ -1077,8 +1077,10 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            // Attempt rail termination regardless of current state (already terminated/finalized)
-            // NOTE: Catch-all error handling is used instead of specific error matching to stay within contract size limits
+            // ⚠️ WARNING: Catch-all error handling will silently suppress ALL errors from terminateRail(),
+            // not just "already terminated/finalized" errors. This could mask legitimate failures.
+            // Ideally we would catch only specific error types, but contract size constraint prevents
+            // us from implementing error handling.
             try payments.terminateRail(info.cacheMissRailId) {} catch {}
             try payments.terminateRail(info.cdnRailId) {} catch {}
 
@@ -1175,8 +1177,10 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Attempt rail termination regardless of current state (already terminated/finalized)
-        // NOTE: Catch-all error handling is used instead of specific error matching to stay within contract size limits
+        // ⚠️ WARNING: Catch-all error handling will silently suppress ALL errors from terminateRail(),
+        // not just "already terminated/finalized" errors. This could mask legitimate failures.
+        // Ideally we would catch only specific error types, but contract size constraint prevents
+        // us from implementing error handling.
         try payments.terminateRail(info.cacheMissRailId) {} catch {}
         try payments.terminateRail(info.cdnRailId) {} catch {}
 
