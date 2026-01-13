@@ -14,6 +14,7 @@ import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/crypt
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "./Errors.sol";
+import {Errors as PaymentErrors} from "@fws-payments/Errors.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
@@ -1077,9 +1078,15 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            // Attempt to terminate CDN rails, ignoring failures if already terminated or finalized
-            try payments.terminateRail(info.cacheMissRailId) {} catch {}
-            try payments.terminateRail(info.cdnRailId) {} catch {}
+            // Attempt to terminate CDN rails, only handling expected termination errors
+            try payments.terminateRail(info.cacheMissRailId) {}
+            catch (bytes memory reason) {
+                _handlePaymentRailTerminatedOrInactiveErrors(reason);
+            }
+            try payments.terminateRail(info.cdnRailId) {}
+            catch (bytes memory reason) {
+                _handlePaymentRailTerminatedOrInactiveErrors(reason);
+            }
 
             // Delete withCDN flag from metadata to prevent further CDN operations
             delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
@@ -1174,9 +1181,15 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Attempt to terminate CDN rails, ignoring failures if already terminated or finalized
-        try payments.terminateRail(info.cacheMissRailId) {} catch {}
-        try payments.terminateRail(info.cdnRailId) {} catch {}
+        // Attempt to terminate CDN rails, only handling expected termination errors
+        try payments.terminateRail(info.cacheMissRailId) {}
+        catch (bytes memory reason) {
+            _handlePaymentRailTerminatedOrInactiveErrors(reason);
+        }
+        try payments.terminateRail(info.cdnRailId) {}
+        catch (bytes memory reason) {
+            _handlePaymentRailTerminatedOrInactiveErrors(reason);
+        }
 
         // Delete withCDN flag from metadata to prevent further CDN operations
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
@@ -1490,6 +1503,32 @@ contract FilecoinWarmStorageService is
             }
         }
         return false;
+    }
+
+    /**
+     * @notice Helper function that handles payment rail terminated or inactive errors
+     * @dev Only allows RailAlreadyTerminated and RailInactiveOrSettled errors to be ignored
+     * @dev All other errors are bubbled up to the caller
+     * @param reason The low-level error data from a failed terminateRail call
+     */
+    function _handlePaymentRailTerminatedOrInactiveErrors(bytes memory reason) private pure {
+        if (reason.length >= 4) {
+            bytes4 errorSelector;
+            assembly {
+                errorSelector := mload(add(reason, 32))
+            }
+            // Allow RailAlreadyTerminated and RailInactiveOrSettled errors
+            if (
+                errorSelector == PaymentErrors.RailAlreadyTerminated.selector
+                    || errorSelector == PaymentErrors.RailInactiveOrSettled.selector
+            ) {
+                return; // Expected error, ignore
+            }
+        }
+        // Unexpected error - bubble it up
+        assembly {
+            revert(add(reason, 32), mload(reason))
+        }
     }
 
     /**
