@@ -61,8 +61,8 @@ The `deployments.json` file stores deployment addresses organized by chain ID:
 {
   "314": {
     "PDP_VERIFIER_PROXY_ADDRESS": "0x...",
-    "PAYMENTS_CONTRACT_ADDRESS": "0x...",
-    "WARM_STORAGE_PROXY_ADDRESS": "0x...",
+    "FILECOIN_PAY_ADDRESS": "0x...",
+    "FWSS_PROXY_ADDRESS": "0x...",
     "metadata": {
       "commit": "abc123...",
       "deployed_at": "2024-01-01T00:00:00Z"
@@ -98,7 +98,7 @@ You can query addresses using `jq`:
 jq '.["314"]' deployments.json
 
 # Get a specific address
-jq -r '.["314"].WARM_STORAGE_PROXY_ADDRESS' deployments.json
+jq -r '.["314"].FWSS_PROXY_ADDRESS' deployments.json
 ```
 
 ### Version Control
@@ -118,7 +118,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 - `deploy-warm-storage-calibnet.sh` requires:
 
   - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
-  - `PAYMENTS_CONTRACT_ADDRESS` - Address of deployed FilecoinPayV1 contract
+  - `FILECOIN_PAY_ADDRESS` - Address of deployed FilecoinPayV1 contract
 
 
 - `deploy-all-warm-storage.sh` requires:
@@ -152,8 +152,8 @@ export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
 export ETH_KEYSTORE="/path/to/keystore.json"
 export PASSWORD="your-password"
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export PDP_VERIFIER_ADDRESS="0x123..."
-export PAYMENTS_CONTRACT_ADDRESS="0x456..."
+export PDP_VERIFIER_PROXY_ADDRESS="0x123..."
+export FILECOIN_PAY_ADDRESS="0x456..."
 
 ./deploy-warm-storage-calibnet.sh
 ```

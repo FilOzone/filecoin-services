@@ -34,13 +34,13 @@ echo "Deploying from address: $ADDR"
 # Get current nonce
 NONCE="$(cast nonce "$ADDR")"
 # Get required addresses from environment or use defaults
-if [ -z "$PDP_VERIFIER_ADDRESS" ]; then
-  echo "Error: PDP_VERIFIER_ADDRESS is not set"
+if [ -z "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
+  echo "Error: PDP_VERIFIER_PROXY_ADDRESS is not set"
   exit 1
 fi
 
-if [ -z "$PAYMENTS_CONTRACT_ADDRESS" ]; then
-  echo "Error: PAYMENTS_CONTRACT_ADDRESS is not set"
+if [ -z "$FILECOIN_PAY_ADDRESS" ]; then
+  echo "Error: FILECOIN_PAY_ADDRESS is not set"
   exit 1
 fi
 
@@ -80,16 +80,16 @@ fi
 echo ""
 echo "Deploying FilecoinWarmStorageService implementation..."
 echo "Constructor arguments:"
-echo "  PDPVerifier: $PDP_VERIFIER_ADDRESS"
-echo "  FilecoinPayV1: $PAYMENTS_CONTRACT_ADDRESS"
+echo "  PDPVerifier: $PDP_VERIFIER_PROXY_ADDRESS"
+echo "  FilecoinPayV1: $FILECOIN_PAY_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
 echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-WARM_STORAGE_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_ADDRESS $PAYMENTS_CONTRACT_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+FWSS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
-if [ -z "$WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
+if [ -z "$FWSS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
   exit 1
 fi
@@ -97,7 +97,7 @@ fi
 echo ""
 echo "# DEPLOYMENT COMPLETE"
 echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
-echo "FilecoinWarmStorageService Implementation deployed at: $WARM_STORAGE_IMPLEMENTATION_ADDRESS"
+echo "FilecoinWarmStorageService Implementation deployed at: $FWSS_IMPLEMENTATION_ADDRESS"
 echo ""
 
 # Automatic contract verification
@@ -107,7 +107,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
 
   pushd "$(dirname $0)/.." >/dev/null
   source tools/verify-contracts.sh
-  verify_contracts_batch "$WARM_STORAGE_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+  verify_contracts_batch "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
   popd >/dev/null
 else
   echo
