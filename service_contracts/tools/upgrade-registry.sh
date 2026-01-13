@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # upgrade-registry.sh: Completes a pending upgrade for ServiceProviderRegistry
-# Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_REGISTRY_IMPLEMENTATION_ADDRESS
+# Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS
 # Optional args: NEW_VERSION
 # Calculated if unset: CHAIN
 
@@ -63,20 +63,20 @@ ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 if [ $CAST_CALL_EXIT_CODE -eq 0 ] && [ -n "$UPGRADE_PLAN_OUTPUT" ]; then
   # Method exists - parse the result
   UPGRADE_PLAN=($UPGRADE_PLAN_OUTPUT)
-  PLANNED_REGISTRY_IMPLEMENTATION_ADDRESS=${UPGRADE_PLAN[0]}
+  PLANNED_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS=${UPGRADE_PLAN[0]}
   AFTER_EPOCH=${UPGRADE_PLAN[1]}
 
   # Check if there's a planned upgrade (non-zero address)
   # Zero address means either no upgrade was announced or the upgrade was already completed
-  if [ -n "$PLANNED_REGISTRY_IMPLEMENTATION_ADDRESS" ] && [ "$PLANNED_REGISTRY_IMPLEMENTATION_ADDRESS" != "$ZERO_ADDRESS" ]; then
+  if [ -n "$PLANNED_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" ] && [ "$PLANNED_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" != "$ZERO_ADDRESS" ]; then
     # New two-step mechanism: validate planned upgrade
     echo "Detected planned upgrade (two-step mechanism)"
     
-    if [ "$PLANNED_REGISTRY_IMPLEMENTATION_ADDRESS" != "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
-      echo "NEW_REGISTRY_IMPLEMENTATION_ADDRESS ($NEW_REGISTRY_IMPLEMENTATION_ADDRESS) != planned ($PLANNED_REGISTRY_IMPLEMENTATION_ADDRESS)"
+    if [ "$PLANNED_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" != "$NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
+      echo "NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS ($NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS) != planned ($PLANNED_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS)"
       exit 1
     else
-      echo "Upgrade plan matches ($NEW_REGISTRY_IMPLEMENTATION_ADDRESS)"
+      echo "Upgrade plan matches ($NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS)"
     fi
 
     CURRENT_EPOCH=$(cast block-number 2>/dev/null)
@@ -110,7 +110,7 @@ fi
 
 # Call upgradeToAndCall on the proxy with migrate function
 echo "Upgrading proxy and calling migrate..."
-TX_HASH=$(cast send "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
+TX_HASH=$(cast send "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
   --json | jq -r '.transactionHash')
@@ -135,19 +135,19 @@ echo "Verifying upgrade..."
 NEW_IMPL=$(cast rpc eth_getStorageAt "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest | sed 's/"//g' | sed 's/0x000000000000000000000000/0x/')
 
 # Compare to lowercase
-export EXPECTED_IMPL=$(echo $NEW_REGISTRY_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')
+export EXPECTED_IMPL=$(echo $NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')
 
 if [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
-    echo "✅ Upgrade successful! Proxy now points to: $NEW_REGISTRY_IMPLEMENTATION_ADDRESS"
+    echo "✅ Upgrade successful! Proxy now points to: $NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
     
     # Update deployments.json with new implementation address
-    if [ -n "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
-        update_deployment_address "$CHAIN" "REGISTRY_IMPLEMENTATION_ADDRESS" "$NEW_REGISTRY_IMPLEMENTATION_ADDRESS"
+    if [ -n "$NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
+        update_deployment_address "$CHAIN" "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" "$NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
     fi
     update_deployment_metadata "$CHAIN"
 else
     echo "⚠️  Warning: Could not verify upgrade. Please check manually."
-    echo "Expected: $NEW_REGISTRY_IMPLEMENTATION_ADDRESS"
+    echo "Expected: $NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
     echo "Got: $NEW_IMPL"
 fi
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # announce-planned-upgrade.sh: Completes a pending upgrade
-# Required args: ETH_RPC_URL, WARM_STORAGE_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
+# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_FWSS_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
@@ -26,8 +26,8 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
-if [ -z "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
-  echo "NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS is not set"
+if [ -z "$NEW_FWSS_IMPLEMENTATION_ADDRESS" ]; then
+  echo "NEW_FWSS_IMPLEMENTATION_ADDRESS is not set"
   exit 1
 fi
 
@@ -52,18 +52,18 @@ echo "Sending announcement from owner address: $ADDR"
 # Get current nonce
 NONCE=$(cast nonce "$ADDR")
 
-if [ -z "$WARM_STORAGE_PROXY_ADDRESS" ]; then
-  echo "Error: WARM_STORAGE_PROXY_ADDRESS is not set"
+if [ -z "$FWSS_PROXY_ADDRESS" ]; then
+  echo "Error: FWSS_PROXY_ADDRESS is not set"
   exit 1
 fi
 
-PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$WARM_STORAGE_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then
   echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
   exit 1
 fi
 
-TX_HASH=$(cast send "$WARM_STORAGE_PROXY_ADDRESS" "announcePlannedUpgrade((address,uint96))" "($NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)" \
+TX_HASH=$(cast send "$FWSS_PROXY_ADDRESS" "announcePlannedUpgrade((address,uint96))" "($NEW_FWSS_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
   --json | jq -r '.transactionHash')

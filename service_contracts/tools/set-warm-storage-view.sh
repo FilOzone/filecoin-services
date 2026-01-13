@@ -5,8 +5,8 @@
 #
 # Environment variables required:
 # - ETH_RPC_URL: RPC endpoint URL
-# - WARM_STORAGE_PROXY_ADDRESS: Address of the deployed FilecoinWarmStorageService proxy
-# - WARM_STORAGE_VIEW_ADDRESS: Address of the deployed FilecoinWarmStorageServiceStateView
+# - FWSS_PROXY_ADDRESS: Address of the deployed FilecoinWarmStorageService proxy
+# - FWSS_VIEW_ADDRESS: Address of the deployed FilecoinWarmStorageServiceStateView
 # - ETH_KEYSTORE: Path to keystore file
 # - PASSWORD: Keystore password
 # - NONCE: Transaction nonce (optional, will fetch if not provided)
@@ -25,13 +25,13 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
-if [ -z "$WARM_STORAGE_PROXY_ADDRESS" ]; then
-  echo "Error: WARM_STORAGE_PROXY_ADDRESS is not set"
+if [ -z "$FWSS_PROXY_ADDRESS" ]; then
+  echo "Error: FWSS_PROXY_ADDRESS is not set"
   exit 1
 fi
 
-if [ -z "$WARM_STORAGE_VIEW_ADDRESS" ]; then
-  echo "Error: WARM_STORAGE_VIEW_ADDRESS is not set"
+if [ -z "$FWSS_VIEW_ADDRESS" ]; then
+  echo "Error: FWSS_VIEW_ADDRESS is not set"
   exit 1
 fi
 
@@ -51,7 +51,7 @@ fi
 echo "Setting view contract address on FilecoinWarmStorageService..."
 
 # Execute transaction and capture output, only show errors if it fails
-TX_OUTPUT=$(cast send --password "$PASSWORD" --nonce $NONCE $WARM_STORAGE_PROXY_ADDRESS "setViewContract(address)" $WARM_STORAGE_VIEW_ADDRESS 2>&1)
+TX_OUTPUT=$(cast send --password "$PASSWORD" --nonce $NONCE $FWSS_PROXY_ADDRESS "setViewContract(address)" $FWSS_VIEW_ADDRESS 2>&1)
 
 if [ $? -eq 0 ]; then
     echo "View contract address set successfully"
