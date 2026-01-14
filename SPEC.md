@@ -139,3 +139,33 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 2. Wait for all proving period deadlines within the lockup to pass
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset
+
+## CDN Payment Rails
+
+Datasets with CDN support have three payment rails: a **PDP rail** for storage proving, and two **CDN rails** (cache-miss and bandwidth) for content delivery. CDN rails pay to the FilBeam beneficiary address, which is immutably set at contract deployment.
+
+### Payment Models
+
+PDP and CDN rails use fundamentally different payment models:
+
+**PDP rail**: Uses proof-based settlement. FWSS acts as validator, receiving callbacks to verify that storage proofs were submitted before authorizing payment. Settlement amounts depend on proving status.
+
+**CDN rails**: Use usage-based settlement. No validator is set. The FilBeam controller calculates payment amounts based on actual egress metrics and calls `settleFilBeamPaymentRails()` on FWSS. This decouples CDN payment logic from the proof-based model used for storage.
+
+### External Rail Management
+
+CDN rails can also be managed directly through FilecoinPay without FWSS involvement:
+
+- **Top-up**: Clients call `topUpCDNPaymentRails()` on FWSS to increase their CDN lockup, which extends their egress allowance.
+- **Settlement**: Anyone can call FilecoinPay's `settleRail()` on CDN rails since they have no validator. The FilBeam controller uses this for usage-based settlement.
+- **Termination**: The payer can terminate CDN rails directly via FilecoinPay (if their lockup is fully settled). FWSS is the rail operator and can also terminate. No callback fires because the validator is unset.
+
+### CDN Metadata Synchronization
+
+FWSS tracks CDN-enabled datasets using a `withCDN` metadata key. This metadata is set when CDN rails are created and deleted when CDN service is terminated through FWSS.
+
+If CDN rails are terminated externally (directly via FilecoinPay), the `withCDN` metadata remains set because FWSS receives no callback. This creates an out-of-sync state where FWSS believes CDN is active but the underlying rails are terminated or finalized. Subsequent CDN operations will fail when they attempt to interact with the inactive rails.
+
+### Service Termination
+
+When terminating a dataset's service, FWSS terminates the PDP rail (which it validates) and performs best-effort termination of CDN rails, ignoring any errors. This ensures service termination succeeds regardless of CDN rail state—whether rails are active, already terminated, or fully settled and finalized.
