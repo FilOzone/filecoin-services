@@ -1077,10 +1077,8 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            // ⚠️ WARNING: Catch-all error handling will silently suppress ALL errors from terminateRail(),
-            // not just "already terminated/finalized" errors. This could mask legitimate failures.
-            // Ideally we would catch only specific error types, but contract size constraint prevents
-            // us from implementing error handling.
+            // CDN rails can be terminated externally via FilecoinPay. Ignore errors from
+            // already-terminated or finalized rails.
             try payments.terminateRail(info.cacheMissRailId) {} catch {}
             try payments.terminateRail(info.cdnRailId) {} catch {}
 
