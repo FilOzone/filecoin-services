@@ -44,6 +44,72 @@ Both FWSS and ServiceProviderRegistry use a security-focused two-step upgrade me
 
 This gives stakeholders time to review changes before execution.
 
+## Choosing AFTER_EPOCH
+
+When announcing an upgrade, choose `AFTER_EPOCH` to give stakeholders adequate notice:
+
+| Upgrade Type | Minimum Notice | Recommended |
+|--------------|----------------|-------------|
+| Routine (bug fixes, minor features) | ~24 hours (~2,880 epochs) | 1-2 days |
+| Breaking changes | ~1 week (~20,160 epochs) | 1-2 weeks |
+| Immutable dependency changes | ~2 weeks (~40,320 epochs) | 2-4 weeks |
+
+**To calculate:**
+
+```bash
+# Get current epoch
+CURRENT_EPOCH=$(cast block-number --rpc-url $ETH_RPC_URL)
+
+# Add desired notice period (e.g., 2 days = ~5760 epochs)
+AFTER_EPOCH=$((CURRENT_EPOCH + 5760))
+
+echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
+```
+
+**Considerations:**
+- Allow time for stakeholder review
+- Avoid weekends/holidays for mainnet upgrades
+- Calibnet can use shorter notice periods for testing
+
+## Release Workflow
+
+### Before the Upgrade
+
+1. **Prepare changelog entry** in `CHANGELOG.md`:
+   - Document all changes since last release
+   - Mark breaking changes clearly
+   - Include migration notes if needed
+
+2. **Create PR** with changelog updates
+
+3. **Deploy new implementation** contract:
+   - Run the deployment script (see [FWSS Upgrade Workflow](#fwss-upgrade-workflow))
+   - `deployments.json` is automatically updated by the script
+   - **Document the new implementation address in PR comments** for traceability
+   - Commit the updated `deployments.json` to the PR
+
+4. **Run upgrade announcement** on-chain via `announce-planned-upgrade.sh`
+
+5. **Create tracking issue** using the [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action
+
+### After Successful Upgrade
+
+1. **Verify** the upgrade on block explorer (Blockscout)
+
+2. **Confirm** `deployments.json` was updated (automatic via script)
+
+3. **Merge** the changelog PR
+
+4. **Tag release** in GitHub (post-upgrade):
+   ```bash
+   git tag v1.X.0
+   git push origin v1.X.0
+   ```
+
+5. **Create GitHub Release** pointing to:
+   - Changelog entry
+   - `deployments.json` for current addresses
+
 ## Stakeholder Communication
 
 <!-- TODO: Update these placeholders with actual channels and procedures -->
