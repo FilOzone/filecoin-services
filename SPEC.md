@@ -142,7 +142,12 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 
 ## CDN Payment Rails
 
-Datasets with CDN support have three payment rails: a **PDP rail** for storage proving, and two **CDN rails** (cache-miss and bandwidth) for content delivery. CDN rails pay to the FilBeam beneficiary address, which is immutably set at contract deployment.
+Datasets with CDN support have three payment rails: a **PDP rail** for storage proving, and two **CDN rails** for content delivery:
+
+- **Cache-miss rail** (`cacheMissRailId`): Pays to the storage provider (SP) for origin fetches
+- **Bandwidth rail** (`cdnRailId`): Pays to the FilBeam beneficiary address (immutably set at deployment)
+
+Both CDN rails have `paymentRate = 0` and use fixed lockup for one-time payments based on usage.
 
 ### Payment Models
 
@@ -150,21 +155,27 @@ PDP and CDN rails use fundamentally different payment models:
 
 **PDP rail**: Uses proof-based settlement. FWSS acts as validator, receiving callbacks to verify that storage proofs were submitted before authorizing payment. Settlement amounts depend on proving status.
 
-**CDN rails**: Use usage-based settlement. No validator is set. The FilBeam controller calculates payment amounts based on actual egress metrics and calls `settleFilBeamPaymentRails()` on FWSS. This decouples CDN payment logic from the proof-based model used for storage.
+**CDN rails**: Use usage-based settlement via one-time payments. No validator is set. The FilBeam controller calculates payment amounts based on actual egress metrics and calls `settleFilBeamPaymentRails()` on FWSS, which executes one-time payments from the fixed lockup. This decouples CDN payment logic from the proof-based model used for storage.
 
-### External Rail Management
+### CDN Rail Operations
 
-CDN rails can also be managed directly through FilecoinPay without FWSS involvement:
+**Top-up**: Clients call `topUpCDNPaymentRails()` on FWSS to increase their CDN fixed lockup, which extends their egress allowance.
 
-- **Top-up**: Clients call `topUpCDNPaymentRails()` on FWSS to increase their CDN lockup, which extends their egress allowance.
-- **Settlement**: Anyone can call FilecoinPay's `settleRail()` on CDN rails since they have no validator. The FilBeam controller uses this for usage-based settlement.
-- **Termination**: The payer can terminate CDN rails directly via FilecoinPay (if their lockup is fully settled). FWSS is the rail operator and can also terminate. No callback fires because the validator is unset.
+**Settlement**: The FilBeam controller calls `settleFilBeamPaymentRails()` on FWSS to execute one-time payments based on usage data. This is the intended settlement path.
+
+**Termination**: The intended path is `terminateCDNService()` on FWSS, which terminates both CDN rails and clears the `withCDN` metadata.
+
+### Direct FilecoinPay Access
+
+Because CDN rails have no validator, FilecoinPay permits the payer to call `terminateRail()` directly. Since CDN rails have `paymentRate = 0`, the payer's lockup is effectively always settled, so this is always permitted. Direct `settleRail()` calls are also permitted but would be a no-op since there's no streaming rate to settle. This is a constraint of FilecoinPay's design, not the intended usage path.
 
 ### CDN Metadata Synchronization
 
 FWSS tracks CDN-enabled datasets using a `withCDN` metadata key. This metadata is set when CDN rails are created and deleted when CDN service is terminated through FWSS.
 
-If CDN rails are terminated externally (directly via FilecoinPay), the `withCDN` metadata remains set because FWSS receives no callback. This creates an out-of-sync state where FWSS believes CDN is active but the underlying rails are terminated or finalized. Subsequent CDN operations will fail when they attempt to interact with the inactive rails.
+If CDN rails are terminated directly via FilecoinPay (bypassing FWSS), the `withCDN` metadata remains set because FWSS receives no callback. This creates an out-of-sync state where FWSS believes CDN is active but the underlying rails are terminated or finalized. Subsequent CDN operations (`topUpCDNPaymentRails`, `settleFilBeamPaymentRails`) will fail when they attempt to interact with the inactive rails.
+
+**Note**: There is currently no mechanism to clean up orphaned `withCDN` metadata. The practical impact is limited since `terminateService()` uses best-effort CDN termination (ignoring errors), so full service termination still succeeds.
 
 ### Service Termination
 
