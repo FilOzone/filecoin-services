@@ -37,7 +37,7 @@ These immutable contracts are **not expected to be redeployed** under normal ope
 
 ## Two-Step Upgrade Process
 
-Both FWSS and ServiceProviderRegistry use a security-focused two-step upgrade mechanism:
+Both FWSS and ServiceProviderRegistry use a two-step upgrade mechanism:
 
 1. **Announce** - Call `announcePlannedUpgrade()` with the new implementation address and `AFTER_EPOCH`
 2. **Execute** - After `AFTER_EPOCH` has passed, call `upgradeToAndCall()` to complete the upgrade
