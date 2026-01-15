@@ -18,6 +18,7 @@ See [`service_contracts/deployments.json`](./service_contracts/deployments.json)
 - Two-step upgrade announcement flow for ServiceProviderRegistry ([#356](https://github.com/FilOzone/filecoin-services/pull/356))
 - Automatic deployment address management via `deployments.json` ([#364](https://github.com/FilOzone/filecoin-services/pull/364))
 - FWSS upgrade process documentation ([UPGRADE-PROCESS.md](./service_contracts/tools/UPGRADE-PROCESS.md))
+- GitHub Action for creating upgrade announcements ([upgrade-announcement.yml](./.github/workflows/upgrade-announcement.yml))
 - Pricing model specification document ([#366](https://github.com/FilOzone/filecoin-services/pull/366))
 - Devnet deployment support ([#373](https://github.com/FilOzone/filecoin-services/pull/373))
 - CDN validation in `validatePayerOperatorApprovalAndFunds()` ([#342](https://github.com/FilOzone/filecoin-services/pull/342))
@@ -358,8 +359,9 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/filozone/filecoin-services/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/filozone/filecoin-services/compare/v0.3.0...v1.0.0
-[0.3.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.3.0
-[0.2.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.2.0
-[0.1.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.1.0
+[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/FilOzone/filecoin-services/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/FilOzone/filecoin-services/compare/v0.3.0...v1.0.0
+[0.3.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.3.0
+[0.2.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.2.0
+[0.1.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.1.0
