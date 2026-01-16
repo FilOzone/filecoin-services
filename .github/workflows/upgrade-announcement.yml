@@ -29,8 +29,8 @@ on:
         description: 'AFTER_EPOCH (block number after which upgrade can execute)'
         required: true
         type: string
-      new_implementation_address:
-        description: 'New implementation contract address'
+      changelog_pr:
+        description: 'PR number with changelog updates'
         required: true
         type: string
       changes_summary:
@@ -105,7 +105,7 @@ jobs:
             const upgradeType = '${{ inputs.upgrade_type }}';
             const contract = '${{ inputs.contract }}';
             const afterEpoch = '${{ inputs.after_epoch }}';
-            const implAddress = '${{ inputs.new_implementation_address }}';
+            const changelogPr = '${{ inputs.changelog_pr }}';
             const releaseTag = '${{ inputs.release_tag }}';
             const actionRequired = '${{ inputs.action_required }}' || 'None';
             const timeEstimate = `${{ steps.calc_time.outputs.estimate }}`;
@@ -116,6 +116,7 @@ jobs:
               : null;
             
             const changelogLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CHANGELOG.md`;
+            const changelogPrLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${changelogPr}`;
             
             const body = `## ${contract} Upgrade Announcement
 
@@ -124,10 +125,8 @@ jobs:
             **Scheduled Execution**: After epoch ${afterEpoch} (${timeEstimate})
 
             ### Changes
+            - Changelog PR: ${changelogPrLink}
             ${changes}
-
-            ### New Implementation Address
-            \`${implAddress}\`
 
             ### Action Required
             ${actionRequired}
@@ -140,7 +139,7 @@ jobs:
             ---
             
             ### Checklist
-            - [ ] New implementation deployed (address above)
+            - [ ] New implementation deployed (address shared)
             - [ ] Upgrade announced on-chain via \`announce-planned-upgrade.sh\`
             - [ ] Stakeholders notified
             - [ ] Upgrade executed after AFTER_EPOCH
