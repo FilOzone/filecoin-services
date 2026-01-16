@@ -114,9 +114,9 @@ CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL"); AFTER_EPOCH=$((CURR
 
 Before running `announce-planned-upgrade.sh`, notify stakeholders through:
 
-- [ ] **Slack**: Post in `#<!-- channel-name -->` with upgrade details
+- [ ] **Documentation**: Update changelog with upcoming changes in a PR
 - [ ] **GitHub**: Create a tracking issue or discussion for the upgrade
-- [ ] **Documentation**: Update changelog with upcoming changes
+- [ ] **Slack**: Post in `#<!-- channel-name -->` with upgrade details
 
 ### Upgrade Announcement Template
 
@@ -233,6 +233,20 @@ The script automatically:
 ## ServiceProviderRegistry Upgrade Workflow
 
 Similar to FWSS, but uses dedicated scripts:
+
+### Deploy New Registry Implementation (Calibnet)
+
+Use the deploy script in upgrade-first mode (implementation-only). This is the default:
+
+```bash
+./deploy-registry-calibnet.sh
+```
+
+To deploy a new proxy as well (fresh deployment), pass the flag:
+
+```bash
+./deploy-registry-calibnet.sh --with-proxy
+```
 
 ### Announce
 
