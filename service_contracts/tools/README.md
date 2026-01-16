@@ -2,13 +2,21 @@
 
 This directory contains scripts for deploying and upgrading the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
+> **For detailed upgrade procedures**, see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
+
 ## Scripts Overview
 
-### Available Scripts
+### Deployment Scripts
 
 - `deploy-warm-storage-calibnet.sh` - Deploy FilecoinWarmStorageService only (requires existing PDPVerifier and FilecoinPayV1 contracts)
 - `deploy-all-warm-storage.sh` - Deploy all contracts to either Calibnet or Mainnet
-- `upgrade-warm-storage-calibnet.sh` - Upgrade existing FilecoinWarmStorageService contract with new proving period parameters
+
+### Upgrade Scripts
+
+- `announce-planned-upgrade.sh` - Announce a planned FWSS upgrade (two-step process)
+- `upgrade.sh` - Execute a previously announced FWSS upgrade
+- `announce-planned-upgrade-registry.sh` - Announce a planned ServiceProviderRegistry upgrade
+- `upgrade-registry.sh` - Execute a previously announced registry upgrade
 
 ### Usage
 
@@ -19,8 +27,9 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 # Deploy all contracts
 ./tools/deploy-all-warm-storage.sh
 
-# Upgrade existing deployment
-./tools/upgrade-warm-storage-calibnet.sh
+# Upgrade existing deployment (see UPGRADE-PROCESS.md for details)
+./tools/announce-planned-upgrade.sh  # Step 1: Announce
+./tools/upgrade.sh                   # Step 2: Execute (after AFTER_EPOCH)
 ```
 
 ## Deployment Parameters
@@ -116,16 +125,13 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 
 ### Required for specific scripts:
 - `deploy-warm-storage-calibnet.sh` requires:
-
   - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
   - `FILECOIN_PAY_ADDRESS` - Address of deployed FilecoinPayV1 contract
-
 
 - `deploy-all-warm-storage.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
 
-- `upgrade-warm-storage-calibnet.sh` requires:
-  - `WARM_STORAGE_SERVICE_PROXY_ADDRESS` - Address of existing FilecoinWarmStorageService proxy to upgrade
+- Upgrade scripts - see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for complete environment variable reference
 
 ## Usage Examples
 
@@ -160,25 +166,24 @@ export FILECOIN_PAY_ADDRESS="0x456..."
 
 ### Upgrade Existing Contract
 
-```bash
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export WARM_STORAGE_SERVICE_PROXY_ADDRESS="0x789..."
-
-# Optional: Custom proving periods
-export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
-export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
-
-./upgrade-warm-storage-calibnet.sh
-```
+See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for the complete two-step upgrade workflow.
 
 ## Contract Upgrade Process
 
-The FilecoinWarmStorageService contract uses OpenZeppelin's upgradeable pattern. When upgrading:
+The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two-step upgrade process** for security:
 
-1. **Deploy new implementation**: The script deploys a new implementation contract
-2. **Upgrade proxy**: Uses `upgradeToAndCall` to point the proxy to the new implementation
+1. **Announce**: Call `announcePlannedUpgrade()` with the new implementation address and a future epoch
+2. **Execute**: After the announced epoch, call `upgradeToAndCall()` to complete the upgrade
+
+This gives stakeholders time to review changes before execution.
+
+**For complete upgrade documentation**, including:
+- Step-by-step upgrade workflows
+- Environment variable reference
+- Immutable dependency handling
+- Verification procedures
+
+See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
 
 ## Testing
 
