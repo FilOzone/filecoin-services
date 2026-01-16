@@ -57,13 +57,7 @@ When announcing an upgrade, choose `AFTER_EPOCH` to give stakeholders adequate n
 **To calculate:**
 
 ```bash
-# Get current epoch
-CURRENT_EPOCH=$(cast block-number --rpc-url $ETH_RPC_URL)
-
-# Add desired notice period (e.g., 2 days = ~5760 epochs)
-AFTER_EPOCH=$((CURRENT_EPOCH + 5760))
-
-echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL"); AFTER_EPOCH=$((CURRENT_EPOCH + 5760)); echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
 ```
 
 **Considerations:**
@@ -71,26 +65,26 @@ echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
 - Avoid weekends/holidays for mainnet upgrades
 - Calibnet can use shorter notice periods for testing
 
-## Release Workflow
+## Pre-Upgrade Checklist
 
 ### Before the Upgrade
 
 1. **Prepare changelog entry** in `CHANGELOG.md`:
-   - Document all changes since last release
+   - Document all changes since last release (https://github.com/FilOzone/filecoin-services/releases)
    - Mark breaking changes clearly
    - Include migration notes if needed
 
 2. **Create PR** with changelog updates
 
-3. **Deploy new implementation** contract:
+3. **Create tracking issue** using the [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action
+
+4. **Deploy new implementation** contract:
    - Run the deployment script (see [FWSS Upgrade Workflow](#fwss-upgrade-workflow))
    - `deployments.json` is automatically updated by the script
    - **Document the new implementation address in PR comments** for traceability
    - Commit the updated `deployments.json` to the PR
 
-4. **Run upgrade announcement** on-chain via `announce-planned-upgrade.sh`
-
-5. **Create tracking issue** using the [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action
+5. **Run upgrade announcement** on-chain via `announce-planned-upgrade.sh`
 
 ### After Successful Upgrade
 
