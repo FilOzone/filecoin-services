@@ -41,10 +41,6 @@ on:
         description: 'Release tag if already created (usually added after upgrade completes)'
         required: false
         type: string
-      action_required:
-        description: 'Action required by integrators (leave empty if none)'
-        required: false
-        type: string
 
 jobs:
   create-announcement:
@@ -107,7 +103,6 @@ jobs:
             const afterEpoch = '${{ inputs.after_epoch }}';
             const changelogPr = '${{ inputs.changelog_pr }}';
             const releaseTag = '${{ inputs.release_tag }}';
-            const actionRequired = '${{ inputs.action_required }}' || 'None';
             const timeEstimate = `${{ steps.calc_time.outputs.estimate }}`;
             const changes = `${{ steps.format_changes.outputs.changes }}`;
             
@@ -115,7 +110,6 @@ jobs:
               ? `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/tag/${releaseTag}`
               : null;
             
-            const changelogLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CHANGELOG.md`;
             const changelogPrLink = `https://github.com/${context.repo.owner}/${context.repo.repo}/pull/${changelogPr}`;
             
             const body = `## ${contract} Upgrade Announcement
@@ -128,12 +122,8 @@ jobs:
             - Changelog PR: ${changelogPrLink}
             ${changes}
 
-            ### Action Required
-            ${actionRequired}
-
             ### Resources
             ${releaseLink ? `- Release: ${releaseLink}` : ''}
-            - Changelog: ${changelogLink}
             - Upgrade Process: [UPGRADE-PROCESS.md](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md)
 
             ---
