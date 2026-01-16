@@ -50,9 +50,9 @@ When announcing an upgrade, choose `AFTER_EPOCH` to give stakeholders adequate n
 
 | Upgrade Type | Minimum Notice | Recommended |
 |--------------|----------------|-------------|
-| Routine (bug fixes, minor features) | ~24 hours (~2,880 epochs) | 1-2 days |
-| Breaking changes | ~1 week (~20,160 epochs) | 1-2 weeks |
-| Immutable dependency changes | ~2 weeks (~40,320 epochs) | 2-4 weeks |
+| Routine (bug fixes, minor features) | ~24 hours (~2880 epochs) | 1-2 days |
+| Breaking changes | ~1 week (~20160 epochs) | 1-2 weeks |
+| Immutable dependency changes | ~2 weeks (~40320 epochs) | 2-4 weeks |
 
 **To calculate:**
 
