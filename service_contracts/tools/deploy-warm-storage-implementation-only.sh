@@ -24,6 +24,10 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
+# Load deployments.json helpers and populate defaults if available
+source "$(dirname "$0")/deployments.sh"
+load_deployment_addresses "$CHAIN"
+
 
 if [ -z "$ETH_KEYSTORE" ]; then
   echo "Error: ETH_KEYSTORE is not set"
@@ -67,6 +71,7 @@ fi
 
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address on calibnet
 
+SIGNATURE_LIB_DEPLOYED=false
 if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
   # Deploy SignatureVerificationLib first so we can link it into the implementation
   echo "Deploying SignatureVerificationLib..."
@@ -77,6 +82,7 @@ if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
     exit 1
   fi
   echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+  SIGNATURE_LIB_DEPLOYED=true
   # Increment nonce for the next deployment
   NONCE=$((NONCE + 1))
 else
@@ -111,6 +117,13 @@ echo "# DEPLOYMENT COMPLETE"
 echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 echo "FilecoinWarmStorageService Implementation deployed at: $FWSS_IMPLEMENTATION_ADDRESS"
 echo ""
+
+# Persist deployment addresses + metadata
+update_deployment_address "$CHAIN" "FWSS_IMPLEMENTATION_ADDRESS" "$FWSS_IMPLEMENTATION_ADDRESS"
+if [ "$SIGNATURE_LIB_DEPLOYED" = "true" ]; then
+  update_deployment_address "$CHAIN" "SIGNATURE_VERIFICATION_LIB_ADDRESS" "$SIGNATURE_VERIFICATION_LIB_ADDRESS"
+fi
+update_deployment_metadata "$CHAIN"
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then
