@@ -9,6 +9,7 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 ### Deployment Scripts
 
 - `deploy-warm-storage-calibnet.sh` - Deploy FilecoinWarmStorageService only (requires existing PDPVerifier and FilecoinPayV1 contracts)
+- `deploy-warm-storage-implementation-only.sh` - Deploy FWSS implementation only; loads defaults from `deployments.json` and writes back new implementation + metadata (reuses existing signature lib unless redeployed)
 - `deploy-all-warm-storage.sh` - Deploy all contracts to either Calibnet or Mainnet
 
 ### Upgrade Scripts
