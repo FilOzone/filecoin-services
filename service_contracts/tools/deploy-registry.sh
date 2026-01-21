@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy-registry-calibnet deploys the Service Provider Registry contract to a target network
+# deploy-registry deploys the Service Provider Registry contract to a target network
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
 # Assumption: forge, cast, jq are in the PATH
@@ -77,10 +77,9 @@ NONCE="$(cast nonce "$ADDR")"
 echo "Starting nonce: $NONCE"
 
 # Deploy ServiceProviderRegistry implementation
-SPR_INIT_COUNTER=1
 echo ""
 echo "=== STEP 1: Deploying ServiceProviderRegistry Implementation ==="
-SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir --constructor-args $SPR_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
+SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract ServiceProviderRegistry implementation address"
   exit 1
