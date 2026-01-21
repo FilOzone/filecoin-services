@@ -38,7 +38,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     function testInitialState() public view {
         // Check version
-        assertEq(registry.VERSION(), "1.0.0", "Version should be 1.0.0");
+        assertEq(registry.VERSION(), "1.1.0", "Version should be 1.1.0");
 
         // Check owner
         assertEq(registry.owner(), owner, "Service provider should be deployer");
