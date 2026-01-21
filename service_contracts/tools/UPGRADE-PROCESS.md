@@ -1,6 +1,6 @@
 # FWSS Contract Upgrade Process
 
-This document describes the upgrade process for FilecoinWarmStorageService (FWSS) and related contracts.
+This document describes the upgrade process for FilecoinWarmStorageService (FWSS) and related contracts, organized as a phase-based runbook.
 
 ## Contract Upgradeability Overview
 
@@ -26,14 +26,7 @@ ServiceProviderRegistry public immutable serviceProviderRegistry;
 SessionKeyRegistry public immutable sessionKeyRegistry;
 ```
 
-### Operational Expectations
-
-These immutable contracts are **not expected to be redeployed** under normal operations. Redeploying any of these would require upgrading FWSS to a new implementation with updated constructor arguments, which could break existing functionality and integrations.
-
-**If redeployment becomes necessary:**
-- It will be announced **well ahead of time** to all stakeholders
-- A migration plan will be communicated
-- The change will go through the standard two-step upgrade process with an extended notice period
+These immutable contracts are **not expected to be redeployed** under normal operations. If redeployment becomes necessary, announce it well ahead of time and follow the standard two-step upgrade process with an extended notice period.
 
 ## Two-Step Upgrade Process
 
@@ -42,85 +35,153 @@ Both FWSS and ServiceProviderRegistry use a two-step upgrade mechanism:
 1. **Announce** - Call `announcePlannedUpgrade()` with the new implementation address and `AFTER_EPOCH`
 2. **Execute** - After `AFTER_EPOCH` has passed, call `upgradeToAndCall()` to complete the upgrade
 
-This gives stakeholders time to review changes before execution.
-
 ## Choosing AFTER_EPOCH
 
 When announcing an upgrade, choose `AFTER_EPOCH` to give stakeholders adequate notice:
 
 | Upgrade Type | Minimum Notice | Recommended |
 |--------------|----------------|-------------|
-| Routine (bug fixes, minor features) | ~24 hours (~2880 epochs) | 1-2 days |
+| Routine (bug fixes, minor features) | ~24 hours (~5760 epochs) | 1-2 days |
 | Breaking changes | ~1 week (~20160 epochs) | 1-2 weeks |
 | Immutable dependency changes | ~2 weeks (~40320 epochs) | 2-4 weeks |
-
-**To calculate:**
 
 ```bash
 CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL"); AFTER_EPOCH=$((CURRENT_EPOCH + 5760)); echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
 ```
 
-**Considerations:**
+Considerations:
 - Allow time for stakeholder review
 - Avoid weekends/holidays for mainnet upgrades
 - Calibnet can use shorter notice periods for testing
 
-## Pre-Upgrade Checklist
+## Phase 0: Decide Scope
 
-### Before the Upgrade
+1. Identify which contracts are changing:
+   - FWSS implementation
+   - ServiceProviderRegistry implementation
+   - StateView contract (typically for breaking changes in the view)
+2. If the change is breaking or touches immutable dependencies, plan for longer notice and a migration guide.
+
+## Phase 1: Prepare
 
 1. **Prepare changelog entry** in `CHANGELOG.md`:
    - Document all changes since last release (https://github.com/FilOzone/filecoin-services/releases)
    - Mark breaking changes clearly
    - Include migration notes if needed
-
 2. **Create PR** with changelog updates
+3. **Update the version** string in the contracts if applicable.
+4. **Create tracking issue** using the [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action
 
-3. **Create tracking issue** using the [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action
+## Phase 2: Calibnet Rehearsal
 
-4. **Deploy new implementation** contract:
-   - Run the deployment script (see [FWSS Upgrade Workflow](#fwss-upgrade-workflow))
-   - `deployments.json` is automatically updated by the script
-   - **Document the new implementation address in PR comments** for traceability
-   - Commit the updated `deployments.json` to the PR
+Always test the upgrade on Calibnet before mainnet.
 
-5. **Run upgrade announcement** on-chain via `announce-planned-upgrade.sh`
+### Deploy Implementations (Calibnet)
 
-### After Successful Upgrade
+FWSS implementation:
+```bash
+./deploy-warm-storage-implementation-only.sh
+```
 
-1. **Verify** the upgrade on block explorer (Blockscout)
+Other contracts you might deploy during a upgrade can be:
 
-2. **Confirm** `deployments.json` was updated (automatic via script)
+ServiceProviderRegistry implementation (if needed):
+```bash
+./deploy-registry-calibnet.sh
+```
 
-3. **Merge** the changelog PR
+FilecoinWarmStorageStateView update (if needed):
+```bash
+./deploy-warm-storage-view.sh
+```
 
+`deployments.json` is updated automatically by the scripts. Commit the updated file in the upgrade PR and document the new addresses in PR comments for traceability.
+
+
+### Announce and Execute (Calibnet)
+
+```bash
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export WARM_STORAGE_PROXY_ADDRESS="0x..."
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+export AFTER_EPOCH="123456"
+
+./announce-planned-upgrade.sh
+```
+
+After `AFTER_EPOCH`, execute:
+```bash
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export WARM_STORAGE_PROXY_ADDRESS="0x..."
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+
+./upgrade.sh
+```
+
+## Phase 3: Mainnet Deployment
+
+1. Deploy registry implementation (if needed):
+   ```bash
+   ./deploy-registry.sh
+   ```
+2. Deploy FWSS implementation:
+   ```bash
+   ./deploy-warm-storage-implementation-only.sh
+   ```
+3. Deploy StateView (if needed):
+   ```bash
+   ./deploy-warm-storage-view.sh
+   ```
+
+`deployments.json` is updated automatically by the scripts. Commit the updated file in the upgrade PR and document the new addresses in PR comments for traceability.
+
+## Phase 4: Announce the Mainnet Upgrade
+
+1. Choose `AFTER_EPOCH` based on the upgrade type.
+2. Announce on-chain:
+   ```bash
+   export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+   export WARM_STORAGE_PROXY_ADDRESS="0x..."
+   export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+   export AFTER_EPOCH="123456"
+
+   ./announce-planned-upgrade.s
+   ```
+4. Notify stakeholders (see template below). Use the GitHub Action to create the announcement issue.
+
+## Phase 5: Execute the Mainnet Upgrade
+
+After `AFTER_EPOCH`, execute:
+
+```bash
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export WARM_STORAGE_PROXY_ADDRESS="0x..."
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+export NEW_WARM_STORAGE_VIEW_ADDRESS="0x..."  # Optional
+
+./upgrade.sh
+```
+
+## Phase 6: Verify and Release
+
+1. **Verify** upgrades on Blockscout.
+2. **Confirm** `deployments.json` was updated (automatic via script).
+3. **Merge** the changelog PR.
 4. **Tag release** in GitHub (post-upgrade):
    ```bash
    git tag v1.X.0
    git push origin v1.X.0
    ```
-
-5. **Create GitHub Release** pointing to:
-   - Changelog entry
-   - `deployments.json` for current addresses
+5. **Create GitHub Release** with the changelog, ensure to point to the `deployments.json` for current addresses.
+6. **Notify stakeholders** that the upgrade is complete.
 
 ## Stakeholder Communication
 
-<!-- TODO: Update these placeholders with actual channels and procedures -->
-
 > **Tip**: Use the [Create Upgrade Announcement](../../.github/workflows/upgrade-announcement.yml) GitHub Action to automatically generate an announcement issue. Go to **Actions → Create Upgrade Announcement → Run workflow**.
-
-### Before Announcing an Upgrade
-
-Before running `announce-planned-upgrade.sh`, notify stakeholders through:
-
-- [ ] **Documentation**: Update changelog with upcoming changes in a PR
-- [ ] **GitHub**: Create a tracking issue or discussion for the upgrade
-- [ ] **Slack**: Post in `#<!-- channel-name -->` with upgrade details
 
 ### Upgrade Announcement Template
 
-> **Automated**: The [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action generates this template as an issue automatically.
+> **Automated**: The GitHub Action generates this template as an issue automatically.
 
 When communicating an upgrade, include:
 
@@ -135,8 +196,10 @@ When communicating an upgrade, include:
 - [Summary of changes]
 - [Link to PR/release notes]
 
-### New Implementation Address
-`0x...`
+### Contracts Planned Upgraded
+- FilecoinWarmStorageService
+- ServiceProviderRegistry (if applicable)
+- FilecoinWarmStorageServiceStateView (if applicable)
 
 ### Action Required
 [None / Describe any required actions for integrators]
@@ -144,151 +207,16 @@ When communicating an upgrade, include:
 ### Resources
 - Release: [link] (if applicable)
 - Changelog: [link]
+- Upgrade Process: [link to this document]
 ```
-
-### After Upgrade Execution
-
-- [ ] **Verify**: Confirm upgrade success on block explorer
-- [ ] **Notify**: Post confirmation in communication channels
-- [ ] **Update**: Update `deployments.json` (automatic) and any external documentation
-- [ ] **Release**: Tag a new release in GitHub with updated addresses
 
 ### Breaking Changes Communication
 
 For upgrades involving immutable dependency changes or breaking API changes:
-
-- Provide **extended notice period** (minimum recommended: <!-- X days/weeks -->)
-- Create detailed **migration guide** for affected integrators
-- Offer **support channel** for questions during migration
-- Consider **phased rollout**: Calibnet first, then Mainnet after validation
-
-## FWSS Upgrade Workflow
-
-### Step 1: Deploy New Implementation
-
-Deploy the new implementation contract with the same immutable dependencies:
-
-```bash
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-
-# Deploy new implementation (uses existing immutable addresses from deployments.json)
-forge create --password "$PASSWORD" --broadcast \
-  --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
-  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService \
-  --constructor-args \
-    "$PDP_VERIFIER_ADDRESS" \
-    "$PAYMENTS_CONTRACT_ADDRESS" \
-    "$USDFC_TOKEN_ADDRESS" \
-    "$FILBEAM_BENEFICIARY_ADDRESS" \
-    "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
-    "$SESSION_KEY_REGISTRY_ADDRESS"
-```
-
-### Step 2: Optionally Deploy New StateView
-
-If the StateView contract needs updating:
-
-```bash
-source ./deploy-warm-storage-view.sh
-```
-
-### Step 3: Announce the Upgrade
-
-```bash
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export WARM_STORAGE_PROXY_ADDRESS="0x..."
-export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."  # From step 1
-export AFTER_EPOCH="123456"  # Block number after which upgrade can execute
-
-./announce-planned-upgrade.sh
-```
-
-### Step 4: Wait for AFTER_EPOCH
-
-The upgrade cannot be executed until the current block number exceeds `AFTER_EPOCH`.
-
-### Step 5: Execute the Upgrade
-
-```bash
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export WARM_STORAGE_PROXY_ADDRESS="0x..."
-export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
-# Optional: NEW_WARM_STORAGE_VIEW_ADDRESS if deploying new view contract
-
-./upgrade.sh
-```
-
-### Step 6: Verify
-
-The script automatically:
-- Verifies the upgrade by checking the implementation storage slot
-- Updates `deployments.json` with the new implementation address
-
-## ServiceProviderRegistry Upgrade Workflow
-
-Similar to FWSS, but uses dedicated scripts:
-
-### Deploy New Registry Implementation (Calibnet)
-
-Use the deploy script in upgrade-first mode (implementation-only). This is the default:
-
-```bash
-./deploy-registry.sh
-```
-
-To deploy a new proxy as well (fresh deployment), pass the flag:
-
-```bash
-./deploy-registry.sh --with-proxy
-```
-
-### Announce
-
-```bash
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export REGISTRY_PROXY_ADDRESS="0x..."
-export NEW_REGISTRY_IMPLEMENTATION_ADDRESS="0x..."
-export AFTER_EPOCH="123456"
-
-./announce-planned-upgrade-registry.sh
-```
-
-### Execute
-
-```bash
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x..."
-export NEW_REGISTRY_IMPLEMENTATION_ADDRESS="0x..."
-export NEW_VERSION="v1.1.0"  # Optional version string for migrate()
-
-./upgrade-registry.sh
-```
-
-## StateView Contract Updates
-
-The `FilecoinWarmStorageServiceStateView` is a helper contract that can be redeployed independently without going through the two-step announcement process:
-
-1. Deploy new StateView:
-   ```bash
-   source ./deploy-warm-storage-view.sh
-   ```
-
-2. Set the new view address on FWSS proxy:
-   ```bash
-   source ./set-warm-storage-view.sh
-   ```
-
-This is an owner-only operation and does not require an upgrade announcement.
+- Provide extended notice period
+- Create a migration guide for affected integrators
+- Offer a support channel for questions during migration
+- Consider phased rollout: Calibnet first, then Mainnet after validation
 
 ## Environment Variables Reference
 
@@ -319,42 +247,6 @@ This is an owner-only operation and does not require an upgrade announcement.
 | `NEW_REGISTRY_IMPLEMENTATION_ADDRESS` | Address of new implementation |
 | `AFTER_EPOCH` | Block number after which upgrade can execute |
 | `NEW_VERSION` | (Optional) Version string for migrate() |
-
-## Verification and Testing
-
-### Always Test on Calibnet First
-
-Before upgrading on mainnet, always test the upgrade on Calibnet:
-
-```bash
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-# ... run upgrade scripts
-```
-
-### Storage Layout Verification
-
-Before deploying a new implementation, verify storage layout compatibility:
-
-```bash
-forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
-```
-
-Compare with the previous version to ensure no storage slot collisions.
-
-### Upgrade Verification
-
-The upgrade scripts automatically verify success by checking the ERC1967 implementation slot:
-
-```bash
-cast rpc eth_getStorageAt "$PROXY_ADDRESS" \
-  0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc latest
-```
-
-### Run Upgrade Tests
-
-```bash
-forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
-```
 
 ## Deployment Address Management
 
