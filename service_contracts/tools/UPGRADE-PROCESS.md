@@ -239,13 +239,13 @@ Similar to FWSS, but uses dedicated scripts:
 Use the deploy script in upgrade-first mode (implementation-only). This is the default:
 
 ```bash
-./deploy-registry-calibnet.sh
+./deploy-registry.sh
 ```
 
 To deploy a new proxy as well (fresh deployment), pass the flag:
 
 ```bash
-./deploy-registry-calibnet.sh --with-proxy
+./deploy-registry.sh --with-proxy
 ```
 
 ### Announce

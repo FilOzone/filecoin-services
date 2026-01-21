@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy-registry-calibnet deploys the Service Provider Registry contract to a target network
+# deploy-registry deploys the Service Provider Registry contract to a target network
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
 # Assumption: forge, cast, jq are in the PATH
