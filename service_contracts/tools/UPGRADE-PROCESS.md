@@ -145,7 +145,7 @@ export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
    export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
    export AFTER_EPOCH="123456"
 
-   ./announce-planned-upgrade.s
+   ./announce-planned-upgrade.sh
    ```
 4. Notify stakeholders (see template below). Use the GitHub Action to create the announcement issue.
 
