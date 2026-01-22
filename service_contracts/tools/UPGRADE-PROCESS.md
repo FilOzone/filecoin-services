@@ -196,7 +196,7 @@ When communicating an upgrade, include:
 - [Summary of changes]
 - [Link to PR/release notes]
 
-### Contracts Planned Upgraded
+### Contracts Planned for Upgrade
 - FilecoinWarmStorageService
 - ServiceProviderRegistry (if applicable)
 - FilecoinWarmStorageServiceStateView (if applicable)
