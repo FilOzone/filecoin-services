@@ -155,7 +155,7 @@ jobs:
 ${changes}
 - [Link to PR/release notes](${changelogPrLink})
 
-### Contracts Planned Upgraded
+### Contracts Planned for Upgrade
 ${contracts.join('\n')}
 
 ### Action Required
