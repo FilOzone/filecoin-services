@@ -45,9 +45,13 @@ When announcing an upgrade, choose `AFTER_EPOCH` to give stakeholders adequate n
 | Breaking changes | ~1 week (~20160 epochs) | 1-2 weeks |
 | Immutable dependency changes | ~2 weeks (~40320 epochs) | 2-4 weeks |
 
+For quickly calculating an `AFTER_EPOCH`, one can use the following snippet:
+
 ```bash
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL"); AFTER_EPOCH=$((CURRENT_EPOCH + 5760)); echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
-```
+UPGRADE_WAIT_DURATION_EPOCHS=5760
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+AFTER_EPOCH=$((CURRENT_EPOCH + $UPGRADE_WAIT_DURATION_EPOCHS))
+echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
 
 Considerations:
 - Allow time for stakeholder review
