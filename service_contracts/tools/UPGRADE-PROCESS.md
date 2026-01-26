@@ -6,7 +6,7 @@ This document describes the upgrade process for FilecoinWarmStorageService (FWSS
 
 | Contract | Proxy Pattern | Upgrade Method |
 |----------|---------------|----------------|
-| FilecoinWarmStorageService | UUPS Proxy (two-step) | `announce-planned-upgrade.sh` + `upgrade.sh` |
+| FilecoinWarmStorageService (FWSS) | UUPS Proxy (two-step) | `announce-planned-upgrade.sh` + `upgrade.sh` |
 | ServiceProviderRegistry | UUPS Proxy (two-step) | `announce-planned-upgrade-registry.sh` + `upgrade-registry.sh` |
 | PDPVerifier | ERC1967 Proxy | Via [pdp repo](https://github.com/FilOzone/pdp) scripts |
 | FilecoinPayV1 | None (immutable) | Not expected to be redeployed |
@@ -60,11 +60,11 @@ Considerations:
    - FWSS implementation
    - ServiceProviderRegistry implementation
    - StateView contract (typically for breaking changes in the view)
-2. If the change is breaking or touches immutable dependencies, plan for longer notice and a migration guide.
+2. If the change is breaking (including breaking changes to dependencies) , plan for longer notice and a migration guide.
 
 ## Phase 1: Prepare
 
-1. **Prepare changelog entry** in `CHANGELOG.md`:
+1. **Prepare changelog entry** in [`CHANGELOG.md`](../../CHANGELOG.md):
    - Document all changes since last release (https://github.com/FilOzone/filecoin-services/releases)
    - Mark breaking changes clearly
    - Include migration notes if needed
