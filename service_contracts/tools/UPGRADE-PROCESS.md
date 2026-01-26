@@ -6,7 +6,7 @@ This document describes the upgrade process for FilecoinWarmStorageService (FWSS
 
 | Contract | Proxy Pattern | Upgrade Method |
 |----------|---------------|----------------|
-| FilecoinWarmStorageService | UUPS Proxy (two-step) | `announce-planned-upgrade.sh` + `upgrade.sh` |
+| FilecoinWarmStorageService (FWSS) | UUPS Proxy (two-step) | `announce-planned-upgrade.sh` + `upgrade.sh` |
 | ServiceProviderRegistry | UUPS Proxy (two-step) | `announce-planned-upgrade-registry.sh` + `upgrade-registry.sh` |
 | PDPVerifier | ERC1967 Proxy | Via [pdp repo](https://github.com/FilOzone/pdp) scripts |
 | FilecoinPayV1 | None (immutable) | Not expected to be redeployed |
