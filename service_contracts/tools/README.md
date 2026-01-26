@@ -14,6 +14,7 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 
 ### Upgrade Scripts
 
+For the [two step upgrade process](#contract-upgrade-process):
 - `announce-planned-upgrade.sh` - Announce a planned FWSS upgrade (two-step process)
 - `upgrade.sh` - Execute a previously announced FWSS upgrade
 - `announce-planned-upgrade-registry.sh` - Announce a planned ServiceProviderRegistry upgrade
