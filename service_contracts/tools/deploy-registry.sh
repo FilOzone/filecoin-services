@@ -21,7 +21,7 @@ for arg in "$@"; do
     -h|--help)
       echo "Usage: $(basename "$0") [--with-proxy]"
       echo ""
-      echo "Default: deploy implementation only (upgrade-first)."
+      echo "Default: deploy implementation only (upgrade)."
       echo "  --with-proxy  Also deploy a new proxy and initialize it."
       exit 0
       ;;
@@ -36,7 +36,7 @@ done
 if [ "$WITH_PROXY" = "true" ]; then
   echo "Mode: implementation + proxy deployment"
 else
-  echo "Mode: implementation-only deployment (upgrade-first)"
+  echo "Mode: implementation-only deployment with no new proxy and no proxy changes"
 fi
 
 if [ -z "$ETH_RPC_URL" ]; then
