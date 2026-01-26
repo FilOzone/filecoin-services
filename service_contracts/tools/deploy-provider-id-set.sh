@@ -35,8 +35,10 @@ echo "Deploying contracts from address $ADDR"
 BALANCE=$(cast balance "$ADDR")
 echo "Deployer balance: $BALANCE"
 
-NONCE="$(cast nonce "$ADDR")"
-echo "Starting nonce: $NONCE"
+if [ -z "$NONCE" ]; then
+    NONCE="$(cast nonce "$ADDR")"
+fi
+echo "Using nonce: $NONCE"
 
 # Deploy ProviderIdSet
 ENDORSEMENT_SET_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ProviderIdSet.sol:ProviderIdSet | grep "Deployed to" | awk '{print $3}')
