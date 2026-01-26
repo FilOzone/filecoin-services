@@ -217,10 +217,8 @@ deploy_implementation_if_needed() {
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
         
-        # Update deployments.json if this is an actual deployment
-        if [ "$DRY_RUN" != "true" ]; then
-            update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
-        fi
+        # Update deployments.json
+        update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -265,10 +263,7 @@ deploy_proxy_if_needed() {
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
         
-        # Update deployments.json if this is an actual deployment
-        if [ "$DRY_RUN" != "true" ]; then
-            update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
-        fi
+        update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
     fi
 
     NONCE=$(expr $NONCE + "1")
