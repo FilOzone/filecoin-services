@@ -64,7 +64,7 @@ Considerations:
    - FWSS implementation
    - ServiceProviderRegistry implementation
    - StateView contract (typically for breaking changes in the view)
-2. If the change is breaking or touches immutable dependencies, plan for longer notice and a migration guide.
+2. If the change is breaking (including breaking changes to dependencies) , plan for longer notice and a migration guide.
 
 ## Phase 1: Prepare
 
