@@ -496,7 +496,7 @@ else
 fi
 echo
 
-# Step 11: Deploy Endorsments ProviderIdSet
+# Step 11: Deploy Endorsements ProviderIdSet
 deploy_endorsements_if_needed
 
 if [ "$DRY_RUN" = "true" ]; then
