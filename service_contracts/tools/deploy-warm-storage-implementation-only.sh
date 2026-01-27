@@ -94,7 +94,7 @@ echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
-    FWSS_INIT_COUNTER=$(expr $(tools/get-initialized-counter $FWSS_PROXY_ADDRESS) + "1")
+    FWSS_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS) + "1")
 else
     FWSS_INIT_COUNTER=1
 fi
@@ -118,7 +118,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
   echo "🔍 Starting automatic contract verification..."
 
   pushd "$(dirname $0)/.." >/dev/null
-  source tools/verify-contracts.sh
+  source $SCRIPT_DIR/verify-contracts.sh
   verify_contracts_batch "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
   popd >/dev/null
 else

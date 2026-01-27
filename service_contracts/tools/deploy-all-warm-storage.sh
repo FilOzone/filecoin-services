@@ -424,7 +424,7 @@ deploy_implementation_if_needed \
 
 # Step 4: Deploy or use existing ServiceProviderRegistry implementation
 if [ -n "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
-    SPR_INIT_COUNTER=$(expr $(tools/get-initialized-counter $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS) + "1")
+    SPR_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS) + "1")
 else
     SPR_INIT_COUNTER=1
 fi
@@ -451,7 +451,7 @@ deploy_implementation_if_needed \
 # Step 7: Deploy or use existing FilecoinWarmStorageService implementation
 # Set LIBRARIES variable for the deployment helper (format: path:name:address)
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
-    FWSS_INIT_COUNTER=$(expr $(tools/get-initialized-counter $FWSS_PROXY_ADDRESS) + "1")
+    FWSS_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS) + "1")
 else
     FWSS_INIT_COUNTER=1
 fi
