@@ -77,7 +77,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         sessionKeyRegistry = new SessionKeyRegistry();
 
         // Deploy provider registry
-        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(2);
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         providerRegistry = ServiceProviderRegistry(address(registryProxy));
@@ -98,7 +98,8 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
             usdfcToken,
             filBeamBeneficiary,
             providerRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(

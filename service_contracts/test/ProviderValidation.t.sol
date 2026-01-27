@@ -60,7 +60,7 @@ contract ProviderValidationTest is MockFVMTest {
         pdpVerifier = new MockPDPVerifier();
 
         // Deploy ServiceProviderRegistry
-        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(2);
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
@@ -76,7 +76,8 @@ contract ProviderValidationTest is MockFVMTest {
             usdfc,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
         bytes memory warmStorageInitData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,

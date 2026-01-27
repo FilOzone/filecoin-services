@@ -136,7 +136,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         mockPDPVerifier = new MockPDPVerifier();
 
         // Deploy actual ServiceProviderRegistry
-        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(1);
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
@@ -216,7 +216,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
         bytes memory initializeData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,
@@ -300,7 +301,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         // Expected event parameters
@@ -332,7 +334,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         bytes memory initDataEmptyName = abi.encodeWithSelector(
@@ -354,7 +357,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         bytes memory initDataEmptyDesc = abi.encodeWithSelector(
@@ -376,7 +380,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         string memory longName = string(
@@ -408,7 +413,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         string memory longDesc = string(
@@ -441,7 +447,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         // Expected event parameters
@@ -478,7 +485,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
 
         FilecoinWarmStorageService.PlannedUpgrade memory plan;
@@ -5067,7 +5075,8 @@ contract SignatureCheckingService is FilecoinWarmStorageService {
             _usdfcTokenAddress,
             _filBeamAddressBeneficiary,
             _serviceProviderRegistry,
-            _sessionKeyRegistry
+            _sessionKeyRegistry,
+            4
         )
     {}
 
@@ -5120,7 +5129,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         mockPDPVerifier = new MockPDPVerifier();
 
         // Deploy actual ServiceProviderRegistry
-        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(2);
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
@@ -5227,7 +5236,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         mockPDPVerifier = new MockPDPVerifier();
 
         // Deploy actual ServiceProviderRegistry
-        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry();
+        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(2);
         bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
         MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
         serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
@@ -5243,7 +5252,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             mockUSDFC,
             filBeamBeneficiary,
             serviceProviderRegistry,
-            sessionKeyRegistry
+            sessionKeyRegistry,
+            4
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,

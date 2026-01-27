@@ -423,10 +423,16 @@ deploy_implementation_if_needed \
     "FilecoinPayV1"
 
 # Step 4: Deploy or use existing ServiceProviderRegistry implementation
+if [ -n "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+    SPR_INIT_COUNTER=$(expr $(tools/get-initialized-counter $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS) + "1")
+else
+    SPR_INIT_COUNTER=1
+fi
 deploy_implementation_if_needed \
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" \
     "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
-    "ServiceProviderRegistry implementation"
+    "ServiceProviderRegistry implementation" \
+    $SPR_INIT_COUNTER
 
 # Step 5: Deploy or use existing ServiceProviderRegistry proxy
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
@@ -444,6 +450,11 @@ deploy_implementation_if_needed \
 
 # Step 7: Deploy or use existing FilecoinWarmStorageService implementation
 # Set LIBRARIES variable for the deployment helper (format: path:name:address)
+if [ -n "$FWSS_PROXY_ADDRESS" ]; then
+    FWSS_INIT_COUNTER=$(expr $(tools/get-initialized-counter $FWSS_PROXY_ADDRESS) + "1")
+else
+    FWSS_INIT_COUNTER=1
+fi
 LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS"
 deploy_implementation_if_needed \
     "FWSS_IMPLEMENTATION_ADDRESS" \
@@ -454,7 +465,8 @@ deploy_implementation_if_needed \
     "$USDFC_TOKEN_ADDRESS" \
     "$FILBEAM_BENEFICIARY_ADDRESS" \
     "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
-    "$SESSION_KEY_REGISTRY_ADDRESS"
+    "$SESSION_KEY_REGISTRY_ADDRESS" \
+    "$FWSS_INIT_COUNTER"
 unset LIBRARIES
 
 # Step 8: Deploy or use existing FilecoinWarmStorageService proxy

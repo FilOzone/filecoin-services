@@ -26,7 +26,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         user2 = address(0x2);
 
         // Deploy implementation
-        implementation = new ServiceProviderRegistry();
+        implementation = new ServiceProviderRegistry(2);
 
         // Deploy proxy
         bytes memory initData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
@@ -60,7 +60,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(afterEpoch, uint96(0));
 
         // Deploy new implementation
-        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
 
         // Announce upgrade
         ServiceProviderRegistry.PlannedUpgrade memory plan;
@@ -116,7 +116,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
     }
 
     function testAnnouncePlannedUpgradeOnlyOwner() public {
-        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
         ServiceProviderRegistry.PlannedUpgrade memory plan;
         plan.nextImplementation = address(newImplementation);
         plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
@@ -137,7 +137,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
     }
 
     function testAnnouncePlannedUpgradeInvalidEpoch() public {
-        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
         ServiceProviderRegistry.PlannedUpgrade memory plan;
         plan.nextImplementation = address(newImplementation);
         plan.afterEpoch = uint96(vm.getBlockNumber()); // Must be in the future
@@ -333,7 +333,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     function testOnlyOwnerCanUpgrade() public {
         // Deploy new implementation
-        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
 
         // Non-owner cannot upgrade (will fail in _authorizeUpgrade due to onlyOwner)
         vm.prank(user1);

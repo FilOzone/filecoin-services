@@ -47,7 +47,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         vm.deal(user, 10 ether);
 
         // Deploy implementation
-        implementation = new ServiceProviderRegistry();
+        implementation = new ServiceProviderRegistry(2);
 
         // Deploy proxy
         bytes memory initData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);

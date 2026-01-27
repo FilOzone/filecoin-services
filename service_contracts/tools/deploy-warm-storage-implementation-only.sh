@@ -5,6 +5,9 @@
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source $SCRIPT_DIR/deployments.sh
+
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"
 
 if [ -z "$ETH_RPC_URL" ]; then
@@ -33,6 +36,9 @@ echo "Deploying from address: $ADDR"
 
 # Get current nonce
 NONCE="$(cast nonce "$ADDR")"
+
+load_deployment_addresses $CHAIN
+
 # Get required addresses from environment or use defaults
 if [ -z "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
   echo "Error: PDP_VERIFIER_PROXY_ADDRESS is not set"
@@ -87,7 +93,13 @@ echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
 
-FWSS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+if [ -n "$FWSS_PROXY_ADDRESS" ]; then
+    FWSS_INIT_COUNTER=$(expr $(tools/get-initialized-counter $FWSS_PROXY_ADDRESS) + "1")
+else
+    FWSS_INIT_COUNTER=1
+fi
+
+FWSS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$FWSS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
