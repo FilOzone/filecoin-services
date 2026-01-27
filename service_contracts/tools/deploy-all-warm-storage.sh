@@ -476,6 +476,7 @@ else
     echo "  🔧 Using external deployment script..."
     source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
     echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
+    NONCE=$(expr $NONCE + "1")
     
     # Update deployments.json
     if [ -n "$FWSS_VIEW_ADDRESS" ]; then
@@ -486,13 +487,13 @@ echo
 
 # Step 10: Set the view contract address on the main contract
 echo -e "${BOLD}Setting view contract address${RESET}"
-NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
     echo "  🔧 Setting view address on FilecoinWarmStorageService..."
     source "$SCRIPT_DIR/set-warm-storage-view.sh"
     echo "  ✅ View address set"
+    NONCE=$(expr $NONCE + "1")
 fi
 echo
 
