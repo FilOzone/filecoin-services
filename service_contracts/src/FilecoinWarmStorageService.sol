@@ -214,6 +214,9 @@ contract FilecoinWarmStorageService is
     bytes32 private constant WITH_CDN_STRING_STORAGE_REPR =
         0x7769746843444e0000000000000000000000000000000000000000000000000e;
 
+    // Upgrade sequence number, used by Initializable.reinitializer
+    uint64 private immutable REINITIALIZER_VERSION;
+
     // Pricing constants (CDN egress pricing is immutable)
     uint256 private immutable CDN_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of CDN egress
     uint256 private immutable CACHE_MISS_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of cache miss egress
@@ -327,9 +330,11 @@ contract FilecoinWarmStorageService is
         IERC20Metadata _usdfc,
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
-        SessionKeyRegistry _sessionKeyRegistry
+        SessionKeyRegistry _sessionKeyRegistry,
+        uint64 _reinitializer_version
     ) {
         _disableInitializers();
+        REINITIALIZER_VERSION = _reinitializer_version;
 
         require(_pdpVerifierAddress != address(0), Errors.ZeroAddress(Errors.AddressField.PDPVerifier));
         pdpVerifierAddress = _pdpVerifierAddress;
@@ -457,7 +462,7 @@ contract FilecoinWarmStorageService is
      * Only callable during proxy upgrade process
      * @param _viewContract Address of the view contract (optional, can be address(0))
      */
-    function migrate(address _viewContract) public onlyProxy onlyOwner reinitializer(4) {
+    function migrate(address _viewContract) public onlyProxy onlyOwner reinitializer(REINITIALIZER_VERSION) {
         // Set view contract if provided
         if (_viewContract != address(0)) {
             viewContractAddress = _viewContract;

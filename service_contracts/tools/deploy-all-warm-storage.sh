@@ -3,6 +3,7 @@
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
 # Assumption: KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
+# Assumption: Must configure SERVICE_NAME, SERVICE_DESCRIPTION
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
@@ -217,10 +218,8 @@ deploy_implementation_if_needed() {
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
         
-        # Update deployments.json if this is an actual deployment
-        if [ "$DRY_RUN" != "true" ]; then
-            update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
-        fi
+        # Update deployments.json
+        update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -265,10 +264,7 @@ deploy_proxy_if_needed() {
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
         
-        # Update deployments.json if this is an actual deployment
-        if [ "$DRY_RUN" != "true" ]; then
-            update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
-        fi
+        update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -299,6 +295,33 @@ deploy_session_key_registry_if_needed() {
         if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
             update_deployment_address "$CHAIN" "SESSION_KEY_REGISTRY_ADDRESS" "$SESSION_KEY_REGISTRY_ADDRESS"
         fi
+    fi
+    echo
+}
+
+# Deploy endorsements ProviderIdSet contract if needed (uses ./deploy-provider-id-set.sh)
+deploy_endorsements_if_needed() {
+    if [ -n "$ENDORSEMENT_SET_ADDRESS" ]; then
+        echo -e "${BOLD}Endorsements ProviderIdSet${RESET}"
+        echo "  ✅ Using existing address: $ENDORSEMENT_SET_ADDRESS"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD}Deploying Endorsements ProviderIdSet${RESET}"
+
+    if [ "$DRY_RUN" = "true" ]; then
+        ENDORSEMENT_SET_ADDRESS="0x0123456789012345678901234567890123456789"
+        echo "  🧪 Using dummy address: $ENDORSEMENT_SET_ADDRESS"
+    else
+        echo "  🔧 Using external deployment script..."
+        AUTO_VERIFY_BEFORE=${AUTO_VERIFY:-true}
+        AUTO_VERIFY=false # override so as to set last
+        # This also updates deployments.json
+        source "$SCRIPT_DIR/deploy-provider-id-set.sh"
+        AUTO_VERIFY=$AUTO_VERIFY_BEFORE
+        NONCE=$(expr $NONCE + "1")
+        echo "  ✅ Deployed at: $ENDORSEMENT_SET_ADDRESS"
     fi
     echo
 }
@@ -400,10 +423,16 @@ deploy_implementation_if_needed \
     "FilecoinPayV1"
 
 # Step 4: Deploy or use existing ServiceProviderRegistry implementation
+if [ -n "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+    SPR_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS) + "1")
+else
+    SPR_INIT_COUNTER=1
+fi
 deploy_implementation_if_needed \
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" \
     "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
-    "ServiceProviderRegistry implementation"
+    "ServiceProviderRegistry implementation" \
+    $SPR_INIT_COUNTER
 
 # Step 5: Deploy or use existing ServiceProviderRegistry proxy
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
@@ -421,6 +450,11 @@ deploy_implementation_if_needed \
 
 # Step 7: Deploy or use existing FilecoinWarmStorageService implementation
 # Set LIBRARIES variable for the deployment helper (format: path:name:address)
+if [ -n "$FWSS_PROXY_ADDRESS" ]; then
+    FWSS_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS) + "1")
+else
+    FWSS_INIT_COUNTER=1
+fi
 LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS"
 deploy_implementation_if_needed \
     "FWSS_IMPLEMENTATION_ADDRESS" \
@@ -431,7 +465,8 @@ deploy_implementation_if_needed \
     "$USDFC_TOKEN_ADDRESS" \
     "$FILBEAM_BENEFICIARY_ADDRESS" \
     "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
-    "$SESSION_KEY_REGISTRY_ADDRESS"
+    "$SESSION_KEY_REGISTRY_ADDRESS" \
+    "$FWSS_INIT_COUNTER"
 unset LIBRARIES
 
 # Step 8: Deploy or use existing FilecoinWarmStorageService proxy
@@ -453,6 +488,7 @@ else
     echo "  🔧 Using external deployment script..."
     source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
     echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
+    NONCE=$(expr $NONCE + "1")
     
     # Update deployments.json
     if [ -n "$FWSS_VIEW_ADDRESS" ]; then
@@ -463,15 +499,18 @@ echo
 
 # Step 10: Set the view contract address on the main contract
 echo -e "${BOLD}Setting view contract address${RESET}"
-NONCE=$(expr $NONCE + "1")
 if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
     echo "  🔧 Setting view address on FilecoinWarmStorageService..."
     source "$SCRIPT_DIR/set-warm-storage-view.sh"
     echo "  ✅ View address set"
+    NONCE=$(expr $NONCE + "1")
 fi
 echo
+
+# Step 11: Deploy Endorsements ProviderIdSet
+deploy_endorsements_if_needed
 
 if [ "$DRY_RUN" = "true" ]; then
     echo
@@ -496,6 +535,7 @@ echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $FWSS_PROXY_ADDRESS"
 echo "FilecoinWarmStorageServiceStateView: $FWSS_VIEW_ADDRESS"
+echo "Endorsements: $ENDORSEMENT_SET_ADDRESS"
 echo
 echo "Network Configuration ($NETWORK_NAME):"
 echo "Challenge finality: $CHALLENGE_FINALITY epochs"
@@ -518,6 +558,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
     verify_contracts_batch \
         "$PDP_VERIFIER_IMPLEMENTATION_ADDRESS,lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
         "$PDP_VERIFIER_PROXY_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
+        "$ENDORSEMENT_SET_ADDRESS,src/ProviderIdSet.sol:ProviderIdSet" \
         "$FILECOIN_PAY_ADDRESS,lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
         "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \

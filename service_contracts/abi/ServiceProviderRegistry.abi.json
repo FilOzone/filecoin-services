@@ -1,7 +1,13 @@
 [
   {
     "type": "constructor",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "_reinitializer_version",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {

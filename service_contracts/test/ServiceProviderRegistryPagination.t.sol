@@ -31,7 +31,7 @@ contract ServiceProviderRegistryPaginationTest is MockFVMTest {
         vm.startPrank(owner);
 
         // Deploy implementation
-        ServiceProviderRegistry implementation = new ServiceProviderRegistry();
+        ServiceProviderRegistry implementation = new ServiceProviderRegistry(2);
 
         // Deploy proxy
         bytes memory initData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);

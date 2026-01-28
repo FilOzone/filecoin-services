@@ -136,9 +136,10 @@ fi
 echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
+FWSS_INIT_COUNTER=1
 SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE \
   --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
-  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract FilecoinWarmStorageService contract address"
   exit 1

@@ -69,6 +69,9 @@ contract ServiceProviderRegistry is
     /// @notice Registration fee in attoFIL (5 FIL = 5 * 10^18 attoFIL)
     uint256 public constant REGISTRATION_FEE = 5e18;
 
+    // Upgrade sequence number, used by Initializable.reinitializer
+    uint64 private immutable REINITIALIZER_VERSION;
+
     /// @notice Emitted when a new provider registers
     event ProviderRegistered(uint256 indexed providerId, address indexed serviceProvider, address indexed payee);
 
@@ -136,7 +139,8 @@ contract ServiceProviderRegistry is
     /// @custom:oz-upgrades-unsafe-allow constructor
     /// @notice Constructor that disables initializers for the implementation contract
     /// @dev This ensures the implementation contract cannot be initialized directly
-    constructor() {
+    constructor(uint64 _reinitializer_version) {
+        REINITIALIZER_VERSION = _reinitializer_version;
         _disableInitializers();
     }
 
@@ -789,7 +793,7 @@ contract ServiceProviderRegistry is
     /// @dev This function should be called during upgrades to emit version tracking events
     /// Only callable during proxy upgrade process
     /// @param newVersion The version string for the new implementation
-    function migrate(string memory newVersion) public onlyProxy onlyOwner reinitializer(2) {
+    function migrate(string memory newVersion) public onlyProxy onlyOwner reinitializer(REINITIALIZER_VERSION) {
         emit ContractUpgraded(newVersion, ERC1967Utils.getImplementation());
     }
 }
