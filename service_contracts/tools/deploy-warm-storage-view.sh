@@ -24,6 +24,11 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
+# Load deployments.json helpers and populate defaults if available
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
+load_deployment_addresses "$CHAIN"
+
 if [ -z "$FWSS_PROXY_ADDRESS" ]; then
   echo "Error: FWSS_PROXY_ADDRESS is not set"
   exit 1
@@ -46,6 +51,10 @@ fi
 export FWSS_VIEW_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --constructor-args $FWSS_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
 
 echo FilecoinWarmStorageServiceStateView deployed at $FWSS_VIEW_ADDRESS
+
+# Persist deployment address + metadata
+update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
+update_deployment_metadata "$CHAIN"
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then

@@ -24,6 +24,10 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
+# Load deployments.json helpers and populate defaults if available
+source "$(dirname "$0")/deployments.sh"
+load_deployment_addresses "$CHAIN"
+
 
 if [ -z "$ETH_KEYSTORE" ]; then
   echo "Error: ETH_KEYSTORE is not set"
@@ -65,8 +69,34 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
-USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address on calibnet
+# Set network-specific USDFC token address based on chain ID
+case "$CHAIN" in
+  "31415926")
+    # Devnet requires explicit USDFC_TOKEN_ADDRESS (mock token)
+    if [ -z "$USDFC_TOKEN_ADDRESS" ]; then
+      echo "Error: USDFC_TOKEN_ADDRESS is not set (required for devnet)"
+      echo "Please set USDFC_TOKEN_ADDRESS to your deployed MockUSDFC address"
+      exit 1
+    fi
+    ;;
+  "314159")
+    USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0}" # calibnet
+    ;;
+  "314")
+    USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0x80B98d3aa09ffff255c3ba4A241111Ff1262F045}" # mainnet
+    ;;
+  *)
+    echo "Error: Unsupported network"
+    echo "  Supported networks:"
+    echo "    31415926 - Filecoin local development network"
+    echo "    314159   - Filecoin Calibration testnet"
+    echo "    314      - Filecoin mainnet"
+    echo "  Detected chain ID: $CHAIN"
+    exit 1
+    ;;
+esac
 
+SIGNATURE_LIB_DEPLOYED=false
 if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
   # Deploy SignatureVerificationLib first so we can link it into the implementation
   echo "Deploying SignatureVerificationLib..."
@@ -77,6 +107,7 @@ if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
     exit 1
   fi
   echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+  SIGNATURE_LIB_DEPLOYED=true
   # Increment nonce for the next deployment
   NONCE=$((NONCE + 1))
 else
@@ -111,6 +142,13 @@ echo "# DEPLOYMENT COMPLETE"
 echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 echo "FilecoinWarmStorageService Implementation deployed at: $FWSS_IMPLEMENTATION_ADDRESS"
 echo ""
+
+# Persist deployment addresses + metadata
+update_deployment_address "$CHAIN" "FWSS_IMPLEMENTATION_ADDRESS" "$FWSS_IMPLEMENTATION_ADDRESS"
+if [ "$SIGNATURE_LIB_DEPLOYED" = "true" ]; then
+  update_deployment_address "$CHAIN" "SIGNATURE_VERIFICATION_LIB_ADDRESS" "$SIGNATURE_VERIFICATION_LIB_ADDRESS"
+fi
+update_deployment_metadata "$CHAIN"
 
 # Automatic contract verification
 if [ "${AUTO_VERIFY:-true}" = "true" ]; then

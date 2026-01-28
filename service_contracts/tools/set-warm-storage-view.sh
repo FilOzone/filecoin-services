@@ -25,6 +25,11 @@ if [ -z "$CHAIN" ]; then
   fi
 fi
 
+# Load deployments.json helpers and populate defaults if available
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
+load_deployment_addresses "$CHAIN"
+
 if [ -z "$FWSS_PROXY_ADDRESS" ]; then
   echo "Error: FWSS_PROXY_ADDRESS is not set"
   exit 1
@@ -55,6 +60,8 @@ TX_OUTPUT=$(cast send --password "$PASSWORD" --nonce $NONCE $FWSS_PROXY_ADDRESS 
 
 if [ $? -eq 0 ]; then
     echo "View contract address set successfully"
+    update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
+    update_deployment_metadata "$CHAIN"
 else
     echo "Error: Failed to set view contract address"
     echo "$TX_OUTPUT"
