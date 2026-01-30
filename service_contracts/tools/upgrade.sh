@@ -87,7 +87,7 @@ if [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
   MIGRATE_DATA=$(cast calldata "migrate(address)" "$NEW_FWSS_VIEW_ADDRESS")
 else
   echo "Keeping previous view contract address ($FWSS_VIEW_ADDRESS)"
-  MIGRATE_DATA="0x"
+  MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
 fi
 
 # Call upgradeToAndCall on the proxy with migrate function
