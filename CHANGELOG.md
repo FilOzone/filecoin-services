@@ -18,8 +18,6 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
   - While the contract is generic and can store any set of provider IDs, one specific instance has been designated as the canonical "endorsed set of provider IDs" for FOC, supporting the GA durability requirements by identifying storage providers that meet quality and reliability standards
 - Two-step upgrade announcement flow for ServiceProviderRegistry ([#356](https://github.com/FilOzone/filecoin-services/pull/356))
 - Automatic deployment address management via `deployments.json` ([#364](https://github.com/FilOzone/filecoin-services/pull/364))
-- FWSS upgrade process documentation ([UPGRADE-PROCESS.md](./service_contracts/tools/UPGRADE-PROCESS.md))
-- GitHub Action for creating upgrade announcements ([upgrade-announcement.yml](./.github/workflows/upgrade-announcement.yml))
 - Devnet deployment support ([#373](https://github.com/FilOzone/filecoin-services/pull/373))
 - CDN validation in `validatePayerOperatorApprovalAndFunds()` ([#342](https://github.com/FilOzone/filecoin-services/pull/342))
 
