@@ -72,8 +72,9 @@ Considerations:
    - Document all changes since last release (https://github.com/FilOzone/filecoin-services/releases)
    - Mark breaking changes clearly
    - Include migration notes if needed
-2. **Create PR** with changelog updates
-3. **Update the version** string in the contracts if applicable.
+2. **Update the version** string in the contracts if applicable.
+3. **Create an "upgrade PR"** with your changelog updates.
+   - Name the pull request clearly, e.g. `feat: FWSS v1.2.0 upgrade (mainnet)` or `feat: ServiceProviderRegistry patch`.
 4. **Create tracking issue** using the [Create Upgrade Announcement](https://github.com/FilOzone/filecoin-services/actions/workflows/upgrade-announcement.yml) GitHub Action
 
 ## Phase 2: Calibnet Rehearsal
@@ -89,15 +90,8 @@ FWSS implementation:
 
 Other contracts you might deploy during a upgrade can be:
 
-ServiceProviderRegistry implementation (if needed):
-```bash
-./deploy-registry-calibnet.sh
-```
-
-FilecoinWarmStorageStateView update (if needed):
-```bash
-./deploy-warm-storage-view.sh
-```
+- ServiceProviderRegistry: `./deploy-registry.sh`
+- FilecoinWarmStorageStateView: `./deploy-warm-storage-view.sh` 
 
 `deployments.json` is updated automatically by the scripts. Commit the updated file in the upgrade PR and document the new addresses in PR comments for traceability.
 
@@ -151,7 +145,7 @@ export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
 
    ./announce-planned-upgrade.sh
    ```
-4. Notify stakeholders (see template below). Use the GitHub Action to create the announcement issue.
+4. Notify stakeholders per [Stakeholder Communication](#stakeholder-communication). 
 
 ## Phase 5: Execute the Mainnet Upgrade
 
