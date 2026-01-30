@@ -15,7 +15,7 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 - `ProviderIdSet` contract for efficient provider ID management ([#386](https://github.com/FilOzone/filecoin-services/pull/386))
   - Space-efficient arrayset implementation for sparse provider IDs
   - Interface: `getProviderIds()`, `containsProviderId()`, `addProviderId()`, `removeProviderId()`
-  - While the contract is generic and can store any set of provider IDs, one specific instance has been designated as the canonical "endorsed set of provider IDs" for FOC, supporting the GA durability requirements by identifying storage providers that meet quality and reliability standards
+  - While the contract is generic and can store any set of provider IDs, one specific instance has been designated as the canonical "endorsed set of provider IDs" for FOC, supporting the GA durability requirements by identifying storage providers that meet quality and reliability standards ([#357](https://github.com/FilOzone/filecoin-services/issues/357))
 - Two-step upgrade announcement flow for ServiceProviderRegistry ([#356](https://github.com/FilOzone/filecoin-services/pull/356))
 - Automatic deployment address management via `deployments.json` ([#364](https://github.com/FilOzone/filecoin-services/pull/364))
 - Devnet deployment support ([#373](https://github.com/FilOzone/filecoin-services/pull/373))
