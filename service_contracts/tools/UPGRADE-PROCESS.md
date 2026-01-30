@@ -171,7 +171,7 @@ export NEW_WARM_STORAGE_VIEW_ADDRESS="0x..."  # Optional
    git push origin v1.X.0
    ```
 5. **Create GitHub Release** with the changelog, ensure to point to the `deployments.json` for current addresses.
-6. **Notify stakeholders** that the upgrade is complete.
+6. **Notify stakeholders** that the upgrade is complete by updating the release issue and then resolve it.
 
 ## Stakeholder Communication
 
