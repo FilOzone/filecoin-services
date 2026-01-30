@@ -3,6 +3,56 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.1.0] - 2026-01-30 - FWSS Upgrade
+
+This release includes bug fixes, new features, and operational improvements for the Filecoin Warm Storage Service.
+
+### Deployment Addresses
+
+See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/tree/v1.1.0/service_contracts/service_contracts/deployments.json) for v1.1.0 Mainnet (chain 314) and Calibnet (chain 314159) contract addresses.
+
+### Added
+- `ProviderIdSet` contract for efficient provider ID management ([#386](https://github.com/FilOzone/filecoin-services/pull/386))
+  - Space-efficient arrayset implementation for sparse provider IDs
+  - Interface: `getProviderIds()`, `containsProviderId()`, `addProviderId()`, `removeProviderId()`
+  - While the contract is generic and can store any set of provider IDs, one specific instance has been designated as the canonical "endorsed set of provider IDs" for FOC, supporting the GA durability requirements by identifying storage providers that meet quality and reliability standards
+- Two-step upgrade announcement flow for ServiceProviderRegistry ([#356](https://github.com/FilOzone/filecoin-services/pull/356))
+- Automatic deployment address management via `deployments.json` ([#364](https://github.com/FilOzone/filecoin-services/pull/364))
+- FWSS upgrade process documentation ([UPGRADE-PROCESS.md](./service_contracts/tools/UPGRADE-PROCESS.md))
+- GitHub Action for creating upgrade announcements ([upgrade-announcement.yml](./.github/workflows/upgrade-announcement.yml))
+- Devnet deployment support ([#373](https://github.com/FilOzone/filecoin-services/pull/373))
+- CDN validation in `validatePayerOperatorApprovalAndFunds()` ([#342](https://github.com/FilOzone/filecoin-services/pull/342))
+
+### Changed
+- **BREAKING**: Renamed deployment keys in `deployments.json` for consistency ([#388](https://github.com/FilOzone/filecoin-services/pull/388))
+  - `PAYMENTS_CONTRACT_ADDRESS` → `FILECOIN_PAY_ADDRESS`
+  - `FWS_IMPLEMENTATION_ADDRESS` → `FWSS_IMPLEMENTATION_ADDRESS`
+  - `WARM_STORAGE_PROXY_ADDRESS` → `FWSS_PROXY_ADDRESS`
+  - `WARM_STORAGE_VIEW_ADDRESS` → `FWSS_VIEW_ADDRESS`
+  - Added `SIGNATURE_VERIFICATION_LIB_ADDRESS`
+- **BREAKING**: Rail settlement required before dataset deletion ([#377](https://github.com/FilOzone/filecoin-services/pull/377))
+  - `dataSetDeleted()` now blocked until `settledUpTo >= endEpoch`
+  - Prevents SPs from deleting datasets before clients can settle
+  - Added `RailNotFullySettled` error
+- **BREAKING**: Removed redundant PDP config getters from view contract ([#372](https://github.com/FilOzone/filecoin-services/pull/372))
+  - Removed: `challengeWindow()`, `getChallengesPerProof()`, `getMaxProvingPeriod()`
+  - Use `getPDPConfig()` instead (per `IPDPProvingSchedule` interface)
+- Rail rate automatically modified when `piecesAdded()` is called ([#365](https://github.com/FilOzone/filecoin-services/pull/365))
+- Deferred rate recalculation to piece operations for efficiency ([#381](https://github.com/FilOzone/filecoin-services/pull/381))
+- Replaced Filfox with Blockscout as default block explorer ([#349](https://github.com/FilOzone/filecoin-services/pull/349))
+
+### Fixed
+- Piece metadata now properly cleaned up on scheduled removals ([#343](https://github.com/FilOzone/filecoin-services/pull/343))
+- Ignore errors when CDN rails already terminated via FilecoinPay ([#385](https://github.com/FilOzone/filecoin-services/pull/385))
+- Deploy warm storage only script fix ([#348](https://github.com/FilOzone/filecoin-services/pull/348))
+
+### Documentation
+- FWSS upgrade process documentation ([UPGRADE-PROCESS.md](./service_contracts/tools/UPGRADE-PROCESS.md))
+- Pricing model specification document ([#366](https://github.com/FilOzone/filecoin-services/pull/366))
+- Added precision loss documentation for minimum rate calculation ([#378](https://github.com/FilOzone/filecoin-services/pull/378))
+- Clarified rate change semantics after termination
+- Added v1.0.0 release links to README ([#344](https://github.com/FilOzone/filecoin-services/pull/344))
+
 ## [1.0.0] - 2025-10-27 - FWSS GA Release
 
 This is the General Availability (GA) release of the Filecoin Warm Storage Service (FWSS) contracts.
@@ -311,8 +361,9 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/filozone/filecoin-services/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/filozone/filecoin-services/compare/v0.3.0...v1.0.0
-[0.3.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.3.0
-[0.2.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.2.0
-[0.1.0]: https://github.com/filozone/filecoin-services/releases/tag/v0.1.0
+[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/FilOzone/filecoin-services/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/FilOzone/filecoin-services/compare/v0.3.0...v1.0.0
+[0.3.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.3.0
+[0.2.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.2.0
+[0.1.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.1.0
