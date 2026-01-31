@@ -403,10 +403,16 @@ echo
 deploy_session_key_registry_if_needed
 
 # Step 1: Deploy or use existing PDPVerifier implementation
+if [ -n "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
+    PDP_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $PDP_VERIFIER_PROXY_ADDRESS) + "1")
+else
+    PDP_INIT_COUNTER=1
+fi
 deploy_implementation_if_needed \
     "PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
     "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
-    "PDPVerifier implementation"
+    "PDPVerifier implementation" \
+    $PDP_INIT_COUNTER
 
 # Step 2: Deploy or use existing PDPVerifier proxy
 INIT_DATA=$(cast calldata "initialize(uint256)" $CHALLENGE_FINALITY)
