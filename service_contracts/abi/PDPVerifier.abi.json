@@ -1,7 +1,13 @@
 [
   {
     "type": "constructor",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "_initializerVersion",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
@@ -122,6 +128,31 @@
       }
     ],
     "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "announcePlannedUpgrade",
+    "inputs": [
+      {
+        "name": "plannedUpgrade",
+        "type": "tuple",
+        "internalType": "struct PDPVerifier.PlannedUpgrade",
+        "components": [
+          {
+            "name": "nextImplementation",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "afterEpoch",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -669,6 +700,24 @@
   },
   {
     "type": "function",
+    "name": "nextUpgrade",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "afterEpoch",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -1150,6 +1199,31 @@
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "UpgradeAnnounced",
+    "inputs": [
+      {
+        "name": "plannedUpgrade",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct PDPVerifier.PlannedUpgrade",
+        "components": [
+          {
+            "name": "nextImplementation",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "afterEpoch",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
       }
     ],
     "anonymous": false
