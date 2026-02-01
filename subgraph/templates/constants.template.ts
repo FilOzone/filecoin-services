@@ -1,5 +1,5 @@
 // This file is auto-generated. Do not edit manually.
-// Generated from config/network.json for network: {{network}}
+// Generated from service_contracts/deployments.json for network: {{network}}
 // Last generated: {{timestamp}}
 
 import { Address, Bytes } from "@graphprotocol/graph-ts";

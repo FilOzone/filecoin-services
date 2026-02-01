@@ -34,6 +34,7 @@ if (shouldGenerateYaml) {
   try {
     fs.writeFileSync(outputPath, yamlContent);
     console.log(`✅ Generated subgraph.yaml for ${network} network at: ${outputPath}`);
+    console.log(`   Source: service_contracts/deployments.json`);
   } catch (error) {
     console.error(`Error: Failed to write subgraph.yaml to: ${outputPath}`);
     console.error(`Write Error: ${error.message}`);

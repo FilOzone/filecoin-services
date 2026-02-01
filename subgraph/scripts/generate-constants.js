@@ -18,7 +18,7 @@ const requiredContracts = ["PDPVerifier", "ServiceProviderRegistry", "FilecoinWa
 for (const contract of requiredContracts) {
   if (!selectedConfig[contract] || !selectedConfig[contract].address) {
     console.error(`Error: Missing or invalid '${contract}' configuration for network '${network}'`);
-    console.error(`Each contract must have an 'address' field in config/network.json`);
+    console.error(`Contract must have an 'address' field in service_contracts/deployments.json`);
     process.exit(1);
   }
 }
@@ -50,6 +50,7 @@ try {
 
   fs.writeFileSync(outputPath, constantsContent);
   console.log(`✅ Generated constants for ${network} network at: ${outputPath}`);
+  console.log(`   Source: service_contracts/deployments.json`);
 } catch (error) {
   console.error(`Error: Failed to write constants file to: ${outputPath}`);
   console.error(`Write Error: ${error.message}`);
