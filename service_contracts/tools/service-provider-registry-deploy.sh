@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy-registry deploys the Service Provider Registry contract to a target network
+# service-provider-registry-deploy.sh deploys the Service Provider Registry contract to a target network
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
 # Assumption: forge, cast, jq are in the PATH
@@ -190,7 +190,7 @@ if [ "$WITH_PROXY" = "true" ]; then
   echo "5. The registry is ready for provider registrations"
 else
   echo "1. Save the implementation address for upgrade announcement"
-  echo "2. Proceed with announce-planned-upgrade-registry.sh"
+  echo "2. Proceed with service-provider-registry-announce-upgrade.sh"
 fi
 echo ""
 if [ "$WITH_PROXY" = "true" ]; then

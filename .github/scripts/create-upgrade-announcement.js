@@ -214,11 +214,11 @@ function generateBody(timeEstimate) {
   const deployChecklist = contracts
     .map((c) => {
       if (c === "FilecoinWarmStorageService") {
-        return "- [ ] Deploy FWSS implementation: `./deploy-warm-storage-implementation-only.sh`";
+        return "- [ ] Deploy FWSS implementation: `./warm-storage-deploy-implementation.sh`";
       } else if (c === "ServiceProviderRegistry") {
-        return "- [ ] Deploy Registry implementation: `./deploy-registry.sh`";
+        return "- [ ] Deploy Registry implementation: `./service-provider-registry-deploy.sh`";
       } else if (c === "FilecoinWarmStorageServiceStateView") {
-        return "- [ ] Deploy StateView: `./deploy-warm-storage-view.sh`";
+        return "- [ ] Deploy StateView: `./warm-storage-deploy-view.sh`";
       }
       return `- [ ] Deploy ${c}`;
     })
@@ -227,9 +227,9 @@ function generateBody(timeEstimate) {
   const announceChecklist = contracts
     .map((c) => {
       if (c === "FilecoinWarmStorageService") {
-        return "- [ ] Announce FWSS upgrade: `./announce-planned-upgrade.sh`";
+        return "- [ ] Announce FWSS upgrade: `./warm-storage-announce-upgrade.sh`";
       } else if (c === "ServiceProviderRegistry") {
-        return "- [ ] Announce Registry upgrade: `./announce-planned-upgrade-registry.sh`";
+        return "- [ ] Announce Registry upgrade: `./service-provider-registry-announce-upgrade.sh`";
       }
       return null;
     })
@@ -239,9 +239,9 @@ function generateBody(timeEstimate) {
   const executeChecklist = contracts
     .map((c) => {
       if (c === "FilecoinWarmStorageService") {
-        return "- [ ] Execute FWSS upgrade: `./upgrade.sh`";
+        return "- [ ] Execute FWSS upgrade: `./warm-storage-execute-upgrade.sh`";
       } else if (c === "ServiceProviderRegistry") {
-        return "- [ ] Execute Registry upgrade: `./upgrade-registry.sh`";
+        return "- [ ] Execute Registry upgrade: `./service-provider-registry-execute-upgrade.sh`";
       }
       return null;
     })

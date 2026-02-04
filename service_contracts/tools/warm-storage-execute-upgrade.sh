@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# upgrade.sh: Completes a pending upgrade
+# warm-storage-execute-upgrade.sh: Completes a pending upgrade
 # Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
 # Optional args: NEW_FWSS_VIEW_ADDRESS
 # Calculated if unset: CHAIN, FWSS_VIEW_ADDRESS

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# announce-planned-upgrade.sh: Completes a pending upgrade
+# warm-storage-announce-upgrade.sh: Completes a pending upgrade
 # Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_FWSS_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
 
 if [ -z "$ETH_RPC_URL" ]; then
