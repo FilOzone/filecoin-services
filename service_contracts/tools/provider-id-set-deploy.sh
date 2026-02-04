@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy-provider-id-set deploys a ProviderIdSet contract
+# provider-id-set-deploy.sh deploys a ProviderIdSet contract
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out

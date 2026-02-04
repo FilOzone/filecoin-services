@@ -1,5 +1,5 @@
 #!/bin/bash
-# deploy-warm-storage-implementation-only.sh - Deploy only FilecoinWarmStorageService implementation (no proxy)
+# warm-storage-deploy-implementation.sh - Deploy only FilecoinWarmStorageService implementation (no proxy)
 # This allows updating an existing proxy to point to the new implementation
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set
 # Assumption: forge, cast are in the PATH

@@ -68,7 +68,7 @@ Always test the upgrade on Calibnet before mainnet.
 cd service_contracts/tools
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 
-./deploy-warm-storage-implementation-only.sh
+./warm-storage-deploy-implementation.sh
 ```
 
 The script updates `deployments.json` automatically. Commit the changes.
@@ -80,7 +80,7 @@ export WARM_STORAGE_PROXY_ADDRESS="0x..."
 export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
 export AFTER_EPOCH="123456"
 
-./announce-planned-upgrade.sh
+./warm-storage-announce-upgrade.sh
 ```
 
 ### Execute Upgrade
@@ -91,7 +91,7 @@ After `AFTER_EPOCH` passes:
 export WARM_STORAGE_PROXY_ADDRESS="0x..."
 export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
 
-./upgrade.sh
+./warm-storage-execute-upgrade.sh
 ```
 
 Verify the upgrade on [Calibnet Blockscout](https://calibration.filfox.info/).
@@ -102,7 +102,7 @@ Verify the upgrade on [Calibnet Blockscout](https://calibration.filfox.info/).
 cd service_contracts/tools
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 
-./deploy-warm-storage-implementation-only.sh
+./warm-storage-deploy-implementation.sh
 ```
 
 Commit the updated `deployments.json`.
@@ -115,7 +115,7 @@ export WARM_STORAGE_PROXY_ADDRESS="0x..."
 export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
 export AFTER_EPOCH="123456"
 
-./announce-planned-upgrade.sh
+./warm-storage-announce-upgrade.sh
 ```
 
 Notify stakeholders (see [Stakeholder Communication](#stakeholder-communication)).
@@ -129,7 +129,7 @@ export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export WARM_STORAGE_PROXY_ADDRESS="0x..."
 export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
 
-./upgrade.sh
+./warm-storage-execute-upgrade.sh
 ```
 
 ## Phase 6: Verify and Release
@@ -178,7 +178,7 @@ The registry uses the same two-step upgrade mechanism as FWSS. Only upgrade it w
 
 **Deploy new implementation:**
 ```bash
-./deploy-registry.sh
+./service-provider-registry-deploy.sh
 ```
 
 **Announce upgrade:**
@@ -187,7 +187,7 @@ export REGISTRY_PROXY_ADDRESS="0x..."
 export NEW_REGISTRY_IMPLEMENTATION_ADDRESS="0x..."
 export AFTER_EPOCH="123456"
 
-./announce-planned-upgrade-registry.sh
+./service-provider-registry-announce-upgrade.sh
 ```
 
 **Execute upgrade (after AFTER_EPOCH):**
@@ -195,7 +195,7 @@ export AFTER_EPOCH="123456"
 export SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x..."
 export NEW_REGISTRY_IMPLEMENTATION_ADDRESS="0x..."
 
-./upgrade-registry.sh
+./service-provider-registry-execute-upgrade.sh
 ```
 
 **Environment variables:**
@@ -215,13 +215,13 @@ StateView is a helper contract (not upgradeable). Redeploy it when:
 
 **Deploy new StateView:**
 ```bash
-./deploy-warm-storage-view.sh
+./warm-storage-deploy-view.sh
 ```
 
 **Update FWSS to use new StateView (during upgrade):**
 ```bash
 export NEW_WARM_STORAGE_VIEW_ADDRESS="0x..."
-./upgrade.sh
+./warm-storage-execute-upgrade.sh
 ```
 
 ### Immutable Dependencies

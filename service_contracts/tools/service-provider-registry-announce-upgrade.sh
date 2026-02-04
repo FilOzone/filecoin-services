@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# announce-planned-upgrade-registry.sh: Announces a planned upgrade for ServiceProviderRegistry
+# service-provider-registry-announce-upgrade.sh: Announces a planned upgrade for ServiceProviderRegistry
 # Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
 
 if [ -z "$ETH_RPC_URL" ]; then
