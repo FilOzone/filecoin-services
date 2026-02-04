@@ -1,4 +1,4 @@
-name: Create Upgrade Announcement
+name: Create Release Issue
 
 on:
   workflow_dispatch:
@@ -17,18 +17,13 @@ on:
         options:
           - Routine
           - Breaking Change
-      upgrade_fwss:
-        description: 'Upgrading FilecoinWarmStorageService?'
-        required: false
-        type: boolean
-        default: true
       upgrade_registry:
-        description: 'Upgrading ServiceProviderRegistry?'
+        description: '(Rare) Also upgrading ServiceProviderRegistry?'
         required: false
         type: boolean
         default: false
       upgrade_state_view:
-        description: 'Upgrading FilecoinWarmStorageServiceStateView?'
+        description: '(Rare) Also redeploying FilecoinWarmStorageServiceStateView?'
         required: false
         type: boolean
         default: false
@@ -78,7 +73,6 @@ jobs:
         env:
           NETWORK: ${{ inputs.network }}
           UPGRADE_TYPE: ${{ inputs.upgrade_type }}
-          UPGRADE_FWSS: ${{ inputs.upgrade_fwss }}
           UPGRADE_REGISTRY: ${{ inputs.upgrade_registry }}
           UPGRADE_STATE_VIEW: ${{ inputs.upgrade_state_view }}
           AFTER_EPOCH: ${{ inputs.after_epoch }}
@@ -97,7 +91,7 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Upgrade Announcement ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Release Issue ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Network**: ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
           echo "**After Epoch**: ${{ inputs.after_epoch }}" >> $GITHUB_STEP_SUMMARY

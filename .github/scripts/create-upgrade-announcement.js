@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Create FWSS Contract Upgrade Announcement Issue
+ * Create FWSS Contract Upgrade Release Issue
+ *
+ * Generates a release issue that combines user-facing upgrade information
+ * with a release engineer checklist (similar to Lotus release issues).
  *
  * Usage:
  *   node create-upgrade-announcement.js [options]
@@ -16,9 +19,8 @@
  *   CHANGELOG_PR         PR number with changelog updates
  *   CHANGES_SUMMARY      Summary of changes (use | for multiple lines)
  *   ACTION_REQUIRED      Action required for integrators (default: None)
- *   UPGRADE_FWSS         Upgrading FilecoinWarmStorageService? (true/false)
- *   UPGRADE_REGISTRY     Upgrading ServiceProviderRegistry? (true/false)
- *   UPGRADE_STATE_VIEW   Upgrading FilecoinWarmStorageServiceStateView? (true/false)
+ *   UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, rare)
+ *   UPGRADE_STATE_VIEW   Also redeploying FilecoinWarmStorageServiceStateView? (true/false, rare)
  *   RELEASE_TAG          Release tag if already created (optional)
  *
  * GitHub-specific environment variables (required when not using --dry-run):
@@ -35,7 +37,7 @@ const showHelp = args.includes("--help") || args.includes("-h");
 
 if (showHelp) {
   console.log(`
-Create FWSS Contract Upgrade Announcement Issue
+Create FWSS Contract Upgrade Release Issue
 
 Usage:
   node create-upgrade-announcement.js [options]
@@ -51,10 +53,9 @@ Environment variables:
   CHANGELOG_PR         PR number with changelog updates
   CHANGES_SUMMARY      Summary of changes (use | for multiple lines)
   ACTION_REQUIRED      Action required for integrators (default: None)
-  UPGRADE_FWSS         Upgrading FilecoinWarmStorageService? (true/false, default: true)
-  UPGRADE_REGISTRY     Upgrading ServiceProviderRegistry? (true/false, default: false)
-  UPGRADE_STATE_VIEW   Upgrading FilecoinWarmStorageServiceStateView? (true/false, default: false)
-  RELEASE_TAG          Release tag if already created (optional)
+  UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, default: false, rare)
+  UPGRADE_STATE_VIEW   Also redeploying StateView? (true/false, default: false, rare)
+  RELEASE_TAG          Release tag (optional, usually added after upgrade completes)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
@@ -74,7 +75,6 @@ const config = {
   changelogPr: process.env.CHANGELOG_PR,
   changesSummary: process.env.CHANGES_SUMMARY,
   actionRequired: process.env.ACTION_REQUIRED || "None",
-  upgradeFwss: process.env.UPGRADE_FWSS !== "false",
   upgradeRegistry: process.env.UPGRADE_REGISTRY === "true",
   upgradeStateView: process.env.UPGRADE_STATE_VIEW === "true",
   releaseTag: process.env.RELEASE_TAG || "",
@@ -196,31 +196,23 @@ function formatChanges(changesSummary) {
     .join("\n");
 }
 
-// Build the list of contracts being upgraded
+// Build the list of contracts being upgraded (FWSS is always included)
 function buildContractsList() {
-  const contracts = [];
+  const contracts = ["FilecoinWarmStorageService"];
 
-  if (config.upgradeFwss) {
-    contracts.push("- FilecoinWarmStorageService");
-  }
   if (config.upgradeRegistry) {
-    contracts.push("- ServiceProviderRegistry");
+    contracts.push("ServiceProviderRegistry");
   }
   if (config.upgradeStateView) {
-    contracts.push("- FilecoinWarmStorageServiceStateView");
+    contracts.push("FilecoinWarmStorageServiceStateView");
   }
 
-  // Default to FilecoinWarmStorageService if none selected
-  if (contracts.length === 0) {
-    contracts.push("- FilecoinWarmStorageService");
-  }
-
-  return contracts.join("\n");
+  return contracts;
 }
 
 // Generate issue title
 function generateTitle() {
-  return `[Upgrade] FWSS Contract - ${config.network} - Epoch ${config.afterEpoch}`;
+  return `[Release] FWSS ${config.network} Upgrade - Epoch ${config.afterEpoch}`;
 }
 
 // Generate issue body
@@ -235,32 +227,140 @@ function generateBody(timeEstimate) {
 
   const changes = formatChanges(config.changesSummary);
   const contracts = buildContractsList();
+  const isMainnet = config.network === "Mainnet";
+  const isBreaking = config.upgradeType === "Breaking Change";
 
-  return `## FWSS Contract Upgrade Announcement
+  // Build contracts checklist for the release checklist section
+  const deployChecklist = contracts
+    .map((c) => {
+      if (c === "FilecoinWarmStorageService") {
+        return "- [ ] Deploy FWSS implementation: `./deploy-warm-storage-implementation-only.sh`";
+      } else if (c === "ServiceProviderRegistry") {
+        return "- [ ] Deploy Registry implementation: `./deploy-registry.sh`";
+      } else if (c === "FilecoinWarmStorageServiceStateView") {
+        return "- [ ] Deploy StateView: `./deploy-warm-storage-view.sh`";
+      }
+      return `- [ ] Deploy ${c}`;
+    })
+    .join("\n");
 
-**Network**: ${config.network}
-**Upgrade Type**: ${config.upgradeType}
-**Scheduled Execution**: After epoch ${config.afterEpoch} (${timeEstimate})
+  const announceChecklist = contracts
+    .map((c) => {
+      if (c === "FilecoinWarmStorageService") {
+        return "- [ ] Announce FWSS upgrade: `./announce-planned-upgrade.sh`";
+      } else if (c === "ServiceProviderRegistry") {
+        return "- [ ] Announce Registry upgrade: `./announce-planned-upgrade-registry.sh`";
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const executeChecklist = contracts
+    .map((c) => {
+      if (c === "FilecoinWarmStorageService") {
+        return "- [ ] Execute FWSS upgrade: `./upgrade.sh`";
+      } else if (c === "ServiceProviderRegistry") {
+        return "- [ ] Execute Registry upgrade: `./upgrade-registry.sh`";
+      }
+      return null;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  return `## Overview
+
+| Field | Value |
+|-------|-------|
+| **Network** | ${config.network} |
+| **Upgrade Type** | ${config.upgradeType} |
+| **Target Epoch** | ${config.afterEpoch} |
+| **Estimated Execution** | ${timeEstimate} |
+| **Changelog PR** | ${changelogPrLink} |
+${releaseLink ? `| **Release** | ${releaseLink} |` : ""}
+
+### Contracts in Scope
+${contracts.map((c) => `- ${c}`).join("\n")}
 
 ### Changes
 ${changes}
-- [Link to PR/release notes](${changelogPrLink})
 
-### Contracts Planned for Upgrade
-${contracts}
-
-### Action Required
+### Action Required for Integrators
 ${config.actionRequired}
 
+---
+
+## Release Checklist
+
+> Full process details: [UPGRADE-PROCESS.md](${upgradeProcessLink})
+
+### Phase 1: Prepare
+- [ ] Changelog entry prepared in [CHANGELOG.md](${changelogLink})
+- [ ] Version string updated in contracts (if applicable)
+- [ ] Upgrade PR created: #${config.changelogPr}
+${isBreaking ? "- [ ] Migration guide prepared for breaking changes" : ""}
+
+### Phase 2: Calibnet Rehearsal
+${isMainnet ? `<details>
+<summary>Calibnet steps (expand)</summary>
+
+` : ""}**Deploy Implementation**
+${deployChecklist}
+- [ ] Commit updated \`deployments.json\`
+
+**Announce Upgrade**
+${announceChecklist}
+
+**Execute Upgrade**
+${executeChecklist}
+- [ ] Verify on Blockscout
+${isMainnet ? `
+</details>
+` : ""}
+${
+  isMainnet
+    ? `### Phase 3: Mainnet Deployment
+${deployChecklist}
+- [ ] Commit updated \`deployments.json\`
+
+### Phase 4: Announce Mainnet Upgrade
+${announceChecklist}
+- [ ] Notify stakeholders (post in relevant channels)
+
+### Phase 5: Execute Mainnet Upgrade
+> ⏳ Wait until after epoch ${config.afterEpoch}
+
+${executeChecklist}
+- [ ] Verify on Blockscout
+`
+    : ""
+}
+### Phase ${isMainnet ? "6" : "3"}: Verify and Release
+- [ ] Verify upgrade on Blockscout
+- [ ] Confirm \`deployments.json\` is up to date
+- [ ] Merge changelog PR: #${config.changelogPr}
+- [ ] Tag release: \`git tag vX.Y.Z && git push origin vX.Y.Z\`
+- [ ] Create GitHub Release with changelog
+- [ ] Update this issue with release link
+- [ ] Close this issue
+
+---
+
 ### Resources
-${releaseLink ? `- Release: ${releaseLink}` : "- Release: [link] (if applicable)"}
-- Changelog: ${changelogLink}
-- Upgrade Process: ${upgradeProcessLink}`;
+- [Changelog](${changelogLink})
+- [Upgrade Process Documentation](${upgradeProcessLink})
+${releaseLink ? `- [Release](${releaseLink})` : ""}
+
+### Deployed Addresses
+<!-- Update after deployments -->
+| Contract | Network | Address |
+|----------|---------|---------|
+| | | |`;
 }
 
 // Generate labels for the issue
 function generateLabels() {
-  const labels = ["upgrade"];
+  const labels = ["release"];
   if (config.upgradeType === "Breaking Change") {
     labels.push("breaking-change");
   }
