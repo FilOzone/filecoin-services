@@ -12,6 +12,8 @@ This document describes the upgrade process for FilecoinWarmStorageService (FWSS
 | PDPVerifier | Yes (ERC1967) | Via [pdp repo](https://github.com/FilOzone/pdp) |
 | FilecoinPayV1, SessionKeyRegistry | No (immutable) | Not expected to change |
 
+**UUPS, two-step** — These contracts use the [UUPS (ERC-1822)](https://eips.ethereum.org/EIPS/eip-1822) proxy pattern via OpenZeppelin's `UUPSUpgradeable`, where the upgrade authorization logic lives in the *implementation* contract rather than the proxy. On top of standard UUPS, we add a **two-step upgrade mechanism**: the owner must first call `announcePlannedUpgrade()` to record the new implementation address and a future epoch, then wait for that epoch to pass before `upgradeToAndCall()` will succeed.
+
 > For upgrading ServiceProviderRegistry or redeploying StateView, see [Upgrading Other Contracts](#upgrading-other-contracts).
 
 ## Two-Step Upgrade Mechanism
@@ -50,7 +52,7 @@ echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
    - Mark breaking changes clearly
    - Include migration notes if needed
 
-2. **Update the version** string in the contract if applicable.
+2. **Update the [version](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/FilecoinWarmStorageService.sol#L63)** string in the contract.
 
 3. **Create an upgrade PR** with your changelog updates.
    - Example title: `feat: FWSS v1.2.0 upgrade`
@@ -71,7 +73,7 @@ export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 ./deploy-warm-storage-implementation-only.sh
 ```
 
-The script updates `deployments.json` automatically. Commit the changes.
+The script updates `deployments.json` automatically. Commit the changes in the branch of the "upgrade PR" above.
 
 ### Announce Upgrade
 
@@ -105,7 +107,7 @@ export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 ./deploy-warm-storage-implementation-only.sh
 ```
 
-Commit the updated `deployments.json`.
+Commit the updated `deployments.json` in the branch of the "upgrade PR" above.
 
 ## Phase 4: Announce Mainnet Upgrade
 
