@@ -5,27 +5,7 @@
  * Generates a release issue that combines user-facing upgrade information
  * with a release engineer checklist (similar to Lotus release issues).
  *
- * Usage:
- *   node create-upgrade-announcement.js [options]
- *
- * Options:
- *   --dry-run       Output issue text without creating an issue
- *   --help          Show this help message
- *
- * Environment variables (required unless --dry-run with minimal output):
- *   NETWORK              Target network (Calibnet or Mainnet)
- *   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
- *   AFTER_EPOCH          Block number after which upgrade can execute
- *   CHANGELOG_PR         PR number with changelog updates
- *   CHANGES_SUMMARY      Summary of changes (use | for multiple lines)
- *   ACTION_REQUIRED      Action required for integrators (default: None)
- *   UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, rare)
- *   UPGRADE_STATE_VIEW   Also redeploying FilecoinWarmStorageServiceStateView? (true/false, rare)
- *   RELEASE_TAG          Release tag if already created (optional)
- *
- * GitHub-specific environment variables (required when not using --dry-run):
- *   GITHUB_TOKEN         GitHub token with issues:write permission
- *   GITHUB_REPOSITORY    Repository in format owner/repo
+ * See help text below for more info.
  */
 
 const https = require("https");
@@ -341,6 +321,8 @@ ${executeChecklist}
 - [ ] Merge changelog PR: #${config.changelogPr}
 - [ ] Tag release: \`git tag vX.Y.Z && git push origin vX.Y.Z\`
 - [ ] Create GitHub Release with changelog
+- [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls) so docs.filecoin.cloud and filecoin.cloud reflect new contract versions
+- [ ] Create "Upgrade Synapse to use newest contracts" issue
 - [ ] Update this issue with release link
 - [ ] Close this issue
 
