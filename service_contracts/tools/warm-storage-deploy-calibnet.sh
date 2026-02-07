@@ -1,5 +1,5 @@
 #! /bin/bash
-# deploy-warm-storage-calibnet deploys the Warm Storage service contract to calibration net
+# warm-storage-deploy-calibnet.sh deploys the Warm Storage service contract to calibration net
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the calibnet.
 # Assumption: forge, cast, jq are in the PATH
@@ -109,7 +109,7 @@ if [ "$MAX_PROVING_PERIOD" -lt "$MIN_REQUIRED" ]; then
   echo "       MAX_PROVING_PERIOD must be at least $MIN_REQUIRED (CHALLENGE_FINALITY + CHALLENGE_WINDOW_SIZE/2)"
   echo "       To fix: Set MAX_PROVING_PERIOD to at least $MIN_REQUIRED"
   echo ""
-  echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./deploy-warm-storage-calibnet.sh"
+  echo "       Example: MAX_PROVING_PERIOD=$MIN_REQUIRED CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE ./warm-storage-deploy-calibnet.sh"
   exit 1
 fi
 

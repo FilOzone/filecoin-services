@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# upgrade-registry.sh: Completes a pending upgrade for ServiceProviderRegistry
+# service-provider-registry-execute-upgrade.sh: Completes a pending upgrade for ServiceProviderRegistry
 # Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS
 # Optional args: NEW_VERSION
 # Calculated if unset: CHAIN
@@ -91,13 +91,13 @@ if [ $CAST_CALL_EXIT_CODE -eq 0 ] && [ -n "$UPGRADE_PLAN_OUTPUT" ]; then
     # Method exists but returns zero - no planned upgrade or already completed
     # On new contracts, _authorizeUpgrade requires a planned upgrade, so one-step will fail
     echo "No planned upgrade detected (nextUpgrade returns zero)"
-    echo "Error: This contract requires a planned upgrade. Please call announce-planned-upgrade-registry.sh first."
+    echo "Error: This contract requires a planned upgrade. Please call service-provider-registry-announce-upgrade.sh first."
     exit 1
   fi
 else
   # Method doesn't exist (old contract without nextUpgrade) or call failed
   echo "nextUpgrade() method not found or call failed, using one-step mechanism (direct upgrade)"
-  echo "WARNING: This is the legacy upgrade path. For new deployments, use announce-planned-upgrade-registry.sh first."
+  echo "WARNING: This is the legacy upgrade path. For new deployments, use service-provider-registry-announce-upgrade.sh first."
 fi
 
 if [ -n "$NEW_VERSION" ]; then

@@ -6,32 +6,47 @@ This directory contains scripts for deploying and upgrading the FilecoinWarmStor
 
 ## Scripts Overview
 
-### Deployment Scripts
+Scripts are organized with prefixes for better discoverability:
 
-- `deploy-warm-storage-calibnet.sh` - Deploy FilecoinWarmStorageService to **Calibnet only** (deploys both the ERC1967 proxy and implementation, plus the SignatureVerificationLib library; requires existing PDPVerifier, FilecoinPayV1, FilBeam, SessionKeyRegistry, and ServiceProviderRegistry contracts)
-- `deploy-warm-storage-implementation-only.sh` - Deploy FWSS implementation only; loads defaults from `deployments.json` and writes back new implementation + metadata (reuses existing signature lib unless redeployed)
-- `deploy-all-warm-storage.sh` - Deploy all contracts to either Calibnet or Mainnet
+### Warm Storage Scripts
 
-### Upgrade Scripts
+| Script | Description |
+|--------|-------------|
+| `warm-storage-deploy-all.sh` | Deploy all contracts (PDPVerifier, FilecoinPayV1, FWSS, etc.) |
+| `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
+| `warm-storage-deploy-view.sh` | Deploy FilecoinWarmStorageServiceStateView |
+| `warm-storage-deploy-calibnet.sh` | Deploy FWSS only (requires existing dependencies) |
+| `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
+| `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
+| `warm-storage-set-view.sh` | Set the StateView address on FWSS |
 
-For the [two step upgrade process](#contract-upgrade-process):
-- `announce-planned-upgrade.sh` - Announce a planned FWSS upgrade (two-step process)
-- `upgrade.sh` - Execute a previously announced FWSS upgrade
-- `announce-planned-upgrade-registry.sh` - Announce a planned ServiceProviderRegistry upgrade
-- `upgrade-registry.sh` - Execute a previously announced registry upgrade
+### Service Provider Registry Scripts
+
+| Script | Description |
+|--------|-------------|
+| `service-provider-registry-deploy.sh` | Deploy ServiceProviderRegistry |
+| `service-provider-registry-announce-upgrade.sh` | Announce a planned registry upgrade |
+| `service-provider-registry-execute-upgrade.sh` | Execute a previously announced registry upgrade |
+
+### Other Scripts
+
+| Script | Description |
+|--------|-------------|
+| `session-key-registry-deploy.sh` | Deploy SessionKeyRegistry |
+| `provider-id-set-deploy.sh` | Deploy ProviderIdSet |
 
 ### Usage
 
 ```bash
-# Deploy to Calibnet
-./tools/deploy-warm-storage-calibnet.sh
-
 # Deploy all contracts
-./tools/deploy-all-warm-storage.sh
+./tools/warm-storage-deploy-all.sh
+
+# Deploy to Calibnet (FWSS only)
+./tools/warm-storage-deploy-calibnet.sh
 
 # Upgrade existing deployment (see UPGRADE-PROCESS.md for details)
-./tools/announce-planned-upgrade.sh  # Step 1: Announce
-./tools/upgrade.sh                   # Step 2: Execute (after AFTER_EPOCH)
+./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
+./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after AFTER_EPOCH)
 ```
 
 ## Deployment Parameters
@@ -126,11 +141,11 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 - `ETH_FROM` - Optional: address to use as deployer (forge/cast default is taken from the keystore)
 
 ### Required for specific scripts:
-- `deploy-warm-storage-calibnet.sh` requires:
+- `warm-storage-deploy-calibnet.sh` requires:
   - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
   - `FILECOIN_PAY_ADDRESS` - Address of deployed FilecoinPayV1 contract
 
-- `deploy-all-warm-storage.sh` requires:
+- `warm-storage-deploy-all.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
 
 - Upgrade scripts - see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for complete environment variable reference
@@ -151,7 +166,7 @@ export CHALLENGE_FINALITY="10"  # Use "150" for mainnet
 export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
 export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
 
-./deploy-all-warm-storage.sh
+./warm-storage-deploy-all.sh
 ```
 
 ### Deploy FilecoinWarmStorageService Only
@@ -163,7 +178,7 @@ export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export PDP_VERIFIER_PROXY_ADDRESS="0x123..."
 export FILECOIN_PAY_ADDRESS="0x456..."
 
-./deploy-warm-storage-calibnet.sh
+./warm-storage-deploy-calibnet.sh
 ```
 
 ### Upgrade Existing Contract

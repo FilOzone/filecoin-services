@@ -1,5 +1,5 @@
 #! /bin/bash
-# deploy-all-warm-storage deploys the PDP verifier, FilecoinPayV1 contract, and Warm Storage service
+# warm-storage-deploy-all.sh deploys the PDP verifier, FilecoinPayV1 contract, and Warm Storage service
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
 # Assumption: KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
@@ -271,7 +271,7 @@ deploy_proxy_if_needed() {
     echo
 }
 
-# Deploy session key registry if needed (uses ./deploy-session-key-registry.sh)
+# Deploy session key registry if needed (uses ./session-key-registry-deploy.sh)
 deploy_session_key_registry_if_needed() {
     if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
         echo -e "${BOLD}SessionKeyRegistry${RESET}"
@@ -287,7 +287,7 @@ deploy_session_key_registry_if_needed() {
         echo "  🧪 Using dummy address: $SESSION_KEY_REGISTRY_ADDRESS"
     else
         echo "  🔧 Using external deployment script..."
-        source "$SCRIPT_DIR/deploy-session-key-registry.sh"
+        source "$SCRIPT_DIR/session-key-registry-deploy.sh"
         NONCE=$(expr $NONCE + "1")
         echo "  ✅ Deployed at: $SESSION_KEY_REGISTRY_ADDRESS"
         
@@ -299,7 +299,7 @@ deploy_session_key_registry_if_needed() {
     echo
 }
 
-# Deploy endorsements ProviderIdSet contract if needed (uses ./deploy-provider-id-set.sh)
+# Deploy endorsements ProviderIdSet contract if needed (uses ./provider-id-set-deploy.sh)
 deploy_endorsements_if_needed() {
     if [ -n "$ENDORSEMENT_SET_ADDRESS" ]; then
         echo -e "${BOLD}Endorsements ProviderIdSet${RESET}"
@@ -318,7 +318,7 @@ deploy_endorsements_if_needed() {
         AUTO_VERIFY_BEFORE=${AUTO_VERIFY:-true}
         AUTO_VERIFY=false # override so as to set last
         # This also updates deployments.json
-        source "$SCRIPT_DIR/deploy-provider-id-set.sh"
+        source "$SCRIPT_DIR/provider-id-set-deploy.sh"
         AUTO_VERIFY=$AUTO_VERIFY_BEFORE
         NONCE=$(expr $NONCE + "1")
         echo "  ✅ Deployed at: $ENDORSEMENT_SET_ADDRESS"
@@ -492,7 +492,7 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "  ✅ Deployment planned (dummy: $FWSS_VIEW_ADDRESS)"
 else
     echo "  🔧 Using external deployment script..."
-    source "$SCRIPT_DIR/deploy-warm-storage-view.sh"
+    source "$SCRIPT_DIR/warm-storage-deploy-view.sh"
     echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
     NONCE=$(expr $NONCE + "1")
     
@@ -509,7 +509,7 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
     echo "  🔧 Setting view address on FilecoinWarmStorageService..."
-    source "$SCRIPT_DIR/set-warm-storage-view.sh"
+    source "$SCRIPT_DIR/warm-storage-set-view.sh"
     echo "  ✅ View address set"
     NONCE=$(expr $NONCE + "1")
 fi
@@ -523,7 +523,7 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "✅ Dry run completed successfully!"
     echo "🔍 All contract compilations and simulations passed"
     echo
-    echo "To perform actual deployment, run with: DRY_RUN=false ./tools/deploy-all-warm-storage.sh"
+    echo "To perform actual deployment, run with: DRY_RUN=false ./tools/warm-storage-deploy-all.sh"
     echo
     echo "# DRY-RUN SUMMARY ($NETWORK_NAME)"
 else
