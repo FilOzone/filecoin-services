@@ -5612,7 +5612,6 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertTrue(result.settleUpto > fromEpoch, "Should settle past start");
     }
 
-
     function testValidatePayment_FirstPeriodUnproven() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
