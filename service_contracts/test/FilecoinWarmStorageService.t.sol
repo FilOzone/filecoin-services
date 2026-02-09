@@ -5679,9 +5679,28 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         fromEpoch = activationEpoch;
         toEpoch = activationEpoch + maxProvingPeriod / 2;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
-
         assertEq(result.modifiedAmount, 0);
         assertEq(result.settleUpto, toEpoch, "Should partial-settle faulted period");
+
+        // Verify cannot settle unproven period on deadline
+        vm.roll(activationEpoch + maxProvingPeriod);
+        toEpoch = activationEpoch + maxProvingPeriod;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0);
+        assertEq(result.settleUpto, fromEpoch, "Should not partial-settle current unproven period");
+
+        // Verify can settle through fault period that just ended
+        vm.roll(activationEpoch + maxProvingPeriod + 1);
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0);
+        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+
+        // Verify can settle past fault for partial payment of proven period
+        toEpoch = activationEpoch + maxProvingPeriod + 1;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        expectedAmount = proposedAmount / (1 + maxProvingPeriod);
+        assertEq(result.modifiedAmount, expectedAmount);
+        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
     }
 
     /**
