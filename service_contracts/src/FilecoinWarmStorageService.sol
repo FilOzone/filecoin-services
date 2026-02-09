@@ -1342,10 +1342,10 @@ contract FilecoinWarmStorageService is
 
         // Calculate periods since activation
         // For example, if activation is at epoch 1000 and proving period is 2880:
-        // - Epoch 1000-3879 is period 0
-        // - Epoch 3880-6759 is period 1
+        // - Epoch 1001-3880 is period 0
+        // - Epoch 3881-6760 is period 1
         // and so on
-        return (epoch - activationEpoch) / maxProvingPeriod;
+        return (epoch - activationEpoch - 1) / maxProvingPeriod;
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -1667,8 +1667,8 @@ contract FilecoinWarmStorageService is
         returns (uint256 provenEpochCount, uint256 settleUpTo)
     {
         require(toEpoch >= activationEpoch && toEpoch <= block.number, Errors.InvalidEpochRange(fromEpoch, toEpoch));
-        if (fromEpoch < activationEpoch - 1) {
-            fromEpoch = activationEpoch - 1;
+        if (fromEpoch < activationEpoch) {
+            fromEpoch = activationEpoch;
         }
 
         uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);

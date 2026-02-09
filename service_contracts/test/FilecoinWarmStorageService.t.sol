@@ -5464,12 +5464,12 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Now validate payment for epochs within these proven periods
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        uint256 fromEpoch = _activationEpoch - 1; // exclusive start
-        uint256 toEpoch = _activationEpoch + (maxProvingPeriod * 3) - 1; // inclusive end, all 3 periods
+        uint256 fromEpoch = _activationEpoch; // exclusive start
+        uint256 toEpoch = _activationEpoch + (maxProvingPeriod * 3); // inclusive end, all 3 periods
         uint256 proposedAmount = 1000e6;
 
         // Move past the periods we're validating, so that toEpoch becomes less than block.number
-        vm.roll(toEpoch + 1);
+        vm.roll(toEpoch);
         vm.prank(address(payments));
         IValidator.ValidationResult memory result =
             pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
@@ -5499,7 +5499,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Validate payment
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        uint256 fromEpoch = activationEpoch - 1; // exclusive
+        uint256 fromEpoch = activationEpoch; // exclusive
         uint256 toEpoch = vm.getBlockNumber() - 1;
         uint256 proposedAmount = 1000e6;
 
@@ -5529,7 +5529,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.note, "No proven epochs in the requested range");
 
         // Never settle less than 1 proving period when that period is unproven
-        fromEpoch = activationEpoch + maxProvingPeriod * 2 - 1;
+        fromEpoch = activationEpoch + maxProvingPeriod * 2;
         toEpoch = activationEpoch + maxProvingPeriod * 2 + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
@@ -5593,8 +5593,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Validate payment for all 3 periods
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        uint256 fromEpoch = activationEpoch - 1;
-        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3) - 1;
+        uint256 fromEpoch = activationEpoch;
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6;
 
         vm.roll(toEpoch + 1);
@@ -5610,6 +5610,70 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         assertEq(result.modifiedAmount, expectedAmount, "Should pay for 2/3 of epochs");
         assertTrue(result.settleUpto > fromEpoch, "Should settle past start");
+    }
+
+
+    function testValidatePayment_FirstPeriodUnproven() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        // Start proving
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+        assertEq(activationEpoch, viewContract.provingActivationEpoch(dataSetId));
+
+        // Skip proof for period 0
+
+        // Move to period 1
+        uint256 deadline0 = activationEpoch + maxProvingPeriod;
+        vm.roll(deadline0 + 1);
+        uint256 challengeEpoch1 = deadline0 + 1 + maxProvingPeriod - (challengeWindow / 2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+
+        // Prove period 1
+        vm.roll(challengeEpoch1);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // Move to period 2 and submit proof
+        uint256 deadline1 = deadline0 + maxProvingPeriod;
+        vm.roll(deadline1 + 1);
+        uint256 challengeEpoch2 = deadline1 + 1 + maxProvingPeriod - (challengeWindow / 2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+
+        vm.roll(challengeEpoch2);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        assertFalse(viewContract.provenPeriods(dataSetId, 0));
+        assertTrue(viewContract.provenPeriods(dataSetId, 1));
+        assertTrue(viewContract.provenPeriods(dataSetId, 2));
+
+        // Validate payment for all 3 periods
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 fromEpoch = activationEpoch;
+        uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
+        uint256 proposedAmount = 3000e6;
+
+        vm.roll(toEpoch + 1);
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        assertTrue(result.settleUpto == toEpoch, "Should settle toEpoch");
+        // Should pay 2/3 of amount (2 proven periods out of 3)
+        uint256 totalEpochs = toEpoch - fromEpoch;
+        uint256 provenEpochs = maxProvingPeriod * 2;
+        uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
+
+        assertEq(result.modifiedAmount, expectedAmount, "Should pay for 2/3 of epochs");
     }
 
     /**
@@ -5873,7 +5937,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Validate payment - should advance settleUpTo to cover all passed periods
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        uint256 fromEpoch = activationEpoch - 1;
+        uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 1000e6;
 
@@ -5907,7 +5971,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Validate payment - should NOT advance because deadline hasn't passed
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        uint256 fromEpoch = activationEpoch - 1;
+        uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod / 2);
         uint256 proposedAmount = 1000e6;
 
@@ -5945,7 +6009,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Validate payment
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        uint256 fromEpoch = activationEpoch - 1;
+        uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6; // 1000 per period
 
@@ -5956,7 +6020,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Note: provenEpochs is maxProvingPeriod + 1 because of how the first period calculation
         // includes epochs from (fromEpoch, startingPeriodDeadline] which is M + 1 epochs
         uint256 totalEpochs = toEpoch - fromEpoch;
-        uint256 provenEpochs = maxProvingPeriod + 1; // Period 0 from (A-1, A+M]
+        uint256 provenEpochs = maxProvingPeriod; // Period 0 from (A, A+M]
         uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
 
         assertEq(result.modifiedAmount, expectedAmount, "Should pay for proven period only");
