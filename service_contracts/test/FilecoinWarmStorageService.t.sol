@@ -5520,8 +5520,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
 
-        // For partial first period, settlement doesn't advance even if deadline passed
-        // (caller should request a full period or use the multi-period path)
+        // For partial first period, settlement doesn't advance until deadline passed
+        vm.roll(activationEpoch + maxProvingPeriod);
         toEpoch = activationEpoch + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
@@ -5529,6 +5529,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.note, "No proven epochs in the requested range");
 
         // Never settle less than 1 proving period when that period is unproven
+        vm.roll(activationEpoch + (maxProvingPeriod * 3));
         fromEpoch = activationEpoch + maxProvingPeriod * 2;
         toEpoch = activationEpoch + maxProvingPeriod * 2 + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
