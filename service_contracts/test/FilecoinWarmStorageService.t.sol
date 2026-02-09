@@ -5673,6 +5673,14 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
 
         assertEq(result.modifiedAmount, expectedAmount, "Should pay for 2/3 of epochs");
+
+        // Verify can settle unproven period if that period has passed
+        fromEpoch = activationEpoch;
+        toEpoch = activationEpoch + maxProvingPeriod / 2;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, 0);
+        assertEq(result.settleUpto, toEpoch, "Should partial-settle faulted period");
     }
 
     /**
