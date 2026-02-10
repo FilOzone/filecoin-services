@@ -1676,12 +1676,15 @@ contract FilecoinWarmStorageService is
         // handle first period separately; it may be partially settled already
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
 
-        if (toEpoch < startingPeriodDeadline && startingPeriodDeadline >= block.number) {
+        if (toEpoch < startingPeriodDeadline) {
             if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount = toEpoch - fromEpoch;
                 settleUpTo = toEpoch;
-            } else {
+            } else if (block.number <= startingPeriodDeadline) {
+                // do not partial-settle an unproven period which might later be proven
                 settleUpTo = fromEpoch;
+            } else {
+                settleUpTo = toEpoch;
             }
         } else {
             if (_isPeriodProven(dataSetId, startingPeriod)) {
