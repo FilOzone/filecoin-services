@@ -1334,17 +1334,29 @@ contract FilecoinWarmStorageService is
         return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch);
     }
 
+    /// @dev Maps an epoch to its proving period ID using exclusive-inclusive ranges.
+    ///
+    /// Proving periods use (start, end] ranges where the original activation epoch is a
+    /// boundary marker (and not included in the first period).
+    ///
+    /// With activation at A and period length M:
+    ///
+    ///   Period 0: epochs (A, A+M]     i.e. A+1 through A+M
+    ///   Period 1: epochs (A+M, A+2M]  i.e. A+M+1 through A+2M
+    ///   Period N: epochs (A+N*M, A+(N+1)*M]
+    ///
+    /// The deadline for period N (the last epoch at which a proof can be submitted)
+    /// is A + (N+1)*M, this also the last epoch counted in the period.
+    ///
+    /// Example with A=1000, M=2880:
+    ///   Period 0: epochs 1001-3880, deadline 3880
+    ///   Period 1: epochs 3881-6760, deadline 6760
     function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch) internal view returns (uint256) {
-        // If proving wasn't activated or epoch is before activation
         if (activationEpoch == 0 || epoch < activationEpoch) {
             return type(uint256).max; // Invalid period
         }
-
-        // Calculate periods since activation
-        // For example, if activation is at epoch 1000 and proving period is 2880:
-        // - Epoch 1001-3880 is period 0
-        // - Epoch 3881-6760 is period 1
-        // and so on
+        // -1 converts from inclusive-exclusive to exclusive-inclusive ranges,
+        // where the deadline epoch belongs to its own period rather than the next
         return (epoch - activationEpoch - 1) / maxProvingPeriod;
     }
 
@@ -1661,6 +1673,41 @@ contract FilecoinWarmStorageService is
         return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settleUpTo, note: ""});
     }
 
+    /// @dev Counts proven epochs and determines how far settlement can advance.
+    ///
+    /// Called by validatePayment() to arbitrate how much a provider should be paid for
+    /// a given epoch range. Returns two values:
+    ///   - provenEpochCount: number of epochs with valid proofs (determines payment)
+    ///   - settleUpTo: the epoch up to which settlement can advance (may exceed proven range)
+    ///
+    /// These are deliberately decoupled: settlement can advance past faulted periods with zero
+    /// payment, allowing the rail to eventually be fully settled and finalised even if the
+    /// provider missed proofs.
+    ///
+    /// The range (fromEpoch, toEpoch] may span part of a period, a full period, or
+    /// multiple periods. The function splits this into up to three regions:
+    ///
+    ///   1. First period (may be partial): fromEpoch may be mid-period (assume that prior epochs
+    ///      are already settled, likely due to a rail rate change, see below).
+    ///   2. Middle period: each contributes exactly maxProvingPeriod epochs, i.e. they are all
+    ///      fully proven or fully faulted.
+    ///   3. Last period: toEpoch may be mid-period.
+    ///
+    /// If the entire range falls within one period, only the first-period branch executes.
+    ///
+    /// For each period boundary, one of three rules applies:
+    ///
+    ///   Proven:  Period has a valid proof. Count epochs toward payment, advance settleUpTo.
+    ///   Faulted: Deadline has passed with no proof. Advance settleUpTo (zero payment).
+    ///            The provider can never prove this period, so blocking would be permanent.
+    ///   Open:    Deadline has not yet passed. Block settlement at the period boundary.
+    ///            The provider may still submit a proof before the deadline.
+    ///
+    /// Why partial-period requests exist:
+    ///   FilecoinPay calls validatePayment() once per rate segment when processing
+    ///   rate changes (see _settleWithRateChanges in FilecoinPay). If the rate changed
+    ///   mid-period (e.g. pieces were added), toEpoch will fall within a period rather
+    ///   than on a boundary.
     function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
         internal
         view
@@ -1672,44 +1719,54 @@ contract FilecoinWarmStorageService is
         }
 
         uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
-
-        // handle first period separately; it may be partially settled already
         uint256 startingPeriodDeadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
 
+        // --- SINGLE-PERIOD PATH ---
+        // The entire range falls within the starting period (including the deadline itself,
+        // which is the last epoch of the period in the exclusive-inclusive convention).
         if (toEpoch <= startingPeriodDeadline) {
             if (_isPeriodProven(dataSetId, startingPeriod)) {
+                // Proven: pay for all requested epochs
                 provenEpochCount = toEpoch - fromEpoch;
                 settleUpTo = toEpoch;
             } else if (block.number <= startingPeriodDeadline) {
-                // do not partial-settle an unproven period which might later be proven
+                // Open: deadline hasn't passed, proof may still arrive, block settlement
                 settleUpTo = fromEpoch;
             } else {
+                // Faulted: deadline passed, no proof, advance with zero payment
                 settleUpTo = toEpoch;
             }
         } else {
+            // --- MULTI-PERIOD PATH ---
+            // Range spans at least one period boundary.
+
+            // First period: count from fromEpoch to the period deadline
             if (_isPeriodProven(dataSetId, startingPeriod)) {
                 provenEpochCount += (startingPeriodDeadline - fromEpoch);
             }
+            // else: if unproven, first period contributes zero, but don't block
 
+            // Middle periods: each is a full maxProvingPeriod to potentially contribute
             uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
-            // loop through the proving periods between startingPeriod and endingPeriod
             for (uint256 period = startingPeriod + 1; period < endingPeriod; period++) {
                 if (_isPeriodProven(dataSetId, period)) {
                     provenEpochCount += maxProvingPeriod;
                 }
             }
-            uint256 endingPeriodDeadline = _calcPeriodDeadline(activationEpoch, endingPeriod);
-            settleUpTo = endingPeriodDeadline - maxProvingPeriod;
 
-            // handle the last period separately
+            // Last period: partial, from period start to toEpoch
+            uint256 endingPeriodDeadline = _calcPeriodDeadline(activationEpoch, endingPeriod);
+            settleUpTo = endingPeriodDeadline - maxProvingPeriod; // start of last period
+
             if (_isPeriodProven(dataSetId, endingPeriod)) {
+                // Proven: pay for epochs in this partial period, advance to toEpoch
                 provenEpochCount += (toEpoch - settleUpTo);
                 settleUpTo = toEpoch;
             } else if (endingPeriodDeadline < block.number) {
-                // Period deadline passed but unproven - advance settlement with zero payment
+                // Faulted: deadline passed, no proof, advance with zero payment
                 settleUpTo = toEpoch;
             }
-            // else: period still open - settlement blocked at previous settleUpTo
+            // else: Open: settlement stops at the start of this period
         }
         return (provenEpochCount, settleUpTo);
     }
@@ -1719,6 +1776,9 @@ contract FilecoinWarmStorageService is
         return isProven != 0;
     }
 
+    /// @dev Returns the deadline epoch for a proving period. The last epoch at which a
+    /// proof can be submitted and the last epoch IN that period. For period N with
+    /// activation A and period length M: deadline = A + (N+1)*M.
     function _calcPeriodDeadline(uint256 activationEpoch, uint256 periodId) private view returns (uint256) {
         return activationEpoch + (periodId + 1) * maxProvingPeriod;
     }
