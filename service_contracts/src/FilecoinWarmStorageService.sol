@@ -1684,30 +1684,22 @@ contract FilecoinWarmStorageService is
     /// payment, allowing the rail to eventually be fully settled and finalised even if the
     /// provider missed proofs.
     ///
-    /// The range (fromEpoch, toEpoch] may span part of a period, a full period, or
-    /// multiple periods. The function splits this into up to three regions:
+    /// Iterates through each proving period that overlaps the range (fromEpoch, toEpoch].
+    /// Partial periods at the start and end are handled by clamping each period's contribution
+    /// to [max(periodStart, fromEpoch), min(toEpoch, deadline)].
     ///
-    ///   1. First period (may be partial): fromEpoch may be mid-period (assume that prior epochs
-    ///      are already settled, likely due to a rail rate change, see below).
-    ///   2. Middle period: each contributes exactly maxProvingPeriod epochs, i.e. they are all
-    ///      fully proven or fully faulted.
-    ///   3. Last period: toEpoch may be mid-period.
-    ///
-    /// If the entire range falls within one period, only the first-period branch executes.
-    ///
-    /// For each period boundary, one of three rules applies:
+    /// For each period, one of three rules applies:
     ///
     ///   Proven:  Period has a valid proof. Count epochs toward payment, advance settleUpTo.
     ///   Faulted: Deadline has passed with no proof. Advance settleUpTo (zero payment).
-    ///            The provider can never prove this period, so blocking would be permanent.
-    ///   Open:    Deadline has not yet passed. Block settlement at the period boundary.
-    ///            The provider may still submit a proof before the deadline.
+    ///   Open:    Deadline has not yet passed. Don't update settleUpTo, blocking settlement
+    ///            at wherever the previous period left it. Note: only the last period in
+    ///            the range can be open (toEpoch <= block.number guarantees earlier deadlines
+    ///            have passed).
     ///
-    /// Why partial-period requests exist:
-    ///   FilecoinPay calls validatePayment() once per rate segment when processing
-    ///   rate changes (see _settleWithRateChanges in FilecoinPay). If the rate changed
-    ///   mid-period (e.g. pieces were added), toEpoch will fall within a period rather
-    ///   than on a boundary.
+    /// Partial-period requests arise when FilecoinPay settles each rate segment independently
+    /// (see _settleWithRateChanges). If the rate changed mid-period (e.g. pieces were added),
+    /// toEpoch will fall within a period rather than on a boundary.
     function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
         internal
         view

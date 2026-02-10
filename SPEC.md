@@ -131,20 +131,7 @@ Where base rail rate changes have occurred (e.g. pieces were added mid-period, c
 
 ### Settlement Algorithm (_findProvenEpochs)
 
-The function splits the settlement range `(fromEpoch, toEpoch]` into up to three regions:
-
-```
-fromEpoch      startingDeadline                  toEpoch  endingDeadline
-    |                 |                              |          |
-    | FIRST (partial) | MIDDLE (full periods) | LAST (partial)  |
-    | from->deadline  |  each = M epochs      | periodStart->to |
-```
-
-1. **First period** (partial): `fromEpoch` may be mid-period. If the range doesn't reach the deadline (`toEpoch < startingPeriodDeadline`), we deal with this period only and the proven/faulted/open rules directly.
-2. **Middle periods** (full): Each complete period between the first and last contributes exactly `maxProvingPeriod` proven epochs (or zero if unproven). Unproven middle periods with passed deadlines are skipped with zero payment.
-3. **Last period** (partial): From the period's start to `toEpoch`. Apply proven/faulted/open rules. If open, `settleUpTo` stops at the *start* of this period (the previous period's deadline).
-
-Note that in the above flow, settlements that cover a **single period** or less are handled differently to those that span multiple periods. As long as the deadline for a single (or partial) period settlement has passed (i.e. is not "open"), we apply the proven/faulted rules directly to that segment. A **multi-period** settlement (that crosses at least one deadline) processes the first period, even if it is partial, according to proven/faulted rules because it necessarily must be already passed (i.e. "closed") but the final period can block since its deadline may be in the future.
+The function iterates through each proving period that overlaps the settlement range `(fromEpoch, toEpoch]`, applying the proven/faulted/open rules uniformly to each. Partial periods at the start and end of the range are handled by clamping: each period contributes epochs from `max(periodStart, fromEpoch)` to `min(toEpoch, deadline)`. Only the last period in the range can be open — since `toEpoch <= block.number`, all earlier periods' deadlines have necessarily passed.
 
 `validatePayment()` signals the final settlement epoch to FilecoinPay, which is recorded as `settledUpTo` on the rail. The next setllement call uses this as its `fromEpoch`, so settlement progresses incrementally. The provider is paid proportional to the number of proven epochs within the range requested for settlement by FilecoinPay, whether that range covers multiple periods, or a partial period due to rate change segmentation.
 
