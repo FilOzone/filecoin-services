@@ -1331,7 +1331,7 @@ contract FilecoinWarmStorageService is
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch);
+        return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch, maxProvingPeriod);
     }
 
     /// @dev Maps an epoch to its proving period ID using exclusive-inclusive ranges.
@@ -1351,13 +1351,13 @@ contract FilecoinWarmStorageService is
     /// Example with A=1000, M=2880:
     ///   Period 0: epochs 1001-3880, deadline 3880
     ///   Period 1: epochs 3881-6760, deadline 6760
-    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch) internal view returns (uint256) {
+    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch, uint256 provingPeriodLength) internal pure returns (uint256) {
         if (activationEpoch == 0 || epoch <= activationEpoch) {
             return type(uint256).max; // Invalid period
         }
         // -1 converts from inclusive-exclusive to exclusive-inclusive ranges,
         // where the deadline epoch belongs to its own period rather than the next
-        return (epoch - activationEpoch - 1) / maxProvingPeriod;
+        return (epoch - activationEpoch - 1) / provingPeriodLength;
     }
 
     function max(uint256 a, uint256 b) internal pure returns (uint256) {
@@ -1718,8 +1718,8 @@ contract FilecoinWarmStorageService is
             fromEpoch = activationEpoch;
         }
         settleUpTo = fromEpoch;
-        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
-        uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
+        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1, maxProvingPeriod);
+        uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch, maxProvingPeriod);
         for (uint256 period = startingPeriod; period <= endingPeriod; period++) {
             uint256 deadline = _calcPeriodDeadline(activationEpoch, period);
             if (_isPeriodProven(dataSetId, period)) {
