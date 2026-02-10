@@ -1730,9 +1730,9 @@ contract FilecoinWarmStorageService is
             } else if (deadline < block.number) {
                 // Faulted: deadline passed, no proof, advance with zero payment
                 settleUpTo = min(toEpoch, deadline);
-           } //else { } // Open: deadline hasn't passed, proof may still arrive, block settlement
+            } //else { } // Open: deadline hasn't passed, proof may still arrive, block settlement
         }
-     
+
         return (provenEpochCount, settleUpTo);
     }
 
