@@ -5693,21 +5693,21 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.roll(activationEpoch + maxProvingPeriod + 1);
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0);
-        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+        assertEq(result.settleUpto, toEpoch, "Should partial-settle previous fault period");
 
         // Verify can settle past fault for partial payment of proven period
         toEpoch = activationEpoch + maxProvingPeriod + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         expectedAmount = proposedAmount / (1 + maxProvingPeriod);
         assertEq(result.modifiedAmount, expectedAmount);
-        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+        assertEq(result.settleUpto, toEpoch, "Should partial-settle beyond fault period");
 
         // Settle first epoch in proven period after fault
         fromEpoch = activationEpoch + maxProvingPeriod;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         expectedAmount = proposedAmount;
         assertEq(result.modifiedAmount, expectedAmount);
-        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+        assertEq(result.settleUpto, toEpoch, "Should first proven epoch after fault period");
 
         // Settle last epoch in fault period
         fromEpoch = activationEpoch + maxProvingPeriod - 1;
@@ -5715,7 +5715,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
         expectedAmount = 0;
         assertEq(result.modifiedAmount, expectedAmount);
-        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+        assertEq(result.settleUpto, toEpoch, "Should settle last epoch in fault period");
     }
 
     /**
