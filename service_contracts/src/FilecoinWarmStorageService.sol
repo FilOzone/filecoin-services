@@ -1352,7 +1352,7 @@ contract FilecoinWarmStorageService is
     ///   Period 0: epochs 1001-3880, deadline 3880
     ///   Period 1: epochs 3881-6760, deadline 6760
     function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch) internal view returns (uint256) {
-        if (activationEpoch == 0 || epoch < activationEpoch) {
+        if (activationEpoch == 0 || epoch <= activationEpoch) {
             return type(uint256).max; // Invalid period
         }
         // -1 converts from inclusive-exclusive to exclusive-inclusive ranges,
