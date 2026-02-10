@@ -5701,6 +5701,21 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         expectedAmount = proposedAmount / (1 + maxProvingPeriod);
         assertEq(result.modifiedAmount, expectedAmount);
         assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+
+        // Settle first epoch in proven period after fault
+        fromEpoch = activationEpoch + maxProvingPeriod;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        expectedAmount = proposedAmount;
+        assertEq(result.modifiedAmount, expectedAmount);
+        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
+
+        // Settle last epoch in fault period
+        fromEpoch = activationEpoch + maxProvingPeriod - 1;
+        toEpoch = activationEpoch + maxProvingPeriod;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        expectedAmount = 0;
+        assertEq(result.modifiedAmount, expectedAmount);
+        assertEq(result.settleUpto, toEpoch, "Should not partial-settle current unproven period");
     }
 
     /**
