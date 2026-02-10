@@ -5806,6 +5806,11 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Since the period is proven, should pay full amount for the requested range
         assertEq(result.modifiedAmount, proposedAmount, "Should pay full amount for proven period");
         assertEq(result.settleUpto, toEpoch, "Should settle to end of range");
+
+        vm.roll(activationEpoch + maxProvingPeriod + 1);
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, proposedAmount, "Should pay full amount for proven period");
+        assertEq(result.settleUpto, toEpoch, "Should settle to end of range");
     }
 
     /**
