@@ -1717,8 +1717,8 @@ contract FilecoinWarmStorageService is
         if (fromEpoch < activationEpoch) {
             fromEpoch = activationEpoch;
         }
-
-        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch);
+        settledUpTo = fromEpoch;
+        uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1);
         uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch);
         for (uint256 period = startingPeriod; period <= endingPeriod; period++) {
             uint256 deadline = _calcPeriodDeadline(activationEpoch, period);
@@ -1727,11 +1727,10 @@ contract FilecoinWarmStorageService is
                 uint256 settleEnd = min(deadline, toEpoch);
                 provenEpochCount += settleEnd - settleStart;
                 settleUpTo = min(toEpoch, deadline);
-            } else if (deadline > block.number) {
+            } else if (deadline < block.number) {
                 // Faulted: deadline passed, no proof, advance with zero payment
                 settleUpTo = min(toEpoch, deadline);
-           } //else 
-                // Open: deadline hasn't passed, proof may still arrive, block settlement
+           } //else { } // Open: deadline hasn't passed, proof may still arrive, block settlement
         }
      
         return (provenEpochCount, settleUpTo);
