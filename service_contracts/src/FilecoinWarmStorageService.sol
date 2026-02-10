@@ -1708,7 +1708,7 @@ contract FilecoinWarmStorageService is
     ///   rate changes (see _settleWithRateChanges in FilecoinPay). If the rate changed
     ///   mid-period (e.g. pieces were added), toEpoch will fall within a period rather
     ///   than on a boundary.
- function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
+    function _findProvenEpochs(uint256 dataSetId, uint256 fromEpoch, uint256 toEpoch, uint256 activationEpoch)
         internal
         view
         returns (uint256 provenEpochCount, uint256 settleUpTo)
