@@ -5520,8 +5520,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
 
-        // For partial first period, settlement doesn't advance even if deadline passed
-        // (caller should request a full period or use the multi-period path)
+        // For partial first period, settlement doesn't advance until deadline passed
+        vm.roll(activationEpoch + maxProvingPeriod);
         toEpoch = activationEpoch + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
@@ -5529,6 +5529,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.note, "No proven epochs in the requested range");
 
         // Never settle less than 1 proving period when that period is unproven
+        vm.roll(activationEpoch + (maxProvingPeriod * 3));
         fromEpoch = activationEpoch + maxProvingPeriod * 2;
         toEpoch = activationEpoch + maxProvingPeriod * 2 + 1;
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
@@ -5673,6 +5674,48 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
 
         assertEq(result.modifiedAmount, expectedAmount, "Should pay for 2/3 of epochs");
+
+        // Verify can settle unproven period if that period has passed
+        fromEpoch = activationEpoch;
+        toEpoch = activationEpoch + maxProvingPeriod / 2;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0);
+        assertEq(result.settleUpto, toEpoch, "Should partial-settle faulted period");
+
+        // Verify cannot settle unproven period on deadline
+        vm.roll(activationEpoch + maxProvingPeriod);
+        toEpoch = activationEpoch + maxProvingPeriod;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0);
+        assertEq(result.settleUpto, fromEpoch, "Should not partial-settle current unproven period");
+
+        // Verify can settle through fault period that just ended
+        vm.roll(activationEpoch + maxProvingPeriod + 1);
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, 0);
+        assertEq(result.settleUpto, toEpoch, "Should partial-settle previous fault period");
+
+        // Verify can settle past fault for partial payment of proven period
+        toEpoch = activationEpoch + maxProvingPeriod + 1;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        expectedAmount = proposedAmount / (1 + maxProvingPeriod);
+        assertEq(result.modifiedAmount, expectedAmount);
+        assertEq(result.settleUpto, toEpoch, "Should partial-settle beyond fault period");
+
+        // Settle first epoch in proven period after fault
+        fromEpoch = activationEpoch + maxProvingPeriod;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        expectedAmount = proposedAmount;
+        assertEq(result.modifiedAmount, expectedAmount);
+        assertEq(result.settleUpto, toEpoch, "Should first proven epoch after fault period");
+
+        // Settle last epoch in fault period
+        fromEpoch = activationEpoch + maxProvingPeriod - 1;
+        toEpoch = activationEpoch + maxProvingPeriod;
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        expectedAmount = 0;
+        assertEq(result.modifiedAmount, expectedAmount);
+        assertEq(result.settleUpto, toEpoch, "Should settle last epoch in fault period");
     }
 
     /**
@@ -5763,6 +5806,51 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Since the period is proven, should pay full amount for the requested range
         assertEq(result.modifiedAmount, proposedAmount, "Should pay full amount for proven period");
         assertEq(result.settleUpto, toEpoch, "Should settle to end of range");
+
+        vm.roll(activationEpoch + maxProvingPeriod + 1);
+        result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+        assertEq(result.modifiedAmount, proposedAmount, "Should pay full amount for proven period");
+        assertEq(result.settleUpto, toEpoch, "Should settle to end of range");
+    }
+
+    /**
+     * @notice Test: toEpoch lands exactly on period deadline with fromEpoch mid-period
+     * to ensure we settle using the single-period path rather than multi-period which would
+     * incur double-counting.
+     */
+    function testValidatePayment_ToEpochExactlyOnDeadline() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        // Prove period 0
+        vm.roll(challengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // fromEpoch mid-period, toEpoch exactly on the deadline, should only settle via
+        // single-period logic
+        uint256 fromEpoch = activationEpoch + 100;
+        uint256 toEpoch = activationEpoch + maxProvingPeriod; // == period 0 deadline
+        uint256 proposedAmount = 1000e6;
+
+        // Roll past the deadline so the period is resolved
+        vm.roll(toEpoch + 1);
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, proposedAmount, "Should pay exactly full amount");
+        assertEq(result.settleUpto, toEpoch, "Should settle to deadline");
     }
 
     /**

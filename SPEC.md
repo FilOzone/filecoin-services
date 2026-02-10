@@ -93,20 +93,60 @@ Deposits extend the duration without changing the rate (unless adding pieces tri
 
 ## Settlement and Payment Validation
 
-### Proving Period Deadlines and Settlement
+### Proving Period Epoch Conventions
 
-Settlement progress (`settledUpTo`) tracks the epoch up to which payments have been processed. The validator callback `validatePayment()` determines how far settlement can advance and how much payment is due.
+Proving periods use **exclusive-inclusive** epoch ranges. The activation epoch (set when `nextProvingPeriod()` is first called) is a boundary marker, not a billable epoch.
 
-**Key principle**: Settlement advancement is decoupled from payment amount.
+With activation epoch `A` and period length `M` (maxProvingPeriod, e.g. 2880 for a 1-day proving period):
 
-- **Proven periods**: Both settlement advancement and payment proceed normally.
-- **Unproven periods with open deadline**: Settlement is blocked until the period is resolved (proven or deadline passes).
-- **Unproven periods with passed deadline**: Settlement advances (the SP can never prove this period), but payment for those epochs is zero.
+```
+Period 0: epochs (A,   A+M]         (billable epochs A+1 through A+M)
+Period 1: epochs (A+M, A+2M]        (billable epochs A+M+1 through A+2M)
+Period N: epochs (A+N*M, A+(N+1)*M]
+```
 
-This design ensures:
-1. Clients are not stuck waiting indefinitely for a provider who has abandoned the service
-2. Providers are not paid for periods they failed to prove
-3. Settlement can complete even if the provider disappears after termination
+The **deadline** for period N is `A + (N+1)*M`, the last epoch of the period, and the last epoch at which a proof can be submitted.
+
+The formula `(epoch - A - 1) / M` maps an epoch to its period number. The `- 1` shifts from inclusive-exclusive `[A, A+M)` to exclusive-inclusive `(A, A+M]` ranges, so the deadline epoch belongs to its own period rather than the next. The activation epoch itself returns an invalid sentinel (`type(uint256).max`) because `epoch < activationEpoch` after the subtraction underflows.
+
+Using the same logic, settlement ranges also use exclusive-inclusive `(fromEpoch, toEpoch]`. The settlement `fromEpoch` should be the last settled epoch, and the range is treated as exclusive of that epoch. `fromEpoch` is also clamped up to `A`, so any `fromEpoch <= A` results in the first billable epoch being `A+1`. `toEpoch` is the last epoch to settle, and the range is treated as inclusive of this epoch.
+
+### Settlement Rules (Proven / Faulted / Open)
+
+`validatePayment()` is called by FilecoinPay during `settleRail()`.
+
+Settlement progress (`settledUpTo`) tracks the epoch up to which payments have been processed. `validatePayment()` determines how far settlement can advance and how much payment is due.
+
+Because payment amount is tied to successfully submitted proofs, it's possible for period can advance `settleUpTo` while contributing zero to the payment.
+
+Each proving period is in one of three states:
+
+- **Proven**: Period has a valid proof. Settlement advances and payment is proportional to proven epochs.
+- **Faulted**: Deadline has passed with no proof. Settlement advances but payment is zero.
+- **Open**: Deadline has not yet passed, no proof. Settlement is blocked at the period boundary because the provider may still submit a proof.
+
+### Partial-Period Settlement (FilecoinPay Rate Changes)
+
+Where base rail rate changes have occurred (e.g. pieces were added mid-period, changing the payment rate), FilecoinPay settles each rate "segment" independently (see `_settleWithRateChanges`). Each segment gets its own `validatePayment()` call with a `toEpoch` that may fall anywhere within a proving period. So `validatePayment()` must be able to handle settlement of near-arbitrary ranges (see `_findProvenEpochs`).
+
+### Settlement Algorithm (_findProvenEpochs)
+
+The function splits the settlement range `(fromEpoch, toEpoch]` into up to three regions:
+
+```
+fromEpoch      startingDeadline                  toEpoch  endingDeadline
+    |                 |                              |          |
+    | FIRST (partial) | MIDDLE (full periods) | LAST (partial)  |
+    | from->deadline  |  each = M epochs      | periodStart->to |
+```
+
+1. **First period** (partial): `fromEpoch` may be mid-period. If the range doesn't reach the deadline (`toEpoch < startingPeriodDeadline`), we deal with this period only and the proven/faulted/open rules directly.
+2. **Middle periods** (full): Each complete period between the first and last contributes exactly `maxProvingPeriod` proven epochs (or zero if unproven). Unproven middle periods with passed deadlines are skipped with zero payment.
+3. **Last period** (partial): From the period's start to `toEpoch`. Apply proven/faulted/open rules. If open, `settleUpTo` stops at the *start* of this period (the previous period's deadline).
+
+Note that in the above flow, settlements that cover a **single period** or less are handled differently to those that span multiple periods. As long as the deadline for a single (or partial) period settlement has passed (i.e. is not "open"), we apply the proven/faulted rules directly to that segment. A **multi-period** settlement (that crosses at least one deadline) processes the first period, even if it is partial, according to proven/faulted rules because it necessarily must be already passed (i.e. "closed") but the final period can block since its deadline may be in the future.
+
+`validatePayment()` signals the final settlement epoch to FilecoinPay, which is recorded as `settledUpTo` on the rail. The next setllement call uses this as its `fromEpoch`, so settlement progresses incrementally. The provider is paid proportional to the number of proven epochs within the range requested for settlement by FilecoinPay, whether that range covers multiple periods, or a partial period due to rate change segmentation.
 
 ### Settlement During Lockup
 
