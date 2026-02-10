@@ -5814,6 +5814,46 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     }
 
     /**
+     * @notice Test: toEpoch lands exactly on period deadline with fromEpoch mid-period
+     * to ensure we settle using the single-period path rather than multi-period which would
+     * incur double-counting.
+     */
+    function testValidatePayment_ToEpochExactlyOnDeadline() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        // Prove period 0
+        vm.roll(challengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        // fromEpoch mid-period, toEpoch exactly on the deadline, should only settle via
+        // single-period logic
+        uint256 fromEpoch = activationEpoch + 100;
+        uint256 toEpoch = activationEpoch + maxProvingPeriod; // == period 0 deadline
+        uint256 proposedAmount = 1000e6;
+
+        // Roll past the deadline so the period is resolved
+        vm.roll(toEpoch + 1);
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, proposedAmount, "Should pay exactly full amount");
+        assertEq(result.settleUpto, toEpoch, "Should settle to deadline");
+    }
+
+    /**
      * @notice Test: Invalid rail ID - should revert
      */
     function testValidatePayment_InvalidRailId() public {
