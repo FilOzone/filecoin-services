@@ -1724,9 +1724,8 @@ contract FilecoinWarmStorageService is
             uint256 deadline = _calcPeriodDeadline(activationEpoch, period);
             if (_isPeriodProven(dataSetId, period)) {
                 uint256 settleStart = max(deadline - maxProvingPeriod, fromEpoch);
-                uint256 settleEnd = min(deadline, toEpoch);
-                provenEpochCount += settleEnd - settleStart;
                 settleUpTo = min(toEpoch, deadline);
+                provenEpochCount += settleUpTo - settleStart;
             } else if (deadline < block.number) {
                 // Faulted: deadline passed, no proof, advance with zero payment
                 settleUpTo = min(toEpoch, deadline);
