@@ -1351,7 +1351,11 @@ contract FilecoinWarmStorageService is
     /// Example with A=1000, M=2880:
     ///   Period 0: epochs 1001-3880, deadline 3880
     ///   Period 1: epochs 3881-6760, deadline 6760
-    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch, uint256 provingPeriodLength) internal pure returns (uint256) {
+    function _provingPeriodForEpoch(uint256 activationEpoch, uint256 epoch, uint256 provingPeriodLength)
+        internal
+        pure
+        returns (uint256)
+    {
         if (activationEpoch == 0 || epoch <= activationEpoch) {
             return type(uint256).max; // Invalid period
         }
