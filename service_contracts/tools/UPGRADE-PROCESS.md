@@ -66,20 +66,25 @@ Always test the upgrade on Calibnet before mainnet.
 
 ### Deploy Implementation
 
-```bash
-cd service_contracts/tools
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+Deploy via the [Deploy Contract](https://github.com/FilOzone/filecoin-services/actions/workflows/deploy-contract.yml) GitHub Actions workflow:
 
-./warm-storage-deploy-implementation.sh
-```
+1. Go to **Actions → Deploy Contract → Run workflow**
+2. Select **Calibnet** and **FWSS Implementation**
+3. Run with **dry run** enabled first to verify the build succeeds
+4. Disable dry run and run again to perform the actual deployment
+5. Copy the deployed address from the job summary — you will need it as `NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS` in the next step
 
-The script updates `deployments.json` automatically. Commit the changes in the branch of the "upgrade PR" above.
+> To deploy locally instead, see [Manual Deployment with Local Scripts](#manual-deployment-with-local-scripts). The local scripts update `deployments.json` automatically.
 
 ### Announce Upgrade
 
+Export the deployed address as `NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS`. The announce script will automatically update `deployments.json` — commit the changes in the branch of the upgrade PR.
+
 ```bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export WARM_STORAGE_PROXY_ADDRESS="0x..."
-export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."  # from the deploy step above
 export AFTER_EPOCH="123456"
 
 ./warm-storage-announce-upgrade.sh
@@ -100,21 +105,25 @@ Verify the upgrade on [Calibnet Blockscout](https://calibration.filfox.info/).
 
 ## Phase 3: Mainnet Deployment
 
-```bash
-cd service_contracts/tools
-export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+Deploy via the [Deploy Contract](https://github.com/FilOzone/filecoin-services/actions/workflows/deploy-contract.yml) GitHub Actions workflow:
 
-./warm-storage-deploy-implementation.sh
-```
+1. Go to **Actions → Deploy Contract → Run workflow**
+2. Select **Mainnet** and **FWSS Implementation**
+3. Run with **dry run** enabled first to verify the build succeeds
+4. Disable dry run and run again (requires approval if the `mainnet` environment is configured)
+5. Copy the deployed address from the job summary — you will need it as `NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS` in the next step
 
-Commit the updated `deployments.json` in the branch of the "upgrade PR" above.
+> To deploy locally instead, see [Manual Deployment with Local Scripts](#manual-deployment-with-local-scripts). The local scripts update `deployments.json` automatically.
 
 ## Phase 4: Announce Mainnet Upgrade
 
+Export the deployed address as `NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS`. The announce script will automatically update `deployments.json` — commit the changes in the branch of the upgrade PR.
+
 ```bash
+cd service_contracts/tools
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export WARM_STORAGE_PROXY_ADDRESS="0x..."
-export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."  # from the deploy step above
 export AFTER_EPOCH="123456"
 
 ./warm-storage-announce-upgrade.sh
@@ -127,6 +136,7 @@ Notify stakeholders (see [Stakeholder Communication](#stakeholder-communication)
 After `AFTER_EPOCH` passes:
 
 ```bash
+cd service_contracts/tools
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export WARM_STORAGE_PROXY_ADDRESS="0x..."
 export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
@@ -178,7 +188,7 @@ The registry uses the same two-step upgrade mechanism as FWSS. Only upgrade it w
 - There are changes to provider registration logic
 - Storage or validation rules need updating
 
-**Deploy new implementation:**
+**Deploy new implementation** via the [Deploy Contract](https://github.com/FilOzone/filecoin-services/actions/workflows/deploy-contract.yml) workflow (select **ServiceProviderRegistry**), or locally:
 ```bash
 ./service-provider-registry-deploy.sh
 ```
@@ -215,7 +225,7 @@ StateView is a helper contract (not upgradeable). Redeploy it when:
 - The view logic changes
 - FWSS changes require updated read functions
 
-**Deploy new StateView:**
+**Deploy new StateView** via the [Deploy Contract](https://github.com/FilOzone/filecoin-services/actions/workflows/deploy-contract.yml) workflow (select **FWSS StateView**), or locally:
 ```bash
 ./warm-storage-deploy-view.sh
 ```
@@ -243,9 +253,37 @@ If any of these need to change, it requires redeploying FWSS entirely. This shou
 
 ---
 
+## Manual Deployment with Local Scripts
+
+If you cannot use the GitHub Actions workflow (e.g., network issues, different wallet setup), you can deploy contracts locally. Make sure `ETH_KEYSTORE`, `PASSWORD`, and `ETH_RPC_URL` are set (see [Environment Variables Reference](#environment-variables-reference)).
+
+### Calibnet
+
+```bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+
+./warm-storage-deploy-implementation.sh
+```
+
+### Mainnet
+
+```bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+
+./warm-storage-deploy-implementation.sh
+```
+
+The scripts update `deployments.json` automatically. Commit the changes in the branch of the upgrade PR.
+
+---
+
 ## Environment Variables Reference
 
 ### Common Variables
+
+> **Note:** When deploying via the [GitHub Actions workflow](#phase-2-calibnet-rehearsal), these variables are configured automatically from repository secrets. You only need to set them for [local deployments](#manual-deployment-with-local-scripts).
 
 | Variable | Description |
 |----------|-------------|

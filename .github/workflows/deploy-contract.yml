@@ -1,0 +1,177 @@
+name: Deploy Contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: 'Target network'
+        required: true
+        type: choice
+        options:
+          - Calibnet
+          - Mainnet
+      contract:
+        description: 'Contract to deploy'
+        required: true
+        type: choice
+        options:
+          - FWSS Implementation
+          - FWSS StateView
+          - ServiceProviderRegistry
+          - SessionKeyRegistry
+      dry_run:
+        description: 'Dry run (build only, no deployment)'
+        required: false
+        type: boolean
+        default: true
+
+# Required repository secrets:
+#   CALIBNET_CONTRACT_DEPLOYER_PRIVATE_KEY  - Raw private key for the Calibnet deployer wallet
+#   MAINNET_CONTRACT_DEPLOYER_PRIVATE_KEY   - Raw private key for the Mainnet deployer wallet
+#   CALIBNET_RPC_URL                        - RPC endpoint for Calibnet (already exists)
+#   MAINNET_RPC_URL                         - RPC endpoint for Mainnet
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.network == 'Mainnet' && 'mainnet' || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set network variables
+        id: network
+        run: |
+          if [ "${{ inputs.network }}" = "Calibnet" ]; then
+            echo "chain_id=314159" >> "$GITHUB_OUTPUT"
+            echo "explorer_url=https://calibration.filfox.info/en" >> "$GITHUB_OUTPUT"
+          else
+            echo "chain_id=314" >> "$GITHUB_OUTPUT"
+            echo "explorer_url=https://filfox.info/en" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set deploy script
+        id: script
+        run: |
+          case "${{ inputs.contract }}" in
+            "FWSS Implementation")
+              echo "path=tools/warm-storage-deploy-implementation.sh" >> "$GITHUB_OUTPUT"
+              echo "label=FilecoinWarmStorageService Implementation" >> "$GITHUB_OUTPUT"
+              ;;
+            "FWSS StateView")
+              echo "path=tools/warm-storage-deploy-view.sh" >> "$GITHUB_OUTPUT"
+              echo "label=FilecoinWarmStorageServiceStateView" >> "$GITHUB_OUTPUT"
+              ;;
+            "ServiceProviderRegistry")
+              echo "path=tools/service-provider-registry-deploy.sh" >> "$GITHUB_OUTPUT"
+              echo "label=ServiceProviderRegistry" >> "$GITHUB_OUTPUT"
+              ;;
+            "SessionKeyRegistry")
+              echo "path=tools/session-key-registry-deploy.sh" >> "$GITHUB_OUTPUT"
+              echo "label=SessionKeyRegistry" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
+      - name: Install dependencies
+        run: |
+          cd service_contracts
+          make install
+
+      - name: Build contracts
+        run: |
+          cd service_contracts
+          make build
+
+      - name: Create temporary keystore
+        if: inputs.dry_run == false
+        env:
+          DEPLOYER_PRIVATE_KEY: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_CONTRACT_DEPLOYER_PRIVATE_KEY || secrets.MAINNET_CONTRACT_DEPLOYER_PRIVATE_KEY }}
+        run: |
+          KEYSTORE_PASSWORD="gha-deploy-$(date +%s)"
+          echo "::add-mask::$KEYSTORE_PASSWORD"
+          mkdir -p "$RUNNER_TEMP/keystore"
+          cast wallet import deployer \
+            --private-key "$DEPLOYER_PRIVATE_KEY" \
+            --keystore-dir "$RUNNER_TEMP/keystore" \
+            --unsafe-password "$KEYSTORE_PASSWORD"
+          echo "ETH_KEYSTORE=$RUNNER_TEMP/keystore/deployer" >> "$GITHUB_ENV"
+          echo "PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Deploy contract
+        if: inputs.dry_run == false
+        env:
+          ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
+          CHAIN: ${{ steps.network.outputs.chain_id }}
+        run: |
+          cd service_contracts
+          bash "${{ steps.script.outputs.path }}" 2>&1 | tee "$RUNNER_TEMP/deploy-output.txt"
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/keystore"
+
+      - name: Generate job summary
+        if: always()
+        env:
+          EXPLORER_URL: ${{ steps.network.outputs.explorer_url }}
+        run: |
+          {
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "## Dry Run: ${{ steps.script.outputs.label }}"
+              echo ""
+              echo "> Build completed successfully. Ready to deploy."
+            else
+              echo "## Deployment: ${{ steps.script.outputs.label }}"
+            fi
+
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|-----------|-------|"
+            echo "| **Network** | ${{ inputs.network }} (${{ steps.network.outputs.chain_id }}) |"
+            echo "| **Contract** | ${{ steps.script.outputs.label }} |"
+            echo "| **Commit** | \`${GITHUB_SHA::8}\` |"
+            echo "| **Actor** | @${{ github.actor }} |"
+            echo "| **Dry Run** | ${{ inputs.dry_run }} |"
+
+            if [ "${{ inputs.dry_run }}" = "false" ] && [ -f "$RUNNER_TEMP/deploy-output.txt" ]; then
+              echo ""
+              echo "### Deployed Addresses"
+              echo ""
+              echo '```'
+              grep -iE "deployed (to|at):?\s*0x[a-fA-F0-9]{40}" "$RUNNER_TEMP/deploy-output.txt" || echo "No addresses found in output"
+              echo '```'
+
+              echo ""
+              echo "### Explorer Links"
+              echo ""
+              grep -iE "deployed (to|at):?\s*0x[a-fA-F0-9]{40}" "$RUNNER_TEMP/deploy-output.txt" \
+                | grep -ioE "0x[a-fA-F0-9]{40}" | sort -u | while read -r addr; do
+                  echo "- [$addr]($EXPLORER_URL/address/$addr)"
+                done
+
+              DIFF=$(cd service_contracts && git diff deployments.json 2>/dev/null || true)
+              if [ -n "$DIFF" ]; then
+                echo ""
+                echo "### deployments.json Changes"
+                echo ""
+                echo '```diff'
+                echo "$DIFF"
+                echo '```'
+                echo ""
+                echo "> **Note:** deployments.json was updated locally but NOT committed. Update it manually in your upgrade PR."
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
