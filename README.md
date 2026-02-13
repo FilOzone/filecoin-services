@@ -125,6 +125,10 @@ make help
 
 For comprehensive deployment instructions, parameters, and scripts, see [service_contracts/tools/README.md](./service_contracts/tools/README.md).
 
+## 📊 Subgraph
+
+The subgraph for indexing Filecoin Warm Storage Service contracts is maintained in a separate repository: [FIL-Builders/fwss-subgraph](https://github.com/FIL-Builders/fwss-subgraph).
+
 ## 🔗 Dependencies
 
 This project builds on several key components:
