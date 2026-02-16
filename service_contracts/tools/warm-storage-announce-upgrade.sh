@@ -1,21 +1,31 @@
 #!/bin/bash
 
-# warm-storage-announce-upgrade.sh: Completes a pending upgrade
-# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_FWSS_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
+# warm-storage-announce-upgrade.sh: Announces a planned FWSS upgrade
+# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_FWSS_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
+# Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
+# Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending
+
+# Get script directory and source deployments.sh
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+source "$SCRIPT_DIR/deployments.sh"
+
+CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
 
-if [ -z "$ETH_KEYSTORE" ]; then
-  echo "Error: ETH_KEYSTORE is not set"
-  exit 1
-fi
+if [ "$CALLDATA_ONLY" != "true" ]; then
+  if [ -z "$ETH_KEYSTORE" ]; then
+    echo "Error: ETH_KEYSTORE is not set"
+    exit 1
+  fi
 
-if [ -z "$PASSWORD" ]; then
-  echo "Error: PASSWORD is not set"
-  exit 1
+  if [ -z "$PASSWORD" ]; then
+    echo "Error: PASSWORD is not set"
+    exit 1
+  fi
 fi
 
 if [ -z "$CHAIN" ]; then
@@ -45,17 +55,22 @@ else
   echo "Announcing planned upgrade after $(($AFTER_EPOCH - $CURRENT_EPOCH)) epochs"
 fi
 
+if [ -z "$FWSS_PROXY_ADDRESS" ]; then
+  echo "Error: FWSS_PROXY_ADDRESS is not set"
+  exit 1
+fi
+
+if [ "$CALLDATA_ONLY" = "true" ]; then
+  CALLDATA=$(cast calldata "announcePlannedUpgrade((address,uint96))" "($NEW_FWSS_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)")
+  print_safe_transaction "$FWSS_PROXY_ADDRESS" "announcePlannedUpgrade((address,uint96))" "$CALLDATA"
+  exit 0
+fi
 
 ADDR=$(cast wallet address --password "$PASSWORD")
 echo "Sending announcement from owner address: $ADDR"
 
 # Get current nonce
 NONCE=$(cast nonce "$ADDR")
-
-if [ -z "$FWSS_PROXY_ADDRESS" ]; then
-  echo "Error: FWSS_PROXY_ADDRESS is not set"
-  exit 1
-fi
 
 PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
 if [ "$PROXY_OWNER" != "$ADDR" ]; then

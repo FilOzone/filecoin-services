@@ -7,14 +7,21 @@
 # - ETH_RPC_URL: RPC endpoint URL
 # - FWSS_PROXY_ADDRESS: Address of the deployed FilecoinWarmStorageService proxy
 # - FWSS_VIEW_ADDRESS: Address of the deployed FilecoinWarmStorageServiceStateView
+#
+# Required for direct send (not CALLDATA_ONLY):
 # - ETH_KEYSTORE: Path to keystore file
 # - PASSWORD: Keystore password
 # - NONCE: Transaction nonce (optional, will fetch if not provided)
+#
+# Optional:
+# - CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
   exit 1
 fi
+
+CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
 
 # Auto-detect chain ID from RPC if not already set
 if [ -z "$CHAIN" ]; then
@@ -38,6 +45,12 @@ fi
 if [ -z "$FWSS_VIEW_ADDRESS" ]; then
   echo "Error: FWSS_VIEW_ADDRESS is not set"
   exit 1
+fi
+
+if [ "$CALLDATA_ONLY" = "true" ]; then
+  CALLDATA=$(cast calldata "setViewContract(address)" "$FWSS_VIEW_ADDRESS")
+  print_safe_transaction "$FWSS_PROXY_ADDRESS" "setViewContract(address)" "$CALLDATA"
+  exit 0
 fi
 
 if [ -z "$ETH_KEYSTORE" ]; then

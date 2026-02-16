@@ -16,6 +16,60 @@ This document describes the upgrade process for FilecoinWarmStorageService (FWSS
 
 > For upgrading ServiceProviderRegistry or redeploying StateView, see [Upgrading Other Contracts](#upgrading-other-contracts).
 
+## Multisig Ownership
+
+FWSS contracts are owned by a Safe multisig. All `onlyOwner` operations (upgrades, config changes) must be submitted as multisig transactions.
+
+### Safe Addresses
+
+| Network | Safe Address |
+|---------|-------------|
+| Mainnet (314) | `0x6386622B4915B027900d65560b0ab84F8a1ff2AA` |
+| Calibnet (314159) | `0x6386622B4915B027900d65560b0ab84F8a1ff2AA` |
+
+### Contracts Under Multisig Ownership
+
+| Contract | Mainnet | Calibnet |
+|----------|---------|----------|
+| FWSS Proxy | `0x8408502033C418E1bbC97cE9ac48E5528F371A9f` | `0x02925630df557F957f70E112bA06e50965417CA0` |
+| ServiceProviderRegistry Proxy | `0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB` | `0x839e5c9988e4e9977d40708d0094103c0839Ac9D` |
+
+### Generating Calldata for Multisig Transactions
+
+All upgrade and management scripts support `CALLDATA_ONLY=true` mode. When enabled, the script skips keystore/password requirements, performs read-only validation, generates the transaction calldata, and prints a formatted block to paste into the Safe UI transaction builder.
+
+```bash
+# Example: announce an upgrade via multisig
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
+export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
+export AFTER_EPOCH="123456"
+
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+```
+
+The output will look like:
+
+```
+============================================================
+  Safe Multisig Transaction
+============================================================
+  Target:    0x8408502033C418E1bbC97cE9ac48E5528F371A9f
+  Function:  announcePlannedUpgrade((address,uint96))
+  Calldata:  0x...
+  Value:     0
+============================================================
+
+Paste the calldata above into the Safe UI transaction builder.
+```
+
+In the Safe UI:
+1. Go to **New Transaction → Transaction Builder**
+2. Enter the **Target** address as the "to" address
+3. Set **Value** to 0
+4. Paste the **Calldata** into the "data" field
+5. Submit and collect required signatures
+
 ## Two-Step Upgrade Mechanism
 
 FWSS uses a two-step upgrade to give stakeholders notice:
@@ -80,6 +134,7 @@ Deploy via the [Deploy Contract](https://github.com/FilOzone/filecoin-services/a
 
 Export the deployed address as `NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS`. The announce script will automatically update `deployments.json` — commit the changes in the branch of the upgrade PR.
 
+**Direct send (EOA owner):**
 ```bash
 cd service_contracts/tools
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
@@ -90,15 +145,37 @@ export AFTER_EPOCH="123456"
 ./warm-storage-announce-upgrade.sh
 ```
 
+**Multisig owner (generate calldata):**
+```bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="0x..."
+export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
+export AFTER_EPOCH="123456"
+
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+# Paste the output calldata into the Safe UI transaction builder
+```
+
 ### Execute Upgrade
 
 After `AFTER_EPOCH` passes:
 
+**Direct send (EOA owner):**
 ```bash
 export WARM_STORAGE_PROXY_ADDRESS="0x..."
 export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
 
 ./warm-storage-execute-upgrade.sh
+```
+
+**Multisig owner (generate calldata):**
+```bash
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="0x..."
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="0x..."
+
+CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 ```
 
 Verify the upgrade on [Calibnet Blockscout](https://calibration.filfox.info/).
@@ -291,6 +368,9 @@ The scripts update `deployments.json` automatically. Commit the changes in the b
 | `ETH_KEYSTORE` | Path to Ethereum keystore file |
 | `PASSWORD` | Keystore password |
 | `CHAIN` | Chain ID (auto-detected if not set) |
+| `CALLDATA_ONLY` | Set to `true` to generate calldata for Safe multisig instead of sending transactions |
+| `NEW_OWNER` | New owner address for `transfer-ownership.sh` |
+| `DRY_RUN` | Set to `true` for read-only mode in `transfer-ownership.sh` |
 
 ### FWSS Variables
 

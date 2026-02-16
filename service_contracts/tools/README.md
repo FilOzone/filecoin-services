@@ -28,6 +28,12 @@ Scripts are organized with prefixes for better discoverability:
 | `service-provider-registry-announce-upgrade.sh` | Announce a planned registry upgrade |
 | `service-provider-registry-execute-upgrade.sh` | Execute a previously announced registry upgrade |
 
+### Ownership Management Scripts
+
+| Script | Description |
+|--------|-------------|
+| `transfer-ownership.sh` | Transfer ownership of FWSS and ServiceProviderRegistry proxies to a new owner |
+
 ### Other Scripts
 
 | Script | Description |
@@ -201,6 +207,53 @@ This gives stakeholders time to review changes before execution.
 - Verification procedures
 
 See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
+
+## Ownership Transfer
+
+The `transfer-ownership.sh` script transfers ownership of the FWSS proxy and ServiceProviderRegistry proxy to a new owner (e.g., a Safe multisig). The transfer uses OpenZeppelin's `transferOwnership(address)` — immediate, one-step, irreversible.
+
+### Dry Run (read-only)
+
+```bash
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export NEW_OWNER="0x6386622B4915B027900d65560b0ab84F8a1ff2AA"
+DRY_RUN=true ./transfer-ownership.sh
+```
+
+### Execute Transfer
+
+```bash
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export ETH_KEYSTORE="/path/to/keystore.json"
+export PASSWORD="your-password"
+export NEW_OWNER="0x6386622B4915B027900d65560b0ab84F8a1ff2AA"
+./transfer-ownership.sh
+```
+
+The script verifies `NEW_OWNER` is a contract (not an EOA), checks the sender is the current owner of both contracts, and verifies ownership after each transfer.
+
+## Post-Transfer: Multisig Operations
+
+After ownership is transferred to a multisig, the upgrade and management scripts can no longer send transactions directly. Instead, use `CALLDATA_ONLY=true` to generate calldata for the Safe transaction builder.
+
+The following scripts support `CALLDATA_ONLY=true`:
+- `warm-storage-announce-upgrade.sh`
+- `warm-storage-execute-upgrade.sh`
+- `service-provider-registry-announce-upgrade.sh`
+- `service-provider-registry-execute-upgrade.sh`
+- `warm-storage-set-view.sh`
+
+### Example: Announce an upgrade via multisig
+
+```bash
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
+export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
+export AFTER_EPOCH="123456"
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+```
+
+This prints a formatted transaction block with the target address, function signature, and calldata to paste into the Safe UI transaction builder.
 
 ## Testing
 

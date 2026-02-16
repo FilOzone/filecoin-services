@@ -1,16 +1,19 @@
 #!/bin/bash
 
 # warm-storage-execute-upgrade.sh: Completes a pending upgrade
-# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, ETH_KEYSTORE, PASSWORD, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
-# Optional args: NEW_FWSS_VIEW_ADDRESS
+# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
+# Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
+# Optional args: NEW_FWSS_VIEW_ADDRESS, CALLDATA_ONLY=true
 # Calculated if unset: CHAIN, FWSS_VIEW_ADDRESS
 
 # Get script directory and source deployments.sh
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/deployments.sh"
 
+CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
+
 if [ -z "$NEW_FWSS_VIEW_ADDRESS" ]; then
-  echo "Warning: NEW_FWSS_VIEW_ADDRESS is not set. Keeping previous view contract." 
+  echo "Warning: NEW_FWSS_VIEW_ADDRESS is not set. Keeping previous view contract."
 fi
 
 if [ -z "$ETH_RPC_URL" ]; then
@@ -18,14 +21,16 @@ if [ -z "$ETH_RPC_URL" ]; then
   exit 1
 fi
 
-if [ -z "$ETH_KEYSTORE" ]; then
-  echo "Error: ETH_KEYSTORE is not set"
-  exit 1
-fi
+if [ "$CALLDATA_ONLY" != "true" ]; then
+  if [ -z "$ETH_KEYSTORE" ]; then
+    echo "Error: ETH_KEYSTORE is not set"
+    exit 1
+  fi
 
-if [ -z "$PASSWORD" ]; then
-  echo "Error: PASSWORD is not set"
-  exit 1
+  if [ -z "$PASSWORD" ]; then
+    echo "Error: PASSWORD is not set"
+    exit 1
+  fi
 fi
 
 if [ -z "$CHAIN" ]; then
@@ -39,21 +44,23 @@ fi
 # Load deployment addresses from deployments.json
 load_deployment_addresses "$CHAIN"
 
-ADDR=$(cast wallet address --password "$PASSWORD")
-echo "Using owner address: $ADDR"
-
-# Get current nonce
-NONCE=$(cast nonce "$ADDR")
-
 if [ -z "$FWSS_PROXY_ADDRESS" ]; then
   echo "Error: FWSS_PROXY_ADDRESS is not set"
   exit 1
 fi
 
-PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
-if [ "$PROXY_OWNER" != "$ADDR" ]; then
-  echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
-  exit 1
+if [ "$CALLDATA_ONLY" != "true" ]; then
+  ADDR=$(cast wallet address --password "$PASSWORD")
+  echo "Using owner address: $ADDR"
+
+  # Get current nonce
+  NONCE=$(cast nonce "$ADDR")
+
+  PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+  if [ "$PROXY_OWNER" != "$ADDR" ]; then
+    echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
+    exit 1
+  fi
 fi
 
 if [ -z "$FWSS_VIEW_ADDRESS" ]; then
@@ -90,6 +97,12 @@ else
   MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
 fi
 
+if [ "$CALLDATA_ONLY" = "true" ]; then
+  CALLDATA=$(cast calldata "upgradeToAndCall(address,bytes)" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA")
+  print_safe_transaction "$FWSS_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$CALLDATA"
+  exit 0
+fi
+
 # Call upgradeToAndCall on the proxy with migrate function
 echo "Upgrading proxy and calling migrate..."
 TX_HASH=$(cast send "$FWSS_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
@@ -120,8 +133,8 @@ NEW_IMPL=$(cast rpc eth_getStorageAt "$FWSS_PROXY_ADDRESS" 0x360894a13ba1a321066
 export EXPECTED_IMPL=$(echo $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')
 
 if [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
-    echo "✅ Upgrade successful! Proxy now points to: $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS"
-    
+    echo "Upgrade successful! Proxy now points to: $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS"
+
     # Update deployments.json with new implementation address
     if [ -n "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" ]; then
         update_deployment_address "$CHAIN" "FWSS_IMPLEMENTATION_ADDRESS" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS"
@@ -131,7 +144,7 @@ if [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
     fi
     update_deployment_metadata "$CHAIN"
 else
-    echo "⚠️  Warning: Could not verify upgrade. Please check manually."
+    echo "Warning: Could not verify upgrade. Please check manually."
     echo "Expected: $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS"
     echo "Got: $NEW_IMPL"
 fi
