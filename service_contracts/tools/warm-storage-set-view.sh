@@ -35,6 +35,7 @@ fi
 # Load deployments.json helpers and populate defaults if available
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/deployments.sh"
+source "$SCRIPT_DIR/multisig.sh"
 load_deployment_addresses "$CHAIN"
 
 if [ -z "$FWSS_PROXY_ADDRESS" ]; then
