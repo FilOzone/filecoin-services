@@ -25,6 +25,22 @@ source "$SCRIPT_DIR/deployments.sh"
 
 DRY_RUN="${DRY_RUN:-false}"
 
+# Helper: convert string to lowercase
+to_lowercase() {
+  echo "$1" | tr '[:upper:]' '[:lower:]'
+}
+
+# Helper: get Filfox explorer URL for a transaction
+explorer_tx_url() {
+  local chain_id="$1"
+  local tx_hash="$2"
+  case "$chain_id" in
+    314)    echo "https://filfox.info/en/tx/$tx_hash" ;;
+    314159) echo "https://calibration.filfox.info/en/tx/$tx_hash" ;;
+    *)      echo "" ;;
+  esac
+}
+
 # --- Validate common requirements ---
 
 if [ -z "$ETH_RPC_URL" ]; then
@@ -138,20 +154,22 @@ echo "  Nonce:    $NONCE"
 TX_HASH=$(cast send "$FWSS_PROXY_ADDRESS" "transferOwnership(address)" "$NEW_OWNER" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
-  --json | jq -r '.transactionHash')
+  --async)
 
 if [ -z "$TX_HASH" ] || [ "$TX_HASH" = "null" ]; then
   echo "Error: Failed to send transferOwnership transaction for FWSS proxy"
   exit 1
 fi
 
+EXPLORER_URL=$(explorer_tx_url "$CHAIN" "$TX_HASH")
 echo "  TX sent: $TX_HASH"
+[ -n "$EXPLORER_URL" ] && echo "  Explorer: $EXPLORER_URL"
 echo "  Waiting for confirmation..."
 cast receipt "$TX_HASH" --confirmations 1 > /dev/null
 
 # Verify new owner
 FWSS_NEW_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
-if [ "$(echo "$FWSS_NEW_OWNER" | tr '[:upper:]' '[:lower:]')" != "$(echo "$NEW_OWNER" | tr '[:upper:]' '[:lower:]')" ]; then
+if [ "$(to_lowercase "$FWSS_NEW_OWNER")" != "$(to_lowercase "$NEW_OWNER")" ]; then
   echo "Error: FWSS proxy owner verification failed!"
   echo "  Expected: $NEW_OWNER"
   echo "  Got:      $FWSS_NEW_OWNER"
@@ -174,20 +192,22 @@ echo "  Nonce:    $NONCE"
 TX_HASH=$(cast send "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "transferOwnership(address)" "$NEW_OWNER" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
-  --json | jq -r '.transactionHash')
+  --async)
 
 if [ -z "$TX_HASH" ] || [ "$TX_HASH" = "null" ]; then
   echo "Error: Failed to send transferOwnership transaction for ServiceProviderRegistry proxy"
   exit 1
 fi
 
+EXPLORER_URL=$(explorer_tx_url "$CHAIN" "$TX_HASH")
 echo "  TX sent: $TX_HASH"
+[ -n "$EXPLORER_URL" ] && echo "  Explorer: $EXPLORER_URL"
 echo "  Waiting for confirmation..."
 cast receipt "$TX_HASH" --confirmations 1 > /dev/null
 
 # Verify new owner
 SPR_NEW_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
-if [ "$(echo "$SPR_NEW_OWNER" | tr '[:upper:]' '[:lower:]')" != "$(echo "$NEW_OWNER" | tr '[:upper:]' '[:lower:]')" ]; then
+if [ "$(to_lowercase "$SPR_NEW_OWNER")" != "$(to_lowercase "$NEW_OWNER")" ]; then
   echo "Error: ServiceProviderRegistry proxy owner verification failed!"
   echo "  Expected: $NEW_OWNER"
   echo "  Got:      $SPR_NEW_OWNER"
