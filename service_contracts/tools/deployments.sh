@@ -74,7 +74,7 @@ load_deployment_addresses() {
     while IFS='=' read -r key value; do
         if [ -n "$key" ] && [ -n "$value" ] && [ "$value" != "null" ]; then
             # Only set if not already set (allow env vars to override)
-            if [ -z "${!key}" ]; then
+            if [ -z "${!key:-}" ]; then
                 export "$key=$value"
                 echo "  ✓ Loaded $key=$value"
             else
