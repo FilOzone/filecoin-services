@@ -9,7 +9,7 @@ This release includes bug fixes, new features, and operational improvements for 
 
 ### Deployment Addresses
 
-See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/tree/v1.1.0/service_contracts/service_contracts/deployments.json) for v1.1.0 Mainnet (chain 314) and Calibnet (chain 314159) contract addresses.
+See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/v1.1.0/service_contracts/deployments.json) for v1.1.0 Mainnet (chain 314) and Calibnet (chain 314159) contract addresses.
 
 ### Added
 - `ProviderIdSet` contract for efficient provider ID management ([#386](https://github.com/FilOzone/filecoin-services/pull/386))
