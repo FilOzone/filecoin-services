@@ -215,49 +215,47 @@ FWSS is composed of multiple independently-deployed contracts connected by on-ch
 ### System Diagram
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          Contract Topology                               │
-│                                                                          │
-│  ┌─────────────────────┐         PDPListener callbacks                   │
-│  │   PDPVerifier        │─────────────────────────────┐                  │
-│  │   (UUPS proxy)       │                             ▼                  │
-│  └─────────────────────┘         ┌──────────────────────────────────┐    │
-│                                  │  FilecoinWarmStorageService       │    │
-│                                  │  (UUPS proxy)                    │    │
-│  ┌─────────────────────┐        │                                  │    │
-│  │   FilecoinPayV1      │◄───────┤  createRail / modifyRailPayment  │    │
-│  │   (immutable)        │────────┤  settleRail / terminateRail      │    │
-│  └─────────────────────┘        │                                  │    │
-│       │  IValidator callbacks    │                                  │    │
-│       │  (validatePayment,       │                                  │    │
-│       │   railTerminated)        │                                  │    │
-│       └──────────────────────────►                                  │    │
-│                                  │                                  │    │
-│  ┌─────────────────────┐        │  getProviderIdByAddress          │    │
-│  │ ServiceProvider-     │◄───────┤  getProviderPayee               │    │
-│  │ Registry (UUPS proxy)│        │                                  │    │
-│  └─────────────────────┘        │                                  │    │
-│                                  │                                  │    │
-│  ┌─────────────────────┐        │  check authorizationExpiry       │    │
-│  │ SessionKeyRegistry   │◄───────┤                                  │    │
-│  │ (immutable)          │        │                                  │    │
-│  └─────────────────────┘        └──────────┬───────────────────────┘    │
-│                                             │                            │
-│  ┌─────────────────────┐                    │ uses                       │
-│  │ SignatureVerification│◄───────────────────┘                           │
-│  │ Lib (library)        │                                                │
-│  └─────────────────────┘                                                │
-│                                                                          │
-│  ┌─────────────────────┐        ┌──────────────────────┐                │
-│  │ StateView            │───────►│ FWSS (read-only)     │                │
-│  │ (immutable)          │        └──────────────────────┘                │
-│  └─────────────────────┘                                                │
-│                                                                          │
-│  ┌─────────────────────┐                                                │
-│  │ USDFC Token          │  Referenced by FWSS and FilecoinPayV1          │
-│  │ (immutable ERC20)    │                                                │
-│  └─────────────────────┘                                                │
-└──────────────────────────────────────────────────────────────────────────┘
+                          Contract Topology
+
+┌──────────────────────┐         PDPListener callbacks
+│ PDPVerifier          │──────────────────────────────────┐
+│ (UUPS proxy)         │                                  ▼
+└──────────────────────┘    ┌────────────────────────────────────┐
+                            │ FilecoinWarmStorageService         │
+                            │ (UUPS proxy)                       │
+┌──────────────────────┐    │                                    │
+│ FilecoinPayV1        │◄───┤ createRail / modifyRailPayment     │
+│ (immutable)          │────┤ settleRail / terminateRail         │
+└──────────────────────┘    │                                    │
+   │ IValidator callbacks   │                                    │
+   │ (validatePayment,      │                                    │
+   │  railTerminated)       │                                    │
+   └───────────────────────►│                                    │
+                            │                                    │
+┌──────────────────────┐    │ getProviderIdByAddress             │
+│ ServiceProvider-     │◄───┤ getProviderPayee                   │
+│ Registry (UUPS proxy)│    │                                    │
+└──────────────────────┘    │                                    │
+                            │                                    │
+┌──────────────────────┐    │ check authorizationExpiry          │
+│ SessionKeyRegistry   │◄───┤                                    │
+│ (immutable)          │    │                                    │
+└──────────────────────┘    └───────────────┬────────────────────┘
+                                            │ uses
+┌──────────────────────┐                    │
+│ SignatureVerification│◄───────────────────┘
+│ Lib (library)        │
+└──────────────────────┘
+
+┌──────────────────────┐    ┌────────────────────────┐
+│ StateView            │────► FWSS (read-only)       │
+│ (immutable)          │    └────────────────────────┘
+└──────────────────────┘
+
+┌──────────────────────┐
+│ USDFC Token          │  Referenced by FWSS and FilecoinPayV1
+│ (immutable ERC20)    │
+└──────────────────────┘
 ```
 
 Arrows indicate the direction of calls. Bidirectional arrows between FWSS and FilecoinPayV1 reflect the callback pattern: FWSS calls FilecoinPayV1 to manage rails, and FilecoinPayV1 calls back into FWSS (as an IValidator) during settlement and termination.
