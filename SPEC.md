@@ -271,7 +271,7 @@ Arrows indicate the direction of calls. Bidirectional arrows between FWSS and Fi
 | SessionKeyRegistry | No | Immutable | Session key authorization; maps (user, signer, permission) → expiry |
 | StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS |
 | SignatureVerificationLib | No | External library | EIP-712 signature recovery and session key validation |
-| USDFC Token | No | Immutable ERC20 | Payment token for all storage and CDN settlements |
+| [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
 
 **[UUPS]** (Universal Upgradeable Proxy Standard, [ERC-1822](https://eips.ethereum.org/EIPS/eip-1822)) is a proxy pattern where the upgrade logic lives in the implementation contract rather than the proxy. The proxy delegates all calls to the current implementation, and only the implementation can authorize a switch to a new one. See the [OpenZeppelin UUPS guide](https://docs.openzeppelin.com/contracts/5.x/api/proxy#UUPSUpgradeable) for details.
 
@@ -302,7 +302,7 @@ The FWSS constructor sets several **immutable addresses** that are baked into th
 
 - `pdpVerifierAddress` — PDPVerifier proxy
 - `paymentsContractAddress` — FilecoinPayV1
-- `usdfcTokenAddress` — USDFC token
+- `usdfcTokenAddress` — [USDFC token](https://docs.secured.finance/usdfc-stablecoin/deployed-contracts) (external)
 - `filBeamBeneficiaryAddress` — CDN beneficiary
 - `serviceProviderRegistry` — ServiceProviderRegistry proxy
 - `sessionKeyRegistry` — SessionKeyRegistry
