@@ -282,7 +282,7 @@ FWSS, PDPVerifier, and ServiceProviderRegistry each implement the same **two-ste
 ```solidity
 function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
     require(plannedUpgrade.nextImplementation.code.length > 3000);
-    require(plannedUpgrade.afterEpoch > block.number);
+    require(plannedUpgrade.afterEpoch > block.number); // plannedUpgrade.afterEpoch  must be at least one block later than `block.number`.  The delay is intended to gives users time to review the announced implementation before it takes effect.
     nextUpgrade = plannedUpgrade;
     emit UpgradeAnnounced(plannedUpgrade);
 }
