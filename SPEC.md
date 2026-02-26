@@ -292,6 +292,8 @@ Because these are Solidity `immutable` variables, they live in the deployed byte
 
 References to non-proxy contracts (FilecoinPayV1, SessionKeyRegistry) are **rigid**: replacing them requires a new FWSS implementation carrying the new address, plus the two-step upgrade. State held in the old contract (rail balances, lockups, session key authorizations) is **orphaned** — it cannot be migrated automatically and must be handled explicitly.
 
+**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy.
+
 ### Data Flows
 
 The following sequences describe the primary cross-contract call paths.
@@ -330,8 +332,8 @@ sequenceDiagram
     Caller->>FilecoinPayV1: settleRail(railId)
     FilecoinPayV1->>FWSS: validatePayment(railId, fromEpoch, toEpoch)
     Note over FWSS: find proven periods in range
-    FWSS-->>FilecoinPayV1: provenEpochCount, finalSettlementEpoch
-    Note over FilecoinPayV1: adjust payment, update settledUpTo
+    FWSS-->>FilecoinPayV1: ValidationResult(modifiedAmount, settleUpto)
+    Note over FilecoinPayV1: pay modifiedAmount, advance settledUpTo
   end
 
   rect rgba(248, 248, 248, 0.2)
@@ -409,6 +411,16 @@ SessionKeyRegistry is **not upgradeable**. It stores session key authorization m
 **Impact assessment.** The impact of a SessionKeyRegistry flaw is relatively low compared to FilecoinPayV1 because it holds only authorization state, not funds. Replacing it requires a new FWSS implementation pointing to the new registry (plus the two-step upgrade). Users must re-register their session keys in the new contract. Existing datasets and rails are unaffected — session keys are only checked during dataset creation and piece operations, not during settlement or proving.
 
 **TODO:** Evaluate a dual-registry transition period where FWSS checks both the old and new registry during migration, allowing users to migrate keys without a hard cutover.
+
+### StateView (FilecoinWarmStorageServiceStateView)
+
+StateView is an **immutable**, auto-generated, read-only contract that queries FWSS storage via `extsload`. It provides ~40 view methods for off-chain callers. FWSS holds a reference to its current StateView in a storage variable (`viewContractAddress`), which external systems (e.g., Synapse) use for discoverability.
+
+StateView depends on FWSS's storage layout remaining stable — it reads specific storage slots via the auto-generated `FilecoinWarmStorageServiceStateInternalLibrary`. If FWSS storage layout changes, StateView (and the internal library) must be regenerated and redeployed to match.
+
+**Impact assessment.** A StateView bug affects only read-only queries — it cannot corrupt FWSS state or affect settlement, proving, or any on-chain operations. The blast radius is limited to off-chain consumers that route queries through StateView.
+
+**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. Alternatively, the new StateView address can be set during the next FWSS upgrade via `migrate()`.
 
 ### Cross-Cutting Concerns
 
