@@ -310,8 +310,10 @@ sequenceDiagram
 
   rect rgba(248, 248, 248, 0.2)
     Note over Client: 1. Dataset Creation
-    Client->>PDPVerifier: create dataset
-    PDPVerifier->>FWSS: dataSetCreated callback
+    Client->>SP: signed EIP-712 authorization (extraData)
+    SP->>PDPVerifier: createDataSet(listener, extraData)
+    PDPVerifier->>FWSS: dataSetCreated callback (extraData)
+    Note over FWSS: verify client EIP-712 signature
     FWSS->>ServiceProviderRegistry: getProviderPayee(providerId)
     ServiceProviderRegistry-->>FWSS: payee address
     FWSS->>FilecoinPayV1: createRail(client, payee, ...)
@@ -320,15 +322,27 @@ sequenceDiagram
 
   rect rgba(248, 248, 248, 0.2)
     Note over Client: 2. Piece Addition
-    SP->>PDPVerifier: add pieces
-    PDPVerifier->>FWSS: piecesAdded callback
+    Client->>SP: signed EIP-712 authorization (extraData)
+    SP->>PDPVerifier: addPieces(setId, pieces, extraData)
+    PDPVerifier->>FWSS: piecesAdded callback (extraData)
+    Note over FWSS: verify client EIP-712 signature
     Note over FWSS: recalculate rate from new total size
     FWSS->>FilecoinPayV1: modifyRailPayment(railId, newRate)
     FilecoinPayV1-->>FWSS: rate updated
   end
 
   rect rgba(248, 248, 248, 0.2)
-    Note over Client: 3. Settlement
+    Note over Client: 3. Schedule Deletions
+    Client->>SP: signed EIP-712 authorization (extraData)
+    SP->>PDPVerifier: schedulePieceDeletions(setId, pieceIds, extraData)
+    PDPVerifier->>FWSS: piecesScheduledRemove callback (extraData)
+    Note over FWSS: verify client EIP-712 signature
+    Note over FWSS: queue removal (deferred to next proving period)
+    Note over PDPVerifier: on nextProvingPeriod: pieces removed, rate updated
+  end
+
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 4. Settlement
     Caller->>FilecoinPayV1: settleRail(railId)
     FilecoinPayV1->>FWSS: validatePayment(railId, fromEpoch, toEpoch)
     Note over FWSS: find proven periods in range
@@ -337,7 +351,7 @@ sequenceDiagram
   end
 
   rect rgba(248, 248, 248, 0.2)
-    Note over Client: 4. Proving
+    Note over Client: 5. Proving
     SP->>PDPVerifier: provePossession(proof, ...)
     Note over PDPVerifier: verify proof
     PDPVerifier->>FWSS: possessionProven callback
@@ -345,7 +359,7 @@ sequenceDiagram
   end
 
   rect rgba(248, 248, 248, 0.2)
-    Note over Client: 5. Termination
+    Note over Client: 6. Termination
     Client->>FWSS: (option 1) terminateService(datasetId)
     SP->>FWSS: (option 2) terminateService(datasetId)
     FWSS->>FilecoinPayV1: terminateRail(railId)
