@@ -273,11 +273,11 @@ Arrows indicate the direction of calls. Bidirectional arrows between FWSS and Fi
 | SignatureVerificationLib | No | External library | EIP-712 signature recovery and session key validation |
 | [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
 
-**[UUPS]** (Universal Upgradeable Proxy Standard, [ERC-1822](https://eips.ethereum.org/EIPS/eip-1822)) is a proxy pattern where the upgrade logic lives in the implementation contract rather than the proxy. The proxy delegates all calls to the current implementation, and only the implementation can authorize a switch to a new one. See the [OpenZeppelin UUPS guide](https://docs.openzeppelin.com/contracts/5.x/api/proxy#UUPSUpgradeable) for details.
-
 ### Upgrade Mechanism
 
-FWSS, PDPVerifier, and ServiceProviderRegistry each implement the same **two-step announce-then-upgrade** pattern. The owner first calls `announcePlannedUpgrade(PlannedUpgrade)` with the address of the new implementation and a future block number. The upgrade cannot execute until that block number is reached. When `upgradeToAndCall` is later invoked, the internal `_authorizeUpgrade` guard verifies the implementation matches the announcement and the delay has elapsed:
+FWSS, PDPVerifier, and ServiceProviderRegistry follow the **[UUPS]** (Universal Upgradeable Proxy Standard, [ERC-1822](https://eips.ethereum.org/EIPS/eip-1822)), a proxy pattern where the upgrade logic lives in the implementation contract rather than the proxy. The proxy delegates all calls to the current implementation, and only the implementation can authorize a switch to a new one. See the [OpenZeppelin UUPS guide](https://docs.openzeppelin.com/contracts/5.x/api/proxy#UUPSUpgradeable) for details.
+
+On top of the standard UUPS pattern, all three contracts implement the same **two-step announce-then-upgrade** pattern. The owner first calls `announcePlannedUpgrade(PlannedUpgrade)` with the address of the new implementation and a future block number. The upgrade cannot execute until that block number is reached. When `upgradeToAndCall` is later invoked, the internal `_authorizeUpgrade` guard verifies the implementation matches the announcement and the delay has elapsed:
 
 ```solidity
 function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
