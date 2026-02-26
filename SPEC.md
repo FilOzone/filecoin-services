@@ -338,7 +338,6 @@ sequenceDiagram
     PDPVerifier->>FWSS: piecesScheduledRemove callback (extraData)
     Note over FWSS: verify client EIP-712 signature
     Note over FWSS: queue removal (deferred to next proving period)
-    Note over PDPVerifier: on nextProvingPeriod: pieces removed, rate updated
   end
 
   rect rgba(248, 248, 248, 0.2)
@@ -359,7 +358,17 @@ sequenceDiagram
   end
 
   rect rgba(248, 248, 248, 0.2)
-    Note over Client: 6. Termination
+    Note over Client: 6. Next Proving Period
+    SP->>PDPVerifier: nextProvingPeriod(setId)
+    PDPVerifier->>FWSS: nextProvingPeriod callback
+    Note over FWSS: process scheduled deletions
+    Note over FWSS: recalculate rate from new total size
+    FWSS->>FilecoinPayV1: modifyRailPayment(railId, newRate)
+    FilecoinPayV1-->>FWSS: rate updated
+  end
+
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 7. Termination
     Client->>FWSS: (option 1) terminateService(datasetId)
     SP->>FWSS: (option 2) terminateService(datasetId)
     FWSS->>FilecoinPayV1: terminateRail(railId)
