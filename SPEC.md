@@ -439,9 +439,11 @@ SessionKeyRegistry is **not upgradeable**. It stores session key authorization m
 
 ### StateView (FilecoinWarmStorageServiceStateView)
 
-StateView is an **immutable**, auto-generated, read-only contract that queries FWSS storage via `extsload`. It provides ~40 view methods for off-chain callers. FWSS holds a reference to its current StateView in a storage variable (`viewContractAddress`), which external systems (e.g., Synapse) use for discoverability.
+StateView is an **immutable**, auto-generated, read-only contract that queries FWSS storage via `extsload`. It provides ~40 view methods for off-chain callers. FWSS holds a mutable reference to its current StateView in a storage variable (`viewContractAddress`), which the owner can update at any time via `setViewContract()` without an FWSS upgrade.
 
 StateView depends on FWSS's storage layout remaining stable — it reads specific storage slots via the auto-generated `FilecoinWarmStorageServiceStateInternalLibrary`. If FWSS storage layout changes, StateView (and the internal library) must be regenerated and redeployed to match.
+
+Because StateView is a read-only contract that reads state from FWSS, **additive deploys are non-breaking**: a new StateView with additional view methods still reads the same underlying FWSS state. Consumers using an older StateView continue to work — they simply lack access to newly added methods. Only bug fixes require coercing consumers to switch to the new address, which is one reason FWSS holds the mutable `viewContractAddress` reference for discoverability. In practice, consumers like Synapse currently hard-wire the StateView address and bump it when a new version is released. This is low-risk given the simplicity of the contract.
 
 **Impact assessment.** A StateView bug affects only read-only queries — it cannot corrupt FWSS state or affect settlement, proving, or any on-chain operations. The blast radius is limited to off-chain consumers that route queries through StateView.
 
