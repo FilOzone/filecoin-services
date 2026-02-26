@@ -321,7 +321,7 @@ The following sequences describe the primary cross-contract call paths.
 
 **2. Piece Addition** — A storage provider adds pieces through PDPVerifier. PDPVerifier calls FWSS via the `piecesAdded` callback. FWSS recalculates the storage rate based on the new total size and calls `FilecoinPayV1.modifyRailPayment` to update the rail's streaming rate.
 
-**3. Settlement** — Anyone calls `FilecoinPayV1.settleRail`. FilecoinPayV1 calls back into FWSS via `IValidator.validatePayment`, passing the proposed settlement range. FWSS checks which proving periods within the range have valid proofs, returning the proven epoch count and the final settlement epoch. FilecoinPayV1 adjusts the payment proportionally.
+**3. Settlement** — Anyone can call `FilecoinPayV1.settleRail`. FilecoinPayV1 calls back into FWSS via `IValidator.validatePayment`, passing the proposed settlement range. FWSS checks which proving periods within the range have valid proofs, returning the proven epoch count and the final settlement epoch. FilecoinPayV1 adjusts the payment proportionally.
 
 **4. Proving** — A storage provider submits a proof to `PDPVerifier.provePossession`. After verification, PDPVerifier calls FWSS via the `possessionProven` callback. FWSS records the proof for the current proving period, which later determines settlement amounts.
 
