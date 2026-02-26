@@ -395,11 +395,13 @@ Most flaws in PDPVerifier logic can be corrected by deploying a new implementati
 
 ### FilecoinPayV1
 
-FilecoinPayV1 is **not upgradeable**. It holds all payment rail state: balances, lockups, rate change queues, and settlement progress. A flaw in FilecoinPayV1 is the **hardest to remediate** because there is no in-place upgrade path.
+FilecoinPayV1 is **not upgradeable**. It holds all payment rail state: balances, lockups, rate change queues, and settlement progress. A flaw in FilecoinPayV1 is the **hardest to remediate** because there is no in-place upgrade path. The response depends on severity:
 
-**Impact assessment.** Replacing FilecoinPayV1 requires deploying a new FilecoinPayV2, deploying a new FWSS implementation that references FilecoinPayV2, and executing the two-step FWSS upgrade. All existing rail IDs in the old contract become orphaned — active rails cannot be migrated automatically because rail state is internal to the contract. Users must re-approve USDFC spending allowances for the new contract. Funds locked in existing rails must be settled or recovered from the old contract before or during the transition.
+**Logic bug or feature gap (incorrect settlement, rate miscalculation, new capability needed).** Deploy FilecoinPayV2, then upgrade FWSS to a **dual-reference implementation** carrying both FilecoinPayV1 and FilecoinPayV2 as immutable references. The new FWSS routes existing rails to v1 and new rails to v2. Existing v1 rails drain naturally through normal settlement and termination — no forced migration. An **opt-in migration path** allows clients and SPs to agree (with signed/verified authorization) to move to new rails: on-chain this means creating new datasets and rails in v2 pointing to the same data on the SP, then terminating the old v1 rails. This is more dramatic on-chain than it is to the user — from the client's and SP's perspective, accounting simply moves over. Users must re-approve USDFC spending allowances for the new contract.
 
-**TODO:** Define a concrete migration procedure. Key decisions include: batch migration vs. opt-in per-rail migration, gas cost estimates, transition window length, whether the old contract remains accessible for settlement of pre-existing rails, and how to handle rails in mid-lockup.
+**Catastrophic bug (funds at risk, exploitable).** The worst case. Emergency action may be required on v1 rails before the dual-reference approach can be deployed. Funds locked in existing rails must be settled or recovered from the old contract, potentially under time pressure.
+
+**TODO:** Define emergency response procedures for the catastrophic case. Key decisions include: whether an emergency pause or withdrawal mechanism should be built into FilecoinPayV1 proactively, how to handle rails in mid-lockup under adversarial conditions, and emergency response timelines.
 
 ### FilecoinWarmStorageService
 
