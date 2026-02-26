@@ -293,8 +293,9 @@ function _authorizeUpgrade(address newImplementation) internal override onlyOwne
     delete nextUpgrade;
 }
 ```
+_(This is from [`FilecoinWarmStorageService.sol:429-441`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/FilecoinWarmStorageService.sol#L429-L441).)_
 
-See [`FilecoinWarmStorageService.sol:429-441`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/FilecoinWarmStorageService.sol#L429-L441). The minimum code-length check (`code.length > 3000`) prevents accidental upgrades to empty or trivially small implementations. The `afterEpoch` delay gives users time to review the announced implementation before it takes effect.
+A successful `_authorizeUpgrade` call will enable the old implementation to set the `newImplementation` address on the proxy, effectively completing the upgrade.
 
 ### Immutable Reference Coupling
 
