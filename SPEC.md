@@ -214,51 +214,29 @@ FWSS is composed of multiple independently-deployed contracts connected by on-ch
 
 ### System Diagram
 
-```
-                          Contract Topology
+```mermaid
+flowchart TB
+  PDPV["PDPVerifier (UUPS proxy)"]
+  FWSS["FilecoinWarmStorageService (UUPS proxy)"]
+  FPV["FilecoinPayV1 (immutable)"]
+  SPR["ServiceProviderRegistry (UUPS proxy)"]
+  SKR["SessionKeyRegistry (immutable)"]
+  SVL["SignatureVerificationLib (library)"]
+  SV["StateView (immutable)"]
+  USDFC["USDFC Token (immutable ERC20)"]
 
-┌──────────────────────┐         PDPListener callbacks
-│ PDPVerifier          │──────────────────────────────────┐
-│ (UUPS proxy)         │                                  ▼
-└──────────────────────┘    ┌────────────────────────────────────┐
-                            │ FilecoinWarmStorageService         │
-                            │ (UUPS proxy)                       │
-┌──────────────────────┐    │                                    │
-│ FilecoinPayV1        │◄───┤ createRail / modifyRailPayment     │
-│ (immutable)          │────┤ settleRail / terminateRail         │
-└──────────────────────┘    │                                    │
-   │ IValidator callbacks   │                                    │
-   │ (validatePayment,      │                                    │
-   │  railTerminated)       │                                    │
-   └───────────────────────►│                                    │
-                            │                                    │
-┌──────────────────────┐    │ getProviderIdByAddress             │
-│ ServiceProvider-     │◄───┤ getProviderPayee                   │
-│ Registry (UUPS proxy)│    │                                    │
-└──────────────────────┘    │                                    │
-                            │                                    │
-┌──────────────────────┐    │ check authorizationExpiry          │
-│ SessionKeyRegistry   │◄───┤                                    │
-│ (immutable)          │    │                                    │
-└──────────────────────┘    └───────────────┬────────────────────┘
-                                            │ uses
-┌──────────────────────┐                    │
-│ SignatureVerification│◄───────────────────┘
-│ Lib (library)        │
-└──────────────────────┘
-
-┌──────────────────────┐    ┌────────────────────────┐
-│ StateView            │────► FWSS (read-only)       │
-│ (immutable)          │    └────────────────────────┘
-└──────────────────────┘
-
-┌──────────────────────┐
-│ USDFC Token          │  Referenced by FWSS and FilecoinPayV1
-│ (immutable ERC20)    │
-└──────────────────────┘
+  PDPV -->|PDPListener callbacks| FWSS
+  FWSS -->|createRail, modifyRailPayment| FPV
+  FPV -->|IValidator: validatePayment, railTerminated| FWSS
+  FWSS -->|getProviderIdByAddress, getProviderPayee| SPR
+  FWSS -->|uses| SVL
+  SVL -->|authorizationExpiry| SKR
+  SV -->|read-only queries| FWSS
+  FWSS -.->|references| USDFC
+  FPV -.->|references| USDFC
 ```
 
-Arrows indicate the direction of calls. Bidirectional arrows between FWSS and FilecoinPayV1 reflect the callback pattern: FWSS calls FilecoinPayV1 to manage rails, and FilecoinPayV1 calls back into FWSS (as an IValidator) during settlement and termination.
+Solid arrows indicate call direction. Dashed arrows indicate token references. Bidirectional arrows between FWSS and FilecoinPayV1 reflect the callback pattern: FWSS calls FilecoinPayV1 to manage rails, and FilecoinPayV1 calls back into FWSS (as an IValidator) during settlement and termination.
 
 ### Contract Inventory
 
@@ -318,15 +296,61 @@ References to non-proxy contracts (FilecoinPayV1, SessionKeyRegistry) are **rigi
 
 The following sequences describe the primary cross-contract call paths.
 
-**1. Dataset Creation** — A client creates a dataset through PDPVerifier. PDPVerifier calls FWSS via the `dataSetCreated` callback. FWSS looks up the provider's payee in ServiceProviderRegistry, then calls `FilecoinPayV1.createRail` to establish a payment rail from the client to the provider.
+```mermaid
+sequenceDiagram
+  participant Caller as Any Caller
+  participant Client
+  participant SP as Storage Provider
+  participant PDPVerifier
+  participant FWSS
+  participant ServiceProviderRegistry
+  participant FilecoinPayV1
 
-**2. Piece Addition** — A storage provider adds pieces through PDPVerifier. PDPVerifier calls FWSS via the `piecesAdded` callback. FWSS recalculates the storage rate based on the new total size and calls `FilecoinPayV1.modifyRailPayment` to update the rail's streaming rate.
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 1. Dataset Creation
+    Client->>PDPVerifier: create dataset
+    PDPVerifier->>FWSS: dataSetCreated callback
+    FWSS->>ServiceProviderRegistry: getProviderPayee(providerId)
+    ServiceProviderRegistry-->>FWSS: payee address
+    FWSS->>FilecoinPayV1: createRail(client, payee, ...)
+    FilecoinPayV1-->>FWSS: rail created
+  end
 
-**3. Settlement** — Anyone can call `FilecoinPayV1.settleRail`. FilecoinPayV1 calls back into FWSS via `IValidator.validatePayment`, passing the proposed settlement range. FWSS checks which proving periods within the range have valid proofs, returning the proven epoch count and the final settlement epoch. FilecoinPayV1 adjusts the payment proportionally.
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 2. Piece Addition
+    SP->>PDPVerifier: add pieces
+    PDPVerifier->>FWSS: piecesAdded callback
+    Note over FWSS: recalculate rate from new total size
+    FWSS->>FilecoinPayV1: modifyRailPayment(railId, newRate)
+    FilecoinPayV1-->>FWSS: rate updated
+  end
 
-**4. Proving** — A storage provider submits a proof to `PDPVerifier.provePossession`. After verification, PDPVerifier calls FWSS via the `possessionProven` callback. FWSS records the proof for the current proving period, which later determines settlement amounts.
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 3. Settlement
+    Caller->>FilecoinPayV1: settleRail(railId)
+    FilecoinPayV1->>FWSS: validatePayment(railId, fromEpoch, toEpoch)
+    Note over FWSS: find proven periods in range
+    FWSS-->>FilecoinPayV1: provenEpochCount, finalSettlementEpoch
+    Note over FilecoinPayV1: adjust payment, update settledUpTo
+  end
 
-**5. Termination** — A client or provider calls `FWSS.terminateService`. FWSS calls `FilecoinPayV1.terminateRail` to begin the lockup countdown on the payment rail. The rail enters the lockup period during which settlement continues normally.
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 4. Proving
+    SP->>PDPVerifier: provePossession(proof, ...)
+    Note over PDPVerifier: verify proof
+    PDPVerifier->>FWSS: possessionProven callback
+    Note over FWSS: record proof for current proving period
+  end
+
+  rect rgba(248, 248, 248, 0.2)
+    Note over Client: 5. Termination
+    Client->>FWSS: (option 1) terminateService(datasetId)
+    SP->>FWSS: (option 2) terminateService(datasetId)
+    FWSS->>FilecoinPayV1: terminateRail(railId)
+    FilecoinPayV1-->>FWSS: rail terminated
+    Note over FilecoinPayV1: rail enters lockup, settlement continues
+  end
+```
 
 ## Failure Scenarios and Migration Strategy
 
