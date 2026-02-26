@@ -307,7 +307,7 @@ The FWSS constructor sets several **immutable addresses** that are baked into th
 - `serviceProviderRegistry` — ServiceProviderRegistry proxy
 - `sessionKeyRegistry` — SessionKeyRegistry
 
-Because these are Solidity `immutable` variables, they live in the deployed bytecode rather than in proxy storage. In a UUPS proxy, upgrading the implementation contract replaces the bytecode, so a new implementation can carry different immutable values. Changing any reference therefore requires deploying a new implementation and executing the two-step upgrade.
+Because these are Solidity `immutable` variables, they live in the deployed bytecode rather than in proxy storage. In a UUPS proxy, upgrading the implementation contract replaces the bytecode, so a new implementation can carry different immutable values. Changing any reference therefore requires deploying a new implementation and executing the [two-step upgrade](#upgrade-process).
 
 **Proxy vs. non-proxy references.** References to proxy contracts (PDPVerifier, ServiceProviderRegistry) are **resilient**: those contracts upgrade their own logic independently without requiring any change to FWSS. The FWSS immutable address points at the proxy, which remains stable across upgrades.
 
