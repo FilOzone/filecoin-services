@@ -435,7 +435,7 @@ SessionKeyRegistry is **not upgradeable**. It stores session key authorization m
 
 **Impact assessment.** The impact of a SessionKeyRegistry flaw is relatively low compared to FilecoinPayV1 because it holds only authorization state, not funds. Replacing it requires a new FWSS implementation pointing to the new registry (plus the two-step upgrade). Users must re-register their session keys in the new contract. Existing datasets and rails are unaffected — session keys are only checked during dataset creation and piece operations, not during settlement or proving.
 
-**TODO:** Evaluate a dual-registry transition period where FWSS checks both the old and new registry during migration, allowing users to migrate keys without a hard cutover.
+**TODO:** Evaluate a dual-registry transition period to allow users to migrate keys without a hard cutover. This could be implemented in FWSS (checking both old and new registries) or in the next SessionKeyRegistry itself (falling back to the previous registry for keys not yet migrated).
 
 ### StateView (FilecoinWarmStorageServiceStateView)
 
