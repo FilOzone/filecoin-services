@@ -75,7 +75,6 @@ Deploy new implementation contracts on both networks before announce/execute.
 
 1. Deploy Calibnet implementation (dry-run, then real) via `Deploy Contract` workflow; capture `CALI_NEW_IMPL`.
 2. Deploy Mainnet implementation (dry-run, then real) via `Deploy Contract` workflow; capture `MAIN_NEW_IMPL`.
-3. Keep `deployments.json` updates in the same PR (do not merge yet).
 
 ## Phase 3: Calibnet Announce + Execute (SAFE path)
 
