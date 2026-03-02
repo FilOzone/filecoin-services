@@ -10,6 +10,11 @@ on:
         options:
           - Calibnet
           - Mainnet
+      fwss_version:
+        description: 'FWSS release version (for issue title), e.g. v1.2.3'
+        required: false
+        type: string
+        default: 'vX.Y.Z'
       upgrade_type:
         description: 'Type of upgrade'
         required: true
@@ -51,6 +56,7 @@ jobs:
         id: create_issue
         env:
           NETWORK: ${{ inputs.network }}
+          RELEASE_VERSION: ${{ inputs.fwss_version }}
           UPGRADE_TYPE: ${{ inputs.upgrade_type }}
           UPGRADE_REGISTRY: ${{ inputs.upgrade_registry }}
           UPGRADE_STATE_VIEW: ${{ inputs.upgrade_state_view }}
@@ -67,6 +73,7 @@ jobs:
         run: |
           echo "## Release Issue ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ inputs.fwss_version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Network**: ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
           echo "**After Epoch**: TBD (set in issue during rollout)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -28,6 +28,7 @@ Options:
 
 Environment variables:
   NETWORK              Target network (Calibnet or Mainnet)
+  RELEASE_VERSION      FWSS release version for the issue title (default: vX.Y.Z)
   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
   AFTER_EPOCH          Block number after which upgrade can execute (optional at issue creation)
   CHANGELOG_PR         PR number with changelog updates (optional at issue creation)
@@ -35,7 +36,6 @@ Environment variables:
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
   UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, default: false, rare)
   UPGRADE_STATE_VIEW   Also redeploying StateView? (true/false, default: false, rare)
-  RELEASE_TAG          Release tag (optional, usually added after upgrade completes)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
@@ -50,6 +50,7 @@ Example:
 // Get configuration from environment
 const config = {
   network: process.env.NETWORK,
+  releaseVersion: (process.env.RELEASE_VERSION || "vX.Y.Z").trim(),
   upgradeType: process.env.UPGRADE_TYPE,
   afterEpoch: (process.env.AFTER_EPOCH || "").trim(),
   changelogPr: (process.env.CHANGELOG_PR || "").trim(),
@@ -57,11 +58,8 @@ const config = {
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
   upgradeRegistry: process.env.UPGRADE_REGISTRY === "true",
   upgradeStateView: process.env.UPGRADE_STATE_VIEW === "true",
-  releaseTag: process.env.RELEASE_TAG || "",
   githubToken: process.env.GITHUB_TOKEN,
   githubRepository: process.env.GITHUB_REPOSITORY,
-  // Optional: pre-computed time estimate (from workflow)
-  timeEstimate: process.env.TIME_ESTIMATE,
 };
 
 // Validate required fields
@@ -84,85 +82,6 @@ function validateConfig() {
       console.error("Error: GITHUB_REPOSITORY is required when not using --dry-run");
       process.exit(1);
     }
-  }
-}
-
-// Fetch current epoch from Filecoin RPC
-async function getCurrentEpoch(network) {
-  const rpcUrl =
-    network === "Mainnet"
-      ? "https://api.node.glif.io/rpc/v1"
-      : "https://api.calibration.node.glif.io/rpc/v1";
-
-  return new Promise((resolve, reject) => {
-    const url = new URL(rpcUrl);
-    const postData = JSON.stringify({
-      jsonrpc: "2.0",
-      method: "eth_blockNumber",
-      params: [],
-      id: 1,
-    });
-
-    const options = {
-      hostname: url.hostname,
-      path: url.pathname,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData),
-      },
-    };
-
-    const req = https.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          const result = JSON.parse(data);
-          if (result.result) {
-            resolve(parseInt(result.result, 16));
-          } else {
-            reject(new Error("Invalid RPC response"));
-          }
-        } catch (e) {
-          reject(e);
-        }
-      });
-    });
-
-    req.on("error", reject);
-    req.write(postData);
-    req.end();
-  });
-}
-
-// Calculate estimated execution time
-async function calculateTimeEstimate(network, afterEpoch) {
-  // If pre-computed estimate is provided, use it
-  if (config.timeEstimate) {
-    return config.timeEstimate;
-  }
-
-  try {
-    const currentEpoch = await getCurrentEpoch(network);
-    const epochsRemaining = afterEpoch - currentEpoch;
-
-    if (epochsRemaining < 0) {
-      return "Immediately (epoch already passed)";
-    }
-
-    // Filecoin has ~30 second block times
-    const secondsRemaining = epochsRemaining * 30;
-    const hours = Math.floor(secondsRemaining / 3600);
-    const minutes = Math.floor((secondsRemaining % 3600) / 60);
-
-    const futureDate = new Date(Date.now() + secondsRemaining * 1000);
-    const dateStr = futureDate.toISOString().replace("T", " ").substring(0, 16) + " UTC";
-
-    return `~${dateStr} (~${hours}h ${minutes}m from current epoch ${currentEpoch})`;
-  } catch (error) {
-    console.error("Warning: Could not fetch current epoch:", error.message);
-    return "Unknown (could not fetch current epoch)";
   }
 }
 
@@ -195,14 +114,12 @@ function buildContractsList() {
 
 // Generate issue title
 function generateTitle() {
-  if (/^\d+$/.test(config.afterEpoch)) {
-    return `[Release] FWSS ${config.network} Upgrade - Epoch ${config.afterEpoch}`;
-  }
-  return `[Release] FWSS ${config.network} Upgrade`;
+  const mainnetSuffix = config.network === "Mainnet" ? " (includes Calibnet)" : "";
+  return `[Release] FWSS ${config.releaseVersion} ${config.network} Upgrade${mainnetSuffix}`;
 }
 
 // Generate issue body
-function generateBody(timeEstimate) {
+function generateBody() {
   const [owner, repo] = (config.githubRepository || "OWNER/REPO").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
 
@@ -215,8 +132,11 @@ function generateBody(timeEstimate) {
     ? `[#${changelogPrNumber}](${changelogPrLink})`
     : "TBD (set after PR is opened)";
   const changelogLink = `${baseUrl}/blob/main/CHANGELOG.md`;
+  const fwssContractLink = `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`;
   const upgradeProcessLink = `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md`;
-  const releaseLink = config.releaseTag ? `${baseUrl}/releases/tag/${config.releaseTag}` : null;
+  const deployWorkflowLink = `${baseUrl}/actions/workflows/deploy-contract.yml`;
+  const fwssCalibnetProxy = "0x02925630df557F957f70E112bA06e50965417CA0";
+  const fwssMainnetProxy = "0x8408502033C418E1bbC97cE9ac48E5528F371A9f";
 
   const changes = formatChanges(config.changesSummary);
   const upgradePrChecklistLine = hasChangelogPr
@@ -225,6 +145,7 @@ function generateBody(timeEstimate) {
   const mergePrChecklistLine = hasChangelogPr
     ? `- [ ] Merge changelog/upgrade PR: #${changelogPrNumber}`
     : "- [ ] Merge changelog/upgrade PR";
+  const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} upgrade`;
   const mainnetWaitLine = hasAfterEpoch
     ? `> ⏳ Wait until after epoch ${config.afterEpoch}`
     : "> ⏳ Set AFTER_EPOCH after deployments, then execute mainnet upgrade";
@@ -274,12 +195,11 @@ function generateBody(timeEstimate) {
 
 | Field | Value |
 |-------|-------|
+| **Version** | ${config.releaseVersion} |
 | **Network** | ${config.network} |
 | **Upgrade Type** | ${config.upgradeType} |
 | **Target Epoch** | ${targetEpochValue} |
-| **Estimated Execution** | ${timeEstimate} |
 | **Changelog PR** | ${changelogPrValue} |
-${releaseLink ? `| **Release** | ${releaseLink} |` : ""}
 
 ### Contracts in Scope
 ${contracts.map((c) => `- ${c}`).join("\n")}
@@ -300,29 +220,54 @@ ${config.actionRequired || "TBD"}
 - [ ] All intended contract changes are merged into \`main\`
 - [ ] Branch created from \`main\`
 - [ ] Changelog entry prepared in [CHANGELOG.md](${changelogLink})
-- [ ] Version string updated in contracts
+- [ ] Version string updated in [FilecoinWarmStorageService.sol](${fwssContractLink})
 ${upgradePrChecklistLine}
+- [ ] Upgrade PR title uses \`${recommendedPrTitle}\`
 - [ ] Upgrade checks run (tests + storage layout checks)
+- [ ] Update this issue placeholders as values become known (\`AFTER_EPOCH\`, PR number, summary, action required)
 ${isBreaking ? "- [ ] Migration guide prepared for breaking changes" : ""}
 
 ### Phase 2: Deploy Implementations
 Deploy both networks before any announce/execute.
 
 **Calibnet**
+- [ ] Run [Deploy Contract workflow](${deployWorkflowLink}) with \`network=Calibnet\`, \`contract=FWSS Implementation\`, \`dry_run=true\`
+- [ ] Re-run with \`dry_run=false\`
 ${deployChecklist}
 - [ ] Capture Calibnet implementation address(es)
 
 **Mainnet**
+- [ ] Run [Deploy Contract workflow](${deployWorkflowLink}) with \`network=Mainnet\`, \`contract=FWSS Implementation\`, \`dry_run=true\`
+- [ ] Re-run with \`dry_run=false\`
 ${isMainnet ? `${deployChecklist}
 - [ ] Capture Mainnet implementation address(es)` : "- [ ] Skip for Calibnet-only release"}
-- [ ] Keep \`deployments.json\` updates in the open upgrade PR (do not merge yet)
 
 ### Phase 3: Calibnet Announce + Execute
 **Announce**
 ${announceChecklist}
+- [ ] Generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI (Transaction Builder, value=\`0\`)
+
+\`\`\`bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="${fwssCalibnetProxy}"
+export NEW_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
+export AFTER_EPOCH="TBD"
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+\`\`\`
 
 **Execute**
 ${executeChecklist}
+- [ ] Wait for \`AFTER_EPOCH\`, then generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI
+
+\`\`\`bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="${fwssCalibnetProxy}"
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
+CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
+\`\`\`
+
 - [ ] Verify on Blockscout
 
 ${
@@ -331,11 +276,31 @@ ${
 **Announce**
 ${announceChecklist}
 - [ ] Notify stakeholders (post in relevant channels)
+- [ ] Generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI
+
+\`\`\`bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="${fwssMainnetProxy}"
+export NEW_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
+export AFTER_EPOCH="TBD"
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+\`\`\`
 
 **Execute**
 ${mainnetWaitLine}
 
 ${executeChecklist}
+- [ ] Generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI
+
+\`\`\`bash
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="${fwssMainnetProxy}"
+export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
+CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
+\`\`\`
+
 - [ ] Verify on Blockscout
 `
     : ""
@@ -354,7 +319,6 @@ ${mergePrChecklistLine}
 ### Resources
 - [Changelog](${changelogLink})
 - [Upgrade Process Documentation](${upgradeProcessLink})
-${releaseLink ? `- [Release](${releaseLink})` : ""}
 
 ### Deployed Addresses
 <!-- Update after deployments -->
@@ -420,13 +384,8 @@ async function createGitHubIssue(title, body, labels) {
 async function main() {
   validateConfig();
 
-  const parsedAfterEpoch = Number.parseInt(config.afterEpoch, 10);
-  const hasAfterEpoch = Number.isFinite(parsedAfterEpoch);
-  const timeEstimate = hasAfterEpoch
-    ? await calculateTimeEstimate(config.network, parsedAfterEpoch)
-    : "TBD (set AFTER_EPOCH first)";
   const title = generateTitle();
-  const body = generateBody(timeEstimate);
+  const body = generateBody();
   const labels = generateLabels();
 
   if (dryRun) {
