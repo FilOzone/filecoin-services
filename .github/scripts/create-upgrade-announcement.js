@@ -30,8 +30,6 @@ Environment variables:
   NETWORK              Target network (Calibnet or Mainnet)
   RELEASE_VERSION      FWSS release version for the issue title (default: vX.Y.Z)
   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
-  AFTER_EPOCH          Block number after which upgrade can execute (optional at issue creation)
-  CHANGELOG_PR         PR number with changelog updates (optional at issue creation)
   CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional at issue creation)
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
   UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, default: false, rare)
@@ -40,8 +38,7 @@ Environment variables:
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
 Example:
-  NETWORK=Calibnet UPGRADE_TYPE=Routine AFTER_EPOCH=12345 \\
-  CHANGELOG_PR=100 CHANGES_SUMMARY="Fix bug|Add feature" \\
+  NETWORK=Calibnet UPGRADE_TYPE=Routine CHANGES_SUMMARY="Fix bug|Add feature" \\
   node create-upgrade-announcement.js --dry-run
 `);
   process.exit(0);
@@ -52,8 +49,6 @@ const config = {
   network: process.env.NETWORK,
   releaseVersion: (process.env.RELEASE_VERSION || "vX.Y.Z").trim(),
   upgradeType: process.env.UPGRADE_TYPE,
-  afterEpoch: (process.env.AFTER_EPOCH || "").trim(),
-  changelogPr: (process.env.CHANGELOG_PR || "").trim(),
   changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
   upgradeRegistry: process.env.UPGRADE_REGISTRY === "true",
@@ -123,14 +118,6 @@ function generateBody() {
   const [owner, repo] = (config.githubRepository || "OWNER/REPO").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
 
-  const changelogPrNumber = config.changelogPr.replace(/^#/, "");
-  const hasAfterEpoch = /^\d+$/.test(config.afterEpoch);
-  const hasChangelogPr = /^\d+$/.test(changelogPrNumber);
-  const targetEpochValue = hasAfterEpoch ? config.afterEpoch : "TBD (set after deployment)";
-  const changelogPrLink = hasChangelogPr ? `${baseUrl}/pull/${changelogPrNumber}` : null;
-  const changelogPrValue = hasChangelogPr
-    ? `[#${changelogPrNumber}](${changelogPrLink})`
-    : "TBD (set after PR is opened)";
   const changelogLink = `${baseUrl}/blob/main/CHANGELOG.md`;
   const fwssContractLink = `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`;
   const upgradeProcessLink = `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md`;
@@ -139,16 +126,8 @@ function generateBody() {
   const fwssMainnetProxy = "0x8408502033C418E1bbC97cE9ac48E5528F371A9f";
 
   const changes = formatChanges(config.changesSummary);
-  const upgradePrChecklistLine = hasChangelogPr
-    ? `- [ ] Upgrade PR created: #${changelogPrNumber}`
-    : "- [ ] Upgrade PR created (update this issue with PR number)";
-  const mergePrChecklistLine = hasChangelogPr
-    ? `- [ ] Merge changelog/upgrade PR: #${changelogPrNumber}`
-    : "- [ ] Merge changelog/upgrade PR";
   const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} upgrade`;
-  const mainnetWaitLine = hasAfterEpoch
-    ? `> ⏳ Wait until after epoch ${config.afterEpoch}`
-    : "> ⏳ Set AFTER_EPOCH after deployments, then execute mainnet upgrade";
+  const mainnetWaitLine = "> ⏳ Set AFTER_EPOCH after deployments, then execute mainnet upgrade";
   const contracts = buildContractsList();
   const isMainnet = config.network === "Mainnet";
   const isBreaking = config.upgradeType === "Breaking Change";
@@ -198,8 +177,8 @@ function generateBody() {
 | **Version** | ${config.releaseVersion} |
 | **Network** | ${config.network} |
 | **Upgrade Type** | ${config.upgradeType} |
-| **Target Epoch** | ${targetEpochValue} |
-| **Changelog PR** | ${changelogPrValue} |
+| **Target Epoch** | TBD (set after deployment) |
+| **Changelog PR** | TBD (set after PR is opened) |
 
 ### Contracts in Scope
 ${contracts.map((c) => `- ${c}`).join("\n")}
@@ -218,17 +197,17 @@ ${config.actionRequired || "TBD"}
 
 ### Phase 1: Branch, PR, and Checks
 - [ ] All intended contract changes are merged into \`main\`
-- [ ] Branch created from \`main\`
+- [ ] Create release branch from \`main\`, called \`release-vX.Y.Z\`
 - [ ] Changelog entry prepared in [CHANGELOG.md](${changelogLink})
 - [ ] Version string updated in [FilecoinWarmStorageService.sol](${fwssContractLink})
-${upgradePrChecklistLine}
+- [ ] Upgrade PR created (update this issue with PR number)
 - [ ] Upgrade PR title uses \`${recommendedPrTitle}\`
 - [ ] Upgrade checks run (tests + storage layout checks)
 - [ ] Update this issue placeholders as values become known (\`AFTER_EPOCH\`, PR number, summary, action required)
 ${isBreaking ? "- [ ] Migration guide prepared for breaking changes" : ""}
 
 ### Phase 2: Deploy Implementations
-Deploy both networks before any announce/execute.
+Deploy to both networks before any announce/execute.
 
 **Calibnet**
 - [ ] Run [Deploy Contract workflow](${deployWorkflowLink}) with \`network=Calibnet\`, \`contract=FWSS Implementation\`, \`dry_run=true\`
@@ -306,7 +285,7 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
     : ""
 }
 ### Phase ${isMainnet ? "5" : "4"}: Merge and Release
-${mergePrChecklistLine}
+- [ ] Merge changelog/upgrade PR
 - [ ] Tag release: \`git tag vX.Y.Z && git push origin vX.Y.Z\`
 - [ ] Create GitHub Release with changelog
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls) so docs.filecoin.cloud and filecoin.cloud reflect new contract versions
