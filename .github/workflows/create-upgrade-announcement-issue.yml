@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       network:
-        description: 'Target network'
+        description: 'Target release network (Mainnet checklist includes Calibnet rehearsal first)'
         required: true
         type: choice
         options:
@@ -27,27 +27,6 @@ on:
         required: false
         type: boolean
         default: false
-      after_epoch:
-        description: 'AFTER_EPOCH (block number after which upgrade can execute)'
-        required: true
-        type: string
-      changelog_pr:
-        description: 'PR number with changelog updates'
-        required: true
-        type: string
-      changes_summary:
-        description: 'Summary of changes (use | for multiple lines)'
-        required: true
-        type: string
-      action_required:
-        description: 'Action required for integrators (or "None" if no action needed)'
-        required: true
-        type: string
-        default: 'None'
-      release_tag:
-        description: 'Release tag if already created (usually added after upgrade completes)'
-        required: false
-        type: string
       dry_run:
         description: 'Dry run (preview issue without creating)'
         required: false
@@ -75,11 +54,6 @@ jobs:
           UPGRADE_TYPE: ${{ inputs.upgrade_type }}
           UPGRADE_REGISTRY: ${{ inputs.upgrade_registry }}
           UPGRADE_STATE_VIEW: ${{ inputs.upgrade_state_view }}
-          AFTER_EPOCH: ${{ inputs.after_epoch }}
-          CHANGELOG_PR: ${{ inputs.changelog_pr }}
-          CHANGES_SUMMARY: ${{ inputs.changes_summary }}
-          ACTION_REQUIRED: ${{ inputs.action_required }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
@@ -94,7 +68,7 @@ jobs:
           echo "## Release Issue ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Network**: ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
-          echo "**After Epoch**: ${{ inputs.after_epoch }}" >> $GITHUB_STEP_SUMMARY
+          echo "**After Epoch**: TBD (set in issue during rollout)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             echo "This was a dry run. No issue was created." >> $GITHUB_STEP_SUMMARY

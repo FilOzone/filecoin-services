@@ -29,10 +29,10 @@ Options:
 Environment variables:
   NETWORK              Target network (Calibnet or Mainnet)
   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
-  AFTER_EPOCH          Block number after which upgrade can execute
-  CHANGELOG_PR         PR number with changelog updates
-  CHANGES_SUMMARY      Summary of changes (use | for multiple lines)
-  ACTION_REQUIRED      Action required for integrators (default: None)
+  AFTER_EPOCH          Block number after which upgrade can execute (optional at issue creation)
+  CHANGELOG_PR         PR number with changelog updates (optional at issue creation)
+  CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional at issue creation)
+  ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
   UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, default: false, rare)
   UPGRADE_STATE_VIEW   Also redeploying StateView? (true/false, default: false, rare)
   RELEASE_TAG          Release tag (optional, usually added after upgrade completes)
@@ -51,10 +51,10 @@ Example:
 const config = {
   network: process.env.NETWORK,
   upgradeType: process.env.UPGRADE_TYPE,
-  afterEpoch: process.env.AFTER_EPOCH,
-  changelogPr: process.env.CHANGELOG_PR,
-  changesSummary: process.env.CHANGES_SUMMARY,
-  actionRequired: process.env.ACTION_REQUIRED || "None",
+  afterEpoch: (process.env.AFTER_EPOCH || "").trim(),
+  changelogPr: (process.env.CHANGELOG_PR || "").trim(),
+  changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
+  actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
   upgradeRegistry: process.env.UPGRADE_REGISTRY === "true",
   upgradeStateView: process.env.UPGRADE_STATE_VIEW === "true",
   releaseTag: process.env.RELEASE_TAG || "",
@@ -66,7 +66,7 @@ const config = {
 
 // Validate required fields
 function validateConfig() {
-  const required = ["network", "upgradeType", "afterEpoch", "changelogPr", "changesSummary"];
+  const required = ["network", "upgradeType"];
   const missing = required.filter((key) => !config[key]);
 
   if (missing.length > 0) {
@@ -168,6 +168,9 @@ async function calculateTimeEstimate(network, afterEpoch) {
 
 // Format changes summary from pipe-separated to bullet points
 function formatChanges(changesSummary) {
+  if (!changesSummary) {
+    return "- TBD";
+  }
   return changesSummary
     .split("|")
     .map((line) => line.trim())
@@ -192,7 +195,10 @@ function buildContractsList() {
 
 // Generate issue title
 function generateTitle() {
-  return `[Release] FWSS ${config.network} Upgrade - Epoch ${config.afterEpoch}`;
+  if (/^\d+$/.test(config.afterEpoch)) {
+    return `[Release] FWSS ${config.network} Upgrade - Epoch ${config.afterEpoch}`;
+  }
+  return `[Release] FWSS ${config.network} Upgrade`;
 }
 
 // Generate issue body
@@ -200,12 +206,28 @@ function generateBody(timeEstimate) {
   const [owner, repo] = (config.githubRepository || "OWNER/REPO").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
 
-  const changelogPrLink = `${baseUrl}/pull/${config.changelogPr}`;
+  const changelogPrNumber = config.changelogPr.replace(/^#/, "");
+  const hasAfterEpoch = /^\d+$/.test(config.afterEpoch);
+  const hasChangelogPr = /^\d+$/.test(changelogPrNumber);
+  const targetEpochValue = hasAfterEpoch ? config.afterEpoch : "TBD (set after deployment)";
+  const changelogPrLink = hasChangelogPr ? `${baseUrl}/pull/${changelogPrNumber}` : null;
+  const changelogPrValue = hasChangelogPr
+    ? `[#${changelogPrNumber}](${changelogPrLink})`
+    : "TBD (set after PR is opened)";
   const changelogLink = `${baseUrl}/blob/main/CHANGELOG.md`;
   const upgradeProcessLink = `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md`;
   const releaseLink = config.releaseTag ? `${baseUrl}/releases/tag/${config.releaseTag}` : null;
 
   const changes = formatChanges(config.changesSummary);
+  const upgradePrChecklistLine = hasChangelogPr
+    ? `- [ ] Upgrade PR created: #${changelogPrNumber}`
+    : "- [ ] Upgrade PR created (update this issue with PR number)";
+  const mergePrChecklistLine = hasChangelogPr
+    ? `- [ ] Merge changelog/upgrade PR: #${changelogPrNumber}`
+    : "- [ ] Merge changelog/upgrade PR";
+  const mainnetWaitLine = hasAfterEpoch
+    ? `> ⏳ Wait until after epoch ${config.afterEpoch}`
+    : "> ⏳ Set AFTER_EPOCH after deployments, then execute mainnet upgrade";
   const contracts = buildContractsList();
   const isMainnet = config.network === "Mainnet";
   const isBreaking = config.upgradeType === "Breaking Change";
@@ -254,9 +276,9 @@ function generateBody(timeEstimate) {
 |-------|-------|
 | **Network** | ${config.network} |
 | **Upgrade Type** | ${config.upgradeType} |
-| **Target Epoch** | ${config.afterEpoch} |
+| **Target Epoch** | ${targetEpochValue} |
 | **Estimated Execution** | ${timeEstimate} |
-| **Changelog PR** | ${changelogPrLink} |
+| **Changelog PR** | ${changelogPrValue} |
 ${releaseLink ? `| **Release** | ${releaseLink} |` : ""}
 
 ### Contracts in Scope
@@ -266,7 +288,7 @@ ${contracts.map((c) => `- ${c}`).join("\n")}
 ${changes}
 
 ### Action Required for Integrators
-${config.actionRequired}
+${config.actionRequired || "TBD"}
 
 ---
 
@@ -274,51 +296,52 @@ ${config.actionRequired}
 
 > Full process details: [UPGRADE-PROCESS.md](${upgradeProcessLink})
 
-### Phase 1: Prepare
+### Phase 1: Branch, PR, and Checks
+- [ ] All intended contract changes are merged into \`main\`
+- [ ] Branch created from \`main\`
 - [ ] Changelog entry prepared in [CHANGELOG.md](${changelogLink})
-- [ ] Version string updated in contracts (if applicable)
-- [ ] Upgrade PR created: #${config.changelogPr}
+- [ ] Version string updated in contracts
+${upgradePrChecklistLine}
+- [ ] Upgrade checks run (tests + storage layout checks)
 ${isBreaking ? "- [ ] Migration guide prepared for breaking changes" : ""}
 
-### Phase 2: Calibnet Rehearsal
-${isMainnet ? `<details>
-<summary>Calibnet steps (expand)</summary>
+### Phase 2: Deploy Implementations
+Deploy both networks before any announce/execute.
 
-` : ""}**Deploy Implementation**
+**Calibnet**
 ${deployChecklist}
-- [ ] Commit updated \`deployments.json\`
+- [ ] Capture Calibnet implementation address(es)
 
-**Announce Upgrade**
+**Mainnet**
+${isMainnet ? `${deployChecklist}
+- [ ] Capture Mainnet implementation address(es)` : "- [ ] Skip for Calibnet-only release"}
+- [ ] Keep \`deployments.json\` updates in the open upgrade PR (do not merge yet)
+
+### Phase 3: Calibnet Announce + Execute
+**Announce**
 ${announceChecklist}
 
-**Execute Upgrade**
+**Execute**
 ${executeChecklist}
 - [ ] Verify on Blockscout
-${isMainnet ? `
-</details>
-` : ""}
+
 ${
   isMainnet
-    ? `### Phase 3: Mainnet Deployment
-${deployChecklist}
-- [ ] Commit updated \`deployments.json\`
-
-### Phase 4: Announce Mainnet Upgrade
+    ? `### Phase 4: Mainnet Announce + Execute
+**Announce**
 ${announceChecklist}
 - [ ] Notify stakeholders (post in relevant channels)
 
-### Phase 5: Execute Mainnet Upgrade
-> ⏳ Wait until after epoch ${config.afterEpoch}
+**Execute**
+${mainnetWaitLine}
 
 ${executeChecklist}
 - [ ] Verify on Blockscout
 `
     : ""
 }
-### Phase ${isMainnet ? "6" : "3"}: Verify and Release
-- [ ] Verify upgrade on Blockscout
-- [ ] Confirm \`deployments.json\` is up to date
-- [ ] Merge changelog PR: #${config.changelogPr}
+### Phase ${isMainnet ? "5" : "4"}: Merge and Release
+${mergePrChecklistLine}
 - [ ] Tag release: \`git tag vX.Y.Z && git push origin vX.Y.Z\`
 - [ ] Create GitHub Release with changelog
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls) so docs.filecoin.cloud and filecoin.cloud reflect new contract versions
@@ -397,7 +420,11 @@ async function createGitHubIssue(title, body, labels) {
 async function main() {
   validateConfig();
 
-  const timeEstimate = await calculateTimeEstimate(config.network, parseInt(config.afterEpoch));
+  const parsedAfterEpoch = Number.parseInt(config.afterEpoch, 10);
+  const hasAfterEpoch = Number.isFinite(parsedAfterEpoch);
+  const timeEstimate = hasAfterEpoch
+    ? await calculateTimeEstimate(config.network, parsedAfterEpoch)
+    : "TBD (set AFTER_EPOCH first)";
   const title = generateTitle();
   const body = generateBody(timeEstimate);
   const labels = generateLabels();
