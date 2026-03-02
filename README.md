@@ -74,11 +74,10 @@ service_contracts/
 
 ## 🌐 Deployed Contracts
 
-### Calibnet (Testnet)
-- Contract Addresses listed in: https://github.com/FilOzone/filecoin-services/releases/tag/v1.0.0 
+Contract addresses for all supported networks are maintained in [service_contracts/deployments.json](./service_contracts/deployments.json), which is updated automatically as new deployments are published.
 
-### Mainnet
-- Contract Addresses listed in: https://github.com/FilOzone/filecoin-services/releases/tag/v1.0.0 
+- Mainnet: chain ID `314`
+- Calibnet (testnet): chain ID `314159`
 
 ## 🔧 Development
 
