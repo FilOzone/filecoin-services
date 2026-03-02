@@ -200,9 +200,15 @@ ${config.actionRequired || "TBD"}
 - [ ] Create release branch from \`main\`, called \`release-vX.Y.Z\`
 - [ ] Changelog entry prepared in [CHANGELOG.md](${changelogLink})
 - [ ] Version string updated in [FilecoinWarmStorageService.sol](${fwssContractLink})
-- [ ] Upgrade PR created (update this issue with PR number)
-- [ ] Upgrade PR title uses \`${recommendedPrTitle}\`
-- [ ] Upgrade checks run (tests + storage layout checks)
+- [ ] Create PR with the title \`${recommendedPrTitle}\`, add link to it in the "Overview" section of this issue. 
+- [ ] Run upgrade checks:
+
+\`\`\`bash
+cd /Users/phi/filecoin-services/service_contracts
+forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
+forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
+\`\`\`
+
 - [ ] Update this issue placeholders as values become known (\`AFTER_EPOCH\`, PR number, summary, action required)
 ${isBreaking ? "- [ ] Migration guide prepared for breaking changes" : ""}
 
