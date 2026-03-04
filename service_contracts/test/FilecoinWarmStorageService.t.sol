@@ -571,7 +571,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Expect DataSetCreated event when creating the data set (with CDN rails)
-        // Rail IDs shift: burn rail takes ID 2 (then terminated), so pdp=1, cacheMiss=3, cdn=4
+        // Rail IDs: burn rail takes ID 2 (then finalized), so pdp=1, cacheMiss=3, cdn=4
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
             1, 1, 1, 3, 4, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
@@ -1404,14 +1404,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient3");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        // Calculate total lockup required (includes sybil fee)
+        // Calculate minimum lockup required (includes sybil fee)
         // MINIMUM_STORAGE_RATE_PER_MONTH = 0.06 USDFC = 6e16
         // DEFAULT_LOCKUP_PERIOD = 86400
         // EPOCHS_PER_MONTH = 86400
         // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        // totalLockupRequired = 6e16 + 0.1e18 (sybil fee) = 16e16
-        uint256 totalLockupRequired = 16e16;
-        uint256 insufficientLockupAllowance = totalLockupRequired - 1; // Just below minimum
+        // minimumLockupRequired = 6e16 + 0.1e18 (sybil fee) = 16e16
+        uint256 minimumLockupRequired = 16e16;
+        uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
         mockUSDFC.safeTransfer(testClient, depositAmount);
@@ -1457,7 +1457,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 address(pdpServiceWithPayments),
                 insufficientLockupAllowance,
                 0, // lockupUsage is 0 initially
-                totalLockupRequired
+                minimumLockupRequired
             )
         );
         vm.prank(serviceProvider);

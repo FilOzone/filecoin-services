@@ -713,7 +713,7 @@ contract FilecoinWarmStorageService is
             uint256 netAmount = USDFC_SYBIL_FEE - USDFC_SYBIL_FEE / payments.NETWORK_FEE_DENOMINATOR();
             payments.withdrawTo(usdfcTokenAddress, pdpVerifierAddress, netAmount);
 
-	    // Cleanup
+            // Cleanup
             payments.terminateRail(burnRailId);
             payments.settleRail(burnRailId, block.number);
         }
@@ -1262,14 +1262,14 @@ contract FilecoinWarmStorageService is
             minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
 
-        // Include sybil fee in the minimum funds check (burn rail consumes this from available funds)
-        uint256 totalMinimumFunds = minimumLockupRequired + USDFC_SYBIL_FEE;
+        // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
+        minimumLockupRequired += USDFC_SYBIL_FEE;
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
         require(
-            availableFunds >= totalMinimumFunds,
-            Errors.InsufficientLockupFunds(payer, totalMinimumFunds, availableFunds)
+            availableFunds >= minimumLockupRequired,
+            Errors.InsufficientLockupFunds(payer, minimumLockupRequired, availableFunds)
         );
 
         // Check operator approval settings
@@ -1294,12 +1294,11 @@ contract FilecoinWarmStorageService is
             Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
         );
 
-        // Verify lockup allowance is sufficient (include CDN extras and sybil fee when applicable)
-        uint256 totalLockupRequired = minimumLockupRequired + USDFC_SYBIL_FEE;
+        // Verify lockup allowance is sufficient
         require(
-            lockupAllowance >= lockupUsage + totalLockupRequired,
+            lockupAllowance >= lockupUsage + minimumLockupRequired,
             Errors.InsufficientLockupAllowance(
-                payer, address(this), lockupAllowance, lockupUsage, totalLockupRequired
+                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
             )
         );
 
