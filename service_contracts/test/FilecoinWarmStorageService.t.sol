@@ -23,6 +23,7 @@ import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
+import {Errors as PayErrors} from "@fws-payments/Errors.sol";
 
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -570,9 +571,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Expect DataSetCreated event when creating the data set (with CDN rails)
+        // Rail IDs shift: burn rail takes ID 2 (then terminated), so pdp=1, cacheMiss=3, cdn=4
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
-            1, 1, 1, 2, 3, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
+            1, 1, 1, 3, 4, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
         // Create a data set as the service provider
@@ -1047,9 +1049,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     // Minimum Funds Validation Tests
     function testInsufficientFunds_BelowMinimum() public {
-        // Setup: Client with insufficient funds (below 0.06 USDFC minimum)
+        // Setup: Client with insufficient funds (below 0.16 USDFC minimum = 0.06 lockup + 0.1 sybil fee)
         address insufficientClient = makeAddr("insufficientClient");
-        uint256 insufficientAmount = 5e16; // 0.05 USDFC (below 0.06 minimum)
+        uint256 insufficientAmount = 15e16; // 0.15 USDFC (below 0.16 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(insufficientClient, insufficientAmount);
@@ -1078,8 +1080,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             createData.signature
         );
 
-        // Expected minimum: (0.06 USDFC * 86400) / 86400 = 0.06 USDFC = 6e16
-        uint256 minimumRequired = 6e16;
+        // Expected minimum: 0.06 USDFC lockup + 0.1 USDFC sybil fee = 0.16 USDFC = 16e16
+        uint256 minimumRequired = 16e16;
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1093,9 +1095,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_ExactMinimum() public {
-        // Setup: Client with exactly the minimum funds (0.06 USDFC)
+        // Setup: Client with exactly the minimum funds (0.16 USDFC = 0.06 lockup + 0.1 sybil fee)
         address exactClient = makeAddr("exactClient");
-        uint256 exactAmount = 6e16; // Exactly 0.06 USDFC
+        uint256 exactAmount = 16e16; // Exactly 0.16 USDFC
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(exactClient, exactAmount);
@@ -1134,9 +1136,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_JustAboveMinimum() public {
-        // Setup: Client with slightly more than minimum (0.07 USDFC)
+        // Setup: Client with slightly more than minimum (0.17 USDFC)
         address aboveMinClient = makeAddr("aboveMinClient");
-        uint256 aboveMinAmount = 7e16; // 0.07 USDFC (just above 0.06 minimum)
+        uint256 aboveMinAmount = 17e16; // 0.17 USDFC (just above 0.16 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(aboveMinClient, aboveMinAmount);
@@ -1181,7 +1183,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Setup: Client with minimal funds - just enough to create an empty dataset
         address limitedClient = makeAddr("limitedClient");
-        uint256 limitedAmount = 7e16; // 0.07 USDFC (just above 0.06 minimum)
+        uint256 limitedAmount = 17e16; // 0.17 USDFC (just above 0.16 minimum = 0.06 lockup + 0.1 sybil fee)
 
         mockUSDFC.safeTransfer(limitedClient, limitedAmount);
 
@@ -1402,13 +1404,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient3");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        // Calculate minimum lockup required
+        // Calculate total lockup required (includes sybil fee)
         // MINIMUM_STORAGE_RATE_PER_MONTH = 0.06 USDFC = 6e16
         // DEFAULT_LOCKUP_PERIOD = 86400
         // EPOCHS_PER_MONTH = 86400
         // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        uint256 minimumLockupRequired = 6e16;
-        uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
+        // totalLockupRequired = 6e16 + 0.1e18 (sybil fee) = 16e16
+        uint256 totalLockupRequired = 16e16;
+        uint256 insufficientLockupAllowance = totalLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
         mockUSDFC.safeTransfer(testClient, depositAmount);
@@ -1454,7 +1457,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 address(pdpServiceWithPayments),
                 insufficientLockupAllowance,
                 0, // lockupUsage is 0 initially
-                minimumLockupRequired
+                totalLockupRequired
             )
         );
         vm.prank(serviceProvider);
@@ -5404,6 +5407,138 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         warmStorageService.migrate(address(0));
+    }
+}
+
+/**
+ * @notice Tests for USDFC sybil fee burn rail in dataset creation
+ */
+contract SybilFeeTest is FilecoinWarmStorageServiceTest {
+    using SafeERC20 for MockERC20;
+
+    function _createClientAndDeposit(string memory name, uint256 amount)
+        internal
+        returns (address clientAddr)
+    {
+        clientAddr = makeAddr(name);
+        mockUSDFC.safeTransfer(clientAddr, amount);
+        vm.startPrank(clientAddr);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), amount);
+        payments.deposit(mockUSDFC, clientAddr, amount);
+        vm.stopPrank();
+    }
+
+    function _encodeCreateData(address payer, uint256 clientDataSetId)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        string[] memory keys = new string[](0);
+        string[] memory values = new string[](0);
+        return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
+    }
+
+    function testDataSetCreation_SybilFeeBurned() public {
+        // Setup client with enough funds
+        address testClient = _createClientAndDeposit("sybilClient", 1e18);
+        bytes memory encodedData = _encodeCreateData(testClient, 100);
+
+        // Get balances before
+        (,, uint256 availableBefore,) = payments.getAccountInfoIfSettled(mockUSDFC, testClient);
+
+        // Create dataset
+        makeSignaturePass(testClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+        assertEq(dataSetId, 1);
+
+        // Verify client funds decreased by sybil fee (plus lockup)
+        (,, uint256 availableAfter,) = payments.getAccountInfoIfSettled(mockUSDFC, testClient);
+        // Available funds decreased by at least the sybil fee
+        assertTrue(availableBefore - availableAfter >= 0.1e18, "Client funds should decrease by at least sybil fee");
+
+        // Verify FWSS received net proceeds and forwarded to PDPVerifier
+        // Net amount = 0.1e18 - 0.1e18/200 = 0.0995e18
+        uint256 netAmount = 0.1e18 - 0.1e18 / payments.NETWORK_FEE_DENOMINATOR();
+        uint256 pdpVerifierBalance = mockUSDFC.balanceOf(address(mockPDPVerifier));
+        assertEq(pdpVerifierBalance, netAmount, "PDPVerifier should receive net sybil fee amount");
+    }
+
+    function testDataSetCreation_InsufficientFundsForSybilFee() public {
+        // Setup client with funds below minimum (0.16 USDFC = 0.06 lockup + 0.1 sybil)
+        address testClient = _createClientAndDeposit("poorClient", 10e16); // 0.10 USDFC
+
+        bytes memory encodedData = _encodeCreateData(testClient, 200);
+
+        // Expect revert due to insufficient funds
+        makeSignaturePass(testClient);
+        vm.expectRevert();
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+    }
+
+    function testDataSetCreation_SybilFeeWithCDN() public {
+        // Setup client with enough for sybil + lockup + CDN
+        address testClient = _createClientAndDeposit("cdnClient", 5e18);
+
+        // Create data with CDN metadata
+        string[] memory keys = new string[](1);
+        string[] memory values = new string[](1);
+        keys[0] = "withCDN";
+        values[0] = "true";
+
+        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 300,
+            metadataKeys: keys,
+            metadataValues: values,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Create dataset with CDN
+        makeSignaturePass(testClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+        assertEq(dataSetId, 1);
+
+        // Verify dataset has CDN rails
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertTrue(info.pdpRailId > 0, "PDP rail should exist");
+        assertTrue(info.cacheMissRailId > 0, "Cache miss rail should exist");
+        assertTrue(info.cdnRailId > 0, "CDN rail should exist");
+
+        // Verify PDPVerifier received sybil fee
+        uint256 netAmount = 0.1e18 - 0.1e18 / payments.NETWORK_FEE_DENOMINATOR();
+        assertEq(mockUSDFC.balanceOf(address(mockPDPVerifier)), netAmount, "PDPVerifier should receive net sybil fee");
+    }
+
+    function testDataSetCreation_BurnRailTerminated() public {
+        // Setup client
+        address testClient = _createClientAndDeposit("terminateClient", 1e18);
+        bytes memory encodedData = _encodeCreateData(testClient, 400);
+
+        makeSignaturePass(testClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+        assertEq(dataSetId, 1);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpRailId, 1, "PDP rail should be ID 1");
+
+        // The burn rail (ID 2) was terminated and settled in the same tx.
+        // With lockupPeriod=0, finalization zeroes out all rail state.
+        // getRail reverts with RailInactiveOrSettled for finalized rails.
+        vm.expectRevert(abi.encodeWithSelector(PayErrors.RailInactiveOrSettled.selector, 2));
+        payments.getRail(2);
     }
 }
 

@@ -200,6 +200,9 @@ contract FilecoinWarmStorageService is
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
+    // Sybil fee: 0.1 USDFC extracted from client and forwarded to PDPVerifier for burning
+    uint256 public constant USDFC_SYBIL_FEE = 0.1e18;
+
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
     uint256 private constant MAX_VALUE_LENGTH = 128;
@@ -691,6 +694,29 @@ contract FilecoinWarmStorageService is
 
         // Set lockup period for the rail
         payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
+
+        // --- Burn rail: extract USDFC sybil fee from client and send to PDPVerifier ---
+        {
+	    // Move funds to this contract in filecoin pay
+            uint256 burnRailId = payments.createRail(
+                usdfcTokenAddress,
+                createData.payer, // from: client
+                address(this), // to: FWSS collects and forwards
+                address(0), // no validator
+                0, 
+                address(this) 
+            );
+            payments.modifyRailLockup(burnRailId, 0, USDFC_SYBIL_FEE);
+            payments.modifyRailPayment(burnRailId, 0, USDFC_SYBIL_FEE);
+
+            // Withdraw burn proceeds to PDPVerifier
+            uint256 netAmount = USDFC_SYBIL_FEE - USDFC_SYBIL_FEE / payments.NETWORK_FEE_DENOMINATOR();
+            payments.withdrawTo(usdfcTokenAddress, pdpVerifierAddress, netAmount);
+
+	    // Cleanup
+            payments.terminateRail(burnRailId);
+            payments.settleRail(burnRailId, block.number);
+        }
 
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
@@ -1236,11 +1262,14 @@ contract FilecoinWarmStorageService is
             minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
 
+        // Include sybil fee in the minimum funds check (burn rail consumes this from available funds)
+        uint256 totalMinimumFunds = minimumLockupRequired + USDFC_SYBIL_FEE;
+
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
         require(
-            availableFunds >= minimumLockupRequired,
-            Errors.InsufficientLockupFunds(payer, minimumLockupRequired, availableFunds)
+            availableFunds >= totalMinimumFunds,
+            Errors.InsufficientLockupFunds(payer, totalMinimumFunds, availableFunds)
         );
 
         // Check operator approval settings
@@ -1265,11 +1294,12 @@ contract FilecoinWarmStorageService is
             Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
         );
 
-        // Verify lockup allowance is sufficient (include CDN extras when applicable)
+        // Verify lockup allowance is sufficient (include CDN extras and sybil fee when applicable)
+        uint256 totalLockupRequired = minimumLockupRequired + USDFC_SYBIL_FEE;
         require(
-            lockupAllowance >= lockupUsage + minimumLockupRequired,
+            lockupAllowance >= lockupUsage + totalLockupRequired,
             Errors.InsufficientLockupAllowance(
-                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
+                payer, address(this), lockupAllowance, lockupUsage, totalLockupRequired
             )
         );
 
