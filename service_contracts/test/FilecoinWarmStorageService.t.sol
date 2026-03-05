@@ -5406,11 +5406,10 @@ contract SybilFeeTest is FilecoinWarmStorageServiceTest {
         // Available funds decreased by at least the sybil fee
         assertTrue(availableBefore - availableAfter >= 0.1e18, "Client funds should decrease by at least sybil fee");
 
-        // Verify FWSS received net proceeds and forwarded to PDPVerifier
-        // Net amount = 0.1e18 - 0.1e18/200 = 0.0995e18
-        uint256 netAmount = 0.1e18 - 0.1e18 / payments.NETWORK_FEE_DENOMINATOR();
-        uint256 pdpVerifierBalance = mockUSDFC.balanceOf(address(mockPDPVerifier));
-        assertEq(pdpVerifierBalance, netAmount, "PDPVerifier should receive net sybil fee amount");
+        // Verify full sybil fee landed in payments' own account (auction pool)
+        // Both network fee and net payee amount credit accounts[token][address(payments)]
+        (uint256 funds,,,) = payments.accounts(mockUSDFC, address(payments));
+        assertTrue(funds >= 0.1e18, "Payments auction pool should receive full sybil fee");
     }
 
     function testDataSetCreation_InsufficientFundsForSybilFee() public {
@@ -5464,9 +5463,9 @@ contract SybilFeeTest is FilecoinWarmStorageServiceTest {
         assertTrue(info.cacheMissRailId > 0, "Cache miss rail should exist");
         assertTrue(info.cdnRailId > 0, "CDN rail should exist");
 
-        // Verify PDPVerifier received sybil fee
-        uint256 netAmount = 0.1e18 - 0.1e18 / payments.NETWORK_FEE_DENOMINATOR();
-        assertEq(mockUSDFC.balanceOf(address(mockPDPVerifier)), netAmount, "PDPVerifier should receive net sybil fee");
+        // Verify full sybil fee landed in payments' own account (auction pool)
+        (uint256 funds,,,) = payments.accounts(mockUSDFC, address(payments));
+        assertTrue(funds >= 0.1e18, "Payments auction pool should receive full sybil fee");
     }
 
     function testDataSetCreation_BurnRailTerminated() public {

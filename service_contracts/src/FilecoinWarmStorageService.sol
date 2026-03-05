@@ -695,24 +695,18 @@ contract FilecoinWarmStorageService is
         // Set lockup period for the rail
         payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
 
-        // --- Burn rail: extract USDFC sybil fee from client and send to PDPVerifier ---
+        // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
         {
-            // Move funds to this contract in filecoin pay
             uint256 burnRailId = payments.createRail(
                 usdfcTokenAddress,
-                createData.payer, // from: client
-                address(this), // to: FWSS collects and forwards
-                address(0), // no validator
-                0,
-                address(this)
+                createData.payer,      // from: client
+                address(payments),     // to: payments contract (auction pool)
+                address(0),            // no validator
+                0,                     // no commission
+                address(this)          // service fee recipient (unused, commission=0)
             );
             payments.modifyRailLockup(burnRailId, 0, USDFC_SYBIL_FEE);
             payments.modifyRailPayment(burnRailId, 0, USDFC_SYBIL_FEE);
-
-            // Withdraw burn proceeds to PDPVerifier (net of 0.5% network fee)
-            payments.withdrawTo(usdfcTokenAddress, pdpVerifierAddress, USDFC_SYBIL_FEE - USDFC_SYBIL_FEE / 200);
-
-            // Cleanup
             payments.terminateRail(burnRailId);
             payments.settleRail(burnRailId, block.number);
         }
