@@ -697,14 +697,14 @@ contract FilecoinWarmStorageService is
 
         // --- Burn rail: extract USDFC sybil fee from client and send to PDPVerifier ---
         {
-	    // Move funds to this contract in filecoin pay
+            // Move funds to this contract in filecoin pay
             uint256 burnRailId = payments.createRail(
                 usdfcTokenAddress,
                 createData.payer, // from: client
                 address(this), // to: FWSS collects and forwards
                 address(0), // no validator
-                0, 
-                address(this) 
+                0,
+                address(this)
             );
             payments.modifyRailLockup(burnRailId, 0, USDFC_SYBIL_FEE);
             payments.modifyRailPayment(burnRailId, 0, USDFC_SYBIL_FEE);

@@ -5416,10 +5416,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 contract SybilFeeTest is FilecoinWarmStorageServiceTest {
     using SafeERC20 for MockERC20;
 
-    function _createClientAndDeposit(string memory name, uint256 amount)
-        internal
-        returns (address clientAddr)
-    {
+    function _createClientAndDeposit(string memory name, uint256 amount) internal returns (address clientAddr) {
         clientAddr = makeAddr(name);
         mockUSDFC.safeTransfer(clientAddr, amount);
         vm.startPrank(clientAddr);
@@ -5429,11 +5426,7 @@ contract SybilFeeTest is FilecoinWarmStorageServiceTest {
         vm.stopPrank();
     }
 
-    function _encodeCreateData(address payer, uint256 clientDataSetId)
-        internal
-        pure
-        returns (bytes memory)
-    {
+    function _encodeCreateData(address payer, uint256 clientDataSetId) internal pure returns (bytes memory) {
         string[] memory keys = new string[](0);
         string[] memory values = new string[](0);
         return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
