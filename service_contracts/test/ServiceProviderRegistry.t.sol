@@ -407,7 +407,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     // ========== Tests for getProvidersByIds ==========
 
-    function testGetProvidersByIdsEmptyArray() public {
+    function testGetProvidersByIdsEmptyArray() public view {
         uint256[] memory emptyIds = new uint256[](0);
 
         (ServiceProviderRegistry.ServiceProviderInfoView[] memory providerInfos, bool[] memory validIds) =
@@ -483,7 +483,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(providerInfos[1].info.name, "Provider 2", "Second provider name should match");
     }
 
-    function testGetProvidersByIdsInvalidIds() public {
+    function testGetProvidersByIdsInvalidIds() public view {
         uint256[] memory ids = new uint256[](3);
         ids[0] = 0; // Invalid ID (0)
         ids[1] = 999; // Non-existent ID

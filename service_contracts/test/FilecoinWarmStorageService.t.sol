@@ -3,7 +3,6 @@ pragma solidity ^0.8.13;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {console, Test, Vm} from "forge-std/Test.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -1623,14 +1622,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
-    /**
-     * @notice Helper function to delete a data set for a client
-     * @dev This function creates the necessary delete signature and calls the PDP verifier
-     * @param provider The service provider address who owns the data set
-     * @param clientAddress The client address who should sign the deletion
-     * @param dataSetId The ID of the data set to delete
-     */
-    function deleteDataSetForClient(address provider, address clientAddress, uint256 dataSetId) internal {
+    function deleteDataSetForClient(address provider, address, /* clientAddress */ uint256 dataSetId) internal {
         // Delete the data set as the provider
         vm.prank(provider);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
@@ -3532,13 +3524,13 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(v5, "data.json", "Piece 2 filename should match");
 
         // Verify getAllPieceMetadata returns correct data for each piece
-        (string[] memory keys0, string[] memory values0) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId);
+        (string[] memory keys0,) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId);
         assertEq(keys0.length, 2, "Piece 0 should have 2 metadata keys");
 
-        (string[] memory keys1, string[] memory values1) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 1);
+        (string[] memory keys1,) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 1);
         assertEq(keys1.length, 3, "Piece 1 should have 3 metadata keys");
 
-        (string[] memory keys2, string[] memory values2) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 2);
+        (string[] memory keys2,) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 2);
         assertEq(keys2.length, 1, "Piece 2 should have 1 metadata key");
     }
 
