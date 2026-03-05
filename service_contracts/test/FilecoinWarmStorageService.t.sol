@@ -5063,26 +5063,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 }
 
-contract SignatureCheckingService is FilecoinWarmStorageService {
-    constructor(
-        address _pdpVerifierAddress,
-        address _paymentsContractAddress,
-        IERC20Metadata _usdfcTokenAddress,
-        address _filBeamAddressBeneficiary,
-        ServiceProviderRegistry _serviceProviderRegistry,
-        SessionKeyRegistry _sessionKeyRegistry
-    )
-        FilecoinWarmStorageService(
-            _pdpVerifierAddress,
-            _paymentsContractAddress,
-            _usdfcTokenAddress,
-            _filBeamAddressBeneficiary,
-            _serviceProviderRegistry,
-            _sessionKeyRegistry,
-            4
-        )
-    {}
-
+contract SignatureCheckingService {
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return SignatureVerificationLib.recoverSigner(messageHash, signature);
     }
@@ -5140,26 +5121,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
         // Deploy FilecoinPayV1 contract (no longer upgradeable)
         payments = new FilecoinPayV1();
 
-        // Deploy and initialize the service
-        SignatureCheckingService serviceImpl = new SignatureCheckingService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry
-        );
-        bytes memory initData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
-            uint64(2880), // maxProvingPeriod
-            uint256(60), // challengeWindowSize
-            filBeamController, // filBeamControllerAddress
-            "Test Service", // service name
-            "Test Description" // service description
-        );
-
-        MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), initData);
-        pdpService = SignatureCheckingService(address(serviceProxy));
+        // Deploy the signature checking service (standalone, no proxy needed)
+        pdpService = new SignatureCheckingService();
 
         // Fund the payer
         mockUSDFC.safeTransfer(payer, 1000 * 10 ** 18); // 1000 USDFC
