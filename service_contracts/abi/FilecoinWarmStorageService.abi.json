@@ -55,6 +55,19 @@
   },
   {
     "type": "function",
+    "name": "USDFC_SYBIL_FEE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "VERSION",
     "inputs": [],
     "outputs": [
@@ -2233,6 +2246,22 @@
   },
   {
     "type": "error",
+    "name": "ProviderIdMismatchAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ProviderNotInApprovedList",
     "inputs": [
       {
@@ -2320,6 +2349,11 @@
   {
     "type": "error",
     "name": "ServiceContractMustTerminateRail",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StorageProviderChangesNotSupported",
     "inputs": []
   },
   {
