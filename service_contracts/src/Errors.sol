@@ -359,4 +359,8 @@ library Errors {
     /// @param maxAllowed The maximum allowed value for this price type
     /// @param actual The attempted value that exceeds the maximum
     error PriceExceedsMaximum(PriceType priceType, uint256 maxAllowed, uint256 actual);
+
+    error ProviderIdMismatchAtIndex(uint256 index, uint256 providerId);
+
+    error StorageProviderChangesNotSupported();
 }

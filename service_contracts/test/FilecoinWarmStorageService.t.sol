@@ -1815,7 +1815,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Change service provider from sp1 to sp2 should revert
         bytes memory testExtraData = new bytes(0);
         vm.prank(sp2);
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
     }
 
@@ -1843,7 +1843,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         bytes memory testExtraData = new bytes(0);
         // Call directly as PDPVerifier - should now revert before validation
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         pdpServiceWithPayments.storageProviderChanged(testDataSetId, sp2, sp2, testExtraData);
     }
 
@@ -1870,7 +1870,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Use arbitrary extra data
         bytes memory testExtraData = abi.encode("arbitrary", 123, address(this));
         vm.prank(sp2);
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         mockPDPVerifier.changeDataSetServiceProvider(testDataSetId, sp2, address(pdpServiceWithPayments), testExtraData);
     }
 

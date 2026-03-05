@@ -570,7 +570,7 @@ contract FilecoinWarmStorageService is
             revert Errors.ProviderNotInApprovedList(providerId);
         }
 
-        require(approvedProviderIds[index] == providerId, "Provider ID mismatch at index");
+        require(approvedProviderIds[index] == providerId, Errors.ProviderIdMismatchAtIndex(index, providerId));
 
         approvedProviders[providerId] = false;
 
@@ -709,9 +709,8 @@ contract FilecoinWarmStorageService is
             payments.modifyRailLockup(burnRailId, 0, USDFC_SYBIL_FEE);
             payments.modifyRailPayment(burnRailId, 0, USDFC_SYBIL_FEE);
 
-            // Withdraw burn proceeds to PDPVerifier
-            uint256 netAmount = USDFC_SYBIL_FEE - USDFC_SYBIL_FEE / payments.NETWORK_FEE_DENOMINATOR();
-            payments.withdrawTo(usdfcTokenAddress, pdpVerifierAddress, netAmount);
+            // Withdraw burn proceeds to PDPVerifier (net of 0.5% network fee)
+            payments.withdrawTo(usdfcTokenAddress, pdpVerifierAddress, USDFC_SYBIL_FEE - USDFC_SYBIL_FEE / 200);
 
             // Cleanup
             payments.terminateRail(burnRailId);
@@ -1087,7 +1086,7 @@ contract FilecoinWarmStorageService is
         address, // newServiceProvider
         bytes calldata // extraData - not used
     ) external override onlyPDPVerifier {
-        revert("Storage provider changes are not yet supported");
+        revert Errors.StorageProviderChangesNotSupported();
     }
 
     function terminateService(uint256 dataSetId) external {
@@ -1108,15 +1107,7 @@ contract FilecoinWarmStorageService is
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            // CDN rails can be terminated externally via FilecoinPay. Ignore errors from
-            // already-terminated or finalized rails.
-            try payments.terminateRail(info.cacheMissRailId) {} catch {}
-            try payments.terminateRail(info.cdnRailId) {} catch {}
-
-            // Delete withCDN flag from metadata to prevent further CDN operations
-            delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
-
-            emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
+            _terminateCDNRails(dataSetId, info, payments);
         }
 
         emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
@@ -1206,17 +1197,7 @@ contract FilecoinWarmStorageService is
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // ⚠️ WARNING: Catch-all error handling will silently suppress ALL errors from terminateRail(),
-        // not just "already terminated/finalized" errors. This could mask legitimate failures.
-        // Ideally we would catch only specific error types, but contract size constraint prevents
-        // us from implementing error handling.
-        try payments.terminateRail(info.cacheMissRailId) {} catch {}
-        try payments.terminateRail(info.cdnRailId) {} catch {}
-
-        // Delete withCDN flag from metadata to prevent further CDN operations
-        delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
-
-        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
+        _terminateCDNRails(dataSetId, info, payments);
     }
 
     function transferFilBeamController(address newController) external onlyFilBeamController {
@@ -1240,6 +1221,19 @@ contract FilecoinWarmStorageService is
                 Errors.DataSetPaymentBeyondEndEpoch(dataSetId, info.pdpEndEpoch, block.number)
             );
         }
+    }
+
+    /// @notice Terminates CDN rails (cacheMiss + CDN), deletes withCDN metadata, and emits event.
+    /// @dev Uses try/catch because CDN rails may have been terminated externally via FilecoinPay.
+    /// ⚠️ WARNING: Catch-all error handling will silently suppress ALL errors from terminateRail(),
+    /// not just "already terminated/finalized" errors. This could mask legitimate failures.
+    /// Ideally we would catch only specific error types, but contract size constraint prevents
+    /// us from implementing error handling.
+    function _terminateCDNRails(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
+        try payments.terminateRail(info.cacheMissRailId) {} catch {}
+        try payments.terminateRail(info.cdnRailId) {} catch {}
+        delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
+        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
     }
 
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
