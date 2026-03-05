@@ -699,11 +699,11 @@ contract FilecoinWarmStorageService is
         {
             uint256 burnRailId = payments.createRail(
                 usdfcTokenAddress,
-                createData.payer,      // from: client
-                address(payments),     // to: payments contract (auction pool)
-                address(0),            // no validator
-                0,                     // no commission
-                address(this)          // service fee recipient (unused, commission=0)
+                createData.payer, // from: client
+                address(payments), // to: payments contract (auction pool)
+                address(0), // no validator
+                0, // no commission
+                address(0) // service fee recipient (unused, commission=0)
             );
             payments.modifyRailLockup(burnRailId, 0, USDFC_SYBIL_FEE);
             payments.modifyRailPayment(burnRailId, 0, USDFC_SYBIL_FEE);
