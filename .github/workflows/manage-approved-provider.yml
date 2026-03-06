@@ -1,0 +1,92 @@
+name: Manage Approved Provider
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: "Target network"
+        required: true
+        type: choice
+        options:
+          - Calibnet
+          - Mainnet
+      operation:
+        description: "Operation"
+        required: true
+        type: choice
+        options:
+          - add
+          - remove
+      provider_id:
+        description: "Provider ID (optional if service_provider_address is set)"
+        required: false
+        type: string
+      service_provider_address:
+        description: "Service provider address (optional if provider_id is set)"
+        required: false
+        type: string
+      safe_nonce:
+        description: "Optional Safe nonce override"
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run only (validate and print calldata, do not propose)"
+        required: false
+        type: boolean
+        default: true
+
+# Required repository secrets:
+#   CALIBNET_RPC_URL
+#   MAINNET_RPC_URL
+#   SAFE_PROPOSER_PRIVATE_KEY
+#
+# Optional repository secret:
+#   SAFE_TRANSACTION_SERVICE_API_KEY
+#
+# Operational assumption:
+#   The SAFE_PROPOSER_PRIVATE_KEY address is authorized to create transaction-service
+#   proposals for the target Safe on Filecoin Safe.
+
+jobs:
+  manage-approved-provider:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.network == 'Mainnet' && 'mainnet' || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+
+      - name: Validate and optionally propose transaction
+        env:
+          ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
+          ACTION: ${{ inputs.operation }}
+          PROVIDER_ID: ${{ inputs.provider_id }}
+          SERVICE_PROVIDER_ADDRESS: ${{ inputs.service_provider_address }}
+          SAFE_NONCE: ${{ inputs.safe_nonce }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PROPOSE_TO_SAFE: true
+          SAFE_PROPOSER_PRIVATE_KEY: ${{ secrets.SAFE_PROPOSER_PRIVATE_KEY }}
+          SAFE_TRANSACTION_SERVICE_API_KEY: ${{ secrets.SAFE_TRANSACTION_SERVICE_API_KEY }}
+        run: |
+          chmod +x service_contracts/tools/warm-storage-manage-approved-provider.sh
+          ./service_contracts/tools/warm-storage-manage-approved-provider.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Manage Approved Provider"
+            echo ""
+            echo "| Input | Value |"
+            echo "|---|---|"
+            echo "| Network | ${{ inputs.network }} |"
+            echo "| Operation | ${{ inputs.operation }} |"
+            echo "| Provider ID Input | ${{ inputs.provider_id || 'n/a' }} |"
+            echo "| Service Provider Address Input | ${{ inputs.service_provider_address || 'n/a' }} |"
+            echo "| Dry Run | ${{ inputs.dry_run }} |"
+          } >> "$GITHUB_STEP_SUMMARY"

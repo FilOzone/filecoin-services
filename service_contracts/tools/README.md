@@ -1,6 +1,6 @@
 # FilecoinWarmStorageService Deployment Scripts
 
-This directory contains scripts for deploying and upgrading the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
+This directory contains scripts for deploying, upgrading, and operating the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
 > **For detailed upgrade procedures**, see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
 
@@ -18,6 +18,7 @@ Scripts are organized with prefixes for better discoverability:
 | `warm-storage-deploy-calibnet.sh` | Deploy FWSS only (requires existing dependencies) |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
 | `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
+| `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
 | `warm-storage-set-view.sh` | Set the StateView address on FWSS |
 
 ### Service Provider Registry Scripts
@@ -40,6 +41,12 @@ Scripts are organized with prefixes for better discoverability:
 |--------|-------------|
 | `session-key-registry-deploy.sh` | Deploy SessionKeyRegistry |
 | `provider-id-set-deploy.sh` | Deploy ProviderIdSet |
+
+### GitHub Workflows
+
+| Workflow | Description |
+|--------|-------------|
+| `.github/workflows/manage-approved-provider.yml` | Validate or propose add/remove Approved SP transactions through Filecoin Safe Transaction Service |
 
 ### Usage
 
@@ -234,11 +241,12 @@ The script verifies `NEW_OWNER` is a contract (not an EOA), checks the sender is
 
 ## Post-Transfer: Multisig Operations
 
-After ownership is transferred to a multisig, the upgrade and management scripts can no longer send transactions directly. Instead, use `CALLDATA_ONLY=true` to generate calldata for the Safe transaction builder.
+After ownership is transferred to a multisig, the upgrade and management scripts can no longer send transactions directly from an owner EOA. Use `CALLDATA_ONLY=true` to generate calldata for the Safe transaction builder, or for approved-provider changes use the dedicated GitHub workflow / helper script Safe proposal flow.
 
 The following scripts support `CALLDATA_ONLY=true`:
 - `warm-storage-announce-upgrade.sh`
 - `warm-storage-execute-upgrade.sh`
+- `warm-storage-manage-approved-provider.sh`
 - `service-provider-registry-announce-upgrade.sh`
 - `service-provider-registry-execute-upgrade.sh`
 - `warm-storage-set-view.sh`
