@@ -200,7 +200,7 @@ contract FilecoinWarmStorageService is
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
-    // Sybil fee: 0.1 USDFC extracted from client and forwarded to PDPVerifier for burning
+    // Sybil fee: 0.1 USDFC paid by client into the FilecoinPay auction pool, to burn FIL
     uint256 public constant USDFC_SYBIL_FEE = 0.1e18;
 
     // Metadata size and count limits
