@@ -61,6 +61,20 @@ jobs:
         with:
           version: v1.3.5
 
+      - name: Input summary
+        run: |
+          {
+            echo "## Manage Approved Provider"
+            echo ""
+            echo "| Input | Value |"
+            echo "|---|---|"
+            echo "| Network | ${{ inputs.network }} |"
+            echo "| Operation | ${{ inputs.operation }} |"
+            echo "| Provider ID Input | ${{ inputs.provider_id || 'n/a' }} |"
+            echo "| Service Provider Address Input | ${{ inputs.service_provider_address || 'n/a' }} |"
+            echo "| Dry Run | ${{ inputs.dry_run }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Validate and optionally propose transaction
         env:
           ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
@@ -75,18 +89,3 @@ jobs:
         run: |
           chmod +x service_contracts/tools/warm-storage-manage-approved-provider.sh
           ./service_contracts/tools/warm-storage-manage-approved-provider.sh
-
-      - name: Summary
-        if: always()
-        run: |
-          {
-            echo "## Manage Approved Provider"
-            echo ""
-            echo "| Input | Value |"
-            echo "|---|---|"
-            echo "| Network | ${{ inputs.network }} |"
-            echo "| Operation | ${{ inputs.operation }} |"
-            echo "| Provider ID Input | ${{ inputs.provider_id || 'n/a' }} |"
-            echo "| Service Provider Address Input | ${{ inputs.service_provider_address || 'n/a' }} |"
-            echo "| Dry Run | ${{ inputs.dry_run }} |"
-          } >> "$GITHUB_STEP_SUMMARY"
