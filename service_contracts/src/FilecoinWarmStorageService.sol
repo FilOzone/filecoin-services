@@ -200,8 +200,6 @@ contract FilecoinWarmStorageService is
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
-    // Sybil fee: 0.1 USDFC paid by client into the FilecoinPay auction pool, to burn FIL
-    uint256 public constant USDFC_SYBIL_FEE = 0.1e18;
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
@@ -697,6 +695,7 @@ contract FilecoinWarmStorageService is
 
         // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
         {
+            uint256 sybilFee = IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
             uint256 burnRailId = payments.createRail(
                 usdfcTokenAddress,
                 createData.payer, // from: client
@@ -705,8 +704,8 @@ contract FilecoinWarmStorageService is
                 0, // no commission
                 address(0) // service fee recipient (unused, commission=0)
             );
-            payments.modifyRailLockup(burnRailId, 0, USDFC_SYBIL_FEE);
-            payments.modifyRailPayment(burnRailId, 0, USDFC_SYBIL_FEE);
+            payments.modifyRailLockup(burnRailId, 0, sybilFee);
+            payments.modifyRailPayment(burnRailId, 0, sybilFee);
             payments.terminateRail(burnRailId);
             payments.settleRail(burnRailId, block.number);
         }
@@ -1251,7 +1250,7 @@ contract FilecoinWarmStorageService is
         }
 
         // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
-        minimumLockupRequired += USDFC_SYBIL_FEE;
+        minimumLockupRequired += IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
