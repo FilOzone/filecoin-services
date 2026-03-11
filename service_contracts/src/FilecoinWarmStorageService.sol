@@ -200,7 +200,6 @@ contract FilecoinWarmStorageService is
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
-
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
     uint256 private constant MAX_VALUE_LENGTH = 128;
