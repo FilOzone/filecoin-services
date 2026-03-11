@@ -15,6 +15,7 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Errors} from "../src/Errors.sol";
 
 contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
     using PDPOffering for PDPOffering.Schema;
@@ -225,7 +226,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         // Change storage provider should revert at FWSS listener
         vm.prank(provider2);
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         pdpVerifier.changeDataSetServiceProvider(dataSetId, provider2, address(serviceContract), new bytes(0));
 
         console.log("Storage provider change correctly rejected");
@@ -242,7 +243,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         // Try to change to unregistered provider, expect a revert
         vm.prank(address(pdpVerifier));
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         serviceContract.storageProviderChanged(dataSetId, provider1, unregisteredAddress, new bytes(0));
 
         console.log("Correctly reverted (feature not yet supported)");
@@ -257,7 +258,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         // Change to registered provider should revert
         vm.prank(address(pdpVerifier));
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         serviceContract.storageProviderChanged(dataSetId, provider1, unauthorizedProvider, new bytes(0));
 
         console.log("Correctly reverted (feature not yet supported)");
@@ -272,7 +273,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         // Try to change with wrong old owner - now reverts before validation
         vm.prank(address(pdpVerifier));
-        vm.expectRevert("Storage provider changes are not yet supported");
+        vm.expectRevert(abi.encodeWithSelector(Errors.StorageProviderChangesNotSupported.selector));
         serviceContract.storageProviderChanged(
             dataSetId,
             provider3, // wrong old owner

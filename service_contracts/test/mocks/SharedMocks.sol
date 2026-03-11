@@ -95,6 +95,7 @@ contract MockERC20 is IERC20, IERC20Metadata {
 
 // MockPDPVerifier is used to simulate the PDPVerifier for our tests
 contract MockPDPVerifier {
+    uint256 public USDFC_SYBIL_FEE = 0.1e18;
     uint256 public nextDataSetId = 1;
 
     // Track data set service providers for testing

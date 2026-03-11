@@ -2233,6 +2233,22 @@
   },
   {
     "type": "error",
+    "name": "ProviderIdMismatchAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ProviderNotInApprovedList",
     "inputs": [
       {
@@ -2320,6 +2336,11 @@
   {
     "type": "error",
     "name": "ServiceContractMustTerminateRail",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StorageProviderChangesNotSupported",
     "inputs": []
   },
   {
