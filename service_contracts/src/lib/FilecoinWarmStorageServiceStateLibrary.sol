@@ -177,10 +177,8 @@ library FilecoinWarmStorageServiceStateLibrary {
             return new uint256[](0);
         }
 
-        uint256 actualLength = limit;
-        if (limit == 0 || offset + limit > totalLength) {
-            actualLength = totalLength - offset;
-        }
+        uint256 remaining = totalLength - offset;
+        uint256 actualLength = (limit == 0 || limit > remaining) ? remaining : limit;
 
         bytes32 baseSlot = keccak256(abi.encode(slot));
         bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
@@ -549,10 +547,8 @@ library FilecoinWarmStorageServiceStateLibrary {
             return new uint256[](0);
         }
 
-        uint256 actualLength = limit;
-        if (limit == 0 || offset + limit > totalLength) {
-            actualLength = totalLength - offset;
-        }
+        uint256 remaining = totalLength - offset;
+        uint256 actualLength = (limit == 0 || limit > remaining) ? remaining : limit;
 
         bytes32 baseSlot = keccak256(abi.encode(slot));
         bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
