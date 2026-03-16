@@ -6327,3 +6327,221 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
     }
 }
+
+// ===== Client Data Set Pagination Tests =====
+
+contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
+    // Helper to create N datasets for the default client, alternating between sp1 and sp2
+    function _createNDataSets(uint256 n) internal returns (uint256[] memory dataSetIds) {
+        dataSetIds = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            (string[] memory keys, string[] memory values) =
+                _getSingleMetadataKV("label", string.concat("DataSet ", Strings.toString(i)));
+            address provider = (i % 2 == 0) ? sp1 : sp2;
+            dataSetIds[i] = createDataSetForClient(provider, client, keys, values);
+        }
+    }
+
+    // --- getClientDataSetsLength ---
+
+    function testGetClientDataSetsLength_Empty() public view {
+        assertEq(viewContract.getClientDataSetsLength(client), 0, "Empty client should have 0 data sets");
+    }
+
+    function testGetClientDataSetsLength_AfterCreation() public {
+        _createNDataSets(5);
+        assertEq(viewContract.getClientDataSetsLength(client), 5, "Should report 5 data sets");
+    }
+
+    // --- clientDataSets (paginated) ---
+
+    function testClientDataSetsPaginated_Empty() public view {
+        uint256[] memory ids = viewContract.clientDataSets(client, 0, 10);
+        assertEq(ids.length, 0, "Empty client should return empty array");
+    }
+
+    function testClientDataSetsPaginated_FullPage() public {
+        uint256[] memory created = _createNDataSets(5);
+
+        uint256[] memory page = viewContract.clientDataSets(client, 0, 3);
+        assertEq(page.length, 3, "Should return 3 IDs");
+        assertEq(page[0], created[0], "First ID should match");
+        assertEq(page[1], created[1], "Second ID should match");
+        assertEq(page[2], created[2], "Third ID should match");
+    }
+
+    function testClientDataSetsPaginated_SecondPage() public {
+        uint256[] memory created = _createNDataSets(5);
+
+        uint256[] memory page = viewContract.clientDataSets(client, 3, 3);
+        assertEq(page.length, 2, "Should return remaining 2 IDs");
+        assertEq(page[0], created[3], "First ID should match");
+        assertEq(page[1], created[4], "Second ID should match");
+    }
+
+    function testClientDataSetsPaginated_OffsetBeyondLength() public {
+        _createNDataSets(3);
+
+        uint256[] memory page = viewContract.clientDataSets(client, 10, 5);
+        assertEq(page.length, 0, "Offset beyond length should return empty array");
+    }
+
+    function testClientDataSetsPaginated_LimitZeroReturnsAll() public {
+        uint256[] memory created = _createNDataSets(5);
+
+        // limit=0 from offset 0 returns all
+        uint256[] memory all = viewContract.clientDataSets(client, 0, 0);
+        assertEq(all.length, 5, "limit=0 should return all data sets");
+
+        // limit=0 from offset 2 returns remaining
+        uint256[] memory remaining = viewContract.clientDataSets(client, 2, 0);
+        assertEq(remaining.length, 3, "limit=0 from offset 2 should return 3");
+        assertEq(remaining[0], created[2], "First remaining ID should match");
+    }
+
+    function testClientDataSetsPaginated_LimitExceedsRemaining() public {
+        uint256[] memory created = _createNDataSets(3);
+
+        uint256[] memory page = viewContract.clientDataSets(client, 1, 100);
+        assertEq(page.length, 2, "Should clamp to remaining items");
+        assertEq(page[0], created[1], "First ID should match");
+        assertEq(page[1], created[2], "Second ID should match");
+    }
+
+    function testClientDataSetsPaginated_ConsistencyWithUnpaginated() public {
+        _createNDataSets(7);
+
+        // Get all using unpaginated
+        uint256[] memory all = viewContract.clientDataSets(client);
+
+        // Get all using paginated in chunks of 3
+        uint256[] memory reconstructed = new uint256[](7);
+        uint256 idx = 0;
+        for (uint256 offset = 0; offset < 7; offset += 3) {
+            uint256[] memory chunk = viewContract.clientDataSets(client, offset, 3);
+            for (uint256 i = 0; i < chunk.length; i++) {
+                reconstructed[idx++] = chunk[i];
+            }
+        }
+
+        assertEq(all.length, reconstructed.length, "Lengths should match");
+        for (uint256 i = 0; i < all.length; i++) {
+            assertEq(all[i], reconstructed[i], "IDs should match at each position");
+        }
+    }
+
+    // --- getClientDataSets (paginated, enriched) ---
+
+    function testGetClientDataSetsPaginated_Empty() public view {
+        FilecoinWarmStorageService.DataSetInfoView[] memory infos = viewContract.getClientDataSets(client, 0, 10);
+        assertEq(infos.length, 0, "Empty client should return empty array");
+    }
+
+    function testGetClientDataSetsPaginated_FullPage() public {
+        _createNDataSets(5);
+
+        FilecoinWarmStorageService.DataSetInfoView[] memory page = viewContract.getClientDataSets(client, 0, 3);
+        assertEq(page.length, 3, "Should return 3 enriched data sets");
+        assertEq(page[0].payer, client, "First data set payer should match");
+        assertEq(page[1].payer, client, "Second data set payer should match");
+        assertEq(page[2].payer, client, "Third data set payer should match");
+        // Verify provider alternation
+        assertEq(page[0].payee, sp1, "First data set payee should be sp1");
+        assertEq(page[1].payee, sp2, "Second data set payee should be sp2");
+        assertEq(page[2].payee, sp1, "Third data set payee should be sp1");
+    }
+
+    function testGetClientDataSetsPaginated_SecondPage() public {
+        _createNDataSets(5);
+
+        FilecoinWarmStorageService.DataSetInfoView[] memory page = viewContract.getClientDataSets(client, 3, 3);
+        assertEq(page.length, 2, "Should return remaining 2 enriched data sets");
+        assertEq(page[0].payee, sp2, "Fourth data set payee should be sp2");
+        assertEq(page[1].payee, sp1, "Fifth data set payee should be sp1");
+    }
+
+    function testGetClientDataSetsPaginated_OffsetBeyondLength() public {
+        _createNDataSets(3);
+
+        FilecoinWarmStorageService.DataSetInfoView[] memory page = viewContract.getClientDataSets(client, 10, 5);
+        assertEq(page.length, 0, "Offset beyond length should return empty array");
+    }
+
+    function testGetClientDataSetsPaginated_LimitZeroReturnsAll() public {
+        _createNDataSets(4);
+
+        FilecoinWarmStorageService.DataSetInfoView[] memory all = viewContract.getClientDataSets(client, 0, 0);
+        assertEq(all.length, 4, "limit=0 should return all enriched data sets");
+    }
+
+    function testGetClientDataSetsPaginated_ConsistencyWithUnpaginated() public {
+        _createNDataSets(6);
+
+        // Get all using unpaginated
+        FilecoinWarmStorageService.DataSetInfoView[] memory all = viewContract.getClientDataSets(client);
+
+        // Get all using paginated in chunks of 2
+        FilecoinWarmStorageService.DataSetInfoView[] memory page1 = viewContract.getClientDataSets(client, 0, 2);
+        FilecoinWarmStorageService.DataSetInfoView[] memory page2 = viewContract.getClientDataSets(client, 2, 2);
+        FilecoinWarmStorageService.DataSetInfoView[] memory page3 = viewContract.getClientDataSets(client, 4, 2);
+
+        assertEq(page1.length + page2.length + page3.length, all.length, "Total across pages should match");
+
+        // Verify each page matches the corresponding slice of the full result
+        assertEq(page1[0].dataSetId, all[0].dataSetId, "Page 1 item 0 should match");
+        assertEq(page1[1].dataSetId, all[1].dataSetId, "Page 1 item 1 should match");
+        assertEq(page2[0].dataSetId, all[2].dataSetId, "Page 2 item 0 should match");
+        assertEq(page2[1].dataSetId, all[3].dataSetId, "Page 2 item 1 should match");
+        assertEq(page3[0].dataSetId, all[4].dataSetId, "Page 3 item 0 should match");
+        assertEq(page3[1].dataSetId, all[5].dataSetId, "Page 3 item 1 should match");
+
+        // Verify rail IDs match too (confirms full struct fidelity)
+        for (uint256 i = 0; i < 2; i++) {
+            assertEq(page1[i].pdpRailId, all[i].pdpRailId, "Rail IDs should match in page 1");
+        }
+        for (uint256 i = 0; i < 2; i++) {
+            assertEq(page2[i].pdpRailId, all[i + 2].pdpRailId, "Rail IDs should match in page 2");
+        }
+    }
+
+    function testGetClientDataSetsPaginated_IncludesTerminatedDataSets() public {
+        uint256[] memory ids = _createNDataSets(3);
+
+        // Terminate the middle dataset
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(ids[1]);
+
+        // Paginated result should still include the terminated dataset
+        FilecoinWarmStorageService.DataSetInfoView[] memory page = viewContract.getClientDataSets(client, 0, 3);
+        assertEq(page.length, 3, "Terminated datasets should still appear in paginated results");
+        assertTrue(page[1].pdpEndEpoch > 0, "Middle dataset should show as terminated");
+    }
+
+    function testGetClientDataSetsPaginated_ExcludesDeletedDataSets() public {
+        uint256[] memory ids = _createNDataSets(4);
+
+        // Terminate and delete dataset at index 1
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(ids[1]);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(ids[1]);
+        vm.roll(info.pdpEndEpoch + 1);
+
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, rail.endEpoch);
+
+        vm.prank(sp2);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, ids[1], bytes(""));
+
+        // After deletion, length should be 3 and pagination should reflect that
+        assertEq(viewContract.getClientDataSetsLength(client), 3, "Length should be 3 after deletion");
+
+        FilecoinWarmStorageService.DataSetInfoView[] memory all = viewContract.getClientDataSets(client, 0, 0);
+        assertEq(all.length, 3, "Should return 3 data sets after deletion");
+
+        // Verify the deleted dataset is not present
+        for (uint256 i = 0; i < all.length; i++) {
+            assertTrue(all[i].dataSetId != ids[1], "Deleted dataset should not appear");
+        }
+    }
+}

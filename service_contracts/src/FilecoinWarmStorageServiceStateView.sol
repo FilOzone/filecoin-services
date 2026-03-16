@@ -22,6 +22,14 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.clientDataSets(payer);
     }
 
+    function clientDataSets(address payer, uint256 offset, uint256 limit)
+        external
+        view
+        returns (uint256[] memory dataSetIds)
+    {
+        return service.clientDataSets(payer, offset, limit);
+    }
+
     function clientNonces(address payer, uint256 nonce) external view returns (uint256) {
         return service.clientNonces(payer, nonce);
     }
@@ -54,12 +62,24 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getApprovedProvidersLength();
     }
 
+    function getClientDataSets(address client, uint256 offset, uint256 limit)
+        external
+        view
+        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
+    {
+        return service.getClientDataSets(client, offset, limit);
+    }
+
     function getClientDataSets(address client)
         external
         view
         returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
     {
         return service.getClientDataSets(client);
+    }
+
+    function getClientDataSetsLength(address payer) external view returns (uint256) {
+        return service.getClientDataSetsLength(payer);
     }
 
     function getCurrentPricingRates() external view returns (uint256 storagePrice, uint256 minimumRate) {
