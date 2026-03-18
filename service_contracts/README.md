@@ -133,7 +133,13 @@ make test
 
 ### Code Generation
 
-The project includes several auto-generated files. To regenerate them:
+The project includes several auto-generated files that must be kept in sync with the contract source. The generated files are:
+
+- `src/lib/FilecoinWarmStorageServiceLayout.sol` — storage slot constants generated from `FilecoinWarmStorageService` by `tools/generate_storage_layout.sh`. Each state variable is mapped to a `bytes32` constant holding its storage slot number (e.g. `MAX_PROVING_PERIOD_SLOT = bytes32(uint256(0))`). Used by `FilecoinWarmStorageServiceStateLibrary` to implement `extsload`-based view access without delegatecall overhead.
+- `src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol` — produced by replacing `public` with `internal` in `FilecoinWarmStorageServiceStateLibrary.sol` via `sed`.
+- `src/FilecoinWarmStorageServiceStateView.sol` — view contract generated from the compiled library ABI by `tools/generate_view_contract.sh`.
+
+To regenerate them after changing `FilecoinWarmStorageService.sol` or `FilecoinWarmStorageServiceStateLibrary.sol`:
 
 ```bash
 # Generate all files (layout, internal library, view contract)
@@ -145,6 +151,15 @@ make force-gen
 # Clean all generated files
 make clean-gen
 ```
+
+**Important:** Generated files must be committed. The `check-gen` CI job (`.github/workflows/check.yml`) runs `make gen` on every pull request and push to `main`, then checks `git status`. If the regenerated output differs from what is committed, the build fails with:
+
+```
+Error: Generated files are not up to date!
+Please run 'make gen' in service_contracts/ and commit the changes.
+```
+
+Always run `make gen` and commit the results whenever you modify a contract that affects storage layout or state access.
 
 ### ABI Management
 
