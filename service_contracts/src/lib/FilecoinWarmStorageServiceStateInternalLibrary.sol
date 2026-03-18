@@ -158,6 +158,56 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         }
     }
 
+    /**
+     * @notice Get client data set IDs with optional pagination
+     * @param service The service contract
+     * @param payer The client address
+     * @param offset Starting index (0-based). Use 0 to start from beginning
+     * @param limit Maximum number of data set IDs to return. Use 0 to get all remaining
+     * @return dataSetIds Array of data set IDs
+     * @dev For large lists, use pagination to avoid gas limit issues. If limit=0,
+     * returns all remaining data sets starting from offset. Example:
+     * clientDataSets(service, payer, 0, 100) gets first 100 data set IDs.
+     */
+    function clientDataSets(FilecoinWarmStorageService service, address payer, uint256 offset, uint256 limit)
+        internal
+        view
+        returns (uint256[] memory dataSetIds)
+    {
+        bytes32 slot = keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SETS_SLOT));
+        uint256 totalLength = uint256(service.extsload(slot));
+
+        if (totalLength == 0 || offset >= totalLength) {
+            return new uint256[](0);
+        }
+
+        uint256 remaining = totalLength - offset;
+        uint256 actualLength = (limit == 0 || limit > remaining) ? remaining : limit;
+
+        bytes32 baseSlot = keccak256(abi.encode(slot));
+        bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
+        bytes32[] memory paginatedResult = service.extsloadStruct(startSlot, actualLength);
+
+        assembly ("memory-safe") {
+            dataSetIds := paginatedResult
+        }
+    }
+
+    /**
+     * @notice Get the total number of data sets for a client
+     * @param service The service contract
+     * @param payer The client address
+     * @return count Total number of data sets
+     */
+    function getClientDataSetsLength(FilecoinWarmStorageService service, address payer)
+        internal
+        view
+        returns (uint256)
+    {
+        bytes32 slot = keccak256(abi.encode(payer, StorageLayout.CLIENT_DATA_SETS_SLOT));
+        return uint256(service.extsload(slot));
+    }
+
     function railToDataSet(FilecoinWarmStorageService service, uint256 railId) internal view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(railId, StorageLayout.RAIL_TO_DATA_SET_SLOT))));
     }
@@ -292,6 +342,30 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
     {
         uint256[] memory dataSetIds = clientDataSets(service, client);
+
+        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            infos[i] = getDataSet(service, dataSetIds[i]);
+        }
+    }
+
+    /**
+     * @notice Get enriched client data sets with optional pagination
+     * @param service The service contract
+     * @param client The client address
+     * @param offset Starting index (0-based). Use 0 to start from beginning
+     * @param limit Maximum number of data sets to return. Use 0 to get all remaining
+     * @return infos Array of enriched data set info structs
+     * @dev For large lists, use pagination to avoid gas limit issues. If limit=0,
+     * returns all remaining data sets starting from offset. Example:
+     * getClientDataSets(service, client, 0, 50) gets the first 50 enriched data sets.
+     */
+    function getClientDataSets(FilecoinWarmStorageService service, address client, uint256 offset, uint256 limit)
+        internal
+        view
+        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
+    {
+        uint256[] memory dataSetIds = clientDataSets(service, client, offset, limit);
 
         infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
@@ -481,10 +555,8 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
             return new uint256[](0);
         }
 
-        uint256 actualLength = limit;
-        if (limit == 0 || offset + limit > totalLength) {
-            actualLength = totalLength - offset;
-        }
+        uint256 remaining = totalLength - offset;
+        uint256 actualLength = (limit == 0 || limit > remaining) ? remaining : limit;
 
         bytes32 baseSlot = keccak256(abi.encode(slot));
         bytes32 startSlot = bytes32(uint256(baseSlot) + offset);
