@@ -3,6 +3,27 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.2.0] - 2026-03-XX - FWSS Upgrade
+
+This release improves dataset creation and dataset query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new datasets.
+
+### Deployment Addresses
+
+See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/deployments.json) for the latest Mainnet (chain 314) and Calibnet (chain 314159) contract addresses. The FWSS proxy addresses remain unchanged in this release; the upgrade only changes the implementation behind the existing proxies.
+
+### Changed
+- Dataset creation now charges the PDPVerifier USDFC sybil fee via a client-funded burn rail ([#437](https://github.com/FilOzone/filecoin-services/pull/437))
+
+### Fixed
+- Corrected FWSS proving-period boundary handling to use exclusive-inclusive ranges ([#419](https://github.com/FilOzone/filecoin-services/pull/419))
+- Simplified and optimized validator-path settlement calculations in `_findProvenEpochs` ([#423](https://github.com/FilOzone/filecoin-services/pull/423), [#424](https://github.com/FilOzone/filecoin-services/pull/424))
+
+### Upgrade Notes
+- Existing FWSS proxy integrations continue using the same proxy addresses.
+- No migration is required for existing datasets or existing integrations.
+- Clients creating new datasets should ensure they have enough available USDFC funds and lockup allowance to cover both the existing minimum lockup and the PDPVerifier sybil fee.
+- No user action is required unless your integration depends on the exact pre-upgrade dataset-creation funding assumptions.
+
 ## [1.1.0] - 2026-01-30 - FWSS Upgrade
 
 This release includes bug fixes, new features, and operational improvements for the Filecoin Warm Storage Service.
