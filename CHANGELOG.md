@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [1.2.0] - 2026-03-XX - FWSS Upgrade
 
-This release improves dataset creation and dataset query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new datasets.
+This release improves data set creation and data set query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new data sets.
 
 ### Deployment Addresses
 
