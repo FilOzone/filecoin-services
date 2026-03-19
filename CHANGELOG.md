@@ -20,7 +20,7 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 
 ### Upgrade Notes
 - Existing FWSS proxy integrations continue using the same proxy addresses.
-- No migration is required for existing datasets or existing integrations.
+- No migration is required for existing data sets or existing integrations.
 - Clients creating new datasets should ensure they have enough available USDFC funds and lockup allowance to cover both the existing minimum lockup and the PDPVerifier sybil fee.
 - No user action is required unless your integration depends on the exact pre-upgrade dataset-creation funding assumptions.
 
