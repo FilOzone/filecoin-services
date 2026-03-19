@@ -22,6 +22,8 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 - Existing FWSS proxy integrations continue using the same proxy addresses.
 - No migration is required for existing data sets or existing integrations.
 - Clients creating new data sets should ensure they have enough available USDFC funds and lockup allowance to cover both the existing minimum lockup and the PDPVerifier sybil fee.
+  - The USDFC sybil fee is `0.1 USDFC`.
+  - The configured amount can be read on-chain by calling `USDFC_SYBIL_FEE()` on the PDPVerifier proxy for each network. See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/deployments.json) for the PDP proxy addresses.
 - No user action is required unless your integration depends on the exact pre-upgrade dataset-creation funding assumptions.
 
 ## [1.1.0] - 2026-01-30 - FWSS Upgrade
