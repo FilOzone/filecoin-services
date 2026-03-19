@@ -12,7 +12,7 @@ This release improves dataset creation and dataset query behavior in FWSS, while
 See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/deployments.json) for the latest Mainnet (chain 314) and Calibnet (chain 314159) contract addresses. The FWSS proxy addresses remain unchanged in this release; the upgrade only changes the implementation behind the existing proxies.
 
 ### Changed
-- Dataset creation now charges the PDPVerifier USDFC sybil fee via a client-funded burn rail ([#437](https://github.com/FilOzone/filecoin-services/pull/437))
+- Data set creation now charges the PDPVerifier USDFC sybil fee via a client-funded burn rail ([#437](https://github.com/FilOzone/filecoin-services/pull/437))
 
 ### Fixed
 - Corrected FWSS proving-period boundary handling to use exclusive-inclusive ranges ([#419](https://github.com/FilOzone/filecoin-services/pull/419))
