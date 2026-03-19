@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.1.1] - 2026-03-02 - FWSS Upgrade
+
+This release includes contract improvements, deployment tooling updates, and operational/documentation refinements for FWSS.
+
+### Deployment Addresses
+
+See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/deployments.json) for v1.1.1 Mainnet (chain 314) and Calibnet (chain 314159) contract addresses.
+
+### Added
+- Contract architecture and failure scenario documentation in `SPEC.md` ([#430](https://github.com/FilOzone/filecoin-services/pull/430))
+- SAFE-oriented FWSS upgrade tooling and runbook documentation ([#384](https://github.com/FilOzone/filecoin-services/pull/384))
+- GitHub Actions workflow for implementation-only deployments (`deploy-contract.yml`) ([#426](https://github.com/FilOzone/filecoin-services/pull/426))
+- Ownership transfer tooling and multisig calldata support for upgrade scripts ([#428](https://github.com/FilOzone/filecoin-services/pull/428))
+
+### Changed
+- Updated `lib/pdp` submodule and deployment flow to include the reinitialization constructor parameter ([#408](https://github.com/FilOzone/filecoin-services/pull/408))
+- Removed the in-repo subgraph and moved subgraph ownership to [`FIL-Builders/fwss-subgraph`](https://github.com/FIL-Builders/fwss-subgraph) ([#427](https://github.com/FilOzone/filecoin-services/pull/427))
+- Standardized deployment links in changelog entries ([#429](https://github.com/FilOzone/filecoin-services/pull/429))
+
+### Fixed
+- Corrected proving-period boundary handling to exclusive-inclusive ranges in FWSS validation logic ([#419](https://github.com/FilOzone/filecoin-services/pull/419))
+- Simplified and optimized proven-epoch settlement calculations in `IValidator` path ([#423](https://github.com/FilOzone/filecoin-services/pull/423), [#424](https://github.com/FilOzone/filecoin-services/pull/424))
+
 ## [1.1.0] - 2026-01-30 - FWSS Upgrade
 
 This release includes bug fixes, new features, and operational improvements for the Filecoin Warm Storage Service.
