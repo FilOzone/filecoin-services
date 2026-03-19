@@ -35,6 +35,23 @@ Scripts are organized with prefixes for better discoverability:
 |--------|-------------|
 | `transfer-ownership.sh` | Transfer ownership of FWSS and ServiceProviderRegistry proxies to a new owner |
 
+### Code Generation Scripts
+
+These scripts are invoked by `make gen` (via `Makefile` rules) and should not normally need to be run directly.
+
+| Script | Description |
+|--------|-------------|
+| [`generate_storage_layout.sh`](generate_storage_layout.sh) `<contract-id>` | Reads the compiled storage layout of a contract via `forge inspect --json <contract-id> storageLayout` (where `<contract-id>` is a Forge contract identifier like `src/File.sol:ContractName`) and emits a Solidity file declaring one `bytes32 constant <VAR>_SLOT` per state variable. The constant value is the decimal slot index cast to `bytes32`. Used to produce [`src/lib/FilecoinWarmStorageServiceLayout.sol`](../src/lib/FilecoinWarmStorageServiceLayout.sol). |
+| [`generate_view_contract.sh`](generate_view_contract.sh) `<abi.json>` | Reads a compiled contract's ABI JSON and emits a Solidity view contract that wraps each `function` entry by delegating to `FilecoinWarmStorageServiceStateInternalLibrary`. Used to produce [`src/FilecoinWarmStorageServiceStateView.sol`](../src/FilecoinWarmStorageServiceStateView.sol). |
+
+#### When to regenerate
+
+Run `make gen` (from the `service_contracts/` directory) and commit the results whenever you:
+- Add, remove, or reorder state variables in [`src/FilecoinWarmStorageService.sol`](../src/FilecoinWarmStorageService.sol) (affects [`src/lib/FilecoinWarmStorageServiceLayout.sol`](../src/lib/FilecoinWarmStorageServiceLayout.sol))
+- Add or modify public view functions in [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](../src/lib/FilecoinWarmStorageServiceStateLibrary.sol) (affects [`src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol`](../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol) and [`src/FilecoinWarmStorageServiceStateView.sol`](../src/FilecoinWarmStorageServiceStateView.sol))
+
+The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/check.yml)) runs on every pull request and push to `main`. It regenerates all files and fails the build if the output differs from what is committed.
+
 ### Other Scripts
 
 | Script | Description |
