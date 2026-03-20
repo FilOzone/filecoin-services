@@ -38,6 +38,15 @@ jobs:
           fi
           echo "Generated files are up to date ✓"
 
+      - name: Fetch base branch for layout comparison
+        if: github.event_name == 'pull_request'
+        run: git fetch origin ${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} --depth=1
+
+      - name: Check storage layout additions
+        run: |
+          cd service_contracts
+          bash tools/check_storage_layout.sh
+
   check-abi:
     name: Check ABI Changes
     runs-on: ubuntu-latest
