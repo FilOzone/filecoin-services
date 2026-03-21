@@ -463,27 +463,3 @@ Several concerns apply to any multi-contract migration, regardless of which comp
 
 **TODO:** Define concrete procedures for coordinated multi-contract upgrades. Document a pre-upgrade testing checklist. Specify rollback procedures and emergency response timelines. Evaluate adopting structural storage protections — such as OpenZeppelin storage gaps, [ERC-7201](https://eips.ethereum.org/EIPS/eip-7201) namespaced storage, [ERC-8042](https://eips.ethereum.org/EIPS/eip-8042), or the [Ithaca storage domain pattern](https://github.com/ithacaxyz/account/blob/ab0a493f04676abc71104623bcfcdede050da2ec/src/IthacaAccount.sol#L102) — for future contracts. Existing contracts will not be migrated to these patterns.
 
-### Storage Layout Verification Process
-
-To prevent storage layout violations from corrupting proxy state, the codebase enforces strict additive-only changes through both automated CI checks and manual release verification.
-
-**Automated CI Check**
-
-Every pull request runs `tools/check_storage_layout.sh` which enforces:
-
-1. **No slot removal**: Existing storage variables cannot be deleted
-2. **No slot reordering**: Existing slot numbers cannot change
-3. **Append-only additions**: New variables must use slot numbers greater than the previous maximum
-
-Violations cause CI to fail with clear error messages indicating the destructive change. Developers can run `make check-layout` locally to validate before pushing.
-
-**Release Verification**
-
-Before finalizing a contract release, a release manager must:
-
-1. Review `FilecoinWarmStorageServiceLayout.sol` for any changes
-2. Confirm changes are purely additive (new slots at the end only)
-3. Verify no existing slot numbers were modified or removed
-4. Check the PR diff of `FilecoinWarmStorageServiceLayout.sol` for destructive patterns
-
-The automated CI check serves as the primary defense; manual review is a safety net. If destructive changes are detected before merge, the PR must be restructured to append new variables rather than insert or modify existing slots.

@@ -1,26 +1,25 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Check that storage layout changes are additive only.
-# This prevents destructive changes to upgradeable contract storage.
-#
-# Destructive changes that will fail this check:
+# Prevents destructive changes to upgradeable contract storage:
 # - Removing existing storage slots
 # - Changing the slot number of an existing variable
 # - Inserting new slots in the middle (shifting existing slots)
-#
-# Allowed changes:
-# - Appending new slots at the end (highest slot numbers)
+# Allowed: Appending new slots at the end (highest slot numbers)
 #
 # Usage: check_storage_layout.sh [<base_layout.sol> <new_layout.sol>]
-#   With no args: compares current HEAD to working tree
-#   With two args: compares base_layout.sol to new_layout.sol
+#   No args: compares HEAD to working tree
+#   Two args: compares base_layout.sol to new_layout.sol
 
-set -e
+set -euo pipefail
 
-# Function to extract slot definitions from layout file
-# Output format: "NAME NUMBER" one per line
+# Clean up temp files on exit
+TEMP_FILES=()
+cleanup() { rm -f "${TEMP_FILES[@]:-}" 2>/dev/null || true; }
+trap cleanup EXIT
+
+# Extract slot definitions from layout file (format: "NAME NUMBER" per line)
 extract_slots() {
     local file="$1"
-    # Match: bytes32 constant NAME_SLOT = bytes32(uint256(NUMBER));
     grep -E 'bytes32 constant [A-Z0-9_]+_SLOT = bytes32\(uint256\([0-9]+\)\);' "$file" 2>/dev/null | \
         sed -E 's/.*constant ([A-Z0-9_]+_SLOT).*uint256\(([0-9]+)\).*/\1 \2/' | \
         sort -k2 -n
@@ -71,6 +70,7 @@ compare_layouts() {
     # Extract slots
     local base_slots_file=$(mktemp)
     local new_slots_file=$(mktemp)
+    TEMP_FILES+=("$base_slots_file" "$new_slots_file")
 
     extract_slots "$base_file" > "$base_slots_file"
     extract_slots "$new_file" > "$new_slots_file"
@@ -111,13 +111,10 @@ compare_layouts() {
         fi
     done < "$new_slots_file"
 
-    # Report results (save counts before cleanup)
+    # Report results
     local base_count=$(wc -l < "$base_slots_file")
     local new_count=$(wc -l < "$new_slots_file")
     local added=$((new_count - base_count))
-
-    # Clean up temp files
-    rm -f "$base_slots_file" "$new_slots_file"
 
     echo ""
     if [ "$errors" -eq 0 ]; then
@@ -142,7 +139,7 @@ case $# in
         fi
 
         # Get the base commit (HEAD for regular check, or base branch for PRs)
-        if [ -n "$GITHUB_BASE_REF" ]; then
+        if [ -n "${GITHUB_BASE_REF:-}" ]; then
             BASE_REF="origin/$GITHUB_BASE_REF"
         elif git rev-parse --quiet --verify HEAD~1 >/dev/null 2>&1; then
             BASE_REF="HEAD~1"
@@ -165,12 +162,12 @@ case $# in
         # Get base version (must use repository-root relative path for git show)
         GIT_PREFIX=$(git rev-parse --show-prefix)
         FULL_LAYOUT_FILE="${GIT_PREFIX}${LAYOUT_FILE}"
-        
+
         TEMP_BASE_LAYOUT=$(mktemp)
+        TEMP_FILES+=("$TEMP_BASE_LAYOUT")
 
         if ! git show "$BASE_REF:$FULL_LAYOUT_FILE" > "$TEMP_BASE_LAYOUT" 2>/dev/null; then
             echo "Warning: Could not retrieve base layout, assuming new file"
-            rm -f "$TEMP_BASE_LAYOUT"
             if validate_layout_format "$LAYOUT_FILE"; then
                 echo "Storage layout format validated"
                 exit 0
@@ -179,11 +176,17 @@ case $# in
             fi
         fi
 
+        # Validate both layouts before comparison
+        if ! validate_layout_format "$TEMP_BASE_LAYOUT"; then
+            echo "Error: Base layout validation failed" >&2
+            exit 1
+        fi
+        if ! validate_layout_format "$LAYOUT_FILE"; then
+            echo "Error: New layout validation failed" >&2
+            exit 1
+        fi
+
         compare_layouts "$TEMP_BASE_LAYOUT" "$LAYOUT_FILE"
-        EXIT_CODE=$?
-        
-        rm -f "$TEMP_BASE_LAYOUT"
-        exit $EXIT_CODE
         ;;
 
     2)
