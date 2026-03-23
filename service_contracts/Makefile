@@ -121,6 +121,12 @@ contract-size-check:
 	@echo "Checking contract sizes..."
 	bash tools/check-contract-size.sh src/
 
+# Storage layout validation
+.PHONY: check-layout
+check-layout:
+	@echo "Checking storage layout for destructive changes..."
+	@bash tools/check_storage_layout.sh
+
 # ABI Management
 
 # Core contracts we publish ABIs for
@@ -187,8 +193,11 @@ help:
 	@echo "  force-gen  - Clean and regenerate all files (use when broken)"
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
-	@echo "  help       - Show this help message"
+	@echo "Validation targets:"
+	@echo "  check-layout - Check storage layout for destructive changes (additions only)"
 	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
+	@echo ""
+	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "ABI management targets:"
 	@echo "  update-abi - Update checked-in ABIs in abi/ directory (incremental)"
