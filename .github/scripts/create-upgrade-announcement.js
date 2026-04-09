@@ -9,7 +9,6 @@
 const fs = require("fs");
 const path = require("path");
 const https = require("https");
-const { execSync } = require("child_process");
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -33,7 +32,6 @@ Environment variables:
   CHANGELOG_PR         PR number or link for release-prep changelog updates (optional)
   CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional)
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
-  DOCS_REF             Git ref/sha used for blob links (optional; defaults to current ref/HEAD)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
@@ -51,7 +49,6 @@ const config = {
   changelogPr: (process.env.CHANGELOG_PR || "").trim(),
   changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
-  docsRef: (process.env.DOCS_REF || process.env.GITHUB_SHA || "").trim(),
   githubToken: process.env.GITHUB_TOKEN,
   githubRepository: process.env.GITHUB_REPOSITORY,
 };
@@ -75,18 +72,6 @@ function validateConfig() {
       console.error("Error: GITHUB_REPOSITORY is required when not using --dry-run");
       process.exit(1);
     }
-  }
-}
-
-function detectDocsRef() {
-  if (config.docsRef) {
-    return config.docsRef;
-  }
-
-  try {
-    return execSync("git rev-parse HEAD", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-  } catch {
-    return "main";
   }
 }
 
@@ -163,7 +148,6 @@ function generateTitle() {
 function generateBody() {
   const [owner, repo] = (config.githubRepository || "FilOzone/filecoin-services").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
-  const docsRef = detectDocsRef();
   const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} upgrade`;
   const releaseBranch = `release-${config.releaseVersion}`;
 
@@ -175,10 +159,10 @@ function generateBody() {
     ACTION_REQUIRED: formatActionRequired(config.actionRequired),
     RELEASE_BRANCH: releaseBranch,
     RECOMMENDED_PR_TITLE: recommendedPrTitle,
-    CHANGELOG_LINK: `${baseUrl}/blob/${docsRef}/CHANGELOG.md`,
-    FWSS_CONTRACT_LINK: `${baseUrl}/blob/${docsRef}/service_contracts/src/FilecoinWarmStorageService.sol`,
-    UPGRADE_PROCESS_LINK: `${baseUrl}/blob/${docsRef}/service_contracts/tools/UPGRADE-PROCESS.md`,
-    CHECKLIST_LINK: `${baseUrl}/blob/${docsRef}/service_contracts/tools/UPGRADE-CHECKLIST.md`,
+    CHANGELOG_LINK: `${baseUrl}/blob/main/CHANGELOG.md`,
+    FWSS_CONTRACT_LINK: `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`,
+    UPGRADE_PROCESS_LINK: `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md`,
+    CHECKLIST_LINK: `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-CHECKLIST.md`,
     DEPLOY_WORKFLOW_LINK: `${baseUrl}/actions/workflows/deploy-contract.yml`,
     CREATE_ISSUE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/create-upgrade-announcement-issue.yml`,
   };

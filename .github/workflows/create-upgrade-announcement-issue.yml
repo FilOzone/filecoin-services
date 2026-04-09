@@ -47,7 +47,6 @@ jobs:
           NETWORK: ${{ inputs.network }}
           RELEASE_VERSION: ${{ inputs.fwss_version }}
           UPGRADE_TYPE: ${{ inputs.upgrade_type }}
-          DOCS_REF: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
