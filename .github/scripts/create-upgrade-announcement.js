@@ -2,15 +2,15 @@
 /**
  * Create FWSS Contract Upgrade Release Issue
  *
- * Generates a release issue that combines user-facing upgrade information
- * with a release engineer checklist (similar to Lotus release issues).
- *
- * See help text below for more info.
+ * Renders the release issue body from service_contracts/tools/UPGRADE-CHECKLIST.md
+ * so the checklist template can evolve on the same branch as the release prep.
  */
 
+const fs = require("fs");
+const path = require("path");
 const https = require("https");
+const { execSync } = require("child_process");
 
-// Parse command line arguments
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const showHelp = args.includes("--help") || args.includes("-h");
@@ -30,34 +30,32 @@ Environment variables:
   NETWORK              Target network (Calibnet or Mainnet)
   RELEASE_VERSION      FWSS release version for the issue title (default: vX.Y.Z)
   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
-  CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional at issue creation)
+  CHANGELOG_PR         PR number or link for release-prep changelog updates (optional)
+  CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional)
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
-  UPGRADE_REGISTRY     Also upgrading ServiceProviderRegistry? (true/false, default: false, rare)
-  UPGRADE_STATE_VIEW   Also redeploying StateView? (true/false, default: false, rare)
+  DOCS_REF             Git ref/sha used for blob links (optional; defaults to current ref/HEAD)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
 Example:
-  NETWORK=Calibnet UPGRADE_TYPE=Routine CHANGES_SUMMARY="Fix bug|Add feature" \\
-  node create-upgrade-announcement.js --dry-run
+  NETWORK=Mainnet RELEASE_VERSION=v1.2.3 UPGRADE_TYPE=Routine \
+  node .github/scripts/create-upgrade-announcement.js --dry-run
 `);
   process.exit(0);
 }
 
-// Get configuration from environment
 const config = {
   network: process.env.NETWORK,
   releaseVersion: (process.env.RELEASE_VERSION || "vX.Y.Z").trim(),
   upgradeType: process.env.UPGRADE_TYPE,
+  changelogPr: (process.env.CHANGELOG_PR || "").trim(),
   changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
-  upgradeRegistry: process.env.UPGRADE_REGISTRY === "true",
-  upgradeStateView: process.env.UPGRADE_STATE_VIEW === "true",
+  docsRef: (process.env.DOCS_REF || process.env.GITHUB_SHA || "").trim(),
   githubToken: process.env.GITHUB_TOKEN,
   githubRepository: process.env.GITHUB_REPOSITORY,
 };
 
-// Validate required fields
 function validateConfig() {
   const required = ["network", "upgradeType"];
   const missing = required.filter((key) => !config[key]);
@@ -80,239 +78,114 @@ function validateConfig() {
   }
 }
 
-// Format changes summary from pipe-separated to bullet points
-function formatChanges(changesSummary) {
-  if (!changesSummary) {
-    return "- TBD";
+function detectDocsRef() {
+  if (config.docsRef) {
+    return config.docsRef;
   }
-  return changesSummary
+
+  try {
+    return execSync("git rev-parse HEAD", { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch {
+    return "main";
+  }
+}
+
+function formatBulletList(value, fallback = "- TBD") {
+  if (!value) {
+    return fallback;
+  }
+
+  const items = value
     .split("|")
     .map((line) => line.trim())
-    .filter((line) => line.length > 0)
-    .map((line) => `- ${line}`)
-    .join("\n");
-}
+    .filter(Boolean);
 
-// Build the list of contracts being upgraded (FWSS is always included)
-function buildContractsList() {
-  const contracts = ["FilecoinWarmStorageService"];
-
-  if (config.upgradeRegistry) {
-    contracts.push("ServiceProviderRegistry");
-  }
-  if (config.upgradeStateView) {
-    contracts.push("FilecoinWarmStorageServiceStateView");
+  if (items.length === 0) {
+    return fallback;
   }
 
-  return contracts;
+  return items.map((line) => `- ${line}`).join("\n");
 }
 
-// Generate issue title
+function formatActionRequired(value) {
+  if (!value) {
+    return "TBD";
+  }
+
+  if (value.includes("|")) {
+    return formatBulletList(value);
+  }
+
+  return value;
+}
+
+function formatChangelogPr(baseUrl) {
+  if (!config.changelogPr) {
+    return "TBD (link PR after opening)";
+  }
+
+  const normalized = config.changelogPr.replace(/^#/, "");
+  if (/^\d+$/.test(normalized)) {
+    return `[#${normalized}](${baseUrl}/pull/${normalized})`;
+  }
+
+  return config.changelogPr;
+}
+
+function loadIssueTemplate() {
+  const templatePath = path.resolve(__dirname, "../../service_contracts/tools/UPGRADE-CHECKLIST.md");
+  const source = fs.readFileSync(templatePath, "utf8");
+  const startMarker = "<!-- ISSUE_TEMPLATE_START -->";
+  const endMarker = "<!-- ISSUE_TEMPLATE_END -->";
+  const start = source.indexOf(startMarker);
+  const end = source.indexOf(endMarker);
+
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(`Could not find issue template markers in ${templatePath}`);
+  }
+
+  return source.slice(start + startMarker.length, end).trim();
+}
+
+function replaceAll(template, replacements) {
+  let rendered = template;
+  for (const [key, value] of Object.entries(replacements)) {
+    rendered = rendered.split(`{{${key}}}`).join(value);
+  }
+  return rendered;
+}
+
 function generateTitle() {
   const mainnetSuffix = config.network === "Mainnet" ? " (includes Calibnet)" : "";
   return `[Release] FWSS ${config.releaseVersion} ${config.network} Upgrade${mainnetSuffix}`;
 }
 
-// Generate issue body
 function generateBody() {
-  const [owner, repo] = (config.githubRepository || "OWNER/REPO").split("/");
+  const [owner, repo] = (config.githubRepository || "FilOzone/filecoin-services").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
-
-  const changelogLink = `${baseUrl}/blob/main/CHANGELOG.md`;
-  const fwssContractLink = `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`;
-  const upgradeProcessLink = `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-PROCESS.md`;
-  const deployWorkflowLink = `${baseUrl}/actions/workflows/deploy-contract.yml`;
-  const fwssCalibnetProxy = "0x02925630df557F957f70E112bA06e50965417CA0";
-  const fwssMainnetProxy = "0x8408502033C418E1bbC97cE9ac48E5528F371A9f";
-
-  const changes = formatChanges(config.changesSummary);
+  const docsRef = detectDocsRef();
   const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} upgrade`;
-  const mainnetWaitLine = "> ⏳ Set AFTER_EPOCH after deployments, then execute mainnet upgrade";
-  const contracts = buildContractsList();
-  const isMainnet = config.network === "Mainnet";
-  const isBreaking = config.upgradeType === "Breaking Change";
+  const releaseBranch = `release-${config.releaseVersion}`;
 
-  // Build contracts checklist for the release checklist section
-  const deployChecklist = contracts
-    .map((c) => {
-      if (c === "FilecoinWarmStorageService") {
-        return "- [ ] Deploy FWSS implementation: `./warm-storage-deploy-implementation.sh`";
-      } else if (c === "ServiceProviderRegistry") {
-        return "- [ ] Deploy Registry implementation: `./service-provider-registry-deploy.sh`";
-      } else if (c === "FilecoinWarmStorageServiceStateView") {
-        return "- [ ] Deploy StateView: `./warm-storage-deploy-view.sh`";
-      }
-      return `- [ ] Deploy ${c}`;
-    })
-    .join("\n");
+  const replacements = {
+    RELEASE_VERSION: config.releaseVersion,
+    UPGRADE_TYPE: config.upgradeType,
+    CHANGELOG_PR: formatChangelogPr(baseUrl),
+    CHANGES_SUMMARY: formatBulletList(config.changesSummary),
+    ACTION_REQUIRED: formatActionRequired(config.actionRequired),
+    RELEASE_BRANCH: releaseBranch,
+    RECOMMENDED_PR_TITLE: recommendedPrTitle,
+    CHANGELOG_LINK: `${baseUrl}/blob/${docsRef}/CHANGELOG.md`,
+    FWSS_CONTRACT_LINK: `${baseUrl}/blob/${docsRef}/service_contracts/src/FilecoinWarmStorageService.sol`,
+    UPGRADE_PROCESS_LINK: `${baseUrl}/blob/${docsRef}/service_contracts/tools/UPGRADE-PROCESS.md`,
+    CHECKLIST_LINK: `${baseUrl}/blob/${docsRef}/service_contracts/tools/UPGRADE-CHECKLIST.md`,
+    DEPLOY_WORKFLOW_LINK: `${baseUrl}/actions/workflows/deploy-contract.yml`,
+    CREATE_ISSUE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/create-upgrade-announcement-issue.yml`,
+  };
 
-  const announceChecklist = contracts
-    .map((c) => {
-      if (c === "FilecoinWarmStorageService") {
-        return "- [ ] Announce FWSS upgrade: `./warm-storage-announce-upgrade.sh`";
-      } else if (c === "ServiceProviderRegistry") {
-        return "- [ ] Announce Registry upgrade: `./service-provider-registry-announce-upgrade.sh`";
-      }
-      return null;
-    })
-    .filter(Boolean)
-    .join("\n");
-
-  const executeChecklist = contracts
-    .map((c) => {
-      if (c === "FilecoinWarmStorageService") {
-        return "- [ ] Execute FWSS upgrade: `./warm-storage-execute-upgrade.sh`";
-      } else if (c === "ServiceProviderRegistry") {
-        return "- [ ] Execute Registry upgrade: `./service-provider-registry-execute-upgrade.sh`";
-      }
-      return null;
-    })
-    .filter(Boolean)
-    .join("\n");
-
-  return `## Overview
-
-| Field | Value |
-|-------|-------|
-| **Version** | ${config.releaseVersion} |
-| **Network** | ${config.network} |
-| **Upgrade Type** | ${config.upgradeType} |
-| **Target Epoch** | TBD (set after deployment) |
-| **Changelog PR** | TBD (set after PR is opened) |
-
-### Contracts in Scope
-${contracts.map((c) => `- ${c}`).join("\n")}
-
-### Changes
-${changes}
-
-### Action Required for Integrators
-${config.actionRequired || "TBD"}
-
----
-
-## Release Checklist
-
-> Full process details: [UPGRADE-PROCESS.md](${upgradeProcessLink})
-
-### Phase 1: Branch, PR, and Checks
-- [ ] All intended contract changes are merged into \`main\`
-- [ ] Create release branch from \`main\`, called \`release-vX.Y.Z\`
-- [ ] Changelog entry prepared in [CHANGELOG.md](${changelogLink})
-- [ ] Version string updated in [FilecoinWarmStorageService.sol](${fwssContractLink})
-- [ ] Create PR with the title \`${recommendedPrTitle}\`, add link to it in the "Overview" section of this issue. 
-- [ ] Run upgrade checks:
-
-\`\`\`bash
-cd /Users/phi/filecoin-services/service_contracts
-forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
-forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
-\`\`\`
-
-- [ ] Update this issue placeholders as values become known (\`AFTER_EPOCH\`, PR number, summary, action required)
-${isBreaking ? "- [ ] Migration guide prepared for breaking changes" : ""}
-
-### Phase 2: Deploy Implementations
-Deploy to both networks before any announce/execute.
-
-**Calibnet**
-- [ ] Run [Deploy Contract workflow](${deployWorkflowLink}) with \`network=Calibnet\`, \`contract=FWSS Implementation\`, \`dry_run=true\`
-- [ ] Re-run with \`dry_run=false\`
-${deployChecklist}
-- [ ] Capture Calibnet implementation address(es)
-
-**Mainnet**
-- [ ] Run [Deploy Contract workflow](${deployWorkflowLink}) with \`network=Mainnet\`, \`contract=FWSS Implementation\`, \`dry_run=true\`
-- [ ] Re-run with \`dry_run=false\`
-${isMainnet ? `${deployChecklist}
-- [ ] Capture Mainnet implementation address(es)` : "- [ ] Skip for Calibnet-only release"}
-
-### Phase 3: Calibnet Announce + Execute
-**Announce**
-${announceChecklist}
-- [ ] Generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI (Transaction Builder, value=\`0\`)
-
-\`\`\`bash
-cd service_contracts/tools
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export FWSS_PROXY_ADDRESS="${fwssCalibnetProxy}"
-export NEW_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
-export AFTER_EPOCH="TBD"
-CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
-\`\`\`
-
-**Execute**
-${executeChecklist}
-- [ ] Wait for \`AFTER_EPOCH\`, then generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI
-
-\`\`\`bash
-cd service_contracts/tools
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export FWSS_PROXY_ADDRESS="${fwssCalibnetProxy}"
-export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
-CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
-\`\`\`
-
-- [ ] Verify on Blockscout
-
-${
-  isMainnet
-    ? `### Phase 4: Mainnet Announce + Execute
-**Announce**
-${announceChecklist}
-- [ ] Notify stakeholders (post in relevant channels)
-- [ ] Generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI
-
-\`\`\`bash
-cd service_contracts/tools
-export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
-export FWSS_PROXY_ADDRESS="${fwssMainnetProxy}"
-export NEW_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
-export AFTER_EPOCH="TBD"
-CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
-\`\`\`
-
-**Execute**
-${mainnetWaitLine}
-
-${executeChecklist}
-- [ ] Generate calldata with \`CALLDATA_ONLY=true\` and submit/sign/execute in Safe UI
-
-\`\`\`bash
-cd service_contracts/tools
-export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
-export FWSS_PROXY_ADDRESS="${fwssMainnetProxy}"
-export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
-CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
-\`\`\`
-
-- [ ] Verify on Blockscout
-`
-    : ""
-}
-### Phase ${isMainnet ? "5" : "4"}: Merge and Release
-- [ ] Merge changelog/upgrade PR
-- [ ] Tag release: \`git tag vX.Y.Z && git push origin vX.Y.Z\`
-- [ ] Create GitHub Release with changelog
-- [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls) so docs.filecoin.cloud and filecoin.cloud reflect new contract versions
-- [ ] Create "Upgrade Synapse to use newest contracts" issue
-- [ ] Update this issue with release link
-- [ ] Close this issue
-
----
-
-### Resources
-- [Changelog](${changelogLink})
-- [Upgrade Process Documentation](${upgradeProcessLink})
-
-### Deployed Addresses
-<!-- Update after deployments -->
-| Contract | Network | Address |
-|----------|---------|---------|
-| | | |`;
+  return replaceAll(loadIssueTemplate(), replacements);
 }
 
-// Generate labels for the issue
 function generateLabels() {
   const labels = ["release"];
   if (config.upgradeType === "Breaking Change") {
@@ -321,7 +194,6 @@ function generateLabels() {
   return labels;
 }
 
-// Create GitHub issue
 async function createGitHubIssue(title, body, labels) {
   const [owner, repo] = config.githubRepository.split("/");
 
@@ -365,7 +237,6 @@ async function createGitHubIssue(title, body, labels) {
   });
 }
 
-// Main execution
 async function main() {
   validateConfig();
 
@@ -381,30 +252,26 @@ async function main() {
     console.log(body);
     console.log("\n=== End of Preview ===");
 
-    // Output in GitHub Actions format if running in that context
     if (process.env.GITHUB_OUTPUT) {
-      const fs = require("fs");
       fs.appendFileSync(process.env.GITHUB_OUTPUT, `title=${title}\n`);
       fs.appendFileSync(process.env.GITHUB_OUTPUT, `labels=${labels.join(",")}\n`);
-      // For multiline body, use delimiter syntax
       fs.appendFileSync(process.env.GITHUB_OUTPUT, `body<<EOF\n${body}\nEOF\n`);
     }
-  } else {
-    console.log("Creating GitHub issue...");
-    try {
-      const issue = await createGitHubIssue(title, body, labels);
-      console.log(`Created issue #${issue.number}: ${issue.html_url}`);
+    return;
+  }
 
-      // Output for GitHub Actions
-      if (process.env.GITHUB_OUTPUT) {
-        const fs = require("fs");
-        fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issue.number}\n`);
-        fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_url=${issue.html_url}\n`);
-      }
-    } catch (error) {
-      console.error("Failed to create issue:", error.message);
-      process.exit(1);
+  console.log("Creating GitHub issue...");
+  try {
+    const issue = await createGitHubIssue(title, body, labels);
+    console.log(`Created issue #${issue.number}: ${issue.html_url}`);
+
+    if (process.env.GITHUB_OUTPUT) {
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_number=${issue.number}\n`);
+      fs.appendFileSync(process.env.GITHUB_OUTPUT, `issue_url=${issue.html_url}\n`);
     }
+  } catch (error) {
+    console.error("Failed to create issue:", error.message);
+    process.exit(1);
   }
 }
 

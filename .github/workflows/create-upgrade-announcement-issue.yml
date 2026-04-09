@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       network:
-        description: 'Target release network (Mainnet checklist includes Calibnet rehearsal first)'
+        description: 'Target release network (Mainnet issues include Calibnet rollout first)'
         required: true
         type: choice
         options:
           - Calibnet
           - Mainnet
       fwss_version:
-        description: 'FWSS release version (for issue title), e.g. v1.2.3'
+        description: 'FWSS release version for the issue title, e.g. v1.2.3'
         required: false
         type: string
         default: 'vX.Y.Z'
@@ -22,18 +22,8 @@ on:
         options:
           - Routine
           - Breaking Change
-      upgrade_registry:
-        description: '(Rare) Also upgrading ServiceProviderRegistry?'
-        required: false
-        type: boolean
-        default: false
-      upgrade_state_view:
-        description: '(Rare) Also redeploying FilecoinWarmStorageServiceStateView?'
-        required: false
-        type: boolean
-        default: false
       dry_run:
-        description: 'Dry run (preview issue without creating)'
+        description: 'Dry run (preview issue without creating it)'
         required: false
         type: boolean
         default: false
@@ -44,7 +34,7 @@ jobs:
     permissions:
       issues: write
     steps:
-      - name: Checkout
+      - name: Checkout selected ref
         uses: actions/checkout@v4
 
       - name: Setup Node.js
@@ -53,13 +43,11 @@ jobs:
           node-version: '20'
 
       - name: Create announcement issue
-        id: create_issue
         env:
           NETWORK: ${{ inputs.network }}
           RELEASE_VERSION: ${{ inputs.fwss_version }}
           UPGRADE_TYPE: ${{ inputs.upgrade_type }}
-          UPGRADE_REGISTRY: ${{ inputs.upgrade_registry }}
-          UPGRADE_STATE_VIEW: ${{ inputs.upgrade_state_view }}
+          DOCS_REF: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
@@ -71,14 +59,17 @@ jobs:
 
       - name: Summary
         run: |
-          echo "## Release Issue ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version**: ${{ inputs.fwss_version }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Network**: ${{ inputs.network }}" >> $GITHUB_STEP_SUMMARY
-          echo "**After Epoch**: TBD (set in issue during rollout)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            echo "This was a dry run. No issue was created." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "See the created issue for full details." >> $GITHUB_STEP_SUMMARY
-          fi
+          {
+            echo "## Release Issue ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}"
+            echo ""
+            echo "**Version**: ${{ inputs.fwss_version }}"
+            echo "**Network**: ${{ inputs.network }}"
+            echo "**Workflow ref**: \\`${{ github.ref_name }}\\`"
+            echo "**Checklist source**: \\`service_contracts/tools/UPGRADE-CHECKLIST.md\\` @ \\`${{ github.sha }}\\`"
+            echo ""
+            if [ "${{ inputs.dry_run }}" = "true" ]; then
+              echo "This was a dry run. No issue was created."
+            else
+              echo "See the created issue for the rendered checklist."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

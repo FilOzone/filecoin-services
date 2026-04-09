@@ -2,6 +2,8 @@
 
 This directory contains scripts for deploying, upgrading, and operating the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
+> **For the release issue template**, see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
+>
 > **For detailed upgrade procedures**, see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
 
 ## Scripts Overview

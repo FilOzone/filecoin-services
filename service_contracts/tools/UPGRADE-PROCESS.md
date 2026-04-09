@@ -5,6 +5,7 @@ This document describes the upgrade process for FilecoinWarmStorageService (FWSS
 ## Scope and Defaults
 
 - Scope: FWSS-only main path (ServiceProviderRegistry and StateView are optional; see [Upgrading Other Contracts](#upgrading-other-contracts)).
+- Release issue template: [`UPGRADE-CHECKLIST.md`](./UPGRADE-CHECKLIST.md).
 - Deployment path: GitHub Actions [Deploy Contract](https://github.com/FilOzone/filecoin-services/actions/workflows/deploy-contract.yml).
 - Owner actions (`onlyOwner`): Safe multisig via `CALLDATA_ONLY=true`.
 - Notice defaults: routine `2880` epochs (~24h), breaking `20160` epochs (~1 week).
@@ -12,6 +13,17 @@ This document describes the upgrade process for FilecoinWarmStorageService (FWSS
 ## Architecture Reference
 
 For contract relationships and dependencies, see the [System Diagram in SPEC.md](../../SPEC.md#system-diagram).
+
+## Release Issue Source of Truth
+
+The release issue should be rendered from [`UPGRADE-CHECKLIST.md`](./UPGRADE-CHECKLIST.md).
+
+Recommended flow:
+1. Create your release branch from the latest `main`.
+2. Update [`UPGRADE-CHECKLIST.md`](./UPGRADE-CHECKLIST.md) on that branch if this rollout needs checklist or wording improvements.
+3. Run [Create Release Issue](https://github.com/FilOzone/filecoin-services/actions/workflows/create-upgrade-announcement-issue.yml) from that same branch in GitHub Actions.
+
+That workflow checks out the selected ref and renders the issue body from that branch's copy of [`UPGRADE-CHECKLIST.md`](./UPGRADE-CHECKLIST.md), so the issue and the release-prep branch stay aligned.
 
 ## Multisig Ownership
 
@@ -51,17 +63,18 @@ AFTER_EPOCH=$((CURRENT_EPOCH + UPGRADE_WAIT_DURATION_EPOCHS))
 echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
 ```
 
-## Phase 1: Branch, PR, and Checks
+## Phase 1: Branch, Issue, PR, and Checks
 
-1. Create the release issue via [Create Release Issue](https://github.com/FilOzone/filecoin-services/actions/workflows/create-upgrade-announcement-issue.yml) in the GitHub Actions UI.
-2. If some values are unknown at issue creation time (`AFTER_EPOCH`, changelog PR number, summary, action required), set placeholders and update the issue later.
-3. Ensure all intended contract changes have landed in `main` and your local `main` is up to date.
-4. Create a new branch from `main`.
-5. Add release-prep updates in this branch:
+1. Ensure all intended contract changes have landed in `main`.
+2. Update local `main` and create a release branch from it.
+3. Update [`UPGRADE-CHECKLIST.md`](./UPGRADE-CHECKLIST.md) in that branch if you want to improve the release issue structure for this rollout.
+4. Run [Create Release Issue](https://github.com/FilOzone/filecoin-services/actions/workflows/create-upgrade-announcement-issue.yml) from that same branch.
+5. Add release-prep updates in the release branch:
 - Changelog update in [`CHANGELOG.md`](../../CHANGELOG.md).
 - Version bump in [`src/FilecoinWarmStorageService.sol`](../src/FilecoinWarmStorageService.sol).
-6. Open your PR with the title: `feat: FWSS vX.Y.Z upgrade`.
-7. Run checks:
+6. Open your upgrade PR with the title: `feat: FWSS vX.Y.Z upgrade`.
+7. Update the release issue Overview with the PR link, summary of changes, and any integrator action required.
+8. Run checks:
 
 ```bash
 cd /Users/phi/filecoin-services/service_contracts
@@ -74,20 +87,38 @@ forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService stor
 Deploy new implementation contracts on both networks before announce/execute.
 
 1. Deploy Calibnet implementation (dry-run, then real) via `Deploy Contract` workflow; capture `CALI_NEW_IMPL`.
-2. Deploy Mainnet implementation (dry-run, then real) via `Deploy Contract` workflow; capture `MAIN_NEW_IMPL`.
+2. Verify the Calibnet implementation on Sourcify and Blockscout. Attempt FilFox verification and record the result.
+3. Deploy Mainnet implementation (dry-run, then real) via `Deploy Contract` workflow; capture `MAIN_NEW_IMPL`.
+4. Verify the Mainnet implementation on Sourcify and Blockscout. Attempt FilFox verification and record the result.
+5. Update the open upgrade PR with the new implementation addresses in [`deployments.json`](../deployments.json).
+
+Example verification commands:
+
+```bash
+cd /Users/phi/filecoin-services/service_contracts
+export CHAIN=314159 # use 314 for mainnet
+export FWSS_IMPL="$CALI_NEW_IMPL" # or "$MAIN_NEW_IMPL" on mainnet
+source tools/verify-contracts.sh
+
+verify_blockscout "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+verify_sourcify "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+verify_filfox "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+```
 
 ## Phase 3: Calibnet Announce + Execute (SAFE path)
 
-1. Compute Calibnet `AFTER_EPOCH` (example: `240` epochs for rehearsal):
+1. Compute Calibnet `AFTER_EPOCH`:
 
 ```bash
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-AFTER_EPOCH=$((CURRENT_EPOCH + 240))
+AFTER_EPOCH=$((CURRENT_EPOCH + 240)) # use a longer window if desired
+
 echo "$CURRENT_EPOCH -> $AFTER_EPOCH"
 ```
 
-2. Generate announce calldata:
+2. Update the release issue schedule table with the Calibnet `AFTER_EPOCH`.
+3. Generate announce calldata:
 
 ```bash
 cd /Users/phi/filecoin-services/service_contracts/tools
@@ -98,9 +129,10 @@ export AFTER_EPOCH="$AFTER_EPOCH"
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
-3. Submit/sign/execute announce tx in Safe UI.
-4. Wait until `AFTER_EPOCH`.
-5. Generate execute calldata:
+4. Submit/sign/execute announce tx in Safe UI.
+5. Record the Calibnet announce transaction link in the release issue.
+6. Wait until `AFTER_EPOCH`.
+7. Generate execute calldata:
 
 ```bash
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
@@ -109,13 +141,30 @@ export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
 CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 ```
 
-6. Submit/sign/execute upgrade tx in Safe UI.
-7. Verify on-chain:
+8. Submit/sign/execute upgrade tx in Safe UI.
+9. Verify on-chain:
 
 ```bash
+CURRENT_VIEW=$(cast call --rpc-url "https://api.calibration.node.glif.io/rpc/v1" \
+  0x02925630df557F957f70E112bA06e50965417CA0 \
+  'viewContractAddress()(address)')
+
+cast rpc --rpc-url "https://api.calibration.node.glif.io/rpc/v1" \
+  eth_getStorageAt \
+  0x02925630df557F957f70E112bA06e50965417CA0 \
+  0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc \
+  latest
+
 cast call --rpc-url "https://api.calibration.node.glif.io/rpc/v1" \
-  "0x02925630df557F957f70E112bA06e50965417CA0" "version()(string)"
+  0x02925630df557F957f70E112bA06e50965417CA0 \
+  'VERSION()(string)'
+
+cast call --rpc-url "https://api.calibration.node.glif.io/rpc/v1" \
+  "$CURRENT_VIEW" \
+  'nextUpgrade()(address,uint96)'
 ```
+
+10. Verify on Blockscout.
 
 ## Phase 4: Mainnet Announce + Execute (SAFE path)
 
@@ -125,10 +174,12 @@ cast call --rpc-url "https://api.calibration.node.glif.io/rpc/v1" \
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
 AFTER_EPOCH=$((CURRENT_EPOCH + 2880)) # use 20160 for breaking changes
+
 echo "$CURRENT_EPOCH -> $AFTER_EPOCH"
 ```
 
-2. Generate announce calldata:
+2. Update the release issue schedule table with the Mainnet `AFTER_EPOCH` and post stakeholder communication.
+3. Generate announce calldata:
 
 ```bash
 cd /Users/phi/filecoin-services/service_contracts/tools
@@ -139,10 +190,10 @@ export AFTER_EPOCH="$AFTER_EPOCH"
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
-3. Submit/sign/execute announce in Safe UI.
-4. Notify stakeholders (see [Stakeholder Communication](#stakeholder-communication)).
-5. Wait until `AFTER_EPOCH`.
-6. Generate execute calldata:
+4. Submit/sign/execute announce in Safe UI.
+5. Record the Mainnet announce transaction link in the release issue.
+6. Wait until `AFTER_EPOCH`.
+7. Generate execute calldata:
 
 ```bash
 cd /Users/phi/filecoin-services/service_contracts/tools
@@ -152,21 +203,46 @@ export NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
 CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 ```
 
-7. Submit/sign/execute upgrade in Safe UI.
-8. Verify on-chain and explorer.
+8. Submit/sign/execute upgrade in Safe UI.
+9. Verify on-chain and explorer:
+
+```bash
+CURRENT_VIEW=$(cast call --rpc-url "https://api.node.glif.io/rpc/v1" \
+  0x8408502033C418E1bbC97cE9ac48E5528F371A9f \
+  'viewContractAddress()(address)')
+
+cast rpc --rpc-url "https://api.node.glif.io/rpc/v1" \
+  eth_getStorageAt \
+  0x8408502033C418E1bbC97cE9ac48E5528F371A9f \
+  0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc \
+  latest
+
+cast call --rpc-url "https://api.node.glif.io/rpc/v1" \
+  0x8408502033C418E1bbC97cE9ac48E5528F371A9f \
+  'VERSION()(string)'
+
+cast call --rpc-url "https://api.node.glif.io/rpc/v1" \
+  "$CURRENT_VIEW" \
+  'nextUpgrade()(address,uint96)'
+```
+
+10. Verify on Blockscout.
 
 ## Phase 5: Merge and Release
 
-1. Merge the upgrade PR.
-2. Tag release:
+1. Finalize any draft or follow-up changelog PRs.
+2. Commit and push the updated [`deployments.json`](../deployments.json).
+3. Tag release:
 
 ```bash
 git tag v1.X.0
 git push origin v1.X.0
 ```
 
-3. Create GitHub Release.
-4. Update and close release issue.
+4. Create GitHub Release.
+5. Merge auto-generated PRs in `filecoin-cloud`.
+6. Create the "Upgrade Synapse to use newest contracts" issue.
+7. Update and close the release issue.
 
 ---
 
