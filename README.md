@@ -148,4 +148,5 @@ See [service_contracts/CONTRIBUTING.md](./service_contracts/CONTRIBUTING.md) for
 6. Submit a pull request
 
 ## 📄 License
-Dual-licensed under [MIT](https://github.com/filecoin-project/lotus/blob/master/LICENSE-MIT) + [Apache 2.0](https://github.com/filecoin-project/lotus/blob/master/LICENSE-APACHE)
+Dual-licensed under [MIT](https://github.com/FilOzone/filecoin-services/blob/main/LICENSE.md) + [Apache 2.0](https://github.com/FilOzone/filecoin-services/blob/main/LICENSE.md)
+
