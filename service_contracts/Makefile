@@ -37,7 +37,7 @@ $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
 
 # Storage layout JSON (full metadata for upgrade safety checks)
 $(LAYOUT_JSON): src/FilecoinWarmStorageService.sol
-	forge inspect --json $< storageLayout | jq '[.storage[] | {label, slot, offset, type}]' > $@
+	forge inspect --json $< storageLayout | jq '[.types as $$types | .storage[] | {label, slot, offset, type: ($$types[.type].label // .type)}]' > $@
 
 # JSON compilation for library (depends on the source library)
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol
