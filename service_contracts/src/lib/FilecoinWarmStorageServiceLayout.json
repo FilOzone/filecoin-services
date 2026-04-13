@@ -1,0 +1,140 @@
+[
+  {
+    "label": "maxProvingPeriod",
+    "slot": "0",
+    "offset": 0,
+    "type": "uint64"
+  },
+  {
+    "label": "challengeWindowSize",
+    "slot": "1",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "serviceCommissionBps",
+    "slot": "2",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "provenPeriods",
+    "slot": "3",
+    "offset": 0,
+    "type": "mapping(uint256 => mapping(uint256 => uint256))"
+  },
+  {
+    "label": "provingActivationEpoch",
+    "slot": "4",
+    "offset": 0,
+    "type": "mapping(uint256 => uint256)"
+  },
+  {
+    "label": "provingDeadlines",
+    "slot": "5",
+    "offset": 0,
+    "type": "mapping(uint256 => uint256)"
+  },
+  {
+    "label": "provenThisPeriod",
+    "slot": "6",
+    "offset": 0,
+    "type": "mapping(uint256 => bool)"
+  },
+  {
+    "label": "dataSetInfo",
+    "slot": "7",
+    "offset": 0,
+    "type": "mapping(uint256 => struct FilecoinWarmStorageService.DataSetInfo)"
+  },
+  {
+    "label": "clientNonces",
+    "slot": "8",
+    "offset": 0,
+    "type": "mapping(address => mapping(uint256 => uint256))"
+  },
+  {
+    "label": "clientDataSets",
+    "slot": "9",
+    "offset": 0,
+    "type": "mapping(address => uint256[])"
+  },
+  {
+    "label": "railToDataSet",
+    "slot": "10",
+    "offset": 0,
+    "type": "mapping(uint256 => uint256)"
+  },
+  {
+    "label": "dataSetMetadata",
+    "slot": "11",
+    "offset": 0,
+    "type": "mapping(uint256 => mapping(string => string))"
+  },
+  {
+    "label": "dataSetMetadataKeys",
+    "slot": "12",
+    "offset": 0,
+    "type": "mapping(uint256 => string[])"
+  },
+  {
+    "label": "dataSetPieceMetadata",
+    "slot": "13",
+    "offset": 0,
+    "type": "mapping(uint256 => mapping(uint256 => mapping(string => string)))"
+  },
+  {
+    "label": "dataSetPieceMetadataKeys",
+    "slot": "14",
+    "offset": 0,
+    "type": "mapping(uint256 => mapping(uint256 => string[]))"
+  },
+  {
+    "label": "approvedProviders",
+    "slot": "15",
+    "offset": 0,
+    "type": "mapping(uint256 => bool)"
+  },
+  {
+    "label": "approvedProviderIds",
+    "slot": "16",
+    "offset": 0,
+    "type": "uint256[]"
+  },
+  {
+    "label": "viewContractAddress",
+    "slot": "17",
+    "offset": 0,
+    "type": "address"
+  },
+  {
+    "label": "filBeamControllerAddress",
+    "slot": "18",
+    "offset": 0,
+    "type": "address"
+  },
+  {
+    "label": "nextUpgrade",
+    "slot": "19",
+    "offset": 0,
+    "type": "struct FilecoinWarmStorageService.PlannedUpgrade"
+  },
+  {
+    "label": "storagePricePerTibPerMonth",
+    "slot": "20",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "minimumStorageRatePerMonth",
+    "slot": "21",
+    "offset": 0,
+    "type": "uint256"
+  },
+  {
+    "label": "scheduledPieceMetadataRemovals",
+    "slot": "22",
+    "offset": 0,
+    "type": "mapping(uint256 => uint256[])"
+  }
+]
