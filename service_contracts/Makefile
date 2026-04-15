@@ -21,6 +21,8 @@ install:
 
 # Generated files
 LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
+LAYOUT_JSON=src/lib/FilecoinWarmStorageServiceLayout.json
+LAYOUT_SNAPSHOT_JQ=tools/storage_layout_snapshot.jq
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
 LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
@@ -33,6 +35,10 @@ build:
 # Storage layout generation
 $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
 	$^ | forge fmt -r - > $@
+
+# Storage layout JSON (full metadata for upgrade safety checks)
+$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
+	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
 
 # JSON compilation for library (depends on the source library)
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol
@@ -48,7 +54,7 @@ $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
 
 # Main code generation target with proper dependencies
 .PHONY: gen
-gen: check-tools $(LAYOUT) $(INTERNAL_LIB) $(VIEW_CONTRACT)
+gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
 	@echo "Code generation complete"
 
 # Force regeneration - useful when things are broken
@@ -60,7 +66,7 @@ force-gen: clean-gen gen
 .PHONY: clean-gen
 clean-gen:
 	@echo "Removing generated files..."
-	@rm -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_CONTRACT)
+	@rm -f $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
 	@rm -rf out/FilecoinWarmStorageServiceStateLibrary.sol
 	@echo "Generated files removed"
 
@@ -120,6 +126,12 @@ coverage-lcov:
 contract-size-check:
 	@echo "Checking contract sizes..."
 	bash tools/check-contract-size.sh src/
+
+# Storage layout validation
+.PHONY: check-layout
+check-layout:
+	@echo "Checking storage layout for destructive changes..."
+	@bash tools/check_storage_layout.sh
 
 # ABI Management
 
@@ -187,8 +199,11 @@ help:
 	@echo "  force-gen  - Clean and regenerate all files (use when broken)"
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
-	@echo "  help       - Show this help message"
+	@echo "Validation targets:"
+	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
 	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
+	@echo ""
+	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "ABI management targets:"
 	@echo "  update-abi - Update checked-in ABIs in abi/ directory (incremental)"
