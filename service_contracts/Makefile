@@ -22,6 +22,7 @@ install:
 # Generated files
 LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
 LAYOUT_JSON=src/lib/FilecoinWarmStorageServiceLayout.json
+LAYOUT_SNAPSHOT_JQ=tools/storage_layout_snapshot.jq
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
 LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
@@ -36,8 +37,8 @@ $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
 	$^ | forge fmt -r - > $@
 
 # Storage layout JSON (full metadata for upgrade safety checks)
-$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol
-	forge inspect --json $< storageLayout | jq '[.types as $$types | .storage[] | {label, slot, offset, type: ($$types[.type].label // .type)}]' > $@
+$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
+	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
 
 # JSON compilation for library (depends on the source library)
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol

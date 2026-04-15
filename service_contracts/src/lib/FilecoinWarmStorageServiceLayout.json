@@ -3,138 +3,602 @@
     "label": "maxProvingPeriod",
     "slot": "0",
     "offset": 0,
-    "type": "uint64"
+    "type": "uint64",
+    "typeDetails": {
+      "label": "uint64",
+      "encoding": "inplace",
+      "numberOfBytes": "8"
+    }
   },
   {
     "label": "challengeWindowSize",
     "slot": "1",
     "offset": 0,
-    "type": "uint256"
+    "type": "uint256",
+    "typeDetails": {
+      "label": "uint256",
+      "encoding": "inplace",
+      "numberOfBytes": "32"
+    }
   },
   {
     "label": "serviceCommissionBps",
     "slot": "2",
     "offset": 0,
-    "type": "uint256"
+    "type": "uint256",
+    "typeDetails": {
+      "label": "uint256",
+      "encoding": "inplace",
+      "numberOfBytes": "32"
+    }
   },
   {
     "label": "provenPeriods",
     "slot": "3",
     "offset": 0,
-    "type": "mapping(uint256 => mapping(uint256 => uint256))"
+    "type": "mapping(uint256 => mapping(uint256 => uint256))",
+    "typeDetails": {
+      "label": "mapping(uint256 => mapping(uint256 => uint256))",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "mapping(uint256 => uint256)",
+        "encoding": "mapping",
+        "numberOfBytes": "32",
+        "key": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        },
+        "value": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        }
+      }
+    }
   },
   {
     "label": "provingActivationEpoch",
     "slot": "4",
     "offset": 0,
-    "type": "mapping(uint256 => uint256)"
+    "type": "mapping(uint256 => uint256)",
+    "typeDetails": {
+      "label": "mapping(uint256 => uint256)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      }
+    }
   },
   {
     "label": "provingDeadlines",
     "slot": "5",
     "offset": 0,
-    "type": "mapping(uint256 => uint256)"
+    "type": "mapping(uint256 => uint256)",
+    "typeDetails": {
+      "label": "mapping(uint256 => uint256)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      }
+    }
   },
   {
     "label": "provenThisPeriod",
     "slot": "6",
     "offset": 0,
-    "type": "mapping(uint256 => bool)"
+    "type": "mapping(uint256 => bool)",
+    "typeDetails": {
+      "label": "mapping(uint256 => bool)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "bool",
+        "encoding": "inplace",
+        "numberOfBytes": "1"
+      }
+    }
   },
   {
     "label": "dataSetInfo",
     "slot": "7",
     "offset": 0,
-    "type": "mapping(uint256 => struct FilecoinWarmStorageService.DataSetInfo)"
+    "type": "mapping(uint256 => struct FilecoinWarmStorageService.DataSetInfo)",
+    "typeDetails": {
+      "label": "mapping(uint256 => struct FilecoinWarmStorageService.DataSetInfo)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "struct FilecoinWarmStorageService.DataSetInfo",
+        "encoding": "inplace",
+        "numberOfBytes": "320",
+        "members": [
+          {
+            "label": "pdpRailId",
+            "slot": "0",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "cacheMissRailId",
+            "slot": "1",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "cdnRailId",
+            "slot": "2",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "payer",
+            "slot": "3",
+            "offset": 0,
+            "type": {
+              "label": "address",
+              "encoding": "inplace",
+              "numberOfBytes": "20"
+            }
+          },
+          {
+            "label": "payee",
+            "slot": "4",
+            "offset": 0,
+            "type": {
+              "label": "address",
+              "encoding": "inplace",
+              "numberOfBytes": "20"
+            }
+          },
+          {
+            "label": "serviceProvider",
+            "slot": "5",
+            "offset": 0,
+            "type": {
+              "label": "address",
+              "encoding": "inplace",
+              "numberOfBytes": "20"
+            }
+          },
+          {
+            "label": "commissionBps",
+            "slot": "6",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "clientDataSetId",
+            "slot": "7",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "pdpEndEpoch",
+            "slot": "8",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "providerId",
+            "slot": "9",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          }
+        ]
+      }
+    }
   },
   {
     "label": "clientNonces",
     "slot": "8",
     "offset": 0,
-    "type": "mapping(address => mapping(uint256 => uint256))"
+    "type": "mapping(address => mapping(uint256 => uint256))",
+    "typeDetails": {
+      "label": "mapping(address => mapping(uint256 => uint256))",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "address",
+        "encoding": "inplace",
+        "numberOfBytes": "20"
+      },
+      "value": {
+        "label": "mapping(uint256 => uint256)",
+        "encoding": "mapping",
+        "numberOfBytes": "32",
+        "key": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        },
+        "value": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        }
+      }
+    }
   },
   {
     "label": "clientDataSets",
     "slot": "9",
     "offset": 0,
-    "type": "mapping(address => uint256[])"
+    "type": "mapping(address => uint256[])",
+    "typeDetails": {
+      "label": "mapping(address => uint256[])",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "address",
+        "encoding": "inplace",
+        "numberOfBytes": "20"
+      },
+      "value": {
+        "label": "uint256[]",
+        "encoding": "dynamic_array",
+        "numberOfBytes": "32",
+        "base": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        }
+      }
+    }
   },
   {
     "label": "railToDataSet",
     "slot": "10",
     "offset": 0,
-    "type": "mapping(uint256 => uint256)"
+    "type": "mapping(uint256 => uint256)",
+    "typeDetails": {
+      "label": "mapping(uint256 => uint256)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      }
+    }
   },
   {
     "label": "dataSetMetadata",
     "slot": "11",
     "offset": 0,
-    "type": "mapping(uint256 => mapping(string => string))"
+    "type": "mapping(uint256 => mapping(string => string))",
+    "typeDetails": {
+      "label": "mapping(uint256 => mapping(string => string))",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "mapping(string => string)",
+        "encoding": "mapping",
+        "numberOfBytes": "32",
+        "key": {
+          "label": "string",
+          "encoding": "bytes",
+          "numberOfBytes": "32"
+        },
+        "value": {
+          "label": "string",
+          "encoding": "bytes",
+          "numberOfBytes": "32"
+        }
+      }
+    }
   },
   {
     "label": "dataSetMetadataKeys",
     "slot": "12",
     "offset": 0,
-    "type": "mapping(uint256 => string[])"
+    "type": "mapping(uint256 => string[])",
+    "typeDetails": {
+      "label": "mapping(uint256 => string[])",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "string[]",
+        "encoding": "dynamic_array",
+        "numberOfBytes": "32",
+        "base": {
+          "label": "string",
+          "encoding": "bytes",
+          "numberOfBytes": "32"
+        }
+      }
+    }
   },
   {
     "label": "dataSetPieceMetadata",
     "slot": "13",
     "offset": 0,
-    "type": "mapping(uint256 => mapping(uint256 => mapping(string => string)))"
+    "type": "mapping(uint256 => mapping(uint256 => mapping(string => string)))",
+    "typeDetails": {
+      "label": "mapping(uint256 => mapping(uint256 => mapping(string => string)))",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "mapping(uint256 => mapping(string => string))",
+        "encoding": "mapping",
+        "numberOfBytes": "32",
+        "key": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        },
+        "value": {
+          "label": "mapping(string => string)",
+          "encoding": "mapping",
+          "numberOfBytes": "32",
+          "key": {
+            "label": "string",
+            "encoding": "bytes",
+            "numberOfBytes": "32"
+          },
+          "value": {
+            "label": "string",
+            "encoding": "bytes",
+            "numberOfBytes": "32"
+          }
+        }
+      }
+    }
   },
   {
     "label": "dataSetPieceMetadataKeys",
     "slot": "14",
     "offset": 0,
-    "type": "mapping(uint256 => mapping(uint256 => string[]))"
+    "type": "mapping(uint256 => mapping(uint256 => string[]))",
+    "typeDetails": {
+      "label": "mapping(uint256 => mapping(uint256 => string[]))",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "mapping(uint256 => string[])",
+        "encoding": "mapping",
+        "numberOfBytes": "32",
+        "key": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        },
+        "value": {
+          "label": "string[]",
+          "encoding": "dynamic_array",
+          "numberOfBytes": "32",
+          "base": {
+            "label": "string",
+            "encoding": "bytes",
+            "numberOfBytes": "32"
+          }
+        }
+      }
+    }
   },
   {
     "label": "approvedProviders",
     "slot": "15",
     "offset": 0,
-    "type": "mapping(uint256 => bool)"
+    "type": "mapping(uint256 => bool)",
+    "typeDetails": {
+      "label": "mapping(uint256 => bool)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "bool",
+        "encoding": "inplace",
+        "numberOfBytes": "1"
+      }
+    }
   },
   {
     "label": "approvedProviderIds",
     "slot": "16",
     "offset": 0,
-    "type": "uint256[]"
+    "type": "uint256[]",
+    "typeDetails": {
+      "label": "uint256[]",
+      "encoding": "dynamic_array",
+      "numberOfBytes": "32",
+      "base": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      }
+    }
   },
   {
     "label": "viewContractAddress",
     "slot": "17",
     "offset": 0,
-    "type": "address"
+    "type": "address",
+    "typeDetails": {
+      "label": "address",
+      "encoding": "inplace",
+      "numberOfBytes": "20"
+    }
   },
   {
     "label": "filBeamControllerAddress",
     "slot": "18",
     "offset": 0,
-    "type": "address"
+    "type": "address",
+    "typeDetails": {
+      "label": "address",
+      "encoding": "inplace",
+      "numberOfBytes": "20"
+    }
   },
   {
     "label": "nextUpgrade",
     "slot": "19",
     "offset": 0,
-    "type": "struct FilecoinWarmStorageService.PlannedUpgrade"
+    "type": "struct FilecoinWarmStorageService.PlannedUpgrade",
+    "typeDetails": {
+      "label": "struct FilecoinWarmStorageService.PlannedUpgrade",
+      "encoding": "inplace",
+      "numberOfBytes": "32",
+      "members": [
+        {
+          "label": "nextImplementation",
+          "slot": "0",
+          "offset": 0,
+          "type": {
+            "label": "address",
+            "encoding": "inplace",
+            "numberOfBytes": "20"
+          }
+        },
+        {
+          "label": "afterEpoch",
+          "slot": "0",
+          "offset": 20,
+          "type": {
+            "label": "uint96",
+            "encoding": "inplace",
+            "numberOfBytes": "12"
+          }
+        }
+      ]
+    }
   },
   {
     "label": "storagePricePerTibPerMonth",
     "slot": "20",
     "offset": 0,
-    "type": "uint256"
+    "type": "uint256",
+    "typeDetails": {
+      "label": "uint256",
+      "encoding": "inplace",
+      "numberOfBytes": "32"
+    }
   },
   {
     "label": "minimumStorageRatePerMonth",
     "slot": "21",
     "offset": 0,
-    "type": "uint256"
+    "type": "uint256",
+    "typeDetails": {
+      "label": "uint256",
+      "encoding": "inplace",
+      "numberOfBytes": "32"
+    }
   },
   {
     "label": "scheduledPieceMetadataRemovals",
     "slot": "22",
     "offset": 0,
-    "type": "mapping(uint256 => uint256[])"
+    "type": "mapping(uint256 => uint256[])",
+    "typeDetails": {
+      "label": "mapping(uint256 => uint256[])",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256[]",
+        "encoding": "dynamic_array",
+        "numberOfBytes": "32",
+        "base": {
+          "label": "uint256",
+          "encoding": "inplace",
+          "numberOfBytes": "32"
+        }
+      }
+    }
   }
 ]

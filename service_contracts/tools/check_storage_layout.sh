@@ -102,6 +102,15 @@ compare_layouts() {
         new_offset=$(echo "$new_entry" | jq -r '.offset')
         new_type=$(echo "$new_entry" | jq -r '.type')
 
+        local type_comparison new_type_comparison
+        if echo "$entry" | jq -e 'has("typeDetails")' >/dev/null && echo "$new_entry" | jq -e 'has("typeDetails")' >/dev/null; then
+            type_comparison=$(echo "$entry" | jq -c '.typeDetails')
+            new_type_comparison=$(echo "$new_entry" | jq -c '.typeDetails')
+        else
+            type_comparison=$(echo "$entry" | jq -c '.type')
+            new_type_comparison=$(echo "$new_entry" | jq -c '.type')
+        fi
+
         if [ "$slot" != "$new_slot" ]; then
             echo "  DESTRUCTIVE: Variable '$label' slot changed from $slot to $new_slot" >&2
             errors=$((errors + 1))
@@ -112,8 +121,12 @@ compare_layouts() {
             errors=$((errors + 1))
         fi
 
-        if [ "$type" != "$new_type" ]; then
-            echo "  DESTRUCTIVE: Variable '$label' type changed from '$type' to '$new_type' (slot $slot)" >&2
+        if [ "$type_comparison" != "$new_type_comparison" ]; then
+            if [ "$type" = "$new_type" ]; then
+                echo "  DESTRUCTIVE: Variable '$label' type details changed within '$type' (slot $slot)" >&2
+            else
+                echo "  DESTRUCTIVE: Variable '$label' type changed from '$type' to '$new_type' (slot $slot)" >&2
+            fi
             errors=$((errors + 1))
         fi
     done < <(jq -c '.[]' "$base_file")
