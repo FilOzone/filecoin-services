@@ -1,6 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
+import {CalldataUtils, CalldataSlice} from "@fvm-solidity/CalldataUtils.sol";
+import {FVMAddress} from "@fvm-solidity/FVMAddress.sol";
+import {CBOR_CODEC} from "@fvm-solidity/FVMCodec.sol";
+import {SECTOR_CONTENT_CHANGED} from "@fvm-solidity/FVMMethod.sol";
+import {
+    CalldataSlice,
+    FVMSectorContentChanged,
+    PieceChangeIter,
+    SectorChangesHeader,
+    SectorContentChangedReturn,
+    SectorReturn
+} from "@fvm-solidity/FVMSectorContentChanged.sol";
 import {FVMActor} from "@fvm-solidity/FVMActor.sol";
 import {FVMMiner} from "@fvm-solidity/FVMMiner.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
@@ -38,6 +50,12 @@ contract PoRepPayee {
 }
 
 contract PoRepService {
+    using FVMAddress for address;
+    using FVMSectorContentChanged for uint256;
+    using CalldataUtils for CalldataSlice;
+
+    error ForbiddenMethod(uint64 method);
+
     FilecoinPayV1 private immutable PAYMENTS;
 
     constructor(FilecoinPayV1 payments) {
@@ -80,9 +98,38 @@ contract PoRepService {
         }
     }
 
-    function createDeal(address client, uint64 provider) external returns (address deal) {
+    function createDeal(address client, uint64 provider, uint256 filPerBytePerEpoch) external returns (address deal) {
         address receiver = createReceiver(provider);
 
-        deal = address(new PoRepDeal(address(this), client, provider, receiver, PAYMENTS));
+        deal = address(new PoRepDeal(address(this), client, provider, receiver, PAYMENTS, filPerBytePerEpoch));
+    }
+
+    function handle_filecoin_method(uint64 method, uint64, bytes calldata)
+        public
+        returns (uint32 exitCode, uint64 returnDataCodec, bytes memory returnData)
+    {
+        require(method == SECTOR_CONTENT_CHANGED, ForbiddenMethod(method));
+        uint64 minerActor = msg.sender.safeActorId();
+
+        uint256 numSectors;
+        uint256 iter;
+        (numSectors, iter) = FVMSectorContentChanged.readParamsHeader();
+
+        SectorContentChangedReturn memory ret;
+        ret.sectors = new SectorReturn[](numSectors);
+        SectorChangesHeader memory header;
+        PieceChangeIter memory piece;
+        for (uint256 i = 0; i < numSectors; i++) {
+            iter = iter.readSectorHeader(header);
+            FVMSectorContentChanged.initSectorReturn(ret.sectors[i], header.numPieces);
+            for (uint256 j = 0; j < header.numPieces; j++) {
+                iter = iter.readPiece(piece);
+                bytes32 cidHash = piece.digest.keccak();
+                address deal = piece.payload.toAddress();
+                PoRepDeal(deal).pieceAdded(minerActor, cidHash, header.sector, piece.paddedSize);
+                FVMSectorContentChanged.accept(ret.sectors[i], j);
+            }
+        }
+        return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
     }
 }

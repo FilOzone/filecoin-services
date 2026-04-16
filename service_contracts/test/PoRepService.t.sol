@@ -45,7 +45,6 @@ contract PoRepPayeeTest is MockFVMTest {
         payee.sudo{value: 1}(notOwner, bytes(""));
     }
 
-    // FIXME
     function testSudo() public {
         address payable notOwner = payable(0x9999999999999999999999999999999999999999);
         assertEq(notOwner.balance, 0);
