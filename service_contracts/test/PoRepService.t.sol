@@ -3,10 +3,13 @@ pragma solidity ^0.8.30;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {PoRepPayee, PoRepService} from "../src/PoRepService.sol";
+import {FVMActor} from "@fvm-solidity/FVMActor.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 
 contract PoRepPayeeTest is MockFVMTest {
+    using FVMActor for address;
+
     uint64 constant MINER_ID = 1643;
     uint64 constant OWNER_ID = 151;
     PoRepPayee payee;
@@ -29,11 +32,14 @@ contract PoRepPayeeTest is MockFVMTest {
     function testOwner() public view {
         assertEq(payee.MINER(), MINER_ID);
         assertEq(payee.owner(), OWNER_ID);
+        assertEq(address(this).getActorId(), OWNER_ID);
     }
 
     function testSudoUnauthorized() public {
         address payable notOwner = payable(0x9999999999999999999999999999999999999999);
         vm.deal(notOwner, 1);
+        ACTOR_PRECOMPILE.mockResolveAddress(notOwner, OWNER_ID + 1);
+
         vm.expectRevert(abi.encodeWithSelector(PoRepPayee.Unauthorized.selector, notOwner));
         vm.prank(notOwner);
         payee.sudo{value: 1}(notOwner, bytes(""));

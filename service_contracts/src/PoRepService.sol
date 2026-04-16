@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {FVMAddress} from "@fvm-solidity/FVMAddress.sol";
+import {FVMActor} from "@fvm-solidity/FVMActor.sol";
 import {FVMMiner} from "@fvm-solidity/FVMMiner.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {PoRepDeal} from "./PoRepDeal.sol";
 
 contract PoRepPayee {
-    using FVMAddress for address;
+    using FVMActor for address;
     using FVMMiner for uint64;
 
     error Unauthorized(address caller);
@@ -23,7 +23,7 @@ contract PoRepPayee {
     }
 
     function sudo(address payable, bytes calldata) external payable returns (bytes memory) {
-        require(msg.sender.actorId() == owner(), Unauthorized(msg.sender));
+        require(msg.sender.getActorId() == owner(), Unauthorized(msg.sender));
         assembly ("memory-safe") {
             let insize := calldataload(68)
             calldatacopy(0, 100, insize)

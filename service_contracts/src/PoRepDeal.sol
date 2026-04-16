@@ -44,8 +44,11 @@ contract PoRepDeal is IValidator {
 
     // TODO move to child contract
     struct SectorStatus {
-        uint256 totalSize;
+        uint256 activeSize;
     }
+
+    mapping(uint256 sectorId => SectorStatus) public sectors;
+    uint256 public totalActiveSize;
 
     constructor(address service, address client, uint64 provider, address receiver, FilecoinPayV1 payments) {
         SERVICE = service;
@@ -82,10 +85,12 @@ contract PoRepDeal is IValidator {
         }
     }
 
-    function pieceAdded(bytes32 cidHash, uint64 sectorId) external onlyService {
-        // TODO
+    function pieceAdded(bytes32 cidHash, uint64 sectorId, uint64 paddedSize) internal {
+        // TODO expiry
         require(pieces[cidHash] == PieceStatus.AUTHORIZED);
         pieces[cidHash] = PieceStatus.ACTIVE;
+        sectors[sectorId].activeSize += paddedSize;
+        totalActiveSize += paddedSize;
     }
 
     /**
@@ -109,7 +114,6 @@ contract PoRepDeal is IValidator {
 
     function handle_filecoin_method(uint64 method, uint64, bytes calldata)
         public
-        view
         returns (uint32 exitCode, uint64 returnDataCodec, bytes memory returnData)
     {
         require(method == SECTOR_CONTENT_CHANGED, ForbiddenMethod(method));
@@ -130,9 +134,10 @@ contract PoRepDeal is IValidator {
             for (uint256 j = 0; j < header.numPieces; j++) {
                 iter = iter.readPiece(piece);
                 bytes32 cidHash = piece.digest.keccak();
+                pieceAdded(cidHash, header.sector, piece.paddedSize);
                 // Decode and validate the allocation ID
-                uint64 allocationId = abi.decode(piece.payload.load(), (uint64));
-                require(allocationId > 0);
+                address deal = abi.decode(piece.payload.load(), (address));
+                // TODO deal
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
             }
         }
