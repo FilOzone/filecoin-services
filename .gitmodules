@@ -19,3 +19,6 @@
 [submodule "service_contracts/lib/fvm-solidity"]
 	path = service_contracts/lib/fvm-solidity
 	url = https://github.com/filecoin-project/fvm-solidity
+[submodule "service_contracts/lib/solady"]
+	path = service_contracts/lib/solady
+	url = https://github.com/Vectorized/solady

@@ -2,9 +2,6 @@
 pragma solidity ^0.8.30;
 
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
-IERC20 constant NATIVE_TOKEN = IERC20(address(0));
 
 contract PoRepDeal is IValidator {
     address public immutable SERVICE;
@@ -13,6 +10,7 @@ contract PoRepDeal is IValidator {
     FilecoinPayV1 private immutable PAYMENTS;
     uint256 public immutable RAIL_ID;
     uint256 public immutable FIL_PER_BYTE_PER_EPOCH;
+    uint64 private immutable NONCE;
 
     uint256 faultedCount;
 
@@ -37,16 +35,18 @@ contract PoRepDeal is IValidator {
         address service,
         address client,
         uint64 provider,
-        address receiver,
         FilecoinPayV1 payments,
-        uint256 filPerByte
+        uint256 railId,
+        uint256 filPerBytePerEpoch,
+        uint64 nonce
     ) {
         SERVICE = service;
         CLIENT = client;
         PROVIDER = provider;
         PAYMENTS = payments;
-        FIL_PER_BYTE_PER_EPOCH = filPerByte;
-        RAIL_ID = PAYMENTS.createRail(NATIVE_TOKEN, client, receiver, address(this), 0, address(0));
+        FIL_PER_BYTE_PER_EPOCH = filPerBytePerEpoch;
+        RAIL_ID = railId;
+        NONCE = nonce;
     }
 
     function _onlyClient() internal view {
@@ -76,7 +76,11 @@ contract PoRepDeal is IValidator {
         }
     }
 
-    function pieceAdded(uint64 minerId, bytes32 cidHash, uint64 sectorId, uint64 paddedSize) external onlyService {
+    function pieceAdded(uint64 minerId, bytes32 cidHash, uint64 sectorId, uint64 paddedSize)
+        external
+        onlyService
+        returns (uint256 railId, uint256 newRate)
+    {
         require(minerId == PROVIDER);
 
         require(pieces[cidHash] == PieceStatus.AUTHORIZED);
@@ -85,7 +89,7 @@ contract PoRepDeal is IValidator {
         sectors[sectorId].activeSize += paddedSize;
         totalActiveSize += paddedSize;
 
-        PAYMENTS.modifyRailPayment(RAIL_ID, paddedSize * FIL_PER_BYTE_PER_EPOCH, 0);
+        return (RAIL_ID, paddedSize * FIL_PER_BYTE_PER_EPOCH);
     }
 
     /**
@@ -102,8 +106,9 @@ contract PoRepDeal is IValidator {
         result.settleUpto = toEpoch;
     }
 
-    function railTerminated(uint256, /*railId*/ address, /*terminator*/ uint256 /*endEpoch*/ ) external view {
+    function railTerminated(uint256, address terminator, uint256 /*endEpoch*/ ) external view {
         require(msg.sender == address(PAYMENTS));
+        require(terminator == SERVICE);
         // TODO cleanup
     }
 }

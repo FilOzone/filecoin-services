@@ -16,7 +16,11 @@ import {
 import {FVMActor} from "@fvm-solidity/FVMActor.sol";
 import {FVMMiner} from "@fvm-solidity/FVMMiner.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {LibRLP} from "@solady/utils/LibRLP.sol";
 import {PoRepDeal} from "./PoRepDeal.sol";
+
+IERC20 constant NATIVE_TOKEN = IERC20(address(0));
 
 contract PoRepPayee {
     using FVMActor for address;
@@ -53,6 +57,7 @@ contract PoRepService {
     using FVMAddress for address;
     using FVMSectorContentChanged for uint256;
     using CalldataUtils for CalldataSlice;
+    using LibRLP for address;
 
     error ForbiddenMethod(uint64 method);
 
@@ -90,9 +95,16 @@ contract PoRepService {
         );
     }
 
+    uint64 private nonce;
+
+    function authenticateDeal(uint64 nonce) internal view {
+        require(msg.sender == address(this).computeAddress(nonce));
+    }
+
     function createReceiver(uint64 provider) public returns (address receiver) {
         receiver = getReceiverAddress(provider);
         if (receiver.code.length == 0) {
+            ++nonce;
             setMiner(provider);
             new PoRepPayee{salt: bytes32(uint256(provider))}();
         }
@@ -100,8 +112,10 @@ contract PoRepService {
 
     function createDeal(address client, uint64 provider, uint256 filPerBytePerEpoch) external returns (address deal) {
         address receiver = createReceiver(provider);
-
-        deal = address(new PoRepDeal(address(this), client, provider, receiver, PAYMENTS, filPerBytePerEpoch));
+        ++nonce;
+        deal = address(this).computeAddress(nonce);
+        uint256 railId = PAYMENTS.createRail(NATIVE_TOKEN, client, receiver, deal, 0, address(0));
+        new PoRepDeal(address(this), client, provider, PAYMENTS, railId, filPerBytePerEpoch, nonce);
     }
 
     function handle_filecoin_method(uint64 method, uint64, bytes calldata)
@@ -125,8 +139,11 @@ contract PoRepService {
             for (uint256 j = 0; j < header.numPieces; j++) {
                 iter = iter.readPiece(piece);
                 bytes32 cidHash = piece.digest.keccak();
-                address deal = piece.payload.toAddress();
-                PoRepDeal(deal).pieceAdded(minerActor, cidHash, header.sector, piece.paddedSize);
+                uint64 nonce = piece.payload.toUint64();
+                address deal = address(this).computeAddress(nonce);
+                (uint256 railId, uint256 newRate) =
+                    PoRepDeal(deal).pieceAdded(minerActor, cidHash, header.sector, piece.paddedSize);
+                PAYMENTS.modifyRailPayment(railId, newRate, 0);
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
             }
         }

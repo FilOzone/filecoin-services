@@ -27,6 +27,7 @@ remappings = [
     '@session-key-registry/=lib/session-key-registry/src/',
     '@fvm-solidity/=lib/fvm-solidity/src/',
     '@pythnetwork/pyth-sdk-solidity/=lib/pdp/lib/pyth-sdk-solidity/',
+    '@solady/=lib/solady/src/',
 ]
 
 # Allow reading test data files
