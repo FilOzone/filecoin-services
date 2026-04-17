@@ -110,12 +110,15 @@ contract PoRepService {
         }
     }
 
-    function createDeal(address client, uint64 provider, uint256 filPerBytePerEpoch) external returns (address deal) {
+    function createDeal(address client, uint64 provider, uint256 filPerBytePerEpoch, uint64 dealEndEpoch)
+        external
+        returns (address deal)
+    {
         address receiver = createReceiver(provider);
         ++nonce;
         deal = address(this).computeAddress(nonce);
         uint256 railId = PAYMENTS.createRail(NATIVE_TOKEN, client, receiver, deal, 0, address(0));
-        new PoRepDeal(address(this), client, provider, PAYMENTS, railId, filPerBytePerEpoch, nonce);
+        new PoRepDeal(address(this), client, provider, PAYMENTS, railId, filPerBytePerEpoch, dealEndEpoch, nonce);
     }
 
     function handle_filecoin_method(uint64 method, uint64, bytes calldata)
@@ -135,18 +138,26 @@ contract PoRepService {
         PieceChangeIter memory piece;
         for (uint256 i = 0; i < numSectors; i++) {
             iter = iter.readSectorHeader(header);
+            // require(header.minimumCommitmentEpoch > 0);
             FVMSectorContentChanged.initSectorReturn(ret.sectors[i], header.numPieces);
             for (uint256 j = 0; j < header.numPieces; j++) {
                 iter = iter.readPiece(piece);
                 bytes32 cidHash = piece.digest.keccak();
                 uint64 nonce = piece.payload.toUint64();
                 address deal = address(this).computeAddress(nonce);
-                (uint256 railId, uint256 newRate) =
-                    PoRepDeal(deal).pieceAdded(minerActor, cidHash, header.sector, piece.paddedSize);
+                (uint256 railId, uint256 newRate) = PoRepDeal(deal).pieceAdded(
+                    minerActor, cidHash, header.sector, uint64(header.minimumCommitmentEpoch), piece.paddedSize
+                );
                 PAYMENTS.modifyRailPayment(railId, newRate, 0);
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
             }
         }
         return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
+    }
+
+    function updateLockups(uint64 nonce, uint256 railId, uint256 endEpoch) external {
+        authenticateDeal(nonce);
+
+        PAYMENTS.modifyRailLockup(railId, endEpoch - block.number, 0);
     }
 }

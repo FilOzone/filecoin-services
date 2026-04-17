@@ -3,6 +3,10 @@ pragma solidity ^0.8.30;
 
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 
+interface IPoRepService {
+    function updateLockups(uint64 nonce, uint256 railId, uint256 endEpoch) external;
+}
+
 contract PoRepDeal is IValidator {
     address public immutable SERVICE;
     address public immutable CLIENT;
@@ -12,6 +16,7 @@ contract PoRepDeal is IValidator {
     uint256 public immutable FIL_PER_BYTE_PER_EPOCH;
     uint64 private immutable NONCE;
 
+    uint64 public endEpoch;
     uint256 faultedCount;
 
     enum PieceStatus {
@@ -38,6 +43,7 @@ contract PoRepDeal is IValidator {
         FilecoinPayV1 payments,
         uint256 railId,
         uint256 filPerBytePerEpoch,
+        uint64 dealEndEpoch,
         uint64 nonce
     ) {
         SERVICE = service;
@@ -46,6 +52,7 @@ contract PoRepDeal is IValidator {
         PAYMENTS = payments;
         FIL_PER_BYTE_PER_EPOCH = filPerBytePerEpoch;
         RAIL_ID = railId;
+        endEpoch = dealEndEpoch;
         NONCE = nonce;
     }
 
@@ -76,12 +83,15 @@ contract PoRepDeal is IValidator {
         }
     }
 
-    function pieceAdded(uint64 minerId, bytes32 cidHash, uint64 sectorId, uint64 paddedSize)
-        external
-        onlyService
-        returns (uint256 railId, uint256 newRate)
-    {
+    function pieceAdded(
+        uint64 minerId,
+        bytes32 cidHash,
+        uint64 sectorId,
+        uint64 minimumCommitmentEpoch,
+        uint64 paddedSize
+    ) external onlyService returns (uint256 railId, uint256 newRate) {
         require(minerId == PROVIDER);
+        require(minimumCommitmentEpoch >= endEpoch);
 
         require(pieces[cidHash] == PieceStatus.AUTHORIZED);
         pieces[cidHash] = PieceStatus.ACTIVE;
@@ -90,6 +100,16 @@ contract PoRepDeal is IValidator {
         totalActiveSize += paddedSize;
 
         return (RAIL_ID, paddedSize * FIL_PER_BYTE_PER_EPOCH);
+    }
+
+    function extend(uint64 epochs) external onlyClient {
+        endEpoch += epochs;
+        IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, endEpoch);
+    }
+
+    function settleRail() external {
+        IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, endEpoch);
+        PAYMENTS.settleRail(RAIL_ID, block.number);
     }
 
     /**
