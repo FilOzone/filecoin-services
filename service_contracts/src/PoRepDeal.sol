@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 
 interface IPoRepService {
-    function updateLockups(uint64 nonce, uint256 railId, uint256 endEpoch) external;
+    function updateLockups(uint64 nonce, uint256 railId, uint256 payment, uint256 remaining) external;
 }
 
 contract PoRepDeal is IValidator {
@@ -16,8 +16,14 @@ contract PoRepDeal is IValidator {
     uint256 public immutable FIL_PER_BYTE_PER_EPOCH;
     uint64 private immutable NONCE;
 
-    uint64 public endEpoch;
-    uint256 faultedCount;
+    struct Info {
+        uint64 settledEpoch;
+        uint64 endEpoch;
+        uint32 faultedCount;
+        uint96 totalActiveSize;
+    }
+
+    Info public info;
 
     enum PieceStatus {
         UNAUTHORIZED,
@@ -34,7 +40,6 @@ contract PoRepDeal is IValidator {
     }
 
     mapping(uint256 sectorId => SectorStatus) public sectors;
-    uint256 public totalActiveSize;
 
     constructor(
         address service,
@@ -52,8 +57,8 @@ contract PoRepDeal is IValidator {
         PAYMENTS = payments;
         FIL_PER_BYTE_PER_EPOCH = filPerBytePerEpoch;
         RAIL_ID = railId;
-        endEpoch = dealEndEpoch;
         NONCE = nonce;
+        info.endEpoch = dealEndEpoch;
     }
 
     function _onlyClient() internal view {
@@ -89,27 +94,41 @@ contract PoRepDeal is IValidator {
         uint64 sectorId,
         uint64 minimumCommitmentEpoch,
         uint64 paddedSize
-    ) external onlyService returns (uint256 railId, uint256 newRate) {
+    ) external onlyService {
         require(minerId == PROVIDER);
-        require(minimumCommitmentEpoch >= endEpoch);
+        require(minimumCommitmentEpoch >= info.endEpoch);
 
         require(pieces[cidHash] == PieceStatus.AUTHORIZED);
         pieces[cidHash] = PieceStatus.ACTIVE;
 
         sectors[sectorId].activeSize += paddedSize;
-        totalActiveSize += paddedSize;
 
-        return (RAIL_ID, paddedSize * FIL_PER_BYTE_PER_EPOCH);
+        uint256 prevSize = info.totalActiveSize;
+        uint256 newSize = prevSize + paddedSize;
+        uint256 prevRate = prevSize * FIL_PER_BYTE_PER_EPOCH;
+        uint256 newRate = newSize * FIL_PER_BYTE_PER_EPOCH;
+        amortize((block.number - info.settledEpoch) * prevRate, (info.endEpoch - block.number) * newRate);
+        info.settledEpoch = uint64(block.number);
+        info.totalActiveSize = uint96(newSize);
     }
 
+    // TODO move to service?
     function extend(uint64 epochs) external onlyClient {
-        endEpoch += epochs;
-        IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, endEpoch);
+        uint256 rate = info.totalActiveSize * FIL_PER_BYTE_PER_EPOCH;
+        uint64 newEndEpoch = info.endEpoch + epochs;
+        amortize((block.number - info.settledEpoch) * rate, (newEndEpoch - block.number) * rate);
+        info.endEpoch = newEndEpoch;
+        info.settledEpoch = uint64(block.number);
     }
 
-    function settleRail() external {
-        IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, endEpoch);
-        PAYMENTS.settleRail(RAIL_ID, block.number);
+    function amortize(uint256 payment, uint256 remaining) internal {
+        IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, payment, remaining);
+    }
+
+    function amortize() external {
+        uint256 rate = info.totalActiveSize * FIL_PER_BYTE_PER_EPOCH;
+        amortize((block.number - info.settledEpoch) * rate, (info.endEpoch - block.number) * rate);
+        info.settledEpoch = uint64(block.number);
     }
 
     /**

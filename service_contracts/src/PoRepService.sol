@@ -145,19 +145,23 @@ contract PoRepService {
                 bytes32 cidHash = piece.digest.keccak();
                 uint64 nonce = piece.payload.toUint64();
                 address deal = address(this).computeAddress(nonce);
-                (uint256 railId, uint256 newRate) = PoRepDeal(deal).pieceAdded(
+                PoRepDeal(deal).pieceAdded(
                     minerActor, cidHash, header.sector, uint64(header.minimumCommitmentEpoch), piece.paddedSize
                 );
-                PAYMENTS.modifyRailPayment(railId, newRate, 0);
+                //PAYMENTS.modifyRailPayment(railId, 0, payment);
+                //PAYMENTS.modifyRailLockup(railId, 0, remaining);
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
             }
         }
         return (0, CBOR_CODEC, FVMSectorContentChanged.encodeReturn(ret));
     }
 
-    function updateLockups(uint64 nonce, uint256 railId, uint256 endEpoch) external {
+    function updateLockups(uint64 nonce, uint256 railId, uint256 payment, uint256 remaining) external {
         authenticateDeal(nonce);
 
-        PAYMENTS.modifyRailLockup(railId, endEpoch - block.number, 0);
+        if (payment > 0) {
+            PAYMENTS.modifyRailPayment(railId, 0, payment);
+        }
+        PAYMENTS.modifyRailLockup(railId, 0, remaining);
     }
 }
