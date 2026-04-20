@@ -123,5 +123,8 @@ contract PoRepDealActivationTest is MockFVMTest {
         deal.amortize();
         vm.roll(endEpoch);
         deal.amortize();
+
+        vm.roll(endEpoch + 1);
+        deal.amortize();
     }
 }

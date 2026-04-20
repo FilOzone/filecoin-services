@@ -36,7 +36,7 @@ contract PoRepDeal is IValidator {
 
     // TODO move to child contract
     struct SectorStatus {
-        uint256 activeSize;
+        uint96 activeSize;
     }
 
     mapping(uint256 sectorId => SectorStatus) public sectors;
@@ -96,6 +96,8 @@ contract PoRepDeal is IValidator {
         uint64 paddedSize
     ) external onlyService {
         require(minerId == PROVIDER);
+
+        // this also enforces block.number < info.endEpoch because minimum commitment is 180 days
         require(minimumCommitmentEpoch >= info.endEpoch);
 
         require(pieces[cidHash] == PieceStatus.AUTHORIZED);
@@ -103,6 +105,7 @@ contract PoRepDeal is IValidator {
 
         sectors[sectorId].activeSize += paddedSize;
 
+        // TODO only amortize once per SectorContentChanged notification
         uint256 prevSize = info.totalActiveSize;
         uint256 newSize = prevSize + paddedSize;
         uint256 prevRate = prevSize * FIL_PER_BYTE_PER_EPOCH;
@@ -112,10 +115,10 @@ contract PoRepDeal is IValidator {
         info.totalActiveSize = uint96(newSize);
     }
 
-    // TODO move to service?
     function extend(uint64 epochs) external onlyClient {
-        uint256 rate = info.totalActiveSize * FIL_PER_BYTE_PER_EPOCH;
+        require(block.number < info.endEpoch);
         uint64 newEndEpoch = info.endEpoch + epochs;
+        uint256 rate = info.totalActiveSize * FIL_PER_BYTE_PER_EPOCH;
         amortize((block.number - info.settledEpoch) * rate, (newEndEpoch - block.number) * rate);
         info.endEpoch = newEndEpoch;
         info.settledEpoch = uint64(block.number);
@@ -127,8 +130,13 @@ contract PoRepDeal is IValidator {
 
     function amortize() external {
         uint256 rate = info.totalActiveSize * FIL_PER_BYTE_PER_EPOCH;
-        amortize((block.number - info.settledEpoch) * rate, (info.endEpoch - block.number) * rate);
-        info.settledEpoch = uint64(block.number);
+        if (block.number <= info.endEpoch) {
+            amortize((block.number - info.settledEpoch) * rate, (info.endEpoch - block.number) * rate);
+            info.settledEpoch = uint64(block.number);
+        } else {
+            amortize((info.endEpoch - info.settledEpoch) * rate, 0);
+            info.settledEpoch = info.endEpoch;
+        }
     }
 
     /**
