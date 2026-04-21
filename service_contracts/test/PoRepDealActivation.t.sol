@@ -3,11 +3,13 @@ pragma solidity ^0.8.30;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {PoRepDeal} from "../src/PoRepDeal.sol";
-import {NATIVE_TOKEN, PoRepService} from "../src/PoRepService.sol";
+import {PoRepService} from "../src/PoRepService.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {PieceChange, SectorChanges, SectorContentChangedParams} from "@fvm-solidity/FVMSectorContentChanged.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+IERC20 constant NATIVE_TOKEN = IERC20(address(0));
 
 contract PoRepDealActivationTest is MockFVMTest {
     uint64 constant MINER_ID = 42;
@@ -60,7 +62,7 @@ contract PoRepDealActivationTest is MockFVMTest {
 
     function _createDeal() internal returns (PoRepDeal deal, uint64 endEpoch) {
         endEpoch = uint64(block.number) + MIN_COMMITMENT_EPOCHS;
-        deal = PoRepDeal(service.createDeal(client, MINER_ID, RATE, endEpoch));
+        deal = PoRepDeal(service.createDeal(client, MINER_ID, NATIVE_TOKEN, RATE, endEpoch, 0));
     }
 
     function _authorize(PoRepDeal deal, bytes memory digest) internal {

@@ -3,12 +3,14 @@ pragma solidity ^0.8.30;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {PoRepDeal} from "../src/PoRepDeal.sol";
-import {NATIVE_TOKEN, PoRepService} from "../src/PoRepService.sol";
+import {PoRepService} from "../src/PoRepService.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {PieceChange, SectorChanges, SectorContentChangedParams} from "@fvm-solidity/FVMSectorContentChanged.sol";
 import {SectorStatus} from "@fvm-solidity/FVMSector.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+IERC20 constant NATIVE_TOKEN = IERC20(address(0));
 
 contract PoRepDealSectorStatusTest is MockFVMTest {
     uint64 constant MINER_ID = 42;
@@ -50,7 +52,7 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         payments.deposit{value: required}(NATIVE_TOKEN, client, required);
 
         endEpoch = uint64(block.number) + MIN_COMMITMENT_EPOCHS;
-        poRepDeal = PoRepDeal(service.createDeal(client, MINER_ID, RATE, endEpoch));
+        poRepDeal = PoRepDeal(service.createDeal(client, MINER_ID, NATIVE_TOKEN, RATE, endEpoch, 0));
 
         bytes32[] memory cidHashes = new bytes32[](1);
         cidHashes[0] = keccak256(COMMP_DIGEST_1);
@@ -75,27 +77,29 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         revert("could not find deal nonce");
     }
 
+    address constant RECIPIENT = address(0x4141414141414141414141414141414141414141);
+
     function testSectorExpiredAfterActivation() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
-        poRepDeal.sectorExpired(SECTOR_ID);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
+        miner.mockSector(SECTOR_ID, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
+        poRepDeal.sectorActive(SECTOR_ID, DEADLINE, PARTITION);
     }
 
     function testSectorFaultyAfterActivation() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
-        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
+        miner.mockSector(SECTOR_ID, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
+        poRepDeal.sectorActive(SECTOR_ID, DEADLINE, PARTITION);
     }
 
     function testSectorExpiredRevertsIfStillActive() public {
         vm.expectRevert();
-        poRepDeal.sectorExpired(SECTOR_ID);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
     }
 
     function testSectorFaultyRevertsIfStillActive() public {
         vm.expectRevert();
-        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION);
-    }
-
-    function testSectorActive() public {
-        poRepDeal.sectorActive(SECTOR_ID, DEADLINE, PARTITION);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
     }
 }

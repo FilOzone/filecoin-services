@@ -20,8 +20,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
 import {PoRepDeal} from "./PoRepDeal.sol";
 
-IERC20 constant NATIVE_TOKEN = IERC20(address(0));
-
 contract PoRepPayee {
     using FVMActor for address;
     using FVMMiner for uint64;
@@ -110,15 +108,21 @@ contract PoRepService {
         }
     }
 
-    function createDeal(address client, uint64 provider, uint256 filPerBytePerEpoch, uint64 dealEndEpoch)
-        external
-        returns (address deal)
-    {
+    function createDeal(
+        address client,
+        uint64 provider,
+        IERC20 token,
+        uint256 tokensPerBytePerEpoch,
+        uint64 dealEndEpoch,
+        uint256 insuranceBps
+    ) external returns (address deal) {
         address receiver = createReceiver(provider);
         ++nonce;
         deal = address(this).computeAddress(nonce);
-        uint256 railId = PAYMENTS.createRail(NATIVE_TOKEN, client, receiver, deal, 0, address(0));
-        new PoRepDeal(address(this), client, provider, PAYMENTS, railId, filPerBytePerEpoch, dealEndEpoch, nonce);
+        uint256 railId = PAYMENTS.createRail(token, client, receiver, deal, insuranceBps, deal);
+        new PoRepDeal(
+            address(this), client, provider, PAYMENTS, railId, token, tokensPerBytePerEpoch, dealEndEpoch, nonce
+        );
     }
 
     function handle_filecoin_method(uint64 method, uint64, bytes calldata)
