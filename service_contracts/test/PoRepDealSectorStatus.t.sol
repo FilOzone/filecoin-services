@@ -82,15 +82,20 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
     function testSectorExpiredAfterActivation() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
         poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
-        miner.mockSector(SECTOR_ID, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
-        poRepDeal.sectorActive(SECTOR_ID, DEADLINE, PARTITION);
     }
 
-    function testSectorFaultyAfterActivation() public {
+    function testSectorRecoverFaultyAfterActivation() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
         poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
         miner.mockSector(SECTOR_ID, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
-        poRepDeal.sectorActive(SECTOR_ID, DEADLINE, PARTITION);
+        poRepDeal.sectorRecovered(SECTOR_ID, DEADLINE, PARTITION);
+    }
+
+    function testSectorExpiredAfterFaulty() public {
+        miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
+        miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
     }
 
     function testSectorExpiredRevertsIfStillActive() public {

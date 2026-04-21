@@ -18,7 +18,7 @@ import {FVMMiner} from "@fvm-solidity/FVMMiner.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
-import {PoRepDeal} from "./PoRepDeal.sol";
+import {IPoRepService, PoRepDeal} from "./PoRepDeal.sol";
 
 contract PoRepPayee {
     using FVMActor for address;
@@ -51,7 +51,7 @@ contract PoRepPayee {
     }
 }
 
-contract PoRepService {
+contract PoRepService is IPoRepService {
     using FVMAddress for address;
     using FVMSectorContentChanged for uint256;
     using CalldataUtils for CalldataSlice;
@@ -167,5 +167,12 @@ contract PoRepService {
             PAYMENTS.modifyRailPayment(railId, 0, payment);
         }
         PAYMENTS.modifyRailLockup(railId, 0, remaining);
+    }
+
+    function terminate(uint64 nonce, uint256 railId, uint64 provider, address sender) external {
+        authenticateDeal(nonce);
+        require(getReceiverAddress(provider) == sender);
+        PAYMENTS.terminateRail(railId);
+        PAYMENTS.settleRail(railId, block.number);
     }
 }

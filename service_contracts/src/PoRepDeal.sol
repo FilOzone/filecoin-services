@@ -7,6 +7,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IPoRepService {
     function updateLockups(uint64 nonce, uint256 railId, uint256 payment, uint256 remaining) external;
+    function terminate(uint64 nonce, uint256 railId, uint64 provider, address sender) external;
 }
 
 contract PoRepDeal is IValidator {
@@ -111,7 +112,6 @@ contract PoRepDeal is IValidator {
 
         sectors[sectorId].dealSize += paddedSize;
 
-        // FIXME check if already terminated
         // TODO only amortize once per SectorContentChanged notification
         uint256 prevSize = info.totalActiveSize;
         uint256 newSize = prevSize + paddedSize;
@@ -125,7 +125,6 @@ contract PoRepDeal is IValidator {
     function extend(uint64 epochs) external onlyClient {
         require(block.number < info.endEpoch);
         require(info.faultedSectorCount == 0);
-        // FIXME prevent if terminated
         uint64 newEndEpoch = info.endEpoch + epochs;
         uint256 rate = info.totalActiveSize * TOKENS_PER_BYTE_PER_EPOCH;
         amortize((block.number - info.settledEpoch) * rate, (newEndEpoch - block.number) * rate);
@@ -138,22 +137,23 @@ contract PoRepDeal is IValidator {
     }
 
     function amortize() external {
-        if (info.faultedSectorCount > 0) {
-            info.settledEpoch = uint64(block.number);
+        if (info.faultedSectorCount == 0) {
+            amortizeHealthy();
             return;
         }
-        amortizeHealthy();
+        info.settledEpoch = uint64(block.number);
     }
 
     function amortizeHealthy() internal {
         uint256 rate = info.totalActiveSize * TOKENS_PER_BYTE_PER_EPOCH;
-        if (block.number <= info.endEpoch) {
+        if (block.number < info.endEpoch) {
+            // live
             amortize((block.number - info.settledEpoch) * rate, (info.endEpoch - block.number) * rate);
-            info.settledEpoch = uint64(block.number);
         } else {
+            // expired
             amortize((info.endEpoch - info.settledEpoch) * rate, 0);
-            info.settledEpoch = info.endEpoch;
         }
+        info.settledEpoch = uint64(block.number);
     }
 
     function payoutBounty(address recipient, uint256 bounty) internal {
@@ -182,11 +182,12 @@ contract PoRepDeal is IValidator {
     function sectorExpired(uint64 sectorId, address recipient, uint256 bounty) external {
         require(block.number < info.endEpoch);
         require(sectors[sectorId].dealSize > 0);
-        require(sectors[sectorId].failed == 0);
         require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
 
-        // FIXME this is unrecoverable so should terminate instead
-        onBadSector(sectorId, recipient, bounty);
+        // this is unrecoverable, so terminate
+        info.endEpoch = uint64(block.number);
+        payoutBounty(recipient, bounty);
+        amortize(0, 0);
     }
 
     function sectorFaulty(uint64 sectorId, int64 deadline, int64 partition, address recipient, uint256 bounty)
@@ -200,13 +201,22 @@ contract PoRepDeal is IValidator {
         onBadSector(sectorId, recipient, bounty);
     }
 
-    // SPs should call this after DeclareFaultsRecovered
+    // SPs should call this after DeclareFaultsRecovered and a successful Window PoSt
     function sectorRecovered(uint64 sectorId, int64 deadline, int64 partition) external {
         require(sectors[sectorId].failed == 1);
         require(sectors[sectorId].dealSize > 0);
         require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Active, deadline, partition));
 
         onSectorRecovered(sectorId);
+    }
+
+    // After deal termination, the remainder of the insurance funds can be collected by the receiver in exchange for rail cleanup
+    // The SP should first call amortize()
+    function sweep(address recipient) external {
+        require(block.number > info.endEpoch);
+        IPoRepService(SERVICE).terminate(NONCE, RAIL_ID, PROVIDER, msg.sender);
+        (uint256 funds,,,) = PAYMENTS.accounts(TOKEN, address(this));
+        PAYMENTS.withdrawTo(TOKEN, recipient, funds);
     }
 
     /**
