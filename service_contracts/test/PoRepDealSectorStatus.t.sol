@@ -81,30 +81,30 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
 
     function testSectorExpiredAfterActivation() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
     }
 
     function testSectorRecoverFaultyAfterActivation() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
-        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
         miner.mockSector(SECTOR_ID, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
         poRepDeal.sectorRecovered(SECTOR_ID, DEADLINE, PARTITION);
     }
 
     function testSectorExpiredAfterFaulty() public {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
-        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
     }
 
     function testSectorExpiredRevertsIfStillActive() public {
         vm.expectRevert();
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT, 0);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
     }
 
     function testSectorFaultyRevertsIfStillActive() public {
         vm.expectRevert();
-        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT, 0);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
     }
 }

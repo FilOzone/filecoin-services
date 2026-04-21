@@ -15,7 +15,7 @@ import {
 } from "@fvm-solidity/FVMSectorContentChanged.sol";
 import {FVMActor} from "@fvm-solidity/FVMActor.sol";
 import {FVMMiner} from "@fvm-solidity/FVMMiner.sol";
-import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
 import {IPoRepService, PoRepDeal} from "./PoRepDeal.sol";
@@ -51,7 +51,7 @@ contract PoRepPayee {
     }
 }
 
-contract PoRepService is IPoRepService {
+contract PoRepService is IPoRepService, IValidator {
     using FVMAddress for address;
     using FVMSectorContentChanged for uint256;
     using CalldataUtils for CalldataSlice;
@@ -119,7 +119,7 @@ contract PoRepService is IPoRepService {
         address receiver = createReceiver(provider);
         ++nonce;
         deal = address(this).computeAddress(nonce);
-        uint256 railId = PAYMENTS.createRail(token, client, receiver, deal, insuranceBps, deal);
+        uint256 railId = PAYMENTS.createRail(token, client, receiver, address(this), insuranceBps, deal);
         new PoRepDeal(
             address(this), client, provider, PAYMENTS, railId, token, tokensPerBytePerEpoch, dealEndEpoch, nonce
         );
@@ -169,10 +169,31 @@ contract PoRepService is IPoRepService {
         PAYMENTS.modifyRailLockup(railId, 0, remaining);
     }
 
-    function terminate(uint64 nonce, uint256 railId, uint64 provider, address sender) external {
+    function terminate(uint64 nonce, uint256 railId, uint64 provider, address receiver) external {
         authenticateDeal(nonce);
-        require(getReceiverAddress(provider) == sender);
+        if (provider > 0) {
+            require(getReceiverAddress(provider) == receiver);
+        }
         PAYMENTS.terminateRail(railId);
         PAYMENTS.settleRail(railId, block.number);
+    }
+
+    /**
+     * IValidator
+     */
+    function validatePayment(
+        uint256, // railId
+        uint256 proposedAmount, // the epoch up to and including which the rail has already been settled
+        uint256, // fromEpoch
+        uint256 toEpoch,
+        uint256 // rate
+    ) external pure returns (ValidationResult memory result) {
+        result.modifiedAmount = proposedAmount;
+        result.settleUpto = toEpoch;
+    }
+
+    function railTerminated(uint256, address terminator, uint256 /*endEpoch*/ ) external view {
+        require(msg.sender == address(PAYMENTS));
+        require(terminator == address(this));
     }
 }

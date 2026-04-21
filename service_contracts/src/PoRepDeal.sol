@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {FVMSector, SectorStatus, NO_DEADLINE, NO_PARTITION} from "@fvm-solidity/FVMSector.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -10,7 +10,7 @@ interface IPoRepService {
     function terminate(uint64 nonce, uint256 railId, uint64 provider, address sender) external;
 }
 
-contract PoRepDeal is IValidator {
+contract PoRepDeal {
     address public immutable SERVICE;
     address public immutable CLIENT;
     uint64 public immutable PROVIDER;
@@ -136,7 +136,7 @@ contract PoRepDeal is IValidator {
         IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, payment, remaining);
     }
 
-    function amortize() external {
+    function amortize() public {
         if (info.faultedSectorCount == 0) {
             amortizeHealthy();
             return;
@@ -156,16 +156,22 @@ contract PoRepDeal is IValidator {
         info.settledEpoch = uint64(block.number);
     }
 
-    function payoutBounty(address recipient, uint256 bounty) internal {
-        PAYMENTS.withdrawTo(TOKEN, recipient, bounty);
+    function getInsuranceFunds() internal view returns (uint256 funds) {
+        (funds,,,) = PAYMENTS.accounts(TOKEN, address(this));
     }
 
-    function onBadSector(uint256 sectorId, address recipient, uint256 bounty) internal {
+    function payoutBounty(address recipient, uint256 bounty) internal {
+        if (bounty > 0) {
+            PAYMENTS.withdrawTo(TOKEN, recipient, bounty);
+        }
+    }
+
+    function onBadSector(uint256 sectorId, address recipient) internal {
         sectors[sectorId].failed = 1;
         if (info.faultedSectorCount == 0) {
             amortizeHealthy();
             info.faultedSectorCount = 1;
-            payoutBounty(recipient, bounty);
+            payoutBounty(recipient, getInsuranceFunds() / 2);
         } else {
             info.faultedSectorCount++;
         }
@@ -179,26 +185,24 @@ contract PoRepDeal is IValidator {
         }
     }
 
-    function sectorExpired(uint64 sectorId, address recipient, uint256 bounty) external {
+    function sectorExpired(uint64 sectorId, address recipient) external {
         require(block.number < info.endEpoch);
         require(sectors[sectorId].dealSize > 0);
         require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
 
         // this is unrecoverable, so terminate
         info.endEpoch = uint64(block.number);
-        payoutBounty(recipient, bounty);
-        amortize(0, 0);
+        amortize();
+        terminate(recipient, 0, address(0));
     }
 
-    function sectorFaulty(uint64 sectorId, int64 deadline, int64 partition, address recipient, uint256 bounty)
-        external
-    {
+    function sectorFaulty(uint64 sectorId, int64 deadline, int64 partition, address recipient) external {
         require(block.number < info.endEpoch);
         require(sectors[sectorId].dealSize > 0);
         require(sectors[sectorId].failed == 0);
         require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Faulty, deadline, partition));
 
-        onBadSector(sectorId, recipient, bounty);
+        onBadSector(sectorId, recipient);
     }
 
     // SPs should call this after DeclareFaultsRecovered and a successful Window PoSt
@@ -210,32 +214,17 @@ contract PoRepDeal is IValidator {
         onSectorRecovered(sectorId);
     }
 
-    // After deal termination, the remainder of the insurance funds can be collected by the receiver in exchange for rail cleanup
-    // The SP should first call amortize()
+    function terminate(address recipient, uint64 provider, address receiver) internal {
+        // if termination is caused by a dead sector, the keeper gets the insurance
+        // otherwise, the insurance is paid to the order of the PROVIDER
+        IPoRepService(SERVICE).terminate(NONCE, RAIL_ID, provider, receiver);
+        payoutBounty(recipient, getInsuranceFunds());
+    }
+
+    // After healthy deal termination, the remainder of the insurance funds can be collected by the receiver in exchange for rail cleanup
     function sweep(address recipient) external {
         require(block.number > info.endEpoch);
-        IPoRepService(SERVICE).terminate(NONCE, RAIL_ID, PROVIDER, msg.sender);
-        (uint256 funds,,,) = PAYMENTS.accounts(TOKEN, address(this));
-        PAYMENTS.withdrawTo(TOKEN, recipient, funds);
-    }
-
-    /**
-     * IValidator
-     */
-    function validatePayment(
-        uint256, // railId
-        uint256 proposedAmount, // the epoch up to and including which the rail has already been settled
-        uint256, // fromEpoch
-        uint256 toEpoch,
-        uint256 // rate
-    ) external pure returns (ValidationResult memory result) {
-        result.modifiedAmount = proposedAmount;
-        result.settleUpto = toEpoch;
-    }
-
-    function railTerminated(uint256, address terminator, uint256 /*endEpoch*/ ) external view {
-        require(msg.sender == address(PAYMENTS));
-        require(terminator == SERVICE);
-        // TODO cleanup
+        amortize();
+        terminate(recipient, PROVIDER, msg.sender);
     }
 }
