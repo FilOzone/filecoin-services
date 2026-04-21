@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {FVMSector, SectorStatus, NO_DEADLINE, NO_PARTITION} from "@fvm-solidity/FVMSector.sol";
 
 interface IPoRepService {
     function updateLockups(uint64 nonce, uint256 railId, uint256 payment, uint256 remaining) external;
@@ -19,7 +20,7 @@ contract PoRepDeal is IValidator {
     struct Info {
         uint64 settledEpoch;
         uint64 endEpoch;
-        uint32 faultedCount;
+        uint32 faultedSectorCount;
         uint96 totalActiveSize;
     }
 
@@ -35,11 +36,12 @@ contract PoRepDeal is IValidator {
     mapping(bytes32 pieceId => PieceStatus) pieces;
 
     // TODO move to child contract
-    struct SectorStatus {
-        uint96 activeSize;
+    struct SectorInfo {
+        uint96 dealSize;
+        uint8 failed;
     }
 
-    mapping(uint256 sectorId => SectorStatus) public sectors;
+    mapping(uint256 sectorId => SectorInfo) public sectors;
 
     constructor(
         address service,
@@ -103,7 +105,7 @@ contract PoRepDeal is IValidator {
         require(pieces[cidHash] == PieceStatus.AUTHORIZED);
         pieces[cidHash] = PieceStatus.ACTIVE;
 
-        sectors[sectorId].activeSize += paddedSize;
+        sectors[sectorId].dealSize += paddedSize;
 
         // TODO only amortize once per SectorContentChanged notification
         uint256 prevSize = info.totalActiveSize;
@@ -128,7 +130,7 @@ contract PoRepDeal is IValidator {
         IPoRepService(SERVICE).updateLockups(NONCE, RAIL_ID, payment, remaining);
     }
 
-    function amortize() external {
+    function amortize() public {
         uint256 rate = info.totalActiveSize * FIL_PER_BYTE_PER_EPOCH;
         if (block.number <= info.endEpoch) {
             amortize((block.number - info.settledEpoch) * rate, (info.endEpoch - block.number) * rate);
@@ -137,6 +139,50 @@ contract PoRepDeal is IValidator {
             amortize((info.endEpoch - info.settledEpoch) * rate, 0);
             info.settledEpoch = info.endEpoch;
         }
+    }
+
+    function onBadSector(uint256 sectorId) internal {
+        sectors[sectorId].failed = 1;
+        if (info.faultedSectorCount == 0) {
+            amortize();
+            info.faultedSectorCount = 1;
+        } else {
+            info.faultedSectorCount++;
+        }
+    }
+
+    function onSectorRestored(uint256 sectorId) internal {
+        sectors[sectorId].failed = 0;
+
+        if (--info.faultedSectorCount == 0) {
+            info.settledEpoch = block.number;
+        }
+    }
+
+    function sectorExpired(uint64 sectorId) external {
+        require(block.number < info.endEpoch);
+        require(sectors[sectorId].dealSize > 0);
+        require(sectors[sectorId].failed == 0);
+        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
+
+        onBadSector(sectorId);
+    }
+
+    function sectorFaulty(uint64 sectorId, int64 deadline, int64 partition) external {
+        require(block.number < info.endEpoch);
+        require(sectors[sectorId].dealSize > 0);
+        require(sectors[sectorId].failed == 0);
+        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Faulty, deadline, partition));
+
+        onBadSector(sectorId);
+    }
+
+    function sectorActive(uint64 sectorId, int64 deadline, int64 partition) external {
+        require(sectors[sectorId].failed == 1);
+        require(sectors[sectorId].dealSize > 0);
+        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Active, deadline, partition));
+
+        onSectorRestored(sectorId);
     }
 
     /**
