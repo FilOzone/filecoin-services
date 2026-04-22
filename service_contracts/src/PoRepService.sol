@@ -143,11 +143,10 @@ contract PoRepService is IPoRepService, IValidator {
             FVMSectorContentChanged.initSectorReturn(ret.sectors[i], header.numPieces);
             for (uint256 j = 0; j < header.numPieces; j++) {
                 iter = iter.readPiece(piece);
-                bytes32 cidHash = piece.digest.keccak();
                 uint64 nonce = piece.payload.toUint64();
                 address deal = address(this).computeAddress(nonce);
                 PoRepDeal(deal).pieceAdded(
-                    minerActor, cidHash, header.sector, uint64(header.minimumCommitmentEpoch), piece.paddedSize
+                    minerActor, piece.digest, header.sector, uint64(header.minimumCommitmentEpoch), piece.paddedSize
                 );
                 //PAYMENTS.modifyRailPayment(railId, 0, payment);
                 //PAYMENTS.modifyRailLockup(railId, 0, remaining);

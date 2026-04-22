@@ -22,8 +22,8 @@ contract PoRepDealActivationTest is MockFVMTest {
     uint256 constant RATE = 1;
 
     // CommP CIDs from the FVMSectorContentChanged test suite; prefix stripped to get the 36-byte digest
-    bytes constant COMMP_CID_1 = hex"0155912024cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
-    bytes constant COMMP_DIGEST_1 = hex"cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
+    bytes constant COMMP_CID_1 = hex"0181e203922020cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36";
+    bytes32 constant COMMP_DIGEST_1 = 0xcdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36;
     FilecoinPayV1 payments;
     PoRepService service;
     FVMMinerActor miner;
@@ -65,9 +65,9 @@ contract PoRepDealActivationTest is MockFVMTest {
         deal = PoRepDeal(service.createDeal(client, MINER_ID, NATIVE_TOKEN, RATE, endEpoch, 0));
     }
 
-    function _authorize(PoRepDeal deal, bytes memory digest) internal {
+    function _authorize(PoRepDeal deal, bytes32 digest) internal {
         bytes32[] memory cidHashes = new bytes32[](1);
-        cidHashes[0] = keccak256(digest);
+        cidHashes[0] = digest;
         vm.prank(client);
         deal.addPieces(cidHashes);
     }

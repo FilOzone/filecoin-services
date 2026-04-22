@@ -23,8 +23,8 @@ contract PoRepDealExtendTest is MockFVMTest {
     uint64 constant SIZE = 32 * 1024 * 1024 * 1024;
     uint256 constant RATE = 1;
 
-    bytes constant COMMP_CID_1 = hex"0155912024cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
-    bytes constant COMMP_DIGEST_1 = hex"cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b367a49ce18";
+    bytes constant COMMP_CID_1 = hex"0181e203922020cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b38";
+    bytes32 constant COMMP_DIGEST_1 = 0xcdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b38;
 
     FilecoinPayV1 payments;
     PoRepService service;
@@ -57,7 +57,7 @@ contract PoRepDealExtendTest is MockFVMTest {
         poRepDeal = PoRepDeal(service.createDeal(client, MINER_ID, NATIVE_TOKEN, RATE, endEpoch, 0));
 
         bytes32[] memory cidHashes = new bytes32[](1);
-        cidHashes[0] = keccak256(COMMP_DIGEST_1);
+        cidHashes[0] = COMMP_DIGEST_1;
         vm.prank(client);
         poRepDeal.addPieces(cidHashes);
 

@@ -87,17 +87,17 @@ contract PoRepDeal {
     }
 
     // TODO allow provider to addPieces with client authorization
-    function addPieces(bytes32[] calldata cidHashes) external onlyClient {
-        for (uint256 i = 0; i < cidHashes.length; i++) {
-            bytes32 cidHash = cidHashes[i];
-            require(pieces[cidHash] == PieceStatus.UNAUTHORIZED);
-            pieces[cidHash] = PieceStatus.AUTHORIZED;
+    function addPieces(bytes32[] calldata pieceDigests) external onlyClient {
+        for (uint256 i = 0; i < pieceDigests.length; i++) {
+            bytes32 pieceDigest = pieceDigests[i];
+            require(pieces[pieceDigest] == PieceStatus.UNAUTHORIZED);
+            pieces[pieceDigest] = PieceStatus.AUTHORIZED;
         }
     }
 
     function pieceAdded(
         uint64 minerId,
-        bytes32 cidHash,
+        bytes32 pieceDigest,
         uint64 sectorId,
         uint64 minimumCommitmentEpoch,
         uint64 paddedSize
@@ -107,8 +107,8 @@ contract PoRepDeal {
         // this also enforces block.number < info.endEpoch because minimum commitment is 180 days
         require(minimumCommitmentEpoch >= info.endEpoch);
 
-        require(pieces[cidHash] == PieceStatus.AUTHORIZED);
-        pieces[cidHash] = PieceStatus.ACTIVE;
+        require(pieces[pieceDigest] == PieceStatus.AUTHORIZED);
+        pieces[pieceDigest] = PieceStatus.ACTIVE;
 
         sectors[sectorId].dealSize += paddedSize;
 
