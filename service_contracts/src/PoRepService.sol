@@ -126,6 +126,7 @@ contract PoRepService is IPoRepService, IValidator {
         returns (uint32 exitCode, uint64 returnDataCodec, bytes memory returnData)
     {
         require(method == SECTOR_CONTENT_CHANGED, ForbiddenMethod(method));
+        // The minerActor must match up with the deal
         uint64 minerActor = msg.sender.safeActorId();
 
         uint256 numSectors;
