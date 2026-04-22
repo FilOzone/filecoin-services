@@ -20,11 +20,11 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
 import {IPoRepService, PoRepDeal} from "./PoRepDeal.sol";
 
+error Unauthorized(address caller);
+
 contract PoRepPayee {
     using FVMActor for address;
     using FVMMiner for uint64;
-
-    error Unauthorized(address caller);
 
     uint64 public immutable MINER;
 
@@ -172,7 +172,7 @@ contract PoRepService is IPoRepService, IValidator {
     function terminate(uint64 nonce, uint256 railId, uint64 provider, address receiver) external {
         authenticateDeal(nonce);
         if (provider > 0) {
-            require(getReceiverAddress(provider) == receiver);
+            require(getReceiverAddress(provider) == receiver, Unauthorized(receiver));
         }
         PAYMENTS.terminateRail(railId);
         PAYMENTS.settleRail(railId, block.number);
