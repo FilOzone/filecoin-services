@@ -18,6 +18,7 @@ import {FVMMiner} from "@fvm-solidity/FVMMiner.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {LibRLP} from "@solady/utils/LibRLP.sol";
+import {LibClone} from "@solady/utils/LibClone.sol";
 import {IPoRepService, PoRepDeal} from "./PoRepDeal.sol";
 
 error Unauthorized(address caller);
@@ -55,6 +56,7 @@ contract PoRepService is IPoRepService, IValidator {
     using FVMAddress for address;
     using FVMSectorContentChanged for uint256;
     using CalldataUtils for CalldataSlice;
+    using LibClone for bytes32;
     using LibRLP for address;
 
     error ForbiddenMethod(uint64 method);
@@ -80,17 +82,7 @@ contract PoRepService is IPoRepService, IValidator {
     bytes32 constant RECEIVER_INITCODE_HASH = keccak256(type(PoRepPayee).creationCode);
 
     function getReceiverAddress(uint64 provider) public view returns (address receiver) {
-        receiver = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            uint8(0xff), address(this), bytes32(uint256(uint64(provider))), RECEIVER_INITCODE_HASH
-                        )
-                    )
-                )
-            )
-        );
+        receiver = RECEIVER_INITCODE_HASH.predictDeterministicAddress(bytes32(uint256(uint64(provider))), address(this));
     }
 
     uint64 private nonce;
