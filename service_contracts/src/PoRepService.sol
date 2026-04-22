@@ -54,12 +54,14 @@ contract PoRepPayee {
 
 contract PoRepService is IPoRepService, IValidator {
     using FVMAddress for address;
+    using FVMMiner for uint64;
     using FVMSectorContentChanged for uint256;
     using CalldataUtils for CalldataSlice;
     using LibClone for bytes32;
     using LibRLP for address;
 
     error ForbiddenMethod(uint64 method);
+    error NotMiner(uint64 provider);
 
     FilecoinPayV1 private immutable PAYMENTS;
 
@@ -108,6 +110,8 @@ contract PoRepService is IPoRepService, IValidator {
         uint64 dealEndEpoch,
         uint256 insuranceBps
     ) external returns (address deal) {
+        require(provider.isMiner(), NotMiner(provider));
+
         address receiver = createReceiver(provider);
         ++nonce;
         deal = address(this).computeAddress(nonce);
