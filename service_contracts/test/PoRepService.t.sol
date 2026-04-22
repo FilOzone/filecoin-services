@@ -6,6 +6,7 @@ import {PoRepPayee, PoRepService, Unauthorized} from "../src/PoRepService.sol";
 import {FVMActor} from "@fvm-solidity/FVMActor.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PoRepPayeeTest is MockFVMTest {
     using FVMActor for address;
@@ -75,5 +76,11 @@ contract PoRepServiceTest is MockFVMTest {
         assertNotEq(receiver.code.length, 0);
 
         assertEq(PoRepPayee(created).MINER(), minerId);
+    }
+
+    function testCreateDealNotMiner() public {
+        uint64 notMinerId = 999;
+        vm.expectRevert(abi.encodeWithSelector(PoRepService.NotMiner.selector, notMinerId));
+        service.createDeal(address(this), notMinerId, IERC20(address(0)), 1, uint64(block.number + 1000), 0);
     }
 }
