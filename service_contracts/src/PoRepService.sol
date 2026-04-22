@@ -82,7 +82,7 @@ contract PoRepService is IPoRepService, IValidator {
     bytes32 constant RECEIVER_INITCODE_HASH = keccak256(type(PoRepPayee).creationCode);
 
     function getReceiverAddress(uint64 provider) public view returns (address receiver) {
-        receiver = RECEIVER_INITCODE_HASH.predictDeterministicAddress(bytes32(uint256(uint64(provider))), address(this));
+        receiver = RECEIVER_INITCODE_HASH.predictDeterministicAddress(bytes32(uint256(provider)), address(this));
     }
 
     uint64 private nonce;
