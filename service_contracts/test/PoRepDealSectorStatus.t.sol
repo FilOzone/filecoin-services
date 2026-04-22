@@ -2,6 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {Errors} from "@fws-payments/Errors.sol";
 import {PoRepDeal} from "../src/PoRepDeal.sol";
 import {PoRepPayee, PoRepService, Unauthorized} from "../src/PoRepService.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
@@ -84,6 +85,12 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         revert("could not find deal nonce");
     }
 
+    function assertRailFinalized() internal {
+        uint256 railId = poRepDeal.RAIL_ID();
+        vm.expectRevert(abi.encodeWithSelector(Errors.RailInactiveOrSettled.selector, railId));
+        payments.getRail(railId);
+    }
+
     address constant RECIPIENT = address(0x4141414141414141414141414141414141414141);
     address constant SWEEPER = address(0x4242424242424242424242424242424242424242);
 
@@ -98,6 +105,7 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
 
         (uint256 paid,,,) = payments.accounts(NATIVE_TOKEN, address(payee));
         assertEq(paid, FAULT_MAX_AGE * SIZE * RATE * 199 / 200 * (10000 - INSURANCE_BIPS) / 10000);
+        assertRailFinalized();
     }
 
     // tests recovery
@@ -132,6 +140,7 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
 
         (uint256 paid,,,) = payments.accounts(NATIVE_TOKEN, address(payee));
         assertEq(paid, paidEpochs * SIZE * RATE * 199 / 200 * (10000 - INSURANCE_BIPS) / 10000);
+        assertRailFinalized();
     }
 
     // tests expiration after fault
@@ -153,6 +162,7 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
 
         (uint256 paid,,,) = payments.accounts(NATIVE_TOKEN, address(payee));
         assertEq(paid, 3 * DAYS_OF_EPOCHS * SIZE * RATE * 199 / 200 * (10000 - INSURANCE_BIPS) / 10000);
+        assertRailFinalized();
     }
 
     function testSectorExpiredRevertsIfStillActive() public {
