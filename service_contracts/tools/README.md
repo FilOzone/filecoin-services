@@ -2,9 +2,7 @@
 
 This directory contains scripts for deploying, upgrading, and operating the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
-> **For the release issue template**, see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
->
-> **For detailed upgrade procedures**, see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
+> **For the self-contained FWSS upgrade runbook and release issue template**, see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
 
 ## Scripts Overview
 
@@ -76,7 +74,7 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 # Deploy to Calibnet (FWSS only)
 ./tools/warm-storage-deploy-calibnet.sh
 
-# Upgrade existing deployment (see UPGRADE-PROCESS.md for details)
+# Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
 ./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after AFTER_EPOCH)
 ```
@@ -180,7 +178,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 - `warm-storage-deploy-all.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
 
-- Upgrade scripts - see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for complete environment variable reference
+- Upgrade scripts - see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete FWSS upgrade runbook
 
 ## Usage Examples
 
@@ -215,7 +213,7 @@ export FILECOIN_PAY_ADDRESS="0x456..."
 
 ### Upgrade Existing Contract
 
-See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for the complete two-step upgrade workflow.
+See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete two-step FWSS upgrade workflow.
 
 ## Contract Upgrade Process
 
@@ -226,13 +224,13 @@ The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two
 
 This gives stakeholders time to review changes before execution.
 
-**For complete upgrade documentation**, including:
+**For complete FWSS upgrade documentation**, including:
 - Step-by-step upgrade workflows
 - Environment variable reference
 - Immutable dependency handling
 - Verification procedures
 
-See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
+See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
 
 ## Ownership Transfer
 
