@@ -33,7 +33,8 @@ contract PoRepPayee {
         MINER = PoRepService(msg.sender).getMiner();
     }
 
-    function owner() public view returns (uint64) {
+    // Reading owner sounds like it should be `view`, but the precompile will revert if you staticcall this method
+    function owner() public returns (uint64) {
         return MINER.getOwnerActorId();
     }
 

@@ -21,7 +21,6 @@ contract PoRepDealActivationTest is MockFVMTest {
     // 1 attoFIL per byte per epoch
     uint256 constant RATE = 1;
 
-    // CommP CIDs from the FVMSectorContentChanged test suite; prefix stripped to get the 36-byte digest
     bytes constant COMMP_CID_1 = hex"0181e203922020cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36";
     bytes32 constant COMMP_DIGEST_1 = 0xcdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36;
     FilecoinPayV1 payments;

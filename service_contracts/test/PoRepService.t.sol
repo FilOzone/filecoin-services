@@ -30,7 +30,7 @@ contract PoRepPayeeTest is MockFVMTest {
         return MINER_ID;
     }
 
-    function testOwner() public view {
+    function testOwner() public {
         assertEq(payee.MINER(), MINER_ID);
         assertEq(payee.owner(), OWNER_ID);
         assertEq(address(this).getActorId(), OWNER_ID);
