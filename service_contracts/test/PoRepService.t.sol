@@ -83,4 +83,15 @@ contract PoRepServiceTest is MockFVMTest {
         vm.expectRevert(abi.encodeWithSelector(PoRepService.NotMiner.selector, notMinerId));
         service.createDeal(address(this), notMinerId, IERC20(address(0)), 1, uint64(block.number + 1000), 0);
     }
+
+    function testForbiddenMethod() public {
+        uint64 wrongMethod = 999;
+        vm.expectRevert(abi.encodeWithSelector(PoRepService.ForbiddenMethod.selector, wrongMethod));
+        service.handle_filecoin_method(wrongMethod, 0, "");
+    }
+
+    function testUpdateLockupsNotDeal() public {
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, address(this)));
+        service.updateLockups(1, 0, 0, 0);
+    }
 }

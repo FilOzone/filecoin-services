@@ -46,6 +46,20 @@ contract PoRepDeal {
 
     mapping(uint256 sectorId => SectorInfo) public sectors;
 
+    error Unauthorized();
+    error PieceAlreadyAuthorized(bytes32 pieceDigest);
+    error WrongProvider(uint64 minerId);
+    error CommitmentTooShort(uint64 minimumCommitmentEpoch, uint64 endEpoch);
+    error PieceNotAuthorized(bytes32 pieceDigest);
+    error DealExpired();
+    error DealFaulted();
+    error DealNotExpired();
+    error SectorNotInDeal(uint64 sectorId);
+    error SectorAlreadyFailed(uint64 sectorId);
+    error SectorNotFailed(uint64 sectorId);
+    error SectorNotFaulty(uint64 sectorId);
+    error SectorNotActive(uint64 sectorId);
+
     constructor(
         address service,
         address client,
@@ -69,11 +83,11 @@ contract PoRepDeal {
     }
 
     function _onlyClient() internal view {
-        require(msg.sender == CLIENT);
+        require(msg.sender == CLIENT, Unauthorized());
     }
 
     function _onlyService() internal view {
-        require(msg.sender == SERVICE);
+        require(msg.sender == SERVICE, Unauthorized());
     }
 
     modifier onlyClient() {
@@ -90,7 +104,7 @@ contract PoRepDeal {
     function addPieces(bytes32[] calldata pieceDigests) external onlyClient {
         for (uint256 i = 0; i < pieceDigests.length; i++) {
             bytes32 pieceDigest = pieceDigests[i];
-            require(pieces[pieceDigest] == PieceStatus.UNAUTHORIZED);
+            require(pieces[pieceDigest] == PieceStatus.UNAUTHORIZED, PieceAlreadyAuthorized(pieceDigest));
             pieces[pieceDigest] = PieceStatus.AUTHORIZED;
         }
     }
@@ -102,12 +116,12 @@ contract PoRepDeal {
         uint64 minimumCommitmentEpoch,
         uint64 paddedSize
     ) external onlyService {
-        require(minerId == PROVIDER);
+        require(minerId == PROVIDER, WrongProvider(minerId));
 
         // this also enforces block.number < info.endEpoch because minimum commitment is 180 days
-        require(minimumCommitmentEpoch >= info.endEpoch);
+        require(minimumCommitmentEpoch >= info.endEpoch, CommitmentTooShort(minimumCommitmentEpoch, info.endEpoch));
 
-        require(pieces[pieceDigest] == PieceStatus.AUTHORIZED);
+        require(pieces[pieceDigest] == PieceStatus.AUTHORIZED, PieceNotAuthorized(pieceDigest));
         pieces[pieceDigest] = PieceStatus.ACTIVE;
 
         sectors[sectorId].dealSize += paddedSize;
@@ -123,8 +137,8 @@ contract PoRepDeal {
     }
 
     function extend(uint64 epochs) external onlyClient {
-        require(block.number < info.endEpoch);
-        require(info.faultedSectorCount == 0);
+        require(block.number < info.endEpoch, DealExpired());
+        require(info.faultedSectorCount == 0, DealFaulted());
         uint64 newEndEpoch = info.endEpoch + epochs;
         uint256 rate = info.totalActiveSize * TOKENS_PER_BYTE_PER_EPOCH;
         amortize((block.number - info.settledEpoch) * rate, (newEndEpoch - block.number) * rate);
@@ -186,8 +200,8 @@ contract PoRepDeal {
     }
 
     function sectorExpired(uint64 sectorId, address recipient) external {
-        require(block.number < info.endEpoch);
-        require(sectors[sectorId].dealSize > 0);
+        require(block.number < info.endEpoch, DealExpired());
+        require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
         require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
 
         // this is unrecoverable, so terminate
@@ -197,19 +211,25 @@ contract PoRepDeal {
     }
 
     function sectorFaulty(uint64 sectorId, int64 deadline, int64 partition, address recipient) external {
-        require(block.number < info.endEpoch);
-        require(sectors[sectorId].dealSize > 0);
-        require(sectors[sectorId].failed == 0);
-        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Faulty, deadline, partition));
+        require(block.number < info.endEpoch, DealExpired());
+        require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
+        require(sectors[sectorId].failed == 0, SectorAlreadyFailed(sectorId));
+        require(
+            FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Faulty, deadline, partition),
+            SectorNotFaulty(sectorId)
+        );
 
         onBadSector(sectorId, recipient);
     }
 
     // SPs should call this after DeclareFaultsRecovered and a successful Window PoSt
     function sectorRecovered(uint64 sectorId, int64 deadline, int64 partition) external {
-        require(sectors[sectorId].failed == 1);
-        require(sectors[sectorId].dealSize > 0);
-        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Active, deadline, partition));
+        require(sectors[sectorId].failed == 1, SectorNotFailed(sectorId));
+        require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
+        require(
+            FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Active, deadline, partition),
+            SectorNotActive(sectorId)
+        );
 
         onSectorRecovered(sectorId);
     }
@@ -223,7 +243,7 @@ contract PoRepDeal {
 
     // After healthy deal termination, the remainder of the insurance funds can be collected by the receiver in exchange for rail cleanup
     function sweep(address recipient) external {
-        require(block.number > info.endEpoch);
+        require(block.number > info.endEpoch, DealNotExpired());
         amortize();
         terminate(recipient, PROVIDER, msg.sender);
     }

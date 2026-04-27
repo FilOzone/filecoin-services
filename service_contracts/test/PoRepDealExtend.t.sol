@@ -95,8 +95,8 @@ contract PoRepDealExtendTest is MockFVMTest {
 
     function testExtendRevertsAfterExpiry() public {
         vm.roll(endEpoch);
-        vm.expectRevert();
         vm.prank(client);
+        vm.expectRevert(PoRepDeal.DealExpired.selector);
         poRepDeal.extend(EXTENSION);
     }
 
@@ -105,13 +105,18 @@ contract PoRepDealExtendTest is MockFVMTest {
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
         poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, address(this));
 
-        vm.expectRevert();
         vm.prank(client);
+        vm.expectRevert(PoRepDeal.DealFaulted.selector);
         poRepDeal.extend(EXTENSION);
     }
 
     function testExtendRevertsIfNotClient() public {
-        vm.expectRevert();
+        vm.expectRevert(PoRepDeal.Unauthorized.selector);
         poRepDeal.extend(EXTENSION);
+    }
+
+    function testSweepRevertsBeforeExpiry() public {
+        vm.expectRevert(PoRepDeal.DealNotExpired.selector);
+        poRepDeal.sweep(address(this));
     }
 }

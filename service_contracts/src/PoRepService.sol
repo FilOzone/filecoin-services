@@ -91,7 +91,7 @@ contract PoRepService is IPoRepService, IValidator {
     uint64 private nonce;
 
     function authenticateDeal(uint64 nonce) internal view {
-        require(msg.sender == address(this).computeAddress(nonce));
+        require(msg.sender == address(this).computeAddress(nonce), Unauthorized(msg.sender));
     }
 
     function createReceiver(uint64 provider) public returns (address receiver) {

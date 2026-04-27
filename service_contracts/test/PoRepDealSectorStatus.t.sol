@@ -8,7 +8,8 @@ import {PoRepPayee, PoRepService, Unauthorized} from "../src/PoRepService.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {PieceChange, SectorChanges, SectorContentChangedParams} from "@fvm-solidity/FVMSectorContentChanged.sol";
-import {SectorStatus} from "@fvm-solidity/FVMSector.sol";
+import {FVMSector, SectorStatus} from "@fvm-solidity/FVMSector.sol";
+import {USR_NOT_FOUND} from "@fvm-solidity/FVMErrors.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 IERC20 constant NATIVE_TOKEN = IERC20(address(0));
@@ -166,12 +167,57 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
     }
 
     function testSectorExpiredRevertsIfStillActive() public {
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(FVMSector.ValidateSectorStatusFailed.selector, int256(int32(USR_NOT_FOUND)))
+        );
         poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
     }
 
     function testSectorFaultyRevertsIfStillActive() public {
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotFaulty.selector, uint64(SECTOR_ID)));
         poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
+    }
+
+    function testSectorExpiredAfterDealEnd() public {
+        vm.roll(endEpoch);
+        vm.expectRevert(PoRepDeal.DealExpired.selector);
+        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
+    }
+
+    function testSectorExpiredNotInDeal() public {
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotInDeal.selector, uint64(99)));
+        poRepDeal.sectorExpired(99, RECIPIENT);
+    }
+
+    function testSectorFaultyAfterDealEnd() public {
+        vm.roll(endEpoch);
+        vm.expectRevert(PoRepDeal.DealExpired.selector);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
+    }
+
+    function testSectorFaultyNotInDeal() public {
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotInDeal.selector, uint64(99)));
+        poRepDeal.sectorFaulty(99, DEADLINE, PARTITION, RECIPIENT);
+    }
+
+    function testSectorFaultyAlreadyFailed() public {
+        miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
+
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorAlreadyFailed.selector, uint64(SECTOR_ID)));
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
+    }
+
+    function testSectorRecoveredNotFailed() public {
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotFailed.selector, uint64(SECTOR_ID)));
+        poRepDeal.sectorRecovered(SECTOR_ID, DEADLINE, PARTITION);
+    }
+
+    function testSectorRecoveredStillFaulty() public {
+        miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
+
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotActive.selector, uint64(SECTOR_ID)));
+        poRepDeal.sectorRecovered(SECTOR_ID, DEADLINE, PARTITION);
     }
 }
