@@ -145,6 +145,16 @@ After termination, the payment rail enters a lockup period. Settlement continues
 
 The client's locked funds are released proportionally as settlement progresses. Unproven epochs result in funds returning to the client rather than flowing to the provider.
 
+### Service Termination
+
+Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the payer or the dataset's service provider is authorized.
+
+`terminateService` calls `FilecoinPay.terminateRail(pdpRailId)`. That call sets the rail's `endEpoch` and starts the lockup-period countdown to finalization. FilecoinPay then calls `railTerminated()` back into FWSS, since FWSS is the PDP rail's validator. The callback sets `info.pdpEndEpoch`, emits `PDPPaymentTerminated`, and verifies that the terminator is FWSS itself. The effect of that last check is that the PDP rail can only be terminated through `terminateService`. A direct `FilecoinPay.terminateRail` call from a client or SP is rejected inside the callback.
+
+If the dataset has CDN rails (`withCDN` metadata set), `terminateService` also terminates the cache-miss and CDN rails in the same transaction as a best-effort step. Errors from those calls are suppressed so PDP service termination always succeeds regardless of CDN rail state.
+
+Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
+
 ### Dataset Deletion Requirements
 
 Dataset deletion (`dataSetDeleted`) requires the payment rail to be fully settled before the dataset can be removed:
@@ -166,6 +176,10 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 2. Wait for all proving period deadlines within the lockup to pass
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset
+
+**State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
+
+**CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated in the same `terminateService` call that initiates PDP rail termination.
 
 ## CDN Payment Rails
 
