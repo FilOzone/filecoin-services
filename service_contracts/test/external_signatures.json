@@ -34,7 +34,7 @@
     ]
   },
   "deleteDataSet": {
-    "signature": "0x052f7cfbc1a6b34ee786e619f97817f095a003910f089b992365226039b05dca36280f4ccc198e9c8fd5131f6dc234cd6abb8f16dbbce59736c871cc7e988c881b",
-    "dataSetId": 12345
+    "signature": "0x82d85f7517c3ebcf68b9ebe200a46627d451219a3a71a95ea7ffce1cd661cc6d553db47958d27c33ccf1105388e1b640cf575a966b0bd4814ed0ec428daa628a1b",
+    "dataSetId": 67890
   }
 }

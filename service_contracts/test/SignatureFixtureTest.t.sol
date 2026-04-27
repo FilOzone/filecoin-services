@@ -72,46 +72,6 @@ contract MetadataSignatureTestContract {
         return keccak256(abi.encodePacked("\x19\x01", _domainSeparator, structHash));
     }
 
-    // Metadata hashing functions
-    function hashMetadataEntry(string memory key, string memory value) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(SignatureVerificationLib.METADATA_ENTRY_TYPEHASH, keccak256(bytes(key)), keccak256(bytes(value)))
-        );
-    }
-
-    function hashMetadataEntries(string[] memory keys, string[] memory values) internal pure returns (bytes32) {
-        if (keys.length == 0) return keccak256("");
-
-        bytes32[] memory hashes = new bytes32[](keys.length);
-        for (uint256 i = 0; i < keys.length; i++) {
-            hashes[i] = hashMetadataEntry(keys[i], values[i]);
-        }
-        return keccak256(abi.encodePacked(hashes));
-    }
-
-    function hashPieceMetadata(uint256 pieceIndex, string[] memory keys, string[] memory values)
-        internal
-        pure
-        returns (bytes32)
-    {
-        bytes32 metadataHash = hashMetadataEntries(keys, values);
-        return keccak256(abi.encode(SignatureVerificationLib.PIECE_METADATA_TYPEHASH, pieceIndex, metadataHash));
-    }
-
-    function hashAllPieceMetadata(string[][] memory allKeys, string[][] memory allValues)
-        internal
-        pure
-        returns (bytes32)
-    {
-        if (allKeys.length == 0) return keccak256("");
-
-        bytes32[] memory pieceHashes = new bytes32[](allKeys.length);
-        for (uint256 i = 0; i < allKeys.length; i++) {
-            pieceHashes[i] = hashPieceMetadata(i, allKeys[i], allValues[i]);
-        }
-        return keccak256(abi.encodePacked(pieceHashes));
-    }
-
     // Signature verification functions
     function verifyCreateDataSetSignature(
         address payer,
@@ -168,11 +128,9 @@ contract MetadataSignatureTestContract {
         string[] memory metadataKeys,
         string[] memory metadataValues
     ) public view returns (bytes32) {
-        bytes32 metadataHash = hashMetadataEntries(metadataKeys, metadataValues);
-        bytes32 structHash = keccak256(
-            abi.encode(SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, metadataHash)
+        return _hashTypedData(
+            SignatureVerificationLib.createDataSetStructHash(clientDataSetId, payee, metadataKeys, metadataValues)
         );
-        return _hashTypedData(structHash);
     }
 
     function getAddPiecesDigest(
@@ -182,25 +140,15 @@ contract MetadataSignatureTestContract {
         string[][] memory metadataKeys,
         string[][] memory metadataValues
     ) public view returns (bytes32) {
-        bytes32[] memory pieceCidsHashes = new bytes32[](pieceCidsArray.length);
-        for (uint256 i = 0; i < pieceCidsArray.length; i++) {
-            pieceCidsHashes[i] =
-                keccak256(abi.encode(SignatureVerificationLib.CID_TYPEHASH, keccak256(pieceCidsArray[i].data)));
-        }
-
-        bytes32 pieceMetadataHash = hashAllPieceMetadata(metadataKeys, metadataValues);
-        bytes32 structHash = keccak256(
-            abi.encode(
-                SignatureVerificationLib.ADD_PIECES_TYPEHASH,
-                clientDataSetId,
-                nonce,
-                keccak256(abi.encodePacked(pieceCidsHashes)),
-                pieceMetadataHash
+        return _hashTypedData(
+            SignatureVerificationLib.addPiecesStructHash(
+                clientDataSetId, nonce, pieceCidsArray, metadataKeys, metadataValues
             )
         );
-        return _hashTypedData(structHash);
     }
 
+    // SchedulePieceRemovals struct hash isn't exposed by the library (FWSS computes
+    // it inline at the call site); re-derived here from the shared typehash.
     function getSchedulePieceRemovalsDigest(uint256 clientDataSetId, uint256[] memory pieceIds)
         public
         view
@@ -235,7 +183,12 @@ contract MetadataSignatureFixturesTest is Test {
     address constant DOMAIN_VERIFYING_CONTRACT = 0x02925630df557F957f70E112bA06e50965417CA0;
 
     // Test data
+    // CLIENT_DATA_SET_ID is the per-client nonce signed for create/add/schedule
+    // operations (assigned by the client, opaque to the contract). DATA_SET_ID
+    // is the canonical PDPVerifier-assigned id signed for delete. Distinct
+    // values keep the conceptual separation visible in the fixtures.
     uint256 constant CLIENT_DATA_SET_ID = 12345;
+    uint256 constant DATA_SET_ID = 67890;
     address constant PAYEE = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     uint256 constant FIRST_ADDED = 1;
 
@@ -258,7 +211,7 @@ contract MetadataSignatureFixturesTest is Test {
         bytes memory createDataSetSig = generateCreateDataSetSignature(dataSetKeys, dataSetValues);
         bytes memory addPiecesSig = generateAddPiecesSignature(pieceKeys, pieceValues);
         bytes memory scheduleRemovalsSig = generateSchedulePieceRemovalsSignature(testPieceIds);
-        bytes memory deleteDataSetSig = generateDeleteDataSetSignature(CLIENT_DATA_SET_ID);
+        bytes memory deleteDataSetSig = generateDeleteDataSetSignature(DATA_SET_ID);
 
         // Compute SDK-format extraData (abi-encoded, matching synapse-core sign-* helpers)
         bytes memory createDataSetExtraData =
@@ -297,7 +250,7 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("    deleteDataSet: {");
         console.log("      extraData:");
         console.log("        '%s' as Hex,", vm.toString(deleteDataSetExtraData));
-        console.log("      dataSetId: %dn,", CLIENT_DATA_SET_ID);
+        console.log("      dataSetId: %dn,", DATA_SET_ID);
         console.log("    },");
         console.log("  },");
         console.log("}");
@@ -342,7 +295,7 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("  },");
         console.log("  \"deleteDataSet\": {");
         console.log("    \"signature\": \"%s\",", vm.toString(deleteDataSetSig));
-        console.log("    \"dataSetId\": %d", CLIENT_DATA_SET_ID);
+        console.log("    \"dataSetId\": %d", DATA_SET_ID);
         console.log("  }");
         console.log("}");
 
@@ -369,7 +322,7 @@ contract MetadataSignatureFixturesTest is Test {
         );
 
         assertTrue(
-            testContract.verifyDeleteDataSetSignature(TEST_SIGNER, CLIENT_DATA_SET_ID, deleteDataSetSig),
+            testContract.verifyDeleteDataSetSignature(TEST_SIGNER, DATA_SET_ID, deleteDataSetSig),
             "DeleteDataSet signature verification failed"
         );
     }
