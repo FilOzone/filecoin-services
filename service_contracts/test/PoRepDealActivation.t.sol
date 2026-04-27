@@ -60,8 +60,18 @@ contract PoRepDealActivationTest is MockFVMTest {
         revert("could not find deal nonce");
     }
 
+    function _predictDealAddress(uint64 provider) internal view returns (address) {
+        uint64 nextNonce = uint64(vm.getNonce(address(service)));
+        if (service.getReceiverAddress(provider).code.length == 0) {
+            nextNonce++;
+        }
+        return vm.computeCreateAddress(address(service), nextNonce);
+    }
+
     function _createDeal() internal returns (PoRepDeal deal, uint64 endEpoch) {
         endEpoch = uint64(block.number) + MIN_COMMITMENT_EPOCHS;
+        vm.expectEmit(address(service));
+        emit PoRepService.DealCreated(client, MINER_ID, _predictDealAddress(MINER_ID));
         deal = PoRepDeal(service.createDeal(client, MINER_ID, NATIVE_TOKEN, RATE, endEpoch, 0));
     }
 

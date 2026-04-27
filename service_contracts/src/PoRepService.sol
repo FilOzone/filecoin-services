@@ -64,6 +64,8 @@ contract PoRepService is IPoRepService, IValidator {
     error ForbiddenMethod(uint64 method);
     error NotMiner(uint64 provider);
 
+    event DealCreated(address indexed client, uint64 indexed provider, address deal);
+
     FilecoinPayV1 private immutable PAYMENTS;
 
     constructor(FilecoinPayV1 payments) {
@@ -120,6 +122,7 @@ contract PoRepService is IPoRepService, IValidator {
         new PoRepDeal(
             address(this), client, provider, PAYMENTS, railId, token, tokensPerBytePerEpoch, dealEndEpoch, nonce
         );
+        emit DealCreated(client, provider, deal);
     }
 
     function handle_filecoin_method(uint64 method, uint64, bytes calldata)

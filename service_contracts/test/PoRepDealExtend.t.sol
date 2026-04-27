@@ -54,6 +54,8 @@ contract PoRepDealExtendTest is MockFVMTest {
         payments.deposit{value: deposit}(NATIVE_TOKEN, client, deposit);
 
         endEpoch = uint64(block.number) + DURATION;
+        vm.expectEmit(address(service));
+        emit PoRepService.DealCreated(client, MINER_ID, _predictDealAddress(MINER_ID));
         poRepDeal = PoRepDeal(service.createDeal(client, MINER_ID, NATIVE_TOKEN, RATE, endEpoch, 0));
 
         bytes32[] memory cidHashes = new bytes32[](1);
@@ -76,6 +78,14 @@ contract PoRepDealExtendTest is MockFVMTest {
             if (vm.computeCreateAddress(deployer, n) == created) return n;
         }
         revert("could not find poRepDeal nonce");
+    }
+
+    function _predictDealAddress(uint64 provider) internal view returns (address) {
+        uint64 nextNonce = uint64(vm.getNonce(address(service)));
+        if (service.getReceiverAddress(provider).code.length == 0) {
+            nextNonce++;
+        }
+        return vm.computeCreateAddress(address(service), nextNonce);
     }
 
     function testExtend() public {
