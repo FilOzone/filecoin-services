@@ -1,7 +1,7 @@
 {
   "signer": "0x2e988A386a799F506693793c6A5AF6B54dfAaBfB",
   "createDataSet": {
-    "signature": "0xc77965e2b6efd594629c44eb61127bc3133b65d08c25f8aa33e3021e7f46435845ab67ffbac96afc4b4671ecbd32d4869ca7fe1c0eaa5affa942d0abbfd98d601b",
+    "signature": "0x71b76dc59fda32a090b48744f047748725f1989d69c24b25713ff7c175f365255d96f112712439fc01a2a9c6fb6cd5e0e78bd57888677cb5172f08acebfc34e21b",
     "clientDataSetId": 12345,
     "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
     "metadata": [
@@ -12,7 +12,7 @@
     ]
   },
   "addPieces": {
-    "signature": "0x1f09427806dc1e4c073a9fd7345fdd1919973abe3f3021594964134887c964d82e7b242019c79b21a8fa40331d14b59219b431846e4cdc08adb2e9470e7273161c",
+    "signature": "0x27e3a89a2b33f19c04986d9b3d705bd9312c1a0be123b1646aacc5bba46246e07de6cad74cfb4755d97bbb1aeb64bd8adb2f0f1d85afdf7b51feae7f184dd6131b",
     "clientDataSetId": 12345,
     "nonce": 1,
     "pieceCidBytes": [
@@ -25,7 +25,7 @@
     ]
   },
   "schedulePieceRemovals": {
-    "signature": "0xcb8e645f2894fde89de54d4a54eb1e0d9871901c6fa1c2ee8a0390dc3a29e6cb2244d0561e3eca6452fa59efaab3d4b18a0b5b59ab52e233b3469422556ae9c61c",
+    "signature": "0x16df3928604421914122d3ad071558e6e704b9d28bd38bdf93b02ca8760497351981d111edc0d7a470213e8cf235a72c2ae4dd8dc426a144b2b9fdd4a4035f091c",
     "clientDataSetId": 12345,
     "pieceIds": [
       1,
@@ -34,7 +34,7 @@
     ]
   },
   "deleteDataSet": {
-    "signature": "0x94e366bd2f9bfc933a87575126715bccf128b77d9c6937e194023e13b54272eb7a74b7e6e26acf4341d9c56e141ff7ba154c37ea03e9c35b126fff1efe1a0c831c",
-    "clientDataSetId": 12345
+    "signature": "0x052f7cfbc1a6b34ee786e619f97817f095a003910f089b992365226039b05dca36280f4ccc198e9c8fd5131f6dc234cd6abb8f16dbbce59736c871cc7e988c881b",
+    "dataSetId": 12345
   }
 }

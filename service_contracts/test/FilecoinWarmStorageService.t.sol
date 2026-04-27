@@ -85,8 +85,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
-    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 clientDataSetId)");
-
     // Expected lockup amounts for CDN rails
     uint256 defaultCDNLockup;
     uint256 defaultCacheMissLockup;
