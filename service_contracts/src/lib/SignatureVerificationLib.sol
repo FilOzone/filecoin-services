@@ -14,18 +14,18 @@ library SignatureVerificationLib {
     // EIP-712 Type hashes
     // ============================================================================
 
-    bytes32 private constant METADATA_ENTRY_TYPEHASH = keccak256("MetadataEntry(string key,string value)");
+    bytes32 internal constant METADATA_ENTRY_TYPEHASH = keccak256("MetadataEntry(string key,string value)");
 
-    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
+    bytes32 internal constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
     );
 
-    bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
+    bytes32 internal constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant PIECE_METADATA_TYPEHASH =
+    bytes32 internal constant PIECE_METADATA_TYPEHASH =
         keccak256("PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)");
 
-    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+    bytes32 internal constant ADD_PIECES_TYPEHASH = keccak256(
         "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
         "Cid(bytes data)" "MetadataEntry(string key,string value)"
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
