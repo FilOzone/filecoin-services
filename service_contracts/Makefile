@@ -8,7 +8,7 @@ CHALLENGE_FINALITY ?=
 
 # Default target
 .PHONY: default
-default: build test
+default: build
 
 # All target including installation
 .PHONY: all
