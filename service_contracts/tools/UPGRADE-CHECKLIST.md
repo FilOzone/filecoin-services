@@ -49,7 +49,7 @@ Keep this table current as values become known.
 - Use the release issue as the rollout source of truth. Keep the schedule, Run Log, tx links, and post-upgrade evidence current.
 - Generate owner-action calldata with `CALLDATA_ONLY=true` and submit it through Safe Transaction Builder.
 - In Safe Transaction Builder, use the script output exactly: target is the printed FWSS proxy, value is `0`, and data is the printed calldata.
-- Do not announce Mainnet until Calibnet execute, on-chain checks, explorer checks, and smoke/E2E checks are complete.
+- Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, and smoke/E2E checks are complete.
 - Do not merge `service_contracts/deployments.json` until live proxy implementation slots match the new implementation addresses.
 - If an `AFTER_EPOCH` changes, submit a new `announcePlannedUpgrade()` transaction and record that it supersedes the previous announcement.
 
