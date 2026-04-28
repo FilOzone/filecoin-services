@@ -74,11 +74,10 @@ service_contracts/
 
 ## 🌐 Deployed Contracts
 
-### Calibnet (Testnet)
-- Contract Addresses listed in: https://github.com/FilOzone/filecoin-services/releases/tag/v1.0.0 
+Contract addresses for all supported networks are maintained in [service_contracts/deployments.json](./service_contracts/deployments.json), which is updated automatically as new deployments are published.
 
-### Mainnet
-- Contract Addresses listed in: https://github.com/FilOzone/filecoin-services/releases/tag/v1.0.0 
+- Mainnet: chain ID `314`
+- Calibnet (testnet): chain ID `314159`
 
 ## 🔧 Development
 
@@ -149,4 +148,5 @@ See [service_contracts/CONTRIBUTING.md](./service_contracts/CONTRIBUTING.md) for
 6. Submit a pull request
 
 ## 📄 License
-Dual-licensed under [MIT](https://github.com/filecoin-project/lotus/blob/master/LICENSE-MIT) + [Apache 2.0](https://github.com/filecoin-project/lotus/blob/master/LICENSE-APACHE)
+Dual-licensed under [MIT](https://github.com/FilOzone/filecoin-services/blob/main/LICENSE.md) + [Apache 2.0](https://github.com/FilOzone/filecoin-services/blob/main/LICENSE.md)
+
