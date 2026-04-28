@@ -230,4 +230,64 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotActive.selector, uint64(SECTOR_ID)));
         poRepDeal.sectorRecovered(SECTOR_ID, DEADLINE, PARTITION);
     }
+
+    // -------------------------------------------------------------------------
+    // authenticateDeal authorization tests
+    // -------------------------------------------------------------------------
+
+    function testUpdateLockupsPayeeReceiverUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, address(payee)));
+        vm.prank(address(payee));
+        service.updateLockups(dealNonce, railId, 0, 0);
+    }
+
+    function testTerminatePayeeReceiverUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, address(payee)));
+        vm.prank(address(payee));
+        service.terminate(dealNonce, railId, uint64(0), address(0));
+    }
+
+    // The receiver is deployed via CREATE2, so its nonce slot (dealNonce-1) does NOT map to
+    // address(payee) under CREATE address derivation. These tests catch a regression where
+    // the receiver is changed from CREATE2 to CREATE, which would let the owner authenticate
+    // as a deal and manipulate rails.
+    function testUpdateLockupsReceiverNonceUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        uint64 receiverNonce = dealNonce - 1;
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, address(payee)));
+        vm.prank(address(payee));
+        service.updateLockups(receiverNonce, railId, 0, 0);
+    }
+
+    function testTerminateReceiverNonceUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        uint64 receiverNonce = dealNonce - 1;
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, address(payee)));
+        vm.prank(address(payee));
+        service.terminate(receiverNonce, railId, uint64(0), address(0));
+    }
+
+    function testUpdateLockupsStrangerUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        address stranger = makeAddr("stranger");
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        service.updateLockups(dealNonce, railId, 0, 0);
+    }
+
+    function testTerminateStrangerUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        address stranger = makeAddr("stranger");
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        service.terminate(dealNonce, railId, uint64(0), address(0));
+    }
 }
