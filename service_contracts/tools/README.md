@@ -3,6 +3,8 @@
 This directory contains scripts for deploying, upgrading, and operating the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
 > **For the self-contained FWSS upgrade runbook and release issue template**, see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
+>
+> **For syncing a new PDPVerifier release** (bumping the submodule, ABI, and recorded address), see [PDP-VERIFIER-SYNC.md](./PDP-VERIFIER-SYNC.md).
 
 ## Scripts Overview
 
@@ -58,6 +60,7 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 |--------|-------------|
 | `session-key-registry-deploy.sh` | Deploy SessionKeyRegistry |
 | `provider-id-set-deploy.sh` | Deploy ProviderIdSet |
+| `check_deployments_checksums.sh` | Validate EIP-55 checksum casing for every address in `deployments.json`. Run by the `check-deployments` CI job. |
 
 ### GitHub Workflows
 
