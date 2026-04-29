@@ -8,13 +8,11 @@
 set -euo pipefail
 
 JSON_PATH="${1:-service_contracts/deployments.json}"
-ZERO="0x0000000000000000000000000000000000000000"
 FAIL=0
 N=0
 
 while IFS=$'\t' read -r path value; do
     [[ "$value" =~ ^0x[0-9a-fA-F]{40}$ ]] || continue
-    [ "${value,,}" = "$ZERO" ] && continue
     N=$((N + 1))
     expected=$(cast to-check-sum-address "$value")
     if [ "$expected" != "$value" ]; then
