@@ -59,6 +59,7 @@ contract PoRepDeal {
     error SectorNotFailed(uint64 sectorId);
     error SectorNotFaulty(uint64 sectorId);
     error SectorNotActive(uint64 sectorId);
+    error SectorNotDead(uint64 sectorId);
 
     constructor(
         address service,
@@ -203,7 +204,10 @@ contract PoRepDeal {
     function sectorExpired(uint64 sectorId, int64 deadline, int64 partition, address recipient) external {
         require(block.number < info.endEpoch, DealExpired());
         require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
-        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, deadline, partition));
+        require(
+            FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, deadline, partition),
+            SectorNotDead(sectorId)
+        );
 
         // this is unrecoverable, so terminate
         info.endEpoch = uint64(block.number);

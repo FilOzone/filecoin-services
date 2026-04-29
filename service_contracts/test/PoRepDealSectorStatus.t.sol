@@ -8,7 +8,7 @@ import {PoRepPayee, PoRepService, Unauthorized} from "../src/PoRepService.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {PieceChange, SectorChanges, SectorContentChangedParams} from "@fvm-solidity/FVMSectorContentChanged.sol";
-import {FVMSector, SectorStatus} from "@fvm-solidity/FVMSector.sol";
+import {FVMSector, NO_DEADLINE, NO_PARTITION, SectorStatus} from "@fvm-solidity/FVMSector.sol";
 import {USR_NOT_FOUND} from "@fvm-solidity/FVMErrors.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -110,7 +110,7 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         vm.roll(vm.getBlockNumber() + FAULT_MAX_AGE);
 
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
+        poRepDeal.sectorExpired(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
 
         assertEq(RECIPIENT.balance, FAULT_MAX_AGE * SIZE * INSURANCE_BIPS * 199 / 200);
 
@@ -167,7 +167,7 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         assertEq(balanceBefore, 3 * DAYS_OF_EPOCHS * SIZE * INSURANCE_BIPS * 199 / 400);
 
         miner.mockSectorStatus(SECTOR_ID, SectorStatus.Dead);
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
+        poRepDeal.sectorExpired(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
 
         assertEq(RECIPIENT.balance, balanceBefore * 2);
 
@@ -176,11 +176,16 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         assertRailFinalized();
     }
 
-    function testSectorExpiredRevertsIfStillActive() public {
+    function testSectorExpiredRevertsNotYetCompacted() public {
         vm.expectRevert(
             abi.encodeWithSelector(FVMSector.ValidateSectorStatusFailed.selector, int256(int32(USR_NOT_FOUND)))
         );
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
+        poRepDeal.sectorExpired(SECTOR_ID, NO_DEADLINE, NO_PARTITION, RECIPIENT);
+    }
+
+    function testSectorExpiredRevertsIfStillActive() public {
+        vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotDead.selector, SECTOR_ID));
+        poRepDeal.sectorExpired(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
     }
 
     function testSectorFaultyRevertsIfStillActive() public {
@@ -191,12 +196,12 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
     function testSectorExpiredAfterDealEnd() public {
         vm.roll(endEpoch);
         vm.expectRevert(PoRepDeal.DealExpired.selector);
-        poRepDeal.sectorExpired(SECTOR_ID, RECIPIENT);
+        poRepDeal.sectorExpired(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
     }
 
     function testSectorExpiredNotInDeal() public {
         vm.expectRevert(abi.encodeWithSelector(PoRepDeal.SectorNotInDeal.selector, uint64(99)));
-        poRepDeal.sectorExpired(99, RECIPIENT);
+        poRepDeal.sectorExpired(99, DEADLINE, PARTITION, RECIPIENT);
     }
 
     function testSectorFaultyAfterDealEnd() public {
