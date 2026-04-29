@@ -95,7 +95,6 @@ jobs:
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: v1.3.5
-
       - name: Install jq
         run: sudo apt-get install -y jq
       - name: Validate EIP-55 checksums in deployments.json
