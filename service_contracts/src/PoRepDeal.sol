@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
-import {FVMSector, SectorStatus, NO_DEADLINE, NO_PARTITION} from "@fvm-solidity/FVMSector.sol";
+import {FVMSector, SectorStatus} from "@fvm-solidity/FVMSector.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 interface IPoRepService {
@@ -199,10 +199,11 @@ contract PoRepDeal {
         }
     }
 
-    function sectorExpired(uint64 sectorId, address recipient) external {
+    // Pass NO_DEADLINE and NO_PARTITION once the sector has been compacted via CompactPartitions.
+    function sectorExpired(uint64 sectorId, int64 deadline, int64 partition, address recipient) external {
         require(block.number < info.endEpoch, DealExpired());
         require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
-        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, NO_DEADLINE, NO_PARTITION));
+        require(FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Dead, deadline, partition));
 
         // this is unrecoverable, so terminate
         info.endEpoch = uint64(block.number);
