@@ -1,0 +1,37 @@
+name: Gas Snapshot
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  gas-snapshot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+
+      - name: Delete gas snapshot
+        run: rm -f service_contracts/.gas-snapshot
+
+      - name: Regenerate gas snapshot
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          make -C service_contracts test
+
+      - name: Check for uncommitted changes
+        run: |
+          git add service_contracts/.gas-snapshot
+          git diff --cached --exit-code service_contracts/.gas-snapshot || {
+            echo "Gas snapshot is out of date. Run 'make test' locally and commit the updated .gas-snapshot file."
+            exit 1
+          }

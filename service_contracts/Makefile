@@ -80,6 +80,7 @@ check-tools:
 .PHONY: test
 test:
 	forge test --via-ir -vv
+	@forge snapshot --no-match-test "Fuzz"
 
 # Clean build artifacts
 .PHONY: clean
