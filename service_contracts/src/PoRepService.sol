@@ -6,7 +6,6 @@ import {FVMAddress} from "@fvm-solidity/FVMAddress.sol";
 import {CBOR_CODEC} from "@fvm-solidity/FVMCodec.sol";
 import {SECTOR_CONTENT_CHANGED} from "@fvm-solidity/FVMMethod.sol";
 import {
-    CalldataSlice,
     FVMSectorContentChanged,
     PieceChangeIter,
     SectorChangesHeader,
