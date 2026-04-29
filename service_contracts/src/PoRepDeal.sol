@@ -181,25 +181,6 @@ contract PoRepDeal {
         }
     }
 
-    function onBadSector(uint256 sectorId, address recipient) internal {
-        sectors[sectorId].failed = 1;
-        if (info.faultedSectorCount == 0) {
-            amortizeHealthy();
-            info.faultedSectorCount = 1;
-            payoutBounty(recipient, getInsuranceFunds() / 2);
-        } else {
-            info.faultedSectorCount++;
-        }
-    }
-
-    function onSectorRecovered(uint256 sectorId) internal {
-        sectors[sectorId].failed = 0;
-
-        if (--info.faultedSectorCount == 0) {
-            info.settledEpoch = uint64(block.number);
-        }
-    }
-
     // Pass NO_DEADLINE and NO_PARTITION once the sector has been compacted via CompactPartitions.
     function sectorExpired(uint64 sectorId, int64 deadline, int64 partition, address recipient) external {
         require(block.number < info.endEpoch, DealExpired());
@@ -217,26 +198,40 @@ contract PoRepDeal {
 
     function sectorFaulty(uint64 sectorId, int64 deadline, int64 partition, address recipient) external {
         require(block.number < info.endEpoch, DealExpired());
-        require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
-        require(sectors[sectorId].failed == 0, SectorAlreadyFailed(sectorId));
+
+        SectorInfo storage sectorInfo = sectors[sectorId];
+        require(sectorInfo.dealSize > 0, SectorNotInDeal(sectorId));
+        require(sectorInfo.failed == 0, SectorAlreadyFailed(sectorId));
         require(
             FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Faulty, deadline, partition),
             SectorNotFaulty(sectorId)
         );
 
-        onBadSector(sectorId, recipient);
+        sectorInfo.failed = 1;
+        if (info.faultedSectorCount == 0) {
+            amortizeHealthy();
+            info.faultedSectorCount = 1;
+            payoutBounty(recipient, getInsuranceFunds() / 2);
+        } else {
+            info.faultedSectorCount++;
+        }
     }
 
     // SPs should call this after DeclareFaultsRecovered and a successful Window PoSt
     function sectorRecovered(uint64 sectorId, int64 deadline, int64 partition) external {
-        require(sectors[sectorId].failed == 1, SectorNotFailed(sectorId));
-        require(sectors[sectorId].dealSize > 0, SectorNotInDeal(sectorId));
+        SectorInfo storage sectorInfo = sectors[sectorId];
+        require(sectorInfo.failed == 1, SectorNotFailed(sectorId));
+        require(sectorInfo.dealSize > 0, SectorNotInDeal(sectorId));
         require(
             FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Active, deadline, partition),
             SectorNotActive(sectorId)
         );
 
-        onSectorRecovered(sectorId);
+        sectorInfo.failed = 0;
+
+        if (--info.faultedSectorCount == 0) {
+            info.settledEpoch = uint64(block.number);
+        }
     }
 
     function terminate(address recipient, uint64 provider, address receiver) internal {
