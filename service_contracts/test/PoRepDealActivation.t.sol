@@ -149,6 +149,12 @@ contract PoRepDealActivationTest is MockFVMTest {
         deal.pieceAdded(MINER_ID, COMMP_DIGEST_1, 1, endEpoch - 1, SIZE_32GB);
     }
 
+    function testPieceAddedOnlyService() public {
+        (PoRepDeal deal, uint64 endEpoch) = _createDeal();
+        vm.expectRevert(PoRepDeal.Unauthorized.selector);
+        deal.pieceAdded(MINER_ID, COMMP_DIGEST_1, 1, endEpoch, SIZE_32GB);
+    }
+
     function testPieceAddedUnauthorized() public {
         (PoRepDeal deal, uint64 endEpoch) = _createDeal();
         vm.prank(address(service));

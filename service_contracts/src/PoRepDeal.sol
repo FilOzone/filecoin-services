@@ -220,8 +220,8 @@ contract PoRepDeal {
     // SPs should call this after DeclareFaultsRecovered and a successful Window PoSt
     function sectorRecovered(uint64 sectorId, int64 deadline, int64 partition) external {
         SectorInfo storage sectorInfo = sectors[sectorId];
+        // a sector cannot have been marked faulty unless it is already in the deal
         require(sectorInfo.failed == 1, SectorNotFailed(sectorId));
-        require(sectorInfo.dealSize > 0, SectorNotInDeal(sectorId));
         require(
             FVMSector.validateSectorStatus(PROVIDER, sectorId, SectorStatus.Active, deadline, partition),
             SectorNotActive(sectorId)

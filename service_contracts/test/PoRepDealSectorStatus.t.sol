@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "@fws-payments/Errors.sol";
 import {PoRepDeal} from "../src/PoRepDeal.sol";
-import {PoRepPayee, PoRepService, Unauthorized} from "../src/PoRepService.sol";
+import {PoRepPayee, PoRepService, TerminationForbidden, Unauthorized} from "../src/PoRepService.sol";
 import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {PieceChange, SectorChanges, SectorContentChangedParams} from "@fvm-solidity/FVMSectorContentChanged.sol";
@@ -29,6 +29,9 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
 
     bytes constant COMMP_CID_1 = hex"0181e203922020cdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36";
     bytes32 constant COMMP_DIGEST_1 = 0xcdf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36;
+    bytes constant COMMP_CID_2 = hex"0181e203922020adf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36";
+    bytes32 constant COMMP_DIGEST_2 = 0xadf33e17483f8397390b0a963ded6e34a18f2fce6daa671716057f905f645b36;
+    uint64 constant SECTOR_ID_2 = 2;
 
     FilecoinPayV1 payments;
     PoRepService service;
@@ -151,6 +154,65 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
 
         (uint256 paid,,,) = payments.accounts(NATIVE_TOKEN, address(payee));
         assertEq(paid, paidEpochs * SIZE * RATE * 199 / 200 * (10000 - INSURANCE_BIPS) / 10000);
+        assertRailFinalized();
+    }
+
+    function testBothSectorsRecovered() public {
+        // Extend approval and deposit to cover two sectors
+        vm.prank(client);
+        payments.setOperatorApproval(
+            NATIVE_TOKEN,
+            address(service),
+            true,
+            uint256(2 * SIZE) * RATE,
+            uint256(2 * SIZE) * RATE * DURATION,
+            DURATION
+        );
+        vm.prank(client);
+        payments.deposit{value: uint256(SIZE) * RATE * DURATION}(NATIVE_TOKEN, client, uint256(SIZE) * RATE * DURATION);
+
+        // Authorize and activate second piece in a second sector
+        bytes32[] memory cidHashes = new bytes32[](1);
+        cidHashes[0] = COMMP_DIGEST_2;
+        vm.prank(client);
+        poRepDeal.addPieces(cidHashes);
+
+        uint64 nonce = _findDealNonce(address(service), address(poRepDeal));
+        miner.mockSector(SECTOR_ID_2, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
+        PieceChange[] memory pieces = new PieceChange[](1);
+        pieces[0] = PieceChange({data: COMMP_CID_2, size: SIZE, payload: abi.encodePacked(nonce)});
+        SectorChanges[] memory sectorChanges = new SectorChanges[](1);
+        sectorChanges[0] = SectorChanges({sector: SECTOR_ID_2, minimumCommitmentEpoch: int64(endEpoch), added: pieces});
+        miner.callSectorContentChanged(address(service), SectorContentChangedParams({sectors: sectorChanges}));
+
+        vm.roll(vm.getBlockNumber() + 3 * DAYS_OF_EPOCHS);
+
+        // First fault pays bounty; second does not
+        miner.mockSectorStatus(SECTOR_ID, SectorStatus.Faulty);
+        poRepDeal.sectorFaulty(SECTOR_ID, DEADLINE, PARTITION, RECIPIENT);
+        uint256 bounty = RECIPIENT.balance;
+        assertGt(bounty, 0);
+
+        miner.mockSectorStatus(SECTOR_ID_2, SectorStatus.Faulty);
+        poRepDeal.sectorFaulty(SECTOR_ID_2, DEADLINE, PARTITION, RECIPIENT);
+        assertEq(RECIPIENT.balance, bounty);
+
+        vm.roll(vm.getBlockNumber() + FAULT_MAX_AGE / 2);
+
+        // First recovery leaves the deal faulted
+        miner.mockSector(SECTOR_ID, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
+        poRepDeal.sectorRecovered(SECTOR_ID, DEADLINE, PARTITION);
+        (,, uint32 faultedCount,) = poRepDeal.info();
+        assertEq(faultedCount, 1);
+
+        // Second recovery fully restores the deal
+        miner.mockSector(SECTOR_ID_2, SectorStatus.Active, DEADLINE, PARTITION, endEpoch);
+        poRepDeal.sectorRecovered(SECTOR_ID_2, DEADLINE, PARTITION);
+        (,, faultedCount,) = poRepDeal.info();
+        assertEq(faultedCount, 0);
+
+        vm.roll(endEpoch + 1);
+        payee.sudo(payable(address(poRepDeal)), abi.encodeWithSelector(PoRepDeal.sweep.selector, SWEEPER));
         assertRailFinalized();
     }
 
@@ -294,5 +356,28 @@ contract PoRepDealSectorStatusTest is MockFVMTest {
         vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, stranger));
         vm.prank(stranger);
         service.terminate(dealNonce, railId, uint64(0), address(0));
+    }
+
+    function testSweepUnauthorized() public {
+        vm.roll(endEpoch + 1);
+        address stranger = makeAddr("stranger");
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, stranger));
+        vm.prank(stranger);
+        poRepDeal.sweep(stranger);
+    }
+
+    function testTerminateClientUnauthorized() public {
+        uint64 dealNonce = _findDealNonce(address(service), address(poRepDeal));
+        uint256 railId = poRepDeal.RAIL_ID();
+        vm.expectRevert(abi.encodeWithSelector(Unauthorized.selector, client));
+        vm.prank(client);
+        service.terminate(dealNonce, railId, uint64(0), address(0));
+    }
+
+    function testClientCannotDirectlyTerminateRail() public {
+        uint256 railId = poRepDeal.RAIL_ID();
+        vm.expectRevert(TerminationForbidden.selector);
+        vm.prank(client);
+        payments.terminateRail(railId);
     }
 }

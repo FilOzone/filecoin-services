@@ -21,6 +21,7 @@ import {LibClone} from "@solady/utils/LibClone.sol";
 import {IPoRepService, PoRepDeal} from "./PoRepDeal.sol";
 
 error Unauthorized(address caller);
+error TerminationForbidden();
 
 contract PoRepPayee {
     using FVMActor for address;
@@ -192,7 +193,7 @@ contract PoRepService is IPoRepService, IValidator {
     }
 
     function railTerminated(uint256, address terminator, uint256 /*endEpoch*/ ) external view {
-        require(msg.sender == address(PAYMENTS));
-        require(terminator == address(this));
+        // require(msg.sender == address(PAYMENTS));
+        require(terminator == address(this), TerminationForbidden());
     }
 }
