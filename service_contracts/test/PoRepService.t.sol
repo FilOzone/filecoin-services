@@ -8,6 +8,14 @@ import {FVMMinerActor} from "@fvm-solidity/mocks/FVMMinerActor.sol";
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
+contract RevertingTarget {
+    error TargetError(uint256 value);
+
+    function run() external pure {
+        revert TargetError(42);
+    }
+}
+
 contract PoRepPayeeTest is MockFVMTest {
     using FVMActor for address;
 
@@ -51,6 +59,13 @@ contract PoRepPayeeTest is MockFVMTest {
         assertEq(notOwner.balance, 0);
         payee.sudo{value: 1}(notOwner, bytes(""));
         assertEq(notOwner.balance, 1);
+    }
+
+    function testSudoForwardsInnerRevert() public {
+        RevertingTarget target = new RevertingTarget();
+        bytes memory innerRevertData = abi.encodeWithSelector(RevertingTarget.TargetError.selector, uint256(42));
+        vm.expectRevert(abi.encode(innerRevertData));
+        payee.sudo(payable(address(target)), abi.encodeCall(RevertingTarget.run, ()));
     }
 }
 
