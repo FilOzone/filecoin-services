@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -52,7 +52,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 
@@ -83,3 +83,20 @@ jobs:
             exit 1
           fi
           echo "All ABIs are up to date ✓"
+
+  check-deployments:
+    name: Check deployments.json Checksums
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.3.5
+      - name: Install jq
+        run: sudo apt-get install -y jq
+      - name: Validate EIP-55 checksums in deployments.json
+        run: |
+          bash service_contracts/tools/check_deployments_checksums.sh service_contracts/deployments.json
