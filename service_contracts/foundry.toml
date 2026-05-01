@@ -9,6 +9,9 @@ solc = "0.8.30"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+# deterministic compilation output
+cbor_metadata = false
+bytecode_hash = "none"
 
 ignored_error_codes = [
     2394, # don't need to clear tstore
