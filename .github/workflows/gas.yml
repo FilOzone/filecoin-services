@@ -28,6 +28,14 @@ jobs:
           export PATH="/home/runner/.config/.foundry/bin:$PATH"
           make -C service_contracts test
 
+      - name: Dump submodules
+        run: |
+          git submodule foreach --recursive '
+            depth=$(echo "$displaypath" | tr -cd "/" | wc -c)
+            indent=$(printf "  %.0s" $(seq 1 $depth))
+            printf "%s%s  →  %s\n" "$indent" "$displaypath" "$sha1"
+          '
+
       - name: Check for uncommitted changes
         run: |
           git add service_contracts/.gas-snapshot
