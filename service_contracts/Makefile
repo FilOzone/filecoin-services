@@ -80,7 +80,7 @@ check-tools:
 .PHONY: test
 test:
 	forge test --via-ir -vv
-	@forge snapshot --isolate --no-match-test "Fuzz"
+	@forge snapshot --isolate --no-match-test "Fuzz" --no-match-contract "MetadataSignatureFixturesTest"
 
 # Clean build artifacts
 .PHONY: clean
