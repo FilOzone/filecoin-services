@@ -5,12 +5,10 @@ pragma solidity ^0.8.20;
 // This file is a generated binding and any changes will be lost.
 // Generated with make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 
+import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
 import {
-    BYTES_PER_LEAF,
-    CHALLENGES_PER_PROOF,
-    NO_PROVING_DEADLINE,
-    FilecoinWarmStorageService
+    CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
 } from "../FilecoinWarmStorageService.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
@@ -66,12 +64,17 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     // --- Public getter functions ---
 
     /**
-     * @notice Get the total size of a data set in bytes
-     * @param leafCount Number of leaves in the data set
-     * @return totalBytes Total size in bytes
+     * @notice Approximate raw (pre-Fr32-expansion) data set size in bytes.
+     * @custom:deprecated Use Cids.leafCountToRawSize directly. Will be removed in a future release.
+     * @dev Overestimates by up to 31 bytes per piece. See leafCountToRawSize in the pdp Cids
+     *      library (lib/pdp/src/Cids.sol) for derivation.
+     * @param leafCount Sum of data-bearing leaves currently recorded in the data set
+     *      (PDPVerifier.getDataSetLeafCount). Decreases only when nextProvingPeriod
+     *      processes scheduled removals.
+     * @return totalBytes Approximate raw byte size
      */
     function getDataSetSizeInBytes(uint256 leafCount) internal pure returns (uint256) {
-        return leafCount * BYTES_PER_LEAF;
+        return Cids.leafCountToRawSize(leafCount);
     }
 
     function clientNonces(FilecoinWarmStorageService service, address payer, uint256 nonce)
