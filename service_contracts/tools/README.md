@@ -180,6 +180,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 
 - `warm-storage-deploy-all.sh` requires:
   - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
+  - Optional: `PDP_USDFC_SYBIL_FEE` - PDPVerifier USDFC sybil fee constructor arg in attoUSDFC; must be > 0. Defaults to `100000000000000000` (0.1 USDFC).
 
 - Upgrade scripts - see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete FWSS upgrade runbook
 
