@@ -1325,7 +1325,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
         // 127/128 ratio: buggy rate is 128/127 = ~1.00787x the correct rate.
-        assertEq(actualRate, (buggyRate * 127) / 128, "ratio between raw and Fr32 rates is exactly 127/128");
+        // Tolerance of 1 covers integer-division truncation differences between the two paths.
+        assertApproxEqAbs(actualRate, (buggyRate * 127) / 128, 1, "ratio between raw and Fr32 rates is 127/128");
     }
 
     function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
@@ -1375,8 +1376,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedRate = pdpServiceWithPayments.calculateRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
         uint256 buggyRate = pdpServiceWithPayments.calculateRatePerEpoch(perPieceLeaves * 32);
         assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
-        assertEq(
-            actualRate, (buggyRate * 127) / 128, "post-removal ratio between raw and Fr32 rates is exactly 127/128"
+        assertApproxEqAbs(
+            actualRate, (buggyRate * 127) / 128, 1, "post-removal ratio between raw and Fr32 rates is 127/128"
         );
     }
 
