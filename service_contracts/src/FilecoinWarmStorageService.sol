@@ -22,7 +22,6 @@ import {Extsload} from "./Extsload.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
-uint256 constant BYTES_PER_LEAF = 32; // Each leaf is 32 bytes
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 
@@ -1299,7 +1298,7 @@ contract FilecoinWarmStorageService is
         // Revert if no payment rail is configured for this data set
         require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
-        uint256 totalBytes = leafCount * BYTES_PER_LEAF;
+        uint256 totalBytes = Cids.leafCountToRawSize(leafCount);
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
         // Update the PDP rail payment rate with the new rate and no one-time payment

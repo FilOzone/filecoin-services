@@ -1290,6 +1290,105 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertGt(rateAfterAdd, initialRate, "Rate should increase immediately after adding piece");
     }
 
+    // Per-byte rate calculation: leafCount is in Fr32-expanded leaves and must be reduced by
+    // the 127/128 expansion ratio before pricing. See FilOzone/filecoin-services#451.
+
+    function testUpdatePaymentRates_PiecesAddedUsesRawSize() public {
+        address payer = makeAddr("rawSizeClient");
+        mockUSDFC.safeTransfer(payer, 100e18);
+        vm.startPrank(payer);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), 100e18);
+        payments.deposit(mockUSDFC, payer, 100e18);
+        vm.stopPrank();
+
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Raw Size Test");
+        bytes memory createData = abi.encode(payer, uint256(7001), dsKeys, dsValues, FAKE_SIGNATURE);
+        makeSignaturePass(payer);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, createData);
+
+        // height=35, padding=0: 1<<30 leaves, well above the floor crossover.
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("raw_size_piece"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(payer);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 1, FAKE_SIGNATURE, new string[](0), new string[](0)
+        );
+
+        uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
+        uint256 expectedRate = pdpServiceWithPayments.calculateRatePerEpoch(Cids.leafCountToRawSize(leafCount));
+        uint256 buggyRate = pdpServiceWithPayments.calculateRatePerEpoch(leafCount * 32);
+
+        assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
+        assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
+        // 127/128 ratio: buggy rate is 128/127 = ~1.00787x the correct rate.
+        // Tolerance of 1 covers integer-division truncation differences between the two paths.
+        assertApproxEqAbs(actualRate, (buggyRate * 127) / 128, 1, "ratio between raw and Fr32 rates is 127/128");
+    }
+
+    function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
+        address payer = makeAddr("rawSizeRemovalClient");
+        mockUSDFC.safeTransfer(payer, 100e18);
+        vm.startPrank(payer);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), 100e18);
+        payments.deposit(mockUSDFC, payer, 100e18);
+        vm.stopPrank();
+
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Removal Raw Size Test");
+        bytes memory createData = abi.encode(payer, uint256(7002), dsKeys, dsValues, FAKE_SIGNATURE);
+        makeSignaturePass(payer);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, createData);
+
+        // Two pieces; we'll remove one and verify nextProvingPeriod recomputes on the remaining.
+        Cids.Cid[] memory pieceData = new Cids.Cid[](2);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("piece_a"));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 35, keccak256("piece_b"));
+        uint256 perPieceLeaves = Cids.leafCount(0, 35);
+
+        makeSignaturePass(payer);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 1, FAKE_SIGNATURE, new string[](0), new string[](0)
+        );
+
+        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + provingPeriod;
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline, 2 * perPieceLeaves, "");
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 1;
+        makeSignaturePass(payer);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        // Advance past the deadline and call nextProvingPeriod with the post-removal leaf count.
+        vm.roll(firstDeadline + 1);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline + provingPeriod, perPieceLeaves, "");
+
+        uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
+        uint256 expectedRate = pdpServiceWithPayments.calculateRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
+        uint256 buggyRate = pdpServiceWithPayments.calculateRatePerEpoch(perPieceLeaves * 32);
+        assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
+        assertApproxEqAbs(
+            actualRate, (buggyRate * 127) / 128, 1, "post-removal ratio between raw and Fr32 rates is 127/128"
+        );
+    }
+
+    function testGetDataSetSizeInBytes_ReturnsRawSize() public view {
+        // Deprecated helper now returns an upper-bound raw size (was previously Fr32-expanded size).
+        assertEq(viewContract.getDataSetSizeInBytes(0), 0);
+        assertEq(viewContract.getDataSetSizeInBytes(4), 127);
+        uint256 leaves1GiB = 1 << 25;
+        assertEq(viewContract.getDataSetSizeInBytes(leaves1GiB), Cids.leafCountToRawSize(leaves1GiB));
+    }
+
     // Operator Approval Validation Tests
     function testOperatorApproval_NotApproved() public {
         // Setup: Client with sufficient funds but no operator approval
