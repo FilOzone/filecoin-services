@@ -34,6 +34,8 @@ library SignatureVerificationLib {
     bytes32 internal constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
+    bytes32 internal constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 dataSetId)");
+
     // ============================================================================
     // Metadata Hashing Functions
     // ============================================================================
@@ -172,6 +174,37 @@ library SignatureVerificationLib {
         return ecrecover(messageHash, v, r, s);
     }
 
+    /**
+     * @notice Recover a signer without reverting for malformed optional signatures.
+     * @param messageHash The signed message hash
+     * @param signature The signature bytes (v, r, s)
+     * @return signer The recovered signer address, or address(0) if invalid
+     */
+    function tryRecoverSigner(bytes32 messageHash, bytes calldata signature) public pure returns (address signer) {
+        if (signature.length != 65) {
+            return address(0);
+        }
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+
+        assembly {
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
+        }
+
+        if (v < 27) {
+            v += 27;
+        }
+        if (v != 27 && v != 28) {
+            return address(0);
+        }
+
+        return ecrecover(messageHash, v, r, s);
+    }
+
     // ============================================================================
     // Signature Verification Functions
     // ============================================================================
@@ -262,5 +295,33 @@ library SignatureVerificationLib {
                 >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
+    }
+
+    /**
+     * @notice Returns the authorized signer for a DeleteDataSet operation, if any.
+     * @dev Deletion auth is optional traceability, so invalid signatures return address(0) instead of reverting.
+     * @param payer The address of the payer who owns the data set
+     * @param signature The signature bytes (v, r, s)
+     * @param digest The EIP-712 digest to verify
+     * @param sessionKeyRegistry The session key registry contract
+     * @return signer The payer or authorized session key signer, or address(0)
+     */
+    function authorizedDeleteDataSetSigner(
+        address payer,
+        bytes calldata signature,
+        bytes32 digest,
+        SessionKeyRegistry sessionKeyRegistry
+    ) public view returns (address signer) {
+        signer = tryRecoverSigner(digest, signature);
+        if (signer == address(0)) {
+            return address(0);
+        }
+        if (payer == signer) {
+            return signer;
+        }
+        if (sessionKeyRegistry.authorizationExpiry(payer, signer, DELETE_DATA_SET_TYPEHASH) >= block.timestamp) {
+            return signer;
+        }
+        return address(0);
     }
 }

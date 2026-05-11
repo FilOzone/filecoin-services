@@ -40,15 +40,10 @@ import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol"
  * Typehashes for operations the FWSS contract implements come from
  * SignatureVerificationLib so any rename in the library will surface here as
  * a fixture mismatch (caught by external_signatures.json + the SDK fixtures).
- * DELETE_DATA_SET_TYPEHASH is declared locally because the FWSS contract
- * doesn't currently implement DeleteDataSet (handler removed in #255); move
- * it into the library when the impl returns.
  */
 contract MetadataSignatureTestContract {
     bytes32 private constant EIP712_DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-
-    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 dataSetId)");
 
     bytes32 private immutable _domainSeparator;
 
@@ -165,7 +160,7 @@ contract MetadataSignatureTestContract {
     }
 
     function getDeleteDataSetDigest(uint256 dataSetId) public view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, dataSetId));
+        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH, dataSetId));
         return _hashTypedData(structHash);
     }
 }

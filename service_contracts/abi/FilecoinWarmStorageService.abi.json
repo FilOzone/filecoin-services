@@ -179,7 +179,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "",
+        "name": "extraData",
         "type": "bytes",
         "internalType": "bytes"
       }
@@ -1110,6 +1110,37 @@
         "type": "string[]",
         "indexed": false,
         "internalType": "string[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DataSetDeleted",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "serviceProvider",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "signer",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
       }
     ],
     "anonymous": false

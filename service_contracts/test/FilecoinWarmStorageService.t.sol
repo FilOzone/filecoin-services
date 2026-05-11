@@ -5156,6 +5156,10 @@ contract SignatureCheckingService {
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
         return SignatureVerificationLib.recoverSigner(messageHash, signature);
     }
+
+    function doTryRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
+        return SignatureVerificationLib.tryRecoverSigner(messageHash, signature);
+    }
 }
 
 contract FilecoinWarmStorageServiceSignatureTest is Test {
@@ -5264,6 +5268,31 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.UnsupportedSignatureV.selector, 25));
         pdpService.doRecoverSigner(messageHash, invalidSignature);
+    }
+
+    function testTryRecoverSignerWithValidSignature() public view {
+        bytes32 messageHash = keccak256(abi.encode(42));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payerPrivateKey, messageHash);
+        bytes memory validSignature = abi.encodePacked(r, s, v);
+
+        address recoveredSigner = pdpService.doTryRecoverSigner(messageHash, validSignature);
+        assertEq(recoveredSigner, payer, "Should recover the correct signer address");
+    }
+
+    function testTryRecoverSignerInvalidLengthReturnsZero() public view {
+        bytes32 messageHash = keccak256(abi.encode(42));
+        bytes memory invalidSignature = abi.encodePacked(bytes32(0), bytes16(0));
+
+        address recoveredSigner = pdpService.doTryRecoverSigner(messageHash, invalidSignature);
+        assertEq(recoveredSigner, address(0), "Should return zero for invalid signature length");
+    }
+
+    function testTryRecoverSignerInvalidValueReturnsZero() public view {
+        bytes32 messageHash = keccak256(abi.encode(42));
+        bytes memory invalidSignature = abi.encodePacked(bytes32(uint256(1)), bytes32(uint256(2)), uint8(25));
+
+        address recoveredSigner = pdpService.doTryRecoverSigner(messageHash, invalidSignature);
+        assertEq(recoveredSigner, address(0), "Should return zero for invalid v value");
     }
 }
 
@@ -6368,6 +6397,103 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
         FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
+    }
+
+    function testDataSetDeleted_EmitsZeroSignerForEmptyExtraData() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
+    }
+
+    function testDataSetDeleted_EmitsClientSignerForValidClientAuth() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+        bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
+
+        makeSignaturePass(client);
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, client);
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
+    }
+
+    function testDataSetDeleted_EmitsSessionKeySignerForValidSessionKeyAuth() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+        bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
+
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH;
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
+
+        makeSignaturePass(sessionKey1);
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, sessionKey1);
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
+    }
+
+    function testDataSetDeleted_EmitsZeroSignerForUnauthorizedSessionKeyAuth() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+        bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
+
+        makeSignaturePass(sessionKey1);
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
+    }
+
+    function testDataSetDeleted_EmitsZeroSignerForUnrelatedSignerAuth() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+        bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
+        address unrelatedSigner = address(0xbad);
+
+        makeSignaturePass(unrelatedSigner);
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
+    }
+
+    function testDataSetDeleted_EmitsZeroSignerForMalformedExtraData() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+
+        vm.expectEmit(true, true, true, true);
+        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, hex"deadbeef");
+    }
+
+    function createTerminatedSettledDataSetForDeletion() internal returns (uint256 dataSetId) {
+        dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+
+        vm.roll(challengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
+
+        FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, railBefore.endEpoch);
     }
 
     /**

@@ -43,6 +43,13 @@ uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
 */
 uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
 
+/*
+* Expected extraData size for optional delete auth.
+* abi.encode(bytes signature) is 160 bytes for a 65-byte signature:
+* 32-byte offset + 32-byte length + 65-byte signature + 31 bytes padding.
+*/
+uint256 constant DELETE_DATA_SET_EXTRA_DATA_SIZE = 160;
+
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -81,6 +88,9 @@ contract FilecoinWarmStorageService is
         address payee,
         string[] metadataKeys,
         string[] metadataValues
+    );
+    event DataSetDeleted(
+        uint256 indexed dataSetId, address indexed payer, address indexed serviceProvider, address signer
     );
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceAdded(
@@ -766,7 +776,7 @@ contract FilecoinWarmStorageService is
     function dataSetDeleted(
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
-        bytes calldata // extraData, - not used
+        bytes calldata extraData
     ) external onlyPDPVerifier {
         // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -795,7 +805,10 @@ contract FilecoinWarmStorageService is
             // Rail is finalized (zeroed out), meaning it was already fully settled
         }
 
-        // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
+        address deletionSigner = authorizedDeleteDataSetSigner(payer, dataSetId, extraData);
+        emit DataSetDeleted(dataSetId, payer, info.serviceProvider, deletionSigner);
+
+        // Keep clientNonces for AddPieces/SchedulePieceRemovals replay protection; deletion does not consume it.
 
         // Remove from client's dataset list
         uint256[] storage clientDataSetList = clientDataSets[payer];
@@ -1635,6 +1648,54 @@ contract FilecoinWarmStorageService is
 
         // Delegate to library for verification
         SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
+    }
+
+    /**
+     * @notice Returns the authorized DeleteDataSet signer from optional PDP extraData.
+     * @dev extraData is expected to be abi.encode(bytes signature). Invalid or unauthorized data is non-fatal.
+     * @param payer The data set payer/client
+     * @param dataSetId The data set being deleted
+     * @param extraData Optional encoded delete signature
+     * @return signer The payer or authorized session key signer, or address(0)
+     */
+    function authorizedDeleteDataSetSigner(address payer, uint256 dataSetId, bytes calldata extraData)
+        internal
+        view
+        returns (address signer)
+    {
+        bytes calldata signature = decodeDeleteDataSetSignature(extraData);
+        if (signature.length == 0) {
+            return address(0);
+        }
+
+        bytes32 digest =
+            _hashTypedDataV4(keccak256(abi.encode(SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH, dataSetId)));
+
+        return SignatureVerificationLib.authorizedDeleteDataSetSigner(payer, signature, digest, sessionKeyRegistry);
+    }
+
+    /**
+     * @notice Decodes delete extraData without reverting on malformed optional data.
+     * @param extraData Optional delete data from PDPVerifier
+     * @return signature The calldata slice containing a 65-byte signature, or an empty slice if malformed
+     */
+    function decodeDeleteDataSetSignature(bytes calldata extraData) internal pure returns (bytes calldata signature) {
+        if (extraData.length != DELETE_DATA_SET_EXTRA_DATA_SIZE) {
+            return extraData[:0];
+        }
+
+        uint256 offset;
+        uint256 signatureLength;
+        assembly ("memory-safe") {
+            offset := calldataload(extraData.offset)
+            signatureLength := calldataload(add(extraData.offset, 32))
+        }
+
+        if (offset != 32 || signatureLength != 65) {
+            return extraData[:0];
+        }
+
+        return extraData[64:129];
     }
 
     /**
