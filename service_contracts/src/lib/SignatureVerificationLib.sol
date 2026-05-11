@@ -145,7 +145,7 @@ library SignatureVerificationLib {
     /**
      * @notice Recover the signer address from a signature
      * @param messageHash The signed message hash
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      * @return The address that signed the message
      */
     function recoverSigner(bytes32 messageHash, bytes calldata signature) public pure returns (address) {
@@ -177,7 +177,7 @@ library SignatureVerificationLib {
     /**
      * @notice Recover a signer without reverting for malformed optional signatures.
      * @param messageHash The signed message hash
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      * @return signer The recovered signer address, or address(0) if invalid
      */
     function tryRecoverSigner(bytes32 messageHash, bytes calldata signature) public pure returns (address signer) {
@@ -242,7 +242,7 @@ library SignatureVerificationLib {
      * @notice Verifies a signature for the AddPieces operation
      * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
      * @param payer The address of the payer who should have signed the message
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
      */
@@ -271,7 +271,7 @@ library SignatureVerificationLib {
      * @notice Verifies a signature for the SchedulePieceRemovals operation
      * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
      * @param payer The address of the payer who should have signed the message
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
      */
@@ -301,7 +301,7 @@ library SignatureVerificationLib {
      * @notice Returns the authorized signer for a DeleteDataSet operation, if any.
      * @dev Deletion auth is optional traceability, so invalid signatures return address(0) instead of reverting.
      * @param payer The address of the payer who owns the data set
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
      * @return signer The payer or authorized session key signer, or address(0)

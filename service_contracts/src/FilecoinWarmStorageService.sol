@@ -177,7 +177,7 @@ contract FilecoinWarmStorageService is
         string[] metadataKeys;
         // Array of metadata values
         string[] metadataValues;
-        // The signature bytes (v, r, s)
+        // The signature bytes encoded as r || s || v
         bytes signature;
     }
 
@@ -1602,7 +1602,7 @@ contract FilecoinWarmStorageService is
      * @param nonce Client-chosen nonce for replay protection
      * @param allKeys 2D array where allKeys[i] contains metadata keys for piece i
      * @param allValues 2D array where allValues[i] contains metadata values for piece i
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      */
     function verifyAddPiecesSignature(
         address payer,
@@ -1627,7 +1627,7 @@ contract FilecoinWarmStorageService is
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceIds Array of piece IDs to be removed
-     * @param signature The signature bytes (v, r, s)
+     * @param signature The signature bytes encoded as r || s || v
      */
     function verifySchedulePieceRemovalsSignature(
         address payer,
