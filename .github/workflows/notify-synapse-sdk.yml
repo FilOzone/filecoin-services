@@ -1,0 +1,157 @@
+name: Notify Synapse SDK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to send, for example v1.2.3. Defaults to the current ref name when run from a tag.'
+        required: false
+        type: string
+      sha:
+        description: 'Commit SHA to send. Defaults to the commit resolved from the release tag.'
+        required: false
+        type: string
+
+# Required repository secret:
+#   SYNAPSE_SDK_DISPATCH_TOKEN - Token allowed to create repository_dispatch events in FilOzone/synapse-sdk.
+#   Current PAT was created using the FilOzzy account on 2026-05-12.
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    name: Dispatch filecoin-services release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Resolve release ref
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+
+          tag="$REF_NAME"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TAG" ]; then
+            tag="$INPUT_TAG"
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -z "$INPUT_TAG" ] && [ "$REF_TYPE" != "tag" ]; then
+            echo "Error: workflow_dispatch runs must provide a tag unless the workflow is run from a tag ref."
+            exit 1
+          fi
+
+          if [[ "$tag" != v* ]]; then
+            echo "Error: expected a release tag starting with 'v', got '$tag'."
+            exit 1
+          fi
+
+          tag_ref="refs/tags/$tag"
+          sha=""
+          if [ -n "$INPUT_SHA" ]; then
+            sha="$INPUT_SHA"
+          elif git show-ref --verify --quiet "$tag_ref"; then
+            sha="$(git rev-list -n 1 "$tag_ref")"
+          else
+            echo "Error: could not resolve $tag_ref locally. Provide the sha input for manual test dispatches with non-existent tags."
+            exit 1
+          fi
+
+          if [ -z "$sha" ]; then
+            echo "Error: could not resolve the commit SHA to send."
+            exit 1
+          fi
+
+          {
+            echo "tag=$tag"
+            echo "tag_ref=$tag_ref"
+            echo "sha=$sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch synapse-sdk update
+        env:
+          SYNAPSE_SDK_DISPATCH_TOKEN: ${{ secrets.SYNAPSE_SDK_DISPATCH_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          TAG_REF: ${{ steps.release.outputs.tag_ref }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SYNAPSE_SDK_DISPATCH_TOKEN:-}" ]; then
+            echo "Error: SYNAPSE_SDK_DISPATCH_TOKEN is not configured."
+            exit 1
+          fi
+
+          echo "Dispatching filecoin-services-release to FilOzone/synapse-sdk"
+          echo "Tag: $TAG"
+          echo "Tag ref: $TAG_REF"
+          echo "SHA: $SHA"
+
+          payload_file="$RUNNER_TEMP/synapse-sdk-dispatch.json"
+          response_file="$RUNNER_TEMP/synapse-sdk-dispatch-response.json"
+
+          jq -n \
+            --arg event_type "filecoin-services-release" \
+            --arg tag "$TAG" \
+            --arg sha "$SHA" \
+            --arg source_repo "$GITHUB_REPOSITORY" \
+            '{
+              event_type: $event_type,
+              client_payload: {
+                tag: $tag,
+                sha: $sha,
+                source_repo: $source_repo
+              }
+            }' > "$payload_file"
+
+          status_code="$(
+            curl --silent --show-error \
+              --request POST \
+              --url "https://api.github.com/repos/FilOzone/synapse-sdk/dispatches" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Authorization: Bearer $SYNAPSE_SDK_DISPATCH_TOKEN" \
+              --header "Content-Type: application/json" \
+              --header "X-GitHub-Api-Version: 2022-11-28" \
+              --data @"$payload_file" \
+              --output "$response_file" \
+              --write-out "%{http_code}"
+          )"
+
+          if [ "$status_code" != "204" ]; then
+            echo "Error: GitHub repository dispatch failed with HTTP $status_code."
+            if [ -s "$response_file" ]; then
+              cat "$response_file"
+            fi
+            exit 1
+          fi
+
+          echo "FilOzone/synapse-sdk accepted repository_dispatch event filecoin-services-release (204)."
+
+      - name: Summary
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          {
+            echo "## Synapse SDK notification sent"
+            echo ""
+            echo "**Event**: \`filecoin-services-release\`"
+            echo "**Target**: \`FilOzone/synapse-sdk\`"
+            echo "**Tag**: \`$TAG\`"
+            echo "**SHA**: \`$SHA\`"
+          } >> "$GITHUB_STEP_SUMMARY"
