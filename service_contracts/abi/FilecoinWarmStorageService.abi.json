@@ -1965,6 +1965,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidDeleteDataSetExtraData",
+    "inputs": [
+      {
+        "name": "actualSize",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidEpochRange",
     "inputs": [
       {

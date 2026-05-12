@@ -6438,36 +6438,50 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
     }
 
-    function testDataSetDeleted_EmitsZeroSignerForUnauthorizedSessionKeyAuth() public {
+    function testDataSetDeleted_RevertsForUnauthorizedSessionKeyAuth() public {
         uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
         bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
 
         makeSignaturePass(sessionKey1);
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
 
         vm.prank(sp1);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
     }
 
-    function testDataSetDeleted_EmitsZeroSignerForUnrelatedSignerAuth() public {
+    function testDataSetDeleted_RevertsForExpiredSessionKeyAuth() public {
+        uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
+        bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
+
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH;
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
+
+        vm.warp(block.timestamp + 1);
+        makeSignaturePass(sessionKey1);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
+    }
+
+    function testDataSetDeleted_RevertsForUnrelatedSignerAuth() public {
         uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
         bytes memory deleteExtraData = abi.encode(FAKE_SIGNATURE);
         address unrelatedSigner = address(0xbad);
 
         makeSignaturePass(unrelatedSigner);
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, unrelatedSigner));
 
         vm.prank(sp1);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, deleteExtraData);
     }
 
-    function testDataSetDeleted_EmitsZeroSignerForMalformedExtraData() public {
+    function testDataSetDeleted_RevertsForMalformedExtraData() public {
         uint256 dataSetId = createTerminatedSettledDataSetForDeletion();
 
-        vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetDeleted(dataSetId, client, sp1, address(0));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDeleteDataSetExtraData.selector, 4));
 
         vm.prank(sp1);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, hex"deadbeef");

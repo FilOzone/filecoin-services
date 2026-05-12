@@ -99,6 +99,10 @@ library Errors {
     /// @notice Extra data is required but was not provided
     error ExtraDataRequired();
 
+    /// @notice Delete authorization extraData is malformed
+    /// @param actualSize The length of the provided extraData
+    error InvalidDeleteDataSetExtraData(uint256 actualSize);
+
     /// @notice Data set is not registered with the payment system
     /// @param dataSetId The ID of the data set
     error DataSetNotRegistered(uint256 dataSetId);

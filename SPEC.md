@@ -177,9 +177,9 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset
 
-**Optional delete authorization**: `deleteDataSet()` may pass `abi.encode(bytes signature)` as PDP `extraData`, where the signature is over `DeleteDataSet(uint256 dataSetId)`. FWSS treats this as attribution only: if the signer is the payer or an authorized `DeleteDataSet` session key, `DataSetDeleted` emits that signer; otherwise it emits `address(0)` and deletion continues.
+**Optional delete authorization**: `deleteDataSet()` may pass `abi.encode(bytes signature)` as PDP `extraData`, where the signature is over `DeleteDataSet(uint256 dataSetId)`. Empty `extraData` emits `DataSetDeleted(..., address(0))` and deletion continues. Non-empty `extraData` must be well-formed and signed by the payer or an authorized `DeleteDataSet` session key; otherwise deletion reverts.
 
-**State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
+**State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces` is **not** cleared; it still protects AddPieces and SchedulePieceRemovals signatures, while deletion auth has no nonce.
 
 **CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated in the same `terminateService` call that initiates PDP rail termination.
 

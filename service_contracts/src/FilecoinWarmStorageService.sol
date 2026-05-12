@@ -44,7 +44,7 @@ uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
 uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
 
 /*
-* Expected extraData size for optional delete auth.
+* Exact extraData size for optional delete authorization.
 * abi.encode(bytes signature) is 160 bytes for a 65-byte signature:
 * 32-byte offset + 32-byte length + 65-byte signature + 31 bytes padding.
 */
@@ -1652,7 +1652,7 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Returns the authorized DeleteDataSet signer from optional PDP extraData.
-     * @dev extraData is expected to be abi.encode(bytes signature). Invalid or unauthorized data is non-fatal.
+     * @dev Empty extraData means no client authorization. Non-empty extraData must be valid authorization.
      * @param payer The data set payer/client
      * @param dataSetId The data set being deleted
      * @param extraData Optional encoded delete signature
@@ -1663,26 +1663,27 @@ contract FilecoinWarmStorageService is
         view
         returns (address signer)
     {
-        bytes calldata signature = decodeDeleteDataSetSignature(extraData);
-        if (signature.length == 0) {
+        if (extraData.length == 0) {
             return address(0);
         }
 
+        bytes calldata signature = decodeDeleteDataSetSignature(extraData);
         bytes32 digest =
             _hashTypedDataV4(keccak256(abi.encode(SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH, dataSetId)));
 
-        return SignatureVerificationLib.authorizedDeleteDataSetSigner(payer, signature, digest, sessionKeyRegistry);
+        return SignatureVerificationLib.verifyDeleteDataSetSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**
-     * @notice Decodes delete extraData without reverting on malformed optional data.
+     * @notice Decodes delete extraData and returns the contained signature.
+     * @dev Delete extraData is optional, but when present must be abi.encode(bytes signature).
      * @param extraData Optional delete data from PDPVerifier
-     * @return signature The calldata slice containing a 65-byte signature, or an empty slice if malformed
+     * @return signature The calldata slice containing a 65-byte r || s || v signature
      */
     function decodeDeleteDataSetSignature(bytes calldata extraData) internal pure returns (bytes calldata signature) {
-        if (extraData.length != DELETE_DATA_SET_EXTRA_DATA_SIZE) {
-            return extraData[:0];
-        }
+        require(
+            extraData.length == DELETE_DATA_SET_EXTRA_DATA_SIZE, Errors.InvalidDeleteDataSetExtraData(extraData.length)
+        );
 
         uint256 offset;
         uint256 signatureLength;
@@ -1691,9 +1692,7 @@ contract FilecoinWarmStorageService is
             signatureLength := calldataload(add(extraData.offset, 32))
         }
 
-        if (offset != 32 || signatureLength != 65) {
-            return extraData[:0];
-        }
+        require(offset == 32 && signatureLength == 65, Errors.InvalidDeleteDataSetExtraData(extraData.length));
 
         return extraData[64:129];
     }

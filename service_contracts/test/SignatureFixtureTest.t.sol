@@ -160,8 +160,7 @@ contract MetadataSignatureTestContract {
     }
 
     function getDeleteDataSetDigest(uint256 dataSetId) public view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH, dataSetId));
-        return _hashTypedData(structHash);
+        return _hashTypedData(keccak256(abi.encode(SignatureVerificationLib.DELETE_DATA_SET_TYPEHASH, dataSetId)));
     }
 }
 

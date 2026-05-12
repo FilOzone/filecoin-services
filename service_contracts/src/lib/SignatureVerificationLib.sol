@@ -298,30 +298,28 @@ library SignatureVerificationLib {
     }
 
     /**
-     * @notice Returns the authorized signer for a DeleteDataSet operation, if any.
-     * @dev Deletion auth is optional traceability, so invalid signatures return address(0) instead of reverting.
+     * @notice Verifies a signature for the DeleteDataSet operation.
      * @param payer The address of the payer who owns the data set
      * @param signature The signature bytes encoded as r || s || v
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
-     * @return signer The payer or authorized session key signer, or address(0)
+     * @return signer The payer or authorized session key signer
      */
-    function authorizedDeleteDataSetSigner(
+    function verifyDeleteDataSetSignature(
         address payer,
         bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
     ) public view returns (address signer) {
         signer = tryRecoverSigner(digest, signature);
-        if (signer == address(0)) {
-            return address(0);
-        }
         if (payer == signer) {
             return signer;
         }
-        if (sessionKeyRegistry.authorizationExpiry(payer, signer, DELETE_DATA_SET_TYPEHASH) >= block.timestamp) {
-            return signer;
-        }
-        return address(0);
+        require(
+            signer != address(0)
+                && sessionKeyRegistry.authorizationExpiry(payer, signer, DELETE_DATA_SET_TYPEHASH) >= block.timestamp,
+            Errors.InvalidSignature(payer, signer)
+        );
+        return signer;
     }
 }
