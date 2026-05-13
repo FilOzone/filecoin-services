@@ -106,25 +106,6 @@
   },
   {
     "type": "function",
-    "name": "calculateRatePerEpoch",
-    "inputs": [
-      {
-        "name": "totalBytes",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "storageRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "configureProvingPeriod",
     "inputs": [
       {
@@ -302,7 +283,7 @@
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -800,37 +781,6 @@
   },
   {
     "type": "function",
-    "name": "updatePricing",
-    "inputs": [
-      {
-        "name": "newStoragePrice",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "newMinimumRate",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "updateServiceCommission",
-    "inputs": [
-      {
-        "name": "newCommissionBps",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "upgradeToAndCall",
     "inputs": [
       {
@@ -931,43 +881,6 @@
   },
   {
     "type": "event",
-    "name": "CDNPaymentRailsToppedUp",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnAmountAdded",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "totalCdnLockup",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cacheMissAmountAdded",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "totalCacheMissLockup",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "CDNPaymentTerminated",
     "inputs": [
       {
@@ -980,37 +893,6 @@
         "name": "endEpoch",
         "type": "uint256",
         "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cacheMissRailId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnRailId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "CDNServiceTerminated",
-    "inputs": [
-      {
-        "name": "caller",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "indexed": true,
         "internalType": "uint256"
       },
       {
@@ -1311,25 +1193,6 @@
   },
   {
     "type": "event",
-    "name": "PricingUpdated",
-    "inputs": [
-      {
-        "name": "storagePrice",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "minimumRate",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "ProviderApproved",
     "inputs": [
       {
@@ -1349,31 +1212,6 @@
         "name": "providerId",
         "type": "uint256",
         "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "RailRateUpdated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      },
-      {
-        "name": "railId",
-        "type": "uint256",
-        "indexed": false,
-        "internalType": "uint256"
-      },
-      {
-        "name": "newRate",
-        "type": "uint256",
-        "indexed": false,
         "internalType": "uint256"
       }
     ],
@@ -1480,33 +1318,6 @@
   },
   {
     "type": "error",
-    "name": "AtLeastOnePriceMustBeNonZero",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "CDNPaymentAlreadyTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "CacheMissPaymentAlreadyTerminated",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "CallerNotPayer",
     "inputs": [
       {
@@ -1602,27 +1413,6 @@
   },
   {
     "type": "error",
-    "name": "CommissionExceedsMaximum",
-    "inputs": [
-      {
-        "name": "commissionType",
-        "type": "uint8",
-        "internalType": "enum Errors.CommissionType"
-      },
-      {
-        "name": "max",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "actual",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "DataSetNotFoundForRail",
     "inputs": [
       {
@@ -1674,11 +1464,6 @@
         "internalType": "uint256"
       }
     ]
-  },
-  {
-    "type": "error",
-    "name": "DivisionByZero",
-    "inputs": []
   },
   {
     "type": "error",
@@ -1744,115 +1529,6 @@
     "inputs": [
       {
         "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientLockupAllowance",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "lockupAllowance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "lockupUsage",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minimumLockupRequired",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientLockupFunds",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "minimumRequired",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "available",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientMaxLockupPeriod",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "maxLockupPeriod",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "requiredLockupPeriod",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientRateAllowance",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "rateAllowance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "rateUsage",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "minimumRateRequired",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1970,17 +1646,6 @@
     "inputs": [
       {
         "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InvalidTopUpAmount",
-    "inputs": [
-      {
-        "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -2136,22 +1801,6 @@
   },
   {
     "type": "error",
-    "name": "OperatorNotApproved",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "OwnableInvalidOwner",
     "inputs": [
       {
@@ -2183,27 +1832,6 @@
       },
       {
         "name": "pdpEndEpoch",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "PriceExceedsMaximum",
-    "inputs": [
-      {
-        "name": "priceType",
-        "type": "uint8",
-        "internalType": "enum Errors.PriceType"
-      },
-      {
-        "name": "maxAllowed",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "actual",
         "type": "uint256",
         "internalType": "uint256"
       }

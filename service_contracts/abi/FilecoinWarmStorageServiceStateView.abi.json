@@ -12,6 +12,25 @@
   },
   {
     "type": "function",
+    "name": "calculateRatePerEpoch",
+    "inputs": [
+      {
+        "name": "totalBytes",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "storageRate",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "clientDataSets",
     "inputs": [
       {
