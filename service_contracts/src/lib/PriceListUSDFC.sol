@@ -17,6 +17,12 @@ uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 
 uint256 constant MINIMUM_STORAGE_RATE_PER_MONTH = (6 * 10 ** TOKEN_DECIMALS) / 100; // 0.06 USDFC
 uint256 constant MINIMUM_STORAGE_RATE_PER_EPOCH = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
 
+uint256 constant CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
+uint256 constant CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
+
+uint256 constant DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
+uint256 constant DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) / 10; // 0.3 USDFC
+
 /**
  * @notice Calculate a per-epoch rate based on total storage size
  * @param totalBytes Total size of the stored data in bytes

@@ -20,12 +20,15 @@ import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 import {Extsload} from "./Extsload.sol";
 
 import {
+    CACHE_MISS_EGRESS_PRICE_PER_TIB,
+    CDN_EGRESS_PRICE_PER_TIB,
+    DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
+    DEFAULT_CDN_LOCKUP_AMOUNT,
     DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
     MINIMUM_STORAGE_RATE_PER_MONTH,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
-    calculateStorageSizeBasedRatePerEpoch,
-    calculateStorageRate
+    TOKEN_DECIMALS
 } from "./lib/PriceListUSDFC.sol";
 import {CDNPaymentRailsToppedUp, Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
@@ -92,7 +95,6 @@ contract FilecoinWarmStorageService is
         string[] metadataKeys,
         string[] metadataValues
     );
-    event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceAdded(
         uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values
     );
@@ -205,21 +207,6 @@ contract FilecoinWarmStorageService is
 
     // Upgrade sequence number, used by Initializable.reinitializer
     uint64 private immutable REINITIALIZER_VERSION;
-
-    // Pricing constants (CDN egress pricing is immutable)
-    uint256 private immutable CDN_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of CDN egress
-    uint256 private immutable CACHE_MISS_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of cache miss egress
-
-    // Fixed lockup amounts for CDN rails
-    uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
-    uint256 private immutable DEFAULT_CACHE_MISS_LOCKUP_AMOUNT; // 0.3 USDFC
-
-    // Maximum pricing bounds (4x initial values)
-    uint256 private immutable MAX_STORAGE_PRICE_PER_TIB_PER_MONTH; // 10 USDFC (4x 2.5)
-    uint256 private immutable MAX_MINIMUM_STORAGE_RATE_PER_MONTH; // 0.24 USDFC (4x 0.06)
-
-    // Token decimals
-    uint8 private immutable TOKEN_DECIMALS;
 
     // External contract addresses
     address public immutable pdpVerifierAddress;
@@ -349,20 +336,8 @@ contract FilecoinWarmStorageService is
         );
         sessionKeyRegistry = _sessionKeyRegistry;
 
-        // Read token decimals from the USDFC token contract
-        TOKEN_DECIMALS = _usdfc.decimals();
-
-        // Initialize the immutable pricing constants based on the actual token decimals
-        CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
-        CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
-
-        // Initialize maximum pricing bounds (4x initial values)
-        MAX_STORAGE_PRICE_PER_TIB_PER_MONTH = 10 * 10 ** TOKEN_DECIMALS; // 10 USDFC (4x 2.5)
-        MAX_MINIMUM_STORAGE_RATE_PER_MONTH = (24 * 10 ** TOKEN_DECIMALS) / 100; // 0.24 USDFC (4x 0.06)
-
-        // Initialize the lockup constants based on the actual token decimals
-        DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
-        DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) / 10; // 0.3 USDFC
+        // Verify token decimals from the USDFC token contract
+        require(TOKEN_DECIMALS == _usdfc.decimals());
     }
 
     /**
@@ -1204,20 +1179,13 @@ contract FilecoinWarmStorageService is
     }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
+        uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
         // Revert if no payment rail is configured for this data set
-        require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
-
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+        require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         // Update the PDP rail payment rate with the new rate and no one-time payment
-        uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
-        uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
-        payments.modifyRailPayment(
-            pdpRailId,
-            newStorageRatePerEpoch,
-            0 // No one-time payment during rate update
-        );
-        emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
+
+        FilecoinPayV1(paymentsContractAddress).updateStorageRates(dataSetId, pdpRailId, leafCount);
     }
 
     function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal returns (bool hadRemovals) {
@@ -1292,10 +1260,6 @@ contract FilecoinWarmStorageService is
 
     function min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
-    }
-
-    function calculateRatePerEpoch(uint256 totalBytes) external pure returns (uint256 storageRate) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes);
     }
 
     /**

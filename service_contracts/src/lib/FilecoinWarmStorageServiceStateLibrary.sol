@@ -6,6 +6,7 @@ import {Errors} from "../Errors.sol";
 import {
     CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
 } from "../FilecoinWarmStorageService.sol";
+import {calculateStorageSizeBasedRatePerEpoch} from "./PriceListUSDFC.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
@@ -611,5 +612,9 @@ library FilecoinWarmStorageServiceStateLibrary {
             uint256(service.extsload(StorageLayout.STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT)),
             uint256(service.extsload(StorageLayout.MINIMUM_STORAGE_RATE_PER_MONTH_SLOT))
         );
+    }
+
+    function calculateRatePerEpoch(uint256 totalBytes) public pure returns (uint256 storageRate) {
+        return calculateStorageSizeBasedRatePerEpoch(totalBytes);
     }
 }
