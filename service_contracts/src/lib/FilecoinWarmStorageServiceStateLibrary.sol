@@ -6,7 +6,12 @@ import {Errors} from "../Errors.sol";
 import {
     CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
 } from "../FilecoinWarmStorageService.sol";
-import {calculateStorageSizeBasedRatePerEpoch} from "./PriceListUSDFC.sol";
+import {
+    calculateStorageSizeBasedRatePerEpoch,
+    MINIMUM_STORAGE_RATE_PER_MONTH,
+    SERVICE_COMMISSION_BPS,
+    STORAGE_PRICE_PER_TIB_PER_MONTH
+} from "./PriceListUSDFC.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
@@ -268,8 +273,8 @@ library FilecoinWarmStorageServiceStateLibrary {
         initChallengeWindowStart = block.number + maxProvingPeriod - challengeWindowSize;
     }
 
-    function serviceCommissionBps(FilecoinWarmStorageService service) public view returns (uint256) {
-        return uint256(service.extsload(StorageLayout.SERVICE_COMMISSION_BPS_SLOT));
+    function serviceCommissionBps(FilecoinWarmStorageService) public pure returns (uint256) {
+        return SERVICE_COMMISSION_BPS;
     }
 
     /**
@@ -603,15 +608,12 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @return storagePrice Current storage price per TiB per month
      * @return minimumRate Current minimum monthly storage rate
      */
-    function getCurrentPricingRates(FilecoinWarmStorageService service)
+    function getCurrentPricingRates(FilecoinWarmStorageService)
         public
-        view
+        pure
         returns (uint256 storagePrice, uint256 minimumRate)
     {
-        return (
-            uint256(service.extsload(StorageLayout.STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT)),
-            uint256(service.extsload(StorageLayout.MINIMUM_STORAGE_RATE_PER_MONTH_SLOT))
-        );
+        return (STORAGE_PRICE_PER_TIB_PER_MONTH, MINIMUM_STORAGE_RATE_PER_MONTH);
     }
 
     function calculateRatePerEpoch(uint256 totalBytes) public pure returns (uint256 storageRate) {

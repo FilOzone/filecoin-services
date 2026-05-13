@@ -227,7 +227,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // Commission rate
-    uint256 private serviceCommissionBps; // deprecated
+    uint256 private deprecatedServiceCommissionBps;
 
     // Track which proving periods have valid proofs with bitmap
     mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;
@@ -273,8 +273,8 @@ contract FilecoinWarmStorageService is
     PlannedUpgrade private nextUpgrade;
 
     // Pricing rates (mutable for future adjustments)
-    uint256 private storagePricePerTibPerMonth; // deprecated
-    uint256 private minimumStorageRatePerMonth; // deprecated
+    uint256 private deprecatedStoragePricePerTibPerMonth;
+    uint256 private deprecatedMinimumStorageRatePerMonth;
 
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
@@ -1230,10 +1230,10 @@ contract FilecoinWarmStorageService is
      * @return serviceFee Service fee (per TiB per month)
      * @return spPayment SP payment (per TiB per month)
      */
-    function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
+    function getEffectiveRates() external pure returns (uint256 serviceFee, uint256 spPayment) {
         uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
 
-        serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
+        serviceFee = (total * SERVICE_COMMISSION_BPS) / COMMISSION_MAX_BPS;
         spPayment = total - serviceFee;
 
         return (serviceFee, spPayment);

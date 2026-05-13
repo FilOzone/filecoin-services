@@ -7,7 +7,7 @@ pragma solidity ^0.8.20;
 
 bytes32 constant MAX_PROVING_PERIOD_SLOT = bytes32(uint256(0));
 bytes32 constant CHALLENGE_WINDOW_SIZE_SLOT = bytes32(uint256(1));
-bytes32 constant SERVICE_COMMISSION_BPS_SLOT = bytes32(uint256(2));
+bytes32 constant DEPRECATED_SERVICE_COMMISSION_BPS_SLOT = bytes32(uint256(2));
 bytes32 constant PROVEN_PERIODS_SLOT = bytes32(uint256(3));
 bytes32 constant PROVING_ACTIVATION_EPOCH_SLOT = bytes32(uint256(4));
 bytes32 constant PROVING_DEADLINES_SLOT = bytes32(uint256(5));
@@ -25,6 +25,6 @@ bytes32 constant APPROVED_PROVIDER_IDS_SLOT = bytes32(uint256(16));
 bytes32 constant VIEW_CONTRACT_ADDRESS_SLOT = bytes32(uint256(17));
 bytes32 constant FIL_BEAM_CONTROLLER_ADDRESS_SLOT = bytes32(uint256(18));
 bytes32 constant NEXT_UPGRADE_SLOT = bytes32(uint256(19));
-bytes32 constant STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT = bytes32(uint256(20));
-bytes32 constant MINIMUM_STORAGE_RATE_PER_MONTH_SLOT = bytes32(uint256(21));
+bytes32 constant DEPRECATED_STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT = bytes32(uint256(20));
+bytes32 constant DEPRECATED_MINIMUM_STORAGE_RATE_PER_MONTH_SLOT = bytes32(uint256(21));
 bytes32 constant SCHEDULED_PIECE_METADATA_REMOVALS_SLOT = bytes32(uint256(22));
