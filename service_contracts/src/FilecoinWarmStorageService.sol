@@ -1209,10 +1209,8 @@ contract FilecoinWarmStorageService is
     /// Ideally we would catch only specific error types, but contract size constraint prevents
     /// us from implementing error handling.
     function _terminateCDNRails(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
-        try payments.terminateRail(info.cacheMissRailId) {} catch {}
-        try payments.terminateRail(info.cdnRailId) {} catch {}
+        payments.terminateCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
-        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
     }
 
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing

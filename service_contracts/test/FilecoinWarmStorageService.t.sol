@@ -18,6 +18,7 @@ import {
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {CDNServiceTerminated} from "../src/lib/Rails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -2286,9 +2287,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
-        );
+        emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 5. Assertions
@@ -2398,9 +2397,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Current block:", block.number);
         vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
-        );
+        emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 4. Start new proving period and submit new proof
