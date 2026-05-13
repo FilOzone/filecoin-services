@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SYBIL_FEE} from "./PriceListUSDFC.sol";
+import {DEFAULT_LOCKUP_PERIOD, SYBIL_FEE} from "./PriceListUSDFC.sol";
 
 event CDNPaymentRailsToppedUp(
     uint256 indexed dataSetId,
@@ -17,8 +17,6 @@ event CDNPaymentRailsToppedUp(
 event CDNServiceTerminated(
     address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
 );
-
-uint256 constant DEFAULT_LOCKUP_PERIOD = 2880 * 30; // 1 month (30 days) in epochs
 
 library Rails {
     function burnSybil(FilecoinPayV1 payments, IERC20 token, address payer) public {

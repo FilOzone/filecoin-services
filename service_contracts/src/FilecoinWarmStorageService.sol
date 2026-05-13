@@ -19,7 +19,8 @@ import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
 import {Extsload} from "./Extsload.sol";
 
-import {CDNPaymentRailsToppedUp, DEFAULT_LOCKUP_PERIOD, Rails} from "./lib/Rails.sol";
+import {DEFAULT_LOCKUP_PERIOD} from "./lib/PriceListUSDFC.sol";
+import {CDNPaymentRailsToppedUp, Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
