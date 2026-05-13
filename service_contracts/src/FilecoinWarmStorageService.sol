@@ -1091,20 +1091,13 @@ contract FilecoinWarmStorageService is
         onlyFilBeamController
     {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
-        if (cdnAmount > 0) {
-            payments.modifyRailPayment(info.cdnRailId, 0, cdnAmount);
-        }
-
-        if (cacheMissAmount > 0) {
-            payments.modifyRailPayment(info.cacheMissRailId, 0, cacheMissAmount);
-        }
+        FilecoinPayV1(paymentsContractAddress).settleCDNRails(
+            info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount
+        );
     }
 
     /**

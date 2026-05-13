@@ -73,4 +73,20 @@ library Rails {
             dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup
         );
     }
+
+    function settleCDNRails(
+        FilecoinPayV1 payments,
+        uint256 cdnRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnAmount,
+        uint256 cacheMissAmount
+    ) public {
+        if (cdnAmount > 0) {
+            payments.modifyRailPayment(cdnRailId, 0, cdnAmount);
+        }
+
+        if (cacheMissAmount > 0) {
+            payments.modifyRailPayment(cacheMissRailId, 0, cacheMissAmount);
+        }
+    }
 }
