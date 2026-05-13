@@ -18,7 +18,7 @@ import {
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {CDNServiceTerminated} from "../src/lib/Rails.sol";
+import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/Rails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -564,7 +564,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             1, defaultCDNLockup, defaultCDNLockup, defaultCacheMissLockup, defaultCacheMissLockup
         );
 
@@ -3867,7 +3867,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             1, defaultCDNLockup, defaultCDNLockup, defaultCacheMissLockup, defaultCacheMissLockup
         );
 
@@ -3921,7 +3921,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Expect the CDNPaymentRailsToppedUp event with correct parameters
         // Event signature: CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 cdnAmountAdded, uint256 totalCdnLockup, uint256 cacheMissAmountAdded, uint256 totalCacheMissLockup)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             1, // dataSetId will be 1 (first dataset created)
             defaultCDNLockup, // CDN amount added (0.7 USDFC)
             defaultCDNLockup, // Total CDN lockup (0.7 USDFC)
@@ -4004,7 +4004,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first to allow for settlement
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4044,7 +4044,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up only the CDN rail
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4077,7 +4077,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up only the cache miss rail
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4162,7 +4162,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4187,7 +4187,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4244,7 +4244,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4414,7 +4414,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4449,9 +4449,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Should work as payer
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, 1000, defaultCDNLockup + 1000, 1000, defaultCacheMissLockup + 1000
-        );
+        emit CDNPaymentRailsToppedUp(dataSetId, 1000, defaultCDNLockup + 1000, 1000, defaultCacheMissLockup + 1000);
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
     }
@@ -4475,9 +4473,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, 1000, defaultCDNLockup + 1000, 500, defaultCacheMissLockup + 500
-        );
+        emit CDNPaymentRailsToppedUp(dataSetId, 1000, defaultCDNLockup + 1000, 500, defaultCacheMissLockup + 500);
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 500);
 
@@ -4488,9 +4484,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Second top-up (should be additive)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, 2000, defaultCDNLockup + 3000, 1500, defaultCacheMissLockup + 2000
-        );
+        emit CDNPaymentRailsToppedUp(dataSetId, 2000, defaultCDNLockup + 3000, 1500, defaultCacheMissLockup + 2000);
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 2000, 1500);
 
@@ -4541,7 +4535,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4567,7 +4561,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4594,7 +4588,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4639,14 +4633,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
         // Second top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnTopUp * 2,
             defaultCDNLockup + cdnTopUp * 3,
@@ -4657,14 +4651,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Third top-up (only CDN)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp * 4, 0, defaultCacheMissLockup + cacheMissTopUp * 3
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
 
         // Fourth top-up (only cache miss)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, 0, defaultCDNLockup + cdnTopUp * 4, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp * 4
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);

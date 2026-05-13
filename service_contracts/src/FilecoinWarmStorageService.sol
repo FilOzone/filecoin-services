@@ -19,7 +19,7 @@ import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
 import {Extsload} from "./Extsload.sol";
 
-import {Rails} from "./lib/Rails.sol";
+import {CDNPaymentRailsToppedUp, DEFAULT_LOCKUP_PERIOD, Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
@@ -93,10 +93,6 @@ contract FilecoinWarmStorageService is
         address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
 
-    event CDNServiceTerminated(
-        address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
-    );
-
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
 
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
@@ -104,14 +100,6 @@ contract FilecoinWarmStorageService is
     event FilBeamControllerChanged(address oldController, address newController);
 
     event ViewContractSet(address indexed viewContract);
-
-    event CDNPaymentRailsToppedUp(
-        uint256 indexed dataSetId,
-        uint256 cdnAmountAdded,
-        uint256 totalCdnLockup,
-        uint256 cacheMissAmountAdded,
-        uint256 totalCacheMissLockup
-    );
 
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
@@ -191,12 +179,10 @@ contract FilecoinWarmStorageService is
         uint96 afterEpoch;
     }
 
-    // =========================================================================
     // Constants
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
     uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 30; // 1 month (30 days) in epochs
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
@@ -1139,30 +1125,8 @@ contract FilecoinWarmStorageService is
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
-        // Both rails must be active for any top-up operation
-        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-
-        require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
-        require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
-
-        // Require at least one amount to be non-zero
-        if (cdnAmountToAdd == 0 && cacheMissAmountToAdd == 0) {
-            revert Errors.InvalidTopUpAmount(dataSetId);
-        }
-
-        // Calculate total lockup amounts
-        uint256 totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
-        uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
-
-        // Only modify rails if amounts are being added
-        payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
-        payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
-
-        emit CDNPaymentRailsToppedUp(
-            dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup
+        FilecoinPayV1(paymentsContractAddress).topUpCDNRails(
+            dataSetId, info.cacheMissRailId, info.cdnRailId, cacheMissAmountToAdd, cdnAmountToAdd
         );
     }
 
