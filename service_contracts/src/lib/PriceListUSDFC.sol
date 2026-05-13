@@ -23,6 +23,8 @@ uint256 constant CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 
 uint256 constant DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
 uint256 constant DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) / 10; // 0.3 USDFC
 
+uint256 constant SERVICE_COMMISSION_BPS = 0;
+
 /**
  * @notice Calculate a per-epoch rate based on total storage size
  * @param totalBytes Total size of the stored data in bytes
