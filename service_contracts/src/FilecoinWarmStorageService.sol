@@ -19,6 +19,7 @@ import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
 import {Extsload} from "./Extsload.sol";
 
+import {Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
@@ -61,7 +62,8 @@ contract FilecoinWarmStorageService is
     // Version tracking
     string public constant VERSION = "1.2.0";
 
-    // =========================================================================
+    using Rails for FilecoinPayV1;
+
     // Events
 
     event ContractUpgraded(string version, address implementation);
@@ -692,21 +694,7 @@ contract FilecoinWarmStorageService is
         payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
 
         // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
-        {
-            uint256 sybilFee = IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
-            uint256 burnRailId = payments.createRail(
-                usdfcTokenAddress,
-                createData.payer, // from: client
-                address(payments), // to: payments contract (auction pool)
-                address(0), // no validator
-                0, // no commission
-                address(0) // service fee recipient (unused, commission=0)
-            );
-            payments.modifyRailLockup(burnRailId, 0, sybilFee);
-            payments.modifyRailPayment(burnRailId, 0, sybilFee);
-            payments.terminateRail(burnRailId);
-            payments.settleRail(burnRailId, block.number);
-        }
+        payments.burnSybil(usdfcTokenAddress, createData.payer);
 
         uint256 cacheMissRailId = 0;
         uint256 cdnRailId = 0;
