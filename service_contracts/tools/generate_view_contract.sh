@@ -43,7 +43,7 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
                     ]
                 end
             ) | join(", ") ) +
-        ") external " +  $stateMutability + " returns (" +
+        ") external " + (if $inputs.[0].type == "FilecoinWarmStorageService" and $stateMutability == "pure" then "view" else $stateMutability end) + " returns (" +
             ( reduce $outputs.[] as {$type,$name,$internalType} (
                 []; 
                 . += [

@@ -195,9 +195,6 @@ library Errors {
     /// @param dataSetId The data set ID
     error NoPDPPaymentRail(uint256 dataSetId);
 
-    /// @notice Division by zero: denominator was zero
-    error DivisionByZero();
-
     /// @notice Signature has an invalid length
     /// @param actualLength The length of the provided signature (should be 65)
     error InvalidSignatureLength(uint256 expectedLength, uint256 actualLength);
@@ -350,15 +347,6 @@ library Errors {
     error InsufficientMaxLockupPeriod(
         address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
     );
-
-    /// @notice At least one price parameter must be non-zero when updating pricing
-    error AtLeastOnePriceMustBeNonZero();
-
-    /// @notice Price update exceeds the maximum allowed value
-    /// @param priceType The type of price being updated (see enum {PriceType})
-    /// @param maxAllowed The maximum allowed value for this price type
-    /// @param actual The attempted value that exceeds the maximum
-    error PriceExceedsMaximum(PriceType priceType, uint256 maxAllowed, uint256 actual);
 
     error ProviderIdMismatchAtIndex(uint256 index, uint256 providerId);
 

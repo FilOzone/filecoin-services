@@ -19,6 +19,16 @@ import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
 import {Extsload} from "./Extsload.sol";
 
+import {
+    CACHE_MISS_EGRESS_PRICE_PER_TIB,
+    CDN_EGRESS_PRICE_PER_TIB,
+    EPOCHS_PER_MONTH,
+    MINIMUM_STORAGE_RATE_PER_MONTH,
+    SERVICE_COMMISSION_BPS,
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TOKEN_DECIMALS
+} from "./lib/PriceListUSDFC.sol";
+import {Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
@@ -61,7 +71,8 @@ contract FilecoinWarmStorageService is
     // Version tracking
     string public constant VERSION = "1.2.0";
 
-    // =========================================================================
+    using Rails for FilecoinPayV1;
+
     // Events
 
     event ContractUpgraded(string version, address implementation);
@@ -82,17 +93,12 @@ contract FilecoinWarmStorageService is
         string[] metadataKeys,
         string[] metadataValues
     );
-    event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
     event PieceAdded(
         uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values
     );
 
     event ServiceTerminated(
         address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
-    );
-
-    event CDNServiceTerminated(
-        address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
     );
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
@@ -103,19 +109,9 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
-    event CDNPaymentRailsToppedUp(
-        uint256 indexed dataSetId,
-        uint256 cdnAmountAdded,
-        uint256 totalCdnLockup,
-        uint256 cacheMissAmountAdded,
-        uint256 totalCacheMissLockup
-    );
-
     // Events for provider management
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
-
-    event PricingUpdated(uint256 storagePrice, uint256 minimumRate);
 
     // =========================================================================
     // Structs
@@ -189,15 +185,9 @@ contract FilecoinWarmStorageService is
         uint96 afterEpoch;
     }
 
-    // =========================================================================
     // Constants
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
-    uint256 private constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-    uint256 private constant DEFAULT_LOCKUP_PERIOD = 2880 * 30; // 1 month (30 days) in epochs
-    uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
-    uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
-    uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
@@ -215,21 +205,6 @@ contract FilecoinWarmStorageService is
 
     // Upgrade sequence number, used by Initializable.reinitializer
     uint64 private immutable REINITIALIZER_VERSION;
-
-    // Pricing constants (CDN egress pricing is immutable)
-    uint256 private immutable CDN_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of CDN egress
-    uint256 private immutable CACHE_MISS_EGRESS_PRICE_PER_TIB; // 7 USDFC per TiB of cache miss egress
-
-    // Fixed lockup amounts for CDN rails
-    uint256 private immutable DEFAULT_CDN_LOCKUP_AMOUNT; // 0.7 USDFC
-    uint256 private immutable DEFAULT_CACHE_MISS_LOCKUP_AMOUNT; // 0.3 USDFC
-
-    // Maximum pricing bounds (4x initial values)
-    uint256 private immutable MAX_STORAGE_PRICE_PER_TIB_PER_MONTH; // 10 USDFC (4x 2.5)
-    uint256 private immutable MAX_MINIMUM_STORAGE_RATE_PER_MONTH; // 0.24 USDFC (4x 0.06)
-
-    // Token decimals
-    uint8 private immutable TOKEN_DECIMALS;
 
     // External contract addresses
     address public immutable pdpVerifierAddress;
@@ -252,7 +227,7 @@ contract FilecoinWarmStorageService is
     uint256 private challengeWindowSize;
 
     // Commission rate
-    uint256 private serviceCommissionBps;
+    uint256 private deprecatedServiceCommissionBps;
 
     // Track which proving periods have valid proofs with bitmap
     mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) private provenPeriods;
@@ -298,8 +273,8 @@ contract FilecoinWarmStorageService is
     PlannedUpgrade private nextUpgrade;
 
     // Pricing rates (mutable for future adjustments)
-    uint256 private storagePricePerTibPerMonth;
-    uint256 private minimumStorageRatePerMonth;
+    uint256 private deprecatedStoragePricePerTibPerMonth;
+    uint256 private deprecatedMinimumStorageRatePerMonth;
 
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
@@ -359,20 +334,8 @@ contract FilecoinWarmStorageService is
         );
         sessionKeyRegistry = _sessionKeyRegistry;
 
-        // Read token decimals from the USDFC token contract
-        TOKEN_DECIMALS = _usdfc.decimals();
-
-        // Initialize the immutable pricing constants based on the actual token decimals
-        CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
-        CACHE_MISS_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
-
-        // Initialize maximum pricing bounds (4x initial values)
-        MAX_STORAGE_PRICE_PER_TIB_PER_MONTH = 10 * 10 ** TOKEN_DECIMALS; // 10 USDFC (4x 2.5)
-        MAX_MINIMUM_STORAGE_RATE_PER_MONTH = (24 * 10 ** TOKEN_DECIMALS) / 100; // 0.24 USDFC (4x 0.06)
-
-        // Initialize the lockup constants based on the actual token decimals
-        DEFAULT_CDN_LOCKUP_AMOUNT = (7 * 10 ** TOKEN_DECIMALS) / 10; // 0.7 USDFC
-        DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) / 10; // 0.3 USDFC
+        // Verify token decimals from the USDFC token contract
+        require(TOKEN_DECIMALS == _usdfc.decimals());
     }
 
     /**
@@ -416,13 +379,6 @@ contract FilecoinWarmStorageService is
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
-
-        // Set commission rate
-        serviceCommissionBps = 0; // 0%
-
-        // Initialize mutable pricing variables
-        storagePricePerTibPerMonth = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-        minimumStorageRatePerMonth = (6 * 10 ** TOKEN_DECIMALS) / 100; // 0.06 USDFC
     }
 
     function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
@@ -492,53 +448,6 @@ contract FilecoinWarmStorageService is
 
         viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
-    }
-
-    /**
-     * @notice Updates the service commission rates
-     * @dev Only callable by the contract owner
-     * @param newCommissionBps New commission rate in basis points
-     */
-    function updateServiceCommission(uint256 newCommissionBps) external onlyOwner {
-        require(
-            newCommissionBps <= COMMISSION_MAX_BPS,
-            Errors.CommissionExceedsMaximum(Errors.CommissionType.Service, COMMISSION_MAX_BPS, newCommissionBps)
-        );
-        serviceCommissionBps = newCommissionBps;
-    }
-
-    /**
-     * @notice Updates the pricing rates for storage services
-     * @dev Only callable by the contract owner. Pass 0 to keep existing value unchanged.
-     *      Price updates apply immediately to existing payment rails when they're recalculated
-     *      (e.g., during piece additions/deletions or proving period updates).
-     *      Maximum allowed values: 10 USDFC for storage, 0.24 USDFC for minimum rate.
-     * @param newStoragePrice New storage price per TiB per month (0 = no change, max 10 USDFC)
-     * @param newMinimumRate New minimum monthly storage rate (0 = no change, max 0.24 USDFC)
-     */
-    function updatePricing(uint256 newStoragePrice, uint256 newMinimumRate) external onlyOwner {
-        require(newStoragePrice > 0 || newMinimumRate > 0, Errors.AtLeastOnePriceMustBeNonZero());
-
-        if (newStoragePrice > 0) {
-            require(
-                newStoragePrice <= MAX_STORAGE_PRICE_PER_TIB_PER_MONTH,
-                Errors.PriceExceedsMaximum(
-                    Errors.PriceType.Storage, MAX_STORAGE_PRICE_PER_TIB_PER_MONTH, newStoragePrice
-                )
-            );
-            storagePricePerTibPerMonth = newStoragePrice;
-        }
-        if (newMinimumRate > 0) {
-            require(
-                newMinimumRate <= MAX_MINIMUM_STORAGE_RATE_PER_MONTH,
-                Errors.PriceExceedsMaximum(
-                    Errors.PriceType.MinimumRate, MAX_MINIMUM_STORAGE_RATE_PER_MONTH, newMinimumRate
-                )
-            );
-            minimumStorageRatePerMonth = newMinimumRate;
-        }
-
-        emit PricingUpdated(storagePricePerTibPerMonth, minimumStorageRatePerMonth);
     }
 
     /**
@@ -626,7 +535,7 @@ contract FilecoinWarmStorageService is
         info.payer = createData.payer;
         info.payee = payee; // Using payee address from registry
         info.serviceProvider = serviceProvider; // Set the service provider
-        info.commissionBps = serviceCommissionBps;
+        info.commissionBps = SERVICE_COMMISSION_BPS;
         info.clientDataSetId = createData.clientDataSetId;
         info.providerId = providerId;
 
@@ -669,80 +578,16 @@ contract FilecoinWarmStorageService is
         // Determine once whether CDN is enabled in metadata and reuse the result
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
 
-        // Validate payer has sufficient funds and operator approvals for minimum pricing
-        // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, createData.payer, hasCDN);
-
-        uint256 pdpRailId = payments.createRail(
-            usdfcTokenAddress, // token address
-            createData.payer, // from (payer)
-            payee, // payee address from registry
-            address(this), // this contract acts as the validator
-            info.commissionBps, // commission rate based on CDN usage
-            address(this)
+        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = payments.createRails(
+            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
         );
 
-        // Store the rail ID
-        info.pdpRailId = pdpRailId;
-
-        // Store reverse mapping from rail ID to data set ID for validation
         railToDataSet[pdpRailId] = dataSetId;
-
-        // Set lockup period for the rail
-        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
-
-        // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
-        {
-            uint256 sybilFee = IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
-            uint256 burnRailId = payments.createRail(
-                usdfcTokenAddress,
-                createData.payer, // from: client
-                address(payments), // to: payments contract (auction pool)
-                address(0), // no validator
-                0, // no commission
-                address(0) // service fee recipient (unused, commission=0)
-            );
-            payments.modifyRailLockup(burnRailId, 0, sybilFee);
-            payments.modifyRailPayment(burnRailId, 0, sybilFee);
-            payments.terminateRail(burnRailId);
-            payments.settleRail(burnRailId, block.number);
-        }
-
-        uint256 cacheMissRailId = 0;
-        uint256 cdnRailId = 0;
-
+        info.pdpRailId = pdpRailId;
         if (hasCDN) {
-            cacheMissRailId = payments.createRail(
-                usdfcTokenAddress, // token address
-                createData.payer, // from (payer)
-                payee, // payee address from registry
-                address(0), // no validator
-                0, // no service commission
-                address(this) // controller
-            );
             info.cacheMissRailId = cacheMissRailId;
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
-
-            cdnRailId = payments.createRail(
-                usdfcTokenAddress, // token address
-                createData.payer, // from (payer)
-                filBeamBeneficiaryAddress, // to FilBeam beneficiary
-                address(0), // no validator
-                0, // no service commission
-                address(this) // controller
-            );
             info.cdnRailId = cdnRailId;
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
-
-            emit CDNPaymentRailsToppedUp(
-                dataSetId,
-                DEFAULT_CDN_LOCKUP_AMOUNT,
-                DEFAULT_CDN_LOCKUP_AMOUNT,
-                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
-                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT
-            );
         }
-
         // Emit event for tracking
         emit DataSetCreated(
             dataSetId,
@@ -1116,20 +961,13 @@ contract FilecoinWarmStorageService is
         onlyFilBeamController
     {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
-        if (cdnAmount > 0) {
-            payments.modifyRailPayment(info.cdnRailId, 0, cdnAmount);
-        }
-
-        if (cacheMissAmount > 0) {
-            payments.modifyRailPayment(info.cacheMissRailId, 0, cacheMissAmount);
-        }
+        FilecoinPayV1(paymentsContractAddress).settleCDNRails(
+            info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount
+        );
     }
 
     /**
@@ -1151,30 +989,8 @@ contract FilecoinWarmStorageService is
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
-        // Both rails must be active for any top-up operation
-        FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
-        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
-
-        require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
-        require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
-
-        // Require at least one amount to be non-zero
-        if (cdnAmountToAdd == 0 && cacheMissAmountToAdd == 0) {
-            revert Errors.InvalidTopUpAmount(dataSetId);
-        }
-
-        // Calculate total lockup amounts
-        uint256 totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
-        uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
-
-        // Only modify rails if amounts are being added
-        payments.modifyRailLockup(info.cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
-        payments.modifyRailLockup(info.cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
-
-        emit CDNPaymentRailsToppedUp(
-            dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup
+        FilecoinPayV1(paymentsContractAddress).topUpCDNRails(
+            dataSetId, info.cacheMissRailId, info.cdnRailId, cacheMissAmountToAdd, cdnAmountToAdd
         );
     }
 
@@ -1221,95 +1037,18 @@ contract FilecoinWarmStorageService is
     /// Ideally we would catch only specific error types, but contract size constraint prevents
     /// us from implementing error handling.
     function _terminateCDNRails(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
-        try payments.terminateRail(info.cacheMissRailId) {} catch {}
-        try payments.terminateRail(info.cdnRailId) {} catch {}
+        payments.terminateCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId);
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
-        emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
-    }
-
-    /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
-    /// @param payments The FilecoinPayV1 contract instance
-    /// @param payer The address of the payer
-    function validatePayerOperatorApprovalAndFunds(FilecoinPayV1 payments, address payer, bool includeCDN)
-        internal
-        view
-    {
-        // Calculate required lockup for minimum pricing.
-        // We use multiply-first here to preserve the exact monthly value for cleaner error messages
-        // (a round number like the configured floor price, rather than a value with many trailing digits
-        // from precision loss). This is slightly more conservative than the actual rail lockup (which
-        // uses the truncated per-epoch rate), but the difference is under 0.0001% and always in the
-        // user's favor - they are never required to have less than what the rail will actually lock.
-        uint256 minimumLockupRequired = (minimumStorageRatePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
-
-        // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
-        if (includeCDN) {
-            minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
-        }
-
-        // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
-        minimumLockupRequired += IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
-
-        // Check that payer has sufficient available funds
-        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
-        require(
-            availableFunds >= minimumLockupRequired,
-            Errors.InsufficientLockupFunds(payer, minimumLockupRequired, availableFunds)
-        );
-
-        // Check operator approval settings
-        (
-            bool isApproved,
-            uint256 rateAllowance,
-            uint256 lockupAllowance,
-            uint256 rateUsage,
-            uint256 lockupUsage,
-            uint256 maxLockupPeriod
-        ) = payments.operatorApprovals(usdfcTokenAddress, payer, address(this));
-
-        // Verify operator is approved
-        require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
-
-        // Calculate minimum rate per epoch
-        uint256 minimumRatePerEpoch = minimumStorageRatePerMonth / EPOCHS_PER_MONTH;
-
-        // Verify rate allowance is sufficient
-        require(
-            rateAllowance >= rateUsage + minimumRatePerEpoch,
-            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
-        );
-
-        // Verify lockup allowance is sufficient
-        require(
-            lockupAllowance >= lockupUsage + minimumLockupRequired,
-            Errors.InsufficientLockupAllowance(
-                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
-            )
-        );
-
-        // Verify max lockup period is sufficient
-        require(
-            maxLockupPeriod >= DEFAULT_LOCKUP_PERIOD,
-            Errors.InsufficientMaxLockupPeriod(payer, address(this), maxLockupPeriod, DEFAULT_LOCKUP_PERIOD)
-        );
     }
 
     function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
+        uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
         // Revert if no payment rail is configured for this data set
-        require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
-
-        uint256 totalBytes = Cids.leafCountToRawSize(leafCount);
-        FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+        require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         // Update the PDP rail payment rate with the new rate and no one-time payment
-        uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
-        uint256 newStorageRatePerEpoch = _calculateStorageRate(totalBytes);
-        payments.modifyRailPayment(
-            pdpRailId,
-            newStorageRatePerEpoch,
-            0 // No one-time payment during rate update
-        );
-        emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
+
+        FilecoinPayV1(paymentsContractAddress).updateStorageRates(dataSetId, pdpRailId, leafCount);
     }
 
     function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal returns (bool hadRemovals) {
@@ -1384,66 +1123,6 @@ contract FilecoinWarmStorageService is
 
     function min(uint256 a, uint256 b) internal pure returns (uint256) {
         return a < b ? a : b;
-    }
-
-    /**
-     * @notice Calculate a per-epoch rate based on total storage size
-     * @param totalBytes Total size of the stored data in bytes
-     * @param ratePerTiBPerMonth The rate per TiB per month in the token's smallest unit
-     * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
-     */
-    function calculateStorageSizeBasedRatePerEpoch(uint256 totalBytes, uint256 ratePerTiBPerMonth)
-        internal
-        view
-        returns (uint256)
-    {
-        uint256 numerator = totalBytes * ratePerTiBPerMonth;
-        uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
-
-        // Ensure denominator is not zero (shouldn't happen with constants)
-        require(denominator > 0, Errors.DivisionByZero());
-
-        uint256 ratePerEpoch = numerator / denominator;
-
-        // Ensure minimum rate is 0.00001 USDFC if calculation results in 0 due to rounding.
-        // This prevents charging 0 for very small sizes due to integer division.
-        if (ratePerEpoch == 0 && totalBytes > 0) {
-            uint256 minRate = (1 * 10 ** uint256(TOKEN_DECIMALS)) / 100000;
-            return minRate;
-        }
-
-        return ratePerEpoch;
-    }
-
-    /**
-     * @notice Calculate storage rate per epoch based on total storage size
-     * @dev Returns storage rate per TiB per month with minimum pricing floor applied
-     * @param totalBytes Total size of the stored data in bytes
-     * @return storageRate The PDP storage rate per epoch
-     */
-    function calculateRatePerEpoch(uint256 totalBytes) external view returns (uint256 storageRate) {
-        storageRate = _calculateStorageRate(totalBytes);
-    }
-
-    /**
-     * @notice Calculate the storage rate per epoch (internal use)
-     * @dev Implements minimum pricing floor and returns the higher of the natural size-based rate or the minimum rate.
-     * @param totalBytes Total size of the stored data in bytes
-     * @return The storage rate per epoch
-     */
-    function _calculateStorageRate(uint256 totalBytes) internal view returns (uint256) {
-        // Calculate natural size-based rate
-        uint256 naturalRate = calculateStorageSizeBasedRatePerEpoch(totalBytes, storagePricePerTibPerMonth);
-
-        // Calculate minimum rate (floor price converted to per-epoch).
-        // Integer division truncates, so (minimumRate × EPOCHS_PER_MONTH) yields slightly less than
-        // minimumStorageRatePerMonth. For typical floor prices this precision loss is under 0.0001%.
-        // The pre-flight lockup check in validatePayerOperatorApprovalAndFunds uses a multiply-first
-        // formula that preserves the full monthly value, ensuring users always have sufficient funds.
-        uint256 minimumRate = minimumStorageRatePerMonth / EPOCHS_PER_MONTH;
-
-        // Return whichever is higher: natural rate or minimum rate
-        return naturalRate > minimumRate ? naturalRate : minimumRate;
     }
 
     /**
@@ -1537,12 +1216,12 @@ contract FilecoinWarmStorageService is
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
         pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: storagePricePerTibPerMonth,
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
             pricePerTiBCdnEgress: CDN_EGRESS_PRICE_PER_TIB,
             pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH,
-            minimumPricePerMonth: minimumStorageRatePerMonth
+            minimumPricePerMonth: MINIMUM_STORAGE_RATE_PER_MONTH
         });
     }
 
@@ -1551,10 +1230,10 @@ contract FilecoinWarmStorageService is
      * @return serviceFee Service fee (per TiB per month)
      * @return spPayment SP payment (per TiB per month)
      */
-    function getEffectiveRates() external view returns (uint256 serviceFee, uint256 spPayment) {
-        uint256 total = storagePricePerTibPerMonth;
+    function getEffectiveRates() external pure returns (uint256 serviceFee, uint256 spPayment) {
+        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
 
-        serviceFee = (total * serviceCommissionBps) / COMMISSION_MAX_BPS;
+        serviceFee = (total * SERVICE_COMMISSION_BPS) / COMMISSION_MAX_BPS;
         spPayment = total - serviceFee;
 
         return (serviceFee, spPayment);

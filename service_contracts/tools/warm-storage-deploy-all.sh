@@ -202,7 +202,10 @@ deploy_implementation_if_needed() {
         local forge_cmd=(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce "$NONCE")
 
         if [ -n "$LIBRARIES" ]; then
-            forge_cmd+=(--libraries "$LIBRARIES")
+            IFS=',' read -ra lib_arr <<< "$LIBRARIES"
+            for lib in "${lib_arr[@]}"; do
+                forge_cmd+=(--libraries "$lib")
+            done
         fi
 
         forge_cmd+=("$contract")
@@ -461,14 +464,20 @@ deploy_implementation_if_needed \
     "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
     "SignatureVerificationLib"
 
-# Step 7: Deploy or use existing FilecoinWarmStorageService implementation
-# Set LIBRARIES variable for the deployment helper (format: path:name:address)
+# Step 7: Deploy or use existing Rails
+deploy_implementation_if_needed \
+    "RAILS_LIB_ADDRESS" \
+    "src/lib/Rails.sol:Rails" \
+    "Rails"
+
+# Step 8: Deploy or use existing FilecoinWarmStorageService implementation
+# Set LIBRARIES variable for the deployment helper (comma-separated path:name:address)
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
     FWSS_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS) + "1")
 else
     FWSS_INIT_COUNTER=1
 fi
-LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS"
+LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/Rails.sol:Rails:$RAILS_LIB_ADDRESS"
 deploy_implementation_if_needed \
     "FWSS_IMPLEMENTATION_ADDRESS" \
     "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
@@ -482,7 +491,7 @@ deploy_implementation_if_needed \
     "$FWSS_INIT_COUNTER"
 unset LIBRARIES
 
-# Step 8: Deploy or use existing FilecoinWarmStorageService proxy
+# Step 9: Deploy or use existing FilecoinWarmStorageService proxy
 # Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 deploy_proxy_if_needed \
@@ -491,7 +500,7 @@ deploy_proxy_if_needed \
     "$INIT_DATA" \
     "FilecoinWarmStorageService proxy"
 
-# Step 9: Deploy FilecoinWarmStorageServiceStateView
+# Step 10: Deploy FilecoinWarmStorageServiceStateView
 echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
 if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would deploy (skipping in dry-run)"
@@ -510,7 +519,7 @@ else
 fi
 echo
 
-# Step 10: Set the view contract address on the main contract
+# Step 11: Set the view contract address on the main contract
 echo -e "${BOLD}Setting view contract address${RESET}"
 if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
@@ -522,7 +531,7 @@ else
 fi
 echo
 
-# Step 11: Deploy Endorsements ProviderIdSet
+# Step 12: Deploy Endorsements ProviderIdSet
 deploy_endorsements_if_needed
 
 if [ "$DRY_RUN" = "true" ]; then
@@ -545,6 +554,8 @@ echo "PDPVerifier Proxy: $PDP_VERIFIER_PROXY_ADDRESS"
 echo "FilecoinPayV1 Contract: $FILECOIN_PAY_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
+echo "SignatureVerificationLib: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+echo "Rails: $RAILS_LIB_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $FWSS_PROXY_ADDRESS"
 echo "FilecoinWarmStorageServiceStateView: $FWSS_VIEW_ADDRESS"
@@ -575,6 +586,8 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$FILECOIN_PAY_ADDRESS,lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
         "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
+        "$RAILS_LIB_ADDRESS,src/lib/Rails.sol:Rails" \
         "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
         "$FWSS_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$FWSS_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"

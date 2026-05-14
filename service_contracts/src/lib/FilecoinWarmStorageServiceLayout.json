@@ -22,7 +22,7 @@
     }
   },
   {
-    "label": "serviceCommissionBps",
+    "label": "deprecatedServiceCommissionBps",
     "slot": "2",
     "offset": 0,
     "type": "uint256",
@@ -554,7 +554,7 @@
     }
   },
   {
-    "label": "storagePricePerTibPerMonth",
+    "label": "deprecatedStoragePricePerTibPerMonth",
     "slot": "20",
     "offset": 0,
     "type": "uint256",
@@ -565,7 +565,7 @@
     }
   },
   {
-    "label": "minimumStorageRatePerMonth",
+    "label": "deprecatedMinimumStorageRatePerMonth",
     "slot": "21",
     "offset": 0,
     "type": "uint256",

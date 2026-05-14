@@ -18,6 +18,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         service = _service;
     }
 
+    function calculateRatePerEpoch(uint256 totalBytes) external pure returns (uint256 storageRate) {
+        return FilecoinWarmStorageServiceStateInternalLibrary.calculateRatePerEpoch(totalBytes);
+    }
+
     function clientDataSets(address payer) external view returns (uint256[] memory dataSetIds) {
         return service.clientDataSets(payer);
     }

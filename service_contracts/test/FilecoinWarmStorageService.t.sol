@@ -18,6 +18,7 @@ import {
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/Rails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -563,7 +564,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             1, defaultCDNLockup, defaultCDNLockup, defaultCacheMissLockup, defaultCacheMissLockup
         );
 
@@ -962,19 +963,19 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400; // Convert to per-epoch
 
         // Test 0 bytes
-        uint256 rateZero = pdpServiceWithPayments.calculateRatePerEpoch(0);
+        uint256 rateZero = viewContract.calculateRatePerEpoch(0);
         assertEq(rateZero, expectedMinPerEpoch, "0 bytes should return 0.06 USDFC/month minimum");
 
         // Test 1 GiB
-        uint256 rateOneGiB = pdpServiceWithPayments.calculateRatePerEpoch(oneGiB);
+        uint256 rateOneGiB = viewContract.calculateRatePerEpoch(oneGiB);
         assertEq(rateOneGiB, expectedMinPerEpoch, "1 GiB should return minimum rate");
 
         // Test 10 GiB
-        uint256 rateTenGiB = pdpServiceWithPayments.calculateRatePerEpoch(10 * oneGiB);
+        uint256 rateTenGiB = viewContract.calculateRatePerEpoch(10 * oneGiB);
         assertEq(rateTenGiB, expectedMinPerEpoch, "10 GiB should return minimum rate");
 
         // Test 24 GiB (below crossover)
-        uint256 rateTwentyFourGiB = pdpServiceWithPayments.calculateRatePerEpoch(24 * oneGiB);
+        uint256 rateTwentyFourGiB = viewContract.calculateRatePerEpoch(24 * oneGiB);
         assertEq(rateTwentyFourGiB, expectedMinPerEpoch, "24 GiB should return minimum rate");
     }
 
@@ -987,11 +988,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
 
         // 24 GiB: natural rate (0.0586) < minimum (0.06), so returns minimum
-        uint256 rate24GiB = pdpServiceWithPayments.calculateRatePerEpoch(24 * oneGiB);
+        uint256 rate24GiB = viewContract.calculateRatePerEpoch(24 * oneGiB);
         assertEq(rate24GiB, expectedMinPerEpoch, "24 GiB should use minimum floor");
 
         // 25 GiB: natural rate (0.0610) > minimum (0.06), so returns natural rate
-        uint256 rate25GiB = pdpServiceWithPayments.calculateRatePerEpoch(25 * oneGiB);
+        uint256 rate25GiB = viewContract.calculateRatePerEpoch(25 * oneGiB);
         assert(rate25GiB > expectedMinPerEpoch);
 
         // Verify it's actually proportional (not minimum)
@@ -1009,16 +1010,16 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
 
         // Test 48 GiB
-        uint256 rate48GiB = pdpServiceWithPayments.calculateRatePerEpoch(48 * oneGiB);
+        uint256 rate48GiB = viewContract.calculateRatePerEpoch(48 * oneGiB);
         assert(rate48GiB > expectedMinPerEpoch);
 
         // Test 100 GiB
-        uint256 rate100GiB = pdpServiceWithPayments.calculateRatePerEpoch(100 * oneGiB);
+        uint256 rate100GiB = viewContract.calculateRatePerEpoch(100 * oneGiB);
         assert(rate100GiB > rate48GiB);
 
         // Test 1 TiB
         uint256 oneTiB = oneGiB * 1024;
-        uint256 rateOneTiB = pdpServiceWithPayments.calculateRatePerEpoch(oneTiB);
+        uint256 rateOneTiB = viewContract.calculateRatePerEpoch(oneTiB);
         assert(rateOneTiB > rate100GiB);
 
         // Verify proportional scaling
@@ -1031,7 +1032,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 oneGiB = 1024 * 1024 * 1024;
 
         // Get rate per epoch for dataset below crossover point
-        uint256 ratePerEpoch = pdpServiceWithPayments.calculateRatePerEpoch(oneGiB);
+        uint256 ratePerEpoch = viewContract.calculateRatePerEpoch(oneGiB);
 
         // Convert to rate per month (86400 epochs per month)
         uint256 ratePerMonth = ratePerEpoch * 86400;
@@ -1319,8 +1320,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
-        uint256 expectedRate = pdpServiceWithPayments.calculateRatePerEpoch(Cids.leafCountToRawSize(leafCount));
-        uint256 buggyRate = pdpServiceWithPayments.calculateRatePerEpoch(leafCount * 32);
+        uint256 expectedRate = viewContract.calculateRatePerEpoch(Cids.leafCountToRawSize(leafCount));
+        uint256 buggyRate = viewContract.calculateRatePerEpoch(leafCount * 32);
 
         assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
@@ -1373,8 +1374,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline + provingPeriod, perPieceLeaves, "");
 
         uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
-        uint256 expectedRate = pdpServiceWithPayments.calculateRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
-        uint256 buggyRate = pdpServiceWithPayments.calculateRatePerEpoch(perPieceLeaves * 32);
+        uint256 expectedRate = viewContract.calculateRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
+        uint256 buggyRate = viewContract.calculateRatePerEpoch(perPieceLeaves * 32);
         assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
         assertApproxEqAbs(
             actualRate, (buggyRate * 127) / 128, 1, "post-removal ratio between raw and Fr32 rates is 127/128"
@@ -2286,9 +2287,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
-        );
+        emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 5. Assertions
@@ -2398,9 +2397,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Current block:", block.number);
         vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.CDNServiceTerminated(
-            filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId
-        );
+        emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
         pdpServiceWithPayments.terminateCDNService(dataSetId);
 
         // 4. Start new proving period and submit new proof
@@ -3870,7 +3867,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect CDNPaymentRailsToppedUp event when creating the data set with CDN enabled
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             1, defaultCDNLockup, defaultCDNLockup, defaultCacheMissLockup, defaultCacheMissLockup
         );
 
@@ -3924,7 +3921,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Expect the CDNPaymentRailsToppedUp event with correct parameters
         // Event signature: CDNPaymentRailsToppedUp(uint256 indexed dataSetId, uint256 cdnAmountAdded, uint256 totalCdnLockup, uint256 cacheMissAmountAdded, uint256 totalCacheMissLockup)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             1, // dataSetId will be 1 (first dataset created)
             defaultCDNLockup, // CDN amount added (0.7 USDFC)
             defaultCDNLockup, // Total CDN lockup (0.7 USDFC)
@@ -4007,7 +4004,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first to allow for settlement
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4047,7 +4044,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up only the CDN rail
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4080,7 +4077,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up only the cache miss rail
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4165,7 +4162,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4190,7 +4187,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4247,7 +4244,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails first
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnAmount,
             defaultCDNLockup + cdnAmount,
@@ -4417,7 +4414,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Top up the rails
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4452,9 +4449,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Should work as payer
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, 1000, defaultCDNLockup + 1000, 1000, defaultCacheMissLockup + 1000
-        );
+        emit CDNPaymentRailsToppedUp(dataSetId, 1000, defaultCDNLockup + 1000, 1000, defaultCacheMissLockup + 1000);
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 1000);
     }
@@ -4478,9 +4473,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, 1000, defaultCDNLockup + 1000, 500, defaultCacheMissLockup + 500
-        );
+        emit CDNPaymentRailsToppedUp(dataSetId, 1000, defaultCDNLockup + 1000, 500, defaultCacheMissLockup + 500);
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 1000, 500);
 
@@ -4491,9 +4484,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Second top-up (should be additive)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
-            dataSetId, 2000, defaultCDNLockup + 3000, 1500, defaultCacheMissLockup + 2000
-        );
+        emit CDNPaymentRailsToppedUp(dataSetId, 2000, defaultCDNLockup + 3000, 1500, defaultCacheMissLockup + 2000);
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 2000, 1500);
 
@@ -4544,7 +4535,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4570,7 +4561,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4597,7 +4588,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 cacheMissTopUp = 50000;
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         vm.prank(client);
@@ -4642,14 +4633,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // First top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
         // Second top-up
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId,
             cdnTopUp * 2,
             defaultCDNLockup + cdnTopUp * 3,
@@ -4660,14 +4651,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Third top-up (only CDN)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, cdnTopUp, defaultCDNLockup + cdnTopUp * 4, 0, defaultCacheMissLockup + cacheMissTopUp * 3
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, 0);
 
         // Fourth top-up (only cache miss)
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.CDNPaymentRailsToppedUp(
+        emit CDNPaymentRailsToppedUp(
             dataSetId, 0, defaultCDNLockup + cdnTopUp * 4, cacheMissTopUp, defaultCacheMissLockup + cacheMissTopUp * 4
         );
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, 0, cacheMissTopUp);

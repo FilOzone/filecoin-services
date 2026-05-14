@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+pragma solidity ^0.8.20;
+
+import {Errors} from "../Errors.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {
+    DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
+    DEFAULT_CDN_LOCKUP_AMOUNT,
+    DEFAULT_LOCKUP_PERIOD,
+    EPOCHS_PER_MONTH,
+    MINIMUM_STORAGE_RATE_PER_MONTH,
+    SERVICE_COMMISSION_BPS,
+    SYBIL_FEE,
+    calculateStorageRate
+} from "./PriceListUSDFC.sol";
+
+event CDNPaymentRailsToppedUp(
+    uint256 indexed dataSetId,
+    uint256 cdnAmountAdded,
+    uint256 totalCdnLockup,
+    uint256 cacheMissAmountAdded,
+    uint256 totalCacheMissLockup
+);
+
+event CDNServiceTerminated(
+    address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
+);
+
+event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
+
+library Rails {
+    function burnSybil(FilecoinPayV1 payments, IERC20 token, address payer) internal {
+        uint256 burnRailId = payments.createRail(
+            token,
+            payer, // from: client
+            address(payments), // to: payments contract (auction pool)
+            address(0), // no validator
+            0, // no commission
+            address(0) // service fee recipient (unused, commission=0)
+        );
+        payments.modifyRailLockup(burnRailId, 0, SYBIL_FEE);
+        payments.modifyRailPayment(burnRailId, 0, SYBIL_FEE);
+        payments.terminateRail(burnRailId);
+        payments.settleRail(burnRailId, block.number);
+    }
+
+    /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
+    /// @param payments The FilecoinPayV1 contract instance
+    /// @param payer The address of the payer
+    function validatePayerOperatorApprovalAndFunds(
+        FilecoinPayV1 payments,
+        IERC20 usdfcTokenAddress,
+        address payer,
+        bool includeCDN
+    ) internal view {
+        // Calculate required lockup for minimum pricing.
+        // We use multiply-first here to preserve the exact monthly value for cleaner error messages
+        // (a round number like the configured floor price, rather than a value with many trailing digits
+        // from precision loss). This is slightly more conservative than the actual rail lockup (which
+        // uses the truncated per-epoch rate), but the difference is under 0.0001% and always in the
+        // user's favor - they are never required to have less than what the rail will actually lock.
+        uint256 minimumLockupRequired = (MINIMUM_STORAGE_RATE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+
+        // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
+        if (includeCDN) {
+            minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
+        }
+
+        // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
+        minimumLockupRequired += SYBIL_FEE;
+
+        // Check that payer has sufficient available funds
+        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
+        require(
+            availableFunds >= minimumLockupRequired,
+            Errors.InsufficientLockupFunds(payer, minimumLockupRequired, availableFunds)
+        );
+
+        // Check operator approval settings
+        (
+            bool isApproved,
+            uint256 rateAllowance,
+            uint256 lockupAllowance,
+            uint256 rateUsage,
+            uint256 lockupUsage,
+            uint256 maxLockupPeriod
+        ) = payments.operatorApprovals(usdfcTokenAddress, payer, address(this));
+
+        // Verify operator is approved
+        require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
+
+        // Calculate minimum rate per epoch
+        uint256 minimumRatePerEpoch = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
+
+        // Verify rate allowance is sufficient
+        require(
+            rateAllowance >= rateUsage + minimumRatePerEpoch,
+            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
+        );
+
+        // Verify lockup allowance is sufficient
+        require(
+            lockupAllowance >= lockupUsage + minimumLockupRequired,
+            Errors.InsufficientLockupAllowance(
+                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
+            )
+        );
+
+        // Verify max lockup period is sufficient
+        require(
+            maxLockupPeriod >= DEFAULT_LOCKUP_PERIOD,
+            Errors.InsufficientMaxLockupPeriod(payer, address(this), maxLockupPeriod, DEFAULT_LOCKUP_PERIOD)
+        );
+    }
+
+    function createRails(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        IERC20 usdfcTokenAddress,
+        address payer,
+        address payee,
+        address filBeamBeneficiaryAddress
+    ) public returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
+        bool hasCDN = filBeamBeneficiaryAddress != address(0);
+        // Validate payer has sufficient funds and operator approvals for minimum pricing
+        // If CDN is enabled, validation must account for the additional fixed lockup amounts
+        validatePayerOperatorApprovalAndFunds(payments, usdfcTokenAddress, payer, hasCDN);
+
+        pdpRailId = payments.createRail(
+            usdfcTokenAddress, // token address
+            payer, // from (payer)
+            payee, // payee address from registry
+            address(this), // this contract acts as the validator
+            SERVICE_COMMISSION_BPS, // commission rate based on CDN usage
+            address(this)
+        );
+
+        // Set lockup period for the rail
+        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
+
+        // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
+        burnSybil(payments, usdfcTokenAddress, payer);
+
+        cacheMissRailId = 0;
+        cdnRailId = 0;
+
+        if (hasCDN) {
+            cacheMissRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                payer, // from (payer)
+                payee, // payee address from registry
+                address(0), // no validator
+                0, // no service commission
+                address(this) // controller
+            );
+            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
+
+            cdnRailId = payments.createRail(
+                usdfcTokenAddress, // token address
+                payer, // from (payer)
+                filBeamBeneficiaryAddress, // to FilBeam beneficiary
+                address(0), // no validator
+                0, // no service commission
+                address(this) // controller
+            );
+            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
+
+            emit CDNPaymentRailsToppedUp(
+                dataSetId,
+                DEFAULT_CDN_LOCKUP_AMOUNT,
+                DEFAULT_CDN_LOCKUP_AMOUNT,
+                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
+                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT
+            );
+        }
+    }
+
+    function terminateCDNRails(FilecoinPayV1 payments, uint256 dataSetId, uint256 cacheMissRailId, uint256 cdnRailId)
+        public
+    {
+        try payments.terminateRail(cacheMissRailId) {} catch {}
+        try payments.terminateRail(cdnRailId) {} catch {}
+        emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
+    }
+
+    function topUpCDNRails(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        uint256 cacheMissRailId,
+        uint256 cdnRailId,
+        uint256 cacheMissAmountToAdd,
+        uint256 cdnAmountToAdd
+    ) public {
+        // Both rails must be active for any top-up operation
+        FilecoinPayV1.RailView memory cdnRail = payments.getRail(cdnRailId);
+        FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
+
+        require(cdnRail.endEpoch == 0, Errors.CDNPaymentAlreadyTerminated(dataSetId));
+        require(cacheMissRail.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
+
+        // Require at least one amount to be non-zero
+        if (cdnAmountToAdd == 0 && cacheMissAmountToAdd == 0) {
+            revert Errors.InvalidTopUpAmount(dataSetId);
+        }
+
+        // Calculate total lockup amounts
+        uint256 totalCdnLockup = cdnRail.lockupFixed + cdnAmountToAdd;
+        uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
+
+        // Only modify rails if amounts are being added
+        payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
+        payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
+        emit CDNPaymentRailsToppedUp(
+            dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup
+        );
+    }
+
+    function settleCDNRails(
+        FilecoinPayV1 payments,
+        uint256 cdnRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnAmount,
+        uint256 cacheMissAmount
+    ) public {
+        if (cdnAmount > 0) {
+            payments.modifyRailPayment(cdnRailId, 0, cdnAmount);
+        }
+
+        if (cacheMissAmount > 0) {
+            payments.modifyRailPayment(cacheMissRailId, 0, cacheMissAmount);
+        }
+    }
+
+    function updateStorageRates(FilecoinPayV1 payments, uint256 dataSetId, uint256 pdpRailId, uint256 leafCount)
+        public
+    {
+        uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
+        payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, 0);
+        emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
+    }
+}
