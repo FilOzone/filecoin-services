@@ -18,13 +18,13 @@ EPOCHS_PER_MONTH              = 86400         # 2880 epochs/day × 30 days
 TiB                           = 1099511627776 # bytes
 
 # Default pricing (owner-adjustable)
-pricePerTiBPerMonth           = 2.5 USDFC
-minimumStorageRatePerMonth    = 0.06 USDFC
+STORAGE_PRICE_PER_TIB_PER_MONTH = 2.5 USDFC
+MINIMUM_STORAGE_RATE_PER_MONTH  = 0.06 USDFC
 
 # Per-epoch rate calculation
-sizeBasedRate = totalBytes × pricePerTiBPerMonth ÷ TiB ÷ EPOCHS_PER_MONTH
-minimumRate   = minimumStorageRatePerMonth ÷ EPOCHS_PER_MONTH
-finalRate     = max(sizeBasedRate, minimumRate)
+sizeBasedRate                  = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
+MINIMUM_STORAGE_RATE_PER_EPOCH = MINIMUM_STORAGE_RATE_PER_MONTH ÷ EPOCHS_PER_MONTH
+finalRate                      = max(sizeBasedRate, MINIMUM_STORAGE_RATE_PER_EPOCH)
 ```
 
 The default minimum floor ensures datasets below ~24.58 GiB still generate the minimum payment of 0.06 USDFC/month.
@@ -33,7 +33,7 @@ The default minimum floor ensures datasets below ~24.58 GiB still generate the m
 
 ### Pricing Updates
 
-Only the contract owner can update pricing by calling `updatePricing(newStoragePrice, newMinimumRate)`. Maximum allowed values are 10 USDFC for storage price and 0.24 USDFC for minimum rate.
+Only the contract owner can update pricing, by upgrading the contract.
 
 **Effect on existing datasets**: Pricing changes do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
 

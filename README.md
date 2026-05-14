@@ -22,7 +22,8 @@ This repository contains smart contracts and services for the Filecoin ecosystem
 
 ## Pricing
 
-The service uses static global pricing set by the contract owner (default: 2.5 USDFC per TiB/month). Rail payment rates are calculated based on data size with a minimum floor. See [SPEC.md](SPEC.md) for details on rate calculation, pricing updates, and top-up/renewal behavior.
+The service uses static global pricing set by the contract owner (currently 2.5 USDFC per TiB/month).
+Rail payment rates are calculated based on data size with a minimum floor. See [SPEC.md](SPEC.md) for details on rate calculation, pricing updates, and top-up/renewal behavior.
 
 ## 🚀 Quick Start
 
