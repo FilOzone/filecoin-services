@@ -7,7 +7,6 @@ import {
     CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
 } from "../FilecoinWarmStorageService.sol";
 import {
-    calculateStorageSizeBasedRatePerEpoch,
     MINIMUM_STORAGE_RATE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
     STORAGE_PRICE_PER_TIB_PER_MONTH
@@ -614,9 +613,5 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (uint256 storagePrice, uint256 minimumRate)
     {
         return (STORAGE_PRICE_PER_TIB_PER_MONTH, MINIMUM_STORAGE_RATE_PER_MONTH);
-    }
-
-    function calculateRatePerEpoch(uint256 totalBytes) public pure returns (uint256 storageRate) {
-        return calculateStorageSizeBasedRatePerEpoch(totalBytes);
     }
 }
