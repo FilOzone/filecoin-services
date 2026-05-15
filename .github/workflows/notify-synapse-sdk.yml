@@ -1,4 +1,4 @@
-name: Notify Synapse SDK
+name: Update Synapse SDK
 
 on:
   push:
@@ -16,24 +16,38 @@ on:
         type: string
 
 # Required repository secret:
-#   SYNAPSE_SDK_DISPATCH_TOKEN - Token allowed to create repository_dispatch events in FilOzone/synapse-sdk.
+#   SYNAPSE_SDK_DISPATCH_TOKEN - Token allowed to push branches and create PRs in FilOzone/synapse-sdk.
 #   Current PAT was created using the FilOzzy account on 2026-05-12.
 
 permissions:
   contents: read
 
+env:
+  SYNAPSE_SDK_REPOSITORY: FilOzone/synapse-sdk
+  SYNAPSE_SDK_PATH: synapse-sdk
+  SYNAPSE_SDK_BASE_BRANCH: master
+
 jobs:
-  notify:
-    name: Dispatch filecoin-services release
+  update-synapse-sdk:
+    name: Update synapse-sdk contracts ref
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout filecoin-services
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
+      - name: Validate synapse-sdk token
+        env:
+          SYNAPSE_SDK_DISPATCH_TOKEN: ${{ secrets.SYNAPSE_SDK_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SYNAPSE_SDK_DISPATCH_TOKEN:-}" ]; then
+            echo "Error: SYNAPSE_SDK_DISPATCH_TOKEN is not configured."
+            exit 1
+          fi
 
       - name: Resolve release ref
         id: release
@@ -68,7 +82,7 @@ jobs:
           elif git show-ref --verify --quiet "$tag_ref"; then
             sha="$(git rev-list -n 1 "$tag_ref")"
           else
-            echo "Error: could not resolve $tag_ref locally. Provide the sha input for manual test dispatches with non-existent tags."
+            echo "Error: could not resolve $tag_ref locally. Provide the sha input for manual test runs with non-existent tags."
             exit 1
           fi
 
@@ -77,81 +91,180 @@ jobs:
             exit 1
           fi
 
+          safe_tag="$(printf '%s' "$tag" | tr -c 'A-Za-z0-9._-' '-')"
+          branch_name="chore/update-filecoin-services-$safe_tag"
+
+          echo "Release tag: $tag"
+          echo "Release tag ref: $tag_ref"
+          echo "Release SHA: $sha"
+          echo "Synapse SDK branch: $branch_name"
+
           {
             echo "tag=$tag"
             echo "tag_ref=$tag_ref"
             echo "sha=$sha"
+            echo "branch_name=$branch_name"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch synapse-sdk update
+      - name: Checkout synapse-sdk
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.SYNAPSE_SDK_REPOSITORY }}
+          ref: ${{ env.SYNAPSE_SDK_BASE_BRANCH }}
+          token: ${{ secrets.SYNAPSE_SDK_DISPATCH_TOKEN }}
+          path: ${{ env.SYNAPSE_SDK_PATH }}
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.33.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Update synapse-sdk
+        id: update
+        working-directory: ${{ env.SYNAPSE_SDK_PATH }}
         env:
-          SYNAPSE_SDK_DISPATCH_TOKEN: ${{ secrets.SYNAPSE_SDK_DISPATCH_TOKEN }}
-          TAG: ${{ steps.release.outputs.tag }}
-          TAG_REF: ${{ steps.release.outputs.tag_ref }}
-          SHA: ${{ steps.release.outputs.sha }}
+          FILECOIN_SERVICES_TAG: ${{ steps.release.outputs.tag }}
+          FILECOIN_SERVICES_SHA: ${{ steps.release.outputs.sha }}
+          BRANCH_NAME: ${{ steps.release.outputs.branch_name }}
+          BASE_BRANCH: ${{ env.SYNAPSE_SDK_BASE_BRANCH }}
         run: |
           set -euo pipefail
 
-          if [ -z "${SYNAPSE_SDK_DISPATCH_TOKEN:-}" ]; then
-            echo "Error: SYNAPSE_SDK_DISPATCH_TOKEN is not configured."
-            exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$BASE_BRANCH"
+          git switch -C "$BRANCH_NAME" "origin/$BASE_BRANCH"
+
+          node <<'NODE'
+          const fs = require('node:fs')
+
+          const configPath = 'packages/synapse-core/wagmi.config.ts'
+          const tag = process.env.FILECOIN_SERVICES_TAG
+          const sha = process.env.FILECOIN_SERVICES_SHA
+          const current = fs.readFileSync(configPath, 'utf8')
+          const pattern = /^const FILECOIN_SERVICES_GIT_REF = '[^']+'(?:\s*\/\/.*)?$/m
+          const replacement = `const FILECOIN_SERVICES_GIT_REF = '${sha}' // ${tag}`
+
+          if (!pattern.test(current)) {
+            throw new Error(`Could not find FILECOIN_SERVICES_GIT_REF in ${configPath}`)
+          }
+
+          fs.writeFileSync(configPath, current.replace(pattern, replacement))
+          NODE
+
+          pnpm install
+          pnpm -r --filter @filoz/synapse-core run generate-abi
+          pnpm run lint
+          pnpm run build
+
+          git status --short
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No synapse-sdk changes detected for $FILECOIN_SERVICES_TAG."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          echo "Dispatching filecoin-services-release to FilOzone/synapse-sdk"
-          echo "Tag: $TAG"
-          echo "Tag ref: $TAG_REF"
-          echo "SHA: $SHA"
+          git add packages/synapse-core/wagmi.config.ts packages/synapse-core/src/abis
 
-          payload_file="$RUNNER_TEMP/synapse-sdk-dispatch.json"
-          response_file="$RUNNER_TEMP/synapse-sdk-dispatch-response.json"
-
-          jq -n \
-            --arg event_type "filecoin-services-release" \
-            --arg tag "$TAG" \
-            --arg sha "$SHA" \
-            --arg source_repo "$GITHUB_REPOSITORY" \
-            '{
-              event_type: $event_type,
-              client_payload: {
-                tag: $tag,
-                sha: $sha,
-                source_repo: $source_repo
-              }
-            }' > "$payload_file"
-
-          status_code="$(
-            curl --silent --show-error \
-              --request POST \
-              --url "https://api.github.com/repos/FilOzone/synapse-sdk/dispatches" \
-              --header "Accept: application/vnd.github+json" \
-              --header "Authorization: Bearer $SYNAPSE_SDK_DISPATCH_TOKEN" \
-              --header "Content-Type: application/json" \
-              --header "X-GitHub-Api-Version: 2022-11-28" \
-              --data @"$payload_file" \
-              --output "$response_file" \
-              --write-out "%{http_code}"
-          )"
-
-          if [ "$status_code" != "204" ]; then
-            echo "Error: GitHub repository dispatch failed with HTTP $status_code."
-            if [ -s "$response_file" ]; then
-              cat "$response_file"
-            fi
-            exit 1
+          if git diff --cached --quiet; then
+            echo "No committable synapse-sdk changes detected after filtering generated files."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-          echo "FilOzone/synapse-sdk accepted repository_dispatch event filecoin-services-release (204)."
+          git commit -m "chore(synapse-core): update filecoin-services ref to $FILECOIN_SERVICES_TAG"
+
+          {
+            echo "has_changes=true"
+            echo "commit=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Push synapse-sdk branch
+        if: steps.update.outputs.has_changes == 'true'
+        working-directory: ${{ env.SYNAPSE_SDK_PATH }}
+        env:
+          BRANCH_NAME: ${{ steps.release.outputs.branch_name }}
+        run: |
+          set -euo pipefail
+
+          git push --force-with-lease origin "$BRANCH_NAME"
+
+      - name: Open synapse-sdk PR
+        if: steps.update.outputs.has_changes == 'true'
+        id: pull_request
+        working-directory: ${{ env.SYNAPSE_SDK_PATH }}
+        env:
+          GH_TOKEN: ${{ secrets.SYNAPSE_SDK_DISPATCH_TOKEN }}
+          FILECOIN_SERVICES_TAG: ${{ steps.release.outputs.tag }}
+          FILECOIN_SERVICES_SHA: ${{ steps.release.outputs.sha }}
+          BRANCH_NAME: ${{ steps.release.outputs.branch_name }}
+          BASE_BRANCH: ${{ env.SYNAPSE_SDK_BASE_BRANCH }}
+        run: |
+          set -euo pipefail
+
+          title="chore(synapse-core): update filecoin-services ref to $FILECOIN_SERVICES_TAG"
+          body_file="$RUNNER_TEMP/synapse-sdk-pr-body.md"
+
+          {
+            echo "Automated update from FilOzone/filecoin-services release \`$FILECOIN_SERVICES_TAG\`."
+            echo ""
+            echo "Changes:"
+            echo "- Updates \`FILECOIN_SERVICES_GIT_REF\` to \`$FILECOIN_SERVICES_SHA\`"
+            echo "- Regenerates synapse-core ABIs and contract addresses"
+            echo ""
+            echo "Source:"
+            echo "- Release tag: https://github.com/FilOzone/filecoin-services/releases/tag/$FILECOIN_SERVICES_TAG"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$body_file"
+
+          pr_url="$(gh pr view "$BRANCH_NAME" --repo "$SYNAPSE_SDK_REPOSITORY" --json url --jq .url 2>/dev/null || true)"
+
+          if [ -n "$pr_url" ]; then
+            gh pr edit "$pr_url" --title "$title" --body-file "$body_file"
+          else
+            pr_url="$(
+              gh pr create \
+                --repo "$SYNAPSE_SDK_REPOSITORY" \
+                --title "$title" \
+                --body-file "$body_file" \
+                --base "$BASE_BRANCH" \
+                --head "$BRANCH_NAME"
+            )"
+          fi
+
+          echo "Synapse SDK PR: $pr_url"
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
 
       - name: Summary
+        if: always()
         env:
           TAG: ${{ steps.release.outputs.tag }}
           SHA: ${{ steps.release.outputs.sha }}
+          BRANCH_NAME: ${{ steps.release.outputs.branch_name }}
+          HAS_CHANGES: ${{ steps.update.outputs.has_changes }}
+          SYNAPSE_COMMIT: ${{ steps.update.outputs.commit }}
+          SYNAPSE_PR_URL: ${{ steps.pull_request.outputs.pr_url }}
         run: |
           {
-            echo "## Synapse SDK notification sent"
+            echo "## Synapse SDK update"
             echo ""
-            echo "**Event**: \`filecoin-services-release\`"
-            echo "**Target**: \`FilOzone/synapse-sdk\`"
             echo "**Tag**: \`$TAG\`"
             echo "**SHA**: \`$SHA\`"
+            echo "**Target repo**: \`$SYNAPSE_SDK_REPOSITORY\`"
+            echo "**Branch**: \`$BRANCH_NAME\`"
+            echo ""
+
+            if [ "$HAS_CHANGES" = "true" ]; then
+              echo "**Synapse commit**: \`$SYNAPSE_COMMIT\`"
+              echo "**Synapse PR**: $SYNAPSE_PR_URL"
+            else
+              echo "No synapse-sdk changes were needed."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
