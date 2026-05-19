@@ -12,11 +12,11 @@
     ]
   },
   "addPieces": {
-    "signature": "0x27e3a89a2b33f19c04986d9b3d705bd9312c1a0be123b1646aacc5bba46246e07de6cad74cfb4755d97bbb1aeb64bd8adb2f0f1d85afdf7b51feae7f184dd6131b",
+    "signature": "0xe629320e4fed8eebdc015f875541230d1478aac9308117b66d4a165de54e28096439705e753274f445b4c62a5ccdf53761efaec6c8f235c3199326a5023daa481b",
     "clientDataSetId": 12345,
     "nonce": 1,
     "pieceCidBytes": [
-      "0x01559120220500de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c",
+      "0x01559120220005de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c",
       "0x01559120227e03642a607ef886b004bf2c1978463ae1d4693ac0f410eb2d1b7a47fe205e5e750f"
     ],
     "metadata": [
@@ -33,8 +33,8 @@
       5
     ]
   },
-  "deleteDataSet": {
-    "signature": "0x82d85f7517c3ebcf68b9ebe200a46627d451219a3a71a95ea7ffce1cd661cc6d553db47958d27c33ccf1105388e1b640cf575a966b0bd4814ed0ec428daa628a1b",
+  "terminateService": {
+    "signature": "0xcc161b61bae2015bf815fdef0221c5a88fe5b862e58b7a030b0435a387b4059e04e267fc95ee525b8f7ceb70672c15ddb47179ce09f9fce7d1496fdc5d3f0ffb1c",
     "dataSetId": 67890
   }
 }

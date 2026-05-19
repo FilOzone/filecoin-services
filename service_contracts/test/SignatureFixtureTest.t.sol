@@ -40,15 +40,15 @@ import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol"
  * Typehashes for operations the FWSS contract implements come from
  * SignatureVerificationLib so any rename in the library will surface here as
  * a fixture mismatch (caught by external_signatures.json + the SDK fixtures).
- * DELETE_DATA_SET_TYPEHASH is declared locally because the FWSS contract
- * doesn't currently implement DeleteDataSet (handler removed in #255); move
- * it into the library when the impl returns.
+ * TERMINATE_SERVICE_TYPEHASH is declared locally because the FWSS contract
+ * doesn't currently implement TerminateService auth; move it into the library
+ * when the impl lands.
  */
 contract MetadataSignatureTestContract {
     bytes32 private constant EIP712_DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
-    bytes32 private constant DELETE_DATA_SET_TYPEHASH = keccak256("DeleteDataSet(uint256 dataSetId)");
+    bytes32 private constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
 
     bytes32 private immutable _domainSeparator;
 
@@ -111,12 +111,12 @@ contract MetadataSignatureTestContract {
         return signer == payer;
     }
 
-    function verifyDeleteDataSetSignature(address payer, uint256 dataSetId, bytes memory signature)
+    function verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature)
         public
         view
         returns (bool)
     {
-        bytes32 digest = getDeleteDataSetDigest(dataSetId);
+        bytes32 digest = getTerminateServiceDigest(dataSetId);
         address signer = ECDSA.recover(digest, signature);
         return signer == payer;
     }
@@ -164,8 +164,8 @@ contract MetadataSignatureTestContract {
         return _hashTypedData(structHash);
     }
 
-    function getDeleteDataSetDigest(uint256 dataSetId) public view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(DELETE_DATA_SET_TYPEHASH, dataSetId));
+    function getTerminateServiceDigest(uint256 dataSetId) public view returns (bytes32) {
+        bytes32 structHash = keccak256(abi.encode(TERMINATE_SERVICE_TYPEHASH, dataSetId));
         return _hashTypedData(structHash);
     }
 }
@@ -185,7 +185,7 @@ contract MetadataSignatureFixturesTest is Test {
     // Test data
     // CLIENT_DATA_SET_ID is the per-client nonce signed for create/add/schedule
     // operations (assigned by the client, opaque to the contract). DATA_SET_ID
-    // is the canonical PDPVerifier-assigned id signed for delete. Distinct
+    // is the canonical PDPVerifier-assigned id signed for terminate. Distinct
     // values keep the conceptual separation visible in the fixtures.
     uint256 constant CLIENT_DATA_SET_ID = 12345;
     uint256 constant DATA_SET_ID = 67890;
@@ -211,14 +211,14 @@ contract MetadataSignatureFixturesTest is Test {
         bytes memory createDataSetSig = generateCreateDataSetSignature(dataSetKeys, dataSetValues);
         bytes memory addPiecesSig = generateAddPiecesSignature(pieceKeys, pieceValues);
         bytes memory scheduleRemovalsSig = generateSchedulePieceRemovalsSignature(testPieceIds);
-        bytes memory deleteDataSetSig = generateDeleteDataSetSignature(DATA_SET_ID);
+        bytes memory terminateServiceSig = generateTerminateServiceSignature(DATA_SET_ID);
 
         // Compute SDK-format extraData (abi-encoded, matching synapse-core sign-* helpers)
         bytes memory createDataSetExtraData =
             encodeCreateDataSetExtraData(TEST_SIGNER, CLIENT_DATA_SET_ID, dataSetKeys, dataSetValues, createDataSetSig);
         bytes memory addPiecesExtraData = encodeAddPiecesExtraData(FIRST_ADDED, pieceKeys, pieceValues, addPiecesSig);
         bytes memory scheduleRemovalsExtraData = encodeSignatureBytes(scheduleRemovalsSig);
-        bytes memory deleteDataSetExtraData = encodeSignatureBytes(deleteDataSetSig);
+        bytes memory terminateServiceExtraData = encodeSignatureBytes(terminateServiceSig);
 
         // Output FIXTURES const for synapse-sdk (typed-data.test.ts)
         console.log("Copy to typed-data.test.ts FIXTURES:");
@@ -247,9 +247,9 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      clientDataSetId: %dn,", CLIENT_DATA_SET_ID);
         console.log("      pieceIds: [%dn, %dn, %dn],", testPieceIds[0], testPieceIds[1], testPieceIds[2]);
         console.log("    },");
-        console.log("    deleteDataSet: {");
+        console.log("    terminateService: {");
         console.log("      extraData:");
-        console.log("        '%s' as Hex,", vm.toString(deleteDataSetExtraData));
+        console.log("        '%s' as Hex,", vm.toString(terminateServiceExtraData));
         console.log("      dataSetId: %dn,", DATA_SET_ID);
         console.log("    },");
         console.log("  },");
@@ -293,8 +293,8 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      %d", testPieceIds[2]);
         console.log("    ]");
         console.log("  },");
-        console.log("  \"deleteDataSet\": {");
-        console.log("    \"signature\": \"%s\",", vm.toString(deleteDataSetSig));
+        console.log("  \"terminateService\": {");
+        console.log("    \"signature\": \"%s\",", vm.toString(terminateServiceSig));
         console.log("    \"dataSetId\": %d", DATA_SET_ID);
         console.log("  }");
         console.log("}");
@@ -322,8 +322,8 @@ contract MetadataSignatureFixturesTest is Test {
         );
 
         assertTrue(
-            testContract.verifyDeleteDataSetSignature(TEST_SIGNER, DATA_SET_ID, deleteDataSetSig),
-            "DeleteDataSet signature verification failed"
+            testContract.verifyTerminateServiceSignature(TEST_SIGNER, DATA_SET_ID, terminateServiceSig),
+            "TerminateService signature verification failed"
         );
     }
 
@@ -339,7 +339,7 @@ contract MetadataSignatureFixturesTest is Test {
         testCreateDataSetSignature(json, signer);
         testAddPiecesSignature(json, signer);
         testSchedulePieceRemovalsSignature(json, signer);
-        testDeleteDataSetSignature(json, signer);
+        testTerminateServiceSignature(json, signer);
 
         console.log("All external signature tests PASSED!");
     }
@@ -383,7 +383,7 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("    { name: 'clientDataSetId', type: 'uint256' },");
         console.log("    { name: 'pieceIds', type: 'uint256[]' }");
         console.log("  ],");
-        console.log("  DeleteDataSet: [");
+        console.log("  TerminateService: [");
         console.log("    { name: 'dataSetId', type: 'uint256' }");
         console.log("  ]");
     }
@@ -410,7 +410,7 @@ contract MetadataSignatureFixturesTest is Test {
         Cids.Cid[] memory pieceCidsArray = new Cids.Cid[](2);
 
         pieceCidsArray[0] = Cids.Cid({
-            data: abi.encodePacked(hex"01559120220500de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c")
+            data: abi.encodePacked(hex"01559120220005de6815dcb348843215a94de532954b60be550a4bec6e74555665e9a5ec4e0f3c")
         });
         pieceCidsArray[1] = Cids.Cid({
             data: abi.encodePacked(hex"01559120227e03642a607ef886b004bf2c1978463ae1d4693ac0f410eb2d1b7a47fe205e5e750f")
@@ -445,8 +445,8 @@ contract MetadataSignatureFixturesTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
-    function generateDeleteDataSetSignature(uint256 dataSetId) internal view returns (bytes memory) {
-        bytes32 digest = testContract.getDeleteDataSetDigest(dataSetId);
+    function generateTerminateServiceSignature(uint256 dataSetId) internal view returns (bytes memory) {
+        bytes32 digest = testContract.getTerminateServiceDigest(dataSetId);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
         return abi.encodePacked(r, s, v);
     }
@@ -536,13 +536,13 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("  SchedulePieceRemovals: PASSED");
     }
 
-    function testDeleteDataSetSignature(string memory json, address signer) internal view {
-        string memory signature = vm.parseJsonString(json, ".deleteDataSet.signature");
-        uint256 dataSetId = vm.parseJsonUint(json, ".deleteDataSet.dataSetId");
+    function testTerminateServiceSignature(string memory json, address signer) internal view {
+        string memory signature = vm.parseJsonString(json, ".terminateService.signature");
+        uint256 dataSetId = vm.parseJsonUint(json, ".terminateService.dataSetId");
 
-        bool isValid = testContract.verifyDeleteDataSetSignature(signer, dataSetId, vm.parseBytes(signature));
+        bool isValid = testContract.verifyTerminateServiceSignature(signer, dataSetId, vm.parseBytes(signature));
 
-        assertTrue(isValid, "DeleteDataSet signature verification failed");
-        console.log("  DeleteDataSet: PASSED");
+        assertTrue(isValid, "TerminateService signature verification failed");
+        console.log("  TerminateService: PASSED");
     }
 }
