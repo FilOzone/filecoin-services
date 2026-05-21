@@ -24,7 +24,7 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 import {Errors as PayErrors} from "@fws-payments/Errors.sol";
-import {calculateStorageSizeBasedRatePerEpoch} from "../src/lib/PriceListUSDFC.sol";
+import {calculateStorageSizeBasedRatePerEpoch, DATASET_FEE_PER_EPOCH} from "../src/lib/PriceListUSDFC.sol";
 
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -914,7 +914,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedNoCDN = 25 * 10 ** (decimals - 1); // 2.5 USDFC with 18 decimals
         uint256 expectedCDNEgress = 7 * 10 ** decimals; // 7 USDFC per TiB of CDN egress
         uint256 expectedCacheMissEgress = 7 * 10 ** decimals; // 7 USDFC per TiB of cache miss egress
-        uint256 expectedMinimum = (6 * 10 ** decimals) / 100; // 0.06 USDFC minimum
+        uint256 expectedMinimum = (24 * 10 ** decimals) / 1000; // 0.024 USDFC per-dataset fee
 
         assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 2.5 * 10^decimals");
         assertEq(pricing.pricePerTiBCdnEgress, expectedCDNEgress, "CDN egress price should be 7 * 10^decimals per TiB");
@@ -925,7 +925,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
         assertEq(address(pricing.tokenAddress), address(mockUSDFC), "Token address should match USDFC");
         assertEq(pricing.epochsPerMonth, 86400, "Epochs per month should be 86400");
-        assertEq(pricing.minimumPricePerMonth, expectedMinimum, "Minimum price should be 0.06 * 10^decimals");
+        assertEq(pricing.datasetFeePerMonth, expectedMinimum, "Dataset fee should be 0.024 * 10^decimals");
 
         // Verify the values are in expected range
         assert(pricing.pricePerTiBPerMonthNoCDN < 10 ** 20); // Less than 10^20
@@ -953,104 +953,60 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assert(serviceFee + spPayment < 10 ** 20); // Less than 10^20
     }
 
-    // Minimum Pricing Tests
-    function testMinimumPricing_SmallDataSetsPayFloorRate() public pure {
-        // Small datasets should all pay the minimum floor rate of 0.06 USDFC/month
+    // Per-Dataset Fee Tests
+    function testDatasetFee_AllSizesIncludeFee() public pure {
+        // All datasets pay size-proportional rate plus the per-dataset fee of 0.024 USDFC/month
         uint256 decimals = 18;
         uint256 oneGiB = 1024 * 1024 * 1024;
+        uint256 datasetFeePerEpoch = (24 * 10 ** decimals) / 1000 / 86400;
 
-        // Expected minimum: 0.06 USDFC/month = 6/100 with 18 decimals
-        uint256 expectedMinPerMonth = (6 * 10 ** decimals) / 100;
-        uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400; // Convert to per-epoch
-
-        // Test 0 bytes
+        // 0 bytes: only the dataset fee
         uint256 rateZero = calculateStorageSizeBasedRatePerEpoch(0);
-        assertEq(rateZero, expectedMinPerEpoch, "0 bytes should return 0.06 USDFC/month minimum");
+        assertEq(rateZero, datasetFeePerEpoch, "0 bytes should return only the dataset fee");
 
-        // Test 1 GiB
+        // Positive sizes should exceed the fee alone
         uint256 rateOneGiB = calculateStorageSizeBasedRatePerEpoch(oneGiB);
-        assertEq(rateOneGiB, expectedMinPerEpoch, "1 GiB should return minimum rate");
+        assert(rateOneGiB > datasetFeePerEpoch);
 
-        // Test 10 GiB
         uint256 rateTenGiB = calculateStorageSizeBasedRatePerEpoch(10 * oneGiB);
-        assertEq(rateTenGiB, expectedMinPerEpoch, "10 GiB should return minimum rate");
-
-        // Test 24 GiB (below crossover)
-        uint256 rateTwentyFourGiB = calculateStorageSizeBasedRatePerEpoch(24 * oneGiB);
-        assertEq(rateTwentyFourGiB, expectedMinPerEpoch, "24 GiB should return minimum rate");
+        assert(rateTenGiB > rateOneGiB);
     }
 
-    function testMinimumPricing_CrossoverPoint() public pure {
-        // Test the crossover where natural pricing exceeds minimum
-        // At 2.5 USDFC/TiB: 0.06/2.5*1024 = 24.576 GiB is the crossover
-        uint256 oneGiB = 1024 * 1024 * 1024;
+    function testDatasetFee_IsAdditive() public pure {
+        // Verify that the rate equals size-based component plus dataset fee
         uint256 decimals = 18;
-        uint256 expectedMinPerMonth = (6 * 10 ** decimals) / 100;
-        uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
-
-        // 24 GiB: natural rate (0.0586) < minimum (0.06), so returns minimum
-        uint256 rate24GiB = calculateStorageSizeBasedRatePerEpoch(24 * oneGiB);
-        assertEq(rate24GiB, expectedMinPerEpoch, "24 GiB should use minimum floor");
-
-        // 25 GiB: natural rate (0.0610) > minimum (0.06), so returns natural rate
-        uint256 rate25GiB = calculateStorageSizeBasedRatePerEpoch(25 * oneGiB);
-        assert(rate25GiB > expectedMinPerEpoch);
-
-        // Verify it's actually proportional (not minimum)
-        uint256 expectedNatural25 = rate25GiB * 86400; // Convert to monthly
-        uint256 expected25Monthly = (25 * 10 ** decimals * 25) / (1024 * 10); // 25 GiB at 2.5 USDFC/TiB
-        // Tolerance: actual loss is ~16,000 from integer division, allow 100,000 for safety
-        assertApproxEqAbs(expectedNatural25, expected25Monthly, 100000, "25 GiB should use natural rate");
-    }
-
-    function testMinimumPricing_LargeDataSetsUseProportionalPricing() public pure {
-        // Large datasets should use proportional pricing (natural rate > minimum)
         uint256 oneGiB = 1024 * 1024 * 1024;
-        uint256 decimals = 18;
-        uint256 expectedMinPerMonth = (6 * 10 ** decimals) / 100;
-        uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
+        uint256 oneTiB = oneGiB * 1024;
+        uint256 datasetFeePerEpoch = (24 * 10 ** decimals) / 1000 / 86400;
 
-        // Test 48 GiB
+        // For 1 TiB: size rate = 2.5 USDFC / 86400 epochs per month
+        uint256 expectedSizeRatePerEpoch = (25 * 10 ** (decimals - 1)) / 86400;
+        uint256 rate1TiB = calculateStorageSizeBasedRatePerEpoch(oneTiB);
+        assertEq(
+            rate1TiB, expectedSizeRatePerEpoch + datasetFeePerEpoch, "1 TiB rate should be size rate + dataset fee"
+        );
+
+        // Rates still scale proportionally for the size component
         uint256 rate48GiB = calculateStorageSizeBasedRatePerEpoch(48 * oneGiB);
-        assert(rate48GiB > expectedMinPerEpoch);
-
-        // Test 100 GiB
         uint256 rate100GiB = calculateStorageSizeBasedRatePerEpoch(100 * oneGiB);
         assert(rate100GiB > rate48GiB);
-
-        // Test 1 TiB
-        uint256 oneTiB = oneGiB * 1024;
-        uint256 rateOneTiB = calculateStorageSizeBasedRatePerEpoch(oneTiB);
-        assert(rateOneTiB > rate100GiB);
-
-        // Verify proportional scaling
-        assertApproxEqRel(rate100GiB, rate48GiB * 100 / 48, 0.01e18, "Rates should scale proportionally");
     }
 
-    function testMinimumPricing_ExactlyPoint06USDFC() public pure {
-        // Verify that minimum pricing is exactly 0.06 USDFC/month for small datasets
-        uint256 decimals = 18; // MockUSDFC uses 18 decimals in tests
-        uint256 oneGiB = 1024 * 1024 * 1024;
+    function testDatasetFee_ExactlyPoint024USDFC() public pure {
+        // Verify that the per-epoch dataset fee is exact (both sides truncate identically)
+        uint256 decimals = 18;
 
-        // Get rate per epoch for dataset below crossover point
-        uint256 ratePerEpoch = calculateStorageSizeBasedRatePerEpoch(oneGiB);
+        uint256 ratePerEpoch = calculateStorageSizeBasedRatePerEpoch(0);
+        uint256 expectedFeePerEpoch = (24 * 10 ** decimals) / 1000 / 86400;
 
-        // Convert to rate per month (86400 epochs per month)
-        uint256 ratePerMonth = ratePerEpoch * 86400;
-
-        // Expected: exactly 0.06 USDFC with 18 decimals = 60000000000000000
-        // Allow tiny tolerance for integer division rounding (0.06 / 86400 rounds down)
-        uint256 expected = (6 * 10 ** decimals) / 100;
-        uint256 tolerance = 1; // Allow 1 per epoch difference = 86400 total
-
-        assertApproxEqAbs(ratePerMonth, expected, tolerance * 86400, "Minimum rate should be 0.06 USDFC/month");
+        assertEq(ratePerEpoch, expectedFeePerEpoch, "Dataset fee per epoch should be exact");
     }
 
     // Minimum Funds Validation Tests
     function testInsufficientFunds_BelowMinimum() public {
-        // Setup: Client with insufficient funds (below 0.16 USDFC minimum = 0.06 lockup + 0.1 sybil fee)
+        // Setup: Client with insufficient funds (below 0.124 USDFC minimum = 0.024 dataset fee + 0.1 sybil fee)
         address insufficientClient = makeAddr("insufficientClient");
-        uint256 insufficientAmount = 15e16; // 0.15 USDFC (below 0.16 minimum)
+        uint256 insufficientAmount = 12e16; // 0.12 USDFC (below 0.124 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(insufficientClient, insufficientAmount);
@@ -1079,8 +1035,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             createData.signature
         );
 
-        // Expected minimum: 0.06 USDFC lockup + 0.1 USDFC sybil fee = 0.16 USDFC = 16e16
-        uint256 minimumRequired = 16e16;
+        // Expected minimum: 0.024 USDFC dataset fee + 0.1 USDFC sybil fee = 0.124 USDFC = 124e15
+        uint256 minimumRequired = 124e15;
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1094,9 +1050,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_ExactMinimum() public {
-        // Setup: Client with exactly the minimum funds (0.16 USDFC = 0.06 lockup + 0.1 sybil fee)
+        // Setup: Client with exactly the minimum funds (0.124 USDFC = 0.024 dataset fee + 0.1 sybil fee)
         address exactClient = makeAddr("exactClient");
-        uint256 exactAmount = 16e16; // Exactly 0.16 USDFC
+        uint256 exactAmount = 124e15; // Exactly 0.124 USDFC
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(exactClient, exactAmount);
@@ -1135,9 +1091,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_JustAboveMinimum() public {
-        // Setup: Client with slightly more than minimum (0.17 USDFC)
+        // Setup: Client with slightly more than minimum (0.125 USDFC)
         address aboveMinClient = makeAddr("aboveMinClient");
-        uint256 aboveMinAmount = 17e16; // 0.17 USDFC (just above 0.16 minimum)
+        uint256 aboveMinAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(aboveMinClient, aboveMinAmount);
@@ -1182,7 +1138,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Setup: Client with minimal funds - just enough to create an empty dataset
         address limitedClient = makeAddr("limitedClient");
-        uint256 limitedAmount = 17e16; // 0.17 USDFC (just above 0.16 minimum = 0.06 lockup + 0.1 sybil fee)
+        uint256 limitedAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum = 0.024 dataset fee + 0.1 sybil fee)
 
         mockUSDFC.safeTransfer(limitedClient, limitedAmount);
 
@@ -1192,7 +1148,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         payments.deposit(mockUSDFC, limitedClient, limitedAmount);
         vm.stopPrank();
 
-        // Create dataset - should succeed with minimal funds (uses minimum floor rate)
+        // Create dataset - should succeed with minimal funds
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Limited Funds Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: limitedClient,
@@ -1326,9 +1282,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
-        // 127/128 ratio: buggy rate is 128/127 = ~1.00787x the correct rate.
+        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
         // Tolerance of 1 covers integer-division truncation differences between the two paths.
-        assertApproxEqAbs(actualRate, (buggyRate * 127) / 128, 1, "ratio between raw and Fr32 rates is 127/128");
+        assertApproxEqAbs(
+            actualRate - DATASET_FEE_PER_EPOCH,
+            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
+            1,
+            "ratio between raw and Fr32 rates is 127/128"
+        );
     }
 
     function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
@@ -1378,8 +1339,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
         uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(perPieceLeaves * 32);
         assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
+        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
         assertApproxEqAbs(
-            actualRate, (buggyRate * 127) / 128, 1, "post-removal ratio between raw and Fr32 rates is 127/128"
+            actualRate - DATASET_FEE_PER_EPOCH,
+            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
+            1,
+            "post-removal ratio between raw and Fr32 rates is 127/128"
         );
     }
 
@@ -1440,10 +1405,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
         // Calculate minimum rate per epoch
-        // MINIMUM_STORAGE_RATE_PER_MONTH = 0.06 USDFC = 6e16
+        // DATASET_FEE_PER_MONTH = 0.024 USDFC = 24e15
         // EPOCHS_PER_MONTH = 2880 * 30 = 86400
-        // minimumRatePerEpoch = 6e16 / 86400 = 694444444444 (integer division)
-        uint256 minimumRatePerEpoch = 694444444444;
+        // minimumRatePerEpoch = 24e15 / 86400 = 277777777777 (integer division)
+        uint256 minimumRatePerEpoch = 277777777777;
         uint256 insufficientRateAllowance = minimumRatePerEpoch - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
@@ -1503,12 +1468,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
         // Calculate minimum lockup required (includes sybil fee)
-        // MINIMUM_STORAGE_RATE_PER_MONTH = 0.06 USDFC = 6e16
+        // DATASET_FEE_PER_MONTH = 0.024 USDFC = 24e15
         // DEFAULT_LOCKUP_PERIOD = 86400
         // EPOCHS_PER_MONTH = 86400
-        // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        // minimumLockupRequired = 6e16 + 0.1e18 (sybil fee) = 16e16
-        uint256 minimumLockupRequired = 16e16;
+        // minimumLockupRequired = (24e15 * 86400) / 86400 = 24e15
+        // minimumLockupRequired = 24e15 + 0.1e18 (sybil fee) = 124e15
+        uint256 minimumLockupRequired = 124e15;
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals

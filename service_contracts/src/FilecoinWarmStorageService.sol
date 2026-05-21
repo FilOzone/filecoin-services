@@ -22,8 +22,8 @@ import {Extsload} from "./Extsload.sol";
 import {
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
     CDN_EGRESS_PRICE_PER_TIB,
+    DATASET_FEE_PER_MONTH,
     EPOCHS_PER_MONTH,
-    MINIMUM_STORAGE_RATE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     TOKEN_DECIMALS
@@ -174,7 +174,7 @@ contract FilecoinWarmStorageService is
         uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based)
         IERC20 tokenAddress; // Address of the USDFC token
         uint256 epochsPerMonth; // Number of epochs in a month
-        uint256 minimumPricePerMonth; // Minimum monthly charge for any dataset size (0.06 USDFC)
+        uint256 datasetFeePerMonth; // Per-dataset additive monthly fee (0.024 USDFC)
     }
 
     // Used for announcing upgrades, packed into one slot
@@ -1221,7 +1221,7 @@ contract FilecoinWarmStorageService is
             pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
             tokenAddress: usdfcTokenAddress,
             epochsPerMonth: EPOCHS_PER_MONTH,
-            minimumPricePerMonth: MINIMUM_STORAGE_RATE_PER_MONTH
+            datasetFeePerMonth: DATASET_FEE_PER_MONTH
         });
     }
 
