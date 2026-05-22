@@ -145,8 +145,6 @@ CHALLENGE_FINALITY="${CHALLENGE_FINALITY:-$DEFAULT_CHALLENGE_FINALITY}"
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-$DEFAULT_MAX_PROVING_PERIOD}"
 CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-$DEFAULT_CHALLENGE_WINDOW_SIZE}"
 
-# PDPVerifier USDFC sybil fee (constructor arg, must be > 0). Default: 0.1 USDFC (1e17 at 18 decimals).
-PDP_USDFC_SYBIL_FEE="${PDP_USDFC_SYBIL_FEE:-100000000000000000}"
 
 # ========================================
 # Deployment Helper Functions
@@ -409,7 +407,6 @@ echo
 deploy_session_key_registry_if_needed
 
 # Step 1: Deploy or use existing FilecoinPayV1 contract
-# Deployed before PDPVerifier because PDPVerifier's constructor requires its address.
 deploy_implementation_if_needed \
     "FILECOIN_PAY_ADDRESS" \
     "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
@@ -426,12 +423,10 @@ deploy_implementation_if_needed \
     "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
     "PDPVerifier implementation" \
     $PDP_INIT_COUNTER \
-    "$USDFC_TOKEN_ADDRESS" \
-    "$PDP_USDFC_SYBIL_FEE" \
-    "$FILECOIN_PAY_ADDRESS"
+    "$CHALLENGE_FINALITY"
 
 # Step 3: Deploy or use existing PDPVerifier proxy
-INIT_DATA=$(cast calldata "initialize(uint256)" $CHALLENGE_FINALITY)
+INIT_DATA=$(cast calldata "initialize()")
 deploy_proxy_if_needed \
     "PDP_VERIFIER_PROXY_ADDRESS" \
     "$PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
