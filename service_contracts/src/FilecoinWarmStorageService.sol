@@ -929,6 +929,7 @@ contract FilecoinWarmStorageService is
         terminateService(dataSetId);
     }
 
+    /// @custom:deprecated Use terminateService(uint256,bytes) instead
     function terminateService(uint256 dataSetId) public {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
