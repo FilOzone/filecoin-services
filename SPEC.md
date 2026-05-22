@@ -27,7 +27,7 @@ DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH
 finalRate             = sizeBasedRate + DATASET_FEE_PER_EPOCH
 ```
 
-Every dataset pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. An empty dataset costs 0.024 USDFC/month; a 1 TiB dataset costs 2.524 USDFC/month.
+Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. A 1 TiB dataset costs 2.524 USDFC/month. A dataset with no pieces is inactive: no proving is required and no payment accrues.
 
 **Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
 

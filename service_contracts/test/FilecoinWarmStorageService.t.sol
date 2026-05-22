@@ -1313,8 +1313,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
         uint256 firstDeadline = block.number + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline, 2 * perPieceLeaves, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, 2 * perPieceLeaves, "");
 
         uint256[] memory pieceIds = new uint256[](1);
         pieceIds[0] = 1;
@@ -1325,8 +1324,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Advance past the deadline and call nextProvingPeriod with the post-removal leaf count.
         vm.roll(firstDeadline + 1);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline + provingPeriod, perPieceLeaves, "");
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, firstDeadline + provingPeriod, perPieceLeaves, ""
+        );
 
         uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
@@ -1917,19 +1917,22 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             assertFalse(viewContract.provenPeriods(testDataSetId, i));
         }
         (uint64 maxProvingPeriod, uint256 challengeWindowSize,,) = viewContract.getPDPConfig();
-        vm.startPrank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, ""
+        );
         vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
         for (uint256 i = 0; i < 2049; i++) {
             assertFalse(viewContract.provenPeriods(testDataSetId, i));
+            vm.prank(address(mockPDPVerifier));
             pdpServiceWithPayments.possessionProven(testDataSetId, 100, 12345, CHALLENGES_PER_PROOF);
             assertTrue(viewContract.provenPeriods(testDataSetId, i));
 
             vm.roll(vm.getBlockNumber() + challengeWindowSize);
-            pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+            mockPDPVerifier.nextProvingPeriod(
+                pdpServiceWithPayments, testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, ""
+            );
             vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
         }
-        vm.stopPrank();
 
         for (uint256 i = 0; i < 2049; i++) {
             assertTrue(viewContract.provenPeriods(testDataSetId, i));
@@ -2001,8 +2004,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
@@ -2112,13 +2114,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // nextProvingPeriod
         console.log("Testing nextProvingPeriod - should revert (beyond payment end epoch)");
-        vm.prank(address(mockPDPVerifier));
         vm.expectRevert(
             abi.encodeWithSelector(
                 Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, block.number + maxProvingPeriod, 100, "");
         console.log("[OK] nextProvingPeriod correctly reverted");
 
         // Roll past the last period deadline to allow settlement
@@ -2192,8 +2193,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
@@ -2311,8 +2311,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
@@ -2350,8 +2349,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 4. Start new proving period and submit new proof
         console.log("\n4. Starting proving period and submitting proof");
         challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         // Warp to challenge window
         provingDeadline = viewContract.provingDeadline(dataSetId);
@@ -4776,8 +4774,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 firstDeadline = currentBlock + 2880; // maxProvingPeriod
         uint256 validChallengeEpoch = firstDeadline - 60 + 1;
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, validChallengeEpoch, 10, bytes(""));
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, validChallengeEpoch, 10, bytes(""));
 
         // Verify proving-related fields have non-zero values before deletion
         uint256 provingDeadlineBefore = viewContract.provingDeadline(dataSetId);
@@ -5542,8 +5539,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 _activationEpoch = vm.getBlockNumber();
         uint256 firstChallengeEpoch = _activationEpoch + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 firstDeadline = _activationEpoch + maxProvingPeriod;
 
@@ -5558,8 +5554,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 secondDeadline = firstDeadline + maxProvingPeriod;
         uint256 challengeEpoch1 = secondDeadline - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch1, 100, "");
 
         // Submit proof for period 1
         vm.roll(challengeEpoch1);
@@ -5571,8 +5566,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 thirdDeadline = secondDeadline + maxProvingPeriod;
         uint256 challengeEpoch2 = thirdDeadline - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch2, 100, "");
 
         // Submit proof for period 2
         vm.roll(challengeEpoch2);
@@ -5606,8 +5600,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5628,8 +5621,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, ""
+        );
 
         // Should settle up to start of current period
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
@@ -5679,8 +5673,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5693,8 +5686,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline0 = activationEpoch + maxProvingPeriod;
         vm.roll(deadline0 + 1);
         uint256 challengeEpoch1 = deadline0 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch1, 100, "");
 
         // Skip proof for period 1
 
@@ -5702,8 +5694,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline1 = deadline0 + maxProvingPeriod;
         vm.roll(deadline1 + 1);
         uint256 challengeEpoch2 = deadline1 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch2, 100, "");
 
         vm.roll(challengeEpoch2);
         vm.prank(address(mockPDPVerifier));
@@ -5737,8 +5728,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
         assertEq(activationEpoch, viewContract.provingActivationEpoch(dataSetId));
@@ -5749,8 +5739,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline0 = activationEpoch + maxProvingPeriod;
         vm.roll(deadline0 + 1);
         uint256 challengeEpoch1 = deadline0 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch1, 100, "");
 
         // Prove period 1
         vm.roll(challengeEpoch1);
@@ -5761,8 +5750,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline1 = deadline0 + maxProvingPeriod;
         vm.roll(deadline1 + 1);
         uint256 challengeEpoch2 = deadline1 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch2, 100, "");
 
         vm.roll(challengeEpoch2);
         vm.prank(address(mockPDPVerifier));
@@ -5857,6 +5845,113 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     }
 
     /**
+     * @notice Empty dataset (no pieces ever added): payment rate is zero and validatePayment
+     * returns 0 because proving was never activated.
+     */
+    function testEmptyDataset_NoPaymentWhenNoPieces() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty");
+
+        // No pieces added — modifyRailPayment was never called, so the rail rate is 0
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        assertEq(rail.paymentRate, 0, "Rail rate must be 0 for empty dataset");
+
+        // validatePayment returns 0 because provingActivationEpoch was never set
+        uint256 fromEpoch = block.number;
+        uint256 toEpoch = block.number + 1000;
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e18, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, 0, "No payment to SP when dataset has no pieces");
+        assertEq(result.settleUpto, fromEpoch, "Settlement must not advance for empty dataset");
+    }
+
+    /**
+     * @notice Empty dataset (no pieces ever added): SP cannot prove possession because
+     * nextProvingPeriod was never called, so provingDeadlines remains NO_PROVING_DEADLINE.
+     */
+    function testEmptyDataset_CannotProveWhenNoPieces() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty");
+
+        // Proving deadline is never set — possessionProven must revert
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProvingNotStarted.selector, dataSetId));
+        pdpServiceWithPayments.possessionProven(dataSetId, 0, 12345, CHALLENGES_PER_PROOF);
+    }
+
+    /**
+     * @notice After all pieces are removed the dataset becomes empty. The PDPVerifier signals
+     * this by passing NO_CHALLENGE_SCHEDULED (0) to nextProvingPeriod, which resets
+     * provingDeadlines to 0. Subsequent possessionProven calls must revert, and
+     * validatePayment must return 0 for epochs that fall in the now-empty period.
+     */
+    function testEmptyDataset_CannotProveAfterAllPiecesRemoved() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "WillEmpty");
+
+        // Add a single piece so the dataset is non-empty and proving can start
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("piece_to_remove"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        // Start the first proving period
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + maxProvingPeriod;
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
+
+        uint256 activationEpoch = block.number;
+
+        // Submit a valid proof for period 0
+        vm.roll(firstDeadline - (challengeWindow / 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, leafCount, 12345, CHALLENGES_PER_PROOF);
+
+        // Schedule removal of the only piece
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        // Advance past the first deadline; PDPVerifier signals the dataset is now empty by
+        // passing challengeEpoch = NO_CHALLENGE_SCHEDULED (0).
+        vm.roll(firstDeadline + 1);
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
+
+        // provingDeadlines is now 0 — possessionProven must revert
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProvingNotStarted.selector, dataSetId));
+        pdpServiceWithPayments.possessionProven(dataSetId, 0, 12345, CHALLENGES_PER_PROOF);
+
+        // validatePayment for an epoch range that falls entirely in the empty period must
+        // return 0 (the period is faulted — no proof was submitted before proving stopped).
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 emptyFrom = activationEpoch + maxProvingPeriod; // start of the now-empty period
+        uint256 emptyTo = activationEpoch + maxProvingPeriod * 2; // one full period later
+
+        vm.roll(emptyTo + 1);
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e18, emptyFrom, emptyTo, 0);
+
+        assertEq(result.modifiedAmount, 0, "No payment to SP for empty period after all pieces removed");
+    }
+
+    /**
      * @notice Test: Request range before activation - should pay nothing
      */
     function testValidatePayment_BeforeActivation() public {
@@ -5869,8 +5964,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5898,8 +5992,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5941,8 +6034,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6025,8 +6117,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Start proving period
         uint256 firstDeadline = block.number + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(setup.dataSetId, firstDeadline, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, firstDeadline, 100, "");
 
         // Schedule piece removal
         uint256[] memory pieceIds = new uint256[](1);
@@ -6046,8 +6137,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Call nextProvingPeriod to trigger cleanup
         uint256 nextDeadline = firstDeadline + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(setup.dataSetId, nextDeadline, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, nextDeadline, 100, "");
 
         // Metadata should now be cleaned up
         (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
@@ -6080,14 +6170,14 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieceData, encodedData);
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, numPieces);
 
         // Get proving period config
         (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
 
         // Start proving period
         uint256 firstDeadline = block.number + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, 100, "");
 
         // Schedule removal of all pieces
         uint256[] memory pieceIds = new uint256[](numPieces);
@@ -6107,8 +6197,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Move to next proving period and trigger cleanup
         vm.roll(block.number + provingPeriod + 1);
         uint256 nextDeadline = firstDeadline + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, nextDeadline, 0, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, nextDeadline, 0, "");
 
         // Verify all metadata is now cleaned up
         for (uint256 i = 0; i < numPieces; i++) {
@@ -6130,8 +6219,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6165,8 +6253,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6198,8 +6285,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6274,8 +6360,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         // Submit proof for first period
         vm.roll(challengeEpoch);
@@ -6319,8 +6404,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
