@@ -732,6 +732,24 @@
   },
   {
     "type": "function",
+    "name": "terminateService",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "topUpCDNPaymentRails",
     "inputs": [
       {

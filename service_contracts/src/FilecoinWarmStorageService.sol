@@ -925,7 +925,11 @@ contract FilecoinWarmStorageService is
         revert Errors.StorageProviderChangesNotSupported();
     }
 
-    function terminateService(uint256 dataSetId) external {
+    function terminateService(uint256 dataSetId, bytes memory /*extraData*/ ) external {
+        terminateService(dataSetId);
+    }
+
+    function terminateService(uint256 dataSetId) public {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
