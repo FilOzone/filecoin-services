@@ -19,17 +19,17 @@ TiB                           = 1099511627776 # bytes
 
 # Default pricing (owner-adjustable)
 STORAGE_PRICE_PER_TIB_PER_MONTH = 2.5 USDFC
-MINIMUM_STORAGE_RATE_PER_MONTH  = 0.06 USDFC
+DATASET_FEE_PER_MONTH           = 0.024 USDFC
 
 # Per-epoch rate calculation
-sizeBasedRate                  = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
-MINIMUM_STORAGE_RATE_PER_EPOCH = MINIMUM_STORAGE_RATE_PER_MONTH ÷ EPOCHS_PER_MONTH
-finalRate                      = max(sizeBasedRate, MINIMUM_STORAGE_RATE_PER_EPOCH)
+sizeBasedRate         = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
+DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH
+finalRate             = sizeBasedRate + DATASET_FEE_PER_EPOCH
 ```
 
-The default minimum floor ensures datasets below ~24.58 GiB still generate the minimum payment of 0.06 USDFC/month.
+Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. A 1 TiB dataset costs 2.524 USDFC/month. A dataset with no pieces is inactive: no proving is required and no payment accrues.
 
-**Precision note**: Integer division when computing `minimumRate` causes minor precision loss. The actual monthly payment (`minimumRate × EPOCHS_PER_MONTH`) is slightly less than `minimumStorageRatePerMonth`—under 0.0001% for typical floor prices. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+**Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
 
 ### Pricing Updates
 
@@ -77,9 +77,9 @@ Clients pay for storage by depositing USDFC into the Filecoin Pay contract. Thes
 lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-At minimum pricing, this equals `minimumStorageRatePerMonth` (0.06 USDFC at default settings). For larger datasets, the lockup equals one month's storage cost.
+For an empty dataset this equals `DATASET_FEE_PER_MONTH` (0.024 USDFC). For datasets with data, the lockup equals one month's total cost (size-based rate plus dataset fee).
 
-**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(minimumStorageRatePerMonth × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages (the configured floor price rather than a value with precision loss artifacts) and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
+**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(DATASET_FEE_PER_MONTH × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
 
 **Storage duration** extends as clients deposit additional funds:
 

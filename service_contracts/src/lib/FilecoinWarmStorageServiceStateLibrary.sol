@@ -6,11 +6,7 @@ import {Errors} from "../Errors.sol";
 import {
     CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
 } from "../FilecoinWarmStorageService.sol";
-import {
-    MINIMUM_STORAGE_RATE_PER_MONTH,
-    SERVICE_COMMISSION_BPS,
-    STORAGE_PRICE_PER_TIB_PER_MONTH
-} from "./PriceListUSDFC.sol";
+import {DATASET_FEE_PER_MONTH, SERVICE_COMMISSION_BPS, STORAGE_PRICE_PER_TIB_PER_MONTH} from "./PriceListUSDFC.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
@@ -605,13 +601,13 @@ library FilecoinWarmStorageServiceStateLibrary {
     /**
      * @notice Get the current pricing rates
      * @return storagePrice Current storage price per TiB per month
-     * @return minimumRate Current minimum monthly storage rate
+     * @return datasetFee Per-dataset additive monthly fee
      */
     function getCurrentPricingRates(FilecoinWarmStorageService)
         public
         pure
-        returns (uint256 storagePrice, uint256 minimumRate)
+        returns (uint256 storagePrice, uint256 datasetFee)
     {
-        return (STORAGE_PRICE_PER_TIB_PER_MONTH, MINIMUM_STORAGE_RATE_PER_MONTH);
+        return (STORAGE_PRICE_PER_TIB_PER_MONTH, DATASET_FEE_PER_MONTH);
     }
 }

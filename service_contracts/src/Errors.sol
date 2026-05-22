@@ -41,8 +41,8 @@ library Errors {
     enum PriceType {
         /// Storage price per TiB per month
         Storage,
-        /// Minimum monthly storage rate (floor price)
-        MinimumRate
+        /// Per-dataset additive monthly fee
+        DatasetFee
     }
 
     /// @notice An expected contract or participant address was the zero address

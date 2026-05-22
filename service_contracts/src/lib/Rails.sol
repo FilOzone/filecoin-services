@@ -5,11 +5,12 @@ import {Errors} from "../Errors.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {
+    DATASET_FEE_PER_EPOCH,
+    DATASET_FEE_PER_MONTH,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
     DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
-    MINIMUM_STORAGE_RATE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
     SYBIL_FEE,
     calculateStorageRate
@@ -54,13 +55,11 @@ library Rails {
         address payer,
         bool includeCDN
     ) internal view {
-        // Calculate required lockup for minimum pricing.
-        // We use multiply-first here to preserve the exact monthly value for cleaner error messages
-        // (a round number like the configured floor price, rather than a value with many trailing digits
-        // from precision loss). This is slightly more conservative than the actual rail lockup (which
-        // uses the truncated per-epoch rate), but the difference is under 0.0001% and always in the
-        // user's favor - they are never required to have less than what the rail will actually lock.
-        uint256 minimumLockupRequired = (MINIMUM_STORAGE_RATE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+        // Calculate required lockup for the per-dataset fee.
+        // We use multiply-first here to preserve the exact monthly value for cleaner error messages.
+        // This is slightly more conservative than the actual rail lockup (which uses the truncated
+        // per-epoch rate), but the difference is under 0.0001% and always in the user's favor.
+        uint256 minimumLockupRequired = (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
         if (includeCDN) {
@@ -90,8 +89,7 @@ library Rails {
         // Verify operator is approved
         require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
 
-        // Calculate minimum rate per epoch
-        uint256 minimumRatePerEpoch = MINIMUM_STORAGE_RATE_PER_MONTH / EPOCHS_PER_MONTH;
+        uint256 minimumRatePerEpoch = DATASET_FEE_PER_EPOCH;
 
         // Verify rate allowance is sufficient
         require(

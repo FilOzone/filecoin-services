@@ -24,7 +24,17 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 import {Errors as PayErrors} from "@fws-payments/Errors.sol";
-import {calculateStorageSizeBasedRatePerEpoch} from "../src/lib/PriceListUSDFC.sol";
+import {
+    calculateStorageSizeBasedRatePerEpoch,
+    DATASET_FEE_PER_EPOCH,
+    DATASET_FEE_PER_MONTH,
+    EPOCHS_PER_MONTH,
+    DEFAULT_LOCKUP_PERIOD,
+    SYBIL_FEE,
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    CDN_EGRESS_PRICE_PER_TIB,
+    CACHE_MISS_EGRESS_PRICE_PER_TIB
+} from "../src/lib/PriceListUSDFC.sol";
 
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -910,22 +920,16 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test the values returned by getServicePrice
         FilecoinWarmStorageService.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
 
-        uint256 decimals = 18; // MockUSDFC uses 18 decimals in tests
-        uint256 expectedNoCDN = 25 * 10 ** (decimals - 1); // 2.5 USDFC with 18 decimals
-        uint256 expectedCDNEgress = 7 * 10 ** decimals; // 7 USDFC per TiB of CDN egress
-        uint256 expectedCacheMissEgress = 7 * 10 ** decimals; // 7 USDFC per TiB of cache miss egress
-        uint256 expectedMinimum = (6 * 10 ** decimals) / 100; // 0.06 USDFC minimum
-
-        assertEq(pricing.pricePerTiBPerMonthNoCDN, expectedNoCDN, "No CDN price should be 2.5 * 10^decimals");
-        assertEq(pricing.pricePerTiBCdnEgress, expectedCDNEgress, "CDN egress price should be 7 * 10^decimals per TiB");
+        assertEq(pricing.pricePerTiBPerMonthNoCDN, STORAGE_PRICE_PER_TIB_PER_MONTH, "No CDN price should be 2.5 USDFC");
+        assertEq(pricing.pricePerTiBCdnEgress, CDN_EGRESS_PRICE_PER_TIB, "CDN egress price should be 7 USDFC per TiB");
         assertEq(
             pricing.pricePerTiBCacheMissEgress,
-            expectedCacheMissEgress,
-            "Cache miss egress price should be 7 * 10^decimals per TiB"
+            CACHE_MISS_EGRESS_PRICE_PER_TIB,
+            "Cache miss egress price should be 7 USDFC per TiB"
         );
         assertEq(address(pricing.tokenAddress), address(mockUSDFC), "Token address should match USDFC");
-        assertEq(pricing.epochsPerMonth, 86400, "Epochs per month should be 86400");
-        assertEq(pricing.minimumPricePerMonth, expectedMinimum, "Minimum price should be 0.06 * 10^decimals");
+        assertEq(pricing.epochsPerMonth, EPOCHS_PER_MONTH, "Epochs per month should be 86400");
+        assertEq(pricing.datasetFeePerMonth, DATASET_FEE_PER_MONTH, "Dataset fee should be 0.024 USDFC");
 
         // Verify the values are in expected range
         assert(pricing.pricePerTiBPerMonthNoCDN < 10 ** 20); // Less than 10^20
@@ -953,104 +957,50 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assert(serviceFee + spPayment < 10 ** 20); // Less than 10^20
     }
 
-    // Minimum Pricing Tests
-    function testMinimumPricing_SmallDataSetsPayFloorRate() public pure {
-        // Small datasets should all pay the minimum floor rate of 0.06 USDFC/month
-        uint256 decimals = 18;
+    // Per-Dataset Fee Tests
+    function testDatasetFee_AllSizesIncludeFee() public pure {
         uint256 oneGiB = 1024 * 1024 * 1024;
 
-        // Expected minimum: 0.06 USDFC/month = 6/100 with 18 decimals
-        uint256 expectedMinPerMonth = (6 * 10 ** decimals) / 100;
-        uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400; // Convert to per-epoch
-
-        // Test 0 bytes
+        // 0 bytes: only the dataset fee
         uint256 rateZero = calculateStorageSizeBasedRatePerEpoch(0);
-        assertEq(rateZero, expectedMinPerEpoch, "0 bytes should return 0.06 USDFC/month minimum");
+        assertEq(rateZero, DATASET_FEE_PER_EPOCH, "0 bytes should return only the dataset fee");
 
-        // Test 1 GiB
+        // Positive sizes should exceed the fee alone
         uint256 rateOneGiB = calculateStorageSizeBasedRatePerEpoch(oneGiB);
-        assertEq(rateOneGiB, expectedMinPerEpoch, "1 GiB should return minimum rate");
+        assert(rateOneGiB > DATASET_FEE_PER_EPOCH);
 
-        // Test 10 GiB
         uint256 rateTenGiB = calculateStorageSizeBasedRatePerEpoch(10 * oneGiB);
-        assertEq(rateTenGiB, expectedMinPerEpoch, "10 GiB should return minimum rate");
-
-        // Test 24 GiB (below crossover)
-        uint256 rateTwentyFourGiB = calculateStorageSizeBasedRatePerEpoch(24 * oneGiB);
-        assertEq(rateTwentyFourGiB, expectedMinPerEpoch, "24 GiB should return minimum rate");
+        assert(rateTenGiB > rateOneGiB);
     }
 
-    function testMinimumPricing_CrossoverPoint() public pure {
-        // Test the crossover where natural pricing exceeds minimum
-        // At 2.5 USDFC/TiB: 0.06/2.5*1024 = 24.576 GiB is the crossover
+    function testDatasetFee_IsAdditive() public pure {
         uint256 oneGiB = 1024 * 1024 * 1024;
-        uint256 decimals = 18;
-        uint256 expectedMinPerMonth = (6 * 10 ** decimals) / 100;
-        uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
+        uint256 oneTiB = oneGiB * 1024;
 
-        // 24 GiB: natural rate (0.0586) < minimum (0.06), so returns minimum
-        uint256 rate24GiB = calculateStorageSizeBasedRatePerEpoch(24 * oneGiB);
-        assertEq(rate24GiB, expectedMinPerEpoch, "24 GiB should use minimum floor");
+        // For 1 TiB: size rate = STORAGE_PRICE_PER_TIB_PER_MONTH / EPOCHS_PER_MONTH
+        uint256 expectedSizeRatePerEpoch = STORAGE_PRICE_PER_TIB_PER_MONTH / EPOCHS_PER_MONTH;
+        uint256 rate1TiB = calculateStorageSizeBasedRatePerEpoch(oneTiB);
+        assertEq(
+            rate1TiB, expectedSizeRatePerEpoch + DATASET_FEE_PER_EPOCH, "1 TiB rate should be size rate + dataset fee"
+        );
 
-        // 25 GiB: natural rate (0.0610) > minimum (0.06), so returns natural rate
-        uint256 rate25GiB = calculateStorageSizeBasedRatePerEpoch(25 * oneGiB);
-        assert(rate25GiB > expectedMinPerEpoch);
-
-        // Verify it's actually proportional (not minimum)
-        uint256 expectedNatural25 = rate25GiB * 86400; // Convert to monthly
-        uint256 expected25Monthly = (25 * 10 ** decimals * 25) / (1024 * 10); // 25 GiB at 2.5 USDFC/TiB
-        // Tolerance: actual loss is ~16,000 from integer division, allow 100,000 for safety
-        assertApproxEqAbs(expectedNatural25, expected25Monthly, 100000, "25 GiB should use natural rate");
-    }
-
-    function testMinimumPricing_LargeDataSetsUseProportionalPricing() public pure {
-        // Large datasets should use proportional pricing (natural rate > minimum)
-        uint256 oneGiB = 1024 * 1024 * 1024;
-        uint256 decimals = 18;
-        uint256 expectedMinPerMonth = (6 * 10 ** decimals) / 100;
-        uint256 expectedMinPerEpoch = expectedMinPerMonth / 86400;
-
-        // Test 48 GiB
+        // Rates still scale proportionally for the size component
         uint256 rate48GiB = calculateStorageSizeBasedRatePerEpoch(48 * oneGiB);
-        assert(rate48GiB > expectedMinPerEpoch);
-
-        // Test 100 GiB
         uint256 rate100GiB = calculateStorageSizeBasedRatePerEpoch(100 * oneGiB);
         assert(rate100GiB > rate48GiB);
-
-        // Test 1 TiB
-        uint256 oneTiB = oneGiB * 1024;
-        uint256 rateOneTiB = calculateStorageSizeBasedRatePerEpoch(oneTiB);
-        assert(rateOneTiB > rate100GiB);
-
-        // Verify proportional scaling
-        assertApproxEqRel(rate100GiB, rate48GiB * 100 / 48, 0.01e18, "Rates should scale proportionally");
     }
 
-    function testMinimumPricing_ExactlyPoint06USDFC() public pure {
-        // Verify that minimum pricing is exactly 0.06 USDFC/month for small datasets
-        uint256 decimals = 18; // MockUSDFC uses 18 decimals in tests
-        uint256 oneGiB = 1024 * 1024 * 1024;
+    function testDatasetFee_ExactlyPoint024USDFC() public pure {
+        uint256 ratePerEpoch = calculateStorageSizeBasedRatePerEpoch(0);
 
-        // Get rate per epoch for dataset below crossover point
-        uint256 ratePerEpoch = calculateStorageSizeBasedRatePerEpoch(oneGiB);
-
-        // Convert to rate per month (86400 epochs per month)
-        uint256 ratePerMonth = ratePerEpoch * 86400;
-
-        // Expected: exactly 0.06 USDFC with 18 decimals = 60000000000000000
-        // Allow tiny tolerance for integer division rounding (0.06 / 86400 rounds down)
-        uint256 expected = (6 * 10 ** decimals) / 100;
-        uint256 tolerance = 1; // Allow 1 per epoch difference = 86400 total
-
-        assertApproxEqAbs(ratePerMonth, expected, tolerance * 86400, "Minimum rate should be 0.06 USDFC/month");
+        assertEq(ratePerEpoch, DATASET_FEE_PER_EPOCH, "Dataset fee per epoch should be exact");
     }
 
     // Minimum Funds Validation Tests
     function testInsufficientFunds_BelowMinimum() public {
-        // Setup: Client with insufficient funds (below 0.16 USDFC minimum = 0.06 lockup + 0.1 sybil fee)
+        // Setup: Client with insufficient funds (below 0.124 USDFC minimum = 0.024 dataset fee + 0.1 sybil fee)
         address insufficientClient = makeAddr("insufficientClient");
-        uint256 insufficientAmount = 15e16; // 0.15 USDFC (below 0.16 minimum)
+        uint256 insufficientAmount = 12e16; // 0.12 USDFC (below 0.124 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(insufficientClient, insufficientAmount);
@@ -1079,8 +1029,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             createData.signature
         );
 
-        // Expected minimum: 0.06 USDFC lockup + 0.1 USDFC sybil fee = 0.16 USDFC = 16e16
-        uint256 minimumRequired = 16e16;
+        uint256 minimumRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE;
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1094,9 +1043,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_ExactMinimum() public {
-        // Setup: Client with exactly the minimum funds (0.16 USDFC = 0.06 lockup + 0.1 sybil fee)
+        // Setup: Client with exactly the minimum funds (0.124 USDFC = 0.024 dataset fee + 0.1 sybil fee)
         address exactClient = makeAddr("exactClient");
-        uint256 exactAmount = 16e16; // Exactly 0.16 USDFC
+        uint256 exactAmount = 124e15; // Exactly 0.124 USDFC
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(exactClient, exactAmount);
@@ -1135,9 +1084,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_JustAboveMinimum() public {
-        // Setup: Client with slightly more than minimum (0.17 USDFC)
+        // Setup: Client with slightly more than minimum (0.125 USDFC)
         address aboveMinClient = makeAddr("aboveMinClient");
-        uint256 aboveMinAmount = 17e16; // 0.17 USDFC (just above 0.16 minimum)
+        uint256 aboveMinAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(aboveMinClient, aboveMinAmount);
@@ -1182,7 +1131,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Setup: Client with minimal funds - just enough to create an empty dataset
         address limitedClient = makeAddr("limitedClient");
-        uint256 limitedAmount = 17e16; // 0.17 USDFC (just above 0.16 minimum = 0.06 lockup + 0.1 sybil fee)
+        uint256 limitedAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum = 0.024 dataset fee + 0.1 sybil fee)
 
         mockUSDFC.safeTransfer(limitedClient, limitedAmount);
 
@@ -1192,7 +1141,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         payments.deposit(mockUSDFC, limitedClient, limitedAmount);
         vm.stopPrank();
 
-        // Create dataset - should succeed with minimal funds (uses minimum floor rate)
+        // Create dataset - should succeed with minimal funds
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Limited Funds Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
             payer: limitedClient,
@@ -1326,9 +1275,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
-        // 127/128 ratio: buggy rate is 128/127 = ~1.00787x the correct rate.
+        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
         // Tolerance of 1 covers integer-division truncation differences between the two paths.
-        assertApproxEqAbs(actualRate, (buggyRate * 127) / 128, 1, "ratio between raw and Fr32 rates is 127/128");
+        assertApproxEqAbs(
+            actualRate - DATASET_FEE_PER_EPOCH,
+            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
+            1,
+            "ratio between raw and Fr32 rates is 127/128"
+        );
     }
 
     function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
@@ -1359,8 +1313,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
         uint256 firstDeadline = block.number + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline, 2 * perPieceLeaves, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, 2 * perPieceLeaves, "");
 
         uint256[] memory pieceIds = new uint256[](1);
         pieceIds[0] = 1;
@@ -1371,15 +1324,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Advance past the deadline and call nextProvingPeriod with the post-removal leaf count.
         vm.roll(firstDeadline + 1);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline + provingPeriod, perPieceLeaves, "");
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, firstDeadline + provingPeriod, perPieceLeaves, ""
+        );
 
         uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
         uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(perPieceLeaves * 32);
         assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
+        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
         assertApproxEqAbs(
-            actualRate, (buggyRate * 127) / 128, 1, "post-removal ratio between raw and Fr32 rates is 127/128"
+            actualRate - DATASET_FEE_PER_EPOCH,
+            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
+            1,
+            "post-removal ratio between raw and Fr32 rates is 127/128"
         );
     }
 
@@ -1439,11 +1397,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient2");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        // Calculate minimum rate per epoch
-        // MINIMUM_STORAGE_RATE_PER_MONTH = 0.06 USDFC = 6e16
-        // EPOCHS_PER_MONTH = 2880 * 30 = 86400
-        // minimumRatePerEpoch = 6e16 / 86400 = 694444444444 (integer division)
-        uint256 minimumRatePerEpoch = 694444444444;
+        uint256 minimumRatePerEpoch = DATASET_FEE_PER_EPOCH;
         uint256 insufficientRateAllowance = minimumRatePerEpoch - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
@@ -1502,13 +1456,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient3");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        // Calculate minimum lockup required (includes sybil fee)
-        // MINIMUM_STORAGE_RATE_PER_MONTH = 0.06 USDFC = 6e16
-        // DEFAULT_LOCKUP_PERIOD = 86400
-        // EPOCHS_PER_MONTH = 86400
-        // minimumLockupRequired = (6e16 * 86400) / 86400 = 6e16
-        // minimumLockupRequired = 6e16 + 0.1e18 (sybil fee) = 16e16
-        uint256 minimumLockupRequired = 16e16;
+        uint256 minimumLockupRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE;
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
@@ -1567,9 +1515,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient4");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        // Get the default lockup period
-        // DEFAULT_LOCKUP_PERIOD = 2880 * 30 = 86400
-        uint256 defaultLockupPeriod = 2880 * 30;
+        uint256 defaultLockupPeriod = DEFAULT_LOCKUP_PERIOD;
         uint256 insufficientMaxLockupPeriod = defaultLockupPeriod - 1; // Just below required
 
         // Transfer tokens and set up approvals
@@ -1971,19 +1917,22 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             assertFalse(viewContract.provenPeriods(testDataSetId, i));
         }
         (uint64 maxProvingPeriod, uint256 challengeWindowSize,,) = viewContract.getPDPConfig();
-        vm.startPrank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, ""
+        );
         vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
         for (uint256 i = 0; i < 2049; i++) {
             assertFalse(viewContract.provenPeriods(testDataSetId, i));
+            vm.prank(address(mockPDPVerifier));
             pdpServiceWithPayments.possessionProven(testDataSetId, 100, 12345, CHALLENGES_PER_PROOF);
             assertTrue(viewContract.provenPeriods(testDataSetId, i));
 
             vm.roll(vm.getBlockNumber() + challengeWindowSize);
-            pdpServiceWithPayments.nextProvingPeriod(testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, "");
+            mockPDPVerifier.nextProvingPeriod(
+                pdpServiceWithPayments, testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, ""
+            );
             vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
         }
-        vm.stopPrank();
 
         for (uint256 i = 0; i < 2049; i++) {
             assertTrue(viewContract.provenPeriods(testDataSetId, i));
@@ -2055,8 +2004,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
@@ -2166,13 +2114,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // nextProvingPeriod
         console.log("Testing nextProvingPeriod - should revert (beyond payment end epoch)");
-        vm.prank(address(mockPDPVerifier));
         vm.expectRevert(
             abi.encodeWithSelector(
                 Errors.DataSetPaymentBeyondEndEpoch.selector, dataSetId, info.pdpEndEpoch, block.number
             )
         );
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, block.number + maxProvingPeriod, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, block.number + maxProvingPeriod, 100, "");
         console.log("[OK] nextProvingPeriod correctly reverted");
 
         // Roll past the last period deadline to allow settlement
@@ -2246,8 +2193,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
@@ -2365,8 +2311,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
 
@@ -2404,8 +2349,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 4. Start new proving period and submit new proof
         console.log("\n4. Starting proving period and submitting proof");
         challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         // Warp to challenge window
         provingDeadline = viewContract.provingDeadline(dataSetId);
@@ -4830,8 +4774,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 firstDeadline = currentBlock + 2880; // maxProvingPeriod
         uint256 validChallengeEpoch = firstDeadline - 60 + 1;
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, validChallengeEpoch, 10, bytes(""));
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, validChallengeEpoch, 10, bytes(""));
 
         // Verify proving-related fields have non-zero values before deletion
         uint256 provingDeadlineBefore = viewContract.provingDeadline(dataSetId);
@@ -5596,8 +5539,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 _activationEpoch = vm.getBlockNumber();
         uint256 firstChallengeEpoch = _activationEpoch + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 firstDeadline = _activationEpoch + maxProvingPeriod;
 
@@ -5612,8 +5554,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 secondDeadline = firstDeadline + maxProvingPeriod;
         uint256 challengeEpoch1 = secondDeadline - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch1, 100, "");
 
         // Submit proof for period 1
         vm.roll(challengeEpoch1);
@@ -5625,8 +5566,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 thirdDeadline = secondDeadline + maxProvingPeriod;
         uint256 challengeEpoch2 = thirdDeadline - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch2, 100, "");
 
         // Submit proof for period 2
         vm.roll(challengeEpoch2);
@@ -5660,8 +5600,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5682,8 +5621,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.settleUpto, activationEpoch + (maxProvingPeriod * 2), "Should not settle last period");
         assertEq(result.note, "No proven epochs in the requested range");
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, challengeEpoch + maxProvingPeriod * 2, 100, ""
+        );
 
         // Should settle up to start of current period
         result = pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch, toEpoch, 0);
@@ -5733,8 +5673,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5747,8 +5686,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline0 = activationEpoch + maxProvingPeriod;
         vm.roll(deadline0 + 1);
         uint256 challengeEpoch1 = deadline0 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch1, 100, "");
 
         // Skip proof for period 1
 
@@ -5756,8 +5694,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline1 = deadline0 + maxProvingPeriod;
         vm.roll(deadline1 + 1);
         uint256 challengeEpoch2 = deadline1 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch2, 100, "");
 
         vm.roll(challengeEpoch2);
         vm.prank(address(mockPDPVerifier));
@@ -5791,8 +5728,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
         assertEq(activationEpoch, viewContract.provingActivationEpoch(dataSetId));
@@ -5803,8 +5739,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline0 = activationEpoch + maxProvingPeriod;
         vm.roll(deadline0 + 1);
         uint256 challengeEpoch1 = deadline0 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch1, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch1, 100, "");
 
         // Prove period 1
         vm.roll(challengeEpoch1);
@@ -5815,8 +5750,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 deadline1 = deadline0 + maxProvingPeriod;
         vm.roll(deadline1 + 1);
         uint256 challengeEpoch2 = deadline1 + 1 + maxProvingPeriod - (challengeWindow / 2);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch2, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch2, 100, "");
 
         vm.roll(challengeEpoch2);
         vm.prank(address(mockPDPVerifier));
@@ -5911,6 +5845,113 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     }
 
     /**
+     * @notice Empty dataset (no pieces ever added): payment rate is zero and validatePayment
+     * returns 0 because proving was never activated.
+     */
+    function testEmptyDataset_NoPaymentWhenNoPieces() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty");
+
+        // No pieces added — modifyRailPayment was never called, so the rail rate is 0
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        assertEq(rail.paymentRate, 0, "Rail rate must be 0 for empty dataset");
+
+        // validatePayment returns 0 because provingActivationEpoch was never set
+        uint256 fromEpoch = block.number;
+        uint256 toEpoch = block.number + 1000;
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e18, fromEpoch, toEpoch, 0);
+
+        assertEq(result.modifiedAmount, 0, "No payment to SP when dataset has no pieces");
+        assertEq(result.settleUpto, fromEpoch, "Settlement must not advance for empty dataset");
+    }
+
+    /**
+     * @notice Empty dataset (no pieces ever added): SP cannot prove possession because
+     * nextProvingPeriod was never called, so provingDeadlines remains NO_PROVING_DEADLINE.
+     */
+    function testEmptyDataset_CannotProveWhenNoPieces() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty");
+
+        // Proving deadline is never set — possessionProven must revert
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProvingNotStarted.selector, dataSetId));
+        pdpServiceWithPayments.possessionProven(dataSetId, 0, 12345, CHALLENGES_PER_PROOF);
+    }
+
+    /**
+     * @notice After all pieces are removed the dataset becomes empty. The PDPVerifier signals
+     * this by passing NO_CHALLENGE_SCHEDULED (0) to nextProvingPeriod, which resets
+     * provingDeadlines to 0. Subsequent possessionProven calls must revert, and
+     * validatePayment must return 0 for epochs that fall in the now-empty period.
+     */
+    function testEmptyDataset_CannotProveAfterAllPiecesRemoved() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "WillEmpty");
+
+        // Add a single piece so the dataset is non-empty and proving can start
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("piece_to_remove"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        // Start the first proving period
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + maxProvingPeriod;
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
+
+        uint256 activationEpoch = block.number;
+
+        // Submit a valid proof for period 0
+        vm.roll(firstDeadline - (challengeWindow / 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, leafCount, 12345, CHALLENGES_PER_PROOF);
+
+        // Schedule removal of the only piece
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        // Advance past the first deadline; PDPVerifier signals the dataset is now empty by
+        // passing challengeEpoch = NO_CHALLENGE_SCHEDULED (0).
+        vm.roll(firstDeadline + 1);
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
+
+        // provingDeadlines is now 0 — possessionProven must revert
+        vm.prank(address(mockPDPVerifier));
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProvingNotStarted.selector, dataSetId));
+        pdpServiceWithPayments.possessionProven(dataSetId, 0, 12345, CHALLENGES_PER_PROOF);
+
+        // validatePayment for an epoch range that falls entirely in the empty period must
+        // return 0 (the period is faulted — no proof was submitted before proving stopped).
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 emptyFrom = activationEpoch + maxProvingPeriod; // start of the now-empty period
+        uint256 emptyTo = activationEpoch + maxProvingPeriod * 2; // one full period later
+
+        vm.roll(emptyTo + 1);
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e18, emptyFrom, emptyTo, 0);
+
+        assertEq(result.modifiedAmount, 0, "No payment to SP for empty period after all pieces removed");
+    }
+
+    /**
      * @notice Test: Request range before activation - should pay nothing
      */
     function testValidatePayment_BeforeActivation() public {
@@ -5923,8 +5964,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5952,8 +5992,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -5995,8 +6034,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6079,8 +6117,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Start proving period
         uint256 firstDeadline = block.number + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(setup.dataSetId, firstDeadline, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, firstDeadline, 100, "");
 
         // Schedule piece removal
         uint256[] memory pieceIds = new uint256[](1);
@@ -6100,8 +6137,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // Call nextProvingPeriod to trigger cleanup
         uint256 nextDeadline = firstDeadline + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(setup.dataSetId, nextDeadline, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, nextDeadline, 100, "");
 
         // Metadata should now be cleaned up
         (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
@@ -6134,14 +6170,14 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieceData, encodedData);
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, numPieces);
 
         // Get proving period config
         (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
 
         // Start proving period
         uint256 firstDeadline = block.number + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstDeadline, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, 100, "");
 
         // Schedule removal of all pieces
         uint256[] memory pieceIds = new uint256[](numPieces);
@@ -6161,8 +6197,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Move to next proving period and trigger cleanup
         vm.roll(block.number + provingPeriod + 1);
         uint256 nextDeadline = firstDeadline + provingPeriod;
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, nextDeadline, 0, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, nextDeadline, 0, "");
 
         // Verify all metadata is now cleaned up
         for (uint256 i = 0; i < numPieces; i++) {
@@ -6184,8 +6219,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6219,8 +6253,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6252,8 +6285,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, firstChallengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstChallengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
@@ -6328,8 +6360,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         // Submit proof for first period
         vm.roll(challengeEpoch);
@@ -6373,8 +6404,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.nextProvingPeriod(dataSetId, challengeEpoch, 100, "");
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
 
