@@ -37,18 +37,13 @@ import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol"
  * (chainId, verifyingContract) pair so we can mirror an arbitrary deployed
  * domain (e.g. calibration FWSS) without redeploying at that address.
  *
- * Typehashes for operations the FWSS contract implements come from
- * SignatureVerificationLib so any rename in the library will surface here as
- * a fixture mismatch (caught by external_signatures.json + the SDK fixtures).
- * TERMINATE_SERVICE_TYPEHASH is declared locally because the FWSS contract
- * doesn't currently implement TerminateService auth; move it into the library
- * when the impl lands.
+ * Typehashes for all FWSS operations come from SignatureVerificationLib so any
+ * rename in the library will surface here as a fixture mismatch (caught by
+ * external_signatures.json + the SDK fixtures).
  */
 contract MetadataSignatureTestContract {
     bytes32 private constant EIP712_DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
-
-    bytes32 private constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
 
     bytes32 private immutable _domainSeparator;
 
@@ -165,7 +160,7 @@ contract MetadataSignatureTestContract {
     }
 
     function getTerminateServiceDigest(uint256 dataSetId) public view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(TERMINATE_SERVICE_TYPEHASH, dataSetId));
+        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId));
         return _hashTypedData(structHash);
     }
 }
