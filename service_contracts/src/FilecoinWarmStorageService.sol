@@ -104,11 +104,7 @@ contract FilecoinWarmStorageService is
     );
 
     event ServiceTerminated(
-        address indexed approver,
-        uint256 indexed dataSetId,
-        uint256 pdpRailId,
-        uint256 cacheMissRailId,
-        uint256 cdnRailId
+        uint256 indexed dataSetId, address signer, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
     );
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
@@ -949,22 +945,21 @@ contract FilecoinWarmStorageService is
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
-        address approver;
+        address signer;
         if (extraData.length > 0) {
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
                 Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
             );
             bytes memory signature = abi.decode(extraData, (bytes));
-            _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
-            approver = info.payer;
+            signer = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             // TODO if msg.sender is info.serviceProvider, termination is immediate
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,
                 Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
             );
-            approver = msg.sender;
+            signer = address(0);
         }
 
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
@@ -974,7 +969,7 @@ contract FilecoinWarmStorageService is
             _terminateCDNRails(dataSetId, info, payments);
         }
 
-        emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+        emit ServiceTerminated(dataSetId, signer, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
     /**
@@ -1344,10 +1339,14 @@ contract FilecoinWarmStorageService is
         SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
-    function _verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature) internal view {
+    function _verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature)
+        internal
+        view
+        returns (address signer)
+    {
         bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId));
         bytes32 digest = _hashTypedDataV4(structHash);
-        SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
+        return SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**

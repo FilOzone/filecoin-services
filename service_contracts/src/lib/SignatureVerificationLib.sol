@@ -279,16 +279,15 @@ library SignatureVerificationLib {
         bytes calldata signature,
         bytes32 digest,
         SessionKeyRegistry sessionKeyRegistry
-    ) public view {
-        address recoveredSigner = recoverSigner(digest, signature);
+    ) public view returns (address recoveredSigner) {
+        recoveredSigner = recoverSigner(digest, signature);
 
-        if (payer == recoveredSigner) {
-            return;
+        if (payer != recoveredSigner) {
+            require(
+                sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, TERMINATE_SERVICE_TYPEHASH)
+                    >= block.timestamp,
+                Errors.InvalidSignature(payer, recoveredSigner)
+            );
         }
-        require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, TERMINATE_SERVICE_TYPEHASH)
-                >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
-        );
     }
 }

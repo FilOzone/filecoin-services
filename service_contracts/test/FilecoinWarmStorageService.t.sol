@@ -2569,8 +2569,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         bytes memory sig = abi.encode(FAKE_SIGNATURE);
         makeSignaturePass(client);
 
-        vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(dataSetId, client, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
@@ -2582,8 +2582,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
-        vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(dataSetId, address(0), info.pdpRailId, 0, 0);
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
     }
@@ -2593,8 +2593,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
-        vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(dataSetId, address(0), info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId);
     }
@@ -2612,9 +2612,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         bytes memory sig = abi.encode(FAKE_SIGNATURE);
         makeSignaturePass(sessionKey1);
 
-        // approver in event is the payer (client), not the session key or SP caller
-        vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        // signer in event is the session key, not the payer
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(dataSetId, sessionKey1, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
