@@ -179,8 +179,7 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
   - `FILECOIN_PAY_ADDRESS` - Address of deployed FilecoinPayV1 contract
 
 - `warm-storage-deploy-all.sh` requires:
-  - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
-  - Optional: `PDP_USDFC_SYBIL_FEE` - PDPVerifier USDFC sybil fee constructor arg in attoUSDFC; must be > 0. Defaults to `100000000000000000` (0.1 USDFC).
+  - Optional: `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier. Defaults to `10` on calibnet/devnet and `150` on mainnet.
 
 - Upgrade scripts - see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete FWSS upgrade runbook
 
