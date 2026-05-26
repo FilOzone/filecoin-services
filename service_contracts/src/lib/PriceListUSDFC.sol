@@ -14,8 +14,7 @@ uint256 constant EPOCHS_PER_MONTH = 2880 * 30;
 // Client-paid, burned to the FilecoinPay auction pool on data set creation.
 // PDPVerifier's cleanup deposit is SP-paid and refundable but may be locked up
 // for 30 days by FWSS, so this client-side burn is what keeps a client from
-// cheaply locking up an SP's FIL by spawning
-// data sets.
+// cheaply locking up an SP's FIL by spawning data sets.
 // USDFC has 18 decimals, so $1 = 10**18 (a.k.a. ether)
 uint256 constant SYBIL_FEE = 0.1 ether;
 uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
