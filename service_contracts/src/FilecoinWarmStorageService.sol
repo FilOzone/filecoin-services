@@ -103,6 +103,13 @@ contract FilecoinWarmStorageService is
         uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values
     );
 
+    /// @notice Emitted when a service is terminated.
+    /// @param approver The address that authorized termination: the payer, one of the payer's
+    ///   session keys (SessionKeyRegistry), or the service provider. Cross-reference with
+    ///   `DataSetCreated` to classify: `approver == serviceProvider` is provider-initiated;
+    ///   otherwise the payer (or their session key) authorized it. Mutual termination — payer
+    ///   signed off-chain while the provider submitted the tx — is indistinguishable from
+    ///   payer-initiated using this event alone; inspect the call trace to detect it.
     event ServiceTerminated(
         address indexed approver,
         uint256 indexed dataSetId,
