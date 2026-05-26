@@ -1240,16 +1240,16 @@
     "name": "ServiceTerminated",
     "inputs": [
       {
+        "name": "approver",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
         "name": "dataSetId",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
-      },
-      {
-        "name": "signer",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
       },
       {
         "name": "pdpRailId",

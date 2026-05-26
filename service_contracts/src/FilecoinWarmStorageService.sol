@@ -104,7 +104,11 @@ contract FilecoinWarmStorageService is
     );
 
     event ServiceTerminated(
-        uint256 indexed dataSetId, address signer, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
+        address indexed approver,
+        uint256 indexed dataSetId,
+        uint256 pdpRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnRailId
     );
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
@@ -945,21 +949,21 @@ contract FilecoinWarmStorageService is
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
-        address signer;
+        address approver;
         if (extraData.length > 0) {
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
                 Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
             );
             bytes memory signature = abi.decode(extraData, (bytes));
-            signer = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
+            approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             // TODO if msg.sender is info.serviceProvider, termination is immediate
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,
                 Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
             );
-            signer = address(0);
+            approver = msg.sender;
         }
 
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
@@ -969,7 +973,7 @@ contract FilecoinWarmStorageService is
             _terminateCDNRails(dataSetId, info, payments);
         }
 
-        emit ServiceTerminated(dataSetId, signer, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+        emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
     /**
