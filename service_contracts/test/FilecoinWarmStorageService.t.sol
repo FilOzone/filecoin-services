@@ -96,6 +96,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     );
     bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
+    bytes32 private constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
 
     // Expected lockup amounts for CDN rails
     uint256 defaultCDNLockup;
@@ -2554,6 +2555,116 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertFalse(exists, "withCDN flag should be deleted");
 
         console.log("=== Test completed successfully! ===");
+    }
+
+    // ============================================================
+    // terminateService extraData / session-key tests
+    // ============================================================
+
+    function testTerminateService_signatureApprover() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "sig test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(client);
+
+        vm.expectEmit(true, true, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
+
+        assertTrue(viewContract.getDataSet(dataSetId).pdpEndEpoch > 0, "dataset should be terminated");
+    }
+
+    function testTerminateService_directPayer_emitsApprover() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+    }
+
+    function testTerminateService_directSP_emitsApprover() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        vm.expectEmit(true, true, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(dataSetId);
+    }
+
+    function testTerminateService_sessionKey() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "session key test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = TERMINATE_SERVICE_TYPEHASH;
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "test");
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(sessionKey1);
+
+        // approver in event is the session key, not the payer
+        vm.expectEmit(true, true, false, true);
+        emit FilecoinWarmStorageService.ServiceTerminated(sessionKey1, dataSetId, info.pdpRailId, 0, 0);
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
+
+        assertTrue(viewContract.getDataSet(dataSetId).pdpEndEpoch > 0, "dataset should be terminated");
+    }
+
+    function testTerminateService_sessionKey_unauthorizedKey() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+
+        // sessionKey2 is not registered at all
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(sessionKey2);
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
+    }
+
+    function testTerminateService_sessionKey_expiredKey() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = TERMINATE_SERVICE_TYPEHASH;
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "test");
+
+        vm.warp(block.timestamp + 1); // one second past expiry
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(sessionKey1);
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
+    }
+
+    function testTerminateService_sessionKey_wrongPermission() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = CREATE_DATA_SET_TYPEHASH; // not TERMINATE_SERVICE_TYPEHASH
+        vm.prank(client);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "test");
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(sessionKey1);
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
     }
 
     function testTransferCDNController() public {

@@ -34,6 +34,8 @@ library SignatureVerificationLib {
     bytes32 internal constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
 
+    bytes32 internal constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
+
     // ============================================================================
     // Metadata Hashing Functions
     // ============================================================================
@@ -262,5 +264,30 @@ library SignatureVerificationLib {
                 >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
+    }
+
+    /**
+     * @notice Verifies a signature for the TerminateService operation
+     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
+     * @param payer The address of the payer who should have signed the message
+     * @param signature The signature bytes (v, r, s)
+     * @param digest The EIP-712 digest to verify
+     * @param sessionKeyRegistry The session key registry contract
+     */
+    function verifyTerminateServiceSignature(
+        address payer,
+        bytes calldata signature,
+        bytes32 digest,
+        SessionKeyRegistry sessionKeyRegistry
+    ) public view returns (address recoveredSigner) {
+        recoveredSigner = recoverSigner(digest, signature);
+
+        if (payer != recoveredSigner) {
+            require(
+                sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, TERMINATE_SERVICE_TYPEHASH)
+                    >= block.timestamp,
+                Errors.InvalidSignature(payer, recoveredSigner)
+            );
+        }
     }
 }

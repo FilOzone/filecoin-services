@@ -53,6 +53,12 @@ uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
 */
 uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
 
+/*
+* Maximum extraData for terminateService
+* Supports: signature (160 bytes needed)
+*/
+uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 256; // 256 bytes
+
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -97,8 +103,19 @@ contract FilecoinWarmStorageService is
         uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values
     );
 
+    /// @notice Emitted when a service is terminated.
+    /// @param approver The address that authorized termination: the payer, one of the payer's
+    ///   session keys (SessionKeyRegistry), or the service provider. Cross-reference with
+    ///   `DataSetCreated` to classify: `approver == serviceProvider` is provider-initiated;
+    ///   otherwise the payer (or their session key) authorized it. Mutual termination — payer
+    ///   signed off-chain while the provider submitted the tx — is indistinguishable from
+    ///   payer-initiated using this event alone; inspect the call trace to detect it.
     event ServiceTerminated(
-        address indexed caller, uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId
+        address indexed approver,
+        uint256 indexed dataSetId,
+        uint256 pdpRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnRailId
     );
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
@@ -925,28 +942,45 @@ contract FilecoinWarmStorageService is
         revert Errors.StorageProviderChangesNotSupported();
     }
 
-    function terminateService(uint256 dataSetId) external {
+    function terminateService(uint256 dataSetId, bytes calldata extraData) external {
+        _terminateService(dataSetId, extraData);
+    }
+
+    /// @custom:deprecated Use terminateService(uint256,bytes) instead
+    function terminateService(uint256 dataSetId) public {
+        _terminateService(dataSetId, "");
+    }
+
+    function _terminateService(uint256 dataSetId, bytes memory extraData) private {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
-
-        // Check if already terminated
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
-        // Check authorization
-        require(
-            msg.sender == info.payer || msg.sender == info.serviceProvider,
-            Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
-        );
+        address approver;
+        if (extraData.length > 0) {
+            require(
+                extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
+                Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
+            );
+            bytes memory signature = abi.decode(extraData, (bytes));
+            approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
+            // TODO if msg.sender is info.serviceProvider, termination is immediate
+        } else {
+            require(
+                msg.sender == info.payer || msg.sender == info.serviceProvider,
+                Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
+            );
+            approver = msg.sender;
+        }
 
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
             _terminateCDNRails(dataSetId, info, payments);
         }
 
-        emit ServiceTerminated(msg.sender, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+        emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
     /**
@@ -1314,6 +1348,16 @@ contract FilecoinWarmStorageService is
 
         // Delegate to library for verification
         SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
+    }
+
+    function _verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature)
+        internal
+        view
+        returns (address signer)
+    {
+        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId));
+        bytes32 digest = _hashTypedDataV4(structHash);
+        return SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**
