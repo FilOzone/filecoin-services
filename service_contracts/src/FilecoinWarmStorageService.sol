@@ -22,6 +22,7 @@ import {Extsload} from "./Extsload.sol";
 import {
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
     ADD_PIECES_FEE,
+    CREATE_DATA_SET_FEE,
     CDN_EGRESS_PRICE_PER_TIB,
     DATASET_FEE_PER_MONTH,
     DEFAULT_LOCKUP_PERIOD,
@@ -611,6 +612,7 @@ contract FilecoinWarmStorageService is
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
         info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
+        info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
         if (hasCDN) {
             info.cacheMissRailId = cacheMissRailId;
             info.cdnRailId = cdnRailId;

@@ -7,6 +7,7 @@ import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol"
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {
     ADD_PIECES_FEE,
+    CREATE_DATA_SET_FEE,
     LIFECYCLE_RESERVE_TARGET,
     SCHEDULE_PIECE_REMOVALS_FEE,
     TERMINATE_FEE
@@ -18,7 +19,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
 
     // Creates a dataset with one piece added and the first proving period initialized.
     // Returns (dataSetId, pdpRailId, leafCount, firstDeadline, maxProvingPeriod).
-    // On return: pendingOneTimePayments == 0, lifecycleReserveBalance == LIFECYCLE_RESERVE_TARGET - ADD_PIECES_FEE.
+    // On return: pendingOneTimePayments == 0, lifecycleReserveBalance == LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_FEE.
     function _createDataSetWithPiece()
         internal
         returns (uint256 dataSetId, uint256 pdpRailId, uint256 leafCount, uint256 firstDeadline, uint256 maxPeriod)
@@ -65,7 +66,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         uint256 pdpRailId = info.pdpRailId;
 
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
-        assertEq(info.pendingOneTimePayments, 0);
+        assertEq(info.pendingOneTimePayments, CREATE_DATA_SET_FEE, "create dataset fee pending");
 
         Cids.Cid[] memory pieces = new Cids.Cid[](1);
         pieces[0] = Cids.CommPv2FromDigest(0, uint8(PIECE_HEIGHT), keccak256("piece0"));
@@ -77,8 +78,12 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         );
 
         info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pendingOneTimePayments, 0, "fee flushed immediately in piecesAdded");
-        assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET - ADD_PIECES_FEE, "reserve decreased by fee");
+        assertEq(info.pendingOneTimePayments, 0, "fees flushed immediately in piecesAdded");
+        assertEq(
+            info.lifecycleReserveBalance,
+            LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_FEE,
+            "reserve decreased by both fees"
+        );
 
         FilecoinPayV1.RailView memory rail = payments.getRail(pdpRailId);
         assertEq(rail.lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
