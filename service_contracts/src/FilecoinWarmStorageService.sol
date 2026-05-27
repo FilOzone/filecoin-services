@@ -21,11 +21,16 @@ import {Extsload} from "./Extsload.sol";
 
 import {
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
+    ADD_PIECES_FEE,
     CDN_EGRESS_PRICE_PER_TIB,
     DATASET_FEE_PER_MONTH,
+    DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
+    LIFECYCLE_RESERVE_TARGET,
+    SCHEDULE_PIECE_REMOVALS_FEE,
     SERVICE_COMMISSION_BPS,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TERMINATE_FEE,
     TOKEN_DECIMALS
 } from "./lib/PriceListUSDFC.sol";
 import {Rails} from "./lib/Rails.sol";
@@ -145,6 +150,8 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint96 pendingOneTimePayments; // fees accumulated since last flush via updateStorageRates
+        uint96 lifecycleReserveBalance; // local mirror of rail's lockupFixed; decremented on flush
     }
 
     // Storage for data set payment information with dataSetId
@@ -159,6 +166,8 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId; // ClientDataSetID
         uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
+        uint96 pendingOneTimePayments; // fees accumulated since last flush via updateStorageRates
+        uint96 lifecycleReserveBalance; // local mirror of rail's lockupFixed; decremented on flush
         uint256 dataSetId; // DataSet ID
     }
 
@@ -601,6 +610,7 @@ contract FilecoinWarmStorageService is
 
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
+        info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
         if (hasCDN) {
             info.cacheMissRailId = cacheMissRailId;
             info.cdnRailId = cdnRailId;
@@ -735,9 +745,12 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
 
+        uint96 pending = info.pendingOneTimePayments + uint96(ADD_PIECES_FEE);
+        uint96 reserveBalance = info.lifecycleReserveBalance;
+
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
         uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
-        updatePaymentRates(dataSetId, currentLeafCount);
+        updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -802,6 +815,8 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
 
+        info.pendingOneTimePayments += uint96(SCHEDULE_PIECE_REMOVALS_FEE);
+
         // Queue piece IDs for metadata cleanup at nextProvingPeriod
         uint256[] storage scheduled = scheduledPieceMetadataRemovals[dataSetId];
         for (uint256 i = 0; i < pieceIds.length; i++) {
@@ -858,6 +873,11 @@ contract FilecoinWarmStorageService is
         onlyPDPVerifier
     {
         requirePaymentNotBeyondEndEpoch(dataSetId);
+
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        uint96 pending = info.pendingOneTimePayments;
+        uint96 reserveBalance = info.lifecycleReserveBalance;
+
         // initialize state for new data set
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline = block.number + maxProvingPeriod;
@@ -872,9 +892,9 @@ contract FilecoinWarmStorageService is
             // This marks when the data set became active for proving
             provingActivationEpoch[dataSetId] = block.number;
 
-            // Rate was already set in piecesAdded; only update if pieces were removed
-            if (processScheduledPieceMetadataRemovals(dataSetId)) {
-                updatePaymentRates(dataSetId, leafCount);
+            // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
+            if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
+                updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance);
             }
 
             return;
@@ -921,9 +941,10 @@ contract FilecoinWarmStorageService is
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Additions update rate immediately in piecesAdded; only update here if pieces were removed
-        if (processScheduledPieceMetadataRemovals(dataSetId)) {
-            updatePaymentRates(dataSetId, leafCount);
+        // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
+        bool hadRemovals = processScheduledPieceMetadataRemovals(dataSetId);
+        if (hadRemovals || pending > 0) {
+            updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance);
         }
     }
 
@@ -973,6 +994,10 @@ contract FilecoinWarmStorageService is
             approver = msg.sender;
         }
 
+        if (approver == info.payer) {
+            info.pendingOneTimePayments += uint96(TERMINATE_FEE);
+        }
+
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
         payments.terminateRail(info.pdpRailId);
 
@@ -981,6 +1006,23 @@ contract FilecoinWarmStorageService is
         }
 
         emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+    }
+
+    /**
+     * @notice Pre-funds the lifecycle reserve beyond the automatic target
+     * @dev Useful before scheduling many piece removals or before terminating.
+     *      Cannot be called after termination; FilecoinPay forbids raising lockupFixed on a terminated rail.
+     * @param dataSetId The ID of the data set
+     * @param amount Additional amount to add to the lifecycle reserve
+     */
+    function topUpLifecycleReserve(uint256 dataSetId, uint256 amount) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
+
+        uint256 pdpRailId = info.pdpRailId;
+        uint96 newBalance = info.lifecycleReserveBalance + uint96(amount);
+        FilecoinPayV1(paymentsContractAddress).modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newBalance);
+        info.lifecycleReserveBalance = newBalance;
     }
 
     /**
@@ -1075,14 +1117,20 @@ contract FilecoinWarmStorageService is
         delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
     }
 
-    function updatePaymentRates(uint256 dataSetId, uint256 leafCount) internal {
-        uint256 pdpRailId = dataSetInfo[dataSetId].pdpRailId;
-        // Revert if no payment rail is configured for this data set
+    function updatePaymentRates(
+        uint256 dataSetId,
+        DataSetInfo storage info,
+        uint256 leafCount,
+        uint96 pending,
+        uint96 reserveBalance
+    ) internal {
+        uint256 pdpRailId = info.pdpRailId;
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
-        // Update the PDP rail payment rate with the new rate and no one-time payment
-
-        FilecoinPayV1(paymentsContractAddress).updateStorageRates(dataSetId, pdpRailId, leafCount);
+        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).updateStorageRates(
+            dataSetId, pdpRailId, leafCount, pending, reserveBalance
+        );
+        info.pendingOneTimePayments = 0;
     }
 
     function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal returns (bool hadRemovals) {

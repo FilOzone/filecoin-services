@@ -30,6 +30,7 @@ import {
     DATASET_FEE_PER_MONTH,
     EPOCHS_PER_MONTH,
     DEFAULT_LOCKUP_PERIOD,
+    LIFECYCLE_RESERVE_TARGET,
     SYBIL_FEE,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     CDN_EGRESS_PRICE_PER_TIB,
@@ -636,7 +637,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(pdpRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(pdpRail.commissionRateBps, 0, "No commission");
-        assertEq(pdpRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(pdpRail.lockupFixed, LIFECYCLE_RESERVE_TARGET, "Lockup fixed should be lifecycle reserve target");
         assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
         FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
@@ -999,9 +1000,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     // Minimum Funds Validation Tests
     function testInsufficientFunds_BelowMinimum() public {
-        // Setup: Client with insufficient funds (below 0.124 USDFC minimum = 0.024 dataset fee + 0.1 sybil fee)
+        // Setup: Client with insufficient funds (below 0.224 USDFC minimum = 0.024 dataset fee + 0.1 sybil fee + 0.1 lifecycle reserve)
         address insufficientClient = makeAddr("insufficientClient");
-        uint256 insufficientAmount = 12e16; // 0.12 USDFC (below 0.124 minimum)
+        uint256 insufficientAmount = 12e16; // 0.12 USDFC (below 0.224 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(insufficientClient, insufficientAmount);
@@ -1030,7 +1031,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             createData.signature
         );
 
-        uint256 minimumRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE;
+        uint256 minimumRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE + LIFECYCLE_RESERVE_TARGET;
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1044,9 +1045,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_ExactMinimum() public {
-        // Setup: Client with exactly the minimum funds (0.124 USDFC = 0.024 dataset fee + 0.1 sybil fee)
+        // Setup: Client with exactly the minimum funds (0.224 USDFC = 0.024 dataset fee + 0.1 sybil fee + 0.1 lifecycle reserve)
         address exactClient = makeAddr("exactClient");
-        uint256 exactAmount = 124e15; // Exactly 0.124 USDFC
+        uint256 exactAmount = DATASET_FEE_PER_MONTH + SYBIL_FEE + LIFECYCLE_RESERVE_TARGET; // Exactly 0.224 USDFC
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(exactClient, exactAmount);
@@ -1085,9 +1086,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_JustAboveMinimum() public {
-        // Setup: Client with slightly more than minimum (0.125 USDFC)
+        // Setup: Client with slightly more than minimum (0.225 USDFC)
         address aboveMinClient = makeAddr("aboveMinClient");
-        uint256 aboveMinAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum)
+        uint256 aboveMinAmount = DATASET_FEE_PER_MONTH + SYBIL_FEE + LIFECYCLE_RESERVE_TARGET + 1e15; // 0.225 USDFC (just above 0.224 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(aboveMinClient, aboveMinAmount);
@@ -1132,7 +1133,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Setup: Client with minimal funds - just enough to create an empty dataset
         address limitedClient = makeAddr("limitedClient");
-        uint256 limitedAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum = 0.024 dataset fee + 0.1 sybil fee)
+        uint256 limitedAmount = DATASET_FEE_PER_MONTH + SYBIL_FEE + LIFECYCLE_RESERVE_TARGET + 1e15; // 0.225 USDFC (just above 0.224 minimum)
 
         mockUSDFC.safeTransfer(limitedClient, limitedAmount);
 
@@ -1457,7 +1458,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient3");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        uint256 minimumLockupRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE;
+        uint256 minimumLockupRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE + LIFECYCLE_RESERVE_TARGET;
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals

@@ -29,6 +29,16 @@ uint256 constant DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) /
 
 uint256 constant SERVICE_COMMISSION_BPS = 0;
 
+// Operation fees (one-time, paid from the lifecycle reserve on the PDP rail)
+uint256 constant ADD_PIECES_FEE = (2 * 10 ** TOKEN_DECIMALS) / 1000; // $0.002 per addPieces call
+uint256 constant SCHEDULE_PIECE_REMOVALS_FEE = (2 * 10 ** TOKEN_DECIMALS) / 1000; // $0.002 per schedulePieceRemovals call
+uint256 constant TERMINATE_FEE = (112 * 10 ** TOKEN_DECIMALS) / 100000; // $0.00112 per user-initiated termination
+
+// Lifecycle reserve: fixed lockup on the PDP rail covering per-op fees during wind-down
+uint256 constant LIFECYCLE_RESERVE_TARGET = (10 * 10 ** TOKEN_DECIMALS) / 100; // $0.10
+// Replenish when reserve drops below this; ~25 ops of headroom before we top up again
+uint256 constant REPLENISH_THRESHOLD = (5 * 10 ** TOKEN_DECIMALS) / 1000; // $0.005
+
 /**
  * @notice Calculate a per-epoch rate based on total storage size
  * @dev Adds a fixed per-dataset fee to the size-proportional rate.

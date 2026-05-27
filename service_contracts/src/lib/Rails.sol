@@ -11,6 +11,8 @@ import {
     DEFAULT_CDN_LOCKUP_AMOUNT,
     DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
+    LIFECYCLE_RESERVE_TARGET,
+    REPLENISH_THRESHOLD,
     SERVICE_COMMISSION_BPS,
     SYBIL_FEE,
     calculateStorageRate
@@ -59,7 +61,8 @@ library Rails {
         // We use multiply-first here to preserve the exact monthly value for cleaner error messages.
         // This is slightly more conservative than the actual rail lockup (which uses the truncated
         // per-epoch rate), but the difference is under 0.0001% and always in the user's favor.
-        uint256 minimumLockupRequired = (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+        uint256 minimumLockupRequired =
+            (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
         if (includeCDN) {
@@ -134,8 +137,8 @@ library Rails {
             address(this)
         );
 
-        // Set lockup period for the rail
-        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
+        // Set lockup period and seed the lifecycle reserve
+        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, LIFECYCLE_RESERVE_TARGET);
 
         // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
         burnSybil(payments, usdfcTokenAddress, payer);
@@ -230,11 +233,25 @@ library Rails {
         }
     }
 
-    function updateStorageRates(FilecoinPayV1 payments, uint256 dataSetId, uint256 pdpRailId, uint256 leafCount)
-        public
-    {
+    function updateStorageRates(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        uint256 pdpRailId,
+        uint256 leafCount,
+        uint96 pending,
+        uint96 reserveBalance
+    ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
-        payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, 0);
+
+        if (reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
+            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, uint96(LIFECYCLE_RESERVE_TARGET) + pending);
+            newReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
+        } else {
+            newReserveBalance = reserveBalance - pending;
+        }
+
+        payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, pending);
+
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
     }
 }
