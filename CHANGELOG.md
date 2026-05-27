@@ -11,9 +11,6 @@ This release improves data set creation and data set query behavior in FWSS, whi
 
 See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/v1.2.0/service_contracts/deployments.json) for the latest Mainnet (chain 314) and Calibnet (chain 314159) contract addresses. The FWSS proxy addresses remain unchanged in this release; the upgrade only changes the implementation behind the existing proxies.
 
-### Changed
-- Data set creation now charges the PDPVerifier USDFC sybil fee via a client-funded burn rail ([#437](https://github.com/FilOzone/filecoin-services/pull/437))
-
 ### Fixed
 - Corrected FWSS proving-period boundary handling to use exclusive-inclusive ranges ([#419](https://github.com/FilOzone/filecoin-services/pull/419))
 - Simplified and optimized validator-path settlement calculations in `_findProvenEpochs` ([#423](https://github.com/FilOzone/filecoin-services/pull/423), [#424](https://github.com/FilOzone/filecoin-services/pull/424))
@@ -21,9 +18,6 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 ### Upgrade Notes
 - Existing FWSS proxy integrations continue using the same proxy addresses.
 - No migration is required for existing data sets or existing integrations.
-- Clients creating new data sets should ensure they have enough available USDFC funds and lockup allowance to cover both the existing minimum lockup and the PDPVerifier sybil fee.
-  - The USDFC sybil fee is `0.1 USDFC`.
-  - The configured amount can be read on-chain by calling `USDFC_SYBIL_FEE()` on the PDPVerifier proxy for each network. See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/deployments.json) for the PDP proxy addresses.
 - No user action is required unless your integration depends on the exact pre-upgrade dataset-creation funding assumptions.
 
 ## [1.1.0] - 2026-01-30 - FWSS Upgrade

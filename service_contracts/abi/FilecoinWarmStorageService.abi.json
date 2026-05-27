@@ -773,6 +773,24 @@
   },
   {
     "type": "function",
+    "name": "topUpLifecycleReserve",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "transferFilBeamController",
     "inputs": [
       {

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import "./FilecoinWarmStorageService.t.sol";
+import {FilecoinWarmStorageServiceTest} from "./FilecoinWarmStorageService.t.sol";
+import {Cids} from "@pdp/Cids.sol";
+import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {
     ADD_PIECES_FEE,
     LIFECYCLE_RESERVE_TARGET,

@@ -14,7 +14,6 @@ import {
     LIFECYCLE_RESERVE_TARGET,
     REPLENISH_THRESHOLD,
     SERVICE_COMMISSION_BPS,
-    SYBIL_FEE,
     calculateStorageRate
 } from "./PriceListUSDFC.sol";
 
@@ -33,21 +32,6 @@ event CDNServiceTerminated(
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
 library Rails {
-    function burnSybil(FilecoinPayV1 payments, IERC20 token, address payer) internal {
-        uint256 burnRailId = payments.createRail(
-            token,
-            payer, // from: client
-            address(payments), // to: payments contract (auction pool)
-            address(0), // no validator
-            0, // no commission
-            address(0) // service fee recipient (unused, commission=0)
-        );
-        payments.modifyRailLockup(burnRailId, 0, SYBIL_FEE);
-        payments.modifyRailPayment(burnRailId, 0, SYBIL_FEE);
-        payments.terminateRail(burnRailId);
-        payments.settleRail(burnRailId, block.number);
-    }
-
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
     /// @param payments The FilecoinPayV1 contract instance
     /// @param payer The address of the payer
@@ -68,9 +52,6 @@ library Rails {
         if (includeCDN) {
             minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
-
-        // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
-        minimumLockupRequired += SYBIL_FEE;
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
@@ -139,9 +120,6 @@ library Rails {
 
         // Set lockup period and seed the lifecycle reserve
         payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, LIFECYCLE_RESERVE_TARGET);
-
-        // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
-        burnSybil(payments, usdfcTokenAddress, payer);
 
         cacheMissRailId = 0;
         cdnRailId = 0;
