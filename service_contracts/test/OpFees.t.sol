@@ -197,7 +197,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     }
 
     function test_terminateFee_chargedOnConsentCase() public {
-        (uint256 dataSetId,,,,) = _createDataSetWithPiece();
+        (uint256 dataSetId, uint256 pdpRailId,,,) = _createDataSetWithPiece();
 
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
@@ -209,8 +209,9 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
 
         info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pendingOneTimePayments, TERMINATE_FEE, "fee charged on consent termination");
-        assertEq(info.lifecycleReserveBalance, reserveBefore, "reserve unchanged until flush");
+        assertEq(info.pendingOneTimePayments, 0, "fee flushed at termination");
+        assertEq(info.lifecycleReserveBalance, reserveBefore - TERMINATE_FEE, "reserve decreased by fee");
+        assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
     }
 
     function test_terminateFee_notChargedOnPayerDirectCall() public {
@@ -324,10 +325,9 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         );
     }
 
-    // TERMINATE_FEE must flush at nextProvingPeriod even when no piece removals are pending.
+    // TERMINATE_FEE must flush at termination time even when no piece removals are pending.
     function test_terminateFee_flushedWithoutRemovals() public {
-        (uint256 dataSetId, uint256 pdpRailId, uint256 leafCount, uint256 firstDeadline, uint256 maxPeriod) =
-            _createDataSetWithPiece();
+        (uint256 dataSetId, uint256 pdpRailId,,,) = _createDataSetWithPiece();
 
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveAfterAdd = info.lifecycleReserveBalance;
@@ -338,16 +338,32 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
 
         info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pendingOneTimePayments, TERMINATE_FEE);
-
-        // Advance proving period with no removals — fee must still flush
-        _advanceProvingPeriod(dataSetId, firstDeadline, maxPeriod, leafCount);
-
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pendingOneTimePayments, 0, "TERMINATE_FEE flushed despite no removals");
+        assertEq(info.pendingOneTimePayments, 0, "TERMINATE_FEE flushed at termination");
         assertEq(info.lifecycleReserveBalance, reserveAfterAdd - TERMINATE_FEE, "reserve decreased by fee");
 
         FilecoinPayV1.RailView memory rail = payments.getRail(pdpRailId);
         assertEq(rail.lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
+    }
+
+    // CREATE_DATA_SET_FEE must be collected even when the dataset is terminated before any proving.
+    function test_createTerminate_createFeeFlushes() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
+        uint256 pdpRailId = viewContract.getDataSet(dataSetId).pdpRailId;
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pendingOneTimePayments, CREATE_DATA_SET_FEE, "create fee pending before termination");
+        assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
+
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pendingOneTimePayments, 0, "create fee flushed at termination");
+        assertEq(
+            info.lifecycleReserveBalance,
+            LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE,
+            "reserve decreased by create fee"
+        );
+        assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
     }
 }

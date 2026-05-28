@@ -55,5 +55,6 @@ function calculateStorageSizeBasedRatePerEpoch(uint256 totalBytes) pure returns 
  * @return storageRatePerEpoch The storage rate per epoch
  */
 function calculateStorageRate(uint256 leafCount) pure returns (uint256 storageRatePerEpoch) {
+    if (leafCount == 0) return 0;
     return calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(leafCount));
 }

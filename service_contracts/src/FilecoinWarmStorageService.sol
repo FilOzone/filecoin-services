@@ -1002,6 +1002,13 @@ contract FilecoinWarmStorageService is
         }
 
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
+
+        uint96 pending = info.pendingOneTimePayments;
+        if (pending > 0) {
+            uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
+            updatePaymentRates(dataSetId, info, leafCount, pending, info.lifecycleReserveBalance);
+        }
+
         payments.terminateRail(info.pdpRailId);
 
         if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
