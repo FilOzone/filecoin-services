@@ -60,7 +60,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "1.2.0";
+    string public constant VERSION = "1.2.1";
 
     // =========================================================================
     // Events
@@ -199,6 +199,7 @@ contract FilecoinWarmStorageService is
     uint256 private constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
     uint256 private constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
     uint256 private constant EPOCHS_PER_MONTH = 2880 * 30;
+    uint256 private constant SYBIL_FEE = 0.1 ether; // 0.1 USDFC
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
@@ -694,7 +695,6 @@ contract FilecoinWarmStorageService is
 
         // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
         {
-            uint256 sybilFee = IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
             uint256 burnRailId = payments.createRail(
                 usdfcTokenAddress,
                 createData.payer, // from: client
@@ -703,8 +703,8 @@ contract FilecoinWarmStorageService is
                 0, // no commission
                 address(0) // service fee recipient (unused, commission=0)
             );
-            payments.modifyRailLockup(burnRailId, 0, sybilFee);
-            payments.modifyRailPayment(burnRailId, 0, sybilFee);
+            payments.modifyRailLockup(burnRailId, 0, SYBIL_FEE);
+            payments.modifyRailPayment(burnRailId, 0, SYBIL_FEE);
             payments.terminateRail(burnRailId);
             payments.settleRail(burnRailId, block.number);
         }
@@ -1249,7 +1249,7 @@ contract FilecoinWarmStorageService is
         }
 
         // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
-        minimumLockupRequired += IPDPVerifier(pdpVerifierAddress).USDFC_SYBIL_FEE();
+        minimumLockupRequired += SYBIL_FEE;
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);

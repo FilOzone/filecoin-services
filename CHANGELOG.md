@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.2.1] - TBD - FWSS Hotfix
+
+This hotfix restores FWSS compatibility with PDPVerifier v3.4.0.
+
+### Fixed
+- Replaced the FWSS dependency on `IPDPVerifier.USDFC_SYBIL_FEE()` with a local `0.1 USDFC` sybil-fee constant during data-set creation and pre-flight lockup validation. This preserves the FWSS v1.2.0 sybil-fee burn rail while remaining compatible with PDPVerifier v3.4.0, which removed that getter.
+
+### Upgrade Notes
+- Existing FWSS proxy addresses remain unchanged.
+- New data-set creation still requires enough USDFC funds and lockup allowance for the FWSS `0.1 USDFC` sybil fee.
+- Curio/SP software also needs to send the 0.1 FIL cleanup deposit required by PDPVerifier v3.4.0 when creating new data sets.
+
 ## [1.2.0] - 2026-03-23 - FWSS Upgrade
 
 This release improves data set creation and data set query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new data sets.
