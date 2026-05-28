@@ -3,6 +3,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [Unreleased]
+
+### Changed
+- Synced PDPVerifier source, ABI, and deployment references to [PDP v3.4.0](https://github.com/FilOzone/pdp/releases/tag/v3.4.0). The Mainnet and Calibration PDPVerifier implementation references now point at the v3.4.0 contracts.
+
+### Deployment Addresses
+
+**Mainnet:**
+- PDPVerifier Implementation: [0xb41A97FEDD2D9497C639A643ec75E56CbCeDe8BA](https://filecoin.blockscout.com/address/0xb41A97FEDD2D9497C639A643ec75E56CbCeDe8BA?tab=contract)
+
+**Calibnet:**
+- PDPVerifier Implementation: [0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61](https://filecoin-testnet.blockscout.com/address/0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61?tab=contract)
+
+### Upgrade Notes
+- No FWSS redeployment is required.
+- PDP v3.4.0 replaces the previous USDFC sybil-fee path with the FIL cleanup deposit flow described in the PDP release notes.
+
 ## [1.2.0] - 2026-03-23 - FWSS Upgrade
 
 This release improves data set creation and data set query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new data sets.
