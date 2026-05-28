@@ -20,6 +20,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - No FWSS redeployment is required.
 - PDP v3.4.0 replaces the previous USDFC sybil-fee path with the FIL cleanup deposit flow described in the PDP release notes.
 
+## [1.2.1] - 2026-05-28 - FWSS Hotfix
+
+This hotfix restores FWSS compatibility with PDPVerifier v3.4.0.
+
+### Deployment Addresses
+
+The FWSS proxy addresses remain unchanged. Implementation deployments were built from commit `a6dec30d61213c2eb9af2b5bbabb4ab36ec531b1`.
+
+| Network | FWSS Proxy | New Implementation | Status |
+| --- | --- | --- | --- |
+| Calibnet | [`0x02925630df557F957f70E112bA06e50965417CA0`](https://filecoin-testnet.blockscout.com/address/0x02925630df557F957f70E112bA06e50965417CA0) | [`0xC196EFddF64C4c2605284Ab66bdbc24fC795dE9E`](https://filecoin-testnet.blockscout.com/address/0xC196EFddF64C4c2605284Ab66bdbc24fC795dE9E) | Upgraded on 2026-05-28 via [`announcePlannedUpgrade`](https://filecoin-testnet.blockscout.com/tx/0x59a6423086a0ee728b118441f074f677e35d25cd8bdd1029f934b5b6ed0a6cce) and [`upgradeToAndCall`](https://filecoin-testnet.blockscout.com/tx/0xb1f6feeb4e7d360203810d7a95f24fbcd13c9e8b278c3756136b7409aa762c81) |
+| Mainnet | [`0x8408502033C418E1bbC97cE9ac48E5528F371A9f`](https://filecoin.blockscout.com/address/0x8408502033C418E1bbC97cE9ac48E5528F371A9f) | [`0xEBc8CD859d0D389235bDe59B97485936daA1aED5`](https://filecoin.blockscout.com/address/0xEBc8CD859d0D389235bDe59B97485936daA1aED5) | Upgraded on 2026-05-28 via [`announcePlannedUpgrade`](https://filecoin.blockscout.com/tx/0xe61059f8d764a2b4d664769c7eee7973a078fbbc0f7c2fd144e86ebba54d483e) and [`upgradeToAndCall`](https://filecoin.blockscout.com/tx/0x45c82cd462ae683e92636b158604bccec9c1dd65b95e45fb23ed7f53bf8a4a25) |
+
+### Fixed
+- Replaced the FWSS dependency on `IPDPVerifier.USDFC_SYBIL_FEE()` with a local `0.1 USDFC` sybil-fee constant during data-set creation and pre-flight lockup validation. This preserves the FWSS v1.2.0 sybil-fee burn rail while remaining compatible with PDPVerifier v3.4.0, which removed that getter.
+
+### Upgrade Notes
+- Existing FWSS proxy addresses remain unchanged.
+- New data-set creation still requires enough USDFC funds and lockup allowance for the FWSS `0.1 USDFC` sybil fee.
+- Curio/SP software also needs to send the 0.1 FIL cleanup deposit required by PDPVerifier v3.4.0 when creating new data sets.
+
 ## [1.2.0] - 2026-03-23 - FWSS Upgrade
 
 This release improves data set creation and data set query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new data sets.
