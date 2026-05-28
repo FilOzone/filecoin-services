@@ -989,7 +989,7 @@ contract FilecoinWarmStorageService is
             );
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
-            if (approver == info.payer && msg.sender == info.serviceProvider) {
+            if (msg.sender == info.serviceProvider) {
                 // TODO termination can be immediate
                 info.pendingOneTimePayments += uint96(TERMINATE_FEE);
             }
