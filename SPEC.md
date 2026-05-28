@@ -31,6 +31,44 @@ Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the s
 
 **Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
 
+### Operation Fees
+
+In addition to the ongoing storage rate, FWSS charges one-time fees for specific lifecycle operations. These fees are deducted from a **lifecycle reserve** maintained as fixed lockup on the PDP rail.
+
+| Operation | Fee | Trigger | Recipient |
+|---|---|---|---|
+| Create dataset | $0.0025 | `dataSetCreated` callback | SP |
+| Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
+| Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
+| Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |
+
+The terminate fee applies only in the **consent case**: when the SP calls `terminateService` with a valid payer signature in `extraData`. Direct termination by the payer or unilateral SP termination does not incur this fee.
+
+#### Lifecycle Reserve
+
+The lifecycle reserve is seeded at **$0.10** when the dataset is created, stored as `lockupFixed` on the PDP rail.
+
+```
+LIFECYCLE_RESERVE_TARGET = $0.10
+REPLENISH_THRESHOLD      = $0.005
+```
+
+**Flush mechanism**: Operation fees are not paid immediately. Each triggering operation increments `pendingOneTimePayments` (a local field in `DataSetInfo`). The accumulated amount is flushed the next time `updateStorageRates` runs—once per `piecesAdded` and once per `nextProvingPeriod`:
+
+```
+modifyRailPayment(pdpRailId, newStorageRate, pendingFees)
+lifecycleReserveBalance -= pendingFees
+pendingOneTimePayments   = 0
+```
+
+This keeps the hot path at one external call per event.
+
+**Replenishment**: Before each flush, if `lifecycleReserveBalance - pending < REPLENISH_THRESHOLD`, the reserve is automatically topped back up to `LIFECYCLE_RESERVE_TARGET` via an additional `modifyRailLockup` call. Replenishment fires roughly once every 50 operations.
+
+**Post-termination**: Once the PDP rail is terminated, `modifyRailLockup` can no longer raise `lockupFixed`. The reserve balance at termination time is the maximum available for wind-down fees. Clients anticipating many post-termination piece removals should pre-fund the reserve before terminating.
+
+**Manual top-up**: The payer can call `topUpLifecycleReserve(dataSetId, amount)` at any time before termination. The payer must have sufficient available funds and `lockupAllowance` to cover the increase; `modifyRailLockup` enforces this via the standard operator approval checks.
+
 ### Pricing Updates
 
 Only the contract owner can update pricing, by upgrading the contract.
