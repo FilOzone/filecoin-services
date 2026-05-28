@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - No FWSS redeployment is required.
 - PDP v3.4.0 replaces the previous USDFC sybil-fee path with the FIL cleanup deposit flow described in the PDP release notes.
 
-## [1.2.1] - TBD - FWSS Hotfix
+## [1.2.1] - 2026-05-28 - FWSS Hotfix
 
 This hotfix restores FWSS compatibility with PDPVerifier v3.4.0.
 
