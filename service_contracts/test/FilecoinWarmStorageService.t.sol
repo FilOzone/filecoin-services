@@ -5345,7 +5345,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             if (logs[i].topics[0] == expectedTopic) {
                 // Decode and verify the event data
                 (string memory version, address implementation) = abi.decode(logs[i].data, (string, address));
-                assertEq(version, "1.2.0", "Version should be 1.2.0");
+                assertEq(version, "1.2.1", "Version should be 1.2.1");
                 assertTrue(implementation != address(0), "Implementation address should not be zero");
                 foundEvent = true;
                 break;
@@ -5366,9 +5366,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 }
 
 /**
- * @notice Tests for USDFC sybil fee burn rail in dataset creation
+ * @notice Tests for USDFC sybil fee burn rail in dataset creation.
  */
-contract SybilFeeTest is FilecoinWarmStorageServiceTest {
+contract PDPVerifierV34CompatibilityTest is FilecoinWarmStorageServiceTest {
     using SafeERC20 for MockERC20;
 
     function _createClientAndDeposit(string memory name, uint256 amount) internal returns (address clientAddr) {
@@ -5387,13 +5387,14 @@ contract SybilFeeTest is FilecoinWarmStorageServiceTest {
         return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
     }
 
-    function testDataSetCreation_SybilFeeBurned() public {
+    function testDataSetCreation_SybilFeeBurnedWithoutPDPVerifierGetter() public {
         // Setup client with enough funds
-        address testClient = _createClientAndDeposit("sybilClient", 1e18);
+        address testClient = _createClientAndDeposit("pdpV34Client", 1e18);
         bytes memory encodedData = _encodeCreateData(testClient, 100);
 
-        // Get balances before
+        // MockPDPVerifier intentionally does not expose USDFC_SYBIL_FEE().
         (,, uint256 availableBefore,) = payments.getAccountInfoIfSettled(mockUSDFC, testClient);
+        (uint256 paymentsFundsBefore,,,) = payments.accounts(mockUSDFC, address(payments));
 
         // Create dataset
         makeSignaturePass(testClient);
@@ -5403,13 +5404,14 @@ contract SybilFeeTest is FilecoinWarmStorageServiceTest {
 
         // Verify client funds decreased by sybil fee (plus lockup)
         (,, uint256 availableAfter,) = payments.getAccountInfoIfSettled(mockUSDFC, testClient);
-        // Available funds decreased by at least the sybil fee
         assertTrue(availableBefore - availableAfter >= 0.1e18, "Client funds should decrease by at least sybil fee");
 
         // Verify full sybil fee landed in payments' own account (auction pool)
         // Both network fee and net payee amount credit accounts[token][address(payments)]
-        (uint256 funds,,,) = payments.accounts(mockUSDFC, address(payments));
-        assertTrue(funds >= 0.1e18, "Payments auction pool should receive full sybil fee");
+        (uint256 paymentsFundsAfter,,,) = payments.accounts(mockUSDFC, address(payments));
+        assertTrue(
+            paymentsFundsAfter - paymentsFundsBefore >= 0.1e18, "Payments auction pool should receive full sybil fee"
+        );
     }
 
     function testDataSetCreation_InsufficientFundsForSybilFee() public {
