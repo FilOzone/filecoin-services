@@ -989,17 +989,16 @@ contract FilecoinWarmStorageService is
             );
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
-            // TODO if msg.sender is info.serviceProvider, termination is immediate
+            if (approver == info.payer && msg.sender == info.serviceProvider) {
+                // TODO termination can be immediate
+                info.pendingOneTimePayments += uint96(TERMINATE_FEE);
+            }
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,
                 Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
             );
             approver = msg.sender;
-        }
-
-        if (approver == info.payer) {
-            info.pendingOneTimePayments += uint96(TERMINATE_FEE);
         }
 
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);

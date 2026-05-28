@@ -196,19 +196,32 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         assertEq(rail.lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
     }
 
-    function test_terminateFee_chargedOnPayerInitiated() public {
+    function test_terminateFee_chargedOnConsentCase() public {
         (uint256 dataSetId,,,,) = _createDataSetWithPiece();
 
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
         assertEq(info.pendingOneTimePayments, 0);
 
+        // Consent case: payer signs off-chain, SP submits with signature in extraData
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pendingOneTimePayments, TERMINATE_FEE, "fee charged on consent termination");
+        assertEq(info.lifecycleReserveBalance, reserveBefore, "reserve unchanged until flush");
+    }
+
+    function test_terminateFee_notChargedOnPayerDirectCall() public {
+        (uint256 dataSetId,,,,) = _createDataSetWithPiece();
+
+        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0);
+
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pendingOneTimePayments, TERMINATE_FEE, "fee charged on payer termination");
-        assertEq(info.lifecycleReserveBalance, reserveBefore, "reserve unchanged until flush");
+        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on payer direct termination");
     }
 
     function test_terminateFee_notChargedOnSpInitiated() public {
@@ -319,9 +332,10 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveAfterAdd = info.lifecycleReserveBalance;
 
-        // Payer terminates; no removals scheduled
-        vm.prank(client);
-        pdpServiceWithPayments.terminateService(dataSetId);
+        // Consent case: payer signs off-chain, SP submits; no removals scheduled
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, TERMINATE_FEE);
