@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {FilecoinWarmStorageServiceTest} from "./FilecoinWarmStorageService.t.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {FilecoinWarmStorageService, MAX_ADD_PIECES_EXTRA_DATA_SIZE} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
@@ -365,5 +366,37 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             "reserve decreased by create fee"
         );
         assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
+    }
+
+    // topUpLifecycleReserve must revert rather than silently wrap around and produce a newBalance
+    // smaller than lifecycleReserveBalance.
+    function test_topUpLifecycleReserve_overflow_reverts() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
+        uint96 currentBalance = viewContract.getDataSet(dataSetId).lifecycleReserveBalance;
+        // amount chosen so uint96(amount) == amount (no truncation) yet currentBalance + amount overflows uint96
+        uint256 amount = uint256(type(uint96).max) - currentBalance + 1;
+        vm.prank(client);
+        vm.expectRevert(stdError.arithmeticError);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, amount);
+    }
+
+    // When amount has bits above the uint96 range set, uint96(amount) silently truncates them;
+    // only the lower 96 bits contribute to the balance increase.
+    function test_topUpLifecycleReserve_bit97_truncated() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 pdpRailId = info.pdpRailId;
+
+        uint256 topUp = 1e18;
+        // bit 97 is above the uint96 range; uint96(amount) == topUp after truncation
+        uint256 amount = (uint256(1) << 97) | topUp;
+        uint96 expectedBalance = info.lifecycleReserveBalance + uint96(topUp);
+
+        vm.prank(client);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, amount);
+
+        info = viewContract.getDataSet(dataSetId);
+        assertEq(info.lifecycleReserveBalance, expectedBalance, "upper bits truncated, lower bits applied");
+        assertEq(payments.getRail(pdpRailId).lockupFixed, expectedBalance, "lockupFixed mirrors reserve");
     }
 }
