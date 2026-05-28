@@ -3,12 +3,15 @@ pragma solidity ^0.8.20;
 
 import {FilecoinWarmStorageServiceTest} from "./FilecoinWarmStorageService.t.sol";
 import {Cids} from "@pdp/Cids.sol";
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageService, MAX_ADD_PIECES_EXTRA_DATA_SIZE} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {
-    ADD_PIECES_FEE,
+    ADD_PIECES_BASE_FEE,
+    ADD_PIECES_PER_PIECE_FEE,
     CREATE_DATA_SET_FEE,
+    DATASET_FEE_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
+    REPLENISH_THRESHOLD,
     SCHEDULE_PIECE_REMOVALS_FEE,
     TERMINATE_FEE
 } from "../src/lib/PriceListUSDFC.sol";
@@ -16,10 +19,40 @@ import {
 contract OpFeesTest is FilecoinWarmStorageServiceTest {
     uint256 constant PIECE_HEIGHT = 4;
     uint256 constant PIECE_LEAVES = 1 << PIECE_HEIGHT;
+    // Minimum N such that pending = CREATE_DATA_SET_FEE + ADD_PIECES_BASE_FEE + N * ADD_PIECES_PER_PIECE_FEE
+    // satisfies LIFECYCLE_RESERVE_TARGET < pending + REPLENISH_THRESHOLD, i.e. triggers replenishment.
+    uint256 constant REPLENISH_BATCH = (
+        LIFECYCLE_RESERVE_TARGET - REPLENISH_THRESHOLD - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE
+    ) / ADD_PIECES_PER_PIECE_FEE + 1;
+    // ABI encoding of abi.encode(nonce, allKeys, allValues, sig) with N empty-metadata pieces:
+    //   overhead  = 4*32 (nonce + 3 dynamic offsets)
+    //             + 2*32 (outer array lengths for allKeys and allValues)
+    //             + 32   (signature length word)
+    //             + ceil(FAKE_SIGNATURE.length / 32) * 32 (padded signature data)
+    //   per piece = 4*32 (offset + empty array for each of allKeys[i] and allValues[i])
+    uint256 constant FAKE_SIGNATURE_LEN = 65; // r(32) + s(32) + v(1)
+    // Round up to next 32-byte boundary without divide-then-multiply.
+    uint256 constant FAKE_SIGNATURE_PADDED = FAKE_SIGNATURE_LEN + (32 - FAKE_SIGNATURE_LEN % 32) % 32;
+    uint256 constant ADD_PIECES_EXTRA_DATA_PER_PIECE = 4 * 32;
+    uint256 constant ADD_PIECES_EXTRA_DATA_OVERHEAD = 4 * 32 + 2 * 32 + 32 + FAKE_SIGNATURE_PADDED;
+    uint256 constant BATCH_CAP =
+        (MAX_ADD_PIECES_EXTRA_DATA_SIZE - ADD_PIECES_EXTRA_DATA_OVERHEAD) / ADD_PIECES_EXTRA_DATA_PER_PIECE;
+    // Fee drained by each full-BATCH_CAP addPieces call (CREATE_DATA_SET_FEE only appears in the first call).
+    uint256 constant PER_CALL_DRAIN = ADD_PIECES_BASE_FEE + BATCH_CAP * ADD_PIECES_PER_PIECE_FEE;
+    // Full-BATCH_CAP calls that flush safely before the reserve crosses the replenishment threshold.
+    uint256 constant NUM_SAFE_CALLS =
+        (LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - REPLENISH_THRESHOLD) / PER_CALL_DRAIN;
+
+    function _buildBatch(uint256 n) internal pure returns (Cids.Cid[] memory pieces) {
+        pieces = new Cids.Cid[](n);
+        for (uint256 i = 0; i < n; i++) {
+            pieces[i] = Cids.CommPv2FromDigest(0, uint8(PIECE_HEIGHT), keccak256(abi.encodePacked(i)));
+        }
+    }
 
     // Creates a dataset with one piece added and the first proving period initialized.
     // Returns (dataSetId, pdpRailId, leafCount, firstDeadline, maxProvingPeriod).
-    // On return: pendingOneTimePayments == 0, lifecycleReserveBalance == LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_FEE.
+    // On return: pendingOneTimePayments == 0, lifecycleReserveBalance == LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE - ADD_PIECES_PER_PIECE_FEE.
     function _createDataSetWithPiece()
         internal
         returns (uint256 dataSetId, uint256 pdpRailId, uint256 leafCount, uint256 firstDeadline, uint256 maxPeriod)
@@ -81,7 +114,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         assertEq(info.pendingOneTimePayments, 0, "fees flushed immediately in piecesAdded");
         assertEq(
             info.lifecycleReserveBalance,
-            LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_FEE,
+            LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE - ADD_PIECES_PER_PIECE_FEE,
             "reserve decreased by both fees"
         );
 
@@ -187,6 +220,95 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on SP-initiated termination");
+    }
+
+    function test_addPiecesFee_largeBatch_triggersReplenishment() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
+
+        uint256 added = 0;
+        for (uint256 i = 0; i < NUM_SAFE_CALLS; i++) {
+            makeSignaturePass(client);
+            mockPDPVerifier.addPieces(
+                pdpServiceWithPayments,
+                dataSetId,
+                added,
+                _buildBatch(BATCH_CAP),
+                nextClientDataSetId++,
+                FAKE_SIGNATURE,
+                new string[](0),
+                new string[](0)
+            );
+            added += BATCH_CAP;
+        }
+        // One more call crosses the threshold and triggers replenishment.
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            added,
+            _buildBatch(BATCH_CAP),
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pendingOneTimePayments, 0, "fees flushed");
+        assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET, "reserve replenished to target");
+
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        assertEq(rail.lockupFixed, LIFECYCLE_RESERVE_TARGET, "lockupFixed reflects replenishment");
+    }
+
+    function test_addPiecesFee_largeBatch_revertsInsufficientFunds() public {
+        // Client has just enough for safe flushes (lifecycle reserve + 2× dataset fee covers
+        // the rate-based lockup from adding pieces) but not enough for replenishment
+        // (which needs ≈ LIFECYCLE_RESERVE_TARGET - REPLENISH_THRESHOLD ≈ 0.095 USDFC more).
+        address minClient = makeAddr("minClient");
+        uint256 minAmount = LIFECYCLE_RESERVE_TARGET + 2 * DATASET_FEE_PER_MONTH;
+        require(mockUSDFC.transfer(minClient, minAmount));
+        vm.startPrank(minClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minAmount);
+        payments.deposit(mockUSDFC, minClient, minAmount);
+        vm.stopPrank();
+
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+        bytes memory encodedData = abi.encode(minClient, nextClientDataSetId++, emptyKeys, emptyValues, FAKE_SIGNATURE);
+        makeSignaturePass(minClient);
+        vm.prank(sp1);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+
+        uint256 added = 0;
+        for (uint256 i = 0; i < NUM_SAFE_CALLS; i++) {
+            makeSignaturePass(minClient);
+            mockPDPVerifier.addPieces(
+                pdpServiceWithPayments,
+                dataSetId,
+                added,
+                _buildBatch(BATCH_CAP),
+                nextClientDataSetId++,
+                FAKE_SIGNATURE,
+                new string[](0),
+                new string[](0)
+            );
+            added += BATCH_CAP;
+        }
+
+        makeSignaturePass(minClient);
+        vm.expectRevert("invariant failure: insufficient funds to cover lockup after function execution");
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            added,
+            _buildBatch(BATCH_CAP),
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
     }
 
     // TERMINATE_FEE must flush at nextProvingPeriod even when no piece removals are pending.

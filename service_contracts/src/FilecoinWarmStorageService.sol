@@ -21,7 +21,8 @@ import {Extsload} from "./Extsload.sol";
 
 import {
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
-    ADD_PIECES_FEE,
+    ADD_PIECES_BASE_FEE,
+    ADD_PIECES_PER_PIECE_FEE,
     CREATE_DATA_SET_FEE,
     CDN_EGRESS_PRICE_PER_TIB,
     DATASET_FEE_PER_MONTH,
@@ -747,7 +748,8 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
 
-        uint96 pending = info.pendingOneTimePayments + uint96(ADD_PIECES_FEE);
+        uint96 pending =
+            info.pendingOneTimePayments + uint96(ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE);
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
