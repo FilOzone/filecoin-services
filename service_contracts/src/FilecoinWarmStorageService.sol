@@ -819,7 +819,11 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
 
-        info.pendingOneTimePayments += uint96(SCHEDULE_PIECE_REMOVALS_FEE);
+        uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
+        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserveIfNeeded(
+            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending
+        );
+        info.pendingOneTimePayments = newPending;
 
         // Queue piece IDs for metadata cleanup at nextProvingPeriod
         uint256[] storage scheduled = scheduledPieceMetadataRemovals[dataSetId];

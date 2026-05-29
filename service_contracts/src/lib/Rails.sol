@@ -211,6 +211,24 @@ library Rails {
         }
     }
 
+    // Replenishes the rail's fixed lockup when the reserve would drop below REPLENISH_THRESHOLD
+    // after paying pending. Returns the new lockupFixed value (mirrors lifecycleReserveBalance).
+    // Skipped for terminated rails (pdpEndEpoch != 0): modifyRailLockup forbids increases there.
+    function replenishReserveIfNeeded(
+        FilecoinPayV1 payments,
+        uint256 pdpRailId,
+        uint256 pdpEndEpoch,
+        uint96 reserveBalance,
+        uint96 pending
+    ) internal returns (uint96) {
+        if (pdpEndEpoch == 0 && reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
+            uint96 newLockup = uint96(LIFECYCLE_RESERVE_TARGET) + pending;
+            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newLockup);
+            return newLockup;
+        }
+        return reserveBalance;
+    }
+
     function updateStorageRates(
         FilecoinPayV1 payments,
         uint256 dataSetId,
@@ -221,16 +239,9 @@ library Rails {
         uint256 pdpEndEpoch
     ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
-
-        if (pdpEndEpoch == 0 && reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
-            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, uint96(LIFECYCLE_RESERVE_TARGET) + pending);
-            newReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
-        } else {
-            newReserveBalance = reserveBalance - pending;
-        }
-
+        newReserveBalance =
+            replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending) - pending;
         payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, pending);
-
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
     }
 }

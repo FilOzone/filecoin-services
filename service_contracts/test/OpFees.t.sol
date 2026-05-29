@@ -44,6 +44,14 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     // Full-BATCH_CAP calls that flush safely before the reserve crosses the replenishment threshold.
     uint256 constant NUM_SAFE_CALLS =
         (LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - REPLENISH_THRESHOLD) / PER_CALL_DRAIN;
+    // Reserve remaining after createDataSet + NUM_SAFE_CALLS batch addPieces (CREATE_DATA_SET_FEE
+    // is folded into the first addPieces flush).
+    uint256 constant RESERVE_AFTER_SAFE_ADD_CALLS =
+        LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - NUM_SAFE_CALLS * PER_CALL_DRAIN;
+    // Complete removal+flush cycles that safely drain SCHEDULE_PIECE_REMOVALS_FEE each before the
+    // reserve falls below the replenishment threshold for the next scheduling call.
+    uint256 constant NUM_SAFE_REMOVAL_CYCLES =
+        (RESERVE_AFTER_SAFE_ADD_CALLS - REPLENISH_THRESHOLD) / SCHEDULE_PIECE_REMOVALS_FEE;
 
     function _buildBatch(uint256 n) internal pure returns (Cids.Cid[] memory pieces) {
         pieces = new Cids.Cid[](n);
@@ -457,6 +465,91 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             new string[](0),
             new string[](0)
         );
+    }
+
+    // With reserve exhausted, piecesScheduledRemove fails at scheduling time (approach 2: replenish
+    // at the operation, not at flush). nextProvingPeriod still succeeds and pays out whatever
+    // fees were already accumulated from the last successful scheduling call.
+    function test_schedulePieceRemoval_depleted_reserve_reverts_remainingPaid() public {
+        address minClient = makeAddr("minClient3");
+        uint256 minAmount = LIFECYCLE_RESERVE_TARGET + 2 * DATASET_FEE_PER_MONTH;
+        require(mockUSDFC.transfer(minClient, minAmount));
+        vm.startPrank(minClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minAmount);
+        payments.deposit(mockUSDFC, minClient, minAmount);
+        vm.stopPrank();
+
+        bytes memory encodedData =
+            abi.encode(minClient, nextClientDataSetId++, new string[](0), new string[](0), FAKE_SIGNATURE);
+        makeSignaturePass(minClient);
+        vm.prank(sp1);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+
+        // Drain reserve via NUM_SAFE_CALLS batch addPieces.
+        uint256 added = 0;
+        for (uint256 i = 0; i < NUM_SAFE_CALLS; i++) {
+            makeSignaturePass(minClient);
+            mockPDPVerifier.addPieces(
+                pdpServiceWithPayments,
+                dataSetId,
+                added,
+                _buildBatch(BATCH_CAP),
+                nextClientDataSetId++,
+                FAKE_SIGNATURE,
+                new string[](0),
+                new string[](0)
+            );
+            added += BATCH_CAP;
+        }
+
+        // Initialize proving (pending=0, no drain).
+        (uint256 maxPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 leafCount = added * PIECE_LEAVES;
+        uint256 deadline = block.number + maxPeriod;
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, deadline - challengeWindow / 2, leafCount, ""
+        );
+
+        // NUM_SAFE_REMOVAL_CYCLES - 1 complete removal+flush cycles each safely drain the fee.
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        for (uint256 i = 0; i < NUM_SAFE_REMOVAL_CYCLES - 1; i++) {
+            makeSignaturePass(minClient);
+            mockPDPVerifier.piecesScheduledRemove(
+                dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+            );
+            deadline = _advanceProvingPeriod(dataSetId, deadline, maxPeriod, leafCount);
+        }
+
+        // One final removal succeeds — reserve still covers it without replenishment.
+        makeSignaturePass(minClient);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        // With the unflushed fee in pending, the next removal would push accumulated pending
+        // above the replenishment threshold and the payer cannot fund the top-up.
+        assertLt(
+            viewContract.getDataSet(dataSetId).lifecycleReserveBalance,
+            2 * SCHEDULE_PIECE_REMOVALS_FEE + REPLENISH_THRESHOLD,
+            "reserve below trigger for next removal given unflushed pending"
+        );
+        makeSignaturePass(minClient);
+        vm.expectRevert("invariant failure: insufficient funds to cover lockup after function execution");
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        // nextProvingPeriod still succeeds and pays the fee from the last successful removal.
+        uint256 pdpRailId = viewContract.getDataSet(dataSetId).pdpRailId;
+        uint96 reserveBefore = viewContract.getDataSet(dataSetId).lifecycleReserveBalance;
+        deadline = _advanceProvingPeriod(dataSetId, deadline, maxPeriod, leafCount);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pendingOneTimePayments, 0, "pending flushed");
+        assertEq(info.lifecycleReserveBalance, reserveBefore - SCHEDULE_PIECE_REMOVALS_FEE, "fee paid in full");
+        assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
     }
 
     // When amount has bits above the uint96 range set, uint96(amount) silently truncates them;
