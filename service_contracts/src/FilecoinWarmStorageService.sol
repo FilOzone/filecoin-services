@@ -1141,7 +1141,7 @@ contract FilecoinWarmStorageService is
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).updateStorageRates(
-            dataSetId, pdpRailId, leafCount, pending, reserveBalance
+            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch
         );
         info.pendingOneTimePayments = 0;
     }

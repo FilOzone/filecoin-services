@@ -217,11 +217,12 @@ library Rails {
         uint256 pdpRailId,
         uint256 leafCount,
         uint96 pending,
-        uint96 reserveBalance
+        uint96 reserveBalance,
+        uint256 pdpEndEpoch
     ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
 
-        if (reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
+        if (pdpEndEpoch == 0 && reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
             payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, uint96(LIFECYCLE_RESERVE_TARGET) + pending);
             newReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
         } else {

@@ -405,6 +405,60 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, amount);
     }
 
+    // Depleting the reserve prevents addPieces: after NUM_SAFE_CALLS the reserve is too low for
+    // replenishment and one more call reverts.
+    function test_addPieces_depleted_reserve_reverts() public {
+        address minClient = makeAddr("minClient2");
+        uint256 minAmount = LIFECYCLE_RESERVE_TARGET + 2 * DATASET_FEE_PER_MONTH;
+        require(mockUSDFC.transfer(minClient, minAmount));
+        vm.startPrank(minClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), minAmount);
+        payments.deposit(mockUSDFC, minClient, minAmount);
+        vm.stopPrank();
+
+        bytes memory encodedData =
+            abi.encode(minClient, nextClientDataSetId++, new string[](0), new string[](0), FAKE_SIGNATURE);
+        makeSignaturePass(minClient);
+        vm.prank(sp1);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
+
+        uint256 added = 0;
+        for (uint256 i = 0; i < NUM_SAFE_CALLS; i++) {
+            makeSignaturePass(minClient);
+            mockPDPVerifier.addPieces(
+                pdpServiceWithPayments,
+                dataSetId,
+                added,
+                _buildBatch(BATCH_CAP),
+                nextClientDataSetId++,
+                FAKE_SIGNATURE,
+                new string[](0),
+                new string[](0)
+            );
+            added += BATCH_CAP;
+        }
+
+        assertLt(
+            viewContract.getDataSet(dataSetId).lifecycleReserveBalance,
+            REPLENISH_THRESHOLD + PER_CALL_DRAIN,
+            "reserve is now below the replenishment trigger for one more batch"
+        );
+
+        makeSignaturePass(minClient);
+        vm.expectRevert("invariant failure: insufficient funds to cover lockup after function execution");
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            added,
+            _buildBatch(BATCH_CAP),
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+    }
+
     // When amount has bits above the uint96 range set, uint96(amount) silently truncates them;
     // only the lower 96 bits contribute to the balance increase.
     function test_topUpLifecycleReserve_bit97_truncated() public {
