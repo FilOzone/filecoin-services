@@ -5,6 +5,7 @@ import {Errors} from "../Errors.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {
+    CDN_LOCKUP_PERIOD,
     DATASET_FEE_PER_EPOCH,
     DATASET_FEE_PER_MONTH,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
@@ -133,7 +134,7 @@ library Rails {
                 0, // no service commission
                 address(this) // controller
             );
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
+            payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
@@ -143,7 +144,7 @@ library Rails {
                 0, // no service commission
                 address(this) // controller
             );
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
+            payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
 
             emit CDNPaymentRailsToppedUp(
                 dataSetId,
@@ -188,8 +189,8 @@ library Rails {
         uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
 
         // Only modify rails if amounts are being added
-        payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
-        payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
+        payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, totalCdnLockup);
+        payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, totalCacheMissLockup);
         emit CDNPaymentRailsToppedUp(
             dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup
         );

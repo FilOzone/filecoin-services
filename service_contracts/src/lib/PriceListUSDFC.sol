@@ -8,8 +8,10 @@ uint256 constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
 uint256 constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
 
 uint256 constant TOKEN_DECIMALS = 18;
-uint256 constant DEFAULT_LOCKUP_PERIOD = 2880 * 30; // 1 month (30 days) in epochs
-uint256 constant EPOCHS_PER_MONTH = 2880 * 30;
+uint256 constant EPOCHS_PER_DAY = 2880;
+uint256 constant DEFAULT_LOCKUP_PERIOD = EPOCHS_PER_DAY * 30;
+uint256 constant CDN_LOCKUP_PERIOD = EPOCHS_PER_DAY * 5; // shorter settle window for FilBeam
+uint256 constant EPOCHS_PER_MONTH = EPOCHS_PER_DAY * 30;
 
 // USDFC has 18 decimals, so $1 = 10**18 (a.k.a. ether)
 uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC

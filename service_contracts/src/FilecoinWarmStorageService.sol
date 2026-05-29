@@ -670,6 +670,11 @@ contract FilecoinWarmStorageService is
             // Rail is finalized (zeroed out), meaning it was already fully settled
         }
 
+        // Terminate CDN rails if configured, giving FilBeam a graceful settle window
+        if (info.cdnRailId != 0) {
+            _terminateCDNRails(dataSetId, info, payments);
+        }
+
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
@@ -1015,10 +1020,6 @@ contract FilecoinWarmStorageService is
 
         payments.terminateRail(info.pdpRailId);
 
-        if (deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId])) {
-            _terminateCDNRails(dataSetId, info, payments);
-        }
-
         emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
@@ -1090,6 +1091,7 @@ contract FilecoinWarmStorageService is
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
         // Check if CDN service is configured
         require(deleteCDNMetadataKey(dataSetMetadataKeys[dataSetId]), Errors.FilBeamServiceNotConfigured(dataSetId));
+        delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
 
         // Check if cache miss and CDN rails are configured
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -1131,7 +1133,6 @@ contract FilecoinWarmStorageService is
     /// us from implementing error handling.
     function _terminateCDNRails(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
         payments.terminateCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId);
-        delete dataSetMetadata[dataSetId][METADATA_KEY_WITH_CDN];
     }
 
     function updatePaymentRates(

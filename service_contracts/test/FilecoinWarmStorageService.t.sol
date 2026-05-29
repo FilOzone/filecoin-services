@@ -2042,10 +2042,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
         console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
-        // Check withCDN metadata is cleared
+        // CDN service persists through the lockup window — metadata and rails still active
         (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN metadata should not exist after termination");
-        assertEq(withCDN, "", "withCDN value should be cleared for dataset");
+        assertTrue(exists, "withCDN metadata should still exist after terminateService");
+        assertEq(withCDN, "", "withCDN value should be empty string");
+        FilecoinPayV1.RailView memory cdnRailView = payments.getRail(info.cdnRailId);
+        assertEq(cdnRailView.endEpoch, 0, "CDN rail should still be active after terminateService");
+        FilecoinPayV1.RailView memory cacheMissRailView = payments.getRail(info.cacheMissRailId);
+        assertEq(cacheMissRailView.endEpoch, 0, "Cache miss rail should still be active after terminateService");
 
         // check status remains active (terminated datasets are still Active)
         status = viewContract.getDataSetStatus(dataSetId);
@@ -2137,6 +2141,17 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(
             uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)"
         );
+
+        // CDN rails terminated in dataSetDeleted
+        FilecoinPayV1.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
+        assertTrue(cdnRailAfter.endEpoch > 0, "CDN rail should be terminated after dataSetDeleted");
+        FilecoinPayV1.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
+        assertTrue(cacheMissRailAfter.endEpoch > 0, "Cache miss rail should be terminated after dataSetDeleted");
+
+        // withCDN metadata cleared as part of dataset cleanup
+        (exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be cleared after dataSetDeleted");
+
         console.log("\n=== Test completed successfully! ===");
     }
 
@@ -2422,9 +2437,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         assertTrue(pdpRail.endEpoch > 0, "PDP rail should be terminated");
 
-        // 5. Verify CDN metadata is cleaned up
+        // 5. CDN metadata persists after terminateService; cleared when dataSetDeleted runs
         (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN flag should be deleted");
+        assertTrue(exists, "withCDN flag should still exist after terminateService");
+
+        // 6. Complete deletion lifecycle and verify metadata is cleared
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(dataSetId);
+        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
+        FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
+        payments.settleRail(terminatedInfo.pdpRailId, settledPdpRail.endEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 0, bytes(""));
+        (bool existsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(existsAfter, "withCDN metadata should be cleared after dataSetDeleted");
 
         console.log("=== Test completed successfully! ===");
     }
@@ -2507,9 +2533,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         assertTrue(pdpRail.endEpoch > 0, "PDP rail should be terminated");
 
-        // 6. Verify CDN metadata is cleaned up
+        // 6. CDN metadata persists after terminateService; cleared when dataSetDeleted runs
         (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN flag should be deleted");
+        assertTrue(exists, "withCDN flag should still exist after terminateService");
+
+        // 7. Complete deletion lifecycle and verify metadata is cleared
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(dataSetId);
+        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
+        FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
+        payments.settleRail(terminatedInfo.pdpRailId, settledPdpRail.endEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 0, bytes(""));
+        (bool existsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(existsAfter, "withCDN metadata should be cleared after dataSetDeleted");
 
         console.log("=== Test completed successfully! ===");
     }
@@ -4420,9 +4457,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        // Verify withCDN metadata is removed
+        // CDN service persists through lockup window — withCDN metadata still present
         (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN metadata should be removed after service termination");
+        assertTrue(exists, "withCDN metadata should still exist after service termination");
 
         // Should still be able to settle CDN payment rails after termination
         uint256 cdnAmount = 50000;
@@ -4622,12 +4659,19 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
-        // Terminate entire service (including CDN rails)
+        // Terminate storage service — CDN rails remain active through the lockup window
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        // Attempt to top up again (should fail because withCDN metadata was removed)
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
+        // Top-up should still succeed: CDN rails are active and withCDN metadata persists
+        vm.expectEmit(true, false, false, true);
+        emit CDNPaymentRailsToppedUp(
+            dataSetId,
+            cdnTopUp,
+            defaultCDNLockup + cdnTopUp + cdnTopUp,
+            cacheMissTopUp,
+            defaultCacheMissLockup + cacheMissTopUp + cacheMissTopUp
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
     }
