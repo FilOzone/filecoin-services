@@ -6,6 +6,7 @@ import {stdError} from "forge-std/StdError.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {FilecoinWarmStorageService, MAX_ADD_PIECES_EXTRA_DATA_SIZE} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {Errors} from "../src/Errors.sol";
 import {
     ADD_PIECES_BASE_FEE,
     ADD_PIECES_PER_PIECE_FEE,
@@ -366,6 +367,30 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             "reserve decreased by create fee"
         );
         assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
+    }
+
+    function test_topUpLifecycleReserve_nonExistentDataSet_reverts() public {
+        uint256 nonExistentId = 9999;
+        vm.prank(client);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetId.selector, nonExistentId));
+        pdpServiceWithPayments.topUpLifecycleReserve(nonExistentId, 1e18);
+    }
+
+    function test_topUpLifecycleReserve_callerNotPayer_reverts() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
+        address notPayer = makeAddr("notPayer");
+        vm.prank(notPayer);
+        vm.expectRevert(abi.encodeWithSelector(Errors.CallerNotPayer.selector, dataSetId, client, notPayer));
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, 1e18);
+    }
+
+    function test_topUpLifecycleReserve_terminated_reverts() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+        vm.prank(client);
+        vm.expectRevert(abi.encodeWithSelector(Errors.DataSetPaymentAlreadyTerminated.selector, dataSetId));
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, 1e18);
     }
 
     // topUpLifecycleReserve must revert rather than silently wrap around and produce a newBalance

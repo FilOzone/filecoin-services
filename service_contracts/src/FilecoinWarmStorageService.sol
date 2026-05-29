@@ -1027,7 +1027,10 @@ contract FilecoinWarmStorageService is
      */
     function topUpLifecycleReserve(uint256 dataSetId, uint256 amount) external {
         DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(msg.sender == info.payer, Errors.CallerNotPayer(dataSetId, info.payer, msg.sender));
+        address payer = info.payer;
+        require(payer != address(0), Errors.InvalidDataSetId(dataSetId));
+        require(msg.sender == payer, Errors.CallerNotPayer(dataSetId, payer, msg.sender));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         uint256 pdpRailId = info.pdpRailId;
         uint96 newBalance = info.lifecycleReserveBalance + uint96(amount);
