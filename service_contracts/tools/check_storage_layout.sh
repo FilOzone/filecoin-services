@@ -61,6 +61,35 @@ validate_layout_json() {
     return 0
 }
 
+# Check if two typeDetails JSON blobs are compatible, allowing struct members to be appended.
+# Struct members appended at higher slot numbers are permitted; all other changes are not.
+typedetails_compatible() {
+    local base_td="$1"
+    local new_td="$2"
+
+    local result
+    result=$(jq -n --argjson base "$base_td" --argjson new "$new_td" '
+        def compatible:
+            .base as $base | .new as $new |
+            if $base == $new then true
+            elif (($base | type) == "object") and (($new | type) == "object") then
+                if (($base | has("encoding")) and $base.encoding == "inplace" and ($base | has("members"))) and
+                   (($new  | has("encoding")) and $new.encoding  == "inplace" and ($new  | has("members"))) then
+                    ($base.label == $new.label) and
+                    (($new.members | length) >= ($base.members | length)) and
+                    ($base.members == ($new.members[0:($base.members | length)]))
+                else
+                    (($base | keys_unsorted) == ($new | keys_unsorted)) and
+                    (reduce ($base | keys_unsorted[]) as $k (true; . and ({base: $base[$k], new: $new[$k]} | compatible)))
+                end
+            else $base == $new
+            end;
+        {base: $base, new: $new} | compatible
+    ' 2>/dev/null)
+
+    [ "$result" = "true" ]
+}
+
 # Compare two JSON layout files and detect destructive changes
 compare_layouts() {
     local base_file="$1"
@@ -136,12 +165,15 @@ compare_layouts() {
         fi
 
         if [ "$type_comparison" != "$new_type_comparison" ]; then
-            if [ "$type" = "$new_type" ]; then
+            if typedetails_compatible "$type_comparison" "$new_type_comparison"; then
+                : # struct member(s) appended — allowed
+            elif [ "$type" = "$new_type" ]; then
                 echo "  DESTRUCTIVE: Variable '$label' type details changed within '$type' (slot $slot)" >&2
+                errors=$((errors + 1))
             else
                 echo "  DESTRUCTIVE: Variable '$label' type changed from '$type' to '$new_type' (slot $slot)" >&2
+                errors=$((errors + 1))
             fi
-            errors=$((errors + 1))
         fi
     done < <(jq -c '.[]' "$base_file")
 

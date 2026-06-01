@@ -5,14 +5,16 @@ import {Errors} from "../Errors.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {
+    CDN_LOCKUP_PERIOD,
     DATASET_FEE_PER_EPOCH,
     DATASET_FEE_PER_MONTH,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
     DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
+    LIFECYCLE_RESERVE_TARGET,
+    REPLENISH_THRESHOLD,
     SERVICE_COMMISSION_BPS,
-    SYBIL_FEE,
     calculateStorageRate
 } from "./PriceListUSDFC.sol";
 
@@ -31,21 +33,6 @@ event CDNServiceTerminated(
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
 library Rails {
-    function burnSybil(FilecoinPayV1 payments, IERC20 token, address payer) internal {
-        uint256 burnRailId = payments.createRail(
-            token,
-            payer, // from: client
-            address(payments), // to: payments contract (auction pool)
-            address(0), // no validator
-            0, // no commission
-            address(0) // service fee recipient (unused, commission=0)
-        );
-        payments.modifyRailLockup(burnRailId, 0, SYBIL_FEE);
-        payments.modifyRailPayment(burnRailId, 0, SYBIL_FEE);
-        payments.terminateRail(burnRailId);
-        payments.settleRail(burnRailId, block.number);
-    }
-
     /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
     /// @param payments The FilecoinPayV1 contract instance
     /// @param payer The address of the payer
@@ -59,15 +46,13 @@ library Rails {
         // We use multiply-first here to preserve the exact monthly value for cleaner error messages.
         // This is slightly more conservative than the actual rail lockup (which uses the truncated
         // per-epoch rate), but the difference is under 0.0001% and always in the user's favor.
-        uint256 minimumLockupRequired = (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH;
+        uint256 minimumLockupRequired =
+            (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
         if (includeCDN) {
             minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
-
-        // Include sybil fee (burn rail lockup consumes funds and lockup allowance)
-        minimumLockupRequired += SYBIL_FEE;
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
@@ -134,11 +119,8 @@ library Rails {
             address(this)
         );
 
-        // Set lockup period for the rail
-        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
-
-        // --- Burn rail: extract USDFC sybil fee from client into payments auction pool ---
-        burnSybil(payments, usdfcTokenAddress, payer);
+        // Set lockup period and seed the lifecycle reserve
+        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, LIFECYCLE_RESERVE_TARGET);
 
         cacheMissRailId = 0;
         cdnRailId = 0;
@@ -152,7 +134,7 @@ library Rails {
                 0, // no service commission
                 address(this) // controller
             );
-            payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
+            payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
             cdnRailId = payments.createRail(
                 usdfcTokenAddress, // token address
@@ -162,7 +144,7 @@ library Rails {
                 0, // no service commission
                 address(this) // controller
             );
-            payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
+            payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
 
             emit CDNPaymentRailsToppedUp(
                 dataSetId,
@@ -207,8 +189,8 @@ library Rails {
         uint256 totalCacheMissLockup = cacheMissRail.lockupFixed + cacheMissAmountToAdd;
 
         // Only modify rails if amounts are being added
-        payments.modifyRailLockup(cdnRailId, DEFAULT_LOCKUP_PERIOD, totalCdnLockup);
-        payments.modifyRailLockup(cacheMissRailId, DEFAULT_LOCKUP_PERIOD, totalCacheMissLockup);
+        payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, totalCdnLockup);
+        payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, totalCacheMissLockup);
         emit CDNPaymentRailsToppedUp(
             dataSetId, cdnAmountToAdd, totalCdnLockup, cacheMissAmountToAdd, totalCacheMissLockup
         );
@@ -230,11 +212,37 @@ library Rails {
         }
     }
 
-    function updateStorageRates(FilecoinPayV1 payments, uint256 dataSetId, uint256 pdpRailId, uint256 leafCount)
-        public
-    {
+    // Replenishes the rail's fixed lockup when the reserve would drop below REPLENISH_THRESHOLD
+    // after paying pending. Returns the new lockupFixed value (mirrors lifecycleReserveBalance).
+    // Skipped for terminated rails (pdpEndEpoch != 0): modifyRailLockup forbids increases there.
+    function replenishReserveIfNeeded(
+        FilecoinPayV1 payments,
+        uint256 pdpRailId,
+        uint256 pdpEndEpoch,
+        uint96 reserveBalance,
+        uint96 pending
+    ) internal returns (uint96) {
+        if (pdpEndEpoch == 0 && reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
+            uint96 newLockup = uint96(LIFECYCLE_RESERVE_TARGET) + pending;
+            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newLockup);
+            return newLockup;
+        }
+        return reserveBalance;
+    }
+
+    function updateStorageRates(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        uint256 pdpRailId,
+        uint256 leafCount,
+        uint96 pending,
+        uint96 reserveBalance,
+        uint256 pdpEndEpoch
+    ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
-        payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, 0);
+        newReserveBalance =
+            replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending) - pending;
+        payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, pending);
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
     }
 }

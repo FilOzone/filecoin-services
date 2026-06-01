@@ -23,14 +23,13 @@ import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
-import {Errors as PayErrors} from "@fws-payments/Errors.sol";
 import {
     calculateStorageSizeBasedRatePerEpoch,
     DATASET_FEE_PER_EPOCH,
     DATASET_FEE_PER_MONTH,
     EPOCHS_PER_MONTH,
     DEFAULT_LOCKUP_PERIOD,
-    SYBIL_FEE,
+    LIFECYCLE_RESERVE_TARGET,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     CDN_EGRESS_PRICE_PER_TIB,
     CACHE_MISS_EGRESS_PRICE_PER_TIB
@@ -581,10 +580,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Expect DataSetCreated event when creating the data set (with CDN rails)
-        // Rail IDs: burn rail takes ID 2 (then finalized), so pdp=1, cacheMiss=3, cdn=4
+        // Rail IDs: pdp=1, cacheMiss=2, cdn=3
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.DataSetCreated(
-            1, 1, 1, 3, 4, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
+            1, 1, 1, 2, 3, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
         // Create a data set as the service provider
@@ -636,7 +635,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(pdpRail.operator, address(pdpServiceWithPayments), "Operator should be the PDP service");
         assertEq(pdpRail.validator, address(pdpServiceWithPayments), "Validator should be the PDP service");
         assertEq(pdpRail.commissionRateBps, 0, "No commission");
-        assertEq(pdpRail.lockupFixed, 0, "Lockup fixed should be 0 after one-time payment");
+        assertEq(pdpRail.lockupFixed, LIFECYCLE_RESERVE_TARGET, "Lockup fixed should be lifecycle reserve target");
         assertEq(pdpRail.paymentRate, 0, "Initial payment rate should be 0");
 
         FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
@@ -999,7 +998,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     // Minimum Funds Validation Tests
     function testInsufficientFunds_BelowMinimum() public {
-        // Setup: Client with insufficient funds (below 0.124 USDFC minimum = 0.024 dataset fee + 0.1 sybil fee)
+        // Setup: Client with insufficient funds (below 0.124 USDFC minimum = 0.024 dataset fee + 0.1 lifecycle reserve)
         address insufficientClient = makeAddr("insufficientClient");
         uint256 insufficientAmount = 12e16; // 0.12 USDFC (below 0.124 minimum)
 
@@ -1030,7 +1029,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             createData.signature
         );
 
-        uint256 minimumRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE;
+        uint256 minimumRequired = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
@@ -1044,9 +1043,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testInsufficientFunds_ExactMinimum() public {
-        // Setup: Client with exactly the minimum funds (0.124 USDFC = 0.024 dataset fee + 0.1 sybil fee)
+        // Setup: Client with exactly the minimum funds (0.124 USDFC = 0.024 dataset fee + 0.1 lifecycle reserve)
         address exactClient = makeAddr("exactClient");
-        uint256 exactAmount = 124e15; // Exactly 0.124 USDFC
+        uint256 exactAmount = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET; // Exactly 0.124 USDFC
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(exactClient, exactAmount);
@@ -1087,7 +1086,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testInsufficientFunds_JustAboveMinimum() public {
         // Setup: Client with slightly more than minimum (0.125 USDFC)
         address aboveMinClient = makeAddr("aboveMinClient");
-        uint256 aboveMinAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum)
+        uint256 aboveMinAmount = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET + 1e15; // 0.125 USDFC (just above 0.124 minimum)
 
         // Transfer tokens from test contract to the test client
         mockUSDFC.safeTransfer(aboveMinClient, aboveMinAmount);
@@ -1132,7 +1131,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Setup: Client with minimal funds - just enough to create an empty dataset
         address limitedClient = makeAddr("limitedClient");
-        uint256 limitedAmount = 125e15; // 0.125 USDFC (just above 0.124 minimum = 0.024 dataset fee + 0.1 sybil fee)
+        uint256 limitedAmount = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET + 1e15; // 0.125 USDFC (just above 0.124 minimum)
 
         mockUSDFC.safeTransfer(limitedClient, limitedAmount);
 
@@ -1457,7 +1456,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient3");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        uint256 minimumLockupRequired = DATASET_FEE_PER_MONTH + SYBIL_FEE;
+        uint256 minimumLockupRequired = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
         uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
 
         // Transfer tokens and set up approvals
@@ -2043,10 +2042,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
         console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
-        // Check withCDN metadata is cleared
+        // CDN service persists through the lockup window — metadata and rails still active
         (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN metadata should not exist after termination");
-        assertEq(withCDN, "", "withCDN value should be cleared for dataset");
+        assertTrue(exists, "withCDN metadata should still exist after terminateService");
+        assertEq(withCDN, "", "withCDN value should be empty string");
+        FilecoinPayV1.RailView memory cdnRailView = payments.getRail(info.cdnRailId);
+        assertEq(cdnRailView.endEpoch, 0, "CDN rail should still be active after terminateService");
+        FilecoinPayV1.RailView memory cacheMissRailView = payments.getRail(info.cacheMissRailId);
+        assertEq(cacheMissRailView.endEpoch, 0, "Cache miss rail should still be active after terminateService");
 
         // check status remains active (terminated datasets are still Active)
         status = viewContract.getDataSetStatus(dataSetId);
@@ -2138,6 +2141,17 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(
             uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)"
         );
+
+        // CDN rails terminated in dataSetDeleted
+        FilecoinPayV1.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
+        assertTrue(cdnRailAfter.endEpoch > 0, "CDN rail should be terminated after dataSetDeleted");
+        FilecoinPayV1.RailView memory cacheMissRailAfter = payments.getRail(info.cacheMissRailId);
+        assertTrue(cacheMissRailAfter.endEpoch > 0, "Cache miss rail should be terminated after dataSetDeleted");
+
+        // withCDN metadata cleared as part of dataset cleanup
+        (exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(exists, "withCDN metadata should be cleared after dataSetDeleted");
+
         console.log("\n=== Test completed successfully! ===");
     }
 
@@ -2423,9 +2437,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         assertTrue(pdpRail.endEpoch > 0, "PDP rail should be terminated");
 
-        // 5. Verify CDN metadata is cleaned up
+        // 5. CDN metadata persists after terminateService; cleared when dataSetDeleted runs
         (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN flag should be deleted");
+        assertTrue(exists, "withCDN flag should still exist after terminateService");
+
+        // 6. Complete deletion lifecycle and verify metadata is cleared
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(dataSetId);
+        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
+        FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
+        payments.settleRail(terminatedInfo.pdpRailId, settledPdpRail.endEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 0, bytes(""));
+        (bool existsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(existsAfter, "withCDN metadata should be cleared after dataSetDeleted");
 
         console.log("=== Test completed successfully! ===");
     }
@@ -2508,9 +2533,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         assertTrue(pdpRail.endEpoch > 0, "PDP rail should be terminated");
 
-        // 6. Verify CDN metadata is cleaned up
+        // 6. CDN metadata persists after terminateService; cleared when dataSetDeleted runs
         (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN flag should be deleted");
+        assertTrue(exists, "withCDN flag should still exist after terminateService");
+
+        // 7. Complete deletion lifecycle and verify metadata is cleared
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(dataSetId);
+        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
+        FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
+        payments.settleRail(terminatedInfo.pdpRailId, settledPdpRail.endEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.dataSetDeleted(dataSetId, 0, bytes(""));
+        (bool existsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        assertFalse(existsAfter, "withCDN metadata should be cleared after dataSetDeleted");
 
         console.log("=== Test completed successfully! ===");
     }
@@ -4421,9 +4457,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        // Verify withCDN metadata is removed
+        // CDN service persists through lockup window — withCDN metadata still present
         (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        assertFalse(exists, "withCDN metadata should be removed after service termination");
+        assertTrue(exists, "withCDN metadata should still exist after service termination");
 
         // Should still be able to settle CDN payment rails after termination
         uint256 cdnAmount = 50000;
@@ -4623,12 +4659,19 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
 
-        // Terminate entire service (including CDN rails)
+        // Terminate storage service — CDN rails remain active through the lockup window
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        // Attempt to top up again (should fail because withCDN metadata was removed)
-        vm.expectRevert(abi.encodeWithSelector(Errors.FilBeamServiceNotConfigured.selector, dataSetId));
+        // Top-up should still succeed: CDN rails are active and withCDN metadata persists
+        vm.expectEmit(true, false, false, true);
+        emit CDNPaymentRailsToppedUp(
+            dataSetId,
+            cdnTopUp,
+            defaultCDNLockup + cdnTopUp + cdnTopUp,
+            cacheMissTopUp,
+            defaultCacheMissLockup + cacheMissTopUp + cacheMissTopUp
+        );
         vm.prank(client);
         pdpServiceWithPayments.topUpCDNPaymentRails(dataSetId, cdnTopUp, cacheMissTopUp);
     }
@@ -5505,130 +5548,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Second call should fail
         vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
         warmStorageService.migrate(address(0));
-    }
-}
-
-/**
- * @notice Tests for USDFC sybil fee burn rail in dataset creation
- */
-contract SybilFeeTest is FilecoinWarmStorageServiceTest {
-    using SafeERC20 for MockERC20;
-
-    function _createClientAndDeposit(string memory name, uint256 amount) internal returns (address clientAddr) {
-        clientAddr = makeAddr(name);
-        mockUSDFC.safeTransfer(clientAddr, amount);
-        vm.startPrank(clientAddr);
-        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        mockUSDFC.approve(address(payments), amount);
-        payments.deposit(mockUSDFC, clientAddr, amount);
-        vm.stopPrank();
-    }
-
-    function _encodeCreateData(address payer, uint256 clientDataSetId) internal pure returns (bytes memory) {
-        string[] memory keys = new string[](0);
-        string[] memory values = new string[](0);
-        return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
-    }
-
-    function testDataSetCreation_SybilFeeBurned() public {
-        // Setup client with enough funds
-        address testClient = _createClientAndDeposit("sybilClient", 1e18);
-        bytes memory encodedData = _encodeCreateData(testClient, 100);
-
-        // Get balances before
-        (,, uint256 availableBefore,) = payments.getAccountInfoIfSettled(mockUSDFC, testClient);
-
-        // Create dataset
-        makeSignaturePass(testClient);
-        vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
-        assertEq(dataSetId, 1);
-
-        // Verify client funds decreased by sybil fee (plus lockup)
-        (,, uint256 availableAfter,) = payments.getAccountInfoIfSettled(mockUSDFC, testClient);
-        // Available funds decreased by at least the sybil fee
-        assertTrue(availableBefore - availableAfter >= 0.1e18, "Client funds should decrease by at least sybil fee");
-
-        // Verify full sybil fee landed in payments' own account (auction pool)
-        // Both network fee and net payee amount credit accounts[token][address(payments)]
-        (uint256 funds,,,) = payments.accounts(mockUSDFC, address(payments));
-        assertTrue(funds >= 0.1e18, "Payments auction pool should receive full sybil fee");
-    }
-
-    function testDataSetCreation_InsufficientFundsForSybilFee() public {
-        // Setup client with funds below minimum (0.16 USDFC = 0.06 lockup + 0.1 sybil)
-        address testClient = _createClientAndDeposit("poorClient", 10e16); // 0.10 USDFC
-
-        bytes memory encodedData = _encodeCreateData(testClient, 200);
-
-        // Expect revert due to insufficient funds
-        makeSignaturePass(testClient);
-        vm.expectRevert();
-        vm.prank(serviceProvider);
-        mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
-    }
-
-    function testDataSetCreation_SybilFeeWithCDN() public {
-        // Setup client with enough for sybil + lockup + CDN
-        address testClient = _createClientAndDeposit("cdnClient", 5e18);
-
-        // Create data with CDN metadata
-        string[] memory keys = new string[](1);
-        string[] memory values = new string[](1);
-        keys[0] = "withCDN";
-        values[0] = "true";
-
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: testClient,
-            clientDataSetId: 300,
-            metadataKeys: keys,
-            metadataValues: values,
-            signature: FAKE_SIGNATURE
-        });
-
-        bytes memory encodedData = abi.encode(
-            createData.payer,
-            createData.clientDataSetId,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.signature
-        );
-
-        // Create dataset with CDN
-        makeSignaturePass(testClient);
-        vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
-        assertEq(dataSetId, 1);
-
-        // Verify dataset has CDN rails
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        assertTrue(info.pdpRailId > 0, "PDP rail should exist");
-        assertTrue(info.cacheMissRailId > 0, "Cache miss rail should exist");
-        assertTrue(info.cdnRailId > 0, "CDN rail should exist");
-
-        // Verify full sybil fee landed in payments' own account (auction pool)
-        (uint256 funds,,,) = payments.accounts(mockUSDFC, address(payments));
-        assertTrue(funds >= 0.1e18, "Payments auction pool should receive full sybil fee");
-    }
-
-    function testDataSetCreation_BurnRailTerminated() public {
-        // Setup client
-        address testClient = _createClientAndDeposit("terminateClient", 1e18);
-        bytes memory encodedData = _encodeCreateData(testClient, 400);
-
-        makeSignaturePass(testClient);
-        vm.prank(serviceProvider);
-        uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
-        assertEq(dataSetId, 1);
-
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        assertEq(info.pdpRailId, 1, "PDP rail should be ID 1");
-
-        // The burn rail (ID 2) was terminated and settled in the same tx.
-        // With lockupPeriod=0, finalization zeroes out all rail state.
-        // getRail reverts with RailInactiveOrSettled for finalized rails.
-        vm.expectRevert(abi.encodeWithSelector(PayErrors.RailInactiveOrSettled.selector, 2));
-        payments.getRail(2);
     }
 }
 

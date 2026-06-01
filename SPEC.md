@@ -31,6 +31,44 @@ Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the s
 
 **Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
 
+### Operation Fees
+
+In addition to the ongoing storage rate, FWSS charges one-time fees for specific lifecycle operations. These fees are deducted from a **lifecycle reserve** maintained as fixed lockup on the PDP rail.
+
+| Operation | Fee | Trigger | Recipient |
+|---|---|---|---|
+| Create dataset | $0.0025 | `dataSetCreated` callback | SP |
+| Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
+| Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
+| Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |
+
+The terminate fee applies only in the **consent case**: when the SP calls `terminateService` with a valid payer signature in `extraData`. Direct termination by the payer or unilateral SP termination does not incur this fee.
+
+#### Lifecycle Reserve
+
+The lifecycle reserve is seeded at **$0.10** when the dataset is created, stored as `lockupFixed` on the PDP rail.
+
+```
+LIFECYCLE_RESERVE_TARGET = $0.10
+REPLENISH_THRESHOLD      = $0.005
+```
+
+**Flush mechanism**: Operation fees are not paid immediately. Each triggering operation increments `pendingOneTimePayments` (a local field in `DataSetInfo`). The accumulated amount is flushed the next time `updateStorageRates` runs—once per `piecesAdded` and once per `nextProvingPeriod`:
+
+```
+modifyRailPayment(pdpRailId, newStorageRate, pendingFees)
+lifecycleReserveBalance -= pendingFees
+pendingOneTimePayments   = 0
+```
+
+This keeps the hot path at one external call per event.
+
+**Replenishment**: When `lifecycleReserveBalance < pending + REPLENISH_THRESHOLD`, the reserve is topped back up via `modifyRailLockup`, setting `lockupFixed` to `LIFECYCLE_RESERVE_TARGET + pending`. After the next flush deducts the pending fees, the net balance returns to `LIFECYCLE_RESERVE_TARGET`. For `piecesAdded` and `nextProvingPeriod`, replenishment and flush happen together inside `updateStorageRates`. For `piecesScheduledRemove`, replenishment fires immediately at scheduling time—before the fee is deferred to the next flush—so the reserve covers accumulating debt even when piece removals precede the next proving period by a long interval.
+
+**Post-termination**: Once the PDP rail is terminated, `modifyRailLockup` can no longer raise `lockupFixed`. The reserve balance at termination time is the maximum available for wind-down fees. Clients anticipating many post-termination piece removals should pre-fund the reserve before terminating.
+
+**Manual top-up**: The payer can call `topUpLifecycleReserve(dataSetId, amount)` at any time before termination. The payer must have sufficient available funds and `lockupAllowance` to cover the increase; `modifyRailLockup` enforces this via the standard operator approval checks.
+
 ### Pricing Updates
 
 Only the contract owner can update pricing, by upgrading the contract.
@@ -151,7 +189,7 @@ Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the
 
 `terminateService` calls `FilecoinPay.terminateRail(pdpRailId)`. That call sets the rail's `endEpoch` and starts the lockup-period countdown to finalization. FilecoinPay then calls `railTerminated()` back into FWSS, since FWSS is the PDP rail's validator. The callback sets `info.pdpEndEpoch`, emits `PDPPaymentTerminated`, and verifies that the terminator is FWSS itself. The effect of that last check is that the PDP rail can only be terminated through `terminateService`. A direct `FilecoinPay.terminateRail` call from a client or SP is rejected inside the callback.
 
-If the dataset has CDN rails (`withCDN` metadata set), `terminateService` also terminates the cache-miss and CDN rails in the same transaction as a best-effort step. Errors from those calls are suppressed so PDP service termination always succeeds regardless of CDN rail state.
+CDN rails are not touched by `terminateService`. They remain active through the PDP rail's 30-day lockup window, allowing FilBeam to continue settling CDN usage during that period. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
 
 Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
 
@@ -179,7 +217,7 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 
 **State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
 
-**CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated in the same `terminateService` call that initiates PDP rail termination.
+**CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated as part of the `dataSetDeleted` callback itself.
 
 ## CDN Payment Rails
 
@@ -188,7 +226,7 @@ Datasets with CDN support have three payment rails: a **PDP rail** for storage p
 - **Cache-miss rail** (`cacheMissRailId`): Pays to the storage provider (SP) for origin fetches
 - **Bandwidth rail** (`cdnRailId`): Pays to the FilBeam beneficiary address (immutably set at deployment)
 
-Both CDN rails have `paymentRate = 0` and use fixed lockup for one-time payments based on usage.
+Both CDN rails have `paymentRate = 0` and use fixed lockup for one-time payments based on usage. At dataset creation the cache-miss rail is seeded with **0.3 USDFC** and the CDN rail with **0.7 USDFC**. Both CDN rails use a **5-day lockup period**, which sets the settle window FilBeam has after dataset deletion to claim any remaining fixed lockup.
 
 ### Payment Models
 
@@ -216,11 +254,11 @@ FWSS tracks CDN-enabled datasets using a `withCDN` metadata key. This metadata i
 
 If CDN rails are terminated directly via FilecoinPay (bypassing FWSS), the `withCDN` metadata remains set because FWSS receives no callback. This creates an out-of-sync state where FWSS believes CDN is active but the underlying rails are terminated or finalized. Subsequent CDN operations (`topUpCDNPaymentRails`, `settleFilBeamPaymentRails`) will fail when they attempt to interact with the inactive rails.
 
-**Note**: There is currently no mechanism to clean up orphaned `withCDN` metadata. The practical impact is limited since `terminateService()` uses best-effort CDN termination (ignoring errors), so full service termination still succeeds.
+**Note**: There is currently no mechanism to clean up orphaned `withCDN` metadata. The practical impact is limited: `terminateService()` does not interact with CDN rails at all, so storage termination always succeeds; and CDN rail termination in `dataSetDeleted` is best-effort, so dataset deletion also succeeds.
 
 ### Service Termination
 
-When terminating a dataset's service, FWSS terminates the PDP rail (which it validates) and performs best-effort termination of CDN rails, ignoring any errors. This ensures service termination succeeds regardless of CDN rail state—whether rails are active, already terminated, or fully settled and finalized.
+`terminateService` only terminates the PDP rail. CDN rails remain active through the PDP rail's 30-day lockup window, allowing FilBeam to continue settling CDN usage during that period. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS terminates the CDN rails with best-effort error suppression. The CDN rails then enter their 5-day settle window; any remaining fixed lockup not claimed by FilBeam returns to the payer once the window closes.
 
 ## Contract Architecture
 

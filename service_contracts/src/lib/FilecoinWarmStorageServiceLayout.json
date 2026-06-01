@@ -143,7 +143,7 @@
       "value": {
         "label": "struct FilecoinWarmStorageService.DataSetInfo",
         "encoding": "inplace",
-        "numberOfBytes": "320",
+        "numberOfBytes": "352",
         "members": [
           {
             "label": "pdpRailId",
@@ -243,6 +243,26 @@
               "label": "uint256",
               "encoding": "inplace",
               "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "pendingOneTimePayments",
+            "slot": "10",
+            "offset": 0,
+            "type": {
+              "label": "uint96",
+              "encoding": "inplace",
+              "numberOfBytes": "12"
+            }
+          },
+          {
+            "label": "lifecycleReserveBalance",
+            "slot": "10",
+            "offset": 12,
+            "type": {
+              "label": "uint96",
+              "encoding": "inplace",
+              "numberOfBytes": "12"
             }
           }
         ]
