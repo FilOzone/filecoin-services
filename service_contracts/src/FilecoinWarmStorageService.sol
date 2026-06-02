@@ -28,7 +28,7 @@ import {
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     TOKEN_DECIMALS
 } from "./lib/PriceListUSDFC.sol";
-import {Rails, CDNServiceTerminated} from "./lib/Rails.sol";
+import {Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
@@ -119,8 +119,6 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId,
         uint256 cdnRailId
     );
-
-    event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId);
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
 
@@ -646,7 +644,7 @@ contract FilecoinWarmStorageService is
             // Abandonment path: rail was never terminated via terminateService.
             // Verify 30-day inactivity, then perform inline teardown.
             _verifyInactivity(dataSetId);
-            _abandonmentTeardown(dataSetId, info, payments);
+            payments.abandonRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         } else {
             // Normal path: terminateService was already called.
             // Verify the payment window has elapsed and the rail is fully settled.
@@ -706,63 +704,6 @@ contract FilecoinWarmStorageService is
         uint256 lastActivity = lastProvenEpoch == 0 ? activation : lastProvenEpoch;
         uint256 requiredEpoch = lastActivity + PDP_INACTIVITY_WINDOW;
         require(block.number > requiredEpoch, Errors.DataSetNotAbandoned(dataSetId, requiredEpoch, block.number));
-    }
-
-    /**
-     * @notice Performs inline teardown of payment rails during the abandonment path.
-     * @dev Settles, modifies lockup, terminates, and re-settles the PDP rail so it finalizes
-     *      within this single transaction. CDN rails (if present) follow the same sequence.
-     *      FWSS dataset state must not be deleted before this function returns because
-     *      validatePayment reads it during the final settleRail.
-     */
-    function _abandonmentTeardown(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
-        // Settle the live PDP rail up to the current block.
-        // validatePayment returns zero payment for all unproven epochs, discharging lockupCurrent
-        // without transferring funds. The "after" settleAccountLockup then advances lockupLastSettledAt
-        // to block.number, satisfying isAccountLockupFullySettled for the modifyRailLockup below.
-        payments.settleRail(info.pdpRailId, block.number);
-
-        // Zero both lockup period and fixed lockup on the PDP rail.
-        // Requires isAccountLockupFullySettled (achieved above).
-        // Sets lockupPeriod = 0 so terminateRail produces endEpoch = block.number.
-        payments.modifyRailLockup(info.pdpRailId, 0, 0);
-
-        if (info.cdnRailId != 0) {
-            // CDN rails may have been terminated externally (payer called FilecoinPay directly, or
-            // FilBeam controller called terminateCDNService). Handle each rail based on its state.
-            _teardownCDNRail(info.cacheMissRailId, payments);
-            _teardownCDNRail(info.cdnRailId, payments);
-            emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
-        }
-
-        // Terminate the PDP rail. FWSS is the operator so always authorized.
-        // endEpoch = lockupLastSettledAt + lockupPeriod = block.number + 0 = block.number.
-        // railTerminated callback fires and sets info.pdpEndEpoch = block.number.
-        payments.terminateRail(info.pdpRailId);
-
-        // Settle the now-terminated PDP rail.
-        // maxSettlementEpoch = min(block.number, endEpoch) = block.number.
-        // validatePayment reads FWSS state here — state must remain intact until this returns.
-        // After settlement settledUpTo >= endEpoch, rail finalizes via checkAndFinalizeTerminatedRail.
-        payments.settleRail(info.pdpRailId, block.number);
-
-        emit DataSetAbandoned(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
-    }
-
-    /**
-     * @notice Tears down a single CDN rail during the abandonment path.
-     * @dev CDN rails carry no validator, so the payer or FilBeam controller may have terminated
-     *      them externally before abandonment fires. Three states are handled:
-     *      - Active: zero lockup period, terminate, then settle to finalize.
-     *      - Terminated: modifyRailLockup and terminateRail are no-ops (caught), settle to finalize.
-     *      - Finalized: all three calls are no-ops (caught); nothing left to do.
-     *      The only errors possible here are "rail already in a more advanced state", so
-     *      swallowing all reverts is safe.
-     */
-    function _teardownCDNRail(uint256 railId, FilecoinPayV1 payments) internal {
-        try payments.modifyRailLockup(railId, 0, 0) {} catch {}
-        try payments.terminateRail(railId) {} catch {}
-        try payments.settleRail(railId, block.number) {} catch {}
     }
 
     /**

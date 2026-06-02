@@ -28,6 +28,8 @@ event CDNServiceTerminated(
     address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
 );
 
+event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId);
+
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
 library Rails {
@@ -180,6 +182,39 @@ library Rails {
         try payments.terminateRail(cacheMissRailId) {} catch {}
         try payments.terminateRail(cdnRailId) {} catch {}
         emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
+    }
+
+    /// @notice Tears down all payment rails for an abandoned dataset in a single library call.
+    /// @dev Settling the PDP rail first discharges lockup for unproven epochs, advancing
+    ///      lockupLastSettledAt to block.number and satisfying isAccountLockupFullySettled for the
+    ///      subsequent modifyRailLockup. CDN rails are handled defensively since the payer or
+    ///      FilBeam controller may have terminated them externally before abandonment fires.
+    function abandonRails(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        uint256 pdpRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnRailId
+    ) public {
+        payments.settleRail(pdpRailId, block.number);
+        payments.modifyRailLockup(pdpRailId, 0, 0);
+
+        if (cdnRailId != 0) {
+            _teardownCDNRail(payments, cacheMissRailId);
+            _teardownCDNRail(payments, cdnRailId);
+            emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
+        }
+
+        payments.terminateRail(pdpRailId);
+        payments.settleRail(pdpRailId, block.number);
+        emit DataSetAbandoned(dataSetId, pdpRailId, cacheMissRailId, cdnRailId);
+    }
+
+    /// @notice Tears down one CDN rail, tolerating rails already terminated or finalized externally.
+    function _teardownCDNRail(FilecoinPayV1 payments, uint256 railId) internal {
+        try payments.modifyRailLockup(railId, 0, 0) {} catch {}
+        try payments.terminateRail(railId) {} catch {}
+        try payments.settleRail(railId, block.number) {} catch {}
     }
 
     function topUpCDNRails(
