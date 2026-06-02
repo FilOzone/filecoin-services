@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {FilecoinWarmStorageServiceTest} from "./FilecoinWarmStorageService.t.sol";
 import {stdError} from "forge-std/StdError.sol";
 import {Cids} from "@pdp/Cids.sol";
-import {FilecoinWarmStorageService, MAX_ADD_PIECES_EXTRA_DATA_SIZE} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../src/Errors.sol";
 import {
@@ -26,19 +26,8 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     uint256 constant REPLENISH_BATCH = (
         LIFECYCLE_RESERVE_TARGET - REPLENISH_THRESHOLD - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE
     ) / ADD_PIECES_PER_PIECE_FEE + 1;
-    // ABI encoding of abi.encode(nonce, allKeys, allValues, sig) with N empty-metadata pieces:
-    //   overhead  = 4*32 (nonce + 3 dynamic offsets)
-    //             + 2*32 (outer array lengths for allKeys and allValues)
-    //             + 32   (signature length word)
-    //             + ceil(FAKE_SIGNATURE.length / 32) * 32 (padded signature data)
-    //   per piece = 4*32 (offset + empty array for each of allKeys[i] and allValues[i])
-    uint256 constant FAKE_SIGNATURE_LEN = 65; // r(32) + s(32) + v(1)
-    // Round up to next 32-byte boundary without divide-then-multiply.
-    uint256 constant FAKE_SIGNATURE_PADDED = FAKE_SIGNATURE_LEN + (32 - FAKE_SIGNATURE_LEN % 32) % 32;
-    uint256 constant ADD_PIECES_EXTRA_DATA_PER_PIECE = 4 * 32;
-    uint256 constant ADD_PIECES_EXTRA_DATA_OVERHEAD = 4 * 32 + 2 * 32 + 32 + FAKE_SIGNATURE_PADDED;
-    uint256 constant BATCH_CAP =
-        (MAX_ADD_PIECES_EXTRA_DATA_SIZE - ADD_PIECES_EXTRA_DATA_OVERHEAD) / ADD_PIECES_EXTRA_DATA_PER_PIECE;
+    // Current upstream ceiling from PDPVerifier's PiecesAdded event under the FVM event value limit.
+    uint256 constant BATCH_CAP = 41;
     // Fee drained by each full-BATCH_CAP addPieces call (CREATE_DATA_SET_FEE only appears in the first call).
     uint256 constant PER_CALL_DRAIN = ADD_PIECES_BASE_FEE + BATCH_CAP * ADD_PIECES_PER_PIECE_FEE;
     // Full-BATCH_CAP calls that flush safely before the reserve crosses the replenishment threshold.

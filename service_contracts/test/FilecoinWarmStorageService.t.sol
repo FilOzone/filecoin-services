@@ -11,7 +11,6 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {
     CHALLENGES_PER_PROOF,
-    MAX_ADD_PIECES_EXTRA_DATA_SIZE,
     MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
     FilecoinWarmStorageService
 } from "../src/FilecoinWarmStorageService.sol";
@@ -80,9 +79,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
-    uint256 private constant MAX_VALUE_LENGTH = 128;
+    uint256 private constant MAX_VALUE_LENGTH = 96;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
-    uint256 private constant MAX_KEYS_PER_PIECE = 5;
+    uint256 private constant MAX_KEYS_PER_PIECE = 3;
 
     bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)"
@@ -2916,11 +2915,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testDataSetMetadataValueLengthBoundaries() public {
-        // Test value lengths: just below max (127), at max (128), and exceeding max (129)
+        // Test value lengths: just below max, at max, and exceeding max
         uint256[] memory valueLengths = new uint256[](3);
-        valueLengths[0] = 127; // Just below max
-        valueLengths[1] = 128; // At max
-        valueLengths[2] = 129; // Exceeds max
+        valueLengths[0] = MAX_VALUE_LENGTH - 1; // Just below max
+        valueLengths[1] = MAX_VALUE_LENGTH; // At max
+        valueLengths[2] = MAX_VALUE_LENGTH + 1; // Exceeds max
 
         for (uint256 i = 0; i < valueLengths.length; i++) {
             uint256 valueLength = valueLengths[i];
@@ -2929,7 +2928,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             metadataKeys[0] = "key";
             metadataValues[0] = _makeStringOfLength(valueLength);
 
-            if (valueLength <= 128) {
+            if (valueLength <= MAX_VALUE_LENGTH) {
                 // Should succeed for valid lengths
                 uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
@@ -2956,7 +2955,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
                 vm.prank(sp1);
                 vm.expectRevert(
-                    abi.encodeWithSelector(Errors.MetadataValueExceedsMaxLength.selector, 0, 128, valueLength)
+                    abi.encodeWithSelector(
+                        Errors.MetadataValueExceedsMaxLength.selector, 0, MAX_VALUE_LENGTH, valueLength
+                    )
                 );
                 mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
             }
@@ -3042,8 +3043,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 //key must be unique with length 32 bytes
                 metadataKeys[i] = _generateKey(i);
                 assertEq(bytes(metadataKeys[i]).length, 32, "Key length should be 32 bytes");
-                // Max key length
-                metadataValues[i] = _makeStringOfLength(128); // Max value length
+                // Max key and value lengths
+                metadataValues[i] = _makeStringOfLength(MAX_VALUE_LENGTH);
             }
 
             if (keyCount <= MAX_KEYS_PER_DATASET) {
@@ -3066,9 +3067,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 bytes memory encodedData = prepareDataSetForClient(sp1, client, metadataKeys, metadataValues);
                 vm.prank(sp1);
                 vm.expectRevert(
-                    abi.encodeWithSelector(
-                        Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE
-                    )
+                    abi.encodeWithSelector(Errors.TooManyMetadataKeys.selector, MAX_KEYS_PER_DATASET, keyCount)
                 );
                 mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
             }
@@ -3207,11 +3206,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testPieceMetadataValueLengthBoundaries() public {
         uint256 pieceId = 42;
 
-        // Test value lengths: just below max (127), at max (128), and exceeding max (129)
+        // Test value lengths: just below max, at max, and exceeding max
         uint256[] memory valueLengths = new uint256[](3);
-        valueLengths[0] = 127; // Just below max
-        valueLengths[1] = 128; // At max
-        valueLengths[2] = 129; // Exceeds max
+        valueLengths[0] = MAX_VALUE_LENGTH - 1; // Just below max
+        valueLengths[1] = MAX_VALUE_LENGTH; // At max
+        valueLengths[2] = MAX_VALUE_LENGTH + 1; // Exceeds max
 
         for (uint256 i = 0; i < valueLengths.length; i++) {
             uint256 valueLength = valueLengths[i];
@@ -3235,7 +3234,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             allValues[0] = values;
             bytes memory encodedData = abi.encode(pieceId + i + 4000, allKeys, allValues, FAKE_SIGNATURE);
 
-            if (valueLength <= 128) {
+            if (valueLength <= MAX_VALUE_LENGTH) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
                 emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
@@ -3259,7 +3258,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             } else {
                 // Should fail for exceeding max
                 vm.expectRevert(
-                    abi.encodeWithSelector(Errors.MetadataValueExceedsMaxLength.selector, 0, 128, valueLength)
+                    abi.encodeWithSelector(
+                        Errors.MetadataValueExceedsMaxLength.selector, 0, MAX_VALUE_LENGTH, valueLength
+                    )
                 );
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
@@ -3272,9 +3273,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Test key counts: just below max, at max, and exceeding max
         uint256[] memory keyCounts = new uint256[](3);
-        keyCounts[0] = MAX_KEYS_PER_PIECE - 1; // Just below max (4)
-        keyCounts[1] = MAX_KEYS_PER_PIECE; // At max (5)
-        keyCounts[2] = MAX_KEYS_PER_PIECE + 1; // Exceeds max (6)
+        keyCounts[0] = MAX_KEYS_PER_PIECE - 1; // Just below max
+        keyCounts[1] = MAX_KEYS_PER_PIECE; // At max
+        keyCounts[2] = MAX_KEYS_PER_PIECE + 1; // Exceeds max
 
         for (uint256 testIdx = 0; testIdx < keyCounts.length; testIdx++) {
             uint256 keyCount = keyCounts[testIdx];
@@ -3364,7 +3365,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                     // Generate globally unique keys by combining piece index and key index
                     keys[k] = _generateKey(p * 1000 + k);
                     assertEq(bytes(keys[k]).length, 32, "Key length should be 32 bytes");
-                    values[k] = _makeStringOfLength(128); // max value length
+                    values[k] = _makeStringOfLength(MAX_VALUE_LENGTH);
                 }
 
                 allKeys[p] = keys;
@@ -3399,7 +3400,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 for (uint256 k = 0; k < keyCount; k++) {
                     // Ensure uniqueness across all pieces
                     keys[k] = _generateKey(p * 1000 + k + 1);
-                    values[k] = _makeStringOfLength(128);
+                    values[k] = _makeStringOfLength(MAX_VALUE_LENGTH);
                 }
 
                 allKeys[p] = keys;
@@ -3409,12 +3410,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             uint256 nonce = pieceId + 2000;
             bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
 
-            // Expect revert when at least one piece has too many keys or extraData becomes too large
+            // Expect revert when at least one piece has too many keys
             vm.prank(address(mockPDPVerifier));
             vm.expectRevert(
-                abi.encodeWithSelector(
-                    Errors.ExtraDataTooLarge.selector, encodedData.length, MAX_ADD_PIECES_EXTRA_DATA_SIZE
-                )
+                abi.encodeWithSelector(Errors.TooManyMetadataKeys.selector, MAX_KEYS_PER_PIECE, MAX_KEYS_PER_PIECE + 1)
             );
             pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + totalPieces, pieceData, encodedData);
             console.log("encodedData length (exceeding limits):", encodedData.length);
