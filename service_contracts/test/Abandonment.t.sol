@@ -115,16 +115,26 @@ contract AbandonmentTest is MockFVMTest {
     }
 
     // Create a dataset via the real PDPVerifier and return its ID.
-    function _createDataSet() internal returns (uint256 dataSetId) {
+    // Pass withCDN=true to include the "withCDN" metadata key, enabling CDN rails.
+    function _createDataSet(bool withCDN) internal returns (uint256 dataSetId) {
         vm.startPrank(client);
         payments.setOperatorApproval(usdfc, address(fwss), true, 1000e18, 1000e18, 365 days);
         usdfc.approve(address(payments), 100e18);
         payments.deposit(usdfc, client, 100e18);
         vm.stopPrank();
 
-        string[] memory emptyKeys = new string[](0);
-        string[] memory emptyValues = new string[](0);
-        bytes memory extraData = abi.encode(client, uint256(0), emptyKeys, emptyValues, FAKE_SIG);
+        string[] memory keys;
+        string[] memory values;
+        if (withCDN) {
+            keys = new string[](1);
+            keys[0] = "withCDN";
+            values = new string[](1);
+            values[0] = "true";
+        } else {
+            keys = new string[](0);
+            values = new string[](0);
+        }
+        bytes memory extraData = abi.encode(client, uint256(0), keys, values, FAKE_SIG);
 
         _makeSignaturePass(client);
         vm.prank(sp);
@@ -133,7 +143,7 @@ contract AbandonmentTest is MockFVMTest {
 
     // A permissionless caller cannot trigger abandonment before INACTIVITY_WINDOW has elapsed.
     function testAbandonmentBlockedBeforeWindowByPDPVerifier() public {
-        uint256 dataSetId = _createDataSet();
+        uint256 dataSetId = _createDataSet(false);
 
         vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW / 2);
 
@@ -146,7 +156,7 @@ contract AbandonmentTest is MockFVMTest {
     // the abandonment path when INACTIVITY_WINDOW has not yet elapsed.
     // The SP's correct alternative is terminateService, which is always available.
     function testAbandonmentBlockedBeforeWindowByFWSS() public {
-        uint256 dataSetId = _createDataSet();
+        uint256 dataSetId = _createDataSet(false);
         uint256 creationBlock = vm.getBlockNumber();
 
         // Simulate proving activation by writing directly to FWSS storage.
@@ -172,7 +182,7 @@ contract AbandonmentTest is MockFVMTest {
     // After INACTIVITY_WINDOW blocks without activity, any caller can trigger abandonment.
     // FWSS should clear all dataset state and finalize the payment rail.
     function testAbandonmentClears() public {
-        uint256 dataSetId = _createDataSet();
+        uint256 dataSetId = _createDataSet(false);
 
         FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "dataset should exist before abandonment");
@@ -188,6 +198,36 @@ contract AbandonmentTest is MockFVMTest {
 
         FilecoinWarmStorageService.DataSetInfoView memory after_ = viewContract.getDataSet(dataSetId);
         assertEq(after_.pdpRailId, 0, "pdpRailId should be cleared");
+        assertEq(after_.payer, address(0), "payer should be cleared");
+
+        uint256[] memory remaining = viewContract.clientDataSets(client);
+        assertEq(remaining.length, 0, "client dataset list should be empty");
+    }
+
+    // Same as testAbandonmentClears but with CDN rails enabled, exercising the CDN teardown branch.
+    function testAbandonmentClearsCDN() public {
+        uint256 dataSetId = _createDataSet(true);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        assertGt(before.pdpRailId, 0, "pdpRailId should be set");
+        assertGt(before.cacheMissRailId, 0, "cacheMissRailId should be set");
+        assertGt(before.cdnRailId, 0, "cdnRailId should be set");
+        assertEq(before.payer, client, "payer should be set");
+
+        vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW + 1);
+
+        vm.expectEmit(true, false, false, true, address(fwss));
+        emit FilecoinWarmStorageService.DataSetAbandoned(
+            dataSetId, before.pdpRailId, before.cacheMissRailId, before.cdnRailId
+        );
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        FilecoinWarmStorageService.DataSetInfoView memory after_ = viewContract.getDataSet(dataSetId);
+        assertEq(after_.pdpRailId, 0, "pdpRailId should be cleared");
+        assertEq(after_.cacheMissRailId, 0, "cacheMissRailId should be cleared");
+        assertEq(after_.cdnRailId, 0, "cdnRailId should be cleared");
         assertEq(after_.payer, address(0), "payer should be cleared");
 
         uint256[] memory remaining = viewContract.clientDataSets(client);
