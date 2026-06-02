@@ -727,16 +727,11 @@ contract FilecoinWarmStorageService is
         // Sets lockupPeriod = 0 so terminateRail produces endEpoch = block.number.
         payments.modifyRailLockup(info.pdpRailId, 0, 0);
 
-        bool hasCDN = info.cdnRailId != 0;
-        if (hasCDN) {
-            // Zero CDN rail lockup periods (allowed since lockupLastSettledAt == block.number).
-            payments.modifyRailLockup(info.cacheMissRailId, 0, 0);
-            payments.modifyRailLockup(info.cdnRailId, 0, 0);
-            // Terminate CDN rails (endEpoch = lockupLastSettledAt + 0 = block.number).
-            payments.terminateCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId);
-            // Settle and finalize CDN rails (zero payment at rate 0, instant finalization).
-            payments.settleRail(info.cacheMissRailId, block.number);
-            payments.settleRail(info.cdnRailId, block.number);
+        if (info.cdnRailId != 0) {
+            // CDN rails may have been terminated externally (payer called FilecoinPay directly, or
+            // FilBeam controller called terminateCDNService). Handle each rail based on its state.
+            _teardownCDNRail(info.cacheMissRailId, payments);
+            _teardownCDNRail(info.cdnRailId, payments);
         }
 
         // Terminate the PDP rail. FWSS is the operator so always authorized.
@@ -751,6 +746,22 @@ contract FilecoinWarmStorageService is
         payments.settleRail(info.pdpRailId, block.number);
 
         emit DataSetAbandoned(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+    }
+
+    /**
+     * @notice Tears down a single CDN rail during the abandonment path.
+     * @dev CDN rails carry no validator, so the payer or FilBeam controller may have terminated
+     *      them externally before abandonment fires. Three states are handled:
+     *      - Active: zero lockup period, terminate, then settle to finalize.
+     *      - Terminated: modifyRailLockup and terminateRail are no-ops (caught), settle to finalize.
+     *      - Finalized: all three calls are no-ops (caught); nothing left to do.
+     *      The only errors possible here are "rail already in a more advanced state", so
+     *      swallowing all reverts is safe.
+     */
+    function _teardownCDNRail(uint256 railId, FilecoinPayV1 payments) internal {
+        try payments.modifyRailLockup(railId, 0, 0) {} catch {}
+        try payments.terminateRail(railId) {} catch {}
+        try payments.settleRail(railId, block.number) {} catch {}
     }
 
     /**

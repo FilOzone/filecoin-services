@@ -233,4 +233,31 @@ contract AbandonmentTest is MockFVMTest {
         uint256[] memory remaining = viewContract.clientDataSets(client);
         assertEq(remaining.length, 0, "client dataset list should be empty");
     }
+
+    // CDN rails carry no validator callback, so the payer can terminate them directly via
+    // FilecoinPay before abandonment fires. Abandonment should still succeed.
+    function testAbandonmentClearsCDNPreTerminated() public {
+        uint256 dataSetId = _createDataSet(true);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+
+        // Payer terminates the CDN rails directly on FilecoinPay, bypassing FWSS.
+        vm.prank(client);
+        payments.terminateRail(before.cdnRailId);
+        vm.prank(client);
+        payments.terminateRail(before.cacheMissRailId);
+
+        vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW + 1);
+
+        // Abandonment should still complete without reverting.
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        FilecoinWarmStorageService.DataSetInfoView memory after_ = viewContract.getDataSet(dataSetId);
+        assertEq(after_.pdpRailId, 0, "pdpRailId should be cleared");
+        assertEq(after_.payer, address(0), "payer should be cleared");
+
+        uint256[] memory remaining = viewContract.clientDataSets(client);
+        assertEq(remaining.length, 0, "client dataset list should be empty");
+    }
 }
