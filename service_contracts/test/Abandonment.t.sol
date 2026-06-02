@@ -13,6 +13,7 @@ import {PROVING_ACTIVATION_EPOCH_SLOT} from "../src/lib/FilecoinWarmStorageServi
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
+import {CDNServiceTerminated} from "../src/lib/Rails.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -216,6 +217,9 @@ contract AbandonmentTest is MockFVMTest {
 
         vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW + 1);
 
+        vm.expectEmit(true, true, false, true, address(fwss));
+        emit CDNServiceTerminated(address(pdpVerifier), dataSetId, before.cacheMissRailId, before.cdnRailId);
+
         vm.expectEmit(true, false, false, true, address(fwss));
         emit FilecoinWarmStorageService.DataSetAbandoned(
             dataSetId, before.pdpRailId, before.cacheMissRailId, before.cdnRailId
@@ -249,7 +253,9 @@ contract AbandonmentTest is MockFVMTest {
 
         vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW + 1);
 
-        // Abandonment should still complete without reverting.
+        vm.expectEmit(true, true, false, false, address(fwss));
+        emit CDNServiceTerminated(address(pdpVerifier), dataSetId, before.cacheMissRailId, before.cdnRailId);
+
         vm.prank(keeper);
         pdpVerifier.deleteDataSet(dataSetId, "");
 

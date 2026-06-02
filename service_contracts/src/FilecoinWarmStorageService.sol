@@ -28,7 +28,7 @@ import {
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     TOKEN_DECIMALS
 } from "./lib/PriceListUSDFC.sol";
-import {Rails} from "./lib/Rails.sol";
+import {Rails, CDNServiceTerminated} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
@@ -732,6 +732,7 @@ contract FilecoinWarmStorageService is
             // FilBeam controller called terminateCDNService). Handle each rail based on its state.
             _teardownCDNRail(info.cacheMissRailId, payments);
             _teardownCDNRail(info.cdnRailId, payments);
+            emit CDNServiceTerminated(msg.sender, dataSetId, info.cacheMissRailId, info.cdnRailId);
         }
 
         // Terminate the PDP rail. FWSS is the operator so always authorized.
