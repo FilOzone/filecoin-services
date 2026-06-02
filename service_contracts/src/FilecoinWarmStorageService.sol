@@ -665,6 +665,7 @@ contract FilecoinWarmStorageService is
         uint256[] storage clientDataSetList = clientDataSets[payer];
         for (uint256 i = 0; i < clientDataSetList.length; i++) {
             if (clientDataSetList[i] == dataSetId) {
+                // Remove this dataset from the array
                 clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
                 clientDataSetList.pop();
                 break;
