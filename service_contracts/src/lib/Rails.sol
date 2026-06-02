@@ -33,7 +33,10 @@ event CDNServiceTerminated(
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
 library Rails {
-    /// @notice Validates that the payer has sufficient funds and operator approvals for minimum pricing
+    /// @notice Validates the payer is set up to add pieces, not just create the dataset.
+    /// @dev    The lifecycle reserve is consumed at creation; the per-dataset fee headroom is only
+    ///         consumed once pieces are added. Empty datasets leave it as approved headroom.
+    ///         Required up front intentionally: creation assumes pieces will follow.
     /// @param payments The FilecoinPayV1 contract instance
     /// @param payer The address of the payer
     function validatePayerOperatorApprovalAndFunds(
@@ -42,24 +45,21 @@ library Rails {
         address payer,
         bool includeCDN
     ) internal view {
-        // Calculate required lockup for the per-dataset fee.
-        // We use multiply-first here to preserve the exact monthly value for cleaner error messages.
-        // This is slightly more conservative than the actual rail lockup (which uses the truncated
-        // per-epoch rate), but the difference is under 0.0001% and always in the user's favor.
-        uint256 minimumLockupRequired =
+        // Required capacity: lifecycle reserve plus per-dataset fee lockup at the default period.
+        // Multiply-first preserves the exact monthly value for cleaner error messages; slightly
+        // more conservative than the actual rail lockup (truncated per-epoch), within 0.0001%
+        // and always in the user's favor.
+        uint256 requiredLockup =
             (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
         if (includeCDN) {
-            minimumLockupRequired += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
+            requiredLockup += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
         }
 
         // Check that payer has sufficient available funds
         (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
-        require(
-            availableFunds >= minimumLockupRequired,
-            Errors.InsufficientLockupFunds(payer, minimumLockupRequired, availableFunds)
-        );
+        require(availableFunds >= requiredLockup, Errors.InsufficientLockupFunds(payer, requiredLockup, availableFunds));
 
         // Check operator approval settings
         (
@@ -74,20 +74,18 @@ library Rails {
         // Verify operator is approved
         require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
 
-        uint256 minimumRatePerEpoch = DATASET_FEE_PER_EPOCH;
-
-        // Verify rate allowance is sufficient
+        // Rate-allowance headroom for the per-dataset fee rate: the floor of any non-empty
+        // dataset's rate (size-proportional component sits on top). Empty datasets never consume
+        // it; required up front for the dataset to be eligible to receive pieces.
         require(
-            rateAllowance >= rateUsage + minimumRatePerEpoch,
-            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, minimumRatePerEpoch)
+            rateAllowance >= rateUsage + DATASET_FEE_PER_EPOCH,
+            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, DATASET_FEE_PER_EPOCH)
         );
 
         // Verify lockup allowance is sufficient
         require(
-            lockupAllowance >= lockupUsage + minimumLockupRequired,
-            Errors.InsufficientLockupAllowance(
-                payer, address(this), lockupAllowance, lockupUsage, minimumLockupRequired
-            )
+            lockupAllowance >= lockupUsage + requiredLockup,
+            Errors.InsufficientLockupAllowance(payer, address(this), lockupAllowance, lockupUsage, requiredLockup)
         );
 
         // Verify max lockup period is sufficient
@@ -106,7 +104,7 @@ library Rails {
         address filBeamBeneficiaryAddress
     ) public returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
         bool hasCDN = filBeamBeneficiaryAddress != address(0);
-        // Validate payer has sufficient funds and operator approvals for minimum pricing
+        // Validate payer has sufficient funds and operator approvals to cover the required lockup
         // If CDN is enabled, validation must account for the additional fixed lockup amounts
         validatePayerOperatorApprovalAndFunds(payments, usdfcTokenAddress, payer, hasCDN);
 
