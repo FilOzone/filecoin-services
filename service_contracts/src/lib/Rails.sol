@@ -38,7 +38,9 @@ library Rails {
     ///         consumed once pieces are added. Empty datasets leave it as approved headroom.
     ///         Required up front intentionally: creation assumes pieces will follow.
     /// @param payments The FilecoinPayV1 contract instance
+    /// @param usdfcTokenAddress The USDFC token used for deposits and operator approvals
     /// @param payer The address of the payer
+    /// @param includeCDN Whether to include fixed CDN/cache-miss lockups in the requirement checks
     function validatePayerOperatorApprovalAndFunds(
         FilecoinPayV1 payments,
         IERC20 usdfcTokenAddress,
