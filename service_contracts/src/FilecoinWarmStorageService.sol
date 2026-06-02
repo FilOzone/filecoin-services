@@ -34,6 +34,8 @@ import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+// Mirror of PDPVerifier.INACTIVITY_WINDOW (lib/pdp/src/PDPVerifier.sol)
+uint256 constant PDP_INACTIVITY_WINDOW = 86400;
 
 /*
 * Maximum extraData for createDataSet
@@ -117,6 +119,8 @@ contract FilecoinWarmStorageService is
         uint256 cacheMissRailId,
         uint256 cdnRailId
     );
+
+    event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId);
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
 
@@ -621,8 +625,10 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set deletion after the payment rails were terminated
-     * @dev Called by the PDPVerifier contract when a data set is deleted
+     * @notice Handles data set deletion after voluntary termination or via the abandonment path.
+     * @dev Called by the PDPVerifier contract when a data set is deleted.
+     *      When pdpEndEpoch == 0 the rail was never terminated via terminateService; FWSS verifies
+     *      30-day inactivity and performs inline teardown so a keeper needs only one transaction.
      * @param dataSetId The ID of the data set being deleted
      */
     function dataSetDeleted(
@@ -630,31 +636,29 @@ contract FilecoinWarmStorageService is
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
     ) external onlyPDPVerifier {
-        // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
-        // Get the payer address for this data set
-        address payer = dataSetInfo[dataSetId].payer;
-
-        // Check if the data set's payment rails have finalized
-        require(
-            info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
-            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
-        );
-
-        // Check if the rail is fully settled before allowing deletion.
-        // This ensures validatePayment() can still read dataset state during settlement.
-        // If deleted before settlement, clients would be forced to use
-        // settleTerminatedRailWithoutValidation() which pays full amount for unproven epochs.
+        address payer = info.payer;
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-        try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
-            require(
-                rail.settledUpTo >= rail.endEpoch,
-                Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
-            );
-        } catch {
-            // Rail is finalized (zeroed out), meaning it was already fully settled
+
+        if (info.pdpEndEpoch == 0) {
+            // Abandonment path: rail was never terminated via terminateService.
+            // Verify 30-day inactivity, then perform inline teardown.
+            _verifyInactivity(dataSetId);
+            _abandonmentTeardown(dataSetId, info, payments);
+        } else {
+            // Normal path: terminateService was already called.
+            // Verify the payment window has elapsed and the rail is fully settled.
+            require(block.number > info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
+            try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
+                require(
+                    rail.settledUpTo >= rail.endEpoch,
+                    Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
+                );
+            } catch {
+                // Rail is finalized (zeroed out), meaning it was already fully settled
+            }
         }
 
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
@@ -663,14 +667,11 @@ contract FilecoinWarmStorageService is
         uint256[] storage clientDataSetList = clientDataSets[payer];
         for (uint256 i = 0; i < clientDataSetList.length; i++) {
             if (clientDataSetList[i] == dataSetId) {
-                // Remove this dataset from the array
                 clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
                 clientDataSetList.pop();
                 break;
             }
         }
-
-        // Remove the dataset from all mappings
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
@@ -689,6 +690,67 @@ contract FilecoinWarmStorageService is
 
         // Complete cleanup
         delete dataSetInfo[dataSetId];
+    }
+
+    /**
+     * @notice Verifies that a data set has been inactive for the required inactivity window.
+     * @dev Reverts if the SP has been active within PDPVerifier.INACTIVITY_WINDOW epochs.
+     *      Never-activated datasets (provingActivationEpoch == 0) are unconditionally accepted.
+     */
+    function _verifyInactivity(uint256 dataSetId) internal view {
+        uint256 activation = provingActivationEpoch[dataSetId];
+        if (activation == 0) return;
+
+        uint256 lastProvenEpoch = IPDPVerifier(pdpVerifierAddress).getDataSetLastProvenEpoch(dataSetId);
+        // If proving was activated but no proof was ever submitted, use the activation epoch as the baseline.
+        uint256 lastActivity = lastProvenEpoch == 0 ? activation : lastProvenEpoch;
+        uint256 requiredEpoch = lastActivity + PDP_INACTIVITY_WINDOW;
+        require(block.number > requiredEpoch, Errors.DataSetNotAbandoned(dataSetId, requiredEpoch, block.number));
+    }
+
+    /**
+     * @notice Performs inline teardown of payment rails during the abandonment path.
+     * @dev Settles, modifies lockup, terminates, and re-settles the PDP rail so it finalizes
+     *      within this single transaction. CDN rails (if present) follow the same sequence.
+     *      FWSS dataset state must not be deleted before this function returns because
+     *      validatePayment reads it during the final settleRail.
+     */
+    function _abandonmentTeardown(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
+        // Settle the live PDP rail up to the current block.
+        // validatePayment returns zero payment for all unproven epochs, discharging lockupCurrent
+        // without transferring funds. The "after" settleAccountLockup then advances lockupLastSettledAt
+        // to block.number, satisfying isAccountLockupFullySettled for the modifyRailLockup below.
+        payments.settleRail(info.pdpRailId, block.number);
+
+        // Zero both lockup period and fixed lockup on the PDP rail.
+        // Requires isAccountLockupFullySettled (achieved above).
+        // Sets lockupPeriod = 0 so terminateRail produces endEpoch = block.number.
+        payments.modifyRailLockup(info.pdpRailId, 0, 0);
+
+        bool hasCDN = info.cdnRailId != 0;
+        if (hasCDN) {
+            // Zero CDN rail lockup periods (allowed since lockupLastSettledAt == block.number).
+            payments.modifyRailLockup(info.cacheMissRailId, 0, 0);
+            payments.modifyRailLockup(info.cdnRailId, 0, 0);
+            // Terminate CDN rails (endEpoch = lockupLastSettledAt + 0 = block.number).
+            payments.terminateCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId);
+            // Settle and finalize CDN rails (zero payment at rate 0, instant finalization).
+            payments.settleRail(info.cacheMissRailId, block.number);
+            payments.settleRail(info.cdnRailId, block.number);
+        }
+
+        // Terminate the PDP rail. FWSS is the operator so always authorized.
+        // endEpoch = lockupLastSettledAt + lockupPeriod = block.number + 0 = block.number.
+        // railTerminated callback fires and sets info.pdpEndEpoch = block.number.
+        payments.terminateRail(info.pdpRailId);
+
+        // Settle the now-terminated PDP rail.
+        // maxSettlementEpoch = min(block.number, endEpoch) = block.number.
+        // validatePayment reads FWSS state here — state must remain intact until this returns.
+        // After settlement settledUpTo >= endEpoch, rail finalizes via checkAndFinalizeTerminatedRail.
+        payments.settleRail(info.pdpRailId, block.number);
+
+        emit DataSetAbandoned(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
 
     /**
@@ -1385,12 +1447,13 @@ contract FilecoinWarmStorageService is
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // If proving wasn't ever activated for this data set, don't pay anything
+        // If proving wasn't ever activated for this data set, don't pay anything.
+        // Return settleUpto = toEpoch (not fromEpoch) so settlement can still advance and discharge lockup.
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
-                settleUpto: fromEpoch,
+                settleUpto: toEpoch,
                 note: "Proving never activated for this data set"
             });
         }

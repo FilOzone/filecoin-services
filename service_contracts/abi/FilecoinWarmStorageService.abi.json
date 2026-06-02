@@ -949,6 +949,37 @@
   },
   {
     "type": "event",
+    "name": "DataSetAbandoned",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pdpRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cacheMissRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "DataSetCreated",
     "inputs": [
       {
@@ -1424,6 +1455,27 @@
     "inputs": [
       {
         "name": "clientDataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "DataSetNotAbandoned",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "requiredEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "currentBlock",
         "type": "uint256",
         "internalType": "uint256"
       }
