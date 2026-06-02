@@ -110,6 +110,23 @@ contract AbandonmentTest is MockFVMTest {
         require(usdfc.transfer(client, 1000e18));
     }
 
+    // Assert that all storage-backed fields of a deleted dataset are zero and metadata is empty.
+    function _assertDataSetCleared(uint256 dataSetId) internal view {
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        assertEq(info.pdpRailId, 0, "pdpRailId");
+        assertEq(info.cacheMissRailId, 0, "cacheMissRailId");
+        assertEq(info.cdnRailId, 0, "cdnRailId");
+        assertEq(info.payer, address(0), "payer");
+        assertEq(info.payee, address(0), "payee");
+        assertEq(info.serviceProvider, address(0), "serviceProvider");
+        assertEq(info.commissionBps, 0, "commissionBps");
+        assertEq(info.pdpEndEpoch, 0, "pdpEndEpoch");
+        assertEq(info.providerId, 0, "providerId");
+
+        (string[] memory keys,) = viewContract.getAllDataSetMetadata(dataSetId);
+        assertEq(keys.length, 0, "metadata keys");
+    }
+
     // Mock ecrecover to return the expected signer, bypassing real EIP-712 verification.
     function _makeSignaturePass(address signer) internal {
         vm.mockCall(address(0x01), bytes(hex""), abi.encode(signer));
@@ -197,12 +214,8 @@ contract AbandonmentTest is MockFVMTest {
         vm.prank(keeper);
         pdpVerifier.deleteDataSet(dataSetId, "");
 
-        FilecoinWarmStorageService.DataSetInfoView memory after_ = viewContract.getDataSet(dataSetId);
-        assertEq(after_.pdpRailId, 0, "pdpRailId should be cleared");
-        assertEq(after_.payer, address(0), "payer should be cleared");
-
-        uint256[] memory remaining = viewContract.clientDataSets(client);
-        assertEq(remaining.length, 0, "client dataset list should be empty");
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 
     // Same as testAbandonmentClears but with CDN rails enabled, exercising the CDN teardown branch.
@@ -226,14 +239,8 @@ contract AbandonmentTest is MockFVMTest {
         vm.prank(keeper);
         pdpVerifier.deleteDataSet(dataSetId, "");
 
-        FilecoinWarmStorageService.DataSetInfoView memory after_ = viewContract.getDataSet(dataSetId);
-        assertEq(after_.pdpRailId, 0, "pdpRailId should be cleared");
-        assertEq(after_.cacheMissRailId, 0, "cacheMissRailId should be cleared");
-        assertEq(after_.cdnRailId, 0, "cdnRailId should be cleared");
-        assertEq(after_.payer, address(0), "payer should be cleared");
-
-        uint256[] memory remaining = viewContract.clientDataSets(client);
-        assertEq(remaining.length, 0, "client dataset list should be empty");
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 
     // CDN rails carry no validator callback, so the payer can terminate them directly via
@@ -257,11 +264,42 @@ contract AbandonmentTest is MockFVMTest {
         vm.prank(keeper);
         pdpVerifier.deleteDataSet(dataSetId, "");
 
-        FilecoinWarmStorageService.DataSetInfoView memory after_ = viewContract.getDataSet(dataSetId);
-        assertEq(after_.pdpRailId, 0, "pdpRailId should be cleared");
-        assertEq(after_.payer, address(0), "payer should be cleared");
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+    }
 
-        uint256[] memory remaining = viewContract.clientDataSets(client);
-        assertEq(remaining.length, 0, "client dataset list should be empty");
+    // CDN rails are finalized before abandonment fires (modifyRailLockup and settleRail both fail).
+    // Payer terminates and settles the CDN rails externally, then abandonment still succeeds.
+    function testAbandonmentClearsCDNPreFinalized() public {
+        uint256 dataSetId = _createDataSet(true);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+
+        // Payer terminates the CDN rails directly on FilecoinPay, bypassing FWSS.
+        vm.prank(client);
+        payments.terminateRail(before.cdnRailId);
+        vm.prank(client);
+        payments.terminateRail(before.cacheMissRailId);
+
+        // Roll past the inactivity window, which also puts us past endEpoch for the CDN rails
+        // (endEpoch = lockupLastSettledAt + DEFAULT_LOCKUP_PERIOD = ~28800, window = 86400).
+        vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW + 1);
+
+        // Settle both CDN rails to their endEpoch, finalizing them (rail struct is zeroed out).
+        payments.settleRail(before.cdnRailId, block.number);
+        payments.settleRail(before.cacheMissRailId, block.number);
+
+        // Confirm finalization: getRail reverts for a zeroed-out rail.
+        vm.expectRevert();
+        payments.getRail(before.cdnRailId);
+
+        vm.expectEmit(true, true, false, false, address(fwss));
+        emit CDNServiceTerminated(address(pdpVerifier), dataSetId, before.cacheMissRailId, before.cdnRailId);
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 }
