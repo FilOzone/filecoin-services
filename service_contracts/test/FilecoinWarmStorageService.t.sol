@@ -11,7 +11,6 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {
     CHALLENGES_PER_PROOF,
-    MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
     FilecoinWarmStorageService
 } from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
