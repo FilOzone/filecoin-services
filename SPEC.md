@@ -37,7 +37,7 @@ In addition to the ongoing storage rate, FWSS charges one-time fees for specific
 
 | Operation | Fee | Trigger | Recipient |
 |---|---|---|---|
-| Create dataset | $0.0025 | `dataSetCreated` callback | SP |
+| Create dataset | $0.025 | `dataSetCreated` callback | SP |
 | Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
 | Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
 | Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |

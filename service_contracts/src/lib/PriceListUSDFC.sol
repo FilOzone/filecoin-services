@@ -27,7 +27,7 @@ uint256 constant DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) /
 uint256 constant SERVICE_COMMISSION_BPS = 0;
 
 // Operation fees (one-time, paid from the lifecycle reserve on the PDP rail)
-uint256 constant CREATE_DATA_SET_FEE = (25 * 10 ** TOKEN_DECIMALS) / 10000; // $0.0025 per dataset created
+uint256 constant CREATE_DATA_SET_FEE = (25 * 10 ** TOKEN_DECIMALS) / 1000; // $0.025 per dataset created
 uint256 constant ADD_PIECES_BASE_FEE = (5 * 10 ** TOKEN_DECIMALS) / 10000; // $0.0005 base per addPieces call
 uint256 constant ADD_PIECES_PER_PIECE_FEE = (3 * 10 ** TOKEN_DECIMALS) / 10000; // $0.0003 per piece added
 uint256 constant SCHEDULE_PIECE_REMOVALS_FEE = (2 * 10 ** TOKEN_DECIMALS) / 1000; // $0.002 per schedulePieceRemovals call
