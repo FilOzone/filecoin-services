@@ -286,7 +286,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "minimumLockupRequired",
+        "name": "lockupRequired",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -302,7 +302,7 @@
         "internalType": "address"
       },
       {
-        "name": "minimumRequired",
+        "name": "required",
         "type": "uint256",
         "internalType": "uint256"
       },
@@ -364,7 +364,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "minimumRateRequired",
+        "name": "rateRequired",
         "type": "uint256",
         "internalType": "uint256"
       }

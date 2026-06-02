@@ -1024,13 +1024,13 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             createData.signature
         );
 
-        uint256 minimumRequired = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
+        uint256 required = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
 
         // Expect revert with InsufficientLockupFunds error
         makeSignaturePass(insufficientClient);
         vm.expectRevert(
             abi.encodeWithSelector(
-                Errors.InsufficientLockupFunds.selector, insufficientClient, minimumRequired, insufficientAmount
+                Errors.InsufficientLockupFunds.selector, insufficientClient, required, insufficientAmount
             )
         );
         vm.prank(serviceProvider);
@@ -1451,8 +1451,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address testClient = makeAddr("testClient3");
         uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
 
-        uint256 minimumLockupRequired = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
-        uint256 insufficientLockupAllowance = minimumLockupRequired - 1; // Just below minimum
+        uint256 lockupRequired = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
+        uint256 insufficientLockupAllowance = lockupRequired - 1; // Just below required
 
         // Transfer tokens and set up approvals
         mockUSDFC.safeTransfer(testClient, depositAmount);
@@ -1498,7 +1498,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
                 address(pdpServiceWithPayments),
                 insufficientLockupAllowance,
                 0, // lockupUsage is 0 initially
-                minimumLockupRequired
+                lockupRequired
             )
         );
         vm.prank(serviceProvider);

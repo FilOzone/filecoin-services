@@ -308,35 +308,35 @@ library Errors {
     /// @param productType The kind of service product attempted to be registered
     error InsufficientCapabilitiesForProduct(ServiceProviderRegistryStorage.ProductType productType);
 
-    /// @notice Payer has insufficient available funds to cover the minimum storage rate
+    /// @notice Payer has insufficient available funds to cover the required lockup
     /// @param payer The payer address
-    /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
+    /// @param required The lockup required for dataset creation
     /// @param available The available funds in the payer's account
-    error InsufficientLockupFunds(address payer, uint256 minimumRequired, uint256 available);
+    error InsufficientLockupFunds(address payer, uint256 required, uint256 available);
 
     /// @notice Operator is not approved for the payer
     /// @param payer The payer address
     /// @param operator The operator address (warm storage service)
     error OperatorNotApproved(address payer, address operator);
 
-    /// @notice Operator has insufficient rate allowance for the minimum storage rate
+    /// @notice Operator has insufficient rate allowance to cover the per-dataset fee rate
     /// @param payer The payer address
     /// @param operator The operator address (warm storage service)
     /// @param rateAllowance The total rate allowance approved
     /// @param rateUsage The current rate usage
-    /// @param minimumRateRequired The minimum rate required per epoch
+    /// @param rateRequired The rate required per epoch
     error InsufficientRateAllowance(
-        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 minimumRateRequired
+        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 rateRequired
     );
 
-    /// @notice Operator has insufficient lockup allowance for the minimum lockup
+    /// @notice Operator has insufficient lockup allowance to cover the required lockup
     /// @param payer The payer address
     /// @param operator The operator address (warm storage service)
     /// @param lockupAllowance The total lockup allowance approved
     /// @param lockupUsage The current lockup usage
-    /// @param minimumLockupRequired The minimum lockup required
+    /// @param lockupRequired The required lockup
     error InsufficientLockupAllowance(
-        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 minimumLockupRequired
+        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 lockupRequired
     );
 
     /// @notice Operator's max lockup period is insufficient for the default lockup period
