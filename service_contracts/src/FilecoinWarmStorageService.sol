@@ -49,12 +49,6 @@ uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
 uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
 
 /*
-* Maximum extraData for addPieces
-* Supports: 5 pieces with full metadata, or 61 pieces with no metadata
-*/
-uint256 constant MAX_ADD_PIECES_EXTRA_DATA_SIZE = 8192; // 8 KiB
-
-/*
 * Maximum extraData for schedulePieceRemovals
 * Supports: signature (160 bytes needed)
 */
@@ -219,9 +213,9 @@ contract FilecoinWarmStorageService is
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
-    uint256 private constant MAX_VALUE_LENGTH = 128;
+    uint256 private constant MAX_VALUE_LENGTH = 96;
     uint256 private constant MAX_KEYS_PER_DATASET = 10;
-    uint256 private constant MAX_KEYS_PER_PIECE = 5;
+    uint256 private constant MAX_KEYS_PER_PIECE = 3;
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
@@ -730,7 +724,7 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         uint256 len = extraData.length;
         require(len > 0, Errors.ExtraDataRequired());
-        require(len <= MAX_ADD_PIECES_EXTRA_DATA_SIZE, Errors.ExtraDataTooLarge(len, MAX_ADD_PIECES_EXTRA_DATA_SIZE));
+        // PDPVerifier currently hits the FVM PiecesAdded event size limit before FWSS needs a byte cap.
         // Decode the extra data
         (uint256 nonce, string[][] memory metadataKeys, string[][] memory metadataValues, bytes memory signature) =
             abi.decode(extraData, (uint256, string[][], string[][], bytes));
