@@ -774,7 +774,7 @@ contract FilecoinWarmStorageService is
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
         uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
-        updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance);
+        updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance, false);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -841,7 +841,7 @@ contract FilecoinWarmStorageService is
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserveIfNeeded(
-            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending
+            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, false
         );
         info.pendingOneTimePayments = newPending;
 
@@ -922,7 +922,7 @@ contract FilecoinWarmStorageService is
 
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
-                updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance);
+                updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance, false);
             }
 
             return;
@@ -972,7 +972,7 @@ contract FilecoinWarmStorageService is
         // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
         bool hadRemovals = processScheduledPieceMetadataRemovals(dataSetId);
         if (hadRemovals || pending > 0) {
-            updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance);
+            updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance, false);
         }
     }
 
@@ -1006,7 +1006,7 @@ contract FilecoinWarmStorageService is
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         address approver;
-        bool immediate = false;
+        bool immediateTermination = false;
         if (extraData.length > 0) {
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
@@ -1015,7 +1015,7 @@ contract FilecoinWarmStorageService is
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             if (msg.sender == info.serviceProvider) {
-                immediate = true;
+                immediateTermination = true;
                 info.pendingOneTimePayments += uint96(TERMINATE_FEE);
             }
         } else {
@@ -1031,12 +1031,9 @@ contract FilecoinWarmStorageService is
         uint96 pending = info.pendingOneTimePayments;
         if (pending > 0) {
             uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
-            updatePaymentRates(dataSetId, info, leafCount, pending, info.lifecycleReserveBalance);
+            updatePaymentRates(dataSetId, info, leafCount, pending, info.lifecycleReserveBalance, immediateTermination);
         }
 
-        if (immediate) {
-            payments.modifyRailLockup(info.pdpRailId, 0, 0);
-        }
         payments.terminateRail(info.pdpRailId);
 
         emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
@@ -1159,13 +1156,14 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info,
         uint256 leafCount,
         uint96 pending,
-        uint96 reserveBalance
+        uint96 reserveBalance,
+        bool immediateTermination
     ) internal {
         uint256 pdpRailId = info.pdpRailId;
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).updateStorageRates(
-            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch
+            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch, immediateTermination
         );
         info.pendingOneTimePayments = 0;
     }

@@ -202,6 +202,8 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         uint96 reserveBefore = info.lifecycleReserveBalance;
         assertEq(info.pendingOneTimePayments, 0);
 
+        (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
+
         // Consent case: payer signs off-chain, SP submits with signature in extraData
         makeSignaturePass(client);
         vm.prank(sp1);
@@ -209,8 +211,15 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "fee flushed at termination");
-        assertEq(info.lifecycleReserveBalance, reserveBefore - TERMINATE_FEE, "reserve decreased by fee");
-        assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
+        assertEq(info.lifecycleReserveBalance, 0, "reserve fully released on immediate termination");
+        assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lockupFixed zeroed after fee deducted");
+
+        uint256 networkFee = (TERMINATE_FEE * payments.NETWORK_FEE_NUMERATOR() + payments.NETWORK_FEE_DENOMINATOR() - 1)
+            / payments.NETWORK_FEE_DENOMINATOR();
+        (, uint256 spFundsAfter,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
+        assertEq(
+            spFundsAfter - spFundsBefore, TERMINATE_FEE - networkFee, "SP received terminate fee net of network fee"
+        );
     }
 
     function test_terminateFee_notChargedOnPayerDirectCall() public {
@@ -331,6 +340,8 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveAfterAdd = info.lifecycleReserveBalance;
 
+        (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
+
         // Consent case: payer signs off-chain, SP submits; no removals scheduled
         makeSignaturePass(client);
         vm.prank(sp1);
@@ -338,10 +349,16 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
 
         info = viewContract.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "TERMINATE_FEE flushed at termination");
-        assertEq(info.lifecycleReserveBalance, reserveAfterAdd - TERMINATE_FEE, "reserve decreased by fee");
+        assertEq(info.lifecycleReserveBalance, 0, "reserve fully released on immediate termination");
 
-        FilecoinPayV1.RailView memory rail = payments.getRail(pdpRailId);
-        assertEq(rail.lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
+        assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lockupFixed zeroed after fee deducted");
+
+        uint256 networkFee = (TERMINATE_FEE * payments.NETWORK_FEE_NUMERATOR() + payments.NETWORK_FEE_DENOMINATOR() - 1)
+            / payments.NETWORK_FEE_DENOMINATOR();
+        (, uint256 spFundsAfter,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
+        assertEq(
+            spFundsAfter - spFundsBefore, TERMINATE_FEE - networkFee, "SP received terminate fee net of network fee"
+        );
     }
 
     // CREATE_DATA_SET_FEE must be collected even when the dataset is terminated before any proving.
