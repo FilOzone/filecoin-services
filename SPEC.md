@@ -451,7 +451,7 @@ sequenceDiagram
     SP->>FWSS: (consent) terminateService(datasetId, payerSignature)
     FWSS->>FilecoinPayV1: terminateRail(railId)
     FilecoinPayV1-->>FWSS: rail terminated
-    Note over FilecoinPayV1: unilateral: rail enters 30-day lockup; consent: endEpoch = block.number
+    Note over FilecoinPayV1: unilateral enters 30-day lockup<br/>consent sets endEpoch = block.number
   end
 ```
 
