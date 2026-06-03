@@ -2606,6 +2606,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
         assertTrue(viewContract.getDataSet(dataSetId).pdpEndEpoch > 0, "dataset should be terminated");
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertEq(pdpRail.lockupPeriod, 0, "lockup period should be 0 for immediate termination");
+        assertEq(pdpRail.lockupFixed, 0, "lockup fixed should be 0 for immediate termination");
     }
 
     function testTerminateService_directPayer_emitsApprover() public {
@@ -2628,6 +2631,13 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         emit FilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId);
+
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertEq(
+            pdpRail.lockupPeriod,
+            DEFAULT_LOCKUP_PERIOD,
+            "lockup period should remain DEFAULT_LOCKUP_PERIOD for non-consensual termination"
+        );
     }
 
     function testTerminateService_sessionKey() public {

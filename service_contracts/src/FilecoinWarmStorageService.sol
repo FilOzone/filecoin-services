@@ -1006,6 +1006,7 @@ contract FilecoinWarmStorageService is
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         address approver;
+        bool immediate = false;
         if (extraData.length > 0) {
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
@@ -1014,7 +1015,7 @@ contract FilecoinWarmStorageService is
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             if (msg.sender == info.serviceProvider) {
-                // TODO termination can be immediate
+                immediate = true;
                 info.pendingOneTimePayments += uint96(TERMINATE_FEE);
             }
         } else {
@@ -1033,6 +1034,9 @@ contract FilecoinWarmStorageService is
             updatePaymentRates(dataSetId, info, leafCount, pending, info.lifecycleReserveBalance);
         }
 
+        if (immediate) {
+            payments.modifyRailLockup(info.pdpRailId, 0, 0);
+        }
         payments.terminateRail(info.pdpRailId);
 
         emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
