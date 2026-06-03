@@ -41,6 +41,8 @@ import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint64 constant CHALLENGES_PER_PROOF = 5;
 uint256 constant COMMISSION_MAX_BPS = 10000; // 100% in basis points
+// Mirror of PDPVerifier.INACTIVITY_WINDOW (lib/pdp/src/PDPVerifier.sol)
+uint256 constant PDP_INACTIVITY_WINDOW = 86400;
 
 /*
 * Maximum extraData for createDataSet
@@ -628,8 +630,10 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles data set deletion after the payment rails were terminated
-     * @dev Called by the PDPVerifier contract when a data set is deleted
+     * @notice Handles data set deletion after voluntary termination or via the abandonment path.
+     * @dev Called by the PDPVerifier contract when a data set is deleted.
+     *      When pdpEndEpoch == 0 the rail was never terminated via terminateService; FWSS verifies
+     *      30-day inactivity and performs inline teardown so a keeper needs only one transaction.
      * @param dataSetId The ID of the data set being deleted
      */
     function dataSetDeleted(
@@ -637,31 +641,29 @@ contract FilecoinWarmStorageService is
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
     ) external onlyPDPVerifier {
-        // Verify the data set exists in our mapping
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
-        // Get the payer address for this data set
-        address payer = dataSetInfo[dataSetId].payer;
-
-        // Check if the data set's payment rails have finalized
-        require(
-            info.pdpEndEpoch != 0 && block.number > info.pdpEndEpoch,
-            Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch)
-        );
-
-        // Check if the rail is fully settled before allowing deletion.
-        // This ensures validatePayment() can still read dataset state during settlement.
-        // If deleted before settlement, clients would be forced to use
-        // settleTerminatedRailWithoutValidation() which pays full amount for unproven epochs.
+        address payer = info.payer;
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
-        try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
-            require(
-                rail.settledUpTo >= rail.endEpoch,
-                Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
-            );
-        } catch {
-            // Rail is finalized (zeroed out), meaning it was already fully settled
+
+        if (info.pdpEndEpoch == 0) {
+            // Abandonment path: rail was never terminated via terminateService.
+            // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
+            _verifyInactivity(dataSetId);
+            payments.abandonRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+        } else {
+            // Normal path: terminateService was already called.
+            // Verify the payment window has elapsed and the rail is fully settled.
+            require(block.number > info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
+            try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
+                require(
+                    rail.settledUpTo >= rail.endEpoch,
+                    Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
+                );
+            } catch {
+                // Rail is finalized (zeroed out), meaning it was already fully settled
+            }
         }
 
         // Terminate CDN rails if configured, giving FilBeam a graceful settle window
@@ -682,8 +684,6 @@ contract FilecoinWarmStorageService is
             }
         }
 
-        // Remove the dataset from all mappings
-
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
@@ -701,6 +701,27 @@ contract FilecoinWarmStorageService is
 
         // Complete cleanup
         delete dataSetInfo[dataSetId];
+    }
+
+    /**
+     * @notice Verifies the data set has been inactive for INACTIVITY_WINDOW.
+     * @dev Layers on PDPVerifier.deleteDataSet's own gate, which restricts non-SP callers within
+     *      the window. This check stops the SP themselves from using deleteDataSet to skip
+     *      terminateService on an active data set.
+     *      Baseline: PDPVerifier's lastProvenEpoch (initialized at creation for current data
+     *      sets, updated on each proof). If 0, the data set is legacy and predates that
+     *      initialization; fall back to our local provingActivationEpoch.
+     *      Never-activated (activation == 0) is accepted unconditionally; PDPVerifier handles the
+     *      since-activation gate.
+     */
+    function _verifyInactivity(uint256 dataSetId) internal view {
+        uint256 activation = provingActivationEpoch[dataSetId];
+        if (activation == 0) return;
+
+        uint256 lastProvenEpoch = IPDPVerifier(pdpVerifierAddress).getDataSetLastProvenEpoch(dataSetId);
+        uint256 lastActivity = lastProvenEpoch == 0 ? activation : lastProvenEpoch;
+        uint256 requiredEpoch = lastActivity + PDP_INACTIVITY_WINDOW;
+        require(block.number > requiredEpoch, Errors.DataSetNotAbandoned(dataSetId, requiredEpoch, block.number));
     }
 
     /**
@@ -1445,12 +1466,14 @@ contract FilecoinWarmStorageService is
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // If proving wasn't ever activated for this data set, don't pay anything
+        // Proving never activated: no payment due, but settleUpto = toEpoch (not fromEpoch) lets
+        // settleRail advance and discharge lockup. Without this, settleRail reverts with
+        // NoProgressInSettlement, which blocks the abandonment teardown path.
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
             return ValidationResult({
                 modifiedAmount: 0,
-                settleUpto: fromEpoch,
+                settleUpto: toEpoch,
                 note: "Proving never activated for this data set"
             });
         }

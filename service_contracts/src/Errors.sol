@@ -351,4 +351,10 @@ library Errors {
     error ProviderIdMismatchAtIndex(uint256 index, uint256 providerId);
 
     error StorageProviderChangesNotSupported();
+
+    /// @notice The data set has not been inactive for the required inactivity window
+    /// @param dataSetId The data set ID
+    /// @param requiredEpoch The first epoch at which abandonment is allowed
+    /// @param currentBlock The current block number
+    error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
 }

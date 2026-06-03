@@ -5865,7 +5865,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
 
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
-        assertEq(result.settleUpto, fromEpoch, "Should not settle");
+        assertEq(result.settleUpto, toEpoch, "Should advance settlement at zero cost");
         assertEq(result.note, "Proving never activated for this data set");
     }
 
@@ -5890,7 +5890,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e18, fromEpoch, toEpoch, 0);
 
         assertEq(result.modifiedAmount, 0, "No payment to SP when dataset has no pieces");
-        assertEq(result.settleUpto, fromEpoch, "Settlement must not advance for empty dataset");
+        assertEq(result.settleUpto, toEpoch, "Settlement advances at zero cost when proving never activated");
     }
 
     /**

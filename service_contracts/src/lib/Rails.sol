@@ -30,6 +30,8 @@ event CDNServiceTerminated(
     address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
 );
 
+event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId);
+
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
 library Rails {
@@ -162,6 +164,44 @@ library Rails {
         try payments.terminateRail(cacheMissRailId) {} catch {}
         try payments.terminateRail(cdnRailId) {} catch {}
         emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
+    }
+
+    /// @notice Tears down all rails for an abandoned data set.
+    /// @dev SP forfeits pending op-fees; lifecycle reserve and streaming buffer return to the
+    ///      payer. Intentional: abandonment means the SP walked away.
+    ///      PDP rail flow: settle to pay any proven epochs and advance settledUpTo; zero the
+    ///      lockup to release buffer+reserve to the payer; terminate (endEpoch = block.number
+    ///      since period is 0); settle again so settledUpTo >= endEpoch finalises the rail.
+    ///      CDN rails are best-effort, may have been terminated externally.
+    function abandonRails(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        uint256 pdpRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnRailId
+    ) public {
+        payments.settleRail(pdpRailId, block.number);
+        payments.modifyRailLockup(pdpRailId, 0, 0);
+
+        if (cdnRailId != 0) {
+            _teardownCDNRail(payments, cacheMissRailId);
+            _teardownCDNRail(payments, cdnRailId);
+            emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
+        }
+
+        payments.terminateRail(pdpRailId);
+        payments.settleRail(pdpRailId, block.number);
+        emit DataSetAbandoned(dataSetId, pdpRailId, cacheMissRailId, cdnRailId);
+    }
+
+    /// @notice Tears down one CDN rail.
+    /// @dev Each step may revert if the rail was independently terminated or finalised by the
+    ///      payer or FilBeam controller (CDN rails have no validator). Best-effort so abandonment
+    ///      completes regardless.
+    function _teardownCDNRail(FilecoinPayV1 payments, uint256 railId) internal {
+        try payments.modifyRailLockup(railId, 0, 0) {} catch {}
+        try payments.terminateRail(railId) {} catch {}
+        try payments.settleRail(railId, block.number) {} catch {}
     }
 
     function topUpCDNRails(

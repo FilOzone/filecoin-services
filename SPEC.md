@@ -163,6 +163,8 @@ Each proving period is in one of three states:
 - **Faulted**: Deadline has passed with no proof. Settlement advances but payment is zero.
 - **Open**: Deadline has not yet passed, no proof. Settlement is blocked at the period boundary because the provider may still submit a proof.
 
+When `provingActivationEpoch == 0` (data set created, possibly populated, but the SP has not yet called `nextProvingPeriod`), `validatePayment()` short-circuits with zero payment and `settleUpto = toEpoch`, so settlement can advance through pre-activation epochs. Without this, `settleRail()` reverts with `NoProgressInSettlement` on never-activated data sets.
+
 ### Partial-Period Settlement (FilecoinPay Rate Changes)
 
 Where base rail rate changes have occurred (e.g. pieces were added mid-period, changing the payment rate), FilecoinPay settles each rate "segment" independently (see `_settleWithRateChanges`). Each segment gets its own `validatePayment()` call with a `toEpoch` that may fall anywhere within a proving period. So `validatePayment()` must be able to handle settlement of near-arbitrary ranges (see `_findProvenEpochs`).
@@ -193,6 +195,8 @@ CDN rails are not touched by `terminateService`. They remain active through the 
 
 Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
 
+Data sets can also reach teardown without `terminateService` via the abandonment path; see below.
+
 ### Dataset Deletion Requirements
 
 Dataset deletion (`dataSetDeleted`) requires the payment rail to be fully settled before the dataset can be removed:
@@ -218,6 +222,8 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 **State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
 
 **CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated as part of the `dataSetDeleted` callback itself.
+
+**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `Rails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve and streaming buffer back to the payer, terminates and finalises the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away.
 
 ## CDN Payment Rails
 
