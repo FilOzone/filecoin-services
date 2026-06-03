@@ -2,6 +2,8 @@
 pragma solidity ^0.8.20;
 
 import {Cids} from "@pdp/Cids.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {PriceList, PriceListRates, PriceListFees, PriceListLockups} from "./PriceList.sol";
 
 uint256 constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
 uint256 constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
@@ -59,4 +61,36 @@ function calculateStorageSizeBasedRatePerEpoch(uint256 totalBytes) pure returns 
 function calculateStorageRate(uint256 leafCount) pure returns (uint256 storageRatePerEpoch) {
     if (leafCount == 0) return 0;
     return calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(leafCount));
+}
+
+/**
+ * @notice Assemble the full PriceList from the USDFC constants.
+ * @dev `token` returns as the zero address; the caller populates it with the deployment's
+ *      USDFC instance address (FWSS holds it as an immutable).
+ */
+function priceList() pure returns (PriceList memory) {
+    return PriceList({
+        token: IERC20(address(0)),
+        rates: PriceListRates({
+            storagePerTibPerMonth: STORAGE_PRICE_PER_TIB_PER_MONTH,
+            datasetFeePerMonth: DATASET_FEE_PER_MONTH,
+            cdnEgressPerTib: CDN_EGRESS_PRICE_PER_TIB,
+            cacheMissEgressPerTib: CACHE_MISS_EGRESS_PRICE_PER_TIB
+        }),
+        fees: PriceListFees({
+            createDataSetFee: CREATE_DATA_SET_FEE,
+            addPiecesBaseFee: ADD_PIECES_BASE_FEE,
+            addPiecesPerPieceFee: ADD_PIECES_PER_PIECE_FEE,
+            schedulePieceRemovalsFee: SCHEDULE_PIECE_REMOVALS_FEE,
+            terminateFee: TERMINATE_FEE
+        }),
+        lockups: PriceListLockups({
+            lifecycleReserveTarget: LIFECYCLE_RESERVE_TARGET,
+            replenishThreshold: REPLENISH_THRESHOLD,
+            defaultLockupPeriod: DEFAULT_LOCKUP_PERIOD,
+            cdnLockupAmount: DEFAULT_CDN_LOCKUP_AMOUNT,
+            cacheMissLockupAmount: DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
+            cdnLockupPeriod: CDN_LOCKUP_PERIOD
+        })
+    });
 }

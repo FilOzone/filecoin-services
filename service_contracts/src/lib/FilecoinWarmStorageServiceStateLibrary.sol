@@ -6,7 +6,14 @@ import {Errors} from "../Errors.sol";
 import {
     CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
 } from "../FilecoinWarmStorageService.sol";
-import {DATASET_FEE_PER_MONTH, SERVICE_COMMISSION_BPS, STORAGE_PRICE_PER_TIB_PER_MONTH} from "./PriceListUSDFC.sol";
+import {
+    DATASET_FEE_PER_MONTH,
+    SERVICE_COMMISSION_BPS,
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    priceList
+} from "./PriceListUSDFC.sol";
+import {PriceList} from "./PriceList.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
@@ -604,6 +611,9 @@ library FilecoinWarmStorageServiceStateLibrary {
      * @notice Get the current pricing rates
      * @return storagePrice Current storage price per TiB per month
      * @return datasetFee Per-dataset additive monthly fee
+     * @custom:deprecated Use `getPriceList()` for the complete catalogue. The same values appear
+     *                    as `getPriceList().rates.storagePerTibPerMonth` and
+     *                    `getPriceList().rates.datasetFeePerMonth`.
      */
     function getCurrentPricingRates(FilecoinWarmStorageService)
         public
@@ -611,5 +621,18 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (uint256 storagePrice, uint256 datasetFee)
     {
         return (STORAGE_PRICE_PER_TIB_PER_MONTH, DATASET_FEE_PER_MONTH);
+    }
+
+    /**
+     * @notice Get the full price catalogue for this FWSS deployment.
+     * @dev Single discovery point: streaming rates, one-time fees, and lockup amounts/periods in
+     *      one struct. The `token` field is populated from the FWSS proxy's `usdfcTokenAddress`
+     *      immutable; the rest comes from the on-chain price constants. Replaces the legacy
+     *      `getServicePrice`, `getCurrentPricingRates`, and `getEffectiveRates` for consumers
+     *      that want the complete price picture.
+     */
+    function getPriceList(FilecoinWarmStorageService service) public view returns (PriceList memory list) {
+        list = priceList();
+        list.token = IERC20(address(service.usdfcTokenAddress()));
     }
 }

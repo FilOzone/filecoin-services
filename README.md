@@ -27,7 +27,7 @@ Rail payment rates are calculated as a size-proportional component plus a flat p
 
 Storage providers submit on-chain transactions on behalf of clients (piece additions, removal scheduling, proving). To reimburse SPs for these gas costs, FWSS charges small one-time operation fees: $0.025 on dataset creation, $0.0005 + $0.0003/piece per add-pieces call, $0.002 per removal-scheduling call, and $0.00112 when an SP terminates service with payer consent. Fees are drawn from a $0.10 lifecycle reserve maintained as fixed lockup on the PDP rail.
 
-See [SPEC.md](SPEC.md) for details on rate calculation, operation fees, pricing updates, and top-up/renewal behavior.
+The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct covering token, streaming rates, one-time fees, and lockup amounts/periods. See [SPEC.md](SPEC.md) for details on rate calculation, operation fees, pricing updates, and top-up/renewal behavior.
 
 ## 🚀 Quick Start
 

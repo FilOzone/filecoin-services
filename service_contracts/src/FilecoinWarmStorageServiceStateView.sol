@@ -8,6 +8,7 @@ pragma solidity ^0.8.20;
 import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
+import {PriceList} from "./lib/PriceList.sol";
 
 contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
@@ -133,6 +134,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         returns (bool exists, string memory value)
     {
         return service.getPieceMetadata(dataSetId, pieceId, key);
+    }
+
+    function getPriceList() external view returns (PriceList memory list) {
+        return service.getPriceList();
     }
 
     function isProviderApproved(uint256 providerId) external view returns (bool) {

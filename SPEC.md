@@ -69,6 +69,21 @@ This keeps the hot path at one external call per event.
 
 **Manual top-up**: The payer can call `topUpLifecycleReserve(dataSetId, amount)` at any time before termination. The payer must have sufficient available funds and `lockupAllowance` to cover the increase; `modifyRailLockup` enforces this via the standard operator approval checks.
 
+### Price Discovery
+
+The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+
+```solidity
+struct PriceList {
+    IERC20 token;
+    PriceListRates rates;       // storage, dataset fee, CDN egress, cache-miss egress
+    PriceListFees fees;          // create, add-pieces base+per-piece, schedule-removals, terminate
+    PriceListLockups lockups;    // lifecycle reserve, replenish threshold, CDN amounts, lockup periods
+}
+```
+
+This is the canonical price discovery API for SDKs and dashboards.
+
 ### Pricing Updates
 
 Only the contract owner can update pricing, by upgrading the contract.
