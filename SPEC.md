@@ -233,7 +233,7 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 - Dataset deletion timing is controlled by proving period deadlines, not just the lockup period
 
 **Timing**: To delete a dataset after termination:
-1. Wait for `block.number > pdpEndEpoch` (lockup period elapsed)
+1. Wait for `block.number >= pdpEndEpoch` (lockup period elapsed)
 2. Wait for all proving period deadlines within the lockup to pass
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset

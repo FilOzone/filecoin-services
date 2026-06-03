@@ -655,7 +655,7 @@ contract FilecoinWarmStorageService is
         } else {
             // Normal path: terminateService was already called.
             // Verify the payment window has elapsed and the rail is fully settled.
-            require(block.number > info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
+            require(block.number >= info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
             try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
                 require(
                     rail.settledUpTo >= rail.endEpoch,

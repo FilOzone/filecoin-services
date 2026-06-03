@@ -2609,6 +2609,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         assertEq(pdpRail.lockupPeriod, 0, "lockup period should be 0 for immediate termination");
         assertEq(pdpRail.lockupFixed, 0, "lockup fixed should be 0 for immediate termination");
+
+        // With lockupPeriod = 0, endEpoch = block.number — no need to advance blocks
+        payments.settleRail(info.pdpRailId, pdpRail.endEpoch);
+        vm.prank(serviceProvider);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, "");
+        assertEq(viewContract.getDataSet(dataSetId).pdpRailId, 0, "dataset should be deleted");
     }
 
     function testTerminateService_directPayer_emitsApprover() public {
