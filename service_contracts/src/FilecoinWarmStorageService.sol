@@ -642,7 +642,7 @@ contract FilecoinWarmStorageService is
 
         if (info.pdpEndEpoch == 0) {
             // Abandonment path: rail was never terminated via terminateService.
-            // Verify 30-day inactivity, then perform inline teardown.
+            // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
             payments.abandonRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         } else {
@@ -692,16 +692,21 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Verifies that a data set has been inactive for the required inactivity window.
-     * @dev Reverts if the SP has been active within PDPVerifier.INACTIVITY_WINDOW epochs.
-     *      Never-activated datasets (provingActivationEpoch == 0) are unconditionally accepted.
+     * @notice Verifies the data set has been inactive for INACTIVITY_WINDOW.
+     * @dev Layers on PDPVerifier.deleteDataSet's own gate, which restricts non-SP callers within
+     *      the window. This check stops the SP themselves from using deleteDataSet to skip
+     *      terminateService on an active data set.
+     *      Baseline: PDPVerifier's lastProvenEpoch (initialized at creation for current data
+     *      sets, updated on each proof). If 0, the data set is legacy and predates that
+     *      initialization; fall back to our local provingActivationEpoch.
+     *      Never-activated (activation == 0) is accepted unconditionally; PDPVerifier handles the
+     *      since-activation gate.
      */
     function _verifyInactivity(uint256 dataSetId) internal view {
         uint256 activation = provingActivationEpoch[dataSetId];
         if (activation == 0) return;
 
         uint256 lastProvenEpoch = IPDPVerifier(pdpVerifierAddress).getDataSetLastProvenEpoch(dataSetId);
-        // If proving was activated but no proof was ever submitted, use the activation epoch as the baseline.
         uint256 lastActivity = lastProvenEpoch == 0 ? activation : lastProvenEpoch;
         uint256 requiredEpoch = lastActivity + PDP_INACTIVITY_WINDOW;
         require(block.number > requiredEpoch, Errors.DataSetNotAbandoned(dataSetId, requiredEpoch, block.number));
@@ -1401,8 +1406,9 @@ contract FilecoinWarmStorageService is
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // If proving wasn't ever activated for this data set, don't pay anything.
-        // Return settleUpto = toEpoch (not fromEpoch) so settlement can still advance and discharge lockup.
+        // Proving never activated: no payment due, but settleUpto = toEpoch (not fromEpoch) lets
+        // settleRail advance and discharge lockup. Without this, settleRail reverts with
+        // NoProgressInSettlement, which blocks the abandonment teardown path.
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
             return ValidationResult({

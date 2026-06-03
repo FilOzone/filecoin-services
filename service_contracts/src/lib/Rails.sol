@@ -184,11 +184,13 @@ library Rails {
         emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
     }
 
-    /// @notice Tears down all payment rails for an abandoned dataset in a single library call.
-    /// @dev Settling the PDP rail first discharges lockup for unproven epochs, advancing
-    ///      lockupLastSettledAt to block.number and satisfying isAccountLockupFullySettled for the
-    ///      subsequent modifyRailLockup. CDN rails are handled defensively since the payer or
-    ///      FilBeam controller may have terminated them externally before abandonment fires.
+    /// @notice Tears down all rails for an abandoned data set.
+    /// @dev SP forfeits pending op-fees; lifecycle reserve and streaming buffer return to the
+    ///      payer. Intentional: abandonment means the SP walked away.
+    ///      PDP rail flow: settle to pay any proven epochs and advance settledUpTo; zero the
+    ///      lockup to release buffer+reserve to the payer; terminate (endEpoch = block.number
+    ///      since period is 0); settle again so settledUpTo >= endEpoch finalises the rail.
+    ///      CDN rails are best-effort, may have been terminated externally.
     function abandonRails(
         FilecoinPayV1 payments,
         uint256 dataSetId,
@@ -210,7 +212,10 @@ library Rails {
         emit DataSetAbandoned(dataSetId, pdpRailId, cacheMissRailId, cdnRailId);
     }
 
-    /// @notice Tears down one CDN rail, tolerating rails already terminated or finalized externally.
+    /// @notice Tears down one CDN rail.
+    /// @dev Each step may revert if the rail was independently terminated or finalised by the
+    ///      payer or FilBeam controller (CDN rails have no validator). Best-effort so abandonment
+    ///      completes regardless.
     function _teardownCDNRail(FilecoinPayV1 payments, uint256 railId) internal {
         try payments.modifyRailLockup(railId, 0, 0) {} catch {}
         try payments.terminateRail(railId) {} catch {}
