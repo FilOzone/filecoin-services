@@ -651,12 +651,10 @@ contract FilecoinWarmStorageService is
             // Abandonment path: rail was never terminated via terminateService.
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
-            payments.settleAbandonedRail(info.pdpRailId);
-            // Wipe activation so validatePayment short-circuits the finalize settle past the
-            // still-open final proving period. The trailing cleanup re-deletes this slot
-            // harmlessly. No new state.
-            delete provingActivationEpoch[dataSetId];
-            payments.finalizeAbandonedRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+            // abandonRails also terminates CDN rails and clears the proving activation epoch
+            payments.abandonRails(
+                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+            );
         } else {
             // Normal path: terminateService was already called.
             // Verify the payment window has elapsed and the rail is fully settled.
@@ -669,11 +667,11 @@ contract FilecoinWarmStorageService is
             } catch {
                 // Rail is finalized (zeroed out), meaning it was already fully settled
             }
-        }
-
-        // Terminate CDN rails if configured, giving FilBeam a graceful settle window
-        if (info.cdnRailId != 0) {
-            _terminateCDNRails(dataSetId, info, payments);
+            // Terminate CDN rails if configured, giving FilBeam a graceful settle window
+            if (info.cdnRailId != 0) {
+                _terminateCDNRails(dataSetId, info, payments);
+            }
+            delete provingActivationEpoch[dataSetId];
         }
 
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
@@ -692,7 +690,6 @@ contract FilecoinWarmStorageService is
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
-        delete provingActivationEpoch[dataSetId];
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
@@ -1482,7 +1479,7 @@ contract FilecoinWarmStorageService is
 
         // No proving activity: pay nothing, advance settleUpto = toEpoch so settleRail can
         // discharge lockup. Hit by never-activated data sets and by the finalize leg of
-        // abandonment (which wipes activationEpoch between settles to unblock the open period).
+        // abandonment (which wipes activationEpoch between settles to unblock the open period)
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});

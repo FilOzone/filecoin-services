@@ -166,30 +166,32 @@ library Rails {
         emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
     }
 
-    /// @notice Abandonment teardown, leg 1: pays proven epochs, releases reserve + buffer to payer.
-    /// @dev Pairs with `finalizeAbandonedRails`. Caller wipes `provingActivationEpoch` between
-    ///      legs so the finalize settle can advance past the open proving period.
-    function settleAbandonedRail(FilecoinPayV1 payments, uint256 pdpRailId) public {
-        payments.settleRail(pdpRailId, block.number);
-        payments.modifyRailLockup(pdpRailId, 0, 0);
-    }
-
-    /// @notice Abandonment teardown, leg 2: tears down CDN rails, terminates and finalises PDP rail.
-    /// @dev Requires the validator to have cleared activation for this data set so the
-    ///      post-terminate settle advances past the open proving period. CDN teardown is
-    ///      best-effort; rails may already be terminated externally.
-    function finalizeAbandonedRails(
+    /// @notice Tears down all rails for an abandoned data set.
+    /// @dev SP forfeits pending op-fees; lifecycle reserve and streaming buffer return to the
+    ///      payer. Intentional: abandonment means the SP walked away.
+    ///      PDP rail flow: settle to pay any proven epochs and advance settledUpTo; zero the
+    ///      lockup to release buffer+reserve to the payer; terminate (endEpoch = block.number
+    ///      since period is 0); settle again so settledUpTo >= endEpoch finalises the rail.
+    ///      CDN rails are best-effort, may have been terminated externally.
+    function abandonRails(
         FilecoinPayV1 payments,
+        mapping(uint256 dataSetId => uint256 activationEpoch) storage provingActivationEpoch,
         uint256 dataSetId,
         uint256 pdpRailId,
         uint256 cacheMissRailId,
         uint256 cdnRailId
     ) public {
+        payments.settleRail(pdpRailId, block.number);
+        payments.modifyRailLockup(pdpRailId, 0, 0);
+
         if (cdnRailId != 0) {
             _teardownCDNRail(payments, cacheMissRailId);
             _teardownCDNRail(payments, cdnRailId);
             emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
         }
+
+        // clearing this allows settling up to block.number
+        delete provingActivationEpoch[dataSetId];
 
         payments.terminateRail(pdpRailId);
         payments.settleRail(pdpRailId, block.number);
