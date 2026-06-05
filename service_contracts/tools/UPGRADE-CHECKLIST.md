@@ -159,7 +159,7 @@ For each network, record evidence that:
 ### Phase 1: Branch, Issue, PR, and Checks
 - [ ] All intended FWSS contract changes are merged into `main`
 - [ ] Changelog/release-notes PR opened for review with a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links
-- [ ] Upgrade PR created with the title `{{RECOMMENDED_PR_TITLE}}`, including the `FilecoinWarmStorageService` `VERSION()` bump
+- [ ] Version bump PR created with the title `{{RECOMMENDED_PR_TITLE}}`, including the `FilecoinWarmStorageService` `VERSION()` bump
 - [ ] Upgrade checks run:
 
 ```bash
@@ -168,7 +168,7 @@ forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout --extra-output storageLayout
 ```
 
-- [ ] Upgrade PR merged so `main` contains the final `FilecoinWarmStorageService` version string
+- [ ] Version bump PR merged so `main` contains the final `FilecoinWarmStorageService` version string
 - [ ] Create release branch from `main` after the version bump lands (recommended: `{{RELEASE_BRANCH}}`)
 - [ ] Review this issue template on the release branch and make any one-off wording or structure tweaks before generating the release issue
 - [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from this branch

@@ -148,7 +148,7 @@ function generateTitle() {
 function generateBody() {
   const [owner, repo] = (config.githubRepository || "FilOzone/filecoin-services").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
-  const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} upgrade`;
+  const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} version bump`;
   const releaseBranch = `release-${config.releaseVersion}`;
 
   const replacements = {
