@@ -12,11 +12,30 @@ This file is the canonical, self-contained template for FWSS release issues.
 
 | Field | Value |
 |-------|-------|
-| **Version** | `{{RELEASE_VERSION}}` |
+| **Stack Version** | `{{RELEASE_VERSION}}` |
 | **Upgrade Type** | `{{UPGRADE_TYPE}}` |
 | **Changelog PR** | {{CHANGELOG_PR}} |
 | **Technical Owner** | `TBD` |
 | **Go/No-Go Status** | `TBD` |
+
+### Release Tracking
+
+The filecoin-services release version is the stack version. It may differ from an individual contract `VERSION()` when the stack changes without an FWSS code change.
+
+| Item | Value |
+|---|---|
+| Frozen deploy commit | `TBD` |
+| GitHub pre-release | `TBD` |
+| Release status | `Pre-release until Mainnet proxy switch is verified` |
+| Synapse SDK PR | `TBD` |
+
+### Component Versions
+
+| Component | Version | Changed? | Notes |
+|---|---|---|---|
+| Stack (`filecoin-services`) | `{{RELEASE_VERSION}}` | Yes | Git tag / GitHub Release |
+| `FilecoinWarmStorageService` | `TBD` | Yes | Contract `VERSION()` returned by the FWSS proxy |
+| `PDPVerifier` | `TBD` | No | Link PDP release if this stack consumes a new PDP version |
 
 ### Upgrade Schedule
 
@@ -87,13 +106,16 @@ Record validation that proves the planned upgrade works against the full contrac
 ### Operating Rules
 
 - Use the release issue as the rollout source of truth. Keep the schedule, Run Log, tx links, and post-upgrade evidence current.
+- Create the stack tag and GitHub Release before any live proxy switch. Mark the GitHub Release as a pre-release until Mainnet is complete and verified.
+- Keep the GitHub pre-release page updated as the external rollout tracker for consumers; keep this issue updated as the operator runbook.
+- Keep CHANGELOG focused on what changed. Put mutable deployment status, addresses, epochs, and transaction links on the GitHub Release page.
 - The technical owner owns the written upgrade plan, dependency target verification, and final go/no-go decision.
 - Before any live announce transaction, fill in the Technical Owner, Cross-Repo Impact, Dependency Targets and Compatibility, Rollback Plan, and foc-devnet validation status.
 - Generate owner-action calldata with `CALLDATA_ONLY=true` and submit it through Safe Transaction Builder.
 - In Safe Transaction Builder, use the script output exactly: target is the printed FWSS proxy, value is `0`, and data is the printed calldata.
 - Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `createDataSet` validation are complete.
 - Do not announce Mainnet until required cross-repo changes are merged/released or explicitly waived by the technical owner.
-- Do not merge `service_contracts/deployments.json` until live proxy implementation slots match the new implementation addresses.
+- `service_contracts/deployments.json` reflects what is live behind proxies. Update it only after the relevant proxy switch is complete, normally in a follow-up PR.
 - If an `AFTER_EPOCH` changes, submit a new `announcePlannedUpgrade()` transaction and record that it supersedes the previous announcement.
 
 ### Notice Guidance
@@ -116,7 +138,7 @@ echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
 
 For each network, record evidence that:
 - FWSS proxy implementation slot equals the new implementation address.
-- `VERSION()` returns the release version without the leading `v`.
+- `VERSION()` returns the expected FWSS contract version without the leading `v`.
 - `nextUpgrade()` is cleared.
 - Blockscout shows the proxy and transaction as expected.
 - A smoke/E2E test passes. The v1.2.0 rollout used the Synapse SDK storage E2E example.
@@ -144,7 +166,7 @@ For each network, record evidence that:
 - [ ] Fill Dependency Targets and Compatibility by comparing target versions/addresses with observed Calibnet and Mainnet deployed state
 - [ ] Fill Rollback Plan, including whether rollback is safe and the approved procedure/script link when available
 - [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
-- [ ] Changelog entry prepared in [CHANGELOG.md]({{CHANGELOG_LINK}})
+- [ ] Changelog entry prepared in [CHANGELOG.md]({{CHANGELOG_LINK}}) with a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links
 - [ ] Version string updated in [FilecoinWarmStorageService.sol]({{FWSS_CONTRACT_LINK}})
 - [ ] Upgrade PR created with the title `{{RECOMMENDED_PR_TITLE}}` and linked in the Overview section of this issue
 - [ ] Upgrade checks run:
@@ -155,7 +177,17 @@ forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
 ```
 
-- [ ] Release issue Overview updated with PR links, summary, and action required
+- [ ] Freeze the deploy commit and record it in Release Tracking
+- [ ] Create and push the stack tag from the frozen deploy commit before any live proxy switch:
+
+```bash
+git tag {{RELEASE_VERSION}}
+git push origin {{RELEASE_VERSION}}
+```
+
+- [ ] Create the GitHub Release from `{{RELEASE_VERSION}}`, mark it as a pre-release, and include component versions plus a FWSS rollout status table
+- [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened the expected Synapse SDK PR from the tag/pre-release, or record an exception in Release Tracking
+- [ ] Release issue Overview and Release Tracking updated with PR links, release link, summary, and action required
 
 ### Phase 2: Deploy Contracts
 Deploy both networks before any announce/execute.
@@ -173,7 +205,7 @@ Deploy both networks before any announce/execute.
 - [ ] Capture `MAIN_NEW_IMPL` and add it to the Run Log
 - [ ] Verify implementation on Sourcify and Blockscout
 - [ ] Attempt FilFox verification and record result
-- [ ] Update the upgrade PR's `service_contracts/deployments.json` with both new implementation addresses, but do not merge it until live proxy slots match those addresses
+- [ ] Add both implementation addresses to the GitHub pre-release rollout status. Do not update `service_contracts/deployments.json` until proxy slots are live.
 
 Verification command pattern:
 
@@ -218,6 +250,7 @@ CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
 - [ ] Record Calibnet announce tx link in the Run Log
+- [ ] Update the GitHub pre-release Calibnet rollout status with the announce tx and `AFTER_EPOCH`
 
 **Execute**
 - [ ] Wait for `AFTER_EPOCH`
@@ -242,8 +275,8 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
 export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
-export EXPECTED_VERSION="{{RELEASE_VERSION}}"
-EXPECTED_VERSION="${EXPECTED_VERSION#v}"
+export EXPECTED_FWSS_VERSION="{{RELEASE_VERSION}}" # use the FWSS contract VERSION() if it differs from the stack tag
+EXPECTED_FWSS_VERSION="${EXPECTED_FWSS_VERSION#v}"
 
 CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
   "$FWSS_PROXY_ADDRESS" \
@@ -264,13 +297,14 @@ NEXT_UPGRADE=$(cast call --rpc-url "$ETH_RPC_URL" \
   'nextUpgrade()(address,uint96)')
 
 echo "Implementation slot: $IMPLEMENTATION_SLOT (expected $EXPECTED_FWSS_IMPLEMENTATION_ADDRESS)"
-echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_VERSION)"
+echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_FWSS_VERSION)"
 echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ```
 
 - [ ] Run and record a Calibnet smoke/E2E test result
 - [ ] Validate a Calibnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
+- [ ] Update the GitHub pre-release Calibnet rollout status with execute tx, checks, and smoke/E2E evidence
 - [ ] Technical owner confirms Calibnet results are good before announcing Mainnet
 
 ### Phase 4: Mainnet Announce + Execute
@@ -303,6 +337,7 @@ CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
 - [ ] Record Mainnet announce tx link in the Run Log
+- [ ] Update the GitHub pre-release Mainnet rollout status with the announce tx and `AFTER_EPOCH`
 
 **Execute**
 - [ ] Wait for `AFTER_EPOCH`
@@ -327,8 +362,8 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
-export EXPECTED_VERSION="{{RELEASE_VERSION}}"
-EXPECTED_VERSION="${EXPECTED_VERSION#v}"
+export EXPECTED_FWSS_VERSION="{{RELEASE_VERSION}}" # use the FWSS contract VERSION() if it differs from the stack tag
+EXPECTED_FWSS_VERSION="${EXPECTED_FWSS_VERSION#v}"
 
 CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
   "$FWSS_PROXY_ADDRESS" \
@@ -349,20 +384,22 @@ NEXT_UPGRADE=$(cast call --rpc-url "$ETH_RPC_URL" \
   'nextUpgrade()(address,uint96)')
 
 echo "Implementation slot: $IMPLEMENTATION_SLOT (expected $EXPECTED_FWSS_IMPLEMENTATION_ADDRESS)"
-echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_VERSION)"
+echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_FWSS_VERSION)"
 echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ```
 
 - [ ] Run and record a Mainnet smoke/E2E test result
 - [ ] Validate a Mainnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
+- [ ] Update the GitHub pre-release Mainnet rollout status with execute tx, checks, and smoke/E2E evidence
 
-### Phase 5: Merge and Release
-- [ ] Confirm `service_contracts/deployments.json` matches live Calibnet and Mainnet FWSS implementation slots
+### Phase 5: Promote Release and Close Out
+- [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
-- [ ] Finalize and merge changelog/deployments PR(s)
-- [ ] Tag release: `git tag {{RELEASE_VERSION}} && git push origin {{RELEASE_VERSION}}`
-- [ ] Create GitHub Release with changelog
+- [ ] Open or update a follow-up PR for `service_contracts/deployments.json` with live implementation addresses plus `pdp_version` and `fwss_version` fields for each network
+- [ ] Merge the `service_contracts/deployments.json` follow-up PR after checksum validation and live-slot verification
+- [ ] Merge release-prep/changelog PRs if still open, keeping mutable rollout details on the GitHub Release page
+- [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Create "Upgrade Synapse to use newest contracts" issue
 - [ ] Capture lessons learned from this rollout and update [`service_contracts/tools/UPGRADE-CHECKLIST.md`]({{CHECKLIST_LINK}}) if the process should change
@@ -385,5 +422,6 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - Run a smoke/E2E check after each network executes; the v1.2.0 rollout used the Synapse SDK storage E2E example.
 - If an `AFTER_EPOCH` changes, record that the later announcement supersedes the earlier one.
 - StateView changes are intentionally left out of the default checklist. If a release needs a new StateView, add a clearly labeled exception section to the release issue and track it explicitly there.
-- `deployments.json` should match live on-chain state. If you prepare updates before a Safe tx executes, verify on-chain before merging.
+- `deployments.json` should match live on-chain state behind proxies. Prepare and merge its update after Safe execution, and include component version fields when the schema supports them.
+- Use the GitHub Release page for mutable rollout details. CHANGELOG entries should describe what changed and link to the release page for deployment addresses, epochs, and txs.
 - FilFox verification was flaky during the `v1.2.0` rollout. Record the result, but do not let it block Sourcify + Blockscout verification.

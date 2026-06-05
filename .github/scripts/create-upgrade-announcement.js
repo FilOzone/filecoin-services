@@ -164,6 +164,7 @@ function generateBody() {
     CHECKLIST_LINK: `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-CHECKLIST.md`,
     DEPLOY_WORKFLOW_LINK: `${baseUrl}/actions/workflows/deploy-contract.yml`,
     CREATE_ISSUE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/create-upgrade-announcement-issue.yml`,
+    SYNAPSE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/notify-synapse-sdk.yml`,
   };
 
   return replaceAll(loadIssueTemplate(), replacements);
