@@ -1009,15 +1009,17 @@ contract FilecoinWarmStorageService is
         bool immediateTermination = false;
         if (extraData.length > 0) {
             require(
+                msg.sender == info.serviceProvider,
+                Errors.CallerNotServiceProvider(dataSetId, info.serviceProvider, msg.sender)
+            );
+            require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
                 Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
             );
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
-            if (msg.sender == info.serviceProvider) {
-                immediateTermination = true;
-                info.pendingOneTimePayments += uint96(TERMINATE_FEE);
-            }
+            immediateTermination = true;
+            info.pendingOneTimePayments += uint96(TERMINATE_FEE);
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,

@@ -2617,6 +2617,18 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(viewContract.getDataSet(dataSetId).pdpRailId, 0, "dataset should be deleted");
     }
 
+    function testTerminateService_extraData_callerNotServiceProvider() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "caller not sp test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        vm.prank(client);
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.CallerNotServiceProvider.selector, dataSetId, serviceProvider, client)
+        );
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
+    }
+
     function testTerminateService_directPayer_emitsApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
