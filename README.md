@@ -31,7 +31,7 @@ The complete on-chain price catalogue is exposed via `FilecoinWarmStorageService
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-org/filecoin-services.git
+git clone https://github.com/FilOzone/filecoin-services.git
 cd filecoin-services/service_contracts
 ```
 
