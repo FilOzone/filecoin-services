@@ -138,6 +138,9 @@ contract AbandonmentTest is MockFVMTest {
         assertEq(info.commissionBps, 0, "commissionBps");
         assertEq(info.pdpEndEpoch, 0, "pdpEndEpoch");
         assertEq(info.providerId, 0, "providerId");
+        assertEq(info.clientDataSetId, 0, "clientDataSetId");
+        assertEq(info.pendingOneTimePayments, 0, "pendingOneTimePayments");
+        assertEq(info.lifecycleReserveBalance, 0, "lifecycleReserveBalance");
 
         (string[] memory keys,) = viewContract.getAllDataSetMetadata(dataSetId);
         assertEq(keys.length, 0, "metadata keys");
