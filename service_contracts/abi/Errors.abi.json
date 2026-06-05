@@ -97,6 +97,27 @@
   },
   {
     "type": "error",
+    "name": "CallerNotServiceProvider",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "expectedServiceProvider",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "caller",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ChallengeWindowTooEarly",
     "inputs": [
       {

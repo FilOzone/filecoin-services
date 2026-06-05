@@ -277,11 +277,17 @@ library Rails {
         uint256 leafCount,
         uint96 pending,
         uint96 reserveBalance,
-        uint256 pdpEndEpoch
+        uint256 pdpEndEpoch,
+        bool immediateTermination
     ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
-        newReserveBalance =
-            replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending) - pending;
+        if (immediateTermination) {
+            payments.modifyRailLockup(pdpRailId, 0, pending);
+            newReserveBalance = 0;
+        } else {
+            newReserveBalance =
+                replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending) - pending;
+        }
         payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, pending);
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
     }
