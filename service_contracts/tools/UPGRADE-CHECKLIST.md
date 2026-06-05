@@ -165,7 +165,7 @@ For each network, record evidence that:
 ```bash
 cd service_contracts
 forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
-forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
+forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout --extra-output storageLayout
 ```
 
 - [ ] Upgrade PR merged so `main` contains the final `FilecoinWarmStorageService` version string
