@@ -652,9 +652,9 @@ contract FilecoinWarmStorageService is
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
             payments.settleAbandonedRail(info.pdpRailId);
-            // Short-circuit validatePayment for the finalize settle: without this, the open
-            // final proving period reverts settlement with NoProgressInSettlement. Relocates
-            // the cleanup below; no new state.
+            // Wipe activation so validatePayment short-circuits the finalize settle past the
+            // still-open final proving period. The trailing cleanup re-deletes this slot
+            // harmlessly. No new state.
             delete provingActivationEpoch[dataSetId];
             payments.finalizeAbandonedRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         } else {
