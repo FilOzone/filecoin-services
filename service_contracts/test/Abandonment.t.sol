@@ -17,6 +17,7 @@ import {
     PROVEN_THIS_PERIOD_SLOT
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {EPOCHS_PER_DAY} from "../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/Rails.sol";
@@ -371,6 +372,44 @@ contract AbandonmentTest is MockFVMTest {
 
         vm.expectRevert();
         payments.getRail(before.pdpRailId);
+    }
+
+    // CDN rails + activated proving + all periods faulted. Exercises CDN teardown and the
+    // activation-epoch wipe in the same abandonRails call.
+    function testAbandonmentClearsCDNActivatedFaultedDataSet() public {
+        uint256 dataSetId = _createDataSet(true);
+        _addSinglePiece(dataSetId);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        assertGt(before.pdpRailId, 0, "pdpRailId should be set");
+        assertGt(before.cacheMissRailId, 0, "cacheMissRailId should be set");
+        assertGt(before.cdnRailId, 0, "cdnRailId should be set");
+
+        uint256 challengeEpoch = block.number + EPOCHS_PER_DAY - 5;
+        vm.prank(sp);
+        pdpVerifier.nextProvingPeriod(dataSetId, challengeEpoch, "");
+
+        uint256 lastActivity = pdpVerifier.getDataSetLastProvenEpoch(dataSetId);
+        vm.roll(lastActivity + pdpVerifier.INACTIVITY_WINDOW() + EPOCHS_PER_DAY * 3 + 1);
+
+        vm.expectEmit(true, true, false, true, address(fwss));
+        emit CDNServiceTerminated(address(pdpVerifier), dataSetId, before.cacheMissRailId, before.cdnRailId);
+
+        vm.expectEmit(true, false, false, false, address(fwss));
+        emit DataSetAbandoned(dataSetId, before.pdpRailId, before.cacheMissRailId, before.cdnRailId);
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+
+        vm.expectRevert();
+        payments.getRail(before.pdpRailId);
+        vm.expectRevert();
+        payments.getRail(before.cacheMissRailId);
+        vm.expectRevert();
+        payments.getRail(before.cdnRailId);
     }
 
     // CDN rails are finalized before abandonment fires (modifyRailLockup and settleRail both fail).
