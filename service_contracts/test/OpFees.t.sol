@@ -200,6 +200,10 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
 
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
+        assertEq(
+            reserveBefore,
+            LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE - ADD_PIECES_PER_PIECE_FEE
+        );
         assertEq(info.pendingOneTimePayments, 0);
 
         (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
@@ -339,6 +343,10 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
 
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint96 reserveAfterAdd = info.lifecycleReserveBalance;
+        assertEq(
+            reserveAfterAdd,
+            LIFECYCLE_RESERVE_TARGET - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE - ADD_PIECES_PER_PIECE_FEE
+        );
 
         (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
 
