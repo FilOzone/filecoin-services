@@ -158,17 +158,8 @@ For each network, record evidence that:
 
 ### Phase 1: Branch, Issue, PR, and Checks
 - [ ] All intended FWSS contract changes are merged into `main`
-- [ ] Create release branch from `main` (recommended: `{{RELEASE_BRANCH}}`)
-- [ ] Review this issue template on the release branch and make any one-off wording or structure tweaks before generating the release issue
-- [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from this branch
-- [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
-- [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
-- [ ] Fill Dependency Targets and Compatibility by comparing target versions/addresses with observed Calibnet and Mainnet deployed state
-- [ ] Fill Rollback Plan, including whether rollback is safe and the approved procedure/script link when available
-- [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
-- [ ] Changelog entry prepared in [CHANGELOG.md]({{CHANGELOG_LINK}}) with a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links
-- [ ] Version string updated in [FilecoinWarmStorageService.sol]({{FWSS_CONTRACT_LINK}})
-- [ ] Upgrade PR created with the title `{{RECOMMENDED_PR_TITLE}}` and linked in the Overview section of this issue
+- [ ] Changelog/release-notes PR opened for review with a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links
+- [ ] Upgrade PR created with the title `{{RECOMMENDED_PR_TITLE}}`, including the `FilecoinWarmStorageService` `VERSION()` bump
 - [ ] Upgrade checks run:
 
 ```bash
@@ -177,6 +168,15 @@ forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
 ```
 
+- [ ] Upgrade PR merged so `main` contains the final `FilecoinWarmStorageService` version string
+- [ ] Create release branch from `main` after the version bump lands (recommended: `{{RELEASE_BRANCH}}`)
+- [ ] Review this issue template on the release branch and make any one-off wording or structure tweaks before generating the release issue
+- [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from this branch
+- [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
+- [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
+- [ ] Fill Dependency Targets and Compatibility by comparing target versions/addresses with observed Calibnet and Mainnet deployed state
+- [ ] Fill Rollback Plan, including whether rollback is safe and the approved procedure/script link when available
+- [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
 - [ ] Freeze the deploy commit and record it in Release Tracking
 - [ ] Create and push the stack tag from the frozen deploy commit before any live proxy switch:
 
