@@ -15,6 +15,8 @@ This file is the canonical, self-contained template for FWSS release issues.
 | **Version** | `{{RELEASE_VERSION}}` |
 | **Upgrade Type** | `{{UPGRADE_TYPE}}` |
 | **Changelog PR** | {{CHANGELOG_PR}} |
+| **Technical Owner** | `TBD` |
+| **Go/No-Go Status** | `TBD` |
 
 ### Upgrade Schedule
 
@@ -37,6 +39,44 @@ Keep this table current as values become known.
 - Out of scope by default: `FilecoinWarmStorageServiceStateView`, `ServiceProviderRegistry`, `PDPVerifier`, `FilecoinPay`, and `SessionKeyRegistry`.
 - If this release needs an out-of-scope change, add a clearly labeled exception section to this issue before starting that work.
 
+### Cross-Repo Impact
+
+List every required cross-repo change or release. Use `None` only after the technical owner confirms the upgrade is FWSS-only.
+
+| Repository | Required change, PR, issue, or release | Required before Mainnet? | Owner/Status |
+|---|---|---|---|
+| `TBD` | `TBD` | `TBD` | `TBD` |
+
+### Dependency Targets and Compatibility
+
+Record the intended deployed dependency versions or addresses, then verify actual deployed state against those targets before go/no-go.
+
+| Dependency | Target version/address | Calibnet observed | Mainnet observed | Verification/status |
+|---|---|---|---|---|
+| `PDPVerifier` | `TBD` | `TBD` | `TBD` | `TBD` |
+| `FilecoinPay` | `TBD` | `TBD` | `TBD` | `TBD` |
+| `ServiceProviderRegistry` | `TBD` | `TBD` | `TBD` | `TBD` |
+| `SessionKeyRegistry` | `TBD` | `TBD` | `TBD` | `TBD` |
+
+### Rollback Plan
+
+State whether rollback is safe before any live announce transaction. Link the approved rollback procedure or script when available.
+
+| Field | Value |
+|---|---|
+| Rollback status | `TBD: Safe / Unsafe / Not applicable` |
+| Previous FWSS implementation | `TBD` |
+| Rollback procedure/script | `TBD` |
+| Decision notes | `TBD` |
+
+### Pre-Live Validation
+
+Record validation that proves the planned upgrade works against the full contract, Curio, and Synapse state before live rollout.
+
+| Validation | Evidence/status |
+|---|---|
+| foc-devnet post-upgrade state validation | `TBD` |
+
 ### Network Constants
 
 | Network | Chain ID | RPC URL | FWSS Proxy | Safe Owner |
@@ -47,9 +87,12 @@ Keep this table current as values become known.
 ### Operating Rules
 
 - Use the release issue as the rollout source of truth. Keep the schedule, Run Log, tx links, and post-upgrade evidence current.
+- The technical owner owns the written upgrade plan, dependency target verification, and final go/no-go decision.
+- Before any live announce transaction, fill in the Technical Owner, Cross-Repo Impact, Dependency Targets and Compatibility, Rollback Plan, and foc-devnet validation status.
 - Generate owner-action calldata with `CALLDATA_ONLY=true` and submit it through Safe Transaction Builder.
 - In Safe Transaction Builder, use the script output exactly: target is the printed FWSS proxy, value is `0`, and data is the printed calldata.
-- Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, and smoke/E2E checks are complete.
+- Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `createDataSet` validation are complete.
+- Do not announce Mainnet until required cross-repo changes are merged/released or explicitly waived by the technical owner.
 - Do not merge `service_contracts/deployments.json` until live proxy implementation slots match the new implementation addresses.
 - If an `AFTER_EPOCH` changes, submit a new `announcePlannedUpgrade()` transaction and record that it supersedes the previous announcement.
 
@@ -77,6 +120,7 @@ For each network, record evidence that:
 - `nextUpgrade()` is cleared.
 - Blockscout shows the proxy and transaction as expected.
 - A smoke/E2E test passes. The v1.2.0 rollout used the Synapse SDK storage E2E example.
+- A `createDataSet` flow succeeds after the upgrade, either by a manual network-specific transaction or Dealbot canary graph evidence.
 
 ### Changes
 {{CHANGES_SUMMARY}}
@@ -88,13 +132,18 @@ For each network, record evidence that:
 
 ## Release Checklist
 
-> Work through the phases in order. Do not announce Mainnet until the Calibnet execute transaction, on-chain checks, and smoke/E2E test are complete.
+> Work through the phases in order. Do not announce Mainnet until the Calibnet execute transaction, on-chain checks, smoke/E2E test, and `createDataSet` validation are complete.
 
 ### Phase 1: Branch, Issue, PR, and Checks
 - [ ] All intended FWSS contract changes are merged into `main`
 - [ ] Create release branch from `main` (recommended: `{{RELEASE_BRANCH}}`)
 - [ ] Review this issue template on the release branch and make any one-off wording or structure tweaks before generating the release issue
 - [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from this branch
+- [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
+- [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
+- [ ] Fill Dependency Targets and Compatibility by comparing target versions/addresses with observed Calibnet and Mainnet deployed state
+- [ ] Fill Rollback Plan, including whether rollback is safe and the approved procedure/script link when available
+- [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
 - [ ] Changelog entry prepared in [CHANGELOG.md]({{CHANGELOG_LINK}})
 - [ ] Version string updated in [FilecoinWarmStorageService.sol]({{FWSS_CONTRACT_LINK}})
 - [ ] Upgrade PR created with the title `{{RECOMMENDED_PR_TITLE}}` and linked in the Overview section of this issue
@@ -220,12 +269,15 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ```
 
 - [ ] Run and record a Calibnet smoke/E2E test result
+- [ ] Validate a Calibnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
-- [ ] Confirm Calibnet results are good before announcing Mainnet
+- [ ] Technical owner confirms Calibnet results are good before announcing Mainnet
 
 ### Phase 4: Mainnet Announce + Execute
 
 **Announce**
+- [ ] Technical owner records Mainnet go/no-go after reviewing Calibnet evidence, rollback status, dependency targets, and cross-repo status
+- [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
 - [ ] Compute Mainnet `AFTER_EPOCH` and update the schedule table
 
@@ -302,10 +354,12 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ```
 
 - [ ] Run and record a Mainnet smoke/E2E test result
+- [ ] Validate a Mainnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
 
 ### Phase 5: Merge and Release
 - [ ] Confirm `service_contracts/deployments.json` matches live Calibnet and Mainnet FWSS implementation slots
+- [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Finalize and merge changelog/deployments PR(s)
 - [ ] Tag release: `git tag {{RELEASE_VERSION}} && git push origin {{RELEASE_VERSION}}`
 - [ ] Create GitHub Release with changelog
