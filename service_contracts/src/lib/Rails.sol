@@ -260,13 +260,8 @@ library Rails {
         uint256 pdpRailId,
         uint256 pdpEndEpoch,
         uint96 reserveBalance,
-        uint96 pending,
-        bool immediateTermination
+        uint96 pending
     ) internal returns (uint96) {
-        if (immediateTermination) {
-            payments.modifyRailLockup(pdpRailId, 0, pending);
-            return pending;
-        }
         if (pdpEndEpoch == 0 && reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
             uint96 newLockup = uint96(LIFECYCLE_RESERVE_TARGET) + pending;
             payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newLockup);
@@ -286,9 +281,13 @@ library Rails {
         bool immediateTermination
     ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
-        newReserveBalance = replenishReserveIfNeeded(
-            payments, pdpRailId, pdpEndEpoch, reserveBalance, pending, immediateTermination
-        ) - pending;
+        if (immediateTermination) {
+            payments.modifyRailLockup(pdpRailId, 0, pending);
+            newReserveBalance = 0;
+        } else {
+            newReserveBalance =
+                replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending) - pending;
+        }
         payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, pending);
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
     }

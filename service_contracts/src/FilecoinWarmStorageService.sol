@@ -841,7 +841,7 @@ contract FilecoinWarmStorageService is
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserveIfNeeded(
-            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, false
+            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending
         );
         info.pendingOneTimePayments = newPending;
 
