@@ -170,8 +170,6 @@ forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService stor
 
 - [ ] Version bump PR merged so `main` contains the final `FilecoinWarmStorageService` version string
 - [ ] Create release branch from `main` after the version bump lands (recommended: `{{RELEASE_BRANCH}}`)
-- [ ] Review this issue template on the release branch and make any one-off wording or structure tweaks before generating the release issue
-- [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from this branch
 - [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
 - [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
 - [ ] Fill Dependency Targets and Compatibility by comparing target versions/addresses with observed Calibnet and Mainnet deployed state
