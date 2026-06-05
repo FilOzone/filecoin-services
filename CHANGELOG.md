@@ -7,9 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 This upcoming FWSS upgrade includes breaking changes for some FWSS integrations, especially callers that depend on removed pricing helpers, removed pricing/CDN events, or the old pricing model.
 
-### Deployment Addresses
+### Deployment / Rollout Status
 
-See [`service_contracts/deployments.json`](./service_contracts/deployments.json) for current Mainnet and Calibnet contract addresses. The FWSS proxy addresses remain unchanged; new FWSS implementation addresses should be recorded there after the deploy workflow completes and the live proxy implementation slots match.
+See the planned [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.0) for rollout status, implementation addresses, epochs, and transaction links once the release is cut. See [`service_contracts/deployments.json`](./service_contracts/deployments.json) for current live Mainnet and Calibnet contract addresses. The FWSS proxy addresses remain unchanged; update `deployments.json` only after live proxy implementation slots match the new implementation addresses.
 
 ### Breaking Changes
 - Removed `calculateRatePerEpoch()`, `updatePricing()`, and `updateServiceCommission()` from the FWSS ABI. Integrations must stop calling those methods; use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. Pricing changes are now delivered by contract upgrade instead of owner calls ([#478](https://github.com/FilOzone/filecoin-services/pull/478), [#488](https://github.com/FilOzone/filecoin-services/pull/488), [#501](https://github.com/FilOzone/filecoin-services/pull/501)).
