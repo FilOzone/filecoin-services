@@ -6,6 +6,8 @@
 
 FilecoinWarmStorageService uses **static global pricing**. All payment rails use the same price regardless of which provider stores the data. The default storage price is 2.5 USDFC per TiB/month.
 
+All pricing constants (rates, fees, and lockup amounts) are defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). The on-chain entry point is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol) which assembles them into the `PriceList` struct.
+
 Providers may advertise their own prices in the ServiceProviderRegistry, but these are informational for other services, and does not affect actual payments in FilecoinWarmStorageService.
 
 ### Rate Calculation
@@ -82,7 +84,7 @@ struct PriceList {
 }
 ```
 
-This is the canonical price discovery API for SDKs and dashboards.
+This is the canonical price discovery API for SDKs and dashboards. The struct is defined in [`service_contracts/src/lib/PriceList.sol`](service_contracts/src/lib/PriceList.sol) and populated from the constants in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol).
 
 ### Pricing Updates
 
