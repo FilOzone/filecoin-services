@@ -10,7 +10,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
-import {PROVEN_PERIODS_SLOT, PROVING_ACTIVATION_EPOCH_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {
+    PROVEN_PERIODS_SLOT,
+    PROVING_ACTIVATION_EPOCH_SLOT,
+    PROVING_DEADLINES_SLOT,
+    PROVEN_THIS_PERIOD_SLOT
+} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
@@ -113,6 +118,15 @@ contract AbandonmentTest is MockFVMTest {
 
     // Assert that all storage-backed fields of a deleted dataset are zero and metadata is empty.
     function _assertDataSetCleared(uint256 dataSetId) internal view {
+        bytes32 activationSlot = keccak256(abi.encode(dataSetId, uint256(PROVING_ACTIVATION_EPOCH_SLOT)));
+        assertEq(uint256(vm.load(address(fwss), activationSlot)), 0, "provingActivationEpoch");
+
+        bytes32 deadlineSlot = keccak256(abi.encode(dataSetId, uint256(PROVING_DEADLINES_SLOT)));
+        assertEq(uint256(vm.load(address(fwss), deadlineSlot)), 0, "provingDeadlines");
+
+        bytes32 provenThisPeriodSlot = keccak256(abi.encode(dataSetId, uint256(PROVEN_THIS_PERIOD_SLOT)));
+        assertEq(uint256(vm.load(address(fwss), provenThisPeriodSlot)), 0, "provenThisPeriod");
+
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpRailId, 0, "pdpRailId");
         assertEq(info.cacheMissRailId, 0, "cacheMissRailId");
