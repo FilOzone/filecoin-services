@@ -4,12 +4,13 @@ pragma solidity ^0.8.13;
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
+import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
-import {PROVING_ACTIVATION_EPOCH_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {PROVEN_PERIODS_SLOT, PROVING_ACTIVATION_EPOCH_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
@@ -266,6 +267,96 @@ contract AbandonmentTest is MockFVMTest {
 
         _assertDataSetCleared(dataSetId);
         assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+    }
+
+    function _addSinglePiece(uint256 dataSetId) internal {
+        Cids.Cid[] memory pieces = new Cids.Cid[](1);
+        pieces[0] = Cids.CommPv2FromDigest(0, 4, keccak256("abandonment-piece"));
+
+        string[][] memory metadataKeys = new string[][](1);
+        string[][] memory metadataValues = new string[][](1);
+        metadataKeys[0] = new string[](0);
+        metadataValues[0] = new string[](0);
+        bytes memory addPayload = abi.encode(uint256(1), metadataKeys, metadataValues, FAKE_SIG);
+
+        _makeSignaturePass(client);
+        vm.prank(sp);
+        pdpVerifier.addPieces(dataSetId, address(0), pieces, addPayload);
+    }
+
+    // Activated, all periods faulted, final period open. Without the activation-epoch wipe
+    // between settles, the finalize settle reverts NoProgressInSettlement against the open
+    // final period.
+    function testAbandonmentClearsActivatedFaultedDataSet() public {
+        uint256 dataSetId = _createDataSet(false);
+        _addSinglePiece(dataSetId);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+
+        uint256 challengeEpoch = block.number + 2880 - 5;
+        vm.prank(sp);
+        pdpVerifier.nextProvingPeriod(dataSetId, challengeEpoch, "");
+
+        uint256 lastActivity = pdpVerifier.getDataSetLastProvenEpoch(dataSetId);
+        vm.roll(lastActivity + pdpVerifier.INACTIVITY_WINDOW() + 2880 * 3 + 1);
+
+        vm.expectEmit(true, false, false, false, address(fwss));
+        emit DataSetAbandoned(dataSetId, before.pdpRailId, 0, 0);
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+
+        vm.expectRevert();
+        payments.getRail(before.pdpRailId);
+    }
+
+    // Mark periods [0..periodCount) proven via direct write to the FWSS bitmap. periodCount <= 256.
+    function _markPeriodsProven(uint256 dataSetId, uint256 periodCount) internal {
+        require(periodCount <= 256, "single-word helper");
+        bytes32 outerSlot = keccak256(abi.encode(dataSetId, uint256(PROVEN_PERIODS_SLOT)));
+        bytes32 innerSlot = keccak256(abi.encode(uint256(0), outerSlot));
+        uint256 mask = periodCount == 256 ? type(uint256).max : (uint256(1) << periodCount) - 1;
+        vm.store(address(fwss), innerSlot, bytes32(mask));
+    }
+
+    function _payeeFunds() internal view returns (uint256) {
+        (, uint256 funds,,) = payments.getAccountInfoIfSettled(usdfc, sp);
+        return funds;
+    }
+
+    // Activated, proven, then SP walks away. First settle pays proven epochs; finalize settle
+    // still needs the activation wipe to advance past the open final period.
+    function testAbandonmentClearsActivatedProvenThenFaultedDataSet() public {
+        uint256 dataSetId = _createDataSet(false);
+        _addSinglePiece(dataSetId);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        uint256 payeeFundsBefore = _payeeFunds();
+
+        uint256 challengeEpoch = block.number + 2880 - 5;
+        vm.prank(sp);
+        pdpVerifier.nextProvingPeriod(dataSetId, challengeEpoch, "");
+
+        _markPeriodsProven(dataSetId, 3);
+
+        uint256 lastActivity = pdpVerifier.getDataSetLastProvenEpoch(dataSetId);
+        vm.roll(lastActivity + pdpVerifier.INACTIVITY_WINDOW() + 2880 * 3 + 1);
+
+        vm.expectEmit(true, false, false, false, address(fwss));
+        emit DataSetAbandoned(dataSetId, before.pdpRailId, 0, 0);
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertGt(_payeeFunds(), payeeFundsBefore, "payee should have received payment for proven periods");
+
+        vm.expectRevert();
+        payments.getRail(before.pdpRailId);
     }
 
     // CDN rails are finalized before abandonment fires (modifyRailLockup and settleRail both fail).

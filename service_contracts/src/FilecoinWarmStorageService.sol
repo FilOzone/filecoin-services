@@ -651,7 +651,12 @@ contract FilecoinWarmStorageService is
             // Abandonment path: rail was never terminated via terminateService.
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
-            payments.abandonRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+            payments.settleAbandonedRail(info.pdpRailId);
+            // Short-circuit validatePayment for the finalize settle: without this, the open
+            // final proving period reverts settlement with NoProgressInSettlement. Relocates
+            // the cleanup below; no new state.
+            delete provingActivationEpoch[dataSetId];
+            payments.finalizeAbandonedRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
         } else {
             // Normal path: terminateService was already called.
             // Verify the payment window has elapsed and the rail is fully settled.
@@ -1475,16 +1480,12 @@ contract FilecoinWarmStorageService is
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // Proving never activated: no payment due, but settleUpto = toEpoch (not fromEpoch) lets
-        // settleRail advance and discharge lockup. Without this, settleRail reverts with
-        // NoProgressInSettlement, which blocks the abandonment teardown path.
+        // No proving activity: pay nothing, advance settleUpto = toEpoch so settleRail can
+        // discharge lockup. Hit by never-activated data sets and by the finalize leg of
+        // abandonment (which wipes activationEpoch between settles to unblock the open period).
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
-            return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: toEpoch,
-                note: "Proving never activated for this data set"
-            });
+            return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
 
         // Count proven epochs up to toEpoch, possibly stopping earlier if unresolved
