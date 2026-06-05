@@ -128,6 +128,10 @@ contract AbandonmentTest is MockFVMTest {
         bytes32 provenThisPeriodSlot = keccak256(abi.encode(dataSetId, uint256(PROVEN_THIS_PERIOD_SLOT)));
         assertEq(uint256(vm.load(address(fwss), provenThisPeriodSlot)), 0, "provenThisPeriod");
 
+        bytes32 provenPeriodsInner = keccak256(abi.encode(dataSetId, uint256(PROVEN_PERIODS_SLOT)));
+        bytes32 provenPeriodsBitmap0 = keccak256(abi.encode(uint256(0), provenPeriodsInner));
+        assertEq(uint256(vm.load(address(fwss), provenPeriodsBitmap0)), 0, "provenPeriods[0]");
+
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         assertEq(info.pdpRailId, 0, "pdpRailId");
         assertEq(info.cacheMissRailId, 0, "cacheMissRailId");

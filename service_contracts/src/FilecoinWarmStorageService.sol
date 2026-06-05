@@ -647,6 +647,9 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
+        // Cache before either branch clears it — needed to bound the provenPeriods loop below.
+        uint256 activation = provingActivationEpoch[dataSetId];
+
         if (info.pdpEndEpoch == 0) {
             // Abandonment path: rail was never terminated via terminateService.
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
@@ -690,6 +693,13 @@ contract FilecoinWarmStorageService is
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
+        if (activation != 0) {
+            uint256 lastPeriod = _provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
+            uint256 lastSlot = lastPeriod >> 8;
+            for (uint256 slot = 0; slot <= lastSlot; slot++) {
+                delete provenPeriods[dataSetId][slot];
+            }
+        }
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
