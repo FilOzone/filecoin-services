@@ -5894,7 +5894,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, toEpoch, "Should advance settlement at zero cost");
-        assertEq(result.note, "Proving never activated for this data set");
+        assertEq(result.note, "No proving activity");
     }
 
     /**
