@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [1.3.0] - FWSS Upgrade
 
-This FWSS contract upgrade coincides with Filecoin Onchain Cloud's 202606 General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
+This FWSS contract upgrade coincides with Filecoin Onchain Cloud's General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
 
 ### Deployment / Rollout Status
 
