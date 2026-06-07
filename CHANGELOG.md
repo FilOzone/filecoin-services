@@ -3,13 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [Unreleased]
+## [1.3.0] - FWSS Upgrade
 
-This upcoming FWSS upgrade includes breaking changes for some FWSS integrations, especially callers that depend on removed pricing helpers, removed pricing/CDN events, or the old pricing model.
+This FWSS contract upgrade coincides with Filecoin Onchain Cloud's 202606 General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
 
 ### Deployment / Rollout Status
 
-See the planned [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.0) for rollout status, implementation addresses, epochs, and transaction links once the release is cut. See [`service_contracts/deployments.json`](./service_contracts/deployments.json) for current live Mainnet and Calibnet contract addresses. The FWSS proxy addresses remain unchanged; update `deployments.json` only after live proxy implementation slots match the new implementation addresses.
+See the [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.0) for rollout status, implementation addresses, epochs, and transaction links. The FWSS proxy addresses remain unchanged.
 
 ### Breaking Changes
 - Removed `calculateRatePerEpoch()`, `updatePricing()`, and `updateServiceCommission()` from the FWSS ABI. Integrations must stop calling those methods; use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. Pricing changes are now delivered by contract upgrade instead of owner calls ([#478](https://github.com/FilOzone/filecoin-services/pull/478), [#488](https://github.com/FilOzone/filecoin-services/pull/488), [#501](https://github.com/FilOzone/filecoin-services/pull/501)).
@@ -32,17 +32,17 @@ See the planned [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-ser
 - Allowed consent-based service termination, settlement, and data-set deletion to be batched in a single transaction ([#506](https://github.com/FilOzone/filecoin-services/pull/506)).
 - Renamed payer validation language from "minimum" to "required" to reflect the new pricing model ([#498](https://github.com/FilOzone/filecoin-services/pull/498)).
 
-### Upgrade Notes
-- Existing FWSS proxy integrations continue using the same proxy addresses.
-- Do not merge `service_contracts/deployments.json` updates for this release until the live Calibnet and Mainnet FWSS proxy implementation slots match the new implementation addresses.
-- Integrations that call removed pricing helpers or consume removed pricing/CDN events must update before relying on this release.
-- Use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. The old mutable owner-pricing API is no longer available.
-- Payers can call `topUpLifecycleReserve(dataSetId, amount)` before termination if they expect many wind-down operations after the PDP rail has terminated.
-
 ### Fixed
+- Fixed abandonment cleanup for activated data sets so `PDPVerifier.deleteDataSet` can complete final settlement after terminating rails, and cleared proving-period storage during data-set deletion ([#512](https://github.com/FilOzone/filecoin-services/pull/512)).
 - Removed the `addPieces` `extraData` byte cap while preserving dedicated metadata limits for operations that parse signed payloads ([#499](https://github.com/FilOzone/filecoin-services/pull/499)).
 - Updated warm-storage deployment scripts for current constructor arguments ([#472](https://github.com/FilOzone/filecoin-services/pull/472)).
 - Added deployment checksum validation and sync documentation to reduce release drift ([#464](https://github.com/FilOzone/filecoin-services/pull/464), [#489](https://github.com/FilOzone/filecoin-services/pull/489)).
+
+### Upgrade Notes
+- Existing FWSS proxy integrations continue using the same proxy addresses.
+- Integrations that call removed pricing helpers or consume removed pricing/CDN events must update before relying on this release.
+- Use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. The old mutable owner-pricing API is no longer available.
+- Payers can call `topUpLifecycleReserve(dataSetId, amount)` before termination if they expect many wind-down operations after the PDP rail has terminated.
 
 ## [1.2.1] - 2026-05-28 - FWSS Hotfix
 
