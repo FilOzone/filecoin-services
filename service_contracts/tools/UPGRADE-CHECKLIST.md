@@ -309,6 +309,7 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Finalize and merge changelog/deployments PR(s)
 - [ ] Tag release: `git tag {{RELEASE_VERSION}} && git push origin {{RELEASE_VERSION}}`
 - [ ] Create GitHub Release with changelog
+- [ ] Run the [Update Synapse SDK](https://github.com/FilOzone/filecoin-services/actions/workflows/notify-synapse-sdk.yml) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Create "Upgrade Synapse to use newest contracts" issue
 - [ ] Capture lessons learned from this rollout and update [`service_contracts/tools/UPGRADE-CHECKLIST.md`]({{CHECKLIST_LINK}}) if the process should change
