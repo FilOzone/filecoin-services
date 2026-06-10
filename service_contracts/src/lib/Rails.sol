@@ -167,11 +167,9 @@ library Rails {
     }
 
     /// @notice Tears down all rails for an abandoned data set.
-    /// @dev SP forfeits pending op-fees; lifecycle reserve and streaming buffer return to the
-    ///      payer. Intentional: abandonment means the SP walked away.
-    ///      PDP rail flow: settle to pay any proven epochs and advance settledUpTo; zero the
-    ///      lockup to release buffer+reserve to the payer; terminate (endEpoch = block.number
-    ///      since period is 0); settle again so settledUpTo >= endEpoch finalises the rail.
+    /// @dev SP forfeits pending op-fees; lifecycle reserve returns to the payer.
+    ///      For well-funded payers the rail is terminated with no lockup period.
+    ///      For underfunded payers the PDP rail remains for DEFAULT_LOCKUP_PERIOD.
     ///      CDN rails are best-effort, may have been terminated externally.
     function abandonRails(
         FilecoinPayV1 payments,
@@ -182,7 +180,14 @@ library Rails {
         uint256 cdnRailId
     ) public {
         payments.settleRail(pdpRailId, block.number);
-        payments.modifyRailLockup(pdpRailId, 0, 0);
+
+        // Try to zero the lockup period before termination.
+        // For underfunded payers the period change will fail.
+        bool reserveRemaining = false;
+        try payments.modifyRailLockup(pdpRailId, 0, 0) {}
+        catch {
+            reserveRemaining = true;
+        }
 
         if (cdnRailId != 0) {
             _teardownCDNRail(payments, cacheMissRailId);
@@ -190,10 +195,14 @@ library Rails {
             emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
         }
 
-        // clearing this allows settling up to block.number
+        // clearing this allows settling remaining epochs with zero payment
         delete provingActivationEpoch[dataSetId];
 
         payments.terminateRail(pdpRailId);
+        if (reserveRemaining) {
+            // release the fixed reserve
+            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, 0);
+        }
         payments.settleRail(pdpRailId, block.number);
         emit DataSetAbandoned(dataSetId, pdpRailId, cacheMissRailId, cdnRailId);
     }
@@ -286,7 +295,13 @@ library Rails {
     ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
         if (immediateTermination) {
-            payments.modifyRailLockup(pdpRailId, 0, pending);
+            // Try to zero the lockup period (requires a fully-settled account).
+            // For underfunded payers the period change is blocked.
+            try payments.modifyRailLockup(pdpRailId, 0, pending) {}
+            catch {
+                // Always release the fixed lockup
+                payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, pending);
+            }
             newReserveBalance = 0;
         } else {
             newReserveBalance =
