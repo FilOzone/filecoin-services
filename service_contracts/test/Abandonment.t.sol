@@ -462,6 +462,19 @@ contract AbandonmentTest is MockFVMTest {
         vm.roll(vm.getBlockNumber() + 1);
     }
 
+    // Helper: top up a payer by epochs * rail.paymentRate, roll forward epochs blocks, then settle.
+    // Advances lockupLastSettledAt by ~epochs without leaving the account overfunded.
+    function _topUpAndSettle(address payer, uint256 railId, uint256 epochs) internal {
+        uint256 topUp = payments.getRail(railId).paymentRate * epochs;
+        require(usdfc.transfer(payer, topUp));
+        vm.startPrank(payer);
+        usdfc.approve(address(payments), topUp);
+        payments.deposit(usdfc, payer, topUp);
+        vm.stopPrank();
+        vm.roll(vm.getBlockNumber() + epochs);
+        payments.settleRail(railId, block.number);
+    }
+
     // An underfunded payer's dataset must be abandonable
     function testAbandonment_underfundedPayer() public {
         uint256 dataSetId = _createUnderfundedDataSet(address(0xdead1), 1);
@@ -477,6 +490,25 @@ contract AbandonmentTest is MockFVMTest {
         _assertDataSetCleared(dataSetId);
         vm.expectRevert();
         payments.getRail(before.pdpRailId);
+    }
+
+    // Inactive rail with some epochs settled
+    function testAbandonment_underfundedPayer_lockupFixedReleased() public {
+        address payer = address(0xdead3);
+        uint256 dataSetId = _createUnderfundedDataSet(payer, 3);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        uint256 pdpRailId = before.pdpRailId;
+
+        _topUpAndSettle(payer, pdpRailId, 1);
+
+        vm.roll(vm.getBlockNumber() + (PDP_INACTIVITY_WINDOW - 1));
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lifecycle reserve should be zero after abandonment");
     }
 
     // An underfunded payer's consent-termination (terminateService with signature) must succeed.
