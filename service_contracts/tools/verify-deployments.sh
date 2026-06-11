@@ -60,25 +60,10 @@ load_deployment_addresses "$CHAIN"
 # Outputs the linked hex without 0x.
 _link_bytecode() {
     local hex="$1" artifact="$2" libs_json="$3"
-    python3 - "$hex" "$(jq -c '.bytecode.linkReferences' "$artifact")" "$libs_json" <<'PYEOF'
-import sys, json
-hex_str = sys.argv[1]
-link_refs = json.loads(sys.argv[2])
-libs = json.loads(sys.argv[3])
-chars = list(hex_str)
-for sol_file, contracts in link_refs.items():
-    for name, positions in contracts.items():
-        key = f"{sol_file}:{name}"
-        addr = libs.get(key)
-        if addr is None:
-            print(f"missing library address for {key}", file=sys.stderr)
-            sys.exit(1)
-        addr_hex = addr.lower().removeprefix('0x').zfill(40)
-        for pos in positions:
-            start = pos['start'] * 2
-            chars[start:start+40] = list(addr_hex)
-print(''.join(chars), end='')
-PYEOF
+    python3 "$SCRIPT_DIR/bytecode.py" link \
+        "$hex" \
+        "$(jq -c '.bytecode.linkReferences' "$artifact")" \
+        "$libs_json"
 }
 
 # ABI-encodes constructor arguments using types derived from the artifact ABI.
@@ -121,6 +106,19 @@ _strip_cbor() {
     printf '%s' "${hex:0:$(( len - strip ))}"
 }
 
+# Reads all immutable values from a deployed contract's on-chain bytecode.
+# Outputs a JSON object mapping immutable name/ID to its 32-byte hex value
+# (no 0x, lowercase), using the first occurrence of each immutable.
+# Args: $1=artifact_path, $2=deployed_address (0x-prefixed)
+read_deployment_immutables() {
+    local artifact="$1" address="$2"
+    local onchain
+    onchain=$(cast code "$address" | tr '[:upper:]' '[:lower:]' | sed 's/^0x//')
+    python3 "$SCRIPT_DIR/bytecode.py" read-imm \
+        "$onchain" \
+        "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")"
+}
+
 # Patches the compiler-generated library_deploy_address immutable in a
 # simulated bytecode hex string (no 0x) with the actual deployed address.
 # The Solidity IR codegen stores address(this) as an immutable for all library
@@ -130,21 +128,10 @@ _strip_cbor() {
 # Args: $1=hex (no 0x), $2=artifact_path, $3=deployed_address (0x-prefixed)
 _patch_library_deploy_address() {
     local hex="$1" artifact="$2" deployed_addr="$3"
-    python3 - "$hex" "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")" "$deployed_addr" <<'PYEOF'
-import sys, json
-hex_str = sys.argv[1]
-imm_refs = json.loads(sys.argv[2])
-if 'library_deploy_address' not in imm_refs:
-    print(hex_str, end='')
-    sys.exit(0)
-addr = sys.argv[3].lower().removeprefix('0x').zfill(64)
-chars = list(hex_str)
-for pos in imm_refs['library_deploy_address']:
-    start = pos['start'] * 2
-    length = pos['length'] * 2
-    chars[start:start+length] = list(addr.zfill(length))
-print(''.join(chars), end='')
-PYEOF
+    python3 "$SCRIPT_DIR/bytecode.py" patch-lib \
+        "$hex" \
+        "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")" \
+        "$deployed_addr"
 }
 
 # ---------------------------------------------------------------------------
@@ -185,7 +172,10 @@ _verify_contract() {
     simulated=$(_run_constructor "${linked_hex}${encoded_args}")
     simulated=$(_patch_library_deploy_address "$simulated" "$artifact_path" "$address")
 
-    if [ "$(_strip_cbor "$simulated")" = "$(_strip_cbor "${onchain#0x}")" ]; then
+    local simulated_lc onchain_lc
+    simulated_lc=$(printf '%s' "$simulated" | tr '[:upper:]' '[:lower:]')
+    onchain_lc=$(printf '%s' "${onchain#0x}" | tr '[:upper:]' '[:lower:]')
+    if [ "$(_strip_cbor "$simulated_lc")" = "$(_strip_cbor "$onchain_lc")" ]; then
         echo "OK"
         return 0
     else
@@ -244,12 +234,15 @@ else
             "$DEPLOYMENTS_JSON_PATH" 2>/dev/null \
             | tr '\n' ',' | sed 's/,$//')
 
-        mapfile -t stored_args < <(jq -r \
+        stored_args=()
+        while IFS= read -r arg; do
+            stored_args+=("$arg")
+        done < <(jq -r \
             ".[\"$CHAIN\"].contracts[\"$contract_key\"].constructor_args[]?" \
             "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
 
         _verify_contract "$contract_key" "$address" "$artifact_contract" \
-            "$libraries_str" "${stored_args[@]}" \
+            "$libraries_str" "${stored_args[@]+"${stored_args[@]}"}" \
             || failures=$((failures + 1))
     done < <(jq -r ".[\"$CHAIN\"].contracts | keys[]?" "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
 

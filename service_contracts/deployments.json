@@ -57,6 +57,12 @@
         "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
         "libraries": {},
         "constructor_args": []
+      },
+      "RAILS_LIB": {
+        "initcode_hash": "0x1aec17865b908cd2b8dcc9cbf0f5a7e2014ce5748e6ad1d08672c7213efd68e9",
+        "artifact_contract": "src/lib/Rails.sol:Rails",
+        "libraries": {},
+        "constructor_args": []
       }
     }
   }
