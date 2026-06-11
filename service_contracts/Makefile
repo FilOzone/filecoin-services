@@ -166,7 +166,7 @@ update-abi: | abi
 		jq '.abi' "$$artifact" > "abi/$$contract.abi.json"; \
 	done
 	@set -e; find out -type f -name '*.json' | sort | while IFS= read -r artifact; do \
-		library_name=$$(jq -r 'select((.abi // []) | length > 0) | ((.metadata.settings.compilationTarget // {}) | to_entries[0] // empty) | select(.key | startswith("$(LIBRARY_ABI_SOURCE_PREFIX)")) | .value' "$$artifact"); \
+		library_name=$$(jq -r 'def artifact_metadata: if (.metadata | type) == "string" then (.metadata | try fromjson catch {}) else (.metadata // {}) end; select((.abi // []) | length > 0) | ((artifact_metadata.settings.compilationTarget // {}) | to_entries[0] // empty) | select(.key | startswith("$(LIBRARY_ABI_SOURCE_PREFIX)")) | .value' "$$artifact"); \
 		if [ -n "$$library_name" ]; then \
 			echo "Extracting ABI for $$library_name..."; \
 			jq '.abi' "$$artifact" > "abi/$$library_name.abi.json"; \
