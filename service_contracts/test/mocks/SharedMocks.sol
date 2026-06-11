@@ -8,9 +8,9 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
-    string private _name = "USD Filecoin";
-    string private _symbol = "USDFC";
-    uint8 private _decimals = 18;
+    string internal _name = "USD Filecoin";
+    string internal _symbol = "USDFC";
+    uint8 internal _decimals = 18;
 
     mapping(address => uint256) private _balances;
     mapping(address => mapping(address => uint256)) private _allowances;
@@ -90,6 +90,17 @@ contract MockERC20 is IERC20, IERC20Metadata {
 
         _allowances[owner][spender] = amount;
         emit Approval(owner, spender, amount);
+    }
+}
+
+// Mock implementation of a bridged USDC token (axlUSDC) with 6 decimals.
+// The parent constructor mints 1M * 10**18 base units to the deployer — far more than 1M
+// "dollars" at 6 decimals, which is harmless for tests (deployer simply holds a large supply).
+contract MockUSDC is MockERC20 {
+    constructor() {
+        _name = "Axelar Wrapped USDC";
+        _symbol = "axlUSDC";
+        _decimals = 6;
     }
 }
 
@@ -219,9 +230,8 @@ contract MockPDPVerifier {
 
         // Call the listener's storageProviderChanged function
         if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).storageProviderChanged(
-                dataSetId, oldServiceProvider, newServiceProvider, extraData
-            );
+            PDPListener(listenerAddr)
+                .storageProviderChanged(dataSetId, oldServiceProvider, newServiceProvider, extraData);
         }
 
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);

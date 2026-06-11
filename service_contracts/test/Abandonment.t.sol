@@ -102,6 +102,8 @@ contract AbandonmentTest is MockFVMTest {
             address(pdpVerifier),
             address(payments),
             usdfc,
+            MockERC20(address(0)), // USDC disabled
+            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,

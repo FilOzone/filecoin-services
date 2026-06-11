@@ -70,7 +70,9 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
-# Set network-specific USDFC token address based on chain ID
+# Set network-specific token addresses based on chain ID. The bridged USDC (6 decimals) is
+# optional: the zero address disables USDC data sets.
+ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 case "$CHAIN" in
   "31415926")
     # Devnet requires explicit USDFC_TOKEN_ADDRESS (mock token)
@@ -79,12 +81,18 @@ case "$CHAIN" in
       echo "Please set USDFC_TOKEN_ADDRESS to your deployed MockUSDFC address"
       exit 1
     fi
+    # USDC optional on devnet (deploy a 6-decimal mock and set USDC_TOKEN_ADDRESS to enable)
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
     ;;
   "314159")
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0}" # calibnet
+    # No canonical axlUSDC on calibration; Axelar's testnet aUSDC (6 decimals) is
+    # 0xCb7996d51Ff923b2C6076d42C065a6ca000D32A1 — set USDC_TOKEN_ADDRESS explicitly to enable.
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
     ;;
   "314")
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0x80B98d3aa09ffff255c3ba4A241111Ff1262F045}" # mainnet
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-0xEB466342C4d449BC9f53A865D5Cb90586f405215}" # mainnet axlUSDC
     ;;
   *)
     echo "Error: Unsupported network"
@@ -107,6 +115,18 @@ deploy_implementation_if_needed \
     "src/lib/Rails.sol:Rails" \
     "Rails"
 
+# The ValueAccrualRouter receives the USDC-rail commission (network value-accrual fee), sells
+# it for FIL via Dutch auction, and burns the FIL. Required whenever USDC is enabled.
+if [ "$USDC_TOKEN_ADDRESS" != "$ZERO_ADDRESS" ]; then
+    deploy_implementation_if_needed \
+        "VALUE_ACCRUAL_ROUTER_ADDRESS" \
+        "src/ValueAccrualRouter.sol:ValueAccrualRouter" \
+        "ValueAccrualRouter" \
+        "filecoin_pay=$FILECOIN_PAY_ADDRESS"
+else
+    VALUE_ACCRUAL_ROUTER_ADDRESS="$ZERO_ADDRESS"
+fi
+
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
     FWSS_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS)
 else
@@ -120,6 +140,8 @@ deploy_implementation_if_needed \
     "pdp_verifier=$PDP_VERIFIER_PROXY_ADDRESS" \
     "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
     "usdfc_token=$USDFC_TOKEN_ADDRESS" \
+    "usdc_token=$USDC_TOKEN_ADDRESS" \
+    "value_accrual_router=$VALUE_ACCRUAL_ROUTER_ADDRESS" \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
@@ -130,6 +152,7 @@ echo ""
 echo "# DEPLOYMENT COMPLETE"
 echo "SignatureVerificationLib: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 echo "Rails: $RAILS_LIB_ADDRESS"
+echo "ValueAccrualRouter: $VALUE_ACCRUAL_ROUTER_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo ""
 
@@ -145,10 +168,10 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
   verify_contracts_batch \
     "$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
     "$RAILS_LIB_ADDRESS,src/lib/Rails.sol:Rails" \
-    "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+    "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
+    "$VALUE_ACCRUAL_ROUTER_ADDRESS,src/ValueAccrualRouter.sol:ValueAccrualRouter"
   popd >/dev/null
 else
   echo
   echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi
-

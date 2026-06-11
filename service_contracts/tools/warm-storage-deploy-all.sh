@@ -69,6 +69,7 @@ case "$CHAIN" in
     NETWORK_NAME="mainnet"
     # Network-specific addresses for mainnet
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0x80B98d3aa09ffff255c3ba4A241111Ff1262F045}"
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-0xEB466342C4d449BC9f53A865D5Cb90586f405215}" # axlUSDC
     # Default challenge and proving configuration for mainnet (production values)
     DEFAULT_CHALLENGE_FINALITY="150"         # Production security value
     DEFAULT_MAX_PROVING_PERIOD="2880"        # 2880 epochs on mainnet
@@ -380,6 +381,20 @@ deploy_implementation_if_needed \
     "src/lib/Rails.sol:Rails" \
     "Rails"
 
+# Step 7b: Deploy or use existing ValueAccrualRouter (only when USDC is enabled).
+# Receives the USDC-rail commission, sells it for FIL via Dutch auction, burns the FIL.
+ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
+USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
+if [ "$USDC_TOKEN_ADDRESS" != "$ZERO_ADDRESS" ]; then
+    deploy_implementation_if_needed \
+        "VALUE_ACCRUAL_ROUTER_ADDRESS" \
+        "src/ValueAccrualRouter.sol:ValueAccrualRouter" \
+        "ValueAccrualRouter" \
+        "$FILECOIN_PAY_ADDRESS"
+else
+    VALUE_ACCRUAL_ROUTER_ADDRESS="$ZERO_ADDRESS"
+fi
+
 # Step 8: Deploy or use existing FilecoinWarmStorageService implementation
 # Set LIBRARIES variable for the deployment helper (comma-separated path:name:address)
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
@@ -395,6 +410,8 @@ deploy_implementation_if_needed \
     "pdp_verifier=$PDP_VERIFIER_PROXY_ADDRESS" \
     "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
     "usdfc_token=$USDFC_TOKEN_ADDRESS" \
+    "usdc_token=$USDC_TOKEN_ADDRESS" \
+    "value_accrual_router=$VALUE_ACCRUAL_ROUTER_ADDRESS" \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
