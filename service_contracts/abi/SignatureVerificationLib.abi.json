@@ -1,0 +1,307 @@
+[
+  {
+    "type": "function",
+    "name": "addPiecesStructHash",
+    "inputs": [
+      {
+        "name": "clientDataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nonce",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceDataArray",
+        "type": "tuple[]",
+        "internalType": "struct Cids.Cid[]",
+        "components": [
+          {
+            "name": "data",
+            "type": "bytes",
+            "internalType": "bytes"
+          }
+        ]
+      },
+      {
+        "name": "allKeys",
+        "type": "string[][]",
+        "internalType": "string[][]"
+      },
+      {
+        "name": "allValues",
+        "type": "string[][]",
+        "internalType": "string[][]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "structHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "createDataSetStructHash",
+    "inputs": [
+      {
+        "name": "clientDataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "payee",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "keys",
+        "type": "string[]",
+        "internalType": "string[]"
+      },
+      {
+        "name": "values",
+        "type": "string[]",
+        "internalType": "string[]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "structHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "hashAllPieceMetadata",
+    "inputs": [
+      {
+        "name": "allKeys",
+        "type": "string[][]",
+        "internalType": "string[][]"
+      },
+      {
+        "name": "allValues",
+        "type": "string[][]",
+        "internalType": "string[][]"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "recoverSigner",
+    "inputs": [
+      {
+        "name": "messageHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "verifyAddPiecesSignature",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionKeyRegistry",
+        "type": "SessionKeyRegistry",
+        "internalType": "contract SessionKeyRegistry"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifyCreateDataSetSignature",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionKeyRegistry",
+        "type": "SessionKeyRegistry",
+        "internalType": "contract SessionKeyRegistry"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifySchedulePieceRemovalsSignature",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionKeyRegistry",
+        "type": "SessionKeyRegistry",
+        "internalType": "contract SessionKeyRegistry"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "verifyTerminateServiceSignature",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "sessionKeyRegistry",
+        "type": "SessionKeyRegistry",
+        "internalType": "contract SessionKeyRegistry"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "recoveredSigner",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignature",
+    "inputs": [
+      {
+        "name": "expected",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "actual",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidSignatureLength",
+    "inputs": [
+      {
+        "name": "expectedLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "actualLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "MetadataKeyAndValueLengthMismatch",
+    "inputs": [
+      {
+        "name": "keysLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "valuesLength",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedSignatureV",
+    "inputs": [
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  }
+]

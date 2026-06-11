@@ -165,15 +165,15 @@ The project maintains checked-in ABI files in the `abi/` directory for use by sc
 make update-abi
 ```
 
-This extracts the ABIs from the compiled contracts and saves them as JSON files:
+This extracts the explicit contract ABIs and any non-empty first-party library ABIs from `src/lib/`, including:
 - `abi/FilecoinWarmStorageService.abi.json` - Main service contract ABI
+- `abi/Rails.abi.json` - Library-emitted FWSS proxy events
+- `abi/SignatureVerificationLib.abi.json` - Public signature helper library ABI
 - `abi/FilecoinWarmStorageServiceStateView.abi.json` - View contract ABI
 
 These ABIs are used by the code generation scripts in the `gen` target and should be updated whenever contract interfaces change.
-
-Note: `SignatureVerificationLib.sol` is an external library (public functions); if you rely on its ABI for external tooling or verification,
-you may also extract the library ABI via `make update-abi` after compilation. The primary consumer is the service implementation which
-is linked at deploy time by the scripts in `tools/`.
+Consumers that subscribe to FWSS events should include both `FilecoinWarmStorageService.abi.json` and `Rails.abi.json`, because `Rails`
+library events are emitted by the FWSS proxy at runtime.
 
 ### Dependencies
 

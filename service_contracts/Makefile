@@ -135,10 +135,10 @@ check-layout:
 
 # ABI Management
 
-# Core contracts we publish ABIs for
+# Core contracts we publish ABIs for explicitly. Non-empty first-party
+# library ABIs under src/lib are discovered from Foundry artifacts.
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
-	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
 	FilecoinPayV1 \
 	PDPVerifier \
@@ -148,25 +148,7 @@ ABI_CONTRACTS := \
 	SessionKeyRegistry \
 	Errors
 
-# Generate ABI file targets
-ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
-
-# Define a template for ABI extraction; we use a template approach instead of
-# defining a global pattern rule because patterns for files that don't exist
-# at parse-time will be rejected by make, so we'll be explicit instead.
-define ABI_RULE
-abi/$(1).abi.json: out/$(1).sol/$(1).json | abi
-	@echo "Extracting ABI for $(1)..."
-	@jq '.abi' $$< > $$@
-
-# Mark JSON as coming from build (unless it's the library which has its own rule)
-ifneq ($(1),FilecoinWarmStorageServiceStateLibrary)
-out/$(1).sol/$(1).json: | build
-endif
-endef
-
-# Generate rules for each contract using the template above
-$(foreach contract,$(ABI_CONTRACTS),$(eval $(call ABI_RULE,$(contract))))
+LIBRARY_ABI_SOURCE_PREFIX := src/lib/
 
 # Directory for ABIs
 abi:
@@ -174,7 +156,22 @@ abi:
 
 # Update ABIs
 .PHONY: update-abi
-update-abi: $(ABI_FILES)
+update-abi: | abi
+	forge clean
+	forge build --via-ir
+	@rm -f abi/*.abi.json
+	@set -e; for contract in $(ABI_CONTRACTS); do \
+		artifact="out/$$contract.sol/$$contract.json"; \
+		echo "Extracting ABI for $$contract..."; \
+		jq '.abi' "$$artifact" > "abi/$$contract.abi.json"; \
+	done
+	@set -e; find out -type f -name '*.json' | sort | while IFS= read -r artifact; do \
+		library_name=$$(jq -r 'select((.abi // []) | length > 0) | ((.metadata.settings.compilationTarget // {}) | to_entries[0] // empty) | select(.key | startswith("$(LIBRARY_ABI_SOURCE_PREFIX)")) | .value' "$$artifact"); \
+		if [ -n "$$library_name" ]; then \
+			echo "Extracting ABI for $$library_name..."; \
+			jq '.abi' "$$artifact" > "abi/$$library_name.abi.json"; \
+		fi; \
+	done
 
 # Clean just the ABIs
 .PHONY: clean-abi
@@ -206,7 +203,7 @@ help:
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "ABI management targets:"
-	@echo "  update-abi - Update checked-in ABIs in abi/ directory (incremental)"
+	@echo "  update-abi - Update checked-in ABIs in abi/ directory from a clean build"
 	@echo "  clean-abi  - Remove all ABI files"
 	@echo ""
 	@echo "Full cleanup:"
