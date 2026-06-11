@@ -28,3 +28,6 @@ bytes32 constant NEXT_UPGRADE_SLOT = bytes32(uint256(19));
 bytes32 constant DEPRECATED_STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT = bytes32(uint256(20));
 bytes32 constant DEPRECATED_MINIMUM_STORAGE_RATE_PER_MONTH_SLOT = bytes32(uint256(21));
 bytes32 constant SCHEDULED_PIECE_METADATA_REMOVALS_SLOT = bytes32(uint256(22));
+bytes32 constant DATA_SET_PAYMENT_TOKEN_SLOT = bytes32(uint256(23));
+bytes32 constant USDC_COMMISSION_BPS_SLOT = bytes32(uint256(24));
+

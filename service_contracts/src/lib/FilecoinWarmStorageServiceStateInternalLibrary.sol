@@ -7,15 +7,14 @@ pragma solidity ^0.8.20;
 
 import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
-import {
-    CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
-} from "../FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     priceList
 } from "./PriceListUSDFC.sol";
+import {priceListUSDC} from "./PriceListUSDC.sol";
 import {PriceList} from "./PriceList.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
@@ -231,12 +230,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (bool)
     {
         return uint256(
-            service.extsload(
+                service.extsload(
                 keccak256(
-                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
-                )
+                abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
             )
-        ) & (1 << (periodId & 255)) != 0;
+            )
+            ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
@@ -642,5 +641,41 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     function getPriceList(FilecoinWarmStorageService service) internal view returns (PriceList memory list) {
         list = priceList();
         list.token = IERC20(address(service.usdfcTokenAddress()));
+    }
+
+    /**
+     * @notice Get the USDC price catalogue for this FWSS deployment.
+     * @dev Same shape as `getPriceList()` but for USDC-denominated data sets (6-decimal amounts,
+     *      grossed up for the network value-accrual fee). The `token` field is populated from
+     *      the FWSS proxy's `usdcTokenAddress` immutable; the zero address means USDC support is
+     *      disabled for this deployment.
+     */
+    function getPriceListUSDC(FilecoinWarmStorageService service) internal view returns (PriceList memory list) {
+        list = priceListUSDC();
+        list.token = IERC20(address(service.usdcTokenAddress()));
+    }
+
+    /**
+     * @notice The rail token of a data set.
+     * @dev Data sets created before multi-token support resolve to USDFC.
+     */
+    function getDataSetPaymentToken(FilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (IERC20 token)
+    {
+        bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_PAYMENT_TOKEN_SLOT));
+        token = IERC20(address(uint160(uint256(service.extsload(slot)))));
+        if (address(token) == address(0)) {
+            token = IERC20(address(service.usdfcTokenAddress()));
+        }
+    }
+
+    /**
+     * @notice The network value-accrual fee (NVAF) in basis points locked into the rails of new
+     *         USDC data sets. Existing rails keep the commission they were created with.
+     */
+    function getUSDCCommissionBps(FilecoinWarmStorageService service) internal view returns (uint256) {
+        return uint256(service.extsload(StorageLayout.USDC_COMMISSION_BPS_SLOT));
     }
 }

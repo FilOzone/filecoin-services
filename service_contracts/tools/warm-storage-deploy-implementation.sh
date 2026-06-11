@@ -69,7 +69,10 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
-# Set network-specific USDFC token address based on chain ID
+ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
+
+# Set network-specific USDFC and USDC token addresses based on chain ID.
+# USDC (bridged axlUSDC) is optional: the zero address disables USDC data sets.
 case "$CHAIN" in
   "31415926")
     # Devnet requires explicit USDFC_TOKEN_ADDRESS (mock token)
@@ -78,12 +81,18 @@ case "$CHAIN" in
       echo "Please set USDFC_TOKEN_ADDRESS to your deployed MockUSDFC address"
       exit 1
     fi
+    # USDC optional on devnet (deploy a 6-decimal mock and set USDC_TOKEN_ADDRESS to enable)
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
     ;;
   "314159")
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0}" # calibnet
+    # No canonical axlUSDC on calibration; Axelar's testnet aUSDC (6 decimals) is
+    # 0xCb7996d51Ff923b2C6076d42C065a6ca000D32A1 — set USDC_TOKEN_ADDRESS explicitly to enable.
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
     ;;
   "314")
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0x80B98d3aa09ffff255c3ba4A241111Ff1262F045}" # mainnet
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-0xEB466342C4d449BC9f53A865D5Cb90586f405215}" # mainnet axlUSDC
     ;;
   *)
     echo "Error: Unsupported network"
@@ -129,12 +138,36 @@ else
   echo "Using Rails at: $RAILS_LIB_ADDRESS"
 fi
 
+# The ValueAccrualRouter receives the USDC-rail commission (network value-accrual fee), sells
+# it for FIL via Dutch auction, and burns the FIL. Required whenever USDC is enabled.
+VALUE_ACCRUAL_ROUTER_DEPLOYED=false
+if [ "$USDC_TOKEN_ADDRESS" != "$ZERO_ADDRESS" ]; then
+  if [ -z "$VALUE_ACCRUAL_ROUTER_ADDRESS" ]; then
+    echo "Deploying ValueAccrualRouter..."
+    export VALUE_ACCRUAL_ROUTER_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ValueAccrualRouter.sol:ValueAccrualRouter --constructor-args $FILECOIN_PAY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+
+    if [ -z "$VALUE_ACCRUAL_ROUTER_ADDRESS" ]; then
+      echo "Error: Failed to deploy ValueAccrualRouter"
+      exit 1
+    fi
+    echo "ValueAccrualRouter deployed at: $VALUE_ACCRUAL_ROUTER_ADDRESS"
+    VALUE_ACCRUAL_ROUTER_DEPLOYED=true
+    NONCE=$((NONCE + 1))
+  else
+    echo "Using ValueAccrualRouter at: $VALUE_ACCRUAL_ROUTER_ADDRESS"
+  fi
+else
+  VALUE_ACCRUAL_ROUTER_ADDRESS="$ZERO_ADDRESS"
+fi
+
 echo ""
 echo "Deploying FilecoinWarmStorageService implementation..."
 echo "Constructor arguments:"
 echo "  PDPVerifier: $PDP_VERIFIER_PROXY_ADDRESS"
 echo "  FilecoinPayV1: $FILECOIN_PAY_ADDRESS"
 echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
+echo "  USDC Token: $USDC_TOKEN_ADDRESS"
+echo "  ValueAccrualRouter: $VALUE_ACCRUAL_ROUTER_ADDRESS"
 echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
 echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
@@ -149,7 +182,7 @@ FWSS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --
   --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
   --libraries "src/lib/Rails.sol:Rails:$RAILS_LIB_ADDRESS" \
   src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService \
-  --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
+  --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $USDC_TOKEN_ADDRESS $VALUE_ACCRUAL_ROUTER_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
 
 if [ -z "$FWSS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
@@ -170,6 +203,9 @@ if [ "$SIGNATURE_LIB_DEPLOYED" = "true" ]; then
 fi
 if [ "$RAILS_LIB_DEPLOYED" = "true" ]; then
   update_deployment_address "$CHAIN" "RAILS_LIB_ADDRESS" "$RAILS_LIB_ADDRESS"
+fi
+if [ "$VALUE_ACCRUAL_ROUTER_DEPLOYED" = "true" ]; then
+  update_deployment_address "$CHAIN" "VALUE_ACCRUAL_ROUTER_ADDRESS" "$VALUE_ACCRUAL_ROUTER_ADDRESS"
 fi
 update_deployment_metadata "$CHAIN"
 

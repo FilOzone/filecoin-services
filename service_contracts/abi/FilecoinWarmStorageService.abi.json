@@ -18,6 +18,16 @@
         "internalType": "contract IERC20Metadata"
       },
       {
+        "name": "_usdc",
+        "type": "address",
+        "internalType": "contract IERC20Metadata"
+      },
+      {
+        "name": "_valueAccrualRouter",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
         "name": "_filBeamBeneficiaryAddress",
         "type": "address",
         "internalType": "address"
@@ -642,6 +652,19 @@
   },
   {
     "type": "function",
+    "name": "setUSDCCommissionBps",
+    "inputs": [
+      {
+        "name": "newCommissionBps",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "setViewContract",
     "inputs": [
       {
@@ -835,6 +858,19 @@
   },
   {
     "type": "function",
+    "name": "usdcTokenAddress",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "contract IERC20Metadata"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "usdfcTokenAddress",
     "inputs": [],
     "outputs": [
@@ -898,6 +934,19 @@
             "internalType": "string"
           }
         ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "valueAccrualRouter",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1185,6 +1234,31 @@
   },
   {
     "type": "event",
+    "name": "PaymentTokenSelected",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": false,
+        "internalType": "contract IERC20"
+      },
+      {
+        "name": "commissionBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PieceAdded",
     "inputs": [
       {
@@ -1283,6 +1357,25 @@
       },
       {
         "name": "cdnRailId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "USDCCommissionBpsUpdated",
+    "inputs": [
+      {
+        "name": "oldCommissionBps",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "newCommissionBps",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1463,6 +1556,27 @@
     "inputs": [
       {
         "name": "clientDataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "CommissionExceedsMaximum",
+    "inputs": [
+      {
+        "name": "commissionType",
+        "type": "uint8",
+        "internalType": "enum Errors.CommissionType"
+      },
+      {
+        "name": "max",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "actual",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -2078,6 +2192,17 @@
         "name": "slot",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownRailToken",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },

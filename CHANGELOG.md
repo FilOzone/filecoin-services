@@ -3,6 +3,54 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [1.4.0] - Unreleased - Multi-token payments (axlUSDC) + network value-accrual fee
+
+This FWSS contract upgrade adds bridged USDC (axlUSDC, 6 decimals) as a second payment token and
+introduces a network value-accrual fee (NVAF) on USDC rails: a small operator commission, routed to a
+new ValueAccrualRouter contract, sold for FIL by recurring Dutch auction, and burned to the burn actor
+(f099). USDFC data sets are unchanged and remain commission-free.
+
+### Added
+- Per-data-set payment token selection via the payer-signed `paymentToken` metadata key (`"USDC"` or
+  `"USDFC"`; absent means USDFC). The choice is covered by the existing `CreateDataSet` EIP-712
+  signature — no signature-format changes.
+- `PriceListUSDC` (6-decimal price catalogue) with SP-bound amounts grossed up by 1/(1 − 2%) so the SP
+  nets the USDFC-equivalent after the NVAF; exposed via
+  `FilecoinWarmStorageServiceStateView.getPriceListUSDC()`. The per-dataset fee is set at the 6-decimal
+  per-epoch quantization floor (`0.0864 USDC/month`).
+- NVAF on USDC rails as the FilecoinPay per-rail operator commission (default 200 bps), locked into the
+  rails of each USDC data set at creation with the `ValueAccrualRouter` as `serviceFeeRecipient`.
+  Owner-stageable for future data sets via `setUSDCCommissionBps` (capped at 200 bps — the cap
+  equals the price gross-up so the SP-parity guarantee holds for every permitted setting), with
+  the `USDCCommissionBpsUpdated` event and `getUSDCCommissionBps()` view.
+- `ValueAccrualRouter`: permissionless, ownerless terminal sink for the NVAF. Collects accrued
+  commission from FilecoinPay and sells it for native FIL through the same recurring Dutch-auction
+  mechanism as FilecoinPay's `burnForFees`; the buyer's FIL is burned via the burn actor. New
+  `CommissionCollected` and `CommissionBurned` events.
+- `PaymentTokenSelected` event at data set creation, and
+  `FilecoinWarmStorageServiceStateView.getDataSetPaymentToken(dataSetId)` (pre-upgrade data sets
+  resolve to USDFC).
+
+### Changed
+- `FilecoinWarmStorageService` constructor takes two new parameters after the USDFC token: the USDC
+  token address (zero address disables USDC data sets) and the `ValueAccrualRouter` address (required
+  when USDC is configured).
+- `Rails.createRails` resolves per-token pricing and now also returns the creation fee and lifecycle
+  reserve target; `Rails` gained `priceListFor`, `resolvePaymentToken`, `oneTimeFees`, and
+  `replenishReserve` entry points. Token-independent size/time constants moved from `PriceListUSDFC`
+  to `PriceList` (re-exported for compatibility).
+- Deployment scripts deploy the `ValueAccrualRouter` and pass the new constructor arguments; mainnet
+  defaults the USDC token to axlUSDC (`0xEB466342C4d449BC9f53A865D5Cb90586f405215`), calibration
+  defaults to disabled.
+
+### Upgrade Notes
+- Storage layout is append-only (two new slots); existing data sets are unaffected and continue to
+  resolve as USDFC for all fee paths.
+- Payers funding USDC data sets must deposit USDC into FilecoinPay and approve FWSS as operator for
+  the USDC token (operator approvals are token-scoped).
+- The NVAF applies only to rails created after the upgrade; FilecoinPay fixes a rail's commission at
+  creation.
+
 ## [1.3.0] - FWSS Upgrade
 
 This FWSS contract upgrade coincides with Filecoin Onchain Cloud's General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
