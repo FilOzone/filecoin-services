@@ -111,6 +111,9 @@ forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService stor
 ### Phase 2: Deploy Contracts
 Deploy both networks before any announce/execute.
 
+**Linked libraries (SignatureVerificationLib, Rails, ValueAccrualRouter)**
+- [ ] If the release changes the source of any externally linked library (`src/lib/SignatureVerificationLib.sol`, `src/lib/Rails.sol`) or a companion contract the implementation depends on (`src/ValueAccrualRouter.sol`), remove its address from `service_contracts/deployments.json` for each network so the deploy scripts redeploy it. Reusing a pinned library address after its ABI changed makes the new implementation delegatecall selectors the old library does not have — every core flow reverts until a correctly linked implementation is upgraded in.
+
 **Calibnet FWSS Implementation**
 - [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=FWSS Implementation`, `dry_run=true`
 - [ ] Re-run with `dry_run=false`

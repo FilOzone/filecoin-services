@@ -89,6 +89,10 @@ echo "  Description: $SERVICE_DESCRIPTION"
 
 # Fixed constants for initialization
 USDFC_TOKEN_ADDRESS="0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0" # USDFC token address
+# Optional bridged USDC (6 decimals). No canonical axlUSDC on calibration; Axelar's testnet
+# aUSDC is 0xCb7996d51Ff923b2C6076d42C065a6ca000D32A1. Zero address disables USDC data sets.
+ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
+USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
 
 # Proving period configuration - use defaults if not set
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-240}"       # Default 240 epochs (120 minutes on calibnet)
@@ -136,10 +140,24 @@ fi
 echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 NONCE=$(expr $NONCE + "1")
 
+# Deploy the ValueAccrualRouter when USDC is enabled (receives the USDC-rail commission,
+# sells it for FIL via Dutch auction, burns the FIL)
+VALUE_ACCRUAL_ROUTER_ADDRESS="${VALUE_ACCRUAL_ROUTER_ADDRESS:-$ZERO_ADDRESS}"
+if [ "$USDC_TOKEN_ADDRESS" != "$ZERO_ADDRESS" ] && [ "$VALUE_ACCRUAL_ROUTER_ADDRESS" = "$ZERO_ADDRESS" ]; then
+  echo "Deploying ValueAccrualRouter..."
+  VALUE_ACCRUAL_ROUTER_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ValueAccrualRouter.sol:ValueAccrualRouter --constructor-args $FILECOIN_PAY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+  if [ -z "$VALUE_ACCRUAL_ROUTER_ADDRESS" ]; then
+    echo "Error: Failed to deploy ValueAccrualRouter"
+    exit 1
+  fi
+  echo "ValueAccrualRouter deployed at: $VALUE_ACCRUAL_ROUTER_ADDRESS"
+  NONCE=$(expr $NONCE + "1")
+fi
+
 FWSS_INIT_COUNTER=1
 SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE \
   --libraries "SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
-  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
+  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $USDC_TOKEN_ADDRESS $VALUE_ACCRUAL_ROUTER_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PAYMENTS_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract FilecoinWarmStorageService contract address"
   exit 1

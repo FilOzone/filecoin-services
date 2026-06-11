@@ -3,17 +3,18 @@ pragma solidity ^0.8.20;
 
 import {Cids} from "@pdp/Cids.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {PriceList, PriceListRates, PriceListFees, PriceListLockups} from "./PriceList.sol";
-
-uint256 constant MIB_IN_BYTES = 1024 * 1024; // 1 MiB in bytes
-uint256 constant GIB_IN_BYTES = MIB_IN_BYTES * 1024; // 1 GiB in bytes
-uint256 constant TIB_IN_BYTES = GIB_IN_BYTES * 1024; // 1 TiB in bytes
+import {
+    CDN_LOCKUP_PERIOD,
+    DEFAULT_LOCKUP_PERIOD,
+    EPOCHS_PER_MONTH,
+    PriceList,
+    PriceListFees,
+    PriceListLockups,
+    PriceListRates,
+    TIB_IN_BYTES
+} from "./PriceList.sol";
 
 uint256 constant TOKEN_DECIMALS = 18;
-uint256 constant EPOCHS_PER_DAY = 2880;
-uint256 constant DEFAULT_LOCKUP_PERIOD = EPOCHS_PER_DAY * 30;
-uint256 constant CDN_LOCKUP_PERIOD = EPOCHS_PER_DAY * 5; // shorter settle window for FilBeam
-uint256 constant EPOCHS_PER_MONTH = EPOCHS_PER_DAY * 30;
 
 // USDFC has 18 decimals, so $1 = 10**18 (a.k.a. ether)
 uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC

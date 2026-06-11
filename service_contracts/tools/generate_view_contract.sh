@@ -12,6 +12,7 @@ echo 'import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol
 echo 'import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
 echo 'import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";'
 echo 'import {PriceList} from "./lib/PriceList.sol";'
+echo 'import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";'
 
 echo contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 echo "    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;"
