@@ -15,26 +15,29 @@ import {
 
 // Price list for USDC-denominated (bridged axlUSDC) data sets.
 //
-// Two deliberate differences from the USDFC list:
+// Three deliberate differences from the USDFC list:
 //
-// 1. Gross-up. USDC rails carry a network value-accrual fee (NVAF) as the rail's operator
+// 1. Storage price base. USDC storage is priced from a $5.00/TiB/month base — double the USDFC
+//    list's $2.50 — so providers net $5 per TiB-month on USDC rails. Every other amount keeps
+//    the USDFC-equivalent base.
+//
+// 2. Gross-up. USDC rails carry a network value-accrual fee (NVAF) as the rail's operator
 //    commission, routed to the ValueAccrualRouter and burned. All SP-bound amounts below are
-//    grossed up by 1/(1 - 2%) — rounded up — so the SP nets the USDFC-equivalent amount after
-//    the commission; the customer bears the NVAF as a posted-price difference, and USDFC keeps
-//    a real discount. (The 0.5% Filecoin Pay network fee applies identically on both tokens, so
-//    it does not enter the gross-up.)
+//    grossed up by 1/(1 - 2%) — rounded up — so the SP nets the base amount after the
+//    commission; the customer bears the NVAF as a posted-price difference. (The 0.5% Filecoin
+//    Pay network fee applies identically on both tokens, so it does not enter the gross-up.)
 //
-// 2. Quantization floor. USDC has 6 decimals, and rails pay per epoch: any monthly amount below
+// 3. Quantization floor. USDC has 6 decimals, and rails pay per epoch: any monthly amount below
 //    EPOCHS_PER_MONTH units ($0.0864) streams as zero. The per-dataset fee is therefore set at
 //    exactly 1 unit per epoch ($0.0864/month) — the smallest non-zero rate — rather than the
-//    USDFC list's $0.024/month. Size-proportional storage rates for very small data sets
-//    (< ~35 GiB) still truncate toward zero; the dataset fee floor keeps every active data set
-//    paying a non-zero stream.
+//    USDFC list's $0.024/month. Size-proportional storage rates for very small data sets still
+//    truncate toward zero; the dataset fee floor keeps every active data set paying a non-zero
+//    stream.
 
 uint256 constant USDC_TOKEN_DECIMALS = 6;
 
 // axlUSDC has 6 decimals, so $1 = 10**6
-uint256 constant USDC_STORAGE_PRICE_PER_TIB_PER_MONTH = 2_551_021; // 2.5 / 0.98, ceil
+uint256 constant USDC_STORAGE_PRICE_PER_TIB_PER_MONTH = 5_102_041; // 5.00 / 0.98, ceil
 uint256 constant USDC_DATASET_FEE_PER_MONTH = EPOCHS_PER_MONTH; // 1 unit/epoch quantization floor
 uint256 constant USDC_DATASET_FEE_PER_EPOCH = USDC_DATASET_FEE_PER_MONTH / EPOCHS_PER_MONTH;
 
@@ -47,7 +50,7 @@ uint256 constant USDC_DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = 306_123; // 0.3 / 0.98,
 // Default NVAF carried as operator commission on USDC rails; owner-adjustable up to the cap.
 // The cap deliberately equals the gross-up (200 bps) so the SP-parity guarantee holds for every
 // permitted setting: any commission at or below the cap leaves the SP netting at least the
-// USDFC-equivalent. Raising the NVAF beyond 2% requires a contract upgrade that also revises
+// list's base amounts. Raising the NVAF beyond 2% requires a contract upgrade that also revises
 // the grossed-up prices — keeping the two coupled by construction.
 uint256 constant USDC_SERVICE_COMMISSION_BPS = 200;
 uint256 constant MAX_USDC_SERVICE_COMMISSION_BPS = 200;
