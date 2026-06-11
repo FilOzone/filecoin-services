@@ -289,8 +289,11 @@ library Rails {
             payments.modifyRailLockup(pdpRailId, 0, pending);
             newReserveBalance = 0;
         } else {
-            newReserveBalance =
-                replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending) - pending;
+            uint96 replenished = replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending);
+            if (replenished < pending) {
+                pending = replenished;
+            }
+            newReserveBalance = replenished - pending;
         }
         payments.modifyRailPayment(pdpRailId, newStorageRatePerEpoch, pending);
         emit RailRateUpdated(dataSetId, pdpRailId, newStorageRatePerEpoch);
