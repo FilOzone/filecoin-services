@@ -62,8 +62,8 @@ load_deployment_addresses() {
     echo "📖 Loading deployment addresses from deployments.json for chain $chain_id"
     
     # Load all addresses from the chain's section
-    # Extract all keys that are not "metadata"
-    local addresses=$(jq -r ".[\"$chain_id\"] | to_entries | .[] | select(.key != \"metadata\") | \"\(.key)=\(.value)\"" "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
+    # Extract all keys that are not "metadata" or "contracts"
+    local addresses=$(jq -r ".[\"$chain_id\"] | to_entries | .[] | select(.key != \"metadata\" and .key != \"contracts\") | \"\(.key)=\(.value)\"" "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
     
     if [ -z "$addresses" ]; then
         echo "ℹ️  No addresses found for chain $chain_id in deployments.json"
@@ -185,6 +185,174 @@ update_deployment_metadata() {
     else
         echo "  ✓ Updated metadata: deployed_at=$deployed_at"
     fi
+}
+
+# Outputs the artifact path for a given "path/to/Foo.sol:Foo" contract specifier.
+_artifact_path() {
+    local artifact_contract="$1"
+    local sol_file="${artifact_contract%:*}"
+    local contract_name="${artifact_contract#*:}"
+    echo "out/$(basename "$sol_file")/$contract_name.json"
+}
+
+# Outputs the keccak256 of the initcode in the given artifact file.
+# Strips the 0x prefix before hashing so cast keccak treats input as a UTF-8
+# string — this works for both pure-hex bytecode and bytecode with unlinked
+# library placeholders (__$...$__).
+_compute_initcode_hash() {
+    local artifact_path="$1"
+    local initcode_hex
+    initcode_hex=$(jq -r '.bytecode.object' "$artifact_path")
+    printf '%s' "${initcode_hex#0x}" | cast keccak
+}
+
+# Outputs a compact JSON array of the given arguments as strings.
+_build_args_json() {
+    local args_json="[]"
+    for arg in "$@"; do
+        args_json=$(printf '%s' "$args_json" | jq -c --arg v "$arg" '. += [$v]')
+    done
+    printf '%s' "$args_json"
+}
+
+# Outputs a JSON object mapping "path:Name" → address from a comma-separated
+# "path:Name:addr,..." libraries string (empty string → "{}").
+_build_libs_json() {
+    local libraries_str="$1"
+    local libs_json="{}"
+    if [ -n "$libraries_str" ]; then
+        IFS=',' read -ra lib_arr <<< "$libraries_str"
+        for lib in "${lib_arr[@]}"; do
+            libs_json=$(printf '%s' "$libs_json" | jq \
+                --arg k "${lib%:*}" --arg v "${lib##*:}" '.[$k] = $v')
+        done
+    fi
+    printf '%s' "$libs_json"
+}
+
+# Returns 0 (needs deployment) if stored metadata is absent or if initcode hash,
+# constructor args, or library deployed bytecode has changed. Returns 1 (up to date).
+# Args: $1=chain_id, $2=contract_key, $3=artifact_contract, $4=libraries_str, $5...=constructor_args
+needs_deployment() {
+    local chain_id="$1"
+    local contract_key="$2"
+    local artifact_contract="$3"
+    local libraries_str="$4"
+    shift 4
+    local constructor_args=("$@")
+
+    # No stored metadata → always deploy
+    local stored_hash
+    stored_hash=$(jq -r ".[\"$chain_id\"].contracts[\"$contract_key\"].initcode_hash // empty" \
+        "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
+    if [ -z "$stored_hash" ]; then
+        return 0
+    fi
+
+    local artifact_path
+    artifact_path=$(_artifact_path "$artifact_contract")
+    if [ ! -f "$artifact_path" ]; then
+        return 0
+    fi
+
+    # Check initcode hash
+    local current_hash
+    current_hash=$(_compute_initcode_hash "$artifact_path")
+    if [ "$current_hash" != "$stored_hash" ]; then
+        echo "  📝 $contract_key: initcode changed"
+        return 0
+    fi
+
+    # Check constructor args
+    local stored_args
+    stored_args=$(jq -c ".[\"$chain_id\"].contracts[\"$contract_key\"].constructor_args // []" \
+        "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
+    if [ "$(_build_args_json "${constructor_args[@]}")" != "$stored_args" ]; then
+        echo "  📝 $contract_key: constructor args changed"
+        return 0
+    fi
+
+    # Check library deployed bytecode via on-chain lookup
+    if [ -n "$libraries_str" ]; then
+        local libs_json
+        libs_json=$(_build_libs_json "$libraries_str")
+        while IFS='=' read -r lib_key lib_addr; do
+            local lib_artifact
+            lib_artifact=$(_artifact_path "$lib_key")
+            if [ ! -f "$lib_artifact" ]; then
+                continue
+            fi
+
+            local onchain_code
+            onchain_code=$(cast code "$lib_addr" 2>/dev/null)
+            # Skip if no code at address (e.g. dry-run dummy address)
+            if [ -z "$onchain_code" ] || [ "$onchain_code" = "0x" ]; then
+                continue
+            fi
+
+            local expected_code
+            expected_code=$(jq -r '.deployedBytecode.object' "$lib_artifact")
+            if [ "$onchain_code" != "$expected_code" ]; then
+                echo "  📝 $contract_key: library $lib_key bytecode changed at $lib_addr"
+                return 0
+            fi
+        done < <(printf '%s' "$libs_json" | jq -r 'to_entries[] | "\(.key)=\(.value)"')
+    fi
+
+    return 1  # up to date
+}
+
+# Record bytecode metadata for a deployed contract in deployments.json
+# Args: $1=chain_id, $2=contract_key (e.g. FWSS_IMPLEMENTATION), $3=artifact_contract (e.g. src/Foo.sol:Foo),
+#       $4=libraries_str (comma-separated "path:Name:addr", may be empty), $5...=constructor args
+update_deployment_bytecode() {
+    local chain_id="$1"
+    local contract_key="$2"
+    local artifact_contract="$3"
+    local libraries_str="$4"
+    shift 4
+    local constructor_args=("$@")
+
+    if [ "${SKIP_UPDATE_DEPLOYMENTS:-false}" = "true" ]; then
+        return 0
+    fi
+
+    ensure_deployments_json
+
+    local artifact_path
+    artifact_path=$(_artifact_path "$artifact_contract")
+    if [ ! -f "$artifact_path" ]; then
+        echo "  ⚠️  Artifact not found at $artifact_path, skipping bytecode metadata"
+        return 0
+    fi
+
+    local initcode_hash
+    initcode_hash=$(_compute_initcode_hash "$artifact_path")
+
+    local temp_file
+    temp_file=$(mktemp)
+    jq --arg chain "$chain_id" \
+       --arg key "$contract_key" \
+       --arg hash "$initcode_hash" \
+       --argjson libs "$(_build_libs_json "$libraries_str")" \
+       --argjson args "$(_build_args_json "${constructor_args[@]}")" \
+       'if .[$chain] then . else .[$chain] = {} end |
+        .[$chain].contracts = (.[$chain].contracts // {}) |
+        .[$chain].contracts[$key] = {
+            "initcode_hash": $hash,
+            "libraries": $libs,
+            "constructor_args": $args
+        }' \
+       "$DEPLOYMENTS_JSON_PATH" > "$temp_file"
+
+    if [ $? -ne 0 ]; then
+        echo "  ⚠️  Failed to update bytecode metadata for $contract_key"
+        rm -f "$temp_file"
+        return 1
+    fi
+
+    mv "$temp_file" "$DEPLOYMENTS_JSON_PATH"
+    echo "  ✓ Recorded bytecode metadata for $contract_key (initcode_hash=$initcode_hash)"
 }
 
 # Get a deployment address from JSON (useful for scripts that just need to read)

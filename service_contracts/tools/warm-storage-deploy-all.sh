@@ -221,9 +221,11 @@ deploy_implementation_if_needed() {
 
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
-        
+
         # Update deployments.json
         update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
+        local contract_key="${var_name%_ADDRESS}"
+        update_deployment_bytecode "$CHAIN" "$contract_key" "$contract" "${LIBRARIES:-}" "${constructor_args[@]}"
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -267,8 +269,10 @@ deploy_proxy_if_needed() {
 
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
-        
+
         update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
+        local contract_key="${var_name%_ADDRESS}"
+        update_deployment_bytecode "$CHAIN" "$contract_key" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" "" "$implementation" "$init_data"
     fi
 
     NONCE=$(expr $NONCE + "1")
