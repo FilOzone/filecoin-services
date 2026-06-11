@@ -30,4 +30,3 @@ bytes32 constant DEPRECATED_MINIMUM_STORAGE_RATE_PER_MONTH_SLOT = bytes32(uint25
 bytes32 constant SCHEDULED_PIECE_METADATA_REMOVALS_SLOT = bytes32(uint256(22));
 bytes32 constant DATA_SET_PAYMENT_TOKEN_SLOT = bytes32(uint256(23));
 bytes32 constant USDC_COMMISSION_BPS_SLOT = bytes32(uint256(24));
-

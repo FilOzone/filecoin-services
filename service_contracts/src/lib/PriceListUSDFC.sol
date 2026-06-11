@@ -6,10 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {
     CDN_LOCKUP_PERIOD,
     DEFAULT_LOCKUP_PERIOD,
-    EPOCHS_PER_DAY,
     EPOCHS_PER_MONTH,
-    GIB_IN_BYTES,
-    MIB_IN_BYTES,
     PriceList,
     PriceListFees,
     PriceListLockups,

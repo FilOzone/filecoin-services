@@ -411,8 +411,7 @@ library Rails {
             payments.modifyRailLockup(pdpRailId, 0, pending);
             newReserveBalance = 0;
         } else {
-            uint96 replenished =
-                replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending, pl);
+            uint96 replenished = replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending, pl);
             if (replenished < pending) {
                 pending = replenished;
             }

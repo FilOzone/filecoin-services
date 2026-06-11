@@ -39,6 +39,7 @@ import {PDPOffering} from "./PDPOffering.sol";
 
 contract MultiTokenValueAccrualTest is MockFVMTest {
     using SafeERC20 for MockERC20;
+    using SafeERC20 for MockUSDC;
     using PDPOffering for PDPOffering.Schema;
 
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
@@ -141,7 +142,7 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
 
         // Fund the client with both tokens and set up payments approvals + deposits
         mockUSDFC.safeTransfer(client, 10_000e18);
-        mockUSDC.transfer(client, 10_000e6);
+        mockUSDC.safeTransfer(client, 10_000e6);
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(service), true, 1000e18, 1000e18, 365 days);
@@ -782,7 +783,7 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
 
     function testUSDCCreateRevertsWithExactRequiredLockup() public {
         address poorClient = address(0xf9);
-        mockUSDC.transfer(poorClient, 1e6);
+        mockUSDC.safeTransfer(poorClient, 1e6);
         vm.startPrank(poorClient);
         payments.setOperatorApproval(mockUSDC, address(service), true, 1000e6, 1000e6, 365 days);
         mockUSDC.approve(address(payments), 1e6);
