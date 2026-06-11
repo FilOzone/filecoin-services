@@ -566,6 +566,44 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
     }
 
+    // Post-termination replenishment is disabled; try exhausting the lifecycleReserveBalance and verify that the one time payment succeeds.
+    function test_nextProvingPeriod_postTermination_withExhaustedReserve() public {
+        (uint256 dataSetId,, uint256 leafCount, uint256 firstDeadline, uint256 maxPeriod) = _createDataSetWithPiece();
+        (, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+
+        // Roll 1 block so the next nextProvingPeriod call clears the "already called this period" guard.
+        vm.roll(vm.getBlockNumber() + 1);
+
+        // Standard termination: reserve preserved, pdpEndEpoch set to a future epoch.
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        uint96 reserveBalance = viewContract.getDataSet(dataSetId).lifecycleReserveBalance;
+        assertGt(reserveBalance, 0);
+
+        // Schedule enough removals to push pending above the reserve.
+        // replenishReserveIfNeeded is a no-op because pdpEndEpoch != 0.
+        uint256 removalsNeeded = uint256(reserveBalance) / SCHEDULE_PIECE_REMOVALS_FEE + 1;
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        for (uint256 i = 0; i < removalsNeeded; i++) {
+            makeSignaturePass(client);
+            mockPDPVerifier.piecesScheduledRemove(
+                dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+            );
+        }
+        assertGt(viewContract.getDataSet(dataSetId).pendingOneTimePayments, reserveBalance, "pending exceeds reserve");
+
+        // nextProvingPeriod should flush pending and clamp lifecycleReserveBalance to 0.
+        uint256 nextDeadline = firstDeadline + maxPeriod;
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, nextDeadline - challengeWindow / 2, leafCount, ""
+        );
+
+        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0, "pending flushed");
+        assertEq(viewContract.getDataSet(dataSetId).lifecycleReserveBalance, 0, "reserve clamped to zero");
+    }
+
     // When amount has bits above the uint96 range set, uint96(amount) silently truncates them;
     // only the lower 96 bits contribute to the balance increase.
     function test_topUpLifecycleReserve_bit97_truncated() public {
