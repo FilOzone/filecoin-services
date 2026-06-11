@@ -334,12 +334,14 @@ update_deployment_bytecode() {
     jq --arg chain "$chain_id" \
        --arg key "$contract_key" \
        --arg hash "$initcode_hash" \
+       --arg artifact "$artifact_contract" \
        --argjson libs "$(_build_libs_json "$libraries_str")" \
        --argjson args "$(_build_args_json "${constructor_args[@]}")" \
        'if .[$chain] then . else .[$chain] = {} end |
         .[$chain].contracts = (.[$chain].contracts // {}) |
         .[$chain].contracts[$key] = {
             "initcode_hash": $hash,
+            "artifact_contract": $artifact,
             "libraries": $libs,
             "constructor_args": $args
         }' \
