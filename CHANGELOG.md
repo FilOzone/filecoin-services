@@ -14,10 +14,12 @@ new ValueAccrualRouter contract, sold for FIL by recurring Dutch auction, and bu
 - Per-data-set payment token selection via the payer-signed `paymentToken` metadata key (`"USDC"` or
   `"USDFC"`; absent means USDFC). The choice is covered by the existing `CreateDataSet` EIP-712
   signature — no signature-format changes.
-- `PriceListUSDC` (6-decimal price catalogue) with SP-bound amounts grossed up by 1/(1 − 2%) so the SP
-  nets the USDFC-equivalent after the NVAF; exposed via
-  `FilecoinWarmStorageServiceStateView.getPriceListUSDC()`. The per-dataset fee is set at the 6-decimal
-  per-epoch quantization floor (`0.0864 USDC/month`).
+- `PriceListUSDC` (6-decimal price catalogue), exposed via
+  `FilecoinWarmStorageServiceStateView.getPriceListUSDC()`. Storage is priced from a `$5.00/TiB/month`
+  base (double the USDFC list) so providers net $5 per TiB-month on USDC rails; all other amounts keep
+  the USDFC-equivalent base. SP-bound amounts are grossed up by 1/(1 − 2%) so the SP nets the base
+  after the NVAF. The per-dataset fee is set at the 6-decimal per-epoch quantization floor
+  (`0.0864 USDC/month`).
 - NVAF on USDC rails as the FilecoinPay per-rail operator commission (default 200 bps), locked into the
   rails of each USDC data set at creation with the `ValueAccrualRouter` as `serviceFeeRecipient`.
   Owner-stageable for future data sets via `setUSDCCommissionBps` (capped at 200 bps — the cap

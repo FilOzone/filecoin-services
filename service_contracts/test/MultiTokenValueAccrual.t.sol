@@ -33,7 +33,7 @@ import {
     USDC_STORAGE_PRICE_PER_TIB_PER_MONTH,
     USDC_TERMINATE_FEE
 } from "../src/lib/PriceListUSDC.sol";
-import {EPOCHS_PER_MONTH, PriceList} from "../src/lib/PriceList.sol";
+import {EPOCHS_PER_MONTH, PriceList, storageSizeBasedRatePerEpoch} from "../src/lib/PriceList.sol";
 import {MockERC20, MockPDPVerifier, MockUSDC} from "./mocks/SharedMocks.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 
@@ -401,11 +401,16 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
 
-        // floor(2_551_021 / 86_400) = 29 size-based + 1 dataset-fee floor = 30 microUSDC/epoch
-        uint256 expectedRate =
-            USDC_STORAGE_PRICE_PER_TIB_PER_MONTH / EPOCHS_PER_MONTH + USDC_DATASET_FEE_PER_MONTH / EPOCHS_PER_MONTH;
+        uint256 expectedRate = usdcRatePerEpochFor1TiB();
         assertEq(pdpRail.paymentRate, expectedRate, "1 TiB USDC rate per epoch");
-        assertEq(expectedRate, 30, "expected 30 microUSDC per epoch for 1 TiB");
+        // floor(127/128 * 5_102_041 / 86_400) = 58 size-based + 1 dataset-fee floor
+        // ($5/TiB/month base grossed up for the NVAF; 127/128 is the Fr32 raw-size factor)
+        assertEq(expectedRate, 59, "expected 59 microUSDC per epoch for 1 TiB");
+    }
+
+    /// The PDP rail rate for the 1 TiB test piece under the USDC price list
+    function usdcRatePerEpochFor1TiB() internal view returns (uint256) {
+        return storageSizeBasedRatePerEpoch(viewContract.getPriceListUSDC(), Cids.leafCountToRawSize(2 ** 35));
     }
 
     function testGetPriceListUSDCView() public view {
@@ -458,8 +463,8 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
     function testUSDCSettlementSkimsCommissionToRouter() public {
         (, uint256 settled, uint256 commission) = _settleProvenUSDCPeriod();
 
-        // One full proven proving period at 30 microUSDC/epoch
-        assertEq(settled, 30 * 2880, "settled amount for one proven period");
+        // One full proven proving period at the 1 TiB USDC rate
+        assertEq(settled, usdcRatePerEpochFor1TiB() * 2880, "settled amount for one proven period");
         assertEq(commission, commissionOn(settled, USDC_SERVICE_COMMISSION_BPS), "2% NVAF after network fee");
 
         // Router account holds the op-fee commission (asserted inside the helper) plus the
