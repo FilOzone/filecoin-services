@@ -135,7 +135,7 @@ check-layout:
 
 # ABI Management
 
-# Core contracts we publish ABIs for
+# Core contracts and externally consumed libraries we publish ABIs for.
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceStateLibrary \
@@ -148,25 +148,10 @@ ABI_CONTRACTS := \
 	SessionKeyRegistry \
 	Errors
 
-# Generate ABI file targets
-ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
-
-# Define a template for ABI extraction; we use a template approach instead of
-# defining a global pattern rule because patterns for files that don't exist
-# at parse-time will be rejected by make, so we'll be explicit instead.
-define ABI_RULE
-abi/$(1).abi.json: out/$(1).sol/$(1).json | abi
-	@echo "Extracting ABI for $(1)..."
-	@jq '.abi' $$< > $$@
-
-# Mark JSON as coming from build (unless it's the library which has its own rule)
-ifneq ($(1),FilecoinWarmStorageServiceStateLibrary)
-out/$(1).sol/$(1).json: | build
-endif
-endef
-
-# Generate rules for each contract using the template above
-$(foreach contract,$(ABI_CONTRACTS),$(eval $(call ABI_RULE,$(contract))))
+# Contract ABIs that should include event fragments emitted from first-party
+# libraries. Library events are logged from the calling contract/proxy address.
+ABI_CONTRACTS_WITH_LIBRARY_EVENTS := FilecoinWarmStorageService
+FIRST_PARTY_LIBRARY_SOURCE_PREFIX := src/lib/
 
 # Directory for ABIs
 abi:
@@ -174,7 +159,26 @@ abi:
 
 # Update ABIs
 .PHONY: update-abi
-update-abi: $(ABI_FILES)
+update-abi: | abi
+	forge clean
+	forge build --via-ir
+	@rm -f abi/*.abi.json
+	@set -e; for contract in $(ABI_CONTRACTS); do \
+		artifact="out/$$contract.sol/$$contract.json"; \
+		echo "Extracting ABI for $$contract..."; \
+		jq '.abi' "$$artifact" > "abi/$$contract.abi.json"; \
+	done
+	@jq -s --arg source_prefix "$(FIRST_PARTY_LIBRARY_SOURCE_PREFIX)" \
+		'def solc_metadata: if (.metadata | type) == "string" then (.metadata | try fromjson catch {}) else (.metadata // {}) end; def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); reduce ([.[] | select((((solc_metadata.settings.compilationTarget // {}) | to_entries[0]? | .key // "") | startswith($$source_prefix))) | (.abi // [])[] | select(.type == "event")][]) as $$event ([]; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
+		out/*.sol/*.json > abi/.library-events.abi.json
+	@set -e; for contract in $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS); do \
+		echo "Merging first-party library events into $$contract ABI..."; \
+		jq -s \
+			'def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); .[0] as $$contract_abi | .[1] as $$library_events | reduce $$library_events[] as $$event ($$contract_abi; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
+			"abi/$$contract.abi.json" abi/.library-events.abi.json > "abi/$$contract.abi.json.tmp"; \
+		mv "abi/$$contract.abi.json.tmp" "abi/$$contract.abi.json"; \
+	done
+	@rm -f abi/.library-events.abi.json
 
 # Clean just the ABIs
 .PHONY: clean-abi
@@ -206,7 +210,7 @@ help:
 	@echo "  help       - Show this help message"
 	@echo ""
 	@echo "ABI management targets:"
-	@echo "  update-abi - Update checked-in ABIs in abi/ directory (incremental)"
+	@echo "  update-abi - Update checked-in ABIs in abi/ directory from a clean build"
 	@echo "  clean-abi  - Remove all ABI files"
 	@echo ""
 	@echo "Full cleanup:"
