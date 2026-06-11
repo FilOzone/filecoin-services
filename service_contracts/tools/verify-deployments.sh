@@ -107,6 +107,46 @@ _run_constructor() {
     fi
 }
 
+# Strips the Solidity CBOR metadata trailer from a hex bytecode string (no 0x).
+# The last 2 bytes are a big-endian length N; the N bytes before them are the
+# CBOR data.  Stripping makes bytecode comparison metadata-hash-agnostic.
+_strip_cbor() {
+    local hex="$1"
+    local len=${#hex}
+    [ "$len" -lt 4 ] && { printf '%s' "$hex"; return; }
+    local cbor_len
+    cbor_len=$(printf '%d' "0x${hex: -4}")
+    local strip=$(( (cbor_len + 2) * 2 ))
+    [ "$strip" -ge "$len" ] && { printf '%s' "$hex"; return; }
+    printf '%s' "${hex:0:$(( len - strip ))}"
+}
+
+# Patches the compiler-generated library_deploy_address immutable in a
+# simulated bytecode hex string (no 0x) with the actual deployed address.
+# The Solidity IR codegen stores address(this) as an immutable for all library
+# contracts (for delegatecall protection); evm -x fills it with the simulator
+# address rather than the real deploy address.  We know the real address, so
+# patch it in before comparison to get exact verification.
+# Args: $1=hex (no 0x), $2=artifact_path, $3=deployed_address (0x-prefixed)
+_patch_library_deploy_address() {
+    local hex="$1" artifact="$2" deployed_addr="$3"
+    python3 - "$hex" "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")" "$deployed_addr" <<'PYEOF'
+import sys, json
+hex_str = sys.argv[1]
+imm_refs = json.loads(sys.argv[2])
+if 'library_deploy_address' not in imm_refs:
+    print(hex_str, end='')
+    sys.exit(0)
+addr = sys.argv[3].lower().removeprefix('0x').zfill(64)
+chars = list(hex_str)
+for pos in imm_refs['library_deploy_address']:
+    start = pos['start'] * 2
+    length = pos['length'] * 2
+    chars[start:start+length] = list(addr.zfill(length))
+print(''.join(chars), end='')
+PYEOF
+}
+
 # ---------------------------------------------------------------------------
 # Core verify function
 # ---------------------------------------------------------------------------
@@ -141,10 +181,11 @@ _verify_contract() {
     libs_json=$(_build_libs_json "$libraries_str")
     initcode_hex=$(jq -r '.bytecode.object' "$artifact_path")
     linked_hex=$(_link_bytecode "${initcode_hex#0x}" "$artifact_path" "$libs_json")
-    encoded_args=$(_encode_constructor_args "$artifact_path" "${constructor_args[@]}")
+    encoded_args=$(_encode_constructor_args "$artifact_path" "${constructor_args[@]+"${constructor_args[@]}"}")
     simulated=$(_run_constructor "${linked_hex}${encoded_args}")
+    simulated=$(_patch_library_deploy_address "$simulated" "$artifact_path" "$address")
 
-    if [ "$simulated" = "${onchain#0x}" ]; then
+    if [ "$(_strip_cbor "$simulated")" = "$(_strip_cbor "${onchain#0x}")" ]; then
         echo "OK"
         return 0
     else
@@ -171,9 +212,9 @@ if [ "$BACKFILL" = "true" ]; then
 
     echo "Verifying $contract_key ($address)..."
     if _verify_contract "$contract_key" "$address" "$artifact_contract" \
-            "$libraries_str" "${constructor_args[@]}"; then
+            "$libraries_str" "${constructor_args[@]+"${constructor_args[@]}"}"; then
         update_deployment_bytecode "$CHAIN" "$contract_key" "$artifact_contract" \
-            "$libraries_str" "${constructor_args[@]}"
+            "$libraries_str" "${constructor_args[@]+"${constructor_args[@]}"}"
     else
         exit 1
     fi

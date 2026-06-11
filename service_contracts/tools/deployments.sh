@@ -336,7 +336,7 @@ update_deployment_bytecode() {
        --arg hash "$initcode_hash" \
        --arg artifact "$artifact_contract" \
        --argjson libs "$(_build_libs_json "$libraries_str")" \
-       --argjson args "$(_build_args_json "${constructor_args[@]}")" \
+       --argjson args "$(_build_args_json "${constructor_args[@]+"${constructor_args[@]}"}")" \
        'if .[$chain] then . else .[$chain] = {} end |
         .[$chain].contracts = (.[$chain].contracts // {}) |
         .[$chain].contracts[$key] = {

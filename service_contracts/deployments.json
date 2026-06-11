@@ -32,6 +32,32 @@
     "FWSS_PROXY_ADDRESS": "0x02925630df557F957f70E112bA06e50965417CA0",
     "FWSS_IMPLEMENTATION_ADDRESS": "0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46",
     "FWSS_VIEW_ADDRESS": "0xF4B446171b3677fD2B9b183a9fB76d517365700a",
-    "ENDORSEMENT_SET_ADDRESS": "0xAA2f7CfC7ecAc616EC9C1f6d700fAd19087FAC84"
+    "ENDORSEMENT_SET_ADDRESS": "0xAA2f7CfC7ecAc616EC9C1f6d700fAd19087FAC84",
+    "contracts": {
+      "FILECOIN_PAY": {
+        "initcode_hash": "0x8af120b0371410d28e4970f4317b56b5f2ac64e2f35a6b007ed5e5e1c1908ed2",
+        "artifact_contract": "src/FilecoinPayV1.sol:FilecoinPayV1",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "SIGNATURE_VERIFICATION_LIB": {
+        "initcode_hash": "0x12633e8217683dfda3b6d0dd4cc96d6d2008235dc76206006dd926e369187332",
+        "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "SESSION_KEY_REGISTRY": {
+        "initcode_hash": "0xbba506b2c43e3f5edf6faa2c33cb04f968411ef02011fd2a786fc1881303169e",
+        "artifact_contract": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "ENDORSEMENT_SET": {
+        "initcode_hash": "0xba92495f3d9212604089e915b09474bbf9b36c975456f233286f96ba24327f41",
+        "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
+        "libraries": {},
+        "constructor_args": []
+      }
+    }
   }
 }
