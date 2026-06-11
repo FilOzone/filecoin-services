@@ -7,7 +7,9 @@ pragma solidity ^0.8.20;
 
 import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
-import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
+import {
+    CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
+} from "../FilecoinWarmStorageService.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
@@ -230,12 +232,12 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (bool)
     {
         return uint256(
-                service.extsload(
+            service.extsload(
                 keccak256(
-                abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
+                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
+                )
             )
-            )
-            ) & (1 << (periodId & 255)) != 0;
+        ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)

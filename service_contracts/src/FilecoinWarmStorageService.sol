@@ -29,9 +29,7 @@ import {
     TOKEN_DECIMALS
 } from "./lib/PriceListUSDFC.sol";
 import {
-    MAX_USDC_SERVICE_COMMISSION_BPS,
-    USDC_SERVICE_COMMISSION_BPS,
-    USDC_TOKEN_DECIMALS
+    MAX_USDC_SERVICE_COMMISSION_BPS, USDC_SERVICE_COMMISSION_BPS, USDC_TOKEN_DECIMALS
 } from "./lib/PriceListUSDC.sol";
 import {DEFAULT_LOCKUP_PERIOD} from "./lib/PriceList.sol";
 import {Rails} from "./lib/Rails.sol";
@@ -746,10 +744,7 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
-    )
-        external
-        onlyPDPVerifier
-    {
+    ) external onlyPDPVerifier {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
@@ -967,15 +962,14 @@ contract FilecoinWarmStorageService is
 
         (,,, uint256 schedulePieceRemovalsFee,,) = Rails.oneTimeFees(_paymentTokenOf(dataSetId), usdcTokenAddress);
         uint96 newPending = info.pendingOneTimePayments + uint96(schedulePieceRemovalsFee);
-        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
-            .replenishReserve(
-                info.pdpRailId,
-                info.pdpEndEpoch,
-                info.lifecycleReserveBalance,
-                newPending,
-                _paymentTokenOf(dataSetId),
-                usdcTokenAddress
-            );
+        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserve(
+            info.pdpRailId,
+            info.pdpEndEpoch,
+            info.lifecycleReserveBalance,
+            newPending,
+            _paymentTokenOf(dataSetId),
+            usdcTokenAddress
+        );
         info.pendingOneTimePayments = newPending;
 
         // Queue piece IDs for metadata cleanup at nextProvingPeriod
@@ -992,10 +986,7 @@ contract FilecoinWarmStorageService is
         uint256, /*challengedLeafCount*/
         uint256, /*seed*/
         uint256 challengeCount
-    )
-        external
-        onlyPDPVerifier
-    {
+    ) external onlyPDPVerifier {
         requirePaymentNotBeyondEndEpoch(dataSetId);
 
         if (provenThisPeriod[dataSetId]) {
@@ -1137,11 +1128,7 @@ contract FilecoinWarmStorageService is
         address, // oldServiceProvider
         address, // newServiceProvider
         bytes calldata // extraData - not used
-    )
-        external
-        override
-        onlyPDPVerifier
-    {
+    ) external override onlyPDPVerifier {
         revert Errors.StorageProviderChangesNotSupported();
     }
 
@@ -1233,8 +1220,9 @@ contract FilecoinWarmStorageService is
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1(paymentsContractAddress)
-            .settleCDNRails(info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount);
+        FilecoinPayV1(paymentsContractAddress).settleCDNRails(
+            info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount
+        );
     }
 
     /**
@@ -1256,16 +1244,15 @@ contract FilecoinWarmStorageService is
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1(paymentsContractAddress)
-            .topUpCDNRails(
-                dataSetId,
-                info.cacheMissRailId,
-                info.cdnRailId,
-                cacheMissAmountToAdd,
-                cdnAmountToAdd,
-                _paymentTokenOf(dataSetId),
-                usdcTokenAddress
-            );
+        FilecoinPayV1(paymentsContractAddress).topUpCDNRails(
+            dataSetId,
+            info.cacheMissRailId,
+            info.cdnRailId,
+            cacheMissAmountToAdd,
+            cdnAmountToAdd,
+            _paymentTokenOf(dataSetId),
+            usdcTokenAddress
+        );
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
@@ -1326,18 +1313,17 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = info.pdpRailId;
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
-        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
-            .updateStorageRates(
-                dataSetId,
-                pdpRailId,
-                leafCount,
-                pending,
-                reserveBalance,
-                info.pdpEndEpoch,
-                immediateTermination,
-                _paymentTokenOf(dataSetId),
-                usdcTokenAddress
-            );
+        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).updateStorageRates(
+            dataSetId,
+            pdpRailId,
+            leafCount,
+            pending,
+            reserveBalance,
+            info.pdpEndEpoch,
+            immediateTermination,
+            _paymentTokenOf(dataSetId),
+            usdcTokenAddress
+        );
         info.pendingOneTimePayments = 0;
     }
 
@@ -1682,7 +1668,9 @@ contract FilecoinWarmStorageService is
         // If no epochs are proven, no payment is due (but settlement may still advance)
         if (provenEpochCount == 0) {
             return ValidationResult({
-                modifiedAmount: 0, settleUpto: settleUpTo, note: "No proven epochs in the requested range"
+                modifiedAmount: 0,
+                settleUpto: settleUpTo,
+                note: "No proven epochs in the requested range"
             });
         }
 
