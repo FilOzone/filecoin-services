@@ -260,6 +260,17 @@ else
             printf '  %-45s SKIP (no artifact_contract; use --backfill)\n' "$contract_key"
             continue
         fi
+        # Snapshot artifacts are frozen Sourcify-sourced bytecode for historical
+        # deployments whose source diverged from the current repo.  They are only
+        # usable for --backfill (to record the initcode_hash); the general verify
+        # loop skips them because the on-chain code cannot be reproduced from
+        # current source.
+        case "$artifact_contract" in
+            *.json)
+                printf '  %-45s SKIP (snapshot artifact; source diverged from deployment)\n' "$contract_key"
+                continue
+                ;;
+        esac
 
         # Rebuild "path:Name:addr,..." from stored {"path:Name": "addr"} JSON
         libraries_str=$(jq -r \

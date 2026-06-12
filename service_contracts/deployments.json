@@ -99,8 +99,8 @@
         ]
       },
       "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
-        "initcode_hash": "0x08151efd2315dce4458e427424daa75c1f6c6a1adb513152f16585e626a469ad",
-        "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
+        "initcode_hash": "0x5af15d0493206428018f7442e74b1d11a1df59b5c507a0b4afcf4e173c44ff04",
+        "artifact_contract": "snapshots/ServiceProviderRegistry-v1.1.0.json",
         "libraries": {},
         "constructor_args": []
       },
