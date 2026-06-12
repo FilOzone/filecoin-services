@@ -3,13 +3,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [1.3.0] - FWSS Upgrade
+## [Unreleased]
+
+### Fixed
+- Fixed a lifecycle reserve underflow in `Rails.updateStorageRates()` that could cause `nextProvingPeriod` to fail ([#521](https://github.com/FilOzone/filecoin-services/pull/521)).
+
+## [1.3.0] - 2026-06-12 - FWSS Upgrade
 
 This FWSS contract upgrade coincides with Filecoin Onchain Cloud's General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
 
 ### Deployment / Rollout Status
 
-See the [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.0) for rollout status, implementation addresses, epochs, and transaction links. The FWSS proxy addresses remain unchanged.
+The Calibnet and Mainnet rollout is complete. See the [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.0) for final implementation addresses, StateView addresses, epochs, transaction links, and validation evidence. The FWSS proxy addresses remain unchanged.
 
 ### Breaking Changes
 - Removed `calculateRatePerEpoch()`, `updatePricing()`, and `updateServiceCommission()` from the FWSS ABI. Integrations must stop calling those methods; use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. Pricing changes are now delivered by contract upgrade instead of owner calls ([#478](https://github.com/FilOzone/filecoin-services/pull/478), [#488](https://github.com/FilOzone/filecoin-services/pull/488), [#501](https://github.com/FilOzone/filecoin-services/pull/501)).
