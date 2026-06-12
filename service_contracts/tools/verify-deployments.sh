@@ -66,6 +66,17 @@ _link_bytecode() {
         "$libs_json"
 }
 
+# Like _link_bytecode but uses deployedBytecode.linkReferences (for the fallback
+# deployed-bytecode comparison path).
+# Args: $1=hex (no 0x), $2=artifact_path, $3=libs_json
+_link_deployed_bytecode() {
+    local hex="$1" artifact="$2" libs_json="$3"
+    python3 "$SCRIPT_DIR/bytecode.py" link \
+        "$hex" \
+        "$(jq -c '.deployedBytecode.linkReferences // {}' "$artifact")" \
+        "$libs_json"
+}
+
 # ABI-encodes constructor arguments using types derived from the artifact ABI.
 # Outputs hex without 0x, or nothing if the constructor takes no parameters.
 _encode_constructor_args() {
@@ -119,18 +130,18 @@ read_deployment_immutables() {
         "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")"
 }
 
-# Patches the compiler-generated library_deploy_address immutable in a
-# simulated bytecode hex string (no 0x) with the actual deployed address.
-# The Solidity IR codegen stores address(this) as an immutable for all library
-# contracts (for delegatecall protection); evm -x fills it with the simulator
-# address rather than the real deploy address.  We know the real address, so
-# patch it in before comparison to get exact verification.
-# Args: $1=hex (no 0x), $2=artifact_path, $3=deployed_address (0x-prefixed)
-_patch_library_deploy_address() {
-    local hex="$1" artifact="$2" deployed_addr="$3"
+# Patches any immutable position in simulated bytecode where the on-chain value
+# equals the deployed address (padded to 32 bytes).  This handles both the
+# library_deploy_address immutable (Solidity library delegatecall guard) and
+# UUPSUpgradeable's __self immutable — both store address(this), which evm -x
+# fills with the simulator address rather than the real deploy address.
+# Args: $1=simulated_hex (no 0x), $2=artifact_path, $3=onchain_hex (no 0x), $4=deployed_address (0x-prefixed)
+_patch_address_this_immutables() {
+    local hex="$1" artifact="$2" onchain_hex="$3" deployed_addr="$4"
     python3 "$SCRIPT_DIR/bytecode.py" patch-lib \
         "$hex" \
         "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")" \
+        "$onchain_hex" \
         "$deployed_addr"
 }
 
@@ -164,26 +175,48 @@ _verify_contract() {
         return 1
     fi
 
-    local libs_json initcode_hex linked_hex encoded_args simulated
+    local libs_json initcode_hex linked_hex encoded_args simulated onchain_lc_hex
     libs_json=$(_build_libs_json "$libraries_str")
     initcode_hex=$(jq -r '.bytecode.object' "$artifact_path")
     linked_hex=$(_link_bytecode "${initcode_hex#0x}" "$artifact_path" "$libs_json")
     encoded_args=$(_encode_constructor_args "$artifact_path" "${constructor_args[@]+"${constructor_args[@]}"}")
-    simulated=$(_run_constructor "${linked_hex}${encoded_args}")
-    simulated=$(_patch_library_deploy_address "$simulated" "$artifact_path" "$address")
+    local raw_simulated
+    raw_simulated=$(_run_constructor "${linked_hex}${encoded_args}")
+    onchain_lc_hex=$(printf '%s' "${onchain#0x}" | tr '[:upper:]' '[:lower:]')
+    simulated=$(_patch_address_this_immutables "$raw_simulated" "$artifact_path" "$onchain_lc_hex" "$address")
 
-    local simulated_lc onchain_lc
+    local simulated_lc
     simulated_lc=$(printf '%s' "$simulated" | tr '[:upper:]' '[:lower:]')
-    onchain_lc=$(printf '%s' "${onchain#0x}" | tr '[:upper:]' '[:lower:]')
-    if [ "$(_strip_cbor "$simulated_lc")" = "$(_strip_cbor "$onchain_lc")" ]; then
+
+    # Primary path: constructor simulation
+    if [ -n "$simulated_lc" ] && [ "$(_strip_cbor "$simulated_lc")" = "$(_strip_cbor "$onchain_lc_hex")" ]; then
         echo "OK"
         return 0
-    else
-        echo "FAIL"
-        echo "    on-chain:  ${onchain:0:42}..."
-        echo "    simulated: 0x${simulated:0:40}..."
-        return 1
     fi
+
+    # Fallback: evm -x cannot simulate some constructors (e.g. via_ir with complex
+    # immutable write ordering).  Instead fill the artifact's deployedBytecode
+    # placeholder zeros with the on-chain immutable values and compare code logic.
+    local imm_refs_json onchain_imm_values filled_lc
+    imm_refs_json=$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact_path")
+    if [ -z "$raw_simulated" ] || [ "$(printf '%s' "$imm_refs_json" | jq 'length')" -gt 0 ]; then
+        onchain_imm_values=$(python3 "$SCRIPT_DIR/bytecode.py" read-imm "$onchain_lc_hex" "$imm_refs_json")
+        local deployed_hex linked_deployed_hex
+        deployed_hex=$(jq -r '.deployedBytecode.object' "$artifact_path" | sed 's/^0x//')
+        linked_deployed_hex=$(_link_deployed_bytecode "$deployed_hex" "$artifact_path" "$libs_json")
+        filled_lc=$(python3 "$SCRIPT_DIR/bytecode.py" fill-imm \
+            "$linked_deployed_hex" "$imm_refs_json" "$onchain_imm_values" \
+            | tr '[:upper:]' '[:lower:]')
+        if [ "$(_strip_cbor "$filled_lc")" = "$(_strip_cbor "$onchain_lc_hex")" ]; then
+            echo "OK (deployed)"
+            return 0
+        fi
+    fi
+
+    echo "FAIL"
+    echo "    on-chain:  0x${onchain_lc_hex:0:40}..."
+    echo "    simulated: 0x${simulated_lc:0:40}..."
+    return 1
 }
 
 # ---------------------------------------------------------------------------

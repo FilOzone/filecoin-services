@@ -9,16 +9,24 @@ link <hex> <link_refs_json> <libs_json>
     from <link_refs_json> (artifact bytecode.linkReferences).
     Outputs the linked hex, no 0x prefix.
 
-patch-lib <hex> <imm_refs_json> <address>
-    Patch the compiler-generated library_deploy_address immutable in <hex>
-    with <address> (0x-prefixed, padded to 32 bytes).  Positions come from
-    <imm_refs_json> (artifact deployedBytecode.immutableReferences).
-    Outputs the patched hex, no 0x prefix.
+patch-lib <simulated_hex> <imm_refs_json> <onchain_hex> <address>
+    Patch any immutable position in <simulated_hex> where the on-chain value
+    equals <address> (padded to 32 bytes), using positions from <imm_refs_json>
+    (artifact deployedBytecode.immutableReferences).  Handles both the named
+    library_deploy_address key and numeric-ID keys like UUPSUpgradeable's
+    __self immutable.  Outputs the patched hex, no 0x prefix.
 
 read-imm <hex> <imm_refs_json>
     Read immutable values from <hex> at positions from <imm_refs_json>.
     Outputs a JSON object mapping immutable name/ID to its hex value
     (32 bytes, no 0x, lowercase), using the first occurrence of each.
+
+fill-imm <hex> <imm_refs_json> <values_json>
+    Fill immutable positions in <hex> with values from <values_json>
+    ({"id": "32-byte-hex-value", ...}).  Used to populate the artifact's
+    deployedBytecode (which has zero placeholders) with known values for
+    direct on-chain comparison when constructor simulation is unavailable.
+    Outputs the filled hex, no 0x prefix.
 """
 
 import sys
@@ -43,16 +51,19 @@ def cmd_link(hex_str, link_refs_json, libs_json):
     print(''.join(chars), end='')
 
 
-def cmd_patch_lib(hex_str, imm_refs_json, deployed_addr):
-    imm_refs = json.loads(imm_refs_json)
-    if 'library_deploy_address' not in imm_refs:
-        print(hex_str, end='')
+def cmd_patch_lib(hex_str, imm_refs_json, onchain_hex, deployed_addr):
+    if not hex_str:
+        print('', end='')
         return
-    addr = deployed_addr.lower().removeprefix('0x').zfill(64)
+    imm_refs = json.loads(imm_refs_json)
+    addr_padded = deployed_addr.lower().removeprefix('0x').zfill(64)
     chars = list(hex_str)
-    for pos in imm_refs['library_deploy_address']:
-        start, length = pos['start'] * 2, pos['length'] * 2
-        chars[start:start + length] = list(addr.zfill(length))
+    for positions in imm_refs.values():
+        for pos in positions:
+            start, length = pos['start'] * 2, pos['length'] * 2
+            onchain_val = onchain_hex[start:start + length]
+            if onchain_val == addr_padded[:length]:
+                chars[start:start + length] = list(addr_padded[:length])
     print(''.join(chars), end='')
 
 
@@ -66,10 +77,26 @@ def cmd_read_imm(hex_str, imm_refs_json):
     print(json.dumps(result, indent=2))
 
 
+def cmd_fill_imm(hex_str, imm_refs_json, values_json):
+    imm_refs = json.loads(imm_refs_json)
+    values = json.loads(values_json)
+    chars = list(hex_str)
+    for imm_id, positions in imm_refs.items():
+        val = values.get(imm_id)
+        if val is None:
+            continue
+        val = val.lower().removeprefix('0x')
+        for pos in positions:
+            start, length = pos['start'] * 2, pos['length'] * 2
+            chars[start:start + length] = list(val.zfill(length))
+    print(''.join(chars), end='')
+
+
 COMMANDS = {
     'link':      (cmd_link,      3),
-    'patch-lib': (cmd_patch_lib, 3),
+    'patch-lib': (cmd_patch_lib, 4),
     'read-imm':  (cmd_read_imm,  2),
+    'fill-imm':  (cmd_fill_imm,  3),
 }
 
 if __name__ == '__main__':

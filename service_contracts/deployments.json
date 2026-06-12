@@ -63,6 +63,31 @@
         "artifact_contract": "src/lib/Rails.sol:Rails",
         "libraries": {},
         "constructor_args": []
+      },
+      "FWSS_VIEW": {
+        "initcode_hash": "0xd394d625889ce14095bb08c9b396614b91c851161e669e1ba3e7cda6c7fcd488",
+        "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
+        "libraries": {},
+        "constructor_args": [
+          "0x02925630df557F957f70E112bA06e50965417CA0"
+        ]
+      },
+      "FWSS_IMPLEMENTATION": {
+        "initcode_hash": "0x5895bd5964d9460082475061936dd3346f8ac6cdf8064edc622b67684e9f62bd",
+        "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+        "libraries": {
+          "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
+          "src/lib/Rails.sol:Rails": "0x05BB7B022645a68fB9c97A7afaD1017EC5B252B2"
+        },
+        "constructor_args": [
+          "0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C",
+          "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
+          "0x1d60d2f5960af6341e842c539985fa297e10d6ea",
+          "0xb3042734b608a1b16e9e86b374a3f3e389b4cdf0",
+          "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
+          "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
+          "8"
+        ]
       }
     }
   }
