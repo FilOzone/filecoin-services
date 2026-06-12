@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Fixed
 - Fixed a lifecycle reserve underflow in `Rails.updateStorageRates()` that could cause `nextProvingPeriod` to fail ([#521](https://github.com/FilOzone/filecoin-services/pull/521)).
 
-## [1.3.0] - 2026-06-12 - FWSS Upgrade
+## [1.3.0] - FWSS Upgrade
 
 This FWSS contract upgrade coincides with Filecoin Onchain Cloud's General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
 
