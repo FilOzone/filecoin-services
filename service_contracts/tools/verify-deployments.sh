@@ -194,23 +194,23 @@ _verify_contract() {
         return 0
     fi
 
-    # Fallback: evm -x cannot simulate some constructors (e.g. via_ir with complex
-    # immutable write ordering).  Instead fill the artifact's deployedBytecode
-    # placeholder zeros with the on-chain immutable values and compare code logic.
+    # Fallback: fill artifact's deployedBytecode with on-chain immutable values and
+    # compare CBOR-stripped code logic.  This handles:
+    #   - via_ir constructors with complex immutable write ordering (evm gives wrong order)
+    #   - proxy constructors that revert in evm (delegatecall to unloaded implementation)
+    #   - any other case where constructor simulation produces wrong or non-empty revert data
     local imm_refs_json onchain_imm_values filled_lc
     imm_refs_json=$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact_path")
-    if [ -z "$raw_simulated" ] || [ "$(printf '%s' "$imm_refs_json" | jq 'length')" -gt 0 ]; then
-        onchain_imm_values=$(python3 "$SCRIPT_DIR/bytecode.py" read-imm "$onchain_lc_hex" "$imm_refs_json")
-        local deployed_hex linked_deployed_hex
-        deployed_hex=$(jq -r '.deployedBytecode.object' "$artifact_path" | sed 's/^0x//')
-        linked_deployed_hex=$(_link_deployed_bytecode "$deployed_hex" "$artifact_path" "$libs_json")
-        filled_lc=$(python3 "$SCRIPT_DIR/bytecode.py" fill-imm \
-            "$linked_deployed_hex" "$imm_refs_json" "$onchain_imm_values" \
-            | tr '[:upper:]' '[:lower:]')
-        if [ "$(_strip_cbor "$filled_lc")" = "$(_strip_cbor "$onchain_lc_hex")" ]; then
-            echo "OK (deployed)"
-            return 0
-        fi
+    onchain_imm_values=$(python3 "$SCRIPT_DIR/bytecode.py" read-imm "$onchain_lc_hex" "$imm_refs_json")
+    local deployed_hex linked_deployed_hex
+    deployed_hex=$(jq -r '.deployedBytecode.object' "$artifact_path" | sed 's/^0x//')
+    linked_deployed_hex=$(_link_deployed_bytecode "$deployed_hex" "$artifact_path" "$libs_json")
+    filled_lc=$(python3 "$SCRIPT_DIR/bytecode.py" fill-imm \
+        "$linked_deployed_hex" "$imm_refs_json" "$onchain_imm_values" \
+        | tr '[:upper:]' '[:lower:]')
+    if [ "$(_strip_cbor "$filled_lc")" = "$(_strip_cbor "$onchain_lc_hex")" ]; then
+        echo "OK (deployed)"
+        return 0
     fi
 
     echo "FAIL"

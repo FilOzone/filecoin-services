@@ -188,11 +188,21 @@ update_deployment_metadata() {
 }
 
 # Outputs the artifact path for a given "path/to/Foo.sol:Foo" contract specifier.
+# For lib/<name>/src/... paths, uses the lib's own out/ directory (e.g. lib/pdp is
+# compiled with its own foundry.toml settings, not service_contracts' settings).
 _artifact_path() {
     local artifact_contract="$1"
     local sol_file="${artifact_contract%:*}"
     local contract_name="${artifact_contract#*:}"
-    echo "out/$(basename "$sol_file")/$contract_name.json"
+    case "$sol_file" in
+        lib/*/src/*)
+            local lib_root="${sol_file%%/src/*}"
+            echo "${lib_root}/out/$(basename "$sol_file")/${contract_name}.json"
+            ;;
+        *)
+            echo "out/$(basename "$sol_file")/${contract_name}.json"
+            ;;
+    esac
 }
 
 # Outputs the keccak256 of the initcode in the given artifact file.

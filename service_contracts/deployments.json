@@ -48,7 +48,7 @@
       },
       "SESSION_KEY_REGISTRY": {
         "initcode_hash": "0xbba506b2c43e3f5edf6faa2c33cb04f968411ef02011fd2a786fc1881303169e",
-        "artifact_contract": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry",
+        "artifact_contract": "SessionKeyRegistry.sol:SessionKeyRegistry",
         "libraries": {},
         "constructor_args": []
       },
@@ -87,6 +87,48 @@
           "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
           "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
           "8"
+        ]
+      },
+      "PDP_VERIFIER_IMPLEMENTATION": {
+        "initcode_hash": "0xe808206209251a31dda41b396232bcdc26a88782210cdce3f026982f4037af3e",
+        "artifact_contract": "lib/pdp/src/PDPVerifier.sol:PDPVerifier",
+        "libraries": {},
+        "constructor_args": [
+          "3",
+          "10"
+        ]
+      },
+      "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
+        "initcode_hash": "0x08151efd2315dce4458e427424daa75c1f6c6a1adb513152f16585e626a469ad",
+        "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "PDP_VERIFIER_PROXY": {
+        "initcode_hash": "0xe8213b99a2d062230952ca9bc2eedea8b4afad1ec33a0ea989fa2553ef400017",
+        "artifact_contract": "ERC1967Proxy.sol:MyERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42",
+          "0x"
+        ]
+      },
+      "SERVICE_PROVIDER_REGISTRY_PROXY": {
+        "initcode_hash": "0xa70959323d2de3fbffdfbb1fdbdcbccdd1cb95f91c9489964cf4ba438f0f6db5",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3",
+          "0x"
+        ]
+      },
+      "FWSS_PROXY": {
+        "initcode_hash": "0xa70959323d2de3fbffdfbb1fdbdcbccdd1cb95f91c9489964cf4ba438f0f6db5",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA",
+          "0x"
         ]
       }
     }
