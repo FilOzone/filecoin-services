@@ -259,6 +259,15 @@ needs_deployment() {
     shift 4
     local constructor_args=("$@")
 
+    # Pinned contracts must not be redeployed through normal deploy scripts.
+    # Upgrades are handled out-of-band (e.g. proxy announcePlannedUpgrade/upgradeTo, manual governance).
+    local pinned
+    pinned=$(jq -r ".[\"$chain_id\"].contracts[\"$contract_key\"].pinned // false" \
+        "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
+    if [ "$pinned" = "true" ]; then
+        return 1
+    fi
+
     # No stored metadata → always deploy
     local stored_hash
     stored_hash=$(jq -r ".[\"$chain_id\"].contracts[\"$contract_key\"].initcode_hash // empty" \

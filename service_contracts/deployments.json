@@ -111,7 +111,8 @@
         "constructor_args": [
           "0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42",
           "0x"
-        ]
+        ],
+        "pinned": true
       },
       "SERVICE_PROVIDER_REGISTRY_PROXY": {
         "initcode_hash": "0xa70959323d2de3fbffdfbb1fdbdcbccdd1cb95f91c9489964cf4ba438f0f6db5",
@@ -120,7 +121,8 @@
         "constructor_args": [
           "0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3",
           "0x"
-        ]
+        ],
+        "pinned": true
       },
       "FWSS_PROXY": {
         "initcode_hash": "0xa70959323d2de3fbffdfbb1fdbdcbccdd1cb95f91c9489964cf4ba438f0f6db5",
@@ -129,7 +131,8 @@
         "constructor_args": [
           "0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA",
           "0x"
-        ]
+        ],
+        "pinned": true
       }
     }
   }
