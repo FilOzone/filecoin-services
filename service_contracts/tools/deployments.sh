@@ -213,6 +213,20 @@ _artifact_path() {
     esac
 }
 
+# Strips the Solidity CBOR metadata trailer from a hex bytecode string.
+# The last 2 bytes are a big-endian length N; the N bytes before them are the
+# CBOR data.  Stripping makes bytecode comparison metadata-hash-agnostic.
+_strip_cbor() {
+    local hex="$1"
+    local len=${#hex}
+    [ "$len" -lt 4 ] && { printf '%s' "$hex"; return; }
+    local cbor_len
+    cbor_len=$(printf '%d' "0x${hex: -4}")
+    local strip=$(( (cbor_len + 2) * 2 ))
+    [ "$strip" -ge "$len" ] && { printf '%s' "$hex"; return; }
+    printf '%s' "${hex:0:$(( len - strip ))}"
+}
+
 # Outputs the keccak256 of the initcode in the given artifact file.
 # Strips the 0x prefix before hashing so cast keccak treats input as a UTF-8
 # string — this works for both pure-hex bytecode and bytecode with unlinked
@@ -258,6 +272,12 @@ needs_deployment() {
     local libraries_str="$4"
     shift 4
     local constructor_args=("$@")
+
+    # No on-chain address yet → always deploy
+    local addr_var="${contract_key}_ADDRESS"
+    if [ -z "${!addr_var:-}" ]; then
+        return 0
+    fi
 
     # Pinned contracts must not be redeployed through normal deploy scripts.
     # Upgrades are handled out-of-band (e.g. proxy announcePlannedUpgrade/upgradeTo, manual governance).
@@ -317,9 +337,16 @@ needs_deployment() {
                 continue
             fi
 
-            local expected_code
+            local expected_code onchain_lc expected_lc imm_refs_json imm_vals filled_lc
             expected_code=$(jq -r '.deployedBytecode.object' "$lib_artifact")
-            if [ "$onchain_code" != "$expected_code" ]; then
+            onchain_lc=$(printf '%s' "$onchain_code" | tr '[:upper:]' '[:lower:]' | sed 's/^0x//')
+            expected_lc=$(printf '%s' "$expected_code" | tr '[:upper:]' '[:lower:]' | sed 's/^0x//')
+            # Fill artifact's immutable placeholders (e.g. library self-address) with
+            # on-chain values before comparing, so they don't produce false positives.
+            imm_refs_json=$(jq -c '.deployedBytecode.immutableReferences // {}' "$lib_artifact")
+            imm_vals=$(python3 "$SCRIPT_DIR/bytecode.py" read-imm "$onchain_lc" "$imm_refs_json")
+            filled_lc=$(python3 "$SCRIPT_DIR/bytecode.py" fill-imm "$expected_lc" "$imm_refs_json" "$imm_vals")
+            if [ "$(_strip_cbor "$onchain_lc")" != "$(_strip_cbor "$filled_lc")" ]; then
                 echo "  📝 $contract_key: library $lib_key bytecode changed at $lib_addr"
                 return 0
             fi

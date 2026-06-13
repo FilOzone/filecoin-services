@@ -103,20 +103,6 @@ _run_constructor() {
     fi
 }
 
-# Strips the Solidity CBOR metadata trailer from a hex bytecode string (no 0x).
-# The last 2 bytes are a big-endian length N; the N bytes before them are the
-# CBOR data.  Stripping makes bytecode comparison metadata-hash-agnostic.
-_strip_cbor() {
-    local hex="$1"
-    local len=${#hex}
-    [ "$len" -lt 4 ] && { printf '%s' "$hex"; return; }
-    local cbor_len
-    cbor_len=$(printf '%d' "0x${hex: -4}")
-    local strip=$(( (cbor_len + 2) * 2 ))
-    [ "$strip" -ge "$len" ] && { printf '%s' "$hex"; return; }
-    printf '%s' "${hex:0:$(( len - strip ))}"
-}
-
 # Reads all immutable values from a deployed contract's on-chain bytecode.
 # Outputs a JSON object mapping immutable name/ID to its 32-byte hex value
 # (no 0x, lowercase), using the first occurrence of each immutable.
