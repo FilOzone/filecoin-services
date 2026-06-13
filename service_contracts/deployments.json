@@ -46,7 +46,7 @@
         "constructor_args": []
       },
       "SIGNATURE_VERIFICATION_LIB": {
-        "initcode_hash": "0x12633e8217683dfda3b6d0dd4cc96d6d2008235dc76206006dd926e369187332",
+        "initcode_hash": "0x96ccc859a75a3e51240423e8c9b6cd410b2382a0f82786bfde190ff2ee3cf104",
         "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
         "libraries": {},
         "constructor_args": []
@@ -78,7 +78,7 @@
         ]
       },
       "FWSS_IMPLEMENTATION": {
-        "initcode_hash": "0x5895bd5964d9460082475061936dd3346f8ac6cdf8064edc622b67684e9f62bd",
+        "initcode_hash": "0x8f6114b8f8e61d5d72b28f925cfd2d84fd8c122a9fd812855b3e5fdb8b0a419b",
         "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
         "libraries": {
           "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
