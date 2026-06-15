@@ -17,7 +17,109 @@
     "FWSS_PROXY_ADDRESS": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
     "FWSS_IMPLEMENTATION_ADDRESS": "0xaF996097790c17D3C23Cc45A3035a29D293d1492",
     "FWSS_VIEW_ADDRESS": "0xAD28BBF18A72f728Ed816D07F5a1d7Ec40D68b5e",
-    "ENDORSEMENT_SET_ADDRESS": "0x59eFa2e8324E1551d46010d7B0B140eE2F5c726b"
+    "ENDORSEMENT_SET_ADDRESS": "0x59eFa2e8324E1551d46010d7B0B140eE2F5c726b",
+    "contracts": {
+      "SIGNATURE_VERIFICATION_LIB": {
+        "initcode_hash": "0x96ccc859a75a3e51240423e8c9b6cd410b2382a0f82786bfde190ff2ee3cf104",
+        "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "RAILS_LIB": {
+        "initcode_hash": "0xeb35a7a155d2df24d2bd24485d5895aa300cd753cd4c954a35924aa8d5afd26d",
+        "artifact_contract": "snapshots/Rails-v1.3.0-pre-fix.json",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "FWSS_IMPLEMENTATION": {
+        "initcode_hash": "0x0cbd2a36b2e9ed86c1a1755d929796f135fee0cabe2535c27f7b22c096de899f",
+        "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+        "libraries": {
+          "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0xBbd3b82a9396156a997111D42c5356718522ed2D",
+          "src/lib/Rails.sol:Rails": "0x25649D27D556c64708D0BF9B20eC214eC991E223"
+        },
+        "constructor_args": [
+          "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
+          "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+          "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+          "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
+          "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
+          "0x74FD50525A958aF5d484601E252271f9625231aB",
+          "4"
+        ]
+      },
+      "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
+        "initcode_hash": "0x5af15d0493206428018f7442e74b1d11a1df59b5c507a0b4afcf4e173c44ff04",
+        "artifact_contract": "snapshots/ServiceProviderRegistry-v1.3.0.json",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "FWSS_PROXY": {
+        "initcode_hash": "0x138e19d6af68f50e03665aedc3d633d3fb4c4fda87252901b4855b5bafe16c23",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0xaF996097790c17D3C23Cc45A3035a29D293d1492",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "SERVICE_PROVIDER_REGISTRY_PROXY": {
+        "initcode_hash": "0x138e19d6af68f50e03665aedc3d633d3fb4c4fda87252901b4855b5bafe16c23",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0x01293CaFdE24DE89fF26d1A19Bfc4E36CBF74F9B",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "PDP_VERIFIER_PROXY": {
+        "initcode_hash": "0x138e19d6af68f50e03665aedc3d633d3fb4c4fda87252901b4855b5bafe16c23",
+        "artifact_contract": "ERC1967/ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0xb41A97FEDD2D9497C639A643ec75E56CbCeDe8BA",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "FILECOIN_PAY": {
+        "initcode_hash": "0x588ff5a8de176c4ed75274cef33a395236aae6b2e0f7fe04acad1ba9ce6beac2",
+        "artifact_contract": "src/FilecoinPayV1.sol:FilecoinPayV1",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "SESSION_KEY_REGISTRY": {
+        "initcode_hash": "0x94601b8227b0ccfad22f0f93c15d2c5eea1a440d95029fca52936b05e741cb7b",
+        "artifact_contract": "src/SessionKeyRegistry.sol:SessionKeyRegistry",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "ENDORSEMENT_SET": {
+        "initcode_hash": "0x95121f85b9c93fb29dd6559fde7cf53446bb36edad5768bb526c51a19f09ec78",
+        "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "FWSS_VIEW": {
+        "initcode_hash": "0x4cb5434e56e29dbc38b5aa2d15333e3a92880334e6bbbd94792b25e38cab23b7",
+        "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
+        "libraries": {},
+        "constructor_args": [
+          "0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
+        ]
+      },
+      "PDP_VERIFIER_IMPLEMENTATION": {
+        "initcode_hash": "0x6d741c49766709a66bd6bf4f5793e5c04115ce3f3303554edbfc430c4d7fa47a",
+        "artifact_contract": "snapshots/PDPVerifier-v1.3.0.json",
+        "libraries": {},
+        "constructor_args": [
+          "3",
+          "150"
+        ]
+      }
+    }
   },
   "314159": {
     "metadata": {
