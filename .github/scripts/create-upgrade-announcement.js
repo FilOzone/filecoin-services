@@ -30,7 +30,7 @@ Environment variables:
   RELEASE_VERSION      Stack release version for the issue title (default: vX.Y.Z)
   FWSS_VERSION         Expected FilecoinWarmStorageService VERSION() without leading v (optional, default: TBD)
   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
-  CHANGELOG_PR         PR number or link for release-prep changelog updates (optional)
+  RELEASE_PREP_PR      PR number or link for release-prep updates (optional; CHANGELOG_PR also supported)
   CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional)
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
@@ -56,7 +56,7 @@ const config = {
   releaseVersion: (process.env.RELEASE_VERSION || "vX.Y.Z").trim(),
   fwssVersion: formatContractVersion(process.env.FWSS_VERSION),
   upgradeType: process.env.UPGRADE_TYPE,
-  changelogPr: (process.env.CHANGELOG_PR || "").trim(),
+  releasePrepPr: (process.env.RELEASE_PREP_PR || process.env.CHANGELOG_PR || "").trim(),
   changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
   githubToken: process.env.GITHUB_TOKEN,
@@ -114,17 +114,17 @@ function formatActionRequired(value) {
   return value;
 }
 
-function formatChangelogPr(baseUrl) {
-  if (!config.changelogPr) {
+function formatReleasePrepPr(baseUrl) {
+  if (!config.releasePrepPr) {
     return "TBD (link PR after opening)";
   }
 
-  const normalized = config.changelogPr.replace(/^#/, "");
+  const normalized = config.releasePrepPr.replace(/^#/, "");
   if (/^\d+$/.test(normalized)) {
     return `[#${normalized}](${baseUrl}/pull/${normalized})`;
   }
 
-  return config.changelogPr;
+  return config.releasePrepPr;
 }
 
 function loadIssueTemplate() {
@@ -158,14 +158,15 @@ function generateTitle() {
 function generateBody() {
   const [owner, repo] = (config.githubRepository || "FilOzone/filecoin-services").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
-  const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} version bump`;
+  const recommendedPrTitle = `chore: prep FWSS ${config.releaseVersion} release`;
   const releaseBranch = `release-${config.releaseVersion}`;
 
   const replacements = {
     RELEASE_VERSION: config.releaseVersion,
     FWSS_VERSION: config.fwssVersion,
     UPGRADE_TYPE: config.upgradeType,
-    CHANGELOG_PR: formatChangelogPr(baseUrl),
+    CHANGELOG_PR: formatReleasePrepPr(baseUrl),
+    RELEASE_PREP_PR: formatReleasePrepPr(baseUrl),
     CHANGES_SUMMARY: formatBulletList(config.changesSummary),
     ACTION_REQUIRED: formatActionRequired(config.actionRequired),
     RELEASE_BRANCH: releaseBranch,

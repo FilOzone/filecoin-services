@@ -14,7 +14,7 @@ This file is the canonical, self-contained template for FWSS release issues.
 |-------|-------|
 | **Stack Version** | `{{RELEASE_VERSION}}` |
 | **Upgrade Type** | `{{UPGRADE_TYPE}}` |
-| **Changelog PR** | {{CHANGELOG_PR}} |
+| **Release-prep PR(s)** | {{RELEASE_PREP_PR}} |
 | **Technical Owner** | `TBD` |
 | **Go/No-Go Status** | `TBD` |
 
@@ -158,8 +158,7 @@ For each network, record evidence that:
 
 ### Phase 1: Branch, Issue, PR, and Checks
 - [ ] All intended FWSS contract changes are merged into `main`
-- [ ] Changelog/release-notes PR opened for review with a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links
-- [ ] Version bump PR created with the title `{{RECOMMENDED_PR_TITLE}}`, including the `FilecoinWarmStorageService` `VERSION()` bump
+- [ ] Release-prep PR(s) opened for review (prefer one PR when practical) with changelog/release notes, a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links, and any applicable version/submodule bump. For FWSS contract changes, include the `FilecoinWarmStorageService` `VERSION()` bump. For PDP-only stack releases, use the PDP/submodule bump PR and leave the FWSS `VERSION()` unchanged. Suggested title: `{{RECOMMENDED_PR_TITLE}}`
 - [ ] Upgrade checks run:
 
 ```bash
@@ -168,8 +167,8 @@ forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout --extra-output storageLayout
 ```
 
-- [ ] Version bump PR merged so `main` contains the final `FilecoinWarmStorageService` version string
-- [ ] Create release branch from `main` after the version bump lands (recommended: `{{RELEASE_BRANCH}}`). Use this branch as the stable ref for rendering the release issue and as the landing branch for rollout patches if `main` moves on.
+- [ ] Release-prep PR(s) merged so `main` contains the final release notes and applicable version/submodule changes before creating the release branch
+- [ ] Create release branch from `main` after the release-prep PR(s) land (recommended: `{{RELEASE_BRANCH}}`). Use this branch as the stable ref for rendering the release issue and as the landing branch for rollout patches if `main` moves on.
 - [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from the release branch so the issue is rendered from that branch's checklist template
 - [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
 - [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
@@ -395,7 +394,7 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update a follow-up PR for `service_contracts/deployments.json` with live implementation addresses plus `pdp_version` and `fwss_version` fields for each network
 - [ ] Merge the `service_contracts/deployments.json` follow-up PR after checksum validation and live-slot verification
-- [ ] Merge release-prep/changelog PRs if still open, keeping mutable rollout details on the GitHub Release page
+- [ ] Merge release-prep PR(s) if still open, keeping mutable rollout details on the GitHub Release page
 - [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Create "Upgrade Synapse to use newest contracts" issue
