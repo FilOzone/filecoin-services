@@ -942,6 +942,17 @@
   },
   {
     "type": "error",
+    "name": "UnknownCDNBandwidthRail",
+    "inputs": [
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "UnsupportedSignatureV",
     "inputs": [
       {
