@@ -183,7 +183,41 @@ git tag {{RELEASE_VERSION}}
 git push origin {{RELEASE_VERSION}}
 ```
 
-- [ ] Create the GitHub Release from `{{RELEASE_VERSION}}`, mark it as a pre-release, and include component versions plus a FWSS rollout status table
+- [ ] Create the GitHub Release from `{{RELEASE_VERSION}}`, mark it as a pre-release, and include component versions plus a FWSS rollout status table:
+
+```bash
+cat > /tmp/fwss-release-notes.md <<'EOF'
+> Status: Pre-release. Calibnet and Mainnet rollout pending; tracked in the release issue.
+
+## Summary
+- TBD
+
+## Component Versions
+
+| Component | Version | Notes |
+|---|---|---|
+| Stack (`filecoin-services`) | `{{RELEASE_VERSION}}` | Git tag / GitHub Release |
+| `FilecoinWarmStorageService` | `{{FWSS_VERSION}}` | Contract `VERSION()` returned by the FWSS proxy |
+| `PDPVerifier` | `TBD` | Link PDP release if this stack consumes a new PDP version |
+
+## Rollout Status
+
+| Network | FWSS Proxy | FWSS Implementation | StateView | Announce tx | Execute tx | Status |
+|---|---|---|---|---|---|---|
+| Calibnet | `0x02925630df557F957f70E112bA06e50965417CA0` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Mainnet | `0x8408502033C418E1bbC97cE9ac48E5528F371A9f` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+
+## Action Required For Integrators
+- TBD
+EOF
+
+gh release create {{RELEASE_VERSION}} \
+  --verify-tag \
+  --prerelease \
+  --title "FWSS {{RELEASE_VERSION}}" \
+  --notes-file /tmp/fwss-release-notes.md
+```
+
 - [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened the expected Synapse SDK PR from the tag/pre-release, or record an exception in Release Tracking
 - [ ] Release issue Overview and Release Tracking updated with PR links, release link, summary, and action required
 
