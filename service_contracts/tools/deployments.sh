@@ -227,15 +227,22 @@ _strip_cbor() {
     printf '%s' "${hex:0:$(( len - strip ))}"
 }
 
-# Outputs the keccak256 of the initcode in the given artifact file.
-# Strips the 0x prefix before hashing so cast keccak treats input as a UTF-8
-# string — this works for both pure-hex bytecode and bytecode with unlinked
-# library placeholders (__$...$__).
+# Outputs the keccak256 of the initcode in the given artifact file, with library
+# addresses linked in before hashing so the result is stable regardless of whether
+# Foundry has cached a linked copy of the artifact on disk.
+# Args: $1=artifact_path, $2=libraries_str (comma-separated "path:Name:addr,..."; may be empty)
 _compute_initcode_hash() {
     local artifact_path="$1"
+    local libraries_str="${2:-}"
     local initcode_hex
-    initcode_hex=$(jq -r '.bytecode.object' "$artifact_path")
-    printf '%s' "${initcode_hex#0x}" | cast keccak
+    initcode_hex=$(jq -r '.bytecode.object' "$artifact_path" | sed 's/^0x//')
+    if [ -n "$libraries_str" ]; then
+        initcode_hex=$(python3 "$SCRIPT_DIR/bytecode.py" link \
+            "$initcode_hex" \
+            "$(jq -c '.bytecode.linkReferences // {}' "$artifact_path")" \
+            "$(_build_libs_json "$libraries_str")")
+    fi
+    printf '%s' "$initcode_hex" | cast keccak
 }
 
 # Outputs a compact JSON array of the given arguments as strings.
@@ -304,7 +311,7 @@ needs_deployment() {
 
     # Check initcode hash
     local current_hash
-    current_hash=$(_compute_initcode_hash "$artifact_path")
+    current_hash=$(_compute_initcode_hash "$artifact_path" "$libraries_str")
     if [ "$current_hash" != "$stored_hash" ]; then
         echo "  📝 $contract_key: initcode changed"
         return 0
@@ -381,7 +388,7 @@ update_deployment_bytecode() {
     fi
 
     local initcode_hash
-    initcode_hash=$(_compute_initcode_hash "$artifact_path")
+    initcode_hash=$(_compute_initcode_hash "$artifact_path" "$libraries_str")
 
     local temp_file
     temp_file=$(mktemp)
