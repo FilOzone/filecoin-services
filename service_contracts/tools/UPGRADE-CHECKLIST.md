@@ -34,7 +34,7 @@ The filecoin-services release version is the stack version. It may differ from a
 | Component | Version | Changed? | Notes |
 |---|---|---|---|
 | Stack (`filecoin-services`) | `{{RELEASE_VERSION}}` | Yes | Git tag / GitHub Release |
-| `FilecoinWarmStorageService` | `TBD` | `TBD` | Contract `VERSION()` returned by the FWSS proxy |
+| `FilecoinWarmStorageService` | `{{FWSS_VERSION}}` | `TBD` | Contract `VERSION()` returned by the FWSS proxy |
 | `PDPVerifier` | `TBD` | `TBD` | Link PDP release if this stack consumes a new PDP version |
 
 ### Upgrade Schedule
@@ -267,15 +267,14 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
 - [ ] Record Calibnet execute tx link in the Run Log
 - [ ] Verify implementation slot equals `CALI_NEW_IMPL`
-- [ ] Verify `VERSION()` returns the release version without the leading `v`
+- [ ] Verify `VERSION()` returns the expected FWSS contract version
 - [ ] Verify `nextUpgrade()` is cleared
 
 ```bash
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
 export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
-export EXPECTED_FWSS_VERSION="{{RELEASE_VERSION}}" # use the FWSS contract VERSION() if it differs from the stack tag
-EXPECTED_FWSS_VERSION="${EXPECTED_FWSS_VERSION#v}"
+export EXPECTED_FWSS_VERSION="{{FWSS_VERSION}}"
 
 CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
   "$FWSS_PROXY_ADDRESS" \
@@ -354,15 +353,14 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
 - [ ] Record Mainnet execute tx link in the Run Log
 - [ ] Verify implementation slot equals `MAIN_NEW_IMPL`
-- [ ] Verify `VERSION()` returns the release version without the leading `v`
+- [ ] Verify `VERSION()` returns the expected FWSS contract version
 - [ ] Verify `nextUpgrade()` is cleared
 
 ```bash
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
-export EXPECTED_FWSS_VERSION="{{RELEASE_VERSION}}" # use the FWSS contract VERSION() if it differs from the stack tag
-EXPECTED_FWSS_VERSION="${EXPECTED_FWSS_VERSION#v}"
+export EXPECTED_FWSS_VERSION="{{FWSS_VERSION}}"
 
 CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
   "$FWSS_PROXY_ADDRESS" \
