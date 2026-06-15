@@ -34,8 +34,8 @@ The filecoin-services release version is the stack version. It may differ from a
 | Component | Version | Changed? | Notes |
 |---|---|---|---|
 | Stack (`filecoin-services`) | `{{RELEASE_VERSION}}` | Yes | Git tag / GitHub Release |
-| `FilecoinWarmStorageService` | `TBD` | Yes | Contract `VERSION()` returned by the FWSS proxy |
-| `PDPVerifier` | `TBD` | No | Link PDP release if this stack consumes a new PDP version |
+| `FilecoinWarmStorageService` | `TBD` | `TBD` | Contract `VERSION()` returned by the FWSS proxy |
+| `PDPVerifier` | `TBD` | `TBD` | Link PDP release if this stack consumes a new PDP version |
 
 ### Upgrade Schedule
 
