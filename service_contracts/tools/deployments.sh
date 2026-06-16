@@ -200,6 +200,21 @@ _artifact_path() {
         *)
             local sol_file="${artifact_contract%:*}"
             local contract_name="${artifact_contract#*:}"
+            # Some libs (e.g. lib/pdp) are built standalone with their own foundry.toml
+            # and have their own out/ with different compiler settings than the root.
+            # Prefer that lib-local artifact when it actually exists on disk; otherwise
+            # fall back to the root out/ (most libs, e.g. fws-payments, have no out/ of
+            # their own and are compiled as part of the root build).
+            case "$sol_file" in
+                lib/*/src/*)
+                    local lib_root="${sol_file%%/src/*}"
+                    local lib_path="${lib_root}/out/$(basename "$sol_file")/${contract_name}.json"
+                    if [ -f "$lib_path" ]; then
+                        echo "$lib_path"
+                        return
+                    fi
+                    ;;
+            esac
             echo "out/$(basename "$sol_file")/${contract_name}.json"
             ;;
     esac
@@ -234,7 +249,7 @@ _compute_initcode_hash() {
             "$(jq -c '.bytecode.linkReferences // {}' "$artifact_path")" \
             "$(_build_libs_json "$libraries_str")")
     fi
-    printf '%s' "$initcode_hex" | cast keccak
+    printf '0x%s' "$(_strip_cbor "$initcode_hex")" | cast keccak
 }
 
 # Outputs a compact JSON array of the given arguments as strings.
