@@ -431,7 +431,7 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Merge release-prep PR(s) if still open, keeping mutable rollout details on the GitHub Release page
 - [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
-- [ ] Create "Upgrade Synapse to use newest contracts" issue
+- [ ] Confirm Synapse PR/release is merged or owned
 - [ ] Capture lessons learned from this rollout and update [`service_contracts/tools/UPGRADE-CHECKLIST.md`]({{CHECKLIST_LINK}}) if the process should change
 - [ ] Add release link to this issue
 - [ ] Close this issue
