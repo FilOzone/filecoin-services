@@ -200,15 +200,7 @@ _artifact_path() {
         *)
             local sol_file="${artifact_contract%:*}"
             local contract_name="${artifact_contract#*:}"
-            case "$sol_file" in
-                lib/*/src/*)
-                    local lib_root="${sol_file%%/src/*}"
-                    echo "${lib_root}/out/$(basename "$sol_file")/${contract_name}.json"
-                    ;;
-                *)
-                    echo "out/$(basename "$sol_file")/${contract_name}.json"
-                    ;;
-            esac
+            echo "out/$(basename "$sol_file")/${contract_name}.json"
             ;;
     esac
 }

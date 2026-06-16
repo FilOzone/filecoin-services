@@ -163,10 +163,11 @@ deploy_implementation_if_needed() {
     shift 3
     local constructor_args=("$@")
 
-    # Check if address already provided
-    if [ -n "${!var_name}" ]; then
+    local contract_key="${var_name%_ADDRESS}"
+
+    if ! needs_deployment "$CHAIN" "$contract_key" "$contract" "${LIBRARIES:-}" "${constructor_args[@]}"; then
         echo -e "${BOLD}${description}${RESET}"
-        echo "  ✅ Using existing address: ${!var_name}"
+        echo "  ✅ Up to date at: ${!var_name}"
         echo
         return 0
     fi
@@ -224,7 +225,6 @@ deploy_implementation_if_needed() {
 
         # Update deployments.json
         update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
-        local contract_key="${var_name%_ADDRESS}"
         update_deployment_bytecode "$CHAIN" "$contract_key" "$contract" "${LIBRARIES:-}" "${constructor_args[@]}"
     fi
 
