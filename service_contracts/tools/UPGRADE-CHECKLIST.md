@@ -443,6 +443,14 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [Upgrade Checklist Source]({{CHECKLIST_LINK}})
 <!-- ISSUE_TEMPLATE_END -->
 
+## Notes From v1.3.0
+
+- Identify linked libraries and StateView changes before deploy. If the release needs new linked libraries, a new `FilecoinWarmStorageServiceStateView`, or a follow-up `setViewContract`, track those explicitly before deploying the FWSS implementation.
+- Rollback must be explicit before live announce. Record either an approved rollback procedure or a written technical-owner decision that rollback is unsafe or not available for this rollout.
+- Run Synapse updates from the intended deployment-address state. If the Synapse workflow or PR is run before `service_contracts/deployments.json` reflects live addresses, record the exception and owner.
+- Final changelog updates should not fold post-tag source changes into the released version section. Put post-tag source changes under `Unreleased` or the next release.
+- Use the GitHub Release page for mutable rollout details. CHANGELOG entries should describe what changed and link to the release page for deployment addresses, epochs, txs, and validation evidence.
+
 ## Notes From v1.2.0
 
 - Track Calibnet and Mainnet `AFTER_EPOCH` values in a small schedule table near the top of the issue.
@@ -451,7 +459,4 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - Notify FilB before Mainnet announce so they can propagate contract-upgrade information.
 - Run a smoke/E2E check after each network executes; the v1.2.0 rollout used the Synapse SDK storage E2E example.
 - If an `AFTER_EPOCH` changes, record that the later announcement supersedes the earlier one.
-- StateView changes are intentionally left out of the default checklist. If a release needs a new StateView, add a clearly labeled exception section to the release issue and track it explicitly there.
-- `deployments.json` should match live on-chain state behind proxies. Prepare and merge its update after Safe execution, and include component version fields when the schema supports them.
-- Use the GitHub Release page for mutable rollout details. CHANGELOG entries should describe what changed and link to the release page for deployment addresses, epochs, and txs.
 - FilFox verification was flaky during the `v1.2.0` rollout. Record the result, but do not let it block Sourcify + Blockscout verification.
