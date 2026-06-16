@@ -93,9 +93,10 @@
       },
       "SESSION_KEY_REGISTRY": {
         "initcode_hash": "0x94601b8227b0ccfad22f0f93c15d2c5eea1a440d95029fca52936b05e741cb7b",
-        "artifact_contract": "src/SessionKeyRegistry.sol:SessionKeyRegistry",
+        "artifact_contract": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "ENDORSEMENT_SET": {
         "initcode_hash": "0x95121f85b9c93fb29dd6559fde7cf53446bb36edad5768bb526c51a19f09ec78",
@@ -157,9 +158,10 @@
       },
       "SESSION_KEY_REGISTRY": {
         "initcode_hash": "0xbba506b2c43e3f5edf6faa2c33cb04f968411ef02011fd2a786fc1881303169e",
-        "artifact_contract": "SessionKeyRegistry.sol:SessionKeyRegistry",
+        "artifact_contract": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "ENDORSEMENT_SET": {
         "initcode_hash": "0xba92495f3d9212604089e915b09474bbf9b36c975456f233286f96ba24327f41",
