@@ -103,19 +103,6 @@ _run_constructor() {
     fi
 }
 
-# Reads all immutable values from a deployed contract's on-chain bytecode.
-# Outputs a JSON object mapping immutable name/ID to its 32-byte hex value
-# (no 0x, lowercase), using the first occurrence of each immutable.
-# Args: $1=artifact_path, $2=deployed_address (0x-prefixed)
-read_deployment_immutables() {
-    local artifact="$1" address="$2"
-    local onchain
-    onchain=$(cast code "$address" | tr '[:upper:]' '[:lower:]' | sed 's/^0x//')
-    python3 "$SCRIPT_DIR/bytecode.py" read-imm \
-        "$onchain" \
-        "$(jq -c '.deployedBytecode.immutableReferences // {}' "$artifact")"
-}
-
 # Patches any immutable position in simulated bytecode where the on-chain value
 # equals the deployed address (padded to 32 bytes).  This handles both the
 # library_deploy_address immutable (Solidity library delegatecall guard) and
