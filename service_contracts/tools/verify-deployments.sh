@@ -226,6 +226,15 @@ else
         address="${!addr_var:-}"
         [ -z "$address" ] && continue
 
+        # Pinned contracts are managed out-of-band; skip ongoing verification.
+        pinned=$(jq -r \
+            ".[\"$CHAIN\"].contracts[\"$contract_key\"].pinned // false" \
+            "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
+        if [ "$pinned" = "true" ]; then
+            printf '  %-45s SKIP (pinned)\n' "$contract_key"
+            continue
+        fi
+
         artifact_contract=$(jq -r \
             ".[\"$CHAIN\"].contracts[\"$contract_key\"].artifact_contract // empty" \
             "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)

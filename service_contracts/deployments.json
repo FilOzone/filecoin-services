@@ -27,7 +27,7 @@
       },
       "RAILS_LIB": {
         "initcode_hash": "0xeb35a7a155d2df24d2bd24485d5895aa300cd753cd4c954a35924aa8d5afd26d",
-        "artifact_contract": "snapshots/Rails-v1.3.0-pre-fix.json",
+        "artifact_contract": "src/lib/Rails.sol:Rails",
         "libraries": {},
         "constructor_args": []
       },
@@ -50,9 +50,10 @@
       },
       "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
         "initcode_hash": "0x5af15d0493206428018f7442e74b1d11a1df59b5c507a0b4afcf4e173c44ff04",
-        "artifact_contract": "snapshots/ServiceProviderRegistry-v1.3.0.json",
+        "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "FWSS_PROXY": {
         "initcode_hash": "0x138e19d6af68f50e03665aedc3d633d3fb4c4fda87252901b4855b5bafe16c23",
@@ -112,12 +113,13 @@
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
         "initcode_hash": "0x6d741c49766709a66bd6bf4f5793e5c04115ce3f3303554edbfc430c4d7fa47a",
-        "artifact_contract": "snapshots/PDPVerifier-v1.3.0.json",
+        "artifact_contract": "lib/pdp/src/PDPVerifier.sol:PDPVerifier",
         "libraries": {},
         "constructor_args": [
           "3",
           "150"
-        ]
+        ],
+        "pinned": true
       }
     }
   },
@@ -207,9 +209,10 @@
       },
       "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
         "initcode_hash": "0x5af15d0493206428018f7442e74b1d11a1df59b5c507a0b4afcf4e173c44ff04",
-        "artifact_contract": "snapshots/ServiceProviderRegistry-v1.1.0.json",
+        "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "PDP_VERIFIER_PROXY": {
         "initcode_hash": "0xe8213b99a2d062230952ca9bc2eedea8b4afad1ec33a0ea989fa2553ef400017",
