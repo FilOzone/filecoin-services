@@ -134,7 +134,13 @@ FWSS_LIBS="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNAT
 # Use the stored counter for the needs_deployment check.  The counter always increments
 # on deployment, so passing the current (stored+1) value would produce a false "args
 # changed" result when nothing else has changed.
-STORED_FWSS_COUNTER=$(jq -r ".[\"$CHAIN\"].contracts.FWSS_IMPLEMENTATION.constructor_args[-1] // empty" \
+# Look up the counter's position by its constructor parameter name so a future
+# reordering of the FWSS constructor args doesn't silently read the wrong stored value.
+FWSS_ARTIFACT_PATH=$(_artifact_path "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService")
+REINIT_ARG_INDEX=$(jq -r '[.abi[] | select(.type=="constructor") | .inputs[].name] | index("_reinitializer_version")' \
+    "$FWSS_ARTIFACT_PATH" 2>/dev/null)
+STORED_FWSS_COUNTER=$(jq -r --argjson idx "${REINIT_ARG_INDEX:-6}" \
+    ".[\"$CHAIN\"].contracts.FWSS_IMPLEMENTATION.constructor_args[\$idx] // empty" \
     "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
 
 FWSS_IMPL_DEPLOYED=false
