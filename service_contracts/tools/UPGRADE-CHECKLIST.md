@@ -95,6 +95,7 @@ Record validation that proves the planned upgrade works against the full contrac
 | Validation | Evidence/status |
 |---|---|
 | foc-devnet post-upgrade state validation | `TBD` |
+| Synapse SDK integration build | `TBD`: link the Synapse SDK PR/check run that builds against the intended contract ABI/types and deployment-address state, or record the owner-approved exception. |
 
 ### Network Constants
 
@@ -218,7 +219,7 @@ gh release create {{RELEASE_VERSION}} \
   --notes-file /tmp/fwss-release-notes.md
 ```
 
-- [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened the expected Synapse SDK PR from the tag/pre-release, or record an exception in Release Tracking
+- [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened or updated the expected Synapse SDK PR and that its integration build passes against the intended contract ABI/types and deployment-address state, or record an exception/owner in Release Tracking
 - [ ] Release issue Overview and Release Tracking updated with PR links, release link, summary, and action required
 
 ### Phase 2: Deploy Contracts
