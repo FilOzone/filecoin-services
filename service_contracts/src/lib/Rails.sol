@@ -295,13 +295,8 @@ library Rails {
     ) public returns (uint96 newReserveBalance) {
         uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
         if (immediateTermination) {
-            // Try to zero the lockup period (requires a fully-settled account).
-            // For underfunded payers the period change is blocked.
-            try payments.modifyRailLockup(pdpRailId, 0, pending) {}
-            catch {
-                // Always release the fixed lockup
-                payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, pending);
-            }
+            // No try/catch: immediateTermination implies the payer consented and is solvent.
+            payments.modifyRailLockup(pdpRailId, 0, pending);
             newReserveBalance = 0;
         } else {
             newReserveBalance =

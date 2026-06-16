@@ -17,6 +17,7 @@ import {
     PROVEN_THIS_PERIOD_SLOT
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {Errors as PaymentsErrors} from "@fws-payments/Errors.sol";
 import {
     calculateStorageRate,
     DEFAULT_LOCKUP_PERIOD,
@@ -511,17 +512,24 @@ contract AbandonmentTest is MockFVMTest {
         assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lifecycle reserve should be zero after abandonment");
     }
 
-    // An underfunded payer's consent-termination (terminateService with signature) must succeed.
+    // An underfunded payer cannot consent to immediate termination: immediateTermination implies
+    // the payer is solvent enough to release the lifecycle reserve and pay the terminate fee in
+    // one step, so the rail's lockup-period change reverts instead of falling back.
     function testTerminateService_underfundedPayer() public {
         uint256 dataSetId = _createUnderfundedDataSet(address(0xdead2), 2);
 
         _makeSignaturePass(address(0xdead2));
         vm.prank(sp);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PaymentsErrors.LockupPeriodChangeNotAllowedDueToInsufficientFunds.selector,
+                usdfc,
+                address(0xdead2),
+                DEFAULT_LOCKUP_PERIOD,
+                0
+            )
+        );
         fwss.terminateService(dataSetId, abi.encode(FAKE_SIG));
-
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        assertGt(info.pdpEndEpoch, 0, "pdpEndEpoch should be set after terminateService");
-        assertEq(info.lifecycleReserveBalance, 0, "lifecycle reserve should be released on termination");
     }
 
     // CDN rails are finalized before abandonment fires (modifyRailLockup and settleRail both fail).
