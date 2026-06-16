@@ -6,6 +6,8 @@
 
 FilecoinWarmStorageService uses **static global pricing**. All payment rails use the same price regardless of which provider stores the data. The default storage price is 2.5 USDFC per TiB/month.
 
+All pricing constants (rates, fees, and lockup amounts) are defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). The on-chain entry point is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol) which assembles them into the `PriceList` struct.
+
 Providers may advertise their own prices in the ServiceProviderRegistry, but these are informational for other services, and does not affect actual payments in FilecoinWarmStorageService.
 
 ### Rate Calculation
@@ -82,7 +84,7 @@ struct PriceList {
 }
 ```
 
-This is the canonical price discovery API for SDKs and dashboards.
+This is the canonical price discovery API for SDKs and dashboards. The struct is defined in [`service_contracts/src/lib/PriceList.sol`](service_contracts/src/lib/PriceList.sol) and populated from the constants in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol).
 
 ### Pricing Updates
 
@@ -206,7 +208,11 @@ Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the
 
 `terminateService` calls `FilecoinPay.terminateRail(pdpRailId)`. That call sets the rail's `endEpoch` and starts the lockup-period countdown to finalization. FilecoinPay then calls `railTerminated()` back into FWSS, since FWSS is the PDP rail's validator. The callback sets `info.pdpEndEpoch`, emits `PDPPaymentTerminated`, and verifies that the terminator is FWSS itself. The effect of that last check is that the PDP rail can only be terminated through `terminateService`. A direct `FilecoinPay.terminateRail` call from a client or SP is rejected inside the callback.
 
-CDN rails are not touched by `terminateService`. They remain active through the PDP rail's 30-day lockup window, allowing FilBeam to continue settling CDN usage during that period. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
+**Unilateral termination**: When the payer or SP terminates without a consent signature, `lockupPeriod` is left at its existing 30-day value and `endEpoch = block.number + lockupPeriod`. The payer's funds continue flowing to the provider during that window.
+
+**Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`, so `endEpoch = block.number` and the payer's streaming buffer is released immediately. The terminate fee is charged; any remaining lifecycle reserve is released at the next settlement.
+
+CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
 
 Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
 
@@ -229,10 +235,12 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 - Dataset deletion timing is controlled by proving period deadlines, not just the lockup period
 
 **Timing**: To delete a dataset after termination:
-1. Wait for `block.number > pdpEndEpoch` (lockup period elapsed)
+1. Wait for `block.number >= pdpEndEpoch` (lockup period elapsed)
 2. Wait for all proving period deadlines within the lockup to pass
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset
+
+In the immediate termination case (`lockupPeriod = 0`, so `endEpoch = block.number`), steps 1–4 can all be batched into a single transaction: `terminateService` → `settleRail` → `deleteDataSet`.
 
 **State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
 
@@ -442,11 +450,12 @@ sequenceDiagram
 
   rect rgba(248, 248, 248, 0.2)
     Note over Client: 7. Termination
-    Client->>FWSS: (option 1) terminateService(datasetId)
-    SP->>FWSS: (option 2) terminateService(datasetId)
+    Client->>FWSS: (unilateral) terminateService(datasetId)
+    SP->>FWSS: (unilateral) terminateService(datasetId)
+    SP->>FWSS: (consent) terminateService(datasetId, payerSignature)
     FWSS->>FilecoinPayV1: terminateRail(railId)
     FilecoinPayV1-->>FWSS: rail terminated
-    Note over FilecoinPayV1: rail enters lockup, settlement continues
+    Note over FilecoinPayV1: unilateral enters 30-day lockup<br/>consent sets endEpoch = block.number
   end
 ```
 

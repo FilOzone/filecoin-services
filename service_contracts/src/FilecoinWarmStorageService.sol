@@ -78,7 +78,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "1.2.0";
+    string public constant VERSION = "1.3.0";
 
     using Rails for FilecoinPayV1;
 
@@ -647,15 +647,21 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
+        // Cache before either branch clears it — needed to bound the provenPeriods loop below.
+        uint256 activation = provingActivationEpoch[dataSetId];
+
         if (info.pdpEndEpoch == 0) {
             // Abandonment path: rail was never terminated via terminateService.
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
-            payments.abandonRails(dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+            // abandonRails also terminates CDN rails and clears the proving activation epoch
+            payments.abandonRails(
+                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+            );
         } else {
             // Normal path: terminateService was already called.
             // Verify the payment window has elapsed and the rail is fully settled.
-            require(block.number > info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
+            require(block.number >= info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
             try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
                 require(
                     rail.settledUpTo >= rail.endEpoch,
@@ -664,11 +670,11 @@ contract FilecoinWarmStorageService is
             } catch {
                 // Rail is finalized (zeroed out), meaning it was already fully settled
             }
-        }
-
-        // Terminate CDN rails if configured, giving FilBeam a graceful settle window
-        if (info.cdnRailId != 0) {
-            _terminateCDNRails(dataSetId, info, payments);
+            // Terminate CDN rails if configured, giving FilBeam a graceful settle window
+            if (info.cdnRailId != 0) {
+                _terminateCDNRails(dataSetId, info, payments);
+            }
+            delete provingActivationEpoch[dataSetId];
         }
 
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
@@ -687,7 +693,13 @@ contract FilecoinWarmStorageService is
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
-        delete provingActivationEpoch[dataSetId];
+        if (activation != 0) {
+            uint256 lastPeriod = _provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
+            uint256 lastSlot = lastPeriod >> 8;
+            for (uint256 slot = 0; slot <= lastSlot; slot++) {
+                delete provenPeriods[dataSetId][slot];
+            }
+        }
 
         // Clean up rail mappings
         delete railToDataSet[info.pdpRailId];
@@ -774,7 +786,7 @@ contract FilecoinWarmStorageService is
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
         uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
-        updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance);
+        updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance, false);
 
         // Store metadata for each new piece
         for (uint256 i = 0; i < pieceData.length; i++) {
@@ -922,7 +934,7 @@ contract FilecoinWarmStorageService is
 
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
-                updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance);
+                updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance, false);
             }
 
             return;
@@ -972,7 +984,7 @@ contract FilecoinWarmStorageService is
         // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
         bool hadRemovals = processScheduledPieceMetadataRemovals(dataSetId);
         if (hadRemovals || pending > 0) {
-            updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance);
+            updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance, false);
         }
     }
 
@@ -1006,17 +1018,20 @@ contract FilecoinWarmStorageService is
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
         address approver;
+        bool immediateTermination = false;
         if (extraData.length > 0) {
+            require(
+                msg.sender == info.serviceProvider,
+                Errors.CallerNotServiceProvider(dataSetId, info.serviceProvider, msg.sender)
+            );
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
                 Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
             );
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
-            if (msg.sender == info.serviceProvider) {
-                // TODO termination can be immediate
-                info.pendingOneTimePayments += uint96(TERMINATE_FEE);
-            }
+            immediateTermination = true;
+            info.pendingOneTimePayments += uint96(TERMINATE_FEE);
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,
@@ -1030,7 +1045,7 @@ contract FilecoinWarmStorageService is
         uint96 pending = info.pendingOneTimePayments;
         if (pending > 0) {
             uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
-            updatePaymentRates(dataSetId, info, leafCount, pending, info.lifecycleReserveBalance);
+            updatePaymentRates(dataSetId, info, leafCount, pending, info.lifecycleReserveBalance, immediateTermination);
         }
 
         payments.terminateRail(info.pdpRailId);
@@ -1155,13 +1170,14 @@ contract FilecoinWarmStorageService is
         DataSetInfo storage info,
         uint256 leafCount,
         uint96 pending,
-        uint96 reserveBalance
+        uint96 reserveBalance,
+        bool immediateTermination
     ) internal {
         uint256 pdpRailId = info.pdpRailId;
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).updateStorageRates(
-            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch
+            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch, immediateTermination
         );
         info.pendingOneTimePayments = 0;
     }
@@ -1471,16 +1487,12 @@ contract FilecoinWarmStorageService is
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // Proving never activated: no payment due, but settleUpto = toEpoch (not fromEpoch) lets
-        // settleRail advance and discharge lockup. Without this, settleRail reverts with
-        // NoProgressInSettlement, which blocks the abandonment teardown path.
+        // No proving activity: pay nothing, advance settleUpto = toEpoch so settleRail can
+        // discharge lockup. Hit by never-activated data sets and by the finalize leg of
+        // abandonment (which wipes activationEpoch between settles to unblock the open period)
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (activationEpoch == 0) {
-            return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: toEpoch,
-                note: "Proving never activated for this data set"
-            });
+            return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
 
         // Count proven epochs up to toEpoch, possibly stopping earlier if unresolved

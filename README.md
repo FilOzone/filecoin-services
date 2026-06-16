@@ -2,16 +2,6 @@
 
 Building Filecoin onchain programmable services that integrate with the Filecoin network for decentralized storage.
 
-## ⚠️ IMPORTANT DISCLAIMER
-
-**🚨 THE WARM STORAGE CONTRACT IS CURRENTLY UNDER ACTIVE DEVELOPMENT AND IS NOT READY FOR PRODUCTION USE 🚨**
-
-**DO NOT USE IN PRODUCTION ENVIRONMENTS**
-
-This software is provided for development, testing, and research purposes only. The smart contracts have not undergone comprehensive security audits and may contain bugs, vulnerabilities, or other issues that could result in loss of funds or data.
-
-**Use at your own risk. The developers and contributors are not responsible for any losses or damages.**
-
 ## Overview
 
 This repository contains smart contracts and services for the Filecoin ecosystem, featuring:
@@ -41,7 +31,7 @@ The complete on-chain price catalogue is exposed via `FilecoinWarmStorageService
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-org/filecoin-services.git
+git clone https://github.com/FilOzone/filecoin-services.git
 cd filecoin-services/service_contracts
 ```
 

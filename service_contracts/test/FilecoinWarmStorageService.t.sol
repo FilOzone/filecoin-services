@@ -2606,6 +2606,27 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
         assertTrue(viewContract.getDataSet(dataSetId).pdpEndEpoch > 0, "dataset should be terminated");
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertEq(pdpRail.lockupPeriod, 0, "lockup period should be 0 for immediate termination");
+        assertEq(pdpRail.lockupFixed, 0, "lockup fixed should be 0 for immediate termination");
+
+        // With lockupPeriod = 0, endEpoch = block.number — no need to advance blocks
+        payments.settleRail(info.pdpRailId, pdpRail.endEpoch);
+        vm.prank(serviceProvider);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, "");
+        assertEq(viewContract.getDataSet(dataSetId).pdpRailId, 0, "dataset should be deleted");
+    }
+
+    function testTerminateService_extraData_callerNotServiceProvider() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "caller not sp test");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        vm.prank(client);
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.CallerNotServiceProvider.selector, dataSetId, serviceProvider, client)
+        );
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
     }
 
     function testTerminateService_directPayer_emitsApprover() public {
@@ -2628,6 +2649,13 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         emit FilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId);
+
+        FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
+        assertEq(
+            pdpRail.lockupPeriod,
+            DEFAULT_LOCKUP_PERIOD,
+            "lockup period should remain DEFAULT_LOCKUP_PERIOD for non-consensual termination"
+        );
     }
 
     function testTerminateService_sessionKey() public {
@@ -5526,7 +5554,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             if (logs[i].topics[0] == expectedTopic) {
                 // Decode and verify the event data
                 (string memory version, address implementation) = abi.decode(logs[i].data, (string, address));
-                assertEq(version, "1.2.0", "Version should be 1.2.0");
+                assertEq(version, "1.3.0", "Version should be 1.3.0");
                 assertTrue(implementation != address(0), "Implementation address should not be zero");
                 foundEvent = true;
                 break;
@@ -5866,7 +5894,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         assertEq(result.modifiedAmount, 0, "Should pay nothing");
         assertEq(result.settleUpto, toEpoch, "Should advance settlement at zero cost");
-        assertEq(result.note, "Proving never activated for this data set");
+        assertEq(result.note, "No proving activity");
     }
 
     /**

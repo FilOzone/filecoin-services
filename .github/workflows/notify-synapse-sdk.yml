@@ -1,11 +1,6 @@
 name: Update Synapse SDK
 
 on:
-  release:
-    types: [published]
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag:
@@ -20,6 +15,10 @@ on:
 # Required repository secret:
 #   SYNAPSE_SDK_DISPATCH_TOKEN - Token allowed to push branches and create PRs in FilOzone/synapse-sdk.
 #   Current PAT was created using the FilOzzy account on 2026-05-12.
+#
+# This workflow is intentionally manual. FWSS release tags and GitHub pre-releases
+# may be created before live implementation addresses are known, but Synapse SDK
+# should only be updated once the operator has chosen the correct release/address ref.
 
 permissions:
   contents: read

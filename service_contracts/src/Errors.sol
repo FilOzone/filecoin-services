@@ -185,6 +185,12 @@ library Errors {
     /// @param caller The actual caller
     error CallerNotPayer(uint256 dataSetId, address expectedPayer, address caller);
 
+    /// @notice Only the service provider can perform this action
+    /// @param dataSetId The data set ID
+    /// @param expectedServiceProvider The service provider address
+    /// @param caller The actual caller
+    error CallerNotServiceProvider(uint256 dataSetId, address expectedServiceProvider, address caller);
+
     /// @notice Data set is beyond its payment end epoch
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The payment end epoch for the data set
