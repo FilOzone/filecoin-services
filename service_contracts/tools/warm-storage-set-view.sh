@@ -79,5 +79,5 @@ if [ $? -eq 0 ]; then
 else
     echo "Error: Failed to set view contract address"
     echo "$TX_OUTPUT"
-    exit 1
+    return 1 2>/dev/null || exit 1
 fi

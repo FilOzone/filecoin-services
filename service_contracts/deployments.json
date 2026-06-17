@@ -106,7 +106,7 @@
         "constructor_args": []
       },
       "FWSS_VIEW": {
-        "initcode_hash": "0xfe70d1438fdd7b7b5813842bb4c324aa65737efe0156b2d618bc8d08dc248a90",
+        "initcode_hash": "0x7d880859bc2e33a3075959d8eaa93890debcd708b009c11afb69bed38f16cdd3",
         "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
         "libraries": {},
         "constructor_args": [
@@ -178,7 +178,7 @@
         "constructor_args": []
       },
       "FWSS_VIEW": {
-        "initcode_hash": "0x7641472ab898891f9091cb53f3d8f965a677bfdff4668ef4ef4faf3d9c7bdb12",
+        "initcode_hash": "0x7d880859bc2e33a3075959d8eaa93890debcd708b009c11afb69bed38f16cdd3",
         "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
         "libraries": {},
         "constructor_args": [

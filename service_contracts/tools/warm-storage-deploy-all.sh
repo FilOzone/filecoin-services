@@ -446,9 +446,12 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
     echo "  🔧 Setting view address on FilecoinWarmStorageService..."
-    source "$SCRIPT_DIR/warm-storage-set-view.sh"
-    echo "  ✅ View address set"
-    NONCE=$(expr $NONCE + "1")
+    if source "$SCRIPT_DIR/warm-storage-set-view.sh"; then
+        echo "  ✅ View address set"
+        NONCE=$(expr $NONCE + "1")
+    else
+        echo "  ⚠️  setViewContract skipped — deployer is not owner (use multisig)"
+    fi
 fi
 echo
 
