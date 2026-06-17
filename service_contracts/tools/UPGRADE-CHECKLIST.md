@@ -95,6 +95,7 @@ Record validation that proves the planned upgrade works against the full contrac
 | Validation | Evidence/status |
 |---|---|
 | foc-devnet post-upgrade state validation | `TBD` |
+| Pricing validation | `TBD`: link command output, test run, or issue comment confirming FWSS pricing values match the intended release pricing before live rollout. |
 | Synapse SDK integration build | `TBD`: link the Synapse SDK PR/check run that builds against the intended contract ABI/types and deployment-address state, or record the owner-approved exception. |
 
 ### Network Constants
@@ -226,6 +227,7 @@ gh release create {{RELEASE_VERSION}} \
 Deploy both networks before any announce/execute.
 
 - [ ] Run the deployment bytecode/metadata check to identify every contract that must be redeployed, including linked libraries and StateView contracts, then record the required deploy set in the Run Log. If `service_contracts/tools/verify-deployments.sh` or the deployment metadata tooling reports drift, resolve or explicitly waive it before live announce.
+- [ ] If linked libraries are redeployed, record their addresses in the Run Log and confirm whether their ABIs need to be published for downstream consumers
 
 **Calibnet FWSS Implementation**
 - [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=FWSS Implementation`, `dry_run=true`
@@ -335,6 +337,7 @@ echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_FWSS_VERSION)"
 echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ```
 
+- [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
 - [ ] Run and record a Calibnet smoke/E2E test result
 - [ ] Validate a Calibnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
@@ -421,6 +424,7 @@ echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_FWSS_VERSION)"
 echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ```
 
+- [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
 - [ ] Run and record a Mainnet smoke/E2E test result
 - [ ] Validate a Mainnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
@@ -434,6 +438,7 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Verify final `service_contracts/deployments.json` bytecode metadata matches the live deployed contracts after all proxy and View switches are complete
 - [ ] Merge release-prep PR(s) if still open, keeping mutable rollout details on the GitHub Release page
 - [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
+- [ ] Publish or update ABIs for any deployed linked libraries, such as `SignatureVerificationLib` or `Rails`, or record why no library ABI update is required
 - [ ] Run the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available, or record an exception/owner in Release Tracking
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Confirm Synapse PR/release is merged or owned
