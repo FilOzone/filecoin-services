@@ -501,7 +501,9 @@ deploy_proxy_if_needed \
 
 # Step 10: Deploy FilecoinWarmStorageServiceStateView
 echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
-if [ "$DRY_RUN" = "true" ]; then
+if ! needs_deployment "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"; then
+    echo "  ✅ Up to date at: $FWSS_VIEW_ADDRESS"
+elif [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would deploy (skipping in dry-run)"
     FWSS_VIEW_ADDRESS="0x8901234567890123456789012345678901234567"  # Dummy address for dry-run
     echo "  ✅ Deployment planned (dummy: $FWSS_VIEW_ADDRESS)"
@@ -510,11 +512,9 @@ else
     source "$SCRIPT_DIR/warm-storage-deploy-view.sh"
     echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
     NONCE=$(expr $NONCE + "1")
-    
+
     # Update deployments.json
-    if [ -n "$FWSS_VIEW_ADDRESS" ]; then
-        update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
-    fi
+    update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
 fi
 echo
 
