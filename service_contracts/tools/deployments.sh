@@ -440,3 +440,109 @@ get_deployment_address() {
     
     jq -r ".[\"$chain_id\"][\"$contract_name\"] // empty" "$DEPLOYMENTS_JSON_PATH" 2>/dev/null
 }
+
+# Deploy an implementation contract if its bytecode or constructor args have changed.
+#
+# Args: $1=var_name (e.g. FWSS_IMPLEMENTATION_ADDRESS), $2=artifact_contract
+#       $3=description, $4...=constructor args as "name=value" pairs
+#
+# The special name "reinitializer" handles the proxy initialization counter:
+#   - check  uses the stored counter (avoids false positives after proxy initialization)
+#   - deploy uses the current proxy counter + 1 as REINITIALIZER_VERSION
+#
+# Requires these environment variables:
+#   CHAIN, PASSWORD, BROADCAST_FLAG, NONCE, DEPLOYMENTS_JSON_PATH
+#   LIBRARIES (optional, comma-separated "path:Name:addr")
+#   DRY_RUN   (optional, set to "true" to skip actual deployment)
+deploy_implementation_if_needed() {
+    local var_name="$1"
+    local contract="$2"
+    local description="$3"
+    shift 3
+    local raw_args=("$@")
+
+    local contract_key="${var_name%_ADDRESS}"
+
+    local -a check_values=()
+    local -a deploy_values=()
+    local arg_idx=0
+    for pair in "${raw_args[@]}"; do
+        local arg_name="${pair%%=*}"
+        local arg_value="${pair#*=}"
+        if [ "$arg_name" = "reinitializer" ]; then
+            # For needs_deployment: use the stored counter so the check doesn't false-positive
+            # after the proxy has been initialized (which increments the on-chain counter).
+            # Fall back to the current proxy counter if no stored value exists yet (first deploy).
+            local stored_counter
+            stored_counter=$(jq -r ".[\"$CHAIN\"].contracts[\"$contract_key\"].constructor_args[$arg_idx] // empty" \
+                "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
+            check_values+=("${stored_counter:-$arg_value}")
+            # For forge create: always use current proxy counter + 1 as REINITIALIZER_VERSION.
+            deploy_values+=("$(( arg_value + 1 ))")
+        else
+            check_values+=("$arg_value")
+            deploy_values+=("$arg_value")
+        fi
+        arg_idx=$(( arg_idx + 1 ))
+    done
+
+    if ! needs_deployment "$CHAIN" "$contract_key" "$contract" "${LIBRARIES:-}" "${check_values[@]}"; then
+        echo -e "${BOLD:-}${description}${RESET:-}"
+        echo "  ✅ Up to date at: ${!var_name}"
+        echo
+        return 0
+    fi
+
+    echo -e "${BOLD:-}Deploying ${description}${RESET:-}"
+
+    if [ "${DRY_RUN:-}" = "true" ]; then
+        echo "  🔍 Testing compilation..."
+        forge build --contracts "$contract" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
+            eval "$var_name='$dummy_addr'"
+            echo "  ✅ Compilation successful (dummy: ${!var_name})"
+        else
+            echo "  ❌ Compilation failed"
+            exit 1
+        fi
+    else
+        if [ -n "${LIBRARIES:-}" ]; then
+            echo "  📚 Using libraries: $LIBRARIES"
+        fi
+        if [ ${#deploy_values[@]} -gt 0 ]; then
+            echo "  🔧 Constructor args: ${#deploy_values[@]} arguments"
+        fi
+
+        local forge_cmd=(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce "$NONCE")
+
+        if [ -n "${LIBRARIES:-}" ]; then
+            IFS=',' read -ra lib_arr <<< "$LIBRARIES"
+            for lib in "${lib_arr[@]}"; do
+                forge_cmd+=(--libraries "$lib")
+            done
+        fi
+
+        forge_cmd+=("$contract")
+
+        if [ ${#deploy_values[@]} -gt 0 ]; then
+            forge_cmd+=(--constructor-args "${deploy_values[@]}")
+        fi
+
+        local address=$("${forge_cmd[@]}" | grep "Deployed to" | awk '{print $3}')
+
+        if [ -z "$address" ]; then
+            echo "  ❌ Failed to extract address"
+            exit 1
+        fi
+
+        eval "$var_name='$address'"
+        echo "  ✅ Deployed at: ${!var_name}"
+
+        update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
+        update_deployment_bytecode "$CHAIN" "$contract_key" "$contract" "${LIBRARIES:-}" "${deploy_values[@]}"
+    fi
+
+    NONCE=$(expr $NONCE + "1")
+    echo
+}

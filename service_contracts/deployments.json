@@ -86,10 +86,11 @@
         "pinned": true
       },
       "FILECOIN_PAY": {
-        "initcode_hash": "0xd460ac77a9bf5352e3d11d5b6a249c496795dfb06a848e244fd10b8f8721eb36",
-        "artifact_contract": "src/FilecoinPayV1.sol:FilecoinPayV1",
+        "initcode_hash": "0x7b6cdd8afb8e163aa5b38a930e337d43b1edd2c8e2475f9519cbaf7760af4352",
+        "artifact_contract": "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "SESSION_KEY_REGISTRY": {
         "initcode_hash": "0x1ff3aaa830f4d7b24a89b622a740a03f0e5772a9725cb2272d57e6d07bf8df3b",
@@ -146,9 +147,10 @@
     "contracts": {
       "FILECOIN_PAY": {
         "initcode_hash": "0x7b6cdd8afb8e163aa5b38a930e337d43b1edd2c8e2475f9519cbaf7760af4352",
-        "artifact_contract": "src/FilecoinPayV1.sol:FilecoinPayV1",
+        "artifact_contract": "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "SIGNATURE_VERIFICATION_LIB": {
         "initcode_hash": "0x7f289263c875cb7f516f44b8a29f4fc6b0b869727506ebcf4411e059346f7ada",
