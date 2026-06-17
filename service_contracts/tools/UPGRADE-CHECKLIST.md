@@ -225,6 +225,8 @@ gh release create {{RELEASE_VERSION}} \
 ### Phase 2: Deploy Contracts
 Deploy both networks before any announce/execute.
 
+- [ ] Run the deployment bytecode/metadata check to identify every contract that must be redeployed, including linked libraries and StateView contracts, then record the required deploy set in the Run Log. If `service_contracts/tools/verify-deployments.sh` or the deployment metadata tooling reports drift, resolve or explicitly waive it before live announce.
+
 **Calibnet FWSS Implementation**
 - [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=FWSS Implementation`, `dry_run=true`
 - [ ] Re-run with `dry_run=false`
@@ -429,6 +431,7 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update a follow-up PR for `service_contracts/deployments.json` with live implementation addresses plus `pdp_version` and `fwss_version` fields for each network
 - [ ] Merge the `service_contracts/deployments.json` follow-up PR after checksum validation and live-slot verification
+- [ ] Verify final `service_contracts/deployments.json` bytecode metadata matches the live deployed contracts after all proxy and View switches are complete
 - [ ] Merge release-prep PR(s) if still open, keeping mutable rollout details on the GitHub Release page
 - [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
 - [ ] Run the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available, or record an exception/owner in Release Tracking
