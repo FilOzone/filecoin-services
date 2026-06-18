@@ -46,6 +46,8 @@ The filecoin-services release version is the stack version. It may differ from a
 
 ### Run Log
 
+The Run Log is this release issue's operator journal for rollout facts discovered during execution: deployed addresses, transaction links, validation outputs, exceptions, and owner decisions.
+
 Keep this table current as values become known.
 
 | Network | New FWSS implementation | Announce tx | Execute tx | Post-upgrade checks |
