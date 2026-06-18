@@ -256,7 +256,7 @@ else
 
         # Rebuild "path:Name:addr,..." from stored {"path:Name": "addr"} JSON
         libraries_str=$(jq -r \
-            ".[\"$CHAIN\"].contracts[\"$contract_key\"].libraries | to_entries[] | \"\(.key):\(.value)\"" \
+            ".[\"$CHAIN\"].contracts[\"$contract_key\"].libraries // {} | to_entries[] | \"\(.key):\(.value)\"" \
             "$DEPLOYMENTS_JSON_PATH" 2>/dev/null \
             | tr '\n' ',' | sed 's/,$//')
 
