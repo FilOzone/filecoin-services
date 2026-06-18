@@ -278,26 +278,15 @@ echo "  CHALLENGE_FINALITY=$CHALLENGE_FINALITY"
 echo "  MAX_PROVING_PERIOD=$MAX_PROVING_PERIOD"
 echo "  CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE"
 
-# Test compilation of key contracts in dry-run mode
+# Build all contracts once in dry-run mode so per-step artifact checks hit the cache
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of core contracts..."
-    
-    # Test compilation without network interaction
-    echo "  - Testing FilecoinWarmStorageService compilation..."
-    forge build --contracts src/FilecoinWarmStorageService.sol > /dev/null 2>&1
+    echo "🔍 Building contracts..."
+    forge build
     if [ $? -ne 0 ]; then
-        echo "❌ FilecoinWarmStorageService compilation failed"
+        echo "❌ Contract compilation failed"
         exit 1
     fi
-    
-    echo "  - Testing ServiceProviderRegistry compilation..."
-    forge build --contracts src/ServiceProviderRegistry.sol > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "❌ ServiceProviderRegistry compilation failed"
-        exit 1
-    fi
-    
-    echo "✅ Core contract compilation tests passed"
+    echo "✅ Contract compilation passed"
 fi
 
 # ========================================

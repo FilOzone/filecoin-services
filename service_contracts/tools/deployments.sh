@@ -496,16 +496,15 @@ deploy_implementation_if_needed() {
     echo -e "${BOLD:-}Deploying ${description}${RESET:-}"
 
     if [ "${DRY_RUN:-}" = "true" ]; then
-        echo "  🔍 Testing compilation..."
-        forge build --contracts "$contract" > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
-            eval "$var_name='$dummy_addr'"
-            echo "  ✅ Compilation successful (dummy: ${!var_name})"
-        else
-            echo "  ❌ Compilation failed"
+        local artifact_path
+        artifact_path=$(_artifact_path "$contract")
+        if [ ! -f "$artifact_path" ]; then
+            echo "  ❌ Artifact not found: $artifact_path (run forge build first)"
             exit 1
         fi
+        local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
+        eval "$var_name='$dummy_addr'"
+        echo "  ✅ Artifact found (dummy: ${!var_name})"
     else
         if [ -n "${LIBRARIES:-}" ]; then
             echo "  📚 Using libraries: $LIBRARIES"
