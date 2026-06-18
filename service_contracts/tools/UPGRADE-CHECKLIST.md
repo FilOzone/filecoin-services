@@ -467,7 +467,18 @@ CHAIN=314 ETH_RPC_URL="https://api.node.glif.io/rpc/v1" \
 
 - [ ] Merge release-prep PR(s) if still open, keeping mutable rollout details on the GitHub Release page
 - [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
-- [ ] Publish or update ABIs for any deployed linked libraries, such as `SignatureVerificationLib` or `Rails`, or record why no library ABI update is required
+- [ ] Publish or update required ABIs after linked-library or interface changes: run `make -C service_contracts update-abi` for checked-in `service_contracts/abi` updates, confirm the Synapse SDK workflow regenerated downstream ABI/types, and record any explicit linked-library ABI publishing target or `None required`
+
+<details>
+<summary>ABI update commands</summary>
+
+```bash
+make -C service_contracts update-abi
+git status --short service_contracts/abi
+```
+
+</details>
+
 - [ ] Run the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available, or record an exception/owner in Release Tracking
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Confirm Synapse PR/release is merged or owned
