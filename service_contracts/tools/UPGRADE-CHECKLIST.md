@@ -447,6 +447,24 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Open or update a follow-up PR for `service_contracts/deployments.json` with live implementation addresses plus `pdp_version` and `fwss_version` fields for each network
 - [ ] Merge the `service_contracts/deployments.json` follow-up PR after checksum validation and live-slot verification
 - [ ] Verify final `service_contracts/deployments.json` bytecode metadata matches the live deployed contracts after all proxy and View switches are complete
+
+<details>
+<summary>Deployment bytecode metadata verification commands</summary>
+
+```bash
+cd service_contracts
+
+# Calibnet
+CHAIN=314159 ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1" \
+  ./tools/verify-deployments.sh
+
+# Mainnet
+CHAIN=314 ETH_RPC_URL="https://api.node.glif.io/rpc/v1" \
+  ./tools/verify-deployments.sh
+```
+
+</details>
+
 - [ ] Merge release-prep PR(s) if still open, keeping mutable rollout details on the GitHub Release page
 - [ ] Promote the GitHub Release from pre-release to latest after Mainnet proxy switch, checks, and release-page status are complete
 - [ ] Publish or update ABIs for any deployed linked libraries, such as `SignatureVerificationLib` or `Rails`, or record why no library ABI update is required
