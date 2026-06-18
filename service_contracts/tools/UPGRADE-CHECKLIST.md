@@ -27,6 +27,7 @@ The filecoin-services release version is the stack version. It may differ from a
 | Frozen deploy commit | `TBD` |
 | GitHub pre-release | `TBD` |
 | Release status | `Pre-release until Mainnet proxy switch is verified` |
+| `deployments.json` PR(s) | `TBD` |
 | Synapse SDK PR | `TBD` |
 
 ### Component Versions
@@ -119,7 +120,7 @@ Record validation that proves the planned upgrade works against the full contrac
 - In Safe Transaction Builder, use the script output exactly: target is the printed FWSS proxy, value is `0`, and data is the printed calldata.
 - Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `createDataSet` validation are complete.
 - Do not announce Mainnet until required cross-repo changes are merged/released or explicitly waived by the technical owner.
-- `service_contracts/deployments.json` reflects what is live behind proxies. Update it only after the relevant proxy switch is complete, normally in a follow-up PR.
+- `service_contracts/deployments.json` reflects what is live behind proxies and View contracts. Update it only after the relevant proxy switch and, if applicable, View switch are complete, normally through follow-up PR(s) to `main`, and record PR links in Release Tracking.
 - If an `AFTER_EPOCH` changes, submit a new `announcePlannedUpgrade()` transaction and record that it supersedes the previous announcement.
 
 ### Notice Guidance
@@ -353,6 +354,7 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 - [ ] Validate a Calibnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
 - [ ] Verify the proxy on Blockscout
 - [ ] Update the GitHub pre-release Calibnet rollout status with execute tx, checks, and smoke/E2E evidence
+- [ ] If Calibnet deployment addresses should be published before Mainnet, open or update a Calibnet-only follow-up PR to `main` for `service_contracts/deployments.json` after the Calibnet proxy switch and, if applicable, View switch are live, then record the PR link in Release Tracking. Otherwise record that the `deployments.json` update will wait for Mainnet.
 - [ ] Technical owner confirms Calibnet results are good before announcing Mainnet
 
 ### Phase 4: Mainnet Announce + Execute
@@ -444,8 +446,8 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
-- [ ] Open or update a follow-up PR for `service_contracts/deployments.json` with live implementation addresses plus `pdp_version` and `fwss_version` fields for each network
-- [ ] Merge the `service_contracts/deployments.json` follow-up PR after checksum validation and live-slot verification
+- [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
+- [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
 - [ ] Verify final `service_contracts/deployments.json` bytecode metadata matches the live deployed contracts after all proxy and View switches are complete
 
 <details>
