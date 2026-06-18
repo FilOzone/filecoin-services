@@ -188,8 +188,10 @@ git push origin {{RELEASE_VERSION}}
 - [ ] Create the GitHub Release from `{{RELEASE_VERSION}}`, mark it as a pre-release, and include component versions plus a FWSS rollout status table:
 
 ```bash
+export RELEASE_ISSUE_URL="TBD" # replace with the generated release issue URL
+
 cat > /tmp/fwss-release-notes.md <<'EOF'
-> Status: Pre-release. Calibnet and Mainnet rollout pending; tracked in the release issue.
+> Status: Pre-release. Calibnet and Mainnet rollout pending; tracked in [the release issue](RELEASE_ISSUE_URL).
 
 ## Summary
 - TBD
@@ -212,6 +214,8 @@ cat > /tmp/fwss-release-notes.md <<'EOF'
 ## Action Required For Integrators
 - TBD
 EOF
+
+perl -0pi -e 's|RELEASE_ISSUE_URL|$ENV{RELEASE_ISSUE_URL}|g' /tmp/fwss-release-notes.md
 
 gh release create {{RELEASE_VERSION}} \
   --verify-tag \
