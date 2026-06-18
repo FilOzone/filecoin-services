@@ -187,6 +187,9 @@ git push origin {{RELEASE_VERSION}}
 
 - [ ] Create the GitHub Release from `{{RELEASE_VERSION}}`, mark it as a pre-release, and include component versions plus a FWSS rollout status table:
 
+<details>
+<summary>GitHub Release creation commands</summary>
+
 ```bash
 export RELEASE_ISSUE_URL="TBD" # replace with the generated release issue URL
 
@@ -223,6 +226,8 @@ gh release create {{RELEASE_VERSION}} \
   --title "FWSS {{RELEASE_VERSION}}" \
   --notes-file /tmp/fwss-release-notes.md
 ```
+
+</details>
 
 - [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened or updated the expected Synapse SDK PR and that its integration build passes against the intended contract ABI/types and deployment-address state, or record an exception/owner in Release Tracking
 - [ ] Release issue Overview and Release Tracking updated with PR links, release link, summary, and action required
