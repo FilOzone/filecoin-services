@@ -201,6 +201,11 @@ contract FilecoinWarmStorageService is
         uint256 datasetFeePerMonth; // Per-dataset additive monthly fee (0.024 USDFC)
     }
 
+    struct UpgradePlan {
+        address nextImplementation;
+        uint96 delay;
+    }
+
     // Used for announcing upgrades, packed into one slot
     struct PlannedUpgrade {
         // Address of the new implementation contract
@@ -302,6 +307,8 @@ contract FilecoinWarmStorageService is
 
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
+
+    mapping(string version => uint256 epoch) public upgradeEpoch;
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
@@ -405,7 +412,18 @@ contract FilecoinWarmStorageService is
         challengeWindowSize = _challengeWindowSize;
     }
 
-    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
+    function announceUpgradePlan(UpgradePlan calldata upgradePlan) external {
+        PlannedUpgrade memory plannedUpgrade =
+            PlannedUpgrade(upgradePlan.nextImplementation, uint96(block.number) + upgradePlan.delay);
+        _announcePlannedUpgrade(plannedUpgrade);
+    }
+
+    // deprecated
+    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
+        _announcePlannedUpgrade(plannedUpgrade);
+    }
+
+    function _announcePlannedUpgrade(PlannedUpgrade memory plannedUpgrade) internal onlyOwner {
         require(plannedUpgrade.nextImplementation.code.length > 3000);
         require(plannedUpgrade.afterEpoch > block.number);
         nextUpgrade = plannedUpgrade;
@@ -448,6 +466,7 @@ contract FilecoinWarmStorageService is
             emit ViewContractSet(_viewContract);
         }
 
+        upgradeEpoch[VERSION] = block.number;
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
     }
 
