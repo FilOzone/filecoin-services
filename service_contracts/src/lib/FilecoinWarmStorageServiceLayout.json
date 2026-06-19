@@ -544,9 +544,9 @@
     "label": "nextUpgrade",
     "slot": "19",
     "offset": 0,
-    "type": "struct FilecoinWarmStorageService.PlannedUpgrade",
+    "type": "struct UpgradeHardening.PlannedUpgrade",
     "typeDetails": {
-      "label": "struct FilecoinWarmStorageService.PlannedUpgrade",
+      "label": "struct UpgradeHardening.PlannedUpgrade",
       "encoding": "inplace",
       "numberOfBytes": "32",
       "members": [
@@ -618,6 +618,27 @@
           "encoding": "inplace",
           "numberOfBytes": "32"
         }
+      }
+    }
+  },
+  {
+    "label": "_upgradeEpoch",
+    "slot": "23",
+    "offset": 0,
+    "type": "mapping(string => uint256)",
+    "typeDetails": {
+      "label": "mapping(string => uint256)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "string",
+        "encoding": "bytes",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
       }
     }
   }

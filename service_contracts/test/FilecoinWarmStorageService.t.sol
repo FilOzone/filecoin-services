@@ -10,6 +10,7 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {UpgradeHardening} from "../src/UpgradeHardening.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
@@ -512,7 +513,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.roll(plan.afterEpoch);
         vm.expectEmit(false, false, false, true, address(service));
-        emit FilecoinWarmStorageService.ContractUpgraded(newServiceImpl.VERSION(), plan.nextImplementation);
+        emit UpgradeHardening.ContractUpgraded(newServiceImpl.VERSION(), plan.nextImplementation);
         service.upgradeToAndCall(plan.nextImplementation, migrateData);
     }
 

@@ -6,14 +6,12 @@ import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
-import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "./Errors.sol";
+import {UpgradeHardening} from "./UpgradeHardening.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
@@ -72,8 +70,7 @@ contract FilecoinWarmStorageService is
     PDPListener,
     IValidator,
     Initializable,
-    UUPSUpgradeable,
-    OwnableUpgradeable,
+    UpgradeHardening,
     Extsload,
     EIP712Upgradeable
 {
@@ -84,7 +81,6 @@ contract FilecoinWarmStorageService is
 
     // Events
 
-    event ContractUpgraded(string version, address implementation);
     event FilecoinServiceDeployed(string name, string description);
     event DataSetServiceProviderChanged(
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
@@ -201,19 +197,6 @@ contract FilecoinWarmStorageService is
         uint256 datasetFeePerMonth; // Per-dataset additive monthly fee (0.024 USDFC)
     }
 
-    struct UpgradePlan {
-        address nextImplementation;
-        uint96 delay;
-    }
-
-    // Used for announcing upgrades, packed into one slot
-    struct PlannedUpgrade {
-        // Address of the new implementation contract
-        address nextImplementation;
-        // Upgrade will not occur until at least this epoch
-        uint96 afterEpoch;
-    }
-
     // Constants
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
@@ -299,6 +282,7 @@ contract FilecoinWarmStorageService is
     // The address allowed to terminate CDN services
     address private filBeamControllerAddress;
 
+    // Pending upgrade announcement
     PlannedUpgrade private nextUpgrade;
 
     // Pricing rates (mutable for future adjustments)
@@ -308,9 +292,8 @@ contract FilecoinWarmStorageService is
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
 
-    mapping(string version => uint256 epoch) public upgradeEpoch;
-
-    event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
+    // Epoch at which each contract version was deployed
+    mapping(string version => uint256 epoch) private _upgradeEpoch;
 
     // =========================================================================
 
@@ -412,29 +395,16 @@ contract FilecoinWarmStorageService is
         challengeWindowSize = _challengeWindowSize;
     }
 
-    function announceUpgradePlan(UpgradePlan calldata upgradePlan) external {
-        PlannedUpgrade memory plannedUpgrade =
-            PlannedUpgrade(upgradePlan.nextImplementation, uint96(block.number) + upgradePlan.delay);
-        _announcePlannedUpgrade(plannedUpgrade);
+    function _currentVersion() internal pure override returns (string memory) {
+        return VERSION;
     }
 
-    // deprecated
-    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
-        _announcePlannedUpgrade(plannedUpgrade);
+    function _nextUpgradeStorage() internal view override returns (PlannedUpgrade storage) {
+        return nextUpgrade;
     }
 
-    function _announcePlannedUpgrade(PlannedUpgrade memory plannedUpgrade) internal onlyOwner {
-        require(plannedUpgrade.nextImplementation.code.length > 3000);
-        require(plannedUpgrade.afterEpoch > block.number);
-        nextUpgrade = plannedUpgrade;
-        emit UpgradeAnnounced(plannedUpgrade);
-    }
-
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
-        // zero address already checked by ERC1967Utils._setImplementation
-        require(newImplementation == nextUpgrade.nextImplementation);
-        require(block.number >= nextUpgrade.afterEpoch);
-        delete nextUpgrade;
+    function _upgradeEpochStorage() internal view override returns (mapping(string => uint256) storage) {
+        return _upgradeEpoch;
     }
 
     /**
@@ -466,8 +436,7 @@ contract FilecoinWarmStorageService is
             emit ViewContractSet(_viewContract);
         }
 
-        upgradeEpoch[VERSION] = block.number;
-        emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+        _recordUpgrade(VERSION);
     }
 
     /**
