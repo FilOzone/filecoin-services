@@ -3,7 +3,8 @@
 # Supports Filfox, Blockscout, and Sourcify verification with proper error handling
 
 # Configuration
-FILFOX_VERIFIER_VERSION="v1.4.4"
+FILFOX_VERIFIER_PACKAGE="@fil-b/filfox-verifier"
+FILFOX_VERIFIER_VERSION="1.1.2"
 
 if [ -z "$CHAIN" ]; then
   export CHAIN=$(cast chain-id)
@@ -24,7 +25,7 @@ verify_filfox() {
   fi
 
   echo "Verifying $display_name on Filfox (chain ID: $CHAIN)..."
-  if npm exec -y -- filfox-verifier@$FILFOX_VERIFIER_VERSION forge "$address" "$contract_path" --chain "$CHAIN"; then
+  if npm exec -y --package "$FILFOX_VERIFIER_PACKAGE@$FILFOX_VERIFIER_VERSION" -- filfox-verifier forge "$address" "$contract_path" --chain "$CHAIN"; then
     echo "Filfox verification successful for $display_name"
     return 0
   else
