@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {console, Test, Vm} from "forge-std/Test.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -585,6 +586,25 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             MIN_UPGRADE_DELAY + (MAX_UPGRADE_DELAY - MIN_UPGRADE_DELAY) * t * t * t / (ramp * ramp * ramp);
         (, uint96 afterEpoch) = viewContract.nextUpgrade();
         assertEq(afterEpoch, vm.getBlockNumber() + expectedDelay);
+    }
+
+    function testAnnounceUpgradePlan_overflowingDelayReverts() public {
+        FilecoinWarmStorageService newImpl = _newFWSSImpl();
+        // type(uint96).max overflows uint96(block.number) + delay; Solidity 0.8 reverts rather than wrapping
+        UpgradeHardening.UpgradePlan memory plan =
+            UpgradeHardening.UpgradePlan({nextImplementation: address(newImpl), delay: type(uint96).max});
+        vm.expectRevert(stdError.arithmeticError);
+        pdpServiceWithPayments.announceUpgradePlan(plan);
+    }
+
+    function testAnnouncePlannedUpgrade_pastEpochClampsToMinDelay() public {
+        FilecoinWarmStorageService newImpl = _newFWSSImpl();
+        UpgradeHardening.PlannedUpgrade memory plan =
+            UpgradeHardening.PlannedUpgrade({nextImplementation: address(newImpl), afterEpoch: 0});
+        pdpServiceWithPayments.announcePlannedUpgrade(plan);
+
+        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        assertGe(afterEpoch, vm.getBlockNumber() + MIN_UPGRADE_DELAY);
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)
