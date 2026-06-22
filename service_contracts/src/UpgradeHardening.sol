@@ -41,10 +41,8 @@ abstract contract UpgradeHardening is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     function announceUpgradePlan(UpgradePlan calldata upgradePlan) external {
-        uint256 minDelay = _hardenedMinDelay();
-        uint96 delay = upgradePlan.delay >= minDelay ? upgradePlan.delay : uint96(minDelay);
         PlannedUpgrade memory plannedUpgrade =
-            PlannedUpgrade(upgradePlan.nextImplementation, uint96(block.number) + delay);
+            PlannedUpgrade(upgradePlan.nextImplementation, uint96(block.number) + upgradePlan.delay);
         _announcePlannedUpgrade(plannedUpgrade);
     }
 
@@ -55,7 +53,10 @@ abstract contract UpgradeHardening is UUPSUpgradeable, OwnableUpgradeable {
 
     function _announcePlannedUpgrade(PlannedUpgrade memory plannedUpgrade) internal onlyOwner {
         require(plannedUpgrade.nextImplementation.code.length > 3000);
-        require(plannedUpgrade.afterEpoch > block.number);
+        uint256 minAfterEpoch = block.number + _hardenedMinDelay();
+        if (plannedUpgrade.afterEpoch < minAfterEpoch) {
+            plannedUpgrade.afterEpoch = uint96(minAfterEpoch);
+        }
         PlannedUpgrade storage $ = _nextUpgradeStorage();
         $.nextImplementation = plannedUpgrade.nextImplementation;
         $.afterEpoch = plannedUpgrade.afterEpoch;
