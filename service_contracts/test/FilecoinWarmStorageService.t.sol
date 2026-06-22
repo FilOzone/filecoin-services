@@ -10,7 +10,9 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
-import {UpgradeHardening} from "../src/UpgradeHardening.sol";
+import {
+    UpgradeHardening, MIN_UPGRADE_DELAY, MAX_UPGRADE_DELAY, UPGRADE_HARDENING_RAMP
+} from "../src/UpgradeHardening.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
@@ -515,6 +517,74 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.expectEmit(false, false, false, true, address(service));
         emit UpgradeHardening.ContractUpgraded(newServiceImpl.VERSION(), plan.nextImplementation);
         service.upgradeToAndCall(plan.nextImplementation, migrateData);
+    }
+
+    function _newFWSSImpl() internal returns (FilecoinWarmStorageService) {
+        return new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            mockUSDFC,
+            filBeamBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry,
+            4
+        );
+    }
+
+    function testAnnounceUpgradePlan_clampsToMinDelay() public {
+        // upgradeEpoch[VERSION] == 0, so min delay is MIN_UPGRADE_DELAY
+        FilecoinWarmStorageService newImpl = _newFWSSImpl();
+        UpgradeHardening.UpgradePlan memory plan =
+            UpgradeHardening.UpgradePlan({nextImplementation: address(newImpl), delay: 0});
+        pdpServiceWithPayments.announceUpgradePlan(plan);
+
+        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        assertEq(afterEpoch, vm.getBlockNumber() + MIN_UPGRADE_DELAY);
+    }
+
+    function testAnnounceUpgradePlan_respectsHigherUserDelay() public {
+        FilecoinWarmStorageService newImpl = _newFWSSImpl();
+        uint96 userDelay = 1000;
+        UpgradeHardening.UpgradePlan memory plan =
+            UpgradeHardening.UpgradePlan({nextImplementation: address(newImpl), delay: userDelay});
+        pdpServiceWithPayments.announceUpgradePlan(plan);
+
+        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        assertEq(afterEpoch, vm.getBlockNumber() + userDelay);
+    }
+
+    function testAnnounceUpgradePlan_maxDelayAtFullRamp() public {
+        pdpServiceWithPayments.migrate(address(0));
+        uint256 migrateBlock = vm.getBlockNumber();
+
+        vm.roll(migrateBlock + UPGRADE_HARDENING_RAMP);
+
+        FilecoinWarmStorageService newImpl = _newFWSSImpl();
+        UpgradeHardening.UpgradePlan memory plan =
+            UpgradeHardening.UpgradePlan({nextImplementation: address(newImpl), delay: 0});
+        pdpServiceWithPayments.announceUpgradePlan(plan);
+
+        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        assertEq(afterEpoch, vm.getBlockNumber() + MAX_UPGRADE_DELAY);
+    }
+
+    function testAnnounceUpgradePlan_cubicInterpolationAtHalfRamp() public {
+        pdpServiceWithPayments.migrate(address(0));
+        uint256 migrateBlock = vm.getBlockNumber();
+
+        uint256 t = UPGRADE_HARDENING_RAMP / 2;
+        vm.roll(migrateBlock + t);
+
+        FilecoinWarmStorageService newImpl = _newFWSSImpl();
+        UpgradeHardening.UpgradePlan memory plan =
+            UpgradeHardening.UpgradePlan({nextImplementation: address(newImpl), delay: 0});
+        pdpServiceWithPayments.announceUpgradePlan(plan);
+
+        uint256 ramp = UPGRADE_HARDENING_RAMP;
+        uint256 expectedDelay =
+            MIN_UPGRADE_DELAY + (MAX_UPGRADE_DELAY - MIN_UPGRADE_DELAY) * t * t * t / (ramp * ramp * ramp);
+        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        assertEq(afterEpoch, vm.getBlockNumber() + expectedDelay);
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)

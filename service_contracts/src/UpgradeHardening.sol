@@ -5,6 +5,11 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 
+// Minimum delay grows cubically from MIN to MAX over RAMP epochs since last upgrade
+uint256 constant MIN_UPGRADE_DELAY = 10; // 5 min
+uint256 constant MAX_UPGRADE_DELAY = 40_320; // 2 weeks
+uint256 constant UPGRADE_HARDENING_RAMP = 161_280; // 8 weeks
+
 /// @notice Abstract base that enforces a time-hardened minimum delay before upgrades can execute.
 abstract contract UpgradeHardening is UUPSUpgradeable, OwnableUpgradeable {
     struct UpgradePlan {
@@ -19,11 +24,6 @@ abstract contract UpgradeHardening is UUPSUpgradeable, OwnableUpgradeable {
         // Upgrade will not occur until at least this epoch
         uint96 afterEpoch;
     }
-
-    // Minimum delay grows cubically from MIN to MAX over RAMP epochs since last upgrade
-    uint256 internal constant MIN_UPGRADE_DELAY = 10; // 5 min
-    uint256 internal constant MAX_UPGRADE_DELAY = 40_320; // 2 weeks
-    uint256 internal constant UPGRADE_HARDENING_RAMP = 161_280; // 8 weeks
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
     event ContractUpgraded(string version, address implementation);

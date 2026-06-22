@@ -75,7 +75,6 @@ typedetails_compatible() {
             elif (($base | type) == "object") and (($new | type) == "object") then
                 if (($base | has("encoding")) and $base.encoding == "inplace" and ($base | has("members"))) and
                    (($new  | has("encoding")) and $new.encoding  == "inplace" and ($new  | has("members"))) then
-                    ($base.label == $new.label) and
                     (($new.members | length) >= ($base.members | length)) and
                     ($base.members == ($new.members[0:($base.members | length)]))
                 else
