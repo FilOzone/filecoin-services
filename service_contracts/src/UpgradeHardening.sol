@@ -48,7 +48,7 @@ abstract contract UpgradeHardening is UUPSUpgradeable, OwnableUpgradeable {
         _announcePlannedUpgrade(plannedUpgrade);
     }
 
-    // deprecated
+    /// @custom:deprecated Use announceUpgradePlan instead
     function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
         _announcePlannedUpgrade(plannedUpgrade);
     }
