@@ -12,6 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SponsoredDataSet, SponsoredDataSetFactory} from "../src/SponsoredDataSet.sol";
+import {LibRLP} from "solady/utils/LibRLP.sol";
 import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -279,5 +280,93 @@ contract SponsoredDataSetTest is MockFVMTest {
 
         dataSet.release(IERC20(address(token)));
         assertEq(token.balanceOf(beneficiary), available);
+    }
+
+    // Returns the nonce the factory will use for its next initDataSet deployment.
+    function _factoryNonce() internal view returns (uint64) {
+        return uint64(vm.getNonce(address(factory)));
+    }
+
+    // Seeds lastProvenEpoch for a PDPVerifier data set via vm.store.
+    // DATA_SET_LAST_PROVEN_EPOCH_SLOT = 14 per PDPVerifierLayout.sol
+    function _fakeProven(uint256 dsId) internal {
+        bytes32 slot = keccak256(abi.encode(dsId, uint256(14)));
+        vm.store(address(pdpVerifier), slot, bytes32(vm.getBlockNumber()));
+    }
+
+    function testMigrateRevertsIfNotFinalized() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        vm.expectRevert(SponsoredDataSet.NotFinalized.selector);
+        source.migrate(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateRevertsIfSuccessorNotFinalized() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.expectRevert(SponsoredDataSet.SuccessorNotFinalized.selector);
+        source.migrate(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateRevertsIfNotTerminated() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce)).finalize();
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        vm.expectRevert(SponsoredDataSet.DataSetNotTerminated.selector);
+        source.migrate(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateRevertsIfSuccessorNotProven() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce)).finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.expectRevert(SponsoredDataSet.SuccessorNotProven.selector);
+        source.migrate(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrate() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+
+        (uint256 funds, uint256 lockupCurrent,,) = payments.accounts(IERC20(address(token)), address(source));
+        uint256 available = funds - lockupCurrent;
+
+        source.migrate(factory, sourceNonce, successorNonce);
+
+        (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
+        assertEq(dstFunds, 10 ** token.decimals() + available);
     }
 }

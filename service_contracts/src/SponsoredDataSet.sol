@@ -7,6 +7,9 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
+import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
+import {LibRLP} from "solady/utils/LibRLP.sol";
+import {LibBytes} from "solady/utils/LibBytes.sol";
 
 function hashTypedDataV4(FilecoinWarmStorageService fwss, bytes32 structHash) view returns (bytes32) {
     (, string memory name, string memory version, uint256 chainId, address verifyingContract,,) = fwss.eip712Domain();
@@ -63,8 +66,17 @@ contract SponsoredDataSet {
 
     error NotPayer(address expected, address actual);
     error NotCurator(address expected, address actual);
+    error AlreadyFinalized();
     error DataSetNotBound();
     error DataSetNotDeleted();
+    error DataSetDeleted();
+    error DataSetNotTerminated();
+    error NotFinalized();
+    error SuccessorNotBound();
+    error SuccessorNotFinalized();
+    error SuccessorNotProven();
+    error PieceMismatch();
+    error FactoryMismatch();
 
     string private constant ORIGIN = "SponsoredDataSet";
 
@@ -78,6 +90,7 @@ contract SponsoredDataSet {
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     uint256 public dataSetId;
     uint256 public railId;
+    uint256 public finalizedEpoch;
 
     constructor(
         FilecoinWarmStorageService fwss,
@@ -116,13 +129,15 @@ contract SponsoredDataSet {
 
     function finalize() external {
         require(msg.sender == CURATOR, NotCurator(CURATOR, msg.sender));
+        require(finalizedEpoch == 0, AlreadyFinalized());
         bytes32[] memory curatorPerms = new bytes32[](2);
         curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
         curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
         SESSION_KEY_REGISTRY.revoke(CURATOR, curatorPerms, ORIGIN);
+        finalizedEpoch = block.number;
     }
 
-    function isFinalized() external view returns (bool) {
+    function isFinalized() public view returns (bool) {
         return SESSION_KEY_REGISTRY.authorizationExpiry(
             address(this), CURATOR, SignatureVerificationLib.ADD_PIECES_TYPEHASH
         ) == 0;
@@ -134,5 +149,56 @@ contract SponsoredDataSet {
         require(payer == address(0), DataSetNotDeleted());
         (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
         PAYMENTS.withdrawTo(token, BENEFICIARY, funds - lockupCurrent);
+    }
+
+    /// @notice Migrates available funds to a verified successor data set from the same factory.
+    /// @dev Checks: both are finalized, source is terminated (not deleted) in FWSS, successor is
+    ///      proven and has the same active pieces in the same order as the source.
+    ///      The source and successor addresses are derived deterministically from (factory, nonce)
+    ///      using the EVM CREATE address formula, proving both were deployed by the same factory.
+    function migrate(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
+        require(LibRLP.computeAddress(address(factory), thisNonce) == address(this), FactoryMismatch());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+
+        require(isFinalized(), NotFinalized());
+        require(successor.isFinalized(), SuccessorNotFinalized());
+
+        require(dataSetId != 0, DataSetNotBound());
+        FilecoinWarmStorageService.DataSetInfoView memory info = WARM_STORAGE_SERVICE.getDataSet(dataSetId);
+        require(info.payer != address(0), DataSetDeleted());
+        require(info.pdpEndEpoch != 0, DataSetNotTerminated());
+
+        uint256 successorDataSetId = successor.dataSetId();
+        require(successorDataSetId != 0, SuccessorNotBound());
+
+        IPDPVerifier pdpVerifier = IPDPVerifier(WARM_STORAGE_SERVICE.pdpVerifierAddress());
+        require(
+            pdpVerifier.getDataSetLastProvenEpoch(successorDataSetId) > successor.finalizedEpoch(), SuccessorNotProven()
+        );
+
+        _verifyPiecesMatch(pdpVerifier, dataSetId, successorDataSetId);
+
+        IERC20 token = factory.TOKEN();
+        (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
+        uint256 available = funds - lockupCurrent;
+        if (available > 0) {
+            PAYMENTS.withdrawTo(token, address(this), available);
+            token.approve(address(PAYMENTS), available);
+            PAYMENTS.deposit(token, address(successor), available);
+        }
+    }
+
+    function _verifyPiecesMatch(IPDPVerifier pdpVerifier, uint256 srcId, uint256 dstId) private view {
+        uint256 total = pdpVerifier.getNextPieceId(srcId);
+        require(total == pdpVerifier.getNextPieceId(dstId), PieceMismatch());
+        for (uint256 i = 0; i < total; i++) {
+            bool srcActive = pdpVerifier.getPieceLeafCount(srcId, i) != 0;
+            require(srcActive == (pdpVerifier.getPieceLeafCount(dstId, i) != 0), PieceMismatch());
+            if (srcActive) {
+                require(
+                    LibBytes.eq(pdpVerifier.getPieceCid(srcId, i), pdpVerifier.getPieceCid(dstId, i)), PieceMismatch()
+                );
+            }
+        }
     }
 }
