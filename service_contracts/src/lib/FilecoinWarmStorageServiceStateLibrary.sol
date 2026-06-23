@@ -124,6 +124,19 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.dataSetId = dataSetId;
     }
 
+    // TODO: measure whether loading 4 slots in one extsloadStruct call is cheaper than two
+    // separate extsload calls for slots 0 (pdpRailId) and 3 (payer) on Filecoin.
+    function getDataSetPayerAndRailId(FilecoinWarmStorageService service, uint256 dataSetId)
+        public
+        view
+        returns (address payer, uint256 pdpRailId)
+    {
+        bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
+        bytes32[] memory info4 = service.extsloadStruct(slot, 4);
+        pdpRailId = uint256(info4[0]);
+        payer = address(uint160(uint256(info4[3])));
+    }
+
     /**
      * @notice Get the current status of a dataset
      * @dev A dataset is Active when it has pieces and proving history (including terminated datasets)
