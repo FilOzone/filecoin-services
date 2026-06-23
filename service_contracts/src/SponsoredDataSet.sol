@@ -62,15 +62,17 @@ contract SponsoredDataSet {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
     error NotPayer(address expected, address actual);
+    error NotCurator(address expected, address actual);
 
     string private constant ORIGIN = "SponsoredDataSet";
 
-    // The curator can add and remove pieces from the data set until they finalize the data set
+    // The curator can add and remove pieces from the data set until they finalize it
     address public immutable CURATOR;
     // The beneficiary receives the funds in the event the data set is deleted without a successful migration
     address public immutable BENEFICIARY;
 
     FilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
+    SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     uint256 public dataSetId;
     uint256 public railId;
 
@@ -96,6 +98,7 @@ contract SponsoredDataSet {
         );
 
         WARM_STORAGE_SERVICE = fwss;
+        SESSION_KEY_REGISTRY = sessionKeyRegistry;
         CURATOR = curator;
         BENEFICIARY = beneficiary;
     }
@@ -105,5 +108,19 @@ contract SponsoredDataSet {
         require(payer == address(this), NotPayer(address(this), payer));
         dataSetId = _dataSetId;
         railId = pdpRailId;
+    }
+
+    function finalize() external {
+        require(msg.sender == CURATOR, NotCurator(CURATOR, msg.sender));
+        bytes32[] memory curatorPerms = new bytes32[](2);
+        curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
+        curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        SESSION_KEY_REGISTRY.revoke(CURATOR, curatorPerms, ORIGIN);
+    }
+
+    function isFinalized() external view returns (bool) {
+        return SESSION_KEY_REGISTRY.authorizationExpiry(
+            address(this), CURATOR, SignatureVerificationLib.ADD_PIECES_TYPEHASH
+        ) == 0;
     }
 }

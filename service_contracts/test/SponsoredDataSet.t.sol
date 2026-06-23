@@ -12,7 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SponsoredDataSet, SponsoredDataSetFactory} from "../src/SponsoredDataSet.sol";
-import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
+import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
@@ -211,5 +211,46 @@ contract SponsoredDataSetTest is MockFVMTest {
         (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
         Cids.Cid memory piece = Cids.CommPv2FromDigest(0, 4, keccak256("test piece"));
         _addPiece(dataSet, piece);
+    }
+
+    function testIsNotFinalizedInitially() public {
+        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        assertFalse(dataSet.isFinalized());
+    }
+
+    function testFinalizeByCurator() public {
+        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        vm.prank(curator);
+        dataSet.finalize();
+        assertTrue(dataSet.isFinalized());
+    }
+
+    function testFinalizeRevokesCuratorPermissions() public {
+        (SponsoredDataSet dataSet, uint256 dsId) = _setupDataSet(100 * 10 ** token.decimals());
+        vm.prank(curator);
+        dataSet.finalize();
+
+        Cids.Cid memory piece = Cids.CommPv2FromDigest(0, 4, keccak256("test piece after finalize"));
+        uint256 nonce = ++addPiecesNonce;
+        bytes32 digest = _hashTypedDataV4(_addPiecesStructHash(piece, nonce));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(curatorPrivKey, digest);
+        bytes memory sig = abi.encodePacked(r, s, v);
+
+        Cids.Cid[] memory pieces = new Cids.Cid[](1);
+        pieces[0] = piece;
+        string[][] memory emptyKeys = new string[][](1);
+        emptyKeys[0] = new string[](0);
+        string[][] memory emptyValues = new string[][](1);
+        emptyValues[0] = new string[](0);
+
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, address(dataSet), curator));
+        pdpVerifier.addPieces(dsId, address(0), pieces, abi.encode(nonce, emptyKeys, emptyValues, sig));
+    }
+
+    function testFinalizeRevertsIfNotCurator() public {
+        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        vm.expectRevert(abi.encodeWithSelector(SponsoredDataSet.NotCurator.selector, curator, address(this)));
+        dataSet.finalize();
     }
 }
