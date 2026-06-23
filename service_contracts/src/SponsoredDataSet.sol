@@ -63,6 +63,8 @@ contract SponsoredDataSet {
 
     error NotPayer(address expected, address actual);
     error NotCurator(address expected, address actual);
+    error DataSetNotBound();
+    error DataSetNotDeleted();
 
     string private constant ORIGIN = "SponsoredDataSet";
 
@@ -72,6 +74,7 @@ contract SponsoredDataSet {
     address public immutable BENEFICIARY;
 
     FilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
+    FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     uint256 public dataSetId;
     uint256 public railId;
@@ -98,6 +101,7 @@ contract SponsoredDataSet {
         );
 
         WARM_STORAGE_SERVICE = fwss;
+        PAYMENTS = filecoinPay;
         SESSION_KEY_REGISTRY = sessionKeyRegistry;
         CURATOR = curator;
         BENEFICIARY = beneficiary;
@@ -122,5 +126,13 @@ contract SponsoredDataSet {
         return SESSION_KEY_REGISTRY.authorizationExpiry(
             address(this), CURATOR, SignatureVerificationLib.ADD_PIECES_TYPEHASH
         ) == 0;
+    }
+
+    function release(IERC20 token) external {
+        require(dataSetId != 0, DataSetNotBound());
+        (address payer,) = WARM_STORAGE_SERVICE.getDataSetPayerAndRailId(dataSetId);
+        require(payer == address(0), DataSetNotDeleted());
+        (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
+        PAYMENTS.withdrawTo(token, BENEFICIARY, funds - lockupCurrent);
     }
 }

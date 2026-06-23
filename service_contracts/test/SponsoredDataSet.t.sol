@@ -253,4 +253,31 @@ contract SponsoredDataSetTest is MockFVMTest {
         vm.expectRevert(abi.encodeWithSelector(SponsoredDataSet.NotCurator.selector, curator, address(this)));
         dataSet.finalize();
     }
+
+    function testReleaseRevertsIfNotBound() public {
+        string[] memory emptyKeys = new string[](0);
+        string[] memory emptyValues = new string[](0);
+        SponsoredDataSet dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, curator, beneficiary);
+        vm.expectRevert(SponsoredDataSet.DataSetNotBound.selector);
+        dataSet.release(IERC20(address(token)));
+    }
+
+    function testReleaseRevertsIfNotDeleted() public {
+        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        vm.expectRevert(SponsoredDataSet.DataSetNotDeleted.selector);
+        dataSet.release(IERC20(address(token)));
+    }
+
+    function testRelease() public {
+        (SponsoredDataSet dataSet, uint256 dsId) = _setupDataSet(100 * 10 ** token.decimals());
+
+        vm.prank(serviceProvider);
+        pdpVerifier.deleteDataSet(dsId, "");
+
+        (uint256 funds, uint256 lockupCurrent,,) = payments.accounts(IERC20(address(token)), address(dataSet));
+        uint256 available = funds - lockupCurrent;
+
+        dataSet.release(IERC20(address(token)));
+        assertEq(token.balanceOf(beneficiary), available);
+    }
 }
