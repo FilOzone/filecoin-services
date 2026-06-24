@@ -369,4 +369,271 @@ contract SponsoredDataSetTest is MockFVMTest {
         (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
         assertEq(dstFunds, 10 ** token.decimals() + available);
     }
+
+    // -------- Challenged migration --------
+
+    struct PropMig {
+        uint64 sourceNonce;
+        SponsoredDataSet source;
+        uint256 srcId;
+        uint64 successorNonce;
+        SponsoredDataSet successor;
+        uint256 dstId;
+        uint256 migrationId;
+    }
+
+    function _setupProposedMigration() internal returns (PropMig memory m) {
+        m.sourceNonce = _factoryNonce();
+        (m.source, m.srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        m.successorNonce = _factoryNonce();
+        (m.successor, m.dstId) = _setupDataSet(10 ** token.decimals());
+        vm.prank(curator);
+        m.source.finalize();
+        vm.prank(curator);
+        m.successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(m.srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(m.dstId);
+        m.migrationId =
+            m.source.proposeMigration{value: m.source.MIGRATION_DEPOSIT()}(factory, m.sourceNonce, m.successorNonce);
+    }
+
+    function testProposeMigration() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+
+        vm.expectEmit(true, false, false, true);
+        emit SponsoredDataSet.MigrationProposed(0, address(this), dstId);
+        uint256 migrationId =
+            source.proposeMigration{value: source.MIGRATION_DEPOSIT()}(factory, sourceNonce, successorNonce);
+
+        assertEq(migrationId, 0);
+        assertEq(source.nextMigrationId(), 1);
+        (address dep,,,,) = source.pendingMigrations(migrationId);
+        assertEq(dep, address(this));
+    }
+
+    function testProposeMigrationRevertsIfIncorrectDeposit() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(SponsoredDataSet.IncorrectDeposit.selector);
+        source.proposeMigration{value: deposit - 1}(factory, sourceNonce, successorNonce);
+    }
+
+    function testProposeMigrationRevertsIfNotFinalized() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(SponsoredDataSet.NotFinalized.selector);
+        source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
+    }
+
+    function testProposeMigrationRevertsIfSuccessorNotFinalized() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(SponsoredDataSet.SuccessorNotFinalized.selector);
+        source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
+    }
+
+    function testProposeMigrationRevertsIfNotTerminated() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(SponsoredDataSet.DataSetNotTerminated.selector);
+        source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
+    }
+
+    function testProposeMigrationRevertsIfSuccessorNotProven() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(SponsoredDataSet.SuccessorNotProven.selector);
+        source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
+    }
+
+    function testProposeMigrationRevertsIfPieceMismatch() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        _addPiece(source, Cids.CommPv2FromDigest(0, 4, keccak256("piece A")));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(SponsoredDataSet.PieceMismatch.selector);
+        source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
+    }
+
+    function testCompleteMigrationRevertsIfChallengePeriodNotExpired() public {
+        PropMig memory m = _setupProposedMigration();
+        vm.expectRevert(SponsoredDataSet.ChallengePeriodNotExpired.selector);
+        m.source.completeMigration(m.migrationId);
+    }
+
+    function testCompleteMigration() public {
+        PropMig memory m = _setupProposedMigration();
+        vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
+
+        (uint256 srcFunds, uint256 srcLockup,,) = payments.accounts(IERC20(address(token)), address(m.source));
+        uint256 available = srcFunds - srcLockup;
+        uint256 balanceBefore = address(this).balance;
+
+        m.source.completeMigration(m.migrationId);
+
+        (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(m.successor));
+        assertEq(dstFunds, 10 ** token.decimals() + available);
+        assertEq(address(this).balance, balanceBefore + m.source.MIGRATION_DEPOSIT());
+        (address dep,,,,) = m.source.pendingMigrations(m.migrationId);
+        assertEq(dep, address(0));
+    }
+
+    function testCompleteMigrationSuccessorTerminated() public {
+        PropMig memory m = _setupProposedMigration();
+        vm.prank(serviceProvider);
+        fwss.terminateService(m.dstId, "");
+        vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
+
+        uint256 balanceBefore = address(this).balance;
+        m.source.completeMigration(m.migrationId);
+
+        assertEq(address(this).balance, balanceBefore + m.source.MIGRATION_DEPOSIT());
+        (address dep,,,,) = m.source.pendingMigrations(m.migrationId);
+        assertEq(dep, address(0));
+    }
+
+    function testCompleteMigrationSuccessorDeleted() public {
+        PropMig memory m = _setupProposedMigration();
+        vm.prank(serviceProvider);
+        pdpVerifier.deleteDataSet(m.dstId, "");
+        vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
+
+        uint256 balanceBefore = address(this).balance;
+        m.source.completeMigration(m.migrationId);
+
+        assertEq(address(this).balance, balanceBefore + m.source.MIGRATION_DEPOSIT());
+        (address dep,,,,) = m.source.pendingMigrations(m.migrationId);
+        assertEq(dep, address(0));
+    }
+
+    function testCompleteMigrationOriginDeleted() public {
+        PropMig memory m = _setupProposedMigration();
+        // Origin can only be deleted after the payment lockup expires (endEpoch=86401).
+        // Rolling past that also satisfies the challenge period (2880 << 86401).
+        vm.roll(86402);
+        payments.settleRail(m.source.railId(), 86401);
+        vm.prank(serviceProvider);
+        pdpVerifier.deleteDataSet(m.srcId, "");
+
+        uint256 balanceBefore = address(this).balance;
+        m.source.completeMigration(m.migrationId);
+
+        assertEq(address(this).balance, balanceBefore + m.source.MIGRATION_DEPOSIT());
+    }
+
+    function testChallengeMigrationRevertsIfPiecesMatch() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        Cids.Cid memory piece = Cids.CommPv2FromDigest(0, 4, keccak256("matching piece"));
+        _addPiece(source, piece);
+        _addPiece(successor, piece);
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        uint256 migrationId =
+            source.proposeMigration{value: source.MIGRATION_DEPOSIT()}(factory, sourceNonce, successorNonce);
+        vm.expectRevert(SponsoredDataSet.ChallengeFailed.selector);
+        source.challengeMigration(migrationId, 0);
+    }
+
+    function testChallengeMigrationRevertsIfChallengePeriodExpired() public {
+        PropMig memory m = _setupProposedMigration();
+        vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
+        vm.expectRevert(SponsoredDataSet.ChallengePeriodExpired.selector);
+        m.source.challengeMigration(m.migrationId, 0);
+    }
+
+    function testChallengeMigration() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        _addPiece(source, Cids.CommPv2FromDigest(0, 4, keccak256("piece A")));
+        _addPiece(successor, Cids.CommPv2FromDigest(0, 4, keccak256("piece B")));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        uint256 migrationId =
+            source.proposeMigration{value: source.MIGRATION_DEPOSIT()}(factory, sourceNonce, successorNonce);
+
+        address challenger = address(0xc1);
+        vm.prank(challenger);
+        source.challengeMigration(migrationId, 0);
+
+        assertEq(challenger.balance, source.MIGRATION_DEPOSIT() / 2);
+        (address dep,,,,) = source.pendingMigrations(migrationId);
+        assertEq(dep, address(0));
+    }
 }

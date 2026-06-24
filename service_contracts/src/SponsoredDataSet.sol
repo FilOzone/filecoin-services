@@ -8,8 +8,10 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
+import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
+import {FVMPay} from "@fvm-solidity/FVMPay.sol";
 
 function hashTypedDataV4(FilecoinWarmStorageService fwss, bytes32 structHash) view returns (bytes32) {
     (, string memory name, string memory version, uint256 chainId, address verifyingContract,,) = fwss.eip712Domain();
@@ -77,8 +79,28 @@ contract SponsoredDataSet {
     error SuccessorNotProven();
     error PieceMismatch();
     error FactoryMismatch();
+    error ChallengePeriodNotExpired();
+    error ChallengePeriodExpired();
+    error ChallengeFailed();
+    error MigrationNotFound();
+    error IncorrectDeposit();
+    error PayFailed();
+    error BurnFailed();
+
+    event MigrationProposed(uint256 indexed migrationId, address depositor, uint256 successorDataSetId);
+
+    struct PendingMigration {
+        address depositor;
+        SponsoredDataSetFactory factory;
+        uint64 thisNonce;
+        uint64 successorNonce;
+        uint256 depositEpoch;
+    }
 
     string private constant ORIGIN = "SponsoredDataSet";
+
+    uint256 public constant CHALLENGE_PERIOD = 2880;
+    uint256 public constant MIGRATION_DEPOSIT = 1 ether;
 
     // The curator can add and remove pieces from the data set until they finalize it
     address public immutable CURATOR;
@@ -91,6 +113,9 @@ contract SponsoredDataSet {
     uint256 public dataSetId;
     uint256 public railId;
     uint256 public finalizedEpoch;
+
+    mapping(uint256 => PendingMigration) public pendingMigrations;
+    uint256 public nextMigrationId;
 
     constructor(
         FilecoinWarmStorageService fwss,
@@ -157,9 +182,92 @@ contract SponsoredDataSet {
     ///      The source and successor addresses are derived deterministically from (factory, nonce)
     ///      using the EVM CREATE address formula, proving both were deployed by the same factory.
     function migrate(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
-        require(LibRLP.computeAddress(address(factory), thisNonce) == address(this), FactoryMismatch());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
+        (IPDPVerifier pdpVerifier, uint256 successorDataSetId) = _checkMigrationConditions(successor);
+        _verifyPiecesMatch(pdpVerifier, dataSetId, successorDataSetId);
+        _transferFunds(factory, successor);
+    }
 
+    /// @notice Proposes a challenged migration to a large-data successor without iterating all pieces.
+    /// @dev Opens a challenge window during which anyone can disprove piece equality by index.
+    ///      Requires a FIL deposit as a bond; depositor gets it back after the challenge period.
+    function proposeMigration(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
+        external
+        payable
+        returns (uint256 migrationId)
+    {
+        require(msg.value == MIGRATION_DEPOSIT, IncorrectDeposit());
+        SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
+        (, uint256 successorDataSetId) = _checkMigrationConditions(successor);
+        migrationId = nextMigrationId++;
+        pendingMigrations[migrationId] = PendingMigration({
+            depositor: msg.sender,
+            factory: factory,
+            thisNonce: thisNonce,
+            successorNonce: successorNonce,
+            depositEpoch: block.number
+        });
+        emit MigrationProposed(migrationId, msg.sender, successorDataSetId);
+    }
+
+    /// @notice Challenges a pending migration by proving pieces differ at a given index.
+    /// @dev Half the deposit is paid to the challenger; the other half is burned.
+    function challengeMigration(uint256 migrationId, uint256 pieceIndex) external {
+        PendingMigration memory migration = pendingMigrations[migrationId];
+        require(migration.depositor != address(0), MigrationNotFound());
+        require(block.number <= migration.depositEpoch + CHALLENGE_PERIOD, ChallengePeriodExpired());
+
+        SponsoredDataSet successor =
+            SponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
+        IPDPVerifier pdpVerifier = IPDPVerifier(WARM_STORAGE_SERVICE.pdpVerifierAddress());
+        uint256 dstId = successor.dataSetId();
+
+        bool srcActive = pdpVerifier.getPieceLeafCount(dataSetId, pieceIndex) != 0;
+        bool dstActive = pdpVerifier.getPieceLeafCount(dstId, pieceIndex) != 0;
+        bool mismatch = srcActive != dstActive;
+        if (!mismatch && srcActive) {
+            bytes memory srcCid = PDPVerifier(address(pdpVerifier)).getPieceCid(dataSetId, pieceIndex).data;
+            bytes memory dstCid = PDPVerifier(address(pdpVerifier)).getPieceCid(dstId, pieceIndex).data;
+            mismatch = !LibBytes.eq(srcCid, dstCid);
+        }
+        require(mismatch, ChallengeFailed());
+
+        delete pendingMigrations[migrationId];
+
+        uint256 half = MIGRATION_DEPOSIT / 2;
+        require(FVMPay.pay(msg.sender, half), PayFailed());
+        require(FVMPay.burn(half), BurnFailed());
+    }
+
+    /// @notice Completes a pending migration after the challenge period has elapsed.
+    /// @dev Transfers available funds to the successor and refunds the deposit to the original depositor.
+    function completeMigration(uint256 migrationId) external {
+        PendingMigration memory migration = pendingMigrations[migrationId];
+        require(migration.depositor != address(0), MigrationNotFound());
+        require(block.number > migration.depositEpoch + CHALLENGE_PERIOD, ChallengePeriodNotExpired());
+
+        delete pendingMigrations[migrationId];
+
+        SponsoredDataSet successor =
+            SponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
+        _transferFunds(migration.factory, successor);
+        require(FVMPay.pay(migration.depositor, MIGRATION_DEPOSIT), PayFailed());
+    }
+
+    function _resolveSuccessor(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
+        internal
+        view
+        returns (SponsoredDataSet)
+    {
+        require(LibRLP.computeAddress(address(factory), thisNonce) == address(this), FactoryMismatch());
+        return SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+    }
+
+    function _checkMigrationConditions(SponsoredDataSet successor)
+        internal
+        view
+        returns (IPDPVerifier pdpVerifier, uint256 successorDataSetId)
+    {
         require(isFinalized(), NotFinalized());
         require(successor.isFinalized(), SuccessorNotFinalized());
 
@@ -168,16 +276,19 @@ contract SponsoredDataSet {
         require(info.payer != address(0), DataSetDeleted());
         require(info.pdpEndEpoch != 0, DataSetNotTerminated());
 
-        uint256 successorDataSetId = successor.dataSetId();
+        successorDataSetId = successor.dataSetId();
         require(successorDataSetId != 0, SuccessorNotBound());
 
-        IPDPVerifier pdpVerifier = IPDPVerifier(WARM_STORAGE_SERVICE.pdpVerifierAddress());
+        pdpVerifier = IPDPVerifier(WARM_STORAGE_SERVICE.pdpVerifierAddress());
         require(
             pdpVerifier.getDataSetLastProvenEpoch(successorDataSetId) > successor.finalizedEpoch(), SuccessorNotProven()
         );
+        require(
+            pdpVerifier.getNextPieceId(dataSetId) == pdpVerifier.getNextPieceId(successorDataSetId), PieceMismatch()
+        );
+    }
 
-        _verifyPiecesMatch(pdpVerifier, dataSetId, successorDataSetId);
-
+    function _transferFunds(SponsoredDataSetFactory factory, SponsoredDataSet successor) internal {
         IERC20 token = factory.TOKEN();
         (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
         uint256 available = funds - lockupCurrent;
@@ -196,7 +307,11 @@ contract SponsoredDataSet {
             require(srcActive == (pdpVerifier.getPieceLeafCount(dstId, i) != 0), PieceMismatch());
             if (srcActive) {
                 require(
-                    LibBytes.eq(pdpVerifier.getPieceCid(srcId, i), pdpVerifier.getPieceCid(dstId, i)), PieceMismatch()
+                    LibBytes.eq(
+                        PDPVerifier(address(pdpVerifier)).getPieceCid(srcId, i).data,
+                        PDPVerifier(address(pdpVerifier)).getPieceCid(dstId, i).data
+                    ),
+                    PieceMismatch()
                 );
             }
         }
