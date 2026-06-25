@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Removed
+- Removed stale service contract helper scripts and obsolete upgrade/deployment artifacts from `service_contracts/tools`.
+
 ### Fixed
 - Fixed a lifecycle reserve underflow in `Rails.updateStorageRates()` that could cause `nextProvingPeriod` to fail ([#521](https://github.com/FilOzone/filecoin-services/pull/521)).
 
@@ -129,7 +132,7 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 - Deploy warm storage only script fix ([#348](https://github.com/FilOzone/filecoin-services/pull/348))
 
 ### Documentation
-- FWSS upgrade process documentation ([UPGRADE-PROCESS.md](./service_contracts/tools/UPGRADE-PROCESS.md))
+- FWSS upgrade process documentation ([UPGRADE-CHECKLIST.md](./service_contracts/tools/UPGRADE-CHECKLIST.md))
 - Pricing model specification document ([#366](https://github.com/FilOzone/filecoin-services/pull/366))
 - Added precision loss documentation for minimum rate calculation ([#378](https://github.com/FilOzone/filecoin-services/pull/378))
 - Clarified rate change semantics after termination
