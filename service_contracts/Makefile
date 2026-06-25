@@ -34,11 +34,11 @@ build:
 
 # Storage layout generation
 $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
-	$^ | forge fmt -r - > $@
+	tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService | forge fmt -r - > $@
 
 # Storage layout JSON (full metadata for upgrade safety checks)
 $(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
-	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
+	forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
 
 # JSON compilation for library (depends on the source library)
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Errors} from "../Errors.sol";
+import {IDataSetAuthorizer} from "../interfaces/IDataSetAuthorizer.sol";
 
 /// @title SignatureVerificationLib
 /// @notice Library for EIP-712 signature verification and metadata hashing
@@ -288,6 +289,34 @@ library SignatureVerificationLib {
                     >= block.timestamp,
                 Errors.InvalidSignature(payer, recoveredSigner)
             );
+        }
+    }
+
+    function verifySignatureWithAuthorizer(
+        address payer,
+        bytes calldata signature,
+        bytes32 digest,
+        SessionKeyRegistry sessionKeyRegistry,
+        bytes32 operation,
+        uint256 dataSetId,
+        address authorizer,
+        uint256 authorizerGas,
+        bytes calldata metadata
+    ) public view returns (address signer) {
+        signer = recoverSigner(digest, signature);
+        require(signer != address(0), Errors.InvalidSignature(payer, signer));
+
+        if (signer == payer || sessionKeyRegistry.authorizationExpiry(payer, signer, operation) >= block.timestamp) {
+            return signer;
+        }
+
+        require(authorizer != address(0), Errors.InvalidSignature(payer, signer));
+        try IDataSetAuthorizer(authorizer).isAuthorized{gas: authorizerGas}(
+            dataSetId, signer, operation, digest, signature, metadata
+        ) returns (bool ok) {
+            require(ok, Errors.InvalidSignature(payer, signer));
+        } catch {
+            revert Errors.InvalidSignature(payer, signer);
         }
     }
 }

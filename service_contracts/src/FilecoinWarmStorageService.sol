@@ -80,6 +80,14 @@ contract FilecoinWarmStorageService is
     // Version tracking
     string public constant VERSION = "1.3.0";
 
+    bytes32 public constant ADD_PIECES_OPERATION = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
+    bytes32 public constant SCHEDULE_PIECE_REMOVALS_OPERATION =
+        SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+    bytes32 public constant TERMINATE_SERVICE_OPERATION = SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH;
+
+    // FEVM gas, not EVM gas. Calibnet measurement has the staticcall overhead around 1.3M.
+    uint256 private constant MAX_AUTHORIZER_GAS = 30_000_000;
+
     using Rails for FilecoinPayV1;
 
     // Events
@@ -303,7 +311,12 @@ contract FilecoinWarmStorageService is
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
 
+    // Optional per-data-set authorizer (address(0) = default payer/session-key behavior).
+    mapping(uint256 dataSetId => address authorizer) internal dataSetAuthorizer;
+
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
+
+    event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
 
     // =========================================================================
 
@@ -778,7 +791,9 @@ contract FilecoinWarmStorageService is
         );
 
         // Verify the signature
-        verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
+        verifyAddPiecesSignature(
+            dataSetId, payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature
+        );
 
         uint96 pending =
             info.pendingOneTimePayments + uint96(ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE);
@@ -849,7 +864,7 @@ contract FilecoinWarmStorageService is
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
-        verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
+        verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserveIfNeeded(
@@ -1398,6 +1413,7 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Verifies a signature for the AddPieces operation
+     * @param dataSetId The data set being operated on
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceDataArray Array of piece CID structures
@@ -1407,6 +1423,7 @@ contract FilecoinWarmStorageService is
      * @param signature The signature bytes (v, r, s)
      */
     function verifyAddPiecesSignature(
+        uint256 dataSetId,
         address payer,
         uint256 clientDataSetId,
         Cids.Cid[] memory pieceDataArray,
@@ -1415,41 +1432,55 @@ contract FilecoinWarmStorageService is
         string[][] memory allValues,
         bytes memory signature
     ) internal view {
-        // Compute the EIP-712 digest
         bytes32 digest = _hashTypedDataV4(
             SignatureVerificationLib.addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
 
-        // Delegate to library for verification
-        SignatureVerificationLib.verifyAddPiecesSignature(payer, signature, digest, sessionKeyRegistry);
+        SignatureVerificationLib.verifySignatureWithAuthorizer(
+            payer,
+            signature,
+            digest,
+            sessionKeyRegistry,
+            ADD_PIECES_OPERATION,
+            dataSetId,
+            dataSetAuthorizer[dataSetId],
+            MAX_AUTHORIZER_GAS,
+            abi.encode(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
+        );
     }
 
     /**
      * @notice Verifies a signature for the SchedulePieceRemovals operation
+     * @param dataSetId The data set being operated on
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceIds Array of piece IDs to be removed
      * @param signature The signature bytes (v, r, s)
      */
     function verifySchedulePieceRemovalsSignature(
+        uint256 dataSetId,
         address payer,
         uint256 clientDataSetId,
         uint256[] memory pieceIds,
         bytes memory signature
     ) internal view {
-        // Compute the EIP-712 digest
-        bytes32 structHash = keccak256(
-            abi.encode(
-                SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
-                clientDataSetId,
-                keccak256(abi.encodePacked(pieceIds))
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(
+                abi.encode(SCHEDULE_PIECE_REMOVALS_OPERATION, clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
             )
         );
 
-        bytes32 digest = _hashTypedDataV4(structHash);
-
-        // Delegate to library for verification
-        SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
+        SignatureVerificationLib.verifySignatureWithAuthorizer(
+            payer,
+            signature,
+            digest,
+            sessionKeyRegistry,
+            SCHEDULE_PIECE_REMOVALS_OPERATION,
+            dataSetId,
+            dataSetAuthorizer[dataSetId],
+            MAX_AUTHORIZER_GAS,
+            abi.encode(clientDataSetId, pieceIds)
+        );
     }
 
     function _verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature)
@@ -1457,9 +1488,35 @@ contract FilecoinWarmStorageService is
         view
         returns (address signer)
     {
-        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId));
-        bytes32 digest = _hashTypedDataV4(structHash);
-        return SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
+        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(TERMINATE_SERVICE_OPERATION, dataSetId)));
+        signer = SignatureVerificationLib.verifySignatureWithAuthorizer(
+            payer,
+            signature,
+            digest,
+            sessionKeyRegistry,
+            TERMINATE_SERVICE_OPERATION,
+            dataSetId,
+            dataSetAuthorizer[dataSetId],
+            MAX_AUTHORIZER_GAS,
+            abi.encode(dataSetId)
+        );
+    }
+
+    /**
+     * @notice Attach, rotate, or clear the optional authorizer for a data set.
+     */
+    function setDataSetAuthorizer(uint256 dataSetId, address authorizer) external {
+        require(dataSetInfo[dataSetId].payer == msg.sender, Errors.OnlyDataSetPayer(dataSetId, msg.sender));
+        require(authorizer == address(0) || authorizer.code.length > 0, Errors.InvalidDataSetAuthorizer(authorizer));
+        dataSetAuthorizer[dataSetId] = authorizer;
+        emit DataSetAuthorizerSet(dataSetId, authorizer);
+    }
+
+    /**
+     * @notice The authorizer attached to a data set, or address(0) if none.
+     */
+    function getDataSetAuthorizer(uint256 dataSetId) external view returns (address) {
+        return dataSetAuthorizer[dataSetId];
     }
 
     /**

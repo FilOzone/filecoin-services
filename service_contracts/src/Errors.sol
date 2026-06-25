@@ -96,6 +96,12 @@ library Errors {
     /// @param actual The recovered address from the signature
     error InvalidSignature(address expected, address actual);
 
+    /// @notice Only the data set's payer may perform this action
+    error OnlyDataSetPayer(uint256 dataSetId, address actual);
+
+    /// @notice A non-zero data set authorizer must be a deployed contract
+    error InvalidDataSetAuthorizer(address authorizer);
+
     /// @notice Extra data is required but was not provided
     error ExtraDataRequired();
 
