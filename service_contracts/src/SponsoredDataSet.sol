@@ -86,6 +86,8 @@ contract SponsoredDataSet {
     error IncorrectDeposit();
     error PayFailed();
     error BurnFailed();
+    error SuccessorCuratorMismatch();
+    error SuccessorBeneficiaryMismatch();
 
     event MigrationProposed(uint256 indexed migrationId, address depositor, uint256 successorDataSetId);
 
@@ -185,6 +187,21 @@ contract SponsoredDataSet {
         SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
         (IPDPVerifier pdpVerifier, uint256 successorDataSetId) = _checkMigrationConditions(successor);
         _verifyPiecesMatch(pdpVerifier, dataSetId, successorDataSetId);
+        _transferFunds(factory, successor);
+    }
+
+    /// @notice The curator migrates funds from a non-finalized data set to a successor with the same curator and beneficiary.
+    /// @dev Requires the caller to be the curator, the source to be non-finalized, and the successor to be
+    ///      bound and proven. Pieces are not checked; the curator vouches for the transition.
+    function migrateUnfinalized(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
+        require(msg.sender == CURATOR, NotCurator(CURATOR, msg.sender));
+        require(!isFinalized(), AlreadyFinalized());
+        SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
+        require(successor.CURATOR() == CURATOR, SuccessorCuratorMismatch());
+        require(successor.BENEFICIARY() == BENEFICIARY, SuccessorBeneficiaryMismatch());
+        uint256 successorDataSetId = successor.dataSetId();
+        require(successorDataSetId != 0, SuccessorNotBound());
+        require(WARM_STORAGE_SERVICE.hasBeenProvenRecently(successorDataSetId), SuccessorNotProven());
         _transferFunds(factory, successor);
     }
 

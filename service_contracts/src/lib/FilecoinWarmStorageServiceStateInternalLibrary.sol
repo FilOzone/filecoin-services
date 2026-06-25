@@ -101,6 +101,23 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
 
+    function hasBeenProvenRecently(FilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (bool)
+    {
+        uint256 activation = provingActivationEpoch(service, dataSetId);
+        if (activation == 0 || block.number <= activation) {
+            return false;
+        }
+        uint256 maxPeriod = getMaxProvingPeriod(service);
+        uint256 currentPeriod = (block.number - activation - 1) / maxPeriod;
+        if (currentPeriod >= 1 && provenPeriods(service, dataSetId, currentPeriod - 1)) {
+            return true;
+        }
+        return provenThisPeriod(service, dataSetId);
+    }
+
     /**
      * @notice Get data set information by ID
      * @param dataSetId The ID of the data set

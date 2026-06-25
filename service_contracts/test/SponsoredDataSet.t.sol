@@ -18,6 +18,8 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {PDPOffering} from "./PDPOffering.sol";
+import {PROVING_ACTIVATION_EPOCH_SLOT, PROVEN_THIS_PERIOD_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {DATA_SET_LAST_PROVEN_EPOCH_SLOT} from "../lib/pdp/src/PDPVerifierLayout.sol";
 
 contract SponsoredDataSetTest is MockFVMTest {
     using PDPOffering for PDPOffering.Schema;
@@ -156,12 +158,15 @@ contract SponsoredDataSetTest is MockFVMTest {
         return keccak256(abi.encode(ADD_PIECES_TYPEHASH, uint256(0), nonce, cidsHash, pieceMetasHash));
     }
 
-    // Deploys a SponsoredDataSet, funds it, creates the data set on-chain, and binds it.
-    function _setupDataSet(uint256 fundAmount) internal returns (SponsoredDataSet dataSet, uint256 dataSetId) {
+    // Deploys a SponsoredDataSet with explicit curator/beneficiary, funds it, creates the data set on-chain, and binds it.
+    function _setupDataSetWith(uint256 fundAmount, address _curator, address _beneficiary)
+        internal
+        returns (SponsoredDataSet dataSet, uint256 dataSetId)
+    {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
 
-        dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, curator, beneficiary);
+        dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, _curator, _beneficiary);
 
         token.approve(address(payments), fundAmount);
         payments.deposit(IERC20(address(token)), address(dataSet), fundAmount);
@@ -172,6 +177,11 @@ contract SponsoredDataSetTest is MockFVMTest {
         dataSetId = pdpVerifier.createDataSet{value: CLEANUP_DEPOSIT}(address(fwss), extraData);
 
         dataSet.bind(dataSetId);
+    }
+
+    // Deploys a SponsoredDataSet, funds it, creates the data set on-chain, and binds it.
+    function _setupDataSet(uint256 fundAmount) internal returns (SponsoredDataSet dataSet, uint256 dataSetId) {
+        return _setupDataSetWith(fundAmount, curator, beneficiary);
     }
 
     // Adds a single piece to the data set; curator signs the AddPieces message.
@@ -287,11 +297,20 @@ contract SponsoredDataSetTest is MockFVMTest {
         return uint64(vm.getNonce(address(factory)));
     }
 
-    // Seeds lastProvenEpoch for a PDPVerifier data set via vm.store.
-    // DATA_SET_LAST_PROVEN_EPOCH_SLOT = 14 per PDPVerifierLayout.sol
+    // Seeds proving state for a FWSS data set and PDPVerifier via vm.store, satisfying both
+    // hasBeenProvenRecently (FWSS) and getDataSetLastProvenEpoch > finalizedEpoch (PDPVerifier).
     function _fakeProven(uint256 dsId) internal {
-        bytes32 slot = keccak256(abi.encode(dsId, uint256(14)));
-        vm.store(address(pdpVerifier), slot, bytes32(vm.getBlockNumber()));
+        if (vm.getBlockNumber() <= 1) {
+            vm.roll(2);
+        }
+        uint256 activationEpoch = vm.getBlockNumber() - 1;
+        vm.store(address(fwss), keccak256(abi.encode(dsId, PROVING_ACTIVATION_EPOCH_SLOT)), bytes32(activationEpoch));
+        vm.store(address(fwss), keccak256(abi.encode(dsId, PROVEN_THIS_PERIOD_SLOT)), bytes32(uint256(1)));
+        vm.store(
+            address(pdpVerifier),
+            keccak256(abi.encode(dsId, DATA_SET_LAST_PROVEN_EPOCH_SLOT)),
+            bytes32(vm.getBlockNumber())
+        );
     }
 
     function testMigrateRevertsIfNotFinalized() public {
@@ -552,9 +571,10 @@ contract SponsoredDataSetTest is MockFVMTest {
 
     function testCompleteMigrationSuccessorDeleted() public {
         PropMig memory m = _setupProposedMigration();
+        uint256 lastProvenEpoch = pdpVerifier.getDataSetLastProvenEpoch(m.dstId);
+        vm.roll(lastProvenEpoch + pdpVerifier.INACTIVITY_WINDOW() + 1);
         vm.prank(serviceProvider);
         pdpVerifier.deleteDataSet(m.dstId, "");
-        vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
 
         uint256 balanceBefore = address(this).balance;
         m.source.completeMigration(m.migrationId);
@@ -635,5 +655,103 @@ contract SponsoredDataSetTest is MockFVMTest {
         assertEq(challenger.balance, source.MIGRATION_DEPOSIT() / 2);
         (address dep,,,,) = source.pendingMigrations(migrationId);
         assertEq(dep, address(0));
+    }
+
+    // -------- Unfinalized migration --------
+
+    function _setupUnfinalizedMigration(bool finalizeSuccessor)
+        internal
+        returns (
+            uint64 sourceNonce,
+            SponsoredDataSet source,
+            uint64 successorNonce,
+            SponsoredDataSet successor,
+            uint256 dstId
+        )
+    {
+        sourceNonce = _factoryNonce();
+        (source,) = _setupDataSet(100 * 10 ** token.decimals());
+        successorNonce = _factoryNonce();
+        (successor, dstId) = _setupDataSet(10 ** token.decimals());
+        if (finalizeSuccessor) {
+            vm.prank(curator);
+            successor.finalize();
+        }
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+    }
+
+    function testMigrateUnfinalized(bool finalizeSuccessor) public {
+        (uint64 sourceNonce, SponsoredDataSet source, uint64 successorNonce, SponsoredDataSet successor,) =
+            _setupUnfinalizedMigration(finalizeSuccessor);
+
+        (uint256 srcFunds, uint256 srcLockup,,) = payments.accounts(IERC20(address(token)), address(source));
+        uint256 available = srcFunds - srcLockup;
+        (uint256 dstFundsBefore,,,) = payments.accounts(IERC20(address(token)), address(successor));
+
+        vm.prank(curator);
+        source.migrateUnfinalized(factory, sourceNonce, successorNonce);
+
+        (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
+        assertEq(dstFunds, dstFundsBefore + available);
+    }
+
+    function testMigrateUnfinalizedRevertsIfNotCurator() public {
+        (uint64 sourceNonce, SponsoredDataSet source, uint64 successorNonce,,) = _setupUnfinalizedMigration(true);
+        vm.expectRevert(abi.encodeWithSelector(SponsoredDataSet.NotCurator.selector, curator, address(this)));
+        source.migrateUnfinalized(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateUnfinalizedRevertsIfAlreadyFinalized() public {
+        (uint64 sourceNonce, SponsoredDataSet source, uint64 successorNonce,,) = _setupUnfinalizedMigration(true);
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        vm.expectRevert(SponsoredDataSet.AlreadyFinalized.selector);
+        source.migrateUnfinalized(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateUnfinalizedRevertsIfSuccessorNotProven() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        uint64 successorNonce = _factoryNonce();
+        (SponsoredDataSet successor,) = _setupDataSet(10 ** token.decimals());
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(curator);
+        vm.expectRevert(SponsoredDataSet.SuccessorNotProven.selector);
+        source.migrateUnfinalized(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateUnfinalizedRevertsIfSuccessorCuratorMismatch() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        address otherCurator = address(0xcc);
+        uint64 successorNonce = _factoryNonce();
+        (SponsoredDataSet successor, uint256 dstId) =
+            _setupDataSetWith(10 ** token.decimals(), otherCurator, beneficiary);
+        vm.prank(otherCurator);
+        successor.finalize();
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        vm.prank(curator);
+        vm.expectRevert(SponsoredDataSet.SuccessorCuratorMismatch.selector);
+        source.migrateUnfinalized(factory, sourceNonce, successorNonce);
+    }
+
+    function testMigrateUnfinalizedRevertsIfSuccessorBeneficiaryMismatch() public {
+        uint64 sourceNonce = _factoryNonce();
+        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        address otherBeneficiary = address(0xbb);
+        uint64 successorNonce = _factoryNonce();
+        (SponsoredDataSet successor, uint256 dstId) =
+            _setupDataSetWith(10 ** token.decimals(), curator, otherBeneficiary);
+        vm.prank(curator);
+        successor.finalize();
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        vm.prank(curator);
+        vm.expectRevert(SponsoredDataSet.SuccessorBeneficiaryMismatch.selector);
+        source.migrateUnfinalized(factory, sourceNonce, successorNonce);
     }
 }
