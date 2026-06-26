@@ -20,7 +20,7 @@ This file is the canonical, self-contained template for FWSS release issues.
 
 ### Release Tracking
 
-The filecoin-services release version is the stack version. It may differ from an individual contract `VERSION()` when the stack changes without an FWSS code change.
+The filecoin-services GitHub release version is the stack version. It may differ from an individual contract `VERSION()` when the stack changes without an FWSS code change.
 
 | Item | Value |
 |---|---|
