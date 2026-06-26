@@ -497,7 +497,7 @@ git status --short service_contracts/abi
 - [ ] Run the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available, or record an exception/owner in Release Tracking
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Confirm Synapse PR/release is merged or owned
-- [ ] Capture lessons learned from this rollout and update [`service_contracts/tools/UPGRADE-CHECKLIST.md`]({{CHECKLIST_LINK}}) if the process should change
+- [ ] Capture lessons learned from this rollout and update [`service_contracts/tools/UPGRADE-CHECKLIST.md`]({{CHECKLIST_UPDATE_LINK}}) if the process should change
 - [ ] Add release link to this issue
 - [ ] Close this issue
 

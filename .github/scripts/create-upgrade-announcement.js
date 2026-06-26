@@ -33,6 +33,7 @@ Environment variables:
   RELEASE_PREP_PR      PR number or link for release-prep updates (optional; CHANGELOG_PR also supported)
   CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional)
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
+  GITHUB_SHA           Commit used for source links (provided by GitHub Actions; default: main)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
@@ -59,6 +60,7 @@ const config = {
   releasePrepPr: (process.env.RELEASE_PREP_PR || process.env.CHANGELOG_PR || "").trim(),
   changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
+  sourceRef: (process.env.GITHUB_SHA || process.env.GITHUB_REF_NAME || "main").trim(),
   githubToken: process.env.GITHUB_TOKEN,
   githubRepository: process.env.GITHUB_REPOSITORY,
 };
@@ -127,6 +129,15 @@ function formatReleasePrepPr(baseUrl) {
   return config.releasePrepPr;
 }
 
+function formatSourceLink(baseUrl, filePath) {
+  const sourceRef = config.sourceRef || "main";
+  return `${baseUrl}/blob/${sourceRef}/${filePath}`;
+}
+
+function formatMainLink(baseUrl, filePath) {
+  return `${baseUrl}/blob/main/${filePath}`;
+}
+
 function loadIssueTemplate() {
   const templatePath = path.resolve(__dirname, "../../service_contracts/tools/UPGRADE-CHECKLIST.md");
   const source = fs.readFileSync(templatePath, "utf8");
@@ -173,7 +184,8 @@ function generateBody() {
     RECOMMENDED_PR_TITLE: recommendedPrTitle,
     CHANGELOG_LINK: `${baseUrl}/blob/main/CHANGELOG.md`,
     FWSS_CONTRACT_LINK: `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`,
-    CHECKLIST_LINK: `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-CHECKLIST.md`,
+    CHECKLIST_LINK: formatSourceLink(baseUrl, "service_contracts/tools/UPGRADE-CHECKLIST.md"),
+    CHECKLIST_UPDATE_LINK: formatMainLink(baseUrl, "service_contracts/tools/UPGRADE-CHECKLIST.md"),
     DEPLOY_WORKFLOW_LINK: `${baseUrl}/actions/workflows/deploy-contract.yml`,
     CREATE_ISSUE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/create-upgrade-announcement-issue.yml`,
     SYNAPSE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/notify-synapse-sdk.yml`,
