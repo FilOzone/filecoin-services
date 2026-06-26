@@ -30,6 +30,15 @@ The filecoin-services release version is the stack version. It may differ from a
 | `deployments.json` PR(s) | `TBD` |
 | Synapse SDK PR | `TBD` |
 
+Field ownership for duplicated rollout data:
+
+| Data | Source of truth | Mirror/update |
+|---|---|---|
+| Operator status, owner decisions, exceptions, and in-progress tx/check evidence | This release issue: Release Tracking and Run Log | Mirror externally useful rollout status to the GitHub Release page |
+| Live contract state | Chain state read from the FWSS proxy, implementation slot, and View contract | Record observed values in the Run Log and use them for go/no-go |
+| Consumer-facing release status, addresses, epochs, and tx links | GitHub Release page | Populate from the Run Log as rollout facts become final |
+| Repo deployment snapshot | `service_contracts/deployments.json` on `main` | Update by follow-up PR(s) only after the relevant proxy and View switches are live |
+
 ### Component Versions
 
 | Component | Version | Changed? | Notes |
