@@ -383,6 +383,8 @@ contract SponsoredDataSetTest is MockFVMTest {
         (uint256 funds, uint256 lockupCurrent,,) = payments.accounts(IERC20(address(token)), address(source));
         uint256 available = funds - lockupCurrent;
 
+        vm.expectEmit(false, false, false, true);
+        emit SponsoredDataSet.Migrated(address(successor));
         source.migrate(factory, sourceNonce, successorNonce);
 
         (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
@@ -546,6 +548,8 @@ contract SponsoredDataSetTest is MockFVMTest {
         uint256 available = srcFunds - srcLockup;
         uint256 balanceBefore = address(this).balance;
 
+        vm.expectEmit(true, false, false, true);
+        emit SponsoredDataSet.MigrationCompleted(m.migrationId, address(m.successor));
         m.source.completeMigration(m.migrationId);
 
         (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(m.successor));
@@ -649,6 +653,8 @@ contract SponsoredDataSetTest is MockFVMTest {
             source.proposeMigration{value: source.MIGRATION_DEPOSIT()}(factory, sourceNonce, successorNonce);
 
         address challenger = address(0xc1);
+        vm.expectEmit(true, false, false, true);
+        emit SponsoredDataSet.MigrationInvalid(migrationId, 0);
         vm.prank(challenger);
         source.challengeMigration(migrationId, 0);
 
@@ -689,6 +695,8 @@ contract SponsoredDataSetTest is MockFVMTest {
         uint256 available = srcFunds - srcLockup;
         (uint256 dstFundsBefore,,,) = payments.accounts(IERC20(address(token)), address(successor));
 
+        vm.expectEmit(false, false, false, true);
+        emit SponsoredDataSet.Migrated(address(successor));
         vm.prank(curator);
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
 

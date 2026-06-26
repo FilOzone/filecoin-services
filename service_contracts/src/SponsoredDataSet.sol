@@ -89,7 +89,10 @@ contract SponsoredDataSet {
     error SuccessorCuratorMismatch();
     error SuccessorBeneficiaryMismatch();
 
+    event Migrated(address successor);
     event MigrationProposed(uint256 indexed migrationId, address depositor, uint256 successorDataSetId);
+    event MigrationCompleted(uint256 indexed migrationId, address successor);
+    event MigrationInvalid(uint256 indexed migrationId, uint256 atIndex);
 
     struct PendingMigration {
         address depositor;
@@ -188,6 +191,7 @@ contract SponsoredDataSet {
         (IPDPVerifier pdpVerifier, uint256 successorDataSetId) = _checkMigrationConditions(successor);
         _verifyPiecesMatch(pdpVerifier, dataSetId, successorDataSetId);
         _transferFunds(factory, successor);
+        emit Migrated(address(successor));
     }
 
     /// @notice The curator migrates funds from a non-finalized data set to a successor with the same curator and beneficiary.
@@ -203,6 +207,7 @@ contract SponsoredDataSet {
         require(successorDataSetId != 0, SuccessorNotBound());
         require(WARM_STORAGE_SERVICE.hasBeenProvenRecently(successorDataSetId), SuccessorNotProven());
         _transferFunds(factory, successor);
+        emit Migrated(address(successor));
     }
 
     /// @notice Proposes a challenged migration to a large-data successor without iterating all pieces.
@@ -251,6 +256,7 @@ contract SponsoredDataSet {
 
         delete pendingMigrations[migrationId];
 
+        emit MigrationInvalid(migrationId, pieceIndex);
         uint256 half = MIGRATION_DEPOSIT / 2;
         require(FVMPay.pay(msg.sender, half), PayFailed());
         require(FVMPay.burn(half), BurnFailed());
@@ -268,6 +274,7 @@ contract SponsoredDataSet {
         SponsoredDataSet successor =
             SponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
         _transferFunds(migration.factory, successor);
+        emit MigrationCompleted(migrationId, address(successor));
         require(FVMPay.pay(migration.depositor, MIGRATION_DEPOSIT), PayFailed());
     }
 
