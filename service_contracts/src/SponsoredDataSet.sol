@@ -11,6 +11,7 @@ import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
+import {LibClone} from "solady/utils/LibClone.sol";
 import {FVMPay} from "@fvm-solidity/FVMPay.sol";
 
 function hashTypedDataV4(FilecoinWarmStorageService fwss, bytes32 structHash) view returns (bytes32) {
@@ -36,12 +37,17 @@ contract SponsoredDataSetFactory {
     FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     IERC20 public immutable TOKEN;
+    SponsoredDataSet public immutable IMPLEMENTATION;
 
     constructor(FilecoinWarmStorageService fwss) {
         WARM_STORAGE_SERVICE = fwss;
-        PAYMENTS = FilecoinPay(fwss.paymentsContractAddress());
-        SESSION_KEY_REGISTRY = fwss.sessionKeyRegistry();
-        TOKEN = fwss.usdfcTokenAddress();
+        FilecoinPay filecoinPay = FilecoinPay(fwss.paymentsContractAddress());
+        PAYMENTS = filecoinPay;
+        SessionKeyRegistry sessionKeyRegistry = fwss.sessionKeyRegistry();
+        SESSION_KEY_REGISTRY = sessionKeyRegistry;
+        IERC20 token = fwss.usdfcTokenAddress();
+        TOKEN = token;
+        IMPLEMENTATION = new SponsoredDataSet(fwss, filecoinPay, sessionKeyRegistry, token);
     }
 
     function initDataSet(
@@ -55,9 +61,8 @@ contract SponsoredDataSetFactory {
             SignatureVerificationLib.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
         bytes32 createDataSetHash = hashTypedDataV4(WARM_STORAGE_SERVICE, createDataSetStructHash);
         address createDataSetSigner = ecrecover(createDataSetHash, 0, 0, 0);
-        SponsoredDataSet dataSet = new SponsoredDataSet(
-            WARM_STORAGE_SERVICE, PAYMENTS, SESSION_KEY_REGISTRY, TOKEN, createDataSetSigner, curator, beneficiary
-        );
+        SponsoredDataSet dataSet = SponsoredDataSet(LibClone.clone(address(IMPLEMENTATION)));
+        dataSet.initialize(createDataSetSigner, curator, beneficiary);
         emit NewSponsoredDataSet(dataSet, curator, payee, beneficiary);
         return dataSet;
     }
@@ -107,14 +112,16 @@ contract SponsoredDataSet {
     uint256 public constant CHALLENGE_PERIOD = 2880;
     uint256 public constant MIGRATION_DEPOSIT = 1 ether;
 
-    // The curator can add and remove pieces from the data set until they finalize it
-    address public immutable CURATOR;
-    // The beneficiary receives the funds in the event the data set is deleted without a successful migration
-    address public immutable BENEFICIARY;
-
     FilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
     FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
+    IERC20 public immutable TOKEN;
+
+    // The curator can add and remove pieces from the data set until they finalize it
+    address public CURATOR;
+    // The beneficiary receives the funds in the event the data set is deleted without a successful migration
+    address public BENEFICIARY;
+
     uint256 public dataSetId;
     uint256 public railId;
     uint256 public finalizedEpoch;
@@ -126,26 +133,29 @@ contract SponsoredDataSet {
         FilecoinWarmStorageService fwss,
         FilecoinPay filecoinPay,
         SessionKeyRegistry sessionKeyRegistry,
-        IERC20 token,
-        address createDataSetSigner,
-        address curator,
-        address beneficiary
+        IERC20 token
     ) {
+        WARM_STORAGE_SERVICE = fwss;
+        PAYMENTS = filecoinPay;
+        SESSION_KEY_REGISTRY = sessionKeyRegistry;
+        TOKEN = token;
+    }
+
+    function initialize(address createDataSetSigner, address curator, address beneficiary) external {
+        require(CURATOR == address(0));
+
         bytes32[] memory createPerms = new bytes32[](1);
         createPerms[0] = SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH;
-        sessionKeyRegistry.login(createDataSetSigner, type(uint256).max, createPerms, ORIGIN);
+        SESSION_KEY_REGISTRY.login(createDataSetSigner, type(uint256).max, createPerms, ORIGIN);
 
         bytes32[] memory curatorPerms = new bytes32[](2);
         curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
         curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
-        sessionKeyRegistry.login(curator, type(uint256).max, curatorPerms, ORIGIN);
-        filecoinPay.setOperatorApproval(
-            token, address(fwss), true, type(uint256).max, type(uint256).max, type(uint256).max
+        SESSION_KEY_REGISTRY.login(curator, type(uint256).max, curatorPerms, ORIGIN);
+        PAYMENTS.setOperatorApproval(
+            TOKEN, address(WARM_STORAGE_SERVICE), true, type(uint256).max, type(uint256).max, type(uint256).max
         );
 
-        WARM_STORAGE_SERVICE = fwss;
-        PAYMENTS = filecoinPay;
-        SESSION_KEY_REGISTRY = sessionKeyRegistry;
         CURATOR = curator;
         BENEFICIARY = beneficiary;
     }
