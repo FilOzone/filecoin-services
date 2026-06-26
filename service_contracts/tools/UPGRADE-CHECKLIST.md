@@ -72,11 +72,15 @@ Keep this table current as values become known.
 
 ### Cross-Repo Impact
 
-List every required cross-repo change or release. Use `None` only after the technical owner confirms the upgrade is FWSS-only.
+Check every pre-seeded row and list each required cross-repo change or release. Use `None` only after the technical owner confirms there is no required change for that repository.
 
 | Repository | Required change, PR, issue, or release | Required before Mainnet? | Owner/Status |
 |---|---|---|---|
-| `TBD` | `TBD` | `TBD` | `TBD` |
+| `FilOzone/synapse-sdk` | `TBD` | `TBD` | `TBD` |
+| `FilOzone/pdp` | `TBD` | `TBD` | `TBD` |
+| `filecoin-project/curio` | `TBD` | `TBD` | `TBD` |
+| `FilOzone/filecoin-cloud` | `TBD` | `TBD` | `TBD` |
+| Other / none | `TBD` | `TBD` | `TBD` |
 
 ### Dependency Targets and Compatibility
 
