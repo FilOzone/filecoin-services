@@ -131,7 +131,7 @@ Record validation that proves the planned upgrade works against the full contrac
 - Before any live announce transaction, fill in the Technical Owner, Cross-Repo Impact, Dependency Targets and Compatibility, Rollback Plan, and foc-devnet validation status.
 - Generate owner-action calldata with `CALLDATA_ONLY=true` and submit it through Safe Transaction Builder.
 - In Safe Transaction Builder, use the script output exactly: target is the printed FWSS proxy, value is `0`, and data is the printed calldata.
-- Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `createDataSet` validation are complete.
+- Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `filecoin-pin` Data Set creation validation are complete.
 - Do not announce Mainnet until required cross-repo changes are merged/released or explicitly waived by the technical owner.
 - `service_contracts/deployments.json` reflects what is live behind proxies and View contracts. Update it only after the relevant proxy switch and, if applicable, View switch are complete, normally through follow-up PR(s) to `main`, and record PR links in Release Tracking.
 - If an `AFTER_EPOCH` changes, submit a new `announcePlannedUpgrade()` transaction and record that it supersedes the previous announcement.
@@ -160,7 +160,7 @@ For each network, record evidence that:
 - `nextUpgrade()` is cleared.
 - Blockscout shows the proxy and transaction as expected.
 - A smoke/E2E test passes. The v1.2.0 rollout used the Synapse SDK storage E2E example.
-- A `createDataSet` flow succeeds after the upgrade, either by a manual network-specific transaction or Dealbot canary graph evidence.
+- A [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) `add` flow succeeds after the upgrade with unique Data Set metadata, forcing creation of a new Data Set on the target network. Record the command output, metadata, Data Set ID, tx/link, SP, and timestamp in the Run Log.
 
 ### Changes
 {{CHANGES_SUMMARY}}
@@ -172,7 +172,7 @@ For each network, record evidence that:
 
 ## Release Checklist
 
-> Work through the phases in order. Do not announce Mainnet until the Calibnet execute transaction, on-chain checks, smoke/E2E test, and `createDataSet` validation are complete.
+> Work through the phases in order. Do not announce Mainnet until the Calibnet execute transaction, on-chain checks, smoke/E2E test, and `filecoin-pin` Data Set creation validation are complete.
 
 ### Phase 1: Branch, Issue, PR, and Checks
 - [ ] All intended FWSS contract changes are merged into `main`
@@ -364,7 +364,25 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 
 - [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
 - [ ] Run and record a Calibnet smoke/E2E test result
-- [ ] Validate a Calibnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
+- [ ] Validate Calibnet Data Set creation through [`filecoin-pin add`](https://github.com/filecoin-project/filecoin-pin) with `--network calibration` and unique `--data-set-metadata`, then record the command output, metadata, Data Set ID, tx/link, SP, and timestamp in the Run Log
+
+<details>
+<summary>Calibnet filecoin-pin validation</summary>
+
+```bash
+RUN_ID="fwss-{{RELEASE_VERSION}}-calibnet-$(date -u +%Y%m%dT%H%M%SZ)"
+printf "FWSS {{RELEASE_VERSION}} Calibnet smoke %s\n" "$RUN_ID" > "/tmp/$RUN_ID.txt"
+
+filecoin-pin add "/tmp/$RUN_ID.txt" \
+  --network calibration \
+  --data-set-metadata fwss_release={{RELEASE_VERSION}} \
+  --data-set-metadata smoke_run="$RUN_ID"
+```
+
+The unique `smoke_run` metadata is required so this validates new Data Set creation rather than reusing an existing Data Set.
+
+</details>
+
 - [ ] Verify the proxy on Blockscout
 - [ ] Update the GitHub pre-release Calibnet rollout status with execute tx, checks, and smoke/E2E evidence
 - [ ] If Calibnet deployment addresses should be published before Mainnet, open or update a Calibnet-only follow-up PR to `main` for `service_contracts/deployments.json` after the Calibnet proxy switch and, if applicable, View switch are live, then record the PR link in Release Tracking. Otherwise record that the `deployments.json` update will wait for Mainnet.
@@ -452,7 +470,25 @@ echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
 
 - [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
 - [ ] Run and record a Mainnet smoke/E2E test result
-- [ ] Validate a Mainnet `createDataSet` flow manually or with Dealbot canary graph evidence, then record the tx/link in the Run Log
+- [ ] Validate Mainnet Data Set creation through [`filecoin-pin add`](https://github.com/filecoin-project/filecoin-pin) with `--network mainnet` and unique `--data-set-metadata`, then record the command output, metadata, Data Set ID, tx/link, SP, and timestamp in the Run Log
+
+<details>
+<summary>Mainnet filecoin-pin validation</summary>
+
+```bash
+RUN_ID="fwss-{{RELEASE_VERSION}}-mainnet-$(date -u +%Y%m%dT%H%M%SZ)"
+printf "FWSS {{RELEASE_VERSION}} Mainnet smoke %s\n" "$RUN_ID" > "/tmp/$RUN_ID.txt"
+
+filecoin-pin add "/tmp/$RUN_ID.txt" \
+  --network mainnet \
+  --data-set-metadata fwss_release={{RELEASE_VERSION}} \
+  --data-set-metadata smoke_run="$RUN_ID"
+```
+
+The unique `smoke_run` metadata is required so this validates new Data Set creation rather than reusing an existing Data Set.
+
+</details>
+
 - [ ] Verify the proxy on Blockscout
 - [ ] Update the GitHub pre-release Mainnet rollout status with execute tx, checks, and smoke/E2E evidence
 
