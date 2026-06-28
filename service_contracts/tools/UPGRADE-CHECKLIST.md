@@ -254,8 +254,26 @@ gh release create {{RELEASE_VERSION}} \
 ### Phase 2: Deploy Contracts
 Deploy both networks before any announce/execute.
 
-- [ ] Run the deployment bytecode/metadata check to identify every contract that must be redeployed, including linked libraries and StateView contracts, then record the required deploy set in the Run Log. If `service_contracts/tools/verify-deployments.sh` or the deployment metadata tooling reports drift, resolve or explicitly waive it before live announce.
-- [ ] If linked libraries are redeployed, record their addresses in the Run Log and confirm whether their ABIs need to be published for downstream consumers
+- [ ] Run the metadata-aware deploy dry-run for each target network before live deployment and record the deploy inventory in the Run Log: `SignatureVerificationLib`, `Rails`, `FilecoinWarmStorageService` implementation, `FilecoinWarmStorageServiceStateView`, and any other contract the tooling marks as needing deployment.
+- [ ] Run `service_contracts/tools/verify-deployments.sh --chain <CHAIN>` for each target network after deployment metadata is available. Resolve or explicitly waive any bytecode/metadata mismatch before live announce.
+- [ ] If linked libraries or StateView are newly deployed, record their addresses, verification status, and ABI-publishing decision in the Run Log.
+
+<details>
+<summary>Deployment metadata checks</summary>
+
+```bash
+cd service_contracts
+
+ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1" \
+  ./tools/verify-deployments.sh --chain 314159
+
+ETH_RPC_URL="https://api.node.glif.io/rpc/v1" \
+  ./tools/verify-deployments.sh --chain 314
+```
+
+Use the deploy dry-run output to identify contracts that are `Up to date` versus `Would deploy` or otherwise need deployment. Record the final deploy set before any live announce transaction.
+
+</details>
 
 **Calibnet FWSS Implementation**
 - [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=FWSS Implementation`, `dry_run=true`
