@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "./FilecoinWarmStorageService.sol";
 import {FilecoinPayV1 as FilecoinPay} from "@fws-payments/FilecoinPayV1.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
-import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
 import {LibBytes} from "solady/utils/LibBytes.sol";
@@ -116,6 +115,7 @@ contract SponsoredDataSet {
     FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     IERC20 public immutable TOKEN;
+    PDPVerifier public immutable PDP_VERIFIER;
 
     // The curator can add and remove pieces from the data set until they finalize it
     address public CURATOR;
@@ -139,6 +139,7 @@ contract SponsoredDataSet {
         PAYMENTS = filecoinPay;
         SESSION_KEY_REGISTRY = sessionKeyRegistry;
         TOKEN = token;
+        PDP_VERIFIER = PDPVerifier(fwss.pdpVerifierAddress());
     }
 
     function initialize(address createDataSetSigner, address curator, address beneficiary) external {
@@ -192,14 +193,15 @@ contract SponsoredDataSet {
     }
 
     /// @notice Migrates available funds to a verified successor data set from the same factory.
-    /// @dev Checks: both are finalized, source is terminated (not deleted) in FWSS, successor is
-    ///      proven and has the same active pieces in the same order as the source.
+    /// @dev Checks: both are finalized, source in FWSS is not deleted and either terminated or the
+    ///      SP has been inactive for at least half the PDP inactivity window, successor is proven and has the
+    ///      same active pieces in the same order as the source.
     ///      The source and successor addresses are derived deterministically from (factory, nonce)
     ///      using the EVM CREATE address formula, proving both were deployed by the same factory.
     function migrate(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
         SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
-        (IPDPVerifier pdpVerifier, uint256 successorDataSetId) = _checkMigrationConditions(successor);
-        _verifyPiecesMatch(pdpVerifier, dataSetId, successorDataSetId);
+        uint256 successorDataSetId = _checkMigrationConditions(successor);
+        _verifyPiecesMatch(dataSetId, successorDataSetId);
         _transferFunds(factory, successor);
         emit Migrated(address(successor));
     }
@@ -230,7 +232,7 @@ contract SponsoredDataSet {
     {
         require(msg.value == MIGRATION_DEPOSIT, IncorrectDeposit());
         SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
-        (, uint256 successorDataSetId) = _checkMigrationConditions(successor);
+        uint256 successorDataSetId = _checkMigrationConditions(successor);
         migrationId = nextMigrationId++;
         pendingMigrations[migrationId] = PendingMigration({
             depositor: msg.sender,
@@ -251,15 +253,14 @@ contract SponsoredDataSet {
 
         SponsoredDataSet successor =
             SponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
-        IPDPVerifier pdpVerifier = IPDPVerifier(WARM_STORAGE_SERVICE.pdpVerifierAddress());
         uint256 dstId = successor.dataSetId();
 
-        bool srcActive = pdpVerifier.getPieceLeafCount(dataSetId, pieceIndex) != 0;
-        bool dstActive = pdpVerifier.getPieceLeafCount(dstId, pieceIndex) != 0;
+        bool srcActive = PDP_VERIFIER.getPieceLeafCount(dataSetId, pieceIndex) != 0;
+        bool dstActive = PDP_VERIFIER.getPieceLeafCount(dstId, pieceIndex) != 0;
         bool mismatch = srcActive != dstActive;
         if (!mismatch && srcActive) {
-            bytes memory srcCid = PDPVerifier(address(pdpVerifier)).getPieceCid(dataSetId, pieceIndex).data;
-            bytes memory dstCid = PDPVerifier(address(pdpVerifier)).getPieceCid(dstId, pieceIndex).data;
+            bytes memory srcCid = PDP_VERIFIER.getPieceCid(dataSetId, pieceIndex).data;
+            bytes memory dstCid = PDP_VERIFIER.getPieceCid(dstId, pieceIndex).data;
             mismatch = !LibBytes.eq(srcCid, dstCid);
         }
         require(mismatch, ChallengeFailed());
@@ -297,28 +298,32 @@ contract SponsoredDataSet {
         return SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
     }
 
-    function _checkMigrationConditions(SponsoredDataSet successor)
-        internal
-        view
-        returns (IPDPVerifier pdpVerifier, uint256 successorDataSetId)
-    {
+    function _checkMigrationConditions(SponsoredDataSet successor) internal view returns (uint256 successorDataSetId) {
         require(isFinalized(), NotFinalized());
         require(successor.isFinalized(), SuccessorNotFinalized());
 
         require(dataSetId != 0, DataSetNotBound());
         FilecoinWarmStorageService.DataSetInfoView memory info = WARM_STORAGE_SERVICE.getDataSet(dataSetId);
         require(info.payer != address(0), DataSetDeleted());
-        require(info.pdpEndEpoch != 0, DataSetNotTerminated());
+
+        // If not terminated, require the SP is in danger of abandonment (past half the inactivity window).
+        if (info.pdpEndEpoch == 0) {
+            uint256 lastProvenEpoch = PDP_VERIFIER.getDataSetLastProvenEpoch(dataSetId);
+            require(
+                lastProvenEpoch != 0 && block.number > lastProvenEpoch + PDP_INACTIVITY_WINDOW / 2,
+                DataSetNotTerminated()
+            );
+        }
 
         successorDataSetId = successor.dataSetId();
         require(successorDataSetId != 0, SuccessorNotBound());
 
-        pdpVerifier = IPDPVerifier(WARM_STORAGE_SERVICE.pdpVerifierAddress());
         require(
-            pdpVerifier.getDataSetLastProvenEpoch(successorDataSetId) > successor.finalizedEpoch(), SuccessorNotProven()
+            PDP_VERIFIER.getDataSetLastProvenEpoch(successorDataSetId) > successor.finalizedEpoch(),
+            SuccessorNotProven()
         );
         require(
-            pdpVerifier.getNextPieceId(dataSetId) == pdpVerifier.getNextPieceId(successorDataSetId), PieceMismatch()
+            PDP_VERIFIER.getNextPieceId(dataSetId) == PDP_VERIFIER.getNextPieceId(successorDataSetId), PieceMismatch()
         );
     }
 
@@ -333,18 +338,15 @@ contract SponsoredDataSet {
         }
     }
 
-    function _verifyPiecesMatch(IPDPVerifier pdpVerifier, uint256 srcId, uint256 dstId) private view {
-        uint256 total = pdpVerifier.getNextPieceId(srcId);
-        require(total == pdpVerifier.getNextPieceId(dstId), PieceMismatch());
+    function _verifyPiecesMatch(uint256 srcId, uint256 dstId) private view {
+        uint256 total = PDP_VERIFIER.getNextPieceId(srcId);
+        require(total == PDP_VERIFIER.getNextPieceId(dstId), PieceMismatch());
         for (uint256 i = 0; i < total; i++) {
-            bool srcActive = pdpVerifier.getPieceLeafCount(srcId, i) != 0;
-            require(srcActive == (pdpVerifier.getPieceLeafCount(dstId, i) != 0), PieceMismatch());
+            bool srcActive = PDP_VERIFIER.getPieceLeafCount(srcId, i) != 0;
+            require(srcActive == (PDP_VERIFIER.getPieceLeafCount(dstId, i) != 0), PieceMismatch());
             if (srcActive) {
                 require(
-                    LibBytes.eq(
-                        PDPVerifier(address(pdpVerifier)).getPieceCid(srcId, i).data,
-                        PDPVerifier(address(pdpVerifier)).getPieceCid(dstId, i).data
-                    ),
+                    LibBytes.eq(PDP_VERIFIER.getPieceCid(srcId, i).data, PDP_VERIFIER.getPieceCid(dstId, i).data),
                     PieceMismatch()
                 );
             }
