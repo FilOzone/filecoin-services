@@ -42,6 +42,7 @@ The Calibnet and Mainnet rollout is complete. See the [v1.3.0 GitHub Release](ht
 
 ### Fixed
 - Fixed abandonment cleanup for activated data sets so `PDPVerifier.deleteDataSet` can complete final settlement after terminating rails, and cleared proving-period storage during data-set deletion ([#512](https://github.com/FilOzone/filecoin-services/pull/512)).
+- Fixed `abandonRails` to handle underfunded payers: when zeroing the lockup period is blocked by FilecoinPay, the lifecycle reserve is still released immediately but the PDP rail retains its default 30-day lockup period rather than finalizing at once ([#520](https://github.com/FilOzone/filecoin-services/pull/520)).
 - Removed the `addPieces` `extraData` byte cap while preserving dedicated metadata limits for operations that parse signed payloads ([#499](https://github.com/FilOzone/filecoin-services/pull/499)).
 - Updated warm-storage deployment scripts for current constructor arguments ([#472](https://github.com/FilOzone/filecoin-services/pull/472)).
 - Added deployment checksum validation and sync documentation to reduce release drift ([#464](https://github.com/FilOzone/filecoin-services/pull/464), [#489](https://github.com/FilOzone/filecoin-services/pull/489)).

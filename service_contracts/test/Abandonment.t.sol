@@ -17,7 +17,13 @@ import {
     PROVEN_THIS_PERIOD_SLOT
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
-import {EPOCHS_PER_DAY} from "../src/lib/PriceListUSDFC.sol";
+import {Errors as PaymentsErrors} from "@fws-payments/Errors.sol";
+import {
+    calculateStorageRate,
+    DEFAULT_LOCKUP_PERIOD,
+    EPOCHS_PER_DAY,
+    LIFECYCLE_RESERVE_TARGET
+} from "../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/Rails.sol";
@@ -417,6 +423,113 @@ contract AbandonmentTest is MockFVMTest {
         payments.getRail(before.cacheMissRailId);
         vm.expectRevert();
         payments.getRail(before.cdnRailId);
+    }
+
+    // Helper: create a dataset for a given payer with a tight deposit.
+    // The payer's funds equal lockupCurrent with zero headroom, so the account
+    // becomes underfunded and settleAccountLockup can no longer advance lockupLastSettledAt.
+    function _createUnderfundedDataSet(address payer, uint256 nonce) internal returns (uint256 dataSetId) {
+        uint256 leafCount = 1 << 4;
+        uint256 tightDeposit = LIFECYCLE_RESERVE_TARGET + calculateStorageRate(leafCount) * DEFAULT_LOCKUP_PERIOD;
+
+        require(usdfc.transfer(payer, tightDeposit));
+
+        vm.startPrank(payer);
+        payments.setOperatorApproval(usdfc, address(fwss), true, 1000e18, 1000e18, 365 days);
+        usdfc.approve(address(payments), tightDeposit);
+        payments.deposit(usdfc, payer, tightDeposit);
+        vm.stopPrank();
+
+        string[] memory keys = new string[](0);
+        string[] memory values = new string[](0);
+        bytes memory extraData = abi.encode(payer, uint256(0), keys, values, FAKE_SIG);
+        _makeSignaturePass(payer);
+        vm.prank(sp);
+        dataSetId = pdpVerifier.createDataSet{value: CLEANUP_DEPOSIT}(address(fwss), extraData);
+
+        Cids.Cid[] memory pieces = new Cids.Cid[](1);
+        pieces[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("tight-piece", nonce)));
+        string[][] memory metadataKeys = new string[][](1);
+        string[][] memory metadataValues = new string[][](1);
+        metadataKeys[0] = new string[](0);
+        metadataValues[0] = new string[](0);
+        _makeSignaturePass(payer);
+        vm.prank(sp);
+        pdpVerifier.addPieces(
+            dataSetId, address(0), pieces, abi.encode(uint256(1), metadataKeys, metadataValues, FAKE_SIG)
+        );
+
+        // One elapsed block is enough to make the account underfunded.
+        vm.roll(vm.getBlockNumber() + 1);
+    }
+
+    // Helper: top up a payer by epochs * rail.paymentRate, roll forward epochs blocks, then settle.
+    // Advances lockupLastSettledAt by ~epochs without leaving the account overfunded.
+    function _topUpAndSettle(address payer, uint256 railId, uint256 epochs) internal {
+        uint256 topUp = payments.getRail(railId).paymentRate * epochs;
+        require(usdfc.transfer(payer, topUp));
+        vm.startPrank(payer);
+        usdfc.approve(address(payments), topUp);
+        payments.deposit(usdfc, payer, topUp);
+        vm.stopPrank();
+        vm.roll(vm.getBlockNumber() + epochs);
+        payments.settleRail(railId, block.number);
+    }
+
+    // An underfunded payer's dataset must be abandonable
+    function testAbandonment_underfundedPayer() public {
+        uint256 dataSetId = _createUnderfundedDataSet(address(0xdead1), 1);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+
+        // allow abandonment
+        vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW);
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        vm.expectRevert();
+        payments.getRail(before.pdpRailId);
+    }
+
+    // Inactive rail with some epochs settled
+    function testAbandonment_underfundedPayer_lockupFixedReleased() public {
+        address payer = address(0xdead3);
+        uint256 dataSetId = _createUnderfundedDataSet(payer, 3);
+
+        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        uint256 pdpRailId = before.pdpRailId;
+
+        _topUpAndSettle(payer, pdpRailId, 1);
+
+        vm.roll(vm.getBlockNumber() + (PDP_INACTIVITY_WINDOW - 1));
+
+        vm.prank(keeper);
+        pdpVerifier.deleteDataSet(dataSetId, "");
+
+        _assertDataSetCleared(dataSetId);
+        assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lifecycle reserve should be zero after abandonment");
+    }
+
+    // An underfunded payer cannot consent to immediate termination: immediateTermination implies
+    // the payer is solvent enough to release the lifecycle reserve and pay the terminate fee in
+    // one step, so the rail's lockup-period change reverts instead of falling back.
+    function testTerminateService_underfundedPayer() public {
+        uint256 dataSetId = _createUnderfundedDataSet(address(0xdead2), 2);
+
+        _makeSignaturePass(address(0xdead2));
+        vm.prank(sp);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PaymentsErrors.LockupPeriodChangeNotAllowedDueToInsufficientFunds.selector,
+                usdfc,
+                address(0xdead2),
+                DEFAULT_LOCKUP_PERIOD,
+                0
+            )
+        );
+        fwss.terminateService(dataSetId, abi.encode(FAKE_SIG));
     }
 
     // CDN rails are finalized before abandonment fires (modifyRailLockup and settleRail both fail).
