@@ -289,6 +289,10 @@ library Errors {
     /// @param dataSetId The data set ID
     error FilBeamServiceNotConfigured(uint256 dataSetId);
 
+    /// @notice The rail id is not a CDN bandwidth rail managed by this contract
+    /// @param cdnRailId The CDN bandwidth rail ID
+    error UnknownCDNBandwidthRail(uint256 cdnRailId);
+
     /// @notice Only the FilBeam controller address can call this function
     /// @param expected The expected FilBeam controller address
     /// @param actual The caller address

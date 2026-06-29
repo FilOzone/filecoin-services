@@ -303,6 +303,14 @@ contract FilecoinWarmStorageService is
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
 
+    // Shared CDN bandwidth rail per (payer, CDN group). The shared rail id is the CDN subscription
+    // identity: every data set in the group resolves to the same cdnRailId. Keyed by
+    // keccak256(abi.encode(payer, groupId)), where groupId is the value of the `withCDN` metadata
+    // entry. An empty group id leaves this unused and the data set keeps a bandwidth rail of its own.
+    mapping(bytes32 cdnGroupKey => uint256 cdnRailId) internal cdnGroupRail;
+    // Number of data sets referencing each shared CDN bandwidth rail; the rail is torn down at zero.
+    mapping(uint256 cdnRailId => uint256 refCount) internal cdnRailRefCount;
+
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     // =========================================================================
@@ -599,11 +607,21 @@ contract FilecoinWarmStorageService is
         // Create the payment rails using the FilecoinPayV1 contract
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
-        // Determine once whether CDN is enabled in metadata and reuse the result
-        bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
+        // Determine once whether CDN is enabled and, if so, which shared subscription it joins.
+        // The group key is derived from the payer and the `withCDN` metadata value, an empty value
+        // means the data set is its own subscription (legacy one-rail-per-data-set behavior).
+        (bool hasCDN, bytes32 cdnGroupKey) =
+            cdnMetadata(createData.payer, createData.metadataKeys, createData.metadataValues);
 
         (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = payments.createRails(
-            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
+            dataSetId,
+            usdfcTokenAddress,
+            createData.payer,
+            payee,
+            hasCDN ? filBeamBeneficiaryAddress : address(0),
+            cdnGroupKey,
+            cdnGroupRail,
+            cdnRailRefCount
         );
 
         railToDataSet[pdpRailId] = dataSetId;
@@ -654,9 +672,14 @@ contract FilecoinWarmStorageService is
             // Abandonment path: rail was never terminated via terminateService.
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
-            // abandonRails also terminates CDN rails and clears the proving activation epoch
+            // abandonRails also terminates CDN rails and clears the proving activation epoch.
+            // The bandwidth rail is only torn down when this is its last referencing data set.
             payments.abandonRails(
-                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+                provingActivationEpoch,
+                dataSetId,
+                info.pdpRailId,
+                info.cacheMissRailId,
+                _bandwidthRailToTeardown(info.cdnRailId)
             );
         } else {
             // Normal path: terminateService was already called.
@@ -1095,6 +1118,22 @@ contract FilecoinWarmStorageService is
     }
 
     /**
+     * @notice Settles a shared CDN bandwidth rail once for its whole subscription.
+     * @dev Only callable by the FilBeam controller. The shared bandwidth rail id is the CDN
+     *      subscription identity, so a single call covers every data set in the group. Cache-miss is
+     *      still settled per data set via `settleFilBeamPaymentRails` (with `cdnAmount == 0` for
+     *      grouped data sets, so the bandwidth portion is only ever settled through this path).
+     * @param cdnRailId The shared CDN bandwidth rail id
+     * @param cdnAmount Amount to settle for the bandwidth rail
+     */
+    function settleCDNBandwidthRail(uint256 cdnRailId, uint256 cdnAmount) external onlyFilBeamController {
+        require(cdnRailRefCount[cdnRailId] != 0, Errors.UnknownCDNBandwidthRail(cdnRailId));
+        if (cdnAmount > 0) {
+            FilecoinPayV1(paymentsContractAddress).modifyRailPayment(cdnRailId, 0, cdnAmount);
+        }
+    }
+
+    /**
      * @notice Allows users to add funds to their CDN-related payment rails
      * @param dataSetId The ID of the data set
      * @param cdnAmountToAdd Amount to add to CDN rail lockup
@@ -1162,7 +1201,23 @@ contract FilecoinWarmStorageService is
     /// Ideally we would catch only specific error types, but contract size constraint prevents
     /// us from implementing error handling.
     function _terminateCDNRails(uint256 dataSetId, DataSetInfo storage info, FilecoinPayV1 payments) internal {
-        payments.terminateCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId);
+        payments.terminateCDNRails(dataSetId, info.cacheMissRailId, _bandwidthRailToTeardown(info.cdnRailId));
+    }
+
+    /// @notice Decrements the reference count for a shared CDN bandwidth rail.
+    /// @dev Returns the rail id to tear down (only when this was the last reference), or 0 when the
+    ///      rail is still shared by sibling data sets and must stay alive.
+    function _bandwidthRailToTeardown(uint256 cdnRailId) internal returns (uint256) {
+        if (cdnRailId == 0) {
+            return 0;
+        }
+        uint256 refs = cdnRailRefCount[cdnRailId];
+        if (refs <= 1) {
+            cdnRailRefCount[cdnRailId] = 0;
+            return cdnRailId;
+        }
+        cdnRailRefCount[cdnRailId] = refs - 1;
+        return 0;
     }
 
     function updatePaymentRates(
@@ -1292,6 +1347,30 @@ contract FilecoinWarmStorageService is
 
         // Key absence means disabled
         return false;
+    }
+
+    /// @notice Reads the `withCDN` metadata entry, returning whether CDN is enabled and the CDN
+    ///         subscription key the data set joins.
+    /// @dev The subscription key is keccak256(abi.encode(payer, groupId)) where groupId is the value
+    ///      of the `withCDN` entry. An empty value yields a zero key, meaning the data set is its own
+    ///      subscription. Keying by payer guarantees the shared rail's `from` matches every member,
+    ///      so different payers can never share a rail. `keys` and `values` are equal length here,
+    ///      validated by the caller before this is reached.
+    function cdnMetadata(address payer, string[] memory keys, string[] memory values)
+        internal
+        pure
+        returns (bool hasCDN, bytes32 cdnGroupKey)
+    {
+        for (uint256 i = 0; i < keys.length; i++) {
+            bytes memory keyBytes = bytes(keys[i]);
+            if (keyBytes.length == METADATA_KEY_WITH_CDN_SIZE && keccak256(keyBytes) == METADATA_KEY_WITH_CDN_HASH) {
+                hasCDN = true;
+                if (bytes(values[i]).length != 0) {
+                    cdnGroupKey = keccak256(abi.encode(payer, values[i]));
+                }
+                break;
+            }
+        }
     }
 
     /**
