@@ -78,11 +78,10 @@ ORDER BY ca.with_cdn
 -- [2a] addPieces N=1 gas  (mainnet, v1.3.0 era)
 -- ============================================================================
 -- Split no-meta vs meta: ~99% of real adds carry ~1 metadata key (+~100M gas).
-SELECT CASE WHEN nm = 0 THEN 'no-meta' ELSE 'meta' END AS bucket,
-       COUNT(*)                                        AS n,
-       ROUND(AVG(gas))                                 AS add_n1_gas
+SELECT bucket, COUNT(*) AS n, ROUND(AVG(gas)) AS add_n1_gas
 FROM (
-  SELECT p.tx_hash, MAX(m.gas_used::numeric) AS gas, COUNT(p.metadata) AS nm
+  SELECT p.tx_hash, MAX(m.gas_used::numeric) AS gas,
+         CASE WHEN COUNT(p.metadata) = 0 THEN 'no-meta' ELSE 'meta' END AS bucket
   FROM fwss_piece_added p
   JOIN tx_meta m USING (tx_hash)
   LEFT JOIN fwss_data_set_created c ON c.tx_hash = p.tx_hash
@@ -90,7 +89,7 @@ FROM (
     AND to_timestamp(m.timestamp::bigint) >= TIMESTAMP '2026-06-12 18:00+00'
   GROUP BY p.tx_hash HAVING COUNT(*) = 1
 ) t
-GROUP BY (nm = 0)
+GROUP BY bucket
 
 
 -- ============================================================================
@@ -100,7 +99,7 @@ GROUP BY (nm = 0)
 -- batches post-GA, so B is measurable here. Needs >=2 distinct N buckets.
 SELECT
   ROUND((cnt*sxy - sx*sy) / NULLIF(cnt*sxx - sx*sx, 0))                                  AS marginal_B_gas,
-  ROUND((sy - ((cnt*sxy - sx*sy) / NULLIF(cnt*sxx - sx*sx, 0))*sx) / cnt)                AS base_A_gas,
+  ROUND((sy - ((cnt*sxy - sx*sy) / NULLIF(cnt*sxx - sx*sx, 0))*sx) / NULLIF(cnt, 0))      AS base_A_gas,
   cnt                                                                                    AS n_buckets
 FROM (
   SELECT COUNT(*) AS cnt, SUM(n) AS sx, SUM(g) AS sy, SUM(n*g) AS sxy, SUM(n*n) AS sxx
@@ -188,13 +187,15 @@ FROM npp CROSS JOIN pp
 -- The enqueue emits no event (FilOzone/pdp#281); the delete runs inside
 -- nextProvingPeriod, fused with proving. Estimates the per-piece processing
 -- premium = (removal-processing nextPP gas - baseline nextPP gas) / pieces.
--- Upper-bound sketch only; pricing-rationale.md section 5.
+-- Upper-bound sketch only; pricing-rationale.md section 5. Both CTEs use a 30d
+-- window (removals are sparse; widen the literal if the sample is too small).
 WITH base AS (
   SELECT AVG(g) AS gas FROM (
     SELECT MAX(m.gas_used::numeric) AS g
     FROM pdp_next_proving_period n
     JOIN tx_meta m USING (tx_hash)
     WHERE n.set_id IN (SELECT data_set_id FROM fwss_data_set_created)
+      AND m.timestamp::bigint > (SELECT MAX(timestamp::bigint) FROM tx_meta) - 2592000
       AND NOT EXISTS (SELECT 1 FROM pdp_pieces_removed r WHERE r.tx_hash = n.tx_hash)
     GROUP BY n.tx_hash
   ) s
@@ -206,6 +207,7 @@ rm AS (
     FROM pdp_pieces_removed r
     JOIN tx_meta m USING (tx_hash)
     WHERE r.set_id IN (SELECT data_set_id FROM fwss_data_set_created)
+      AND m.timestamp::bigint > (SELECT MAX(timestamp::bigint) FROM tx_meta) - 2592000
     GROUP BY r.tx_hash
   ) s
 )
