@@ -54,6 +54,7 @@ echo FilecoinWarmStorageServiceStateView deployed at $FWSS_VIEW_ADDRESS
 
 # Persist deployment address + metadata
 update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
+update_deployment_bytecode "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"
 update_deployment_metadata "$CHAIN"
 
 # Automatic contract verification

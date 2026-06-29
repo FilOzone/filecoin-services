@@ -40,6 +40,7 @@ echo "Deploying from address: $ADDR"
 
 # Get current nonce
 NONCE="$(cast nonce "$ADDR")"
+BROADCAST_FLAG="--broadcast"
 
 load_deployment_addresses $CHAIN
 
@@ -96,81 +97,42 @@ case "$CHAIN" in
     ;;
 esac
 
-SIGNATURE_LIB_DEPLOYED=false
-if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
-  # Deploy SignatureVerificationLib first so we can link it into the implementation
-  echo "Deploying SignatureVerificationLib..."
-  export SIGNATURE_VERIFICATION_LIB_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/lib/SignatureVerificationLib.sol:SignatureVerificationLib | grep "Deployed to" | awk '{print $3}')
+deploy_implementation_if_needed \
+    "SIGNATURE_VERIFICATION_LIB_ADDRESS" \
+    "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
+    "SignatureVerificationLib"
 
-  if [ -z "$SIGNATURE_VERIFICATION_LIB_ADDRESS" ]; then
-    echo "Error: Failed to deploy SignatureVerificationLib"
-    exit 1
-  fi
-  echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
-  SIGNATURE_LIB_DEPLOYED=true
-  NONCE=$((NONCE + 1))
-else
-  echo "Using SignatureVerificationLib at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
-fi
-
-RAILS_LIB_DEPLOYED=false
-if [ -z "$RAILS_LIB_ADDRESS" ]; then
-  echo "Deploying Rails..."
-  export RAILS_LIB_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/lib/Rails.sol:Rails | grep "Deployed to" | awk '{print $3}')
-
-  if [ -z "$RAILS_LIB_ADDRESS" ]; then
-    echo "Error: Failed to deploy Rails"
-    exit 1
-  fi
-  echo "Rails deployed at: $RAILS_LIB_ADDRESS"
-  RAILS_LIB_DEPLOYED=true
-  NONCE=$((NONCE + 1))
-else
-  echo "Using Rails at: $RAILS_LIB_ADDRESS"
-fi
-
-echo ""
-echo "Deploying FilecoinWarmStorageService implementation..."
-echo "Constructor arguments:"
-echo "  PDPVerifier: $PDP_VERIFIER_PROXY_ADDRESS"
-echo "  FilecoinPayV1: $FILECOIN_PAY_ADDRESS"
-echo "  USDFC Token: $USDFC_TOKEN_ADDRESS"
-echo "  FilBeam Beneficiary Address: $FILBEAM_BENEFICIARY_ADDRESS"
-echo "  ServiceProviderRegistry: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
-echo "  SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
+deploy_implementation_if_needed \
+    "RAILS_LIB_ADDRESS" \
+    "src/lib/Rails.sol:Rails" \
+    "Rails"
 
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
-    FWSS_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS) + "1")
+    FWSS_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS)
 else
-    FWSS_INIT_COUNTER=1
+    FWSS_INIT_COUNTER=0
 fi
-
-FWSS_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE \
-  --libraries "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS" \
-  --libraries "src/lib/Rails.sol:Rails:$RAILS_LIB_ADDRESS" \
-  src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService \
-  --constructor-args $PDP_VERIFIER_PROXY_ADDRESS $FILECOIN_PAY_ADDRESS $USDFC_TOKEN_ADDRESS $FILBEAM_BENEFICIARY_ADDRESS $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS $SESSION_KEY_REGISTRY_ADDRESS $FWSS_INIT_COUNTER | grep "Deployed to" | awk '{print $3}')
-
-if [ -z "$FWSS_IMPLEMENTATION_ADDRESS" ]; then
-  echo "Error: Failed to deploy FilecoinWarmStorageService implementation"
-  exit 1
-fi
+LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/Rails.sol:Rails:$RAILS_LIB_ADDRESS"
+deploy_implementation_if_needed \
+    "FWSS_IMPLEMENTATION_ADDRESS" \
+    "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
+    "FilecoinWarmStorageService implementation" \
+    "pdp_verifier=$PDP_VERIFIER_PROXY_ADDRESS" \
+    "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
+    "usdfc_token=$USDFC_TOKEN_ADDRESS" \
+    "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
+    "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
+    "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
+    "reinitializer=$FWSS_INIT_COUNTER"
+unset LIBRARIES
 
 echo ""
 echo "# DEPLOYMENT COMPLETE"
-echo "SignatureVerificationLib deployed at: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
-echo "Rails deployed at: $RAILS_LIB_ADDRESS"
-echo "FilecoinWarmStorageService Implementation deployed at: $FWSS_IMPLEMENTATION_ADDRESS"
+echo "SignatureVerificationLib: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+echo "Rails: $RAILS_LIB_ADDRESS"
+echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo ""
 
-# Persist deployment addresses + metadata
-update_deployment_address "$CHAIN" "FWSS_IMPLEMENTATION_ADDRESS" "$FWSS_IMPLEMENTATION_ADDRESS"
-if [ "$SIGNATURE_LIB_DEPLOYED" = "true" ]; then
-  update_deployment_address "$CHAIN" "SIGNATURE_VERIFICATION_LIB_ADDRESS" "$SIGNATURE_VERIFICATION_LIB_ADDRESS"
-fi
-if [ "$RAILS_LIB_DEPLOYED" = "true" ]; then
-  update_deployment_address "$CHAIN" "RAILS_LIB_ADDRESS" "$RAILS_LIB_ADDRESS"
-fi
 update_deployment_metadata "$CHAIN"
 
 # Automatic contract verification
