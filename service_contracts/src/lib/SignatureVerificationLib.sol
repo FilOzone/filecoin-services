@@ -292,6 +292,9 @@ library SignatureVerificationLib {
         }
     }
 
+    /// @notice Verifies an operation signature, delegating to the data set's authorizer when one is attached.
+    /// @dev When `authorizer` is address(0), applies the default payer / session-key check. Otherwise the
+    ///      authorizer is the sole gate: FWSS forwards the raw signature and lets it recover and decide.
     function verifySignatureWithAuthorizer(
         address payer,
         bytes calldata signature,
@@ -300,23 +303,24 @@ library SignatureVerificationLib {
         bytes32 operation,
         uint256 dataSetId,
         address authorizer,
-        uint256 authorizerGas,
         bytes calldata metadata
     ) public view returns (address signer) {
-        signer = recoverSigner(digest, signature);
-        require(signer != address(0), Errors.InvalidSignature(payer, signer));
-
-        if (signer == payer || sessionKeyRegistry.authorizationExpiry(payer, signer, operation) >= block.timestamp) {
+        if (authorizer == address(0)) {
+            signer = recoverSigner(digest, signature);
+            if (signer == payer) {
+                return signer;
+            }
+            require(
+                sessionKeyRegistry.authorizationExpiry(payer, signer, operation) >= block.timestamp,
+                Errors.InvalidSignature(payer, signer)
+            );
             return signer;
         }
 
-        require(authorizer != address(0), Errors.InvalidSignature(payer, signer));
-        try IDataSetAuthorizer(authorizer).isAuthorized{gas: authorizerGas}(
-            dataSetId, signer, operation, digest, signature, metadata
-        ) returns (bool ok) {
-            require(ok, Errors.InvalidSignature(payer, signer));
-        } catch {
-            revert Errors.InvalidSignature(payer, signer);
-        }
+        require(
+            IDataSetAuthorizer(authorizer).isAuthorized(dataSetId, payer, operation, digest, signature, metadata),
+            Errors.Unauthorized(payer, operation, digest, signature)
+        );
+        return payer;
     }
 }

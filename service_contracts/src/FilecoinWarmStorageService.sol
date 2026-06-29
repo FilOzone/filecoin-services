@@ -85,9 +85,6 @@ contract FilecoinWarmStorageService is
         SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
     bytes32 public constant TERMINATE_SERVICE_OPERATION = SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH;
 
-    // FEVM gas, not EVM gas. Calibnet measurement has the staticcall overhead around 1.3M.
-    uint256 private constant MAX_AUTHORIZER_GAS = 30_000_000;
-
     using Rails for FilecoinPayV1;
 
     // Events
@@ -1444,7 +1441,6 @@ contract FilecoinWarmStorageService is
             ADD_PIECES_OPERATION,
             dataSetId,
             dataSetAuthorizer[dataSetId],
-            MAX_AUTHORIZER_GAS,
             abi.encode(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
     }
@@ -1478,7 +1474,6 @@ contract FilecoinWarmStorageService is
             SCHEDULE_PIECE_REMOVALS_OPERATION,
             dataSetId,
             dataSetAuthorizer[dataSetId],
-            MAX_AUTHORIZER_GAS,
             abi.encode(clientDataSetId, pieceIds)
         );
     }
@@ -1497,7 +1492,6 @@ contract FilecoinWarmStorageService is
             TERMINATE_SERVICE_OPERATION,
             dataSetId,
             dataSetAuthorizer[dataSetId],
-            MAX_AUTHORIZER_GAS,
             abi.encode(dataSetId)
         );
     }

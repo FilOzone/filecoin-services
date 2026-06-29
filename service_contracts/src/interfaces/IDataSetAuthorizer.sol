@@ -2,19 +2,21 @@
 pragma solidity ^0.8.20;
 
 /// @title IDataSetAuthorizer
-/// @notice Optional per-data-set write ACL.
-/// @dev FWSS calls this with a fixed gas budget. Revert or out-of-gas means "not authorized".
+/// @notice Optional per-data-set write ACL. When a payer attaches an authorizer, FWSS
+///         delegates the entire authorization decision for that data set to it.
+/// @dev A revert (or out-of-gas) means "not authorized": the operation reverts.
 interface IDataSetAuthorizer {
     /// @param dataSetId The data set being operated on.
-    /// @param signer The secp256k1 signer recovered from the operation signature.
+    /// @param payer The data set's payer (the on-chain owner of the rails).
     /// @param operation The operation type hash, e.g. FWSS.ADD_PIECES_OPERATION().
     /// @param digest The EIP-712 digest signed for the operation.
-    /// @param signature The raw signature over `digest`.
+    /// @param signature The raw signature over `digest`; the authorizer recovers the
+    ///        signer itself, on whatever curve it supports.
     /// @param metadata ABI-encoded signed operation payload forwarded by FWSS.
-    /// @return True if `signer` is allowed to perform `operation` on `dataSetId`.
+    /// @return True if the operation is authorized on `dataSetId`.
     function isAuthorized(
         uint256 dataSetId,
-        address signer,
+        address payer,
         bytes32 operation,
         bytes32 digest,
         bytes calldata signature,

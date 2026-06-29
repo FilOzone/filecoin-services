@@ -51,11 +51,15 @@ contract TestDataSetAuthorizer is IDataSetAuthorizer {
         }
     }
 
-    function isAuthorized(uint256 dataSetId, address signer, bytes32 operation, bytes32, bytes calldata, bytes calldata)
-        external
-        view
-        returns (bool)
-    {
+    function isAuthorized(
+        uint256 dataSetId,
+        address, // payer
+        bytes32 operation,
+        bytes32 digest,
+        bytes calldata signature,
+        bytes calldata // metadata
+    ) external view returns (bool) {
+        address signer = SignatureVerificationLib.recoverSigner(digest, signature);
         if (allowed[dataSetId][signer]) {
             return true;
         }
@@ -5374,8 +5378,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(bob);
         sessionKeyRegistry.login(sessionKey2, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
 
+        // The authorizer returns false for sessionKey2 (wrong permission), so FWSS reverts Unauthorized.
         makeSignaturePass(sessionKey2);
-        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey2));
+        vm.expectRevert();
         _addAuthorizerTestPiece(dataSetId, 2);
     }
 
@@ -5385,6 +5390,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         address bob = address(0xb0b);
         TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
         authorizer.allow(dataSetId, bob);
+        // Once an authorizer is attached it is the sole gate, so the payer must be allowed explicitly.
+        authorizer.allow(dataSetId, client);
 
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
@@ -5413,7 +5420,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertGt(viewContract.getDataSet(dataSetId).pdpEndEpoch, 0);
     }
 
-    function testDataSetAuthorizerRevertDeniesDelegatedSignerButDoesNotBlockPayer() public {
+    function testDataSetAuthorizerRevertBlocksAllWritesIncludingPayer() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
         RevertingDataSetAuthorizer authorizer = new RevertingDataSetAuthorizer();
@@ -5421,11 +5428,15 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
 
+        // A delegated signer is rejected: the authorizer is the sole gate and it reverts.
         makeSignaturePass(sessionKey1);
-        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, sessionKey1));
+        vm.expectRevert();
         _addAuthorizerTestPiece(dataSetId, 1);
 
+        // The payer is no longer special-cased. Attaching an authorizer delegates every write
+        // decision to it, so a reverting authorizer locks out the payer too.
         makeSignaturePass(client);
+        vm.expectRevert();
         _addAuthorizerTestPiece(dataSetId, 2);
     }
 
