@@ -80,11 +80,6 @@ contract FilecoinWarmStorageService is
     // Version tracking
     string public constant VERSION = "1.3.0";
 
-    bytes32 public constant ADD_PIECES_OPERATION = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
-    bytes32 public constant SCHEDULE_PIECE_REMOVALS_OPERATION =
-        SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
-    bytes32 public constant TERMINATE_SERVICE_OPERATION = SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH;
-
     using Rails for FilecoinPayV1;
 
     // Events
@@ -1438,7 +1433,7 @@ contract FilecoinWarmStorageService is
             signature,
             digest,
             sessionKeyRegistry,
-            ADD_PIECES_OPERATION,
+            SignatureVerificationLib.ADD_PIECES_TYPEHASH,
             dataSetId,
             dataSetAuthorizer[dataSetId],
             abi.encode(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
@@ -1462,7 +1457,11 @@ contract FilecoinWarmStorageService is
     ) internal view {
         bytes32 digest = _hashTypedDataV4(
             keccak256(
-                abi.encode(SCHEDULE_PIECE_REMOVALS_OPERATION, clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
+                abi.encode(
+                    SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
+                    clientDataSetId,
+                    keccak256(abi.encodePacked(pieceIds))
+                )
             )
         );
 
@@ -1471,7 +1470,7 @@ contract FilecoinWarmStorageService is
             signature,
             digest,
             sessionKeyRegistry,
-            SCHEDULE_PIECE_REMOVALS_OPERATION,
+            SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
             dataSetId,
             dataSetAuthorizer[dataSetId],
             abi.encode(clientDataSetId, pieceIds)
@@ -1483,13 +1482,14 @@ contract FilecoinWarmStorageService is
         view
         returns (address signer)
     {
-        bytes32 digest = _hashTypedDataV4(keccak256(abi.encode(TERMINATE_SERVICE_OPERATION, dataSetId)));
+        bytes32 digest =
+            _hashTypedDataV4(keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId)));
         signer = SignatureVerificationLib.verifySignatureWithAuthorizer(
             payer,
             signature,
             digest,
             sessionKeyRegistry,
-            TERMINATE_SERVICE_OPERATION,
+            SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH,
             dataSetId,
             dataSetAuthorizer[dataSetId],
             abi.encode(dataSetId)
@@ -1504,13 +1504,6 @@ contract FilecoinWarmStorageService is
         require(authorizer == address(0) || authorizer.code.length > 0, Errors.InvalidDataSetAuthorizer(authorizer));
         dataSetAuthorizer[dataSetId] = authorizer;
         emit DataSetAuthorizerSet(dataSetId, authorizer);
-    }
-
-    /**
-     * @notice The authorizer attached to a data set, or address(0) if none.
-     */
-    function getDataSetAuthorizer(uint256 dataSetId) external view returns (address) {
-        return dataSetAuthorizer[dataSetId];
     }
 
     /**

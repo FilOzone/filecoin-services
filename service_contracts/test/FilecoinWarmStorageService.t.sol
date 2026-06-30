@@ -57,7 +57,7 @@ contract TestDataSetAuthorizer is IDataSetAuthorizer {
         bytes32 operation,
         bytes32 digest,
         bytes calldata signature,
-        bytes calldata // metadata
+        bytes calldata // signedData
     ) external view returns (bool) {
         address signer = SignatureVerificationLib.recoverSigner(digest, signature);
         if (allowed[dataSetId][signer]) {
@@ -5330,11 +5330,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         emit FilecoinWarmStorageService.DataSetAuthorizerSet(dataSetId, address(authorizer));
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
-        assertEq(pdpServiceWithPayments.getDataSetAuthorizer(dataSetId), address(authorizer));
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
 
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(0));
-        assertEq(pdpServiceWithPayments.getDataSetAuthorizer(dataSetId), address(0));
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0));
     }
 
     function testDataSetAuthorizerIsOptionalAndAllowsDelegatedAddPieces() public {

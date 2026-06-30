@@ -303,7 +303,7 @@ library SignatureVerificationLib {
         bytes32 operation,
         uint256 dataSetId,
         address authorizer,
-        bytes calldata metadata
+        bytes calldata signedData
     ) public view returns (address signer) {
         if (authorizer == address(0)) {
             signer = recoverSigner(digest, signature);
@@ -318,7 +318,7 @@ library SignatureVerificationLib {
         }
 
         require(
-            IDataSetAuthorizer(authorizer).isAuthorized(dataSetId, payer, operation, digest, signature, metadata),
+            IDataSetAuthorizer(authorizer).isAuthorized(dataSetId, payer, operation, digest, signature, signedData),
             Errors.Unauthorized(payer, operation, digest, signature)
         );
         return payer;
