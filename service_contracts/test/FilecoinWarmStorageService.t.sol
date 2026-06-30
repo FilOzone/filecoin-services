@@ -84,6 +84,87 @@ contract RevertingDataSetAuthorizer is IDataSetAuthorizer {
     }
 }
 
+contract SignedDataCheckingAuthorizer is IDataSetAuthorizer {
+    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+        "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
+        "Cid(bytes data)" "MetadataEntry(string key,string value)"
+        "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
+    );
+    bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
+        keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
+    bytes32 private constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
+
+    address internal immutable signer;
+    bytes32 internal expectedOperation;
+    uint256 internal expectedDataSetId;
+    uint256 internal expectedClientDataSetId;
+    uint256 internal expectedNonce;
+    bytes32 internal expectedCidDataHash;
+    uint256 internal expectedPieceId;
+
+    constructor(address _signer) {
+        signer = _signer;
+    }
+
+    function expectAdd(uint256 dataSetId, uint256 clientDataSetId, uint256 nonce, bytes32 cidDataHash) external {
+        expectedOperation = ADD_PIECES_TYPEHASH;
+        expectedDataSetId = dataSetId;
+        expectedClientDataSetId = clientDataSetId;
+        expectedNonce = nonce;
+        expectedCidDataHash = cidDataHash;
+    }
+
+    function expectRemoval(uint256 dataSetId, uint256 clientDataSetId, uint256 pieceId) external {
+        expectedOperation = SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        expectedDataSetId = dataSetId;
+        expectedClientDataSetId = clientDataSetId;
+        expectedPieceId = pieceId;
+    }
+
+    function expectTerminate(uint256 dataSetId) external {
+        expectedOperation = TERMINATE_SERVICE_TYPEHASH;
+        expectedDataSetId = dataSetId;
+    }
+
+    function isAuthorized(
+        uint256 dataSetId,
+        address, // payer
+        bytes32 operation,
+        bytes32 digest,
+        bytes calldata signature,
+        bytes calldata signedData
+    ) external view returns (bool) {
+        if (
+            dataSetId != expectedDataSetId || operation != expectedOperation
+                || SignatureVerificationLib.recoverSigner(digest, signature) != signer
+        ) {
+            return false;
+        }
+
+        if (operation == ADD_PIECES_TYPEHASH) {
+            (
+                uint256 clientDataSetId,
+                uint256 nonce,
+                Cids.Cid[] memory pieces,
+                string[][] memory keys,
+                string[][] memory values
+            ) = abi.decode(signedData, (uint256, uint256, Cids.Cid[], string[][], string[][]));
+            return clientDataSetId == expectedClientDataSetId && nonce == expectedNonce && pieces.length == 1
+                && keccak256(pieces[0].data) == expectedCidDataHash && keys.length == 1 && keys[0].length == 1
+                && values.length == 1 && values[0].length == 1 && keccak256(bytes(keys[0][0])) == keccak256(bytes("path"))
+                && keccak256(bytes(values[0][0])) == keccak256(bytes("/acl/piece"));
+        }
+
+        if (operation == SCHEDULE_PIECE_REMOVALS_TYPEHASH) {
+            (uint256 clientDataSetId, uint256[] memory pieceIds) = abi.decode(signedData, (uint256, uint256[]));
+            return clientDataSetId == expectedClientDataSetId && pieceIds.length == 1 && pieceIds[0] == expectedPieceId;
+        }
+
+        uint256 terminatedDataSetId = abi.decode(signedData, (uint256));
+        return terminatedDataSetId == expectedDataSetId;
+    }
+}
+
 contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
     using PDPOffering for PDPOffering.Schema;
@@ -5438,6 +5519,47 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         makeSignaturePass(client);
         vm.expectRevert();
         _addAuthorizerTestPiece(dataSetId, 2);
+    }
+
+    function testDataSetAuthorizerReceivesSignedDataForEachWrite() public {
+        uint256 clientDataSetId = nextClientDataSetId;
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        address bob = address(0xb0b);
+        SignedDataCheckingAuthorizer authorizer = new SignedDataCheckingAuthorizer(bob);
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_signed_data")));
+        (string[] memory pieceKeys, string[] memory pieceValues) = _getSingleMetadataKV("path", "/acl/piece");
+
+        authorizer.expectAdd(dataSetId, clientDataSetId, 100, keccak256(pieceData[0].data));
+        makeSignaturePass(bob);
+        vm.expectRevert();
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 99, FAKE_SIGNATURE, pieceKeys, pieceValues
+        );
+
+        authorizer.expectAdd(dataSetId, clientDataSetId, 99, keccak256(pieceData[0].data));
+        makeSignaturePass(bob);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 99, FAKE_SIGNATURE, pieceKeys, pieceValues
+        );
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        authorizer.expectRemoval(dataSetId, clientDataSetId, pieceIds[0]);
+        makeSignaturePass(bob);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        authorizer.expectTerminate(dataSetId);
+        makeSignaturePass(bob);
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
     }
 
     function _addAuthorizerTestPiece(uint256 dataSetId, uint256 nonce) internal {
