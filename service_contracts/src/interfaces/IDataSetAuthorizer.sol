@@ -13,7 +13,7 @@ interface IDataSetAuthorizer {
     /// @param signature The raw signature over `digest`; the authorizer recovers the
     ///        signer itself, on whatever curve it supports.
     /// @param signedData The ABI-encoded signed operation payload forwarded by FWSS.
-    /// @return True if the operation is authorized on `dataSetId`.
+    /// @return authorized True if the operation is authorized on `dataSetId`.
     function isAuthorized(
         uint256 dataSetId,
         address payer,
@@ -21,5 +21,5 @@ interface IDataSetAuthorizer {
         bytes32 digest,
         bytes calldata signature,
         bytes calldata signedData
-    ) external view returns (bool);
+    ) external view returns (bool authorized);
 }
