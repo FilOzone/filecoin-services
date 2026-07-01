@@ -620,5 +620,26 @@
         }
       }
     }
+  },
+  {
+    "label": "dataSetAuthorizer",
+    "slot": "23",
+    "offset": 0,
+    "type": "mapping(uint256 => address)",
+    "typeDetails": {
+      "label": "mapping(uint256 => address)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "address",
+        "encoding": "inplace",
+        "numberOfBytes": "20"
+      }
+    }
   }
 ]
