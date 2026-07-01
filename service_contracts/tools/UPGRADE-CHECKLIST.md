@@ -255,6 +255,7 @@ gh release create {{RELEASE_VERSION}} \
 Deploy both networks before any announce/execute.
 
 - [ ] Run the metadata-aware deploy dry-run for each target network before live deployment and record the deploy inventory in the Run Log: `SignatureVerificationLib`, `Rails`, `FilecoinWarmStorageService` implementation, `FilecoinWarmStorageServiceStateView`, and any other contract the tooling marks as needing deployment.
+- [ ] For every contract type marked as needing deployment by the dry-run, run the matching [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) before live announce. Use `contract=FWSS Implementation` for linked libraries or FWSS implementation changes, and `contract=FWSS StateView` for StateView changes.
 - [ ] Run `service_contracts/tools/verify-deployments.sh --chain <CHAIN>` for each target network after deployment metadata is available. Resolve or explicitly waive any bytecode/metadata mismatch before live announce.
 - [ ] If linked libraries or StateView are newly deployed, record their addresses, verification status, and ABI-publishing decision in the Run Log.
 
@@ -272,6 +273,13 @@ ETH_RPC_URL="https://api.node.glif.io/rpc/v1" \
 ```
 
 Use the deploy dry-run output to identify contracts that are `Up to date` versus `Would deploy` or otherwise need deployment. Record the final deploy set before any live announce transaction.
+
+| Dry-run marks as needing deployment | Operator action |
+|---|---|
+| `SignatureVerificationLib` or `Rails` | Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS Implementation`; the implementation deploy script deploys linked libraries before deploying the FWSS implementation and records their addresses |
+| `FilecoinWarmStorageService` implementation | Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS Implementation` |
+| `FilecoinWarmStorageServiceStateView` | Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS StateView`, then follow the optional StateView switch steps below |
+| `ServiceProviderRegistry` or `SessionKeyRegistry` | Only deploy if the release explicitly includes that out-of-scope contract; use its matching Deploy Contract workflow option and add an exception section to this issue |
 
 </details>
 
