@@ -400,6 +400,7 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 - [ ] Record Calibnet execute tx link in the Run Log
 - [ ] Verify implementation slot equals `CALI_NEW_IMPL`
 - [ ] Verify `VERSION()` returns the expected FWSS contract version
+- [ ] Verify `viewContractAddress()` equals `CALI_NEW_VIEW` if a StateView switch was expected, or the unchanged View address otherwise
 - [ ] Verify `nextUpgrade()` is cleared
 
 ```bash
@@ -407,10 +408,14 @@ export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
 export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
 export EXPECTED_FWSS_VERSION="{{FWSS_VERSION}}"
+export EXPECTED_FWSS_VIEW_ADDRESS="${CALI_NEW_VIEW:-unchanged}"
 
 CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
   "$FWSS_PROXY_ADDRESS" \
   'viewContractAddress()(address)')
+if [ "$EXPECTED_FWSS_VIEW_ADDRESS" = "unchanged" ]; then
+  EXPECTED_FWSS_VIEW_ADDRESS="$CURRENT_VIEW"
+fi
 
 IMPLEMENTATION_SLOT=$(cast rpc --rpc-url "$ETH_RPC_URL" \
   eth_getStorageAt \
@@ -428,7 +433,13 @@ NEXT_UPGRADE=$(cast call --rpc-url "$ETH_RPC_URL" \
 
 echo "Implementation slot: $IMPLEMENTATION_SLOT (expected $EXPECTED_FWSS_IMPLEMENTATION_ADDRESS)"
 echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_FWSS_VERSION)"
+echo "viewContractAddress(): $CURRENT_VIEW (expected $EXPECTED_FWSS_VIEW_ADDRESS)"
 echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
+
+if [ "$(printf '%s' "$CURRENT_VIEW" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$EXPECTED_FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
+  echo "ERROR: viewContractAddress() mismatch"
+  exit 1
+fi
 ```
 
 - [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
@@ -506,6 +517,7 @@ CALLDATA_ONLY=true ./warm-storage-execute-upgrade.sh
 - [ ] Record Mainnet execute tx link in the Run Log
 - [ ] Verify implementation slot equals `MAIN_NEW_IMPL`
 - [ ] Verify `VERSION()` returns the expected FWSS contract version
+- [ ] Verify `viewContractAddress()` equals `MAIN_NEW_VIEW` if a StateView switch was expected, or the unchanged View address otherwise
 - [ ] Verify `nextUpgrade()` is cleared
 
 ```bash
@@ -513,10 +525,14 @@ export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
 export EXPECTED_FWSS_VERSION="{{FWSS_VERSION}}"
+export EXPECTED_FWSS_VIEW_ADDRESS="${MAIN_NEW_VIEW:-unchanged}"
 
 CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
   "$FWSS_PROXY_ADDRESS" \
   'viewContractAddress()(address)')
+if [ "$EXPECTED_FWSS_VIEW_ADDRESS" = "unchanged" ]; then
+  EXPECTED_FWSS_VIEW_ADDRESS="$CURRENT_VIEW"
+fi
 
 IMPLEMENTATION_SLOT=$(cast rpc --rpc-url "$ETH_RPC_URL" \
   eth_getStorageAt \
@@ -534,7 +550,13 @@ NEXT_UPGRADE=$(cast call --rpc-url "$ETH_RPC_URL" \
 
 echo "Implementation slot: $IMPLEMENTATION_SLOT (expected $EXPECTED_FWSS_IMPLEMENTATION_ADDRESS)"
 echo "VERSION(): $ACTUAL_VERSION (expected $EXPECTED_FWSS_VERSION)"
+echo "viewContractAddress(): $CURRENT_VIEW (expected $EXPECTED_FWSS_VIEW_ADDRESS)"
 echo "nextUpgrade(): $NEXT_UPGRADE (expected zero address and 0)"
+
+if [ "$(printf '%s' "$CURRENT_VIEW" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$EXPECTED_FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
+  echo "ERROR: viewContractAddress() mismatch"
+  exit 1
+fi
 ```
 
 - [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
