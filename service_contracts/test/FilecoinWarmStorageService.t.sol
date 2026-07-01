@@ -5419,6 +5419,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testDataSetAuthorizerIsOptionalAndAllowsDelegatedAddPieces() public {
+        uint256 clientDataSetId = nextClientDataSetId;
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
         address bob = address(0xb0b);
@@ -5435,9 +5436,34 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         makeSignaturePass(bob);
         _addAuthorizerTestPiece(dataSetId, 2);
+
+        // End-to-end with a genuine signature: clear the ecrecover mock and drive the full
+        // FWSS -> authorizer -> recoverSigner path through a real vm.sign over the EIP-712 digest.
+        vm.clearMockedCalls();
+        uint256 signerKey = 0xA11CE;
+        address realSigner = vm.addr(signerKey);
+        authorizer.allow(dataSetId, realSigner);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_real_sig")));
+        string[] memory emptyMeta = new string[](0);
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = emptyMeta;
+        allValues[0] = emptyMeta;
+
+        bytes32 digest = _eip712Digest(
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 3, pieceData, allKeys, allValues)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
+
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 3, abi.encodePacked(r, s, v), emptyMeta, emptyMeta
+        );
     }
 
     function testDataSetAuthorizerTreatsAuthorizedAccountSessionKeysAsAuthorized() public {
+        uint256 clientDataSetId = nextClientDataSetId;
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
         address bob = address(0xb0b);
@@ -5460,8 +5486,23 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         sessionKeyRegistry.login(sessionKey2, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
 
         // The authorizer returns false for sessionKey2 (wrong permission), so FWSS reverts Unauthorized.
+        Cids.Cid[] memory rejectedPieceData = new Cids.Cid[](1);
+        rejectedPieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_piece", uint256(2))));
+        string[] memory emptyMeta = new string[](0);
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = emptyMeta;
+        allValues[0] = emptyMeta;
+        bytes32 rejectedDigest = _eip712Digest(
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 2, rejectedPieceData, allKeys, allValues)
+        );
+
         makeSignaturePass(sessionKey2);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.Unauthorized.selector, client, ADD_PIECES_TYPEHASH, rejectedDigest, FAKE_SIGNATURE
+            )
+        );
         _addAuthorizerTestPiece(dataSetId, 2);
     }
 
@@ -5509,15 +5550,15 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
 
-        // A delegated signer is rejected: the authorizer is the sole gate and it reverts.
+        // A delegated signer is rejected: the authorizer is the sole gate and its revert bubbles up.
         makeSignaturePass(sessionKey1);
-        vm.expectRevert();
+        vm.expectRevert(bytes("authorizer called"));
         _addAuthorizerTestPiece(dataSetId, 1);
 
         // The payer is no longer special-cased. Attaching an authorizer delegates every write
         // decision to it, so a reverting authorizer locks out the payer too.
         makeSignaturePass(client);
-        vm.expectRevert();
+        vm.expectRevert(bytes("authorizer called"));
         _addAuthorizerTestPiece(dataSetId, 2);
     }
 
@@ -5535,9 +5576,21 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_signed_data")));
         (string[] memory pieceKeys, string[] memory pieceValues) = _getSingleMetadataKV("path", "/acl/piece");
 
+        // Authorizer returns false (nonce mismatch), so FWSS reverts with Errors.Unauthorized,
+        // distinct from an authorizer that itself reverts (whose revert would bubble up instead).
+        string[][] memory addKeys = new string[][](1);
+        string[][] memory addValues = new string[][](1);
+        addKeys[0] = pieceKeys;
+        addValues[0] = pieceValues;
+        bytes32 addDigest = _eip712Digest(
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 99, pieceData, addKeys, addValues)
+        );
+
         authorizer.expectAdd(dataSetId, clientDataSetId, 100, keccak256(pieceData[0].data));
         makeSignaturePass(bob);
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.Unauthorized.selector, client, ADD_PIECES_TYPEHASH, addDigest, FAKE_SIGNATURE)
+        );
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, 0, pieceData, 99, FAKE_SIGNATURE, pieceKeys, pieceValues
         );
@@ -5576,6 +5629,22 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         mockPDPVerifier.piecesScheduledRemove(
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
+    }
+
+    // Wraps an EIP-712 struct hash with the live FWSS domain separator, matching _hashTypedDataV4.
+    function _eip712Digest(bytes32 structHash) internal view returns (bytes32) {
+        (, string memory name, string memory version, uint256 chainId, address verifyingContract,,) =
+            pdpServiceWithPayments.eip712Domain();
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                chainId,
+                verifyingContract
+            )
+        );
+        return keccak256(abi.encodePacked(hex"1901", domainSeparator, structHash));
     }
 }
 
@@ -6724,6 +6793,12 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     function testDataSetDeleted_SucceedsAfterRailSettled() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
+        // Attach an authorizer so we can confirm it is cleared on deletion
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
+
         // Start proving so we can settle with validated payments
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
@@ -6759,6 +6834,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
         FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0), "Authorizer should be cleared on deletion");
     }
 
     /**

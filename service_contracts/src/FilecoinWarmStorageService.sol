@@ -717,6 +717,7 @@ contract FilecoinWarmStorageService is
         delete dataSetMetadataKeys[dataSetId];
 
         // Complete cleanup
+        delete dataSetAuthorizer[dataSetId];
         delete dataSetInfo[dataSetId];
     }
 
