@@ -248,7 +248,7 @@ gh release create {{RELEASE_VERSION}} \
 
 </details>
 
-- [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened or updated the expected Synapse SDK PR and that its integration build passes against the intended contract ABI/types and deployment-address state, or record an exception/owner in Release Tracking
+- [ ] Confirm the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow opened or updated the expected Synapse SDK PR and that its integration build passes against the intended contract ABI/types and deployment-address state, or record an exception/owner in Release Tracking. This Phase 1 check is the early ABI/type signal; run the workflow again in Phase 5 after final deployment-address state exists.
 - [ ] Release issue Overview and Release Tracking updated with PR links, release link, summary, and action required
 
 ### Phase 2: Deploy Contracts
@@ -599,7 +599,7 @@ git status --short service_contracts/abi
 
 </details>
 
-- [ ] Run the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available, or record an exception/owner in Release Tracking
+- [ ] Run the [Update Synapse SDK]({{SYNAPSE_WORKFLOW_LINK}}) workflow manually with the release tag and the approved source ref/SHA after the intended deployment address state is available, or record an exception/owner in Release Tracking. This Phase 5 run is the final address-state update and should not be skipped because the Phase 1 ABI/type signal already ran.
 - [ ] Merge auto-generated PRs in [filecoin-cloud](https://github.com/FilOzone/filecoin-cloud/pulls)
 - [ ] Confirm Synapse PR/release is merged or owned
 - [ ] Capture lessons learned from this rollout and update [`service_contracts/tools/UPGRADE-CHECKLIST.md`]({{CHECKLIST_UPDATE_LINK}}) if the process should change
