@@ -60,10 +60,10 @@ The Run Log is this release issue's operator journal for rollout facts discovere
 
 Keep this table current as values become known.
 
-| Network | New FWSS implementation | Announce tx | Execute tx | Post-upgrade checks |
-|---|---|---|---|---|
-| Calibnet | `TBD` | `TBD` | `TBD` | Pending |
-| Mainnet | `TBD` | `TBD` | `TBD` | Pending |
+| Network | New FWSS implementation | StateView / setView tx | Announce tx | Execute tx | Post-upgrade checks |
+|---|---|---|---|---|---|
+| Calibnet | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Mainnet | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
 
 ### Scope
 - In scope: `FilecoinWarmStorageService` implementation upgrade behind the existing FWSS proxy.
@@ -305,6 +305,46 @@ verify_sourcify "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmSto
 verify_blockscout "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
 verify_filfox "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
 ```
+
+**Optional StateView Switch**
+- [ ] If the deploy inventory includes a new `FilecoinWarmStorageServiceStateView`, run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS StateView`, `dry_run=true`, then `dry_run=false` for each affected network
+- [ ] Capture `CALI_NEW_VIEW` and/or `MAIN_NEW_VIEW`, record the deployed StateView address and verification status in the Run Log, and add the StateView address to the GitHub pre-release rollout table
+- [ ] Generate `setViewContract(address)` calldata for each affected network and stage it in Safe UI. Execute the staged `setViewContract` transaction after the corresponding FWSS proxy upgrade execute transaction unless the technical owner approves a different ordering.
+- [ ] After each `setViewContract` transaction lands, record its tx link in the Run Log and verify `viewContractAddress()` equals the new StateView address
+
+<details>
+<summary>StateView setViewContract calldata and verification</summary>
+
+```bash
+# Calibnet
+cd service_contracts/tools
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
+export FWSS_VIEW_ADDRESS="$CALI_NEW_VIEW"
+
+CALLDATA_ONLY=true ./warm-storage-set-view.sh
+
+CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
+  "$FWSS_PROXY_ADDRESS" \
+  'viewContractAddress()(address)')
+echo "viewContractAddress(): $CURRENT_VIEW (expected $FWSS_VIEW_ADDRESS)"
+
+# Mainnet
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
+export FWSS_VIEW_ADDRESS="$MAIN_NEW_VIEW"
+
+CALLDATA_ONLY=true ./warm-storage-set-view.sh
+
+CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
+  "$FWSS_PROXY_ADDRESS" \
+  'viewContractAddress()(address)')
+echo "viewContractAddress(): $CURRENT_VIEW (expected $FWSS_VIEW_ADDRESS)"
+```
+
+In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata.
+
+</details>
 
 ### Phase 3: Calibnet Announce + Execute
 
