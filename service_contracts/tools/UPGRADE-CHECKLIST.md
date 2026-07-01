@@ -179,7 +179,7 @@ For each network, record evidence that:
 
 ### Phase 1: Branch, Issue, PR, and Checks
 - [ ] All intended FWSS contract changes are merged into `main`
-- [ ] Release-prep PR(s) opened for review (prefer one PR when practical) with changelog/release notes, a Deployment note linking to the GitHub Release page for rollout status, addresses, and transaction links, and any applicable version/submodule bump. For FWSS contract changes, include the `FilecoinWarmStorageService` `VERSION()` bump. For PDP-only stack releases, use the PDP/submodule bump PR and leave the FWSS `VERSION()` unchanged. Suggested title: `{{RECOMMENDED_PR_TITLE}}`
+- [ ] Release-prep PR(s) opened for review (prefer one PR when practical) with changelog/release notes, a Deployment note linking to the [GitHub Release page](https://github.com/FilOzone/filecoin-services/releases/tag/{{RELEASE_VERSION}}) for rollout status, addresses, and transaction links, and any applicable version/submodule bump. For FWSS contract changes, include the `FilecoinWarmStorageService` `VERSION()` bump. For PDP-only stack releases, use the PDP/submodule bump PR and leave the FWSS `VERSION()` unchanged. Suggested title: `{{RECOMMENDED_PR_TITLE}}`
 - [ ] Upgrade checks run:
 
 ```bash
