@@ -12,7 +12,10 @@ interface IDataSetAuthorizer {
     /// @param digest The EIP-712 digest signed for the operation.
     /// @param signature The raw signature over `digest`; the authorizer recovers the
     ///        signer itself, on whatever curve it supports.
-    /// @param signedData The ABI-encoded signed operation payload forwarded by FWSS.
+    /// @param operationData The ABI-encoded raw operation payload forwarded by FWSS, carrying all
+    ///        operation-specific data (e.g. piece metadata) so the authorizer can gate on its
+    ///        contents — for example enforcing metadata- or path-based ACLs. Empty for operations
+    ///        whose data is fully described by the other parameters (e.g. terminate).
     /// @return authorized True if the operation is authorized on `dataSetId`.
     function isAuthorized(
         uint256 dataSetId,
@@ -20,6 +23,6 @@ interface IDataSetAuthorizer {
         bytes32 operation,
         bytes32 digest,
         bytes calldata signature,
-        bytes calldata signedData
+        bytes calldata operationData
     ) external view returns (bool authorized);
 }

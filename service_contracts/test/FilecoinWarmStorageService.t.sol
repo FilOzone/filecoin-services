@@ -57,7 +57,7 @@ contract TestDataSetAuthorizer is IDataSetAuthorizer {
         bytes32 operation,
         bytes32 digest,
         bytes calldata signature,
-        bytes calldata // signedData
+        bytes calldata // operationData
     ) external view returns (bool) {
         address signer = SignatureVerificationLib.recoverSigner(digest, signature);
         if (allowed[dataSetId][signer]) {
@@ -84,7 +84,7 @@ contract RevertingDataSetAuthorizer is IDataSetAuthorizer {
     }
 }
 
-contract SignedDataCheckingAuthorizer is IDataSetAuthorizer {
+contract OperationDataCheckingAuthorizer is IDataSetAuthorizer {
     bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
         "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
         "Cid(bytes data)" "MetadataEntry(string key,string value)"
@@ -132,7 +132,7 @@ contract SignedDataCheckingAuthorizer is IDataSetAuthorizer {
         bytes32 operation,
         bytes32 digest,
         bytes calldata signature,
-        bytes calldata signedData
+        bytes calldata operationData
     ) external view returns (bool) {
         if (
             dataSetId != expectedDataSetId || operation != expectedOperation
@@ -148,7 +148,7 @@ contract SignedDataCheckingAuthorizer is IDataSetAuthorizer {
                 Cids.Cid[] memory pieces,
                 string[][] memory keys,
                 string[][] memory values
-            ) = abi.decode(signedData, (uint256, uint256, Cids.Cid[], string[][], string[][]));
+            ) = abi.decode(operationData, (uint256, uint256, Cids.Cid[], string[][], string[][]));
             return clientDataSetId == expectedClientDataSetId && nonce == expectedNonce && pieces.length == 1
                 && keccak256(pieces[0].data) == expectedCidDataHash && keys.length == 1 && keys[0].length == 1
                 && values.length == 1 && values[0].length == 1 && keccak256(bytes(keys[0][0])) == keccak256(bytes("path"))
@@ -156,12 +156,12 @@ contract SignedDataCheckingAuthorizer is IDataSetAuthorizer {
         }
 
         if (operation == SCHEDULE_PIECE_REMOVALS_TYPEHASH) {
-            (uint256 clientDataSetId, uint256[] memory pieceIds) = abi.decode(signedData, (uint256, uint256[]));
+            (uint256 clientDataSetId, uint256[] memory pieceIds) = abi.decode(operationData, (uint256, uint256[]));
             return clientDataSetId == expectedClientDataSetId && pieceIds.length == 1 && pieceIds[0] == expectedPieceId;
         }
 
-        uint256 terminatedDataSetId = abi.decode(signedData, (uint256));
-        return terminatedDataSetId == expectedDataSetId;
+        // Terminate carries no operationData; dataSetId is passed directly and already checked above.
+        return dataSetId == expectedDataSetId;
     }
 }
 
@@ -5562,12 +5562,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         _addAuthorizerTestPiece(dataSetId, 2);
     }
 
-    function testDataSetAuthorizerReceivesSignedDataForEachWrite() public {
+    function testDataSetAuthorizerReceivesOperationDataForEachWrite() public {
         uint256 clientDataSetId = nextClientDataSetId;
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
         address bob = address(0xb0b);
-        SignedDataCheckingAuthorizer authorizer = new SignedDataCheckingAuthorizer(bob);
+        OperationDataCheckingAuthorizer authorizer = new OperationDataCheckingAuthorizer(bob);
 
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));

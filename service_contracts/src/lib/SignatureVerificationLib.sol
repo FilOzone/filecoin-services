@@ -294,7 +294,8 @@ library SignatureVerificationLib {
 
     /// @notice Verifies an operation signature, delegating to the data set's authorizer when one is attached.
     /// @dev When `authorizer` is address(0), applies the default payer / session-key check. Otherwise the
-    ///      authorizer is the sole gate: FWSS forwards the raw signature and lets it recover and decide.
+    ///      authorizer is the sole gate: FWSS forwards the raw signature plus the operation's raw data and
+    ///      lets it recover and decide. `operationData` is only populated when an authorizer is attached.
     function verifySignatureWithAuthorizer(
         address payer,
         bytes calldata signature,
@@ -303,7 +304,7 @@ library SignatureVerificationLib {
         bytes32 operation,
         uint256 dataSetId,
         address authorizer,
-        bytes calldata signedData
+        bytes calldata operationData
     ) public view returns (address signer) {
         if (authorizer == address(0)) {
             signer = recoverSigner(digest, signature);
@@ -318,7 +319,7 @@ library SignatureVerificationLib {
         }
 
         require(
-            IDataSetAuthorizer(authorizer).isAuthorized(dataSetId, payer, operation, digest, signature, signedData),
+            IDataSetAuthorizer(authorizer).isAuthorized(dataSetId, payer, operation, digest, signature, operationData),
             Errors.Unauthorized(payer, operation, digest, signature)
         );
         return payer;
