@@ -1429,21 +1429,20 @@ contract FilecoinWarmStorageService is
             SignatureVerificationLib.addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
 
-        // Only encode the raw operation data when an authorizer is attached; the default path never reads it.
         address authorizer = dataSetAuthorizer[dataSetId];
-        bytes memory operationData = authorizer == address(0)
-            ? bytes("")
-            : abi.encode(clientDataSetId, nonce, pieceDataArray, allKeys, allValues);
+        if (authorizer == address(0)) {
+            SignatureVerificationLib.verifyAddPiecesSignature(payer, signature, digest, sessionKeyRegistry);
+            return;
+        }
 
-        SignatureVerificationLib.verifySignatureWithAuthorizer(
+        SignatureVerificationLib.verifyAuthorizer(
             payer,
             signature,
             digest,
-            sessionKeyRegistry,
             SignatureVerificationLib.ADD_PIECES_TYPEHASH,
             dataSetId,
             authorizer,
-            operationData
+            abi.encode(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
     }
 
@@ -1472,19 +1471,20 @@ contract FilecoinWarmStorageService is
             )
         );
 
-        // Only encode the raw operation data when an authorizer is attached; the default path never reads it.
         address authorizer = dataSetAuthorizer[dataSetId];
-        bytes memory operationData = authorizer == address(0) ? bytes("") : abi.encode(clientDataSetId, pieceIds);
+        if (authorizer == address(0)) {
+            SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
+            return;
+        }
 
-        SignatureVerificationLib.verifySignatureWithAuthorizer(
+        SignatureVerificationLib.verifyAuthorizer(
             payer,
             signature,
             digest,
-            sessionKeyRegistry,
             SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
             dataSetId,
             authorizer,
-            operationData
+            abi.encode(clientDataSetId, pieceIds)
         );
     }
 
@@ -1495,16 +1495,15 @@ contract FilecoinWarmStorageService is
     {
         bytes32 digest =
             _hashTypedDataV4(keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId)));
+
+        address authorizer = dataSetAuthorizer[dataSetId];
+        if (authorizer == address(0)) {
+            return SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
+        }
+
         // Terminate carries no data beyond dataSetId, which the authorizer already receives directly.
-        signer = SignatureVerificationLib.verifySignatureWithAuthorizer(
-            payer,
-            signature,
-            digest,
-            sessionKeyRegistry,
-            SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH,
-            dataSetId,
-            dataSetAuthorizer[dataSetId],
-            bytes("")
+        return SignatureVerificationLib.verifyAuthorizer(
+            payer, signature, digest, SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId, authorizer, bytes("")
         );
     }
 
