@@ -473,6 +473,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 **Announce**
 - [ ] Technical owner records Mainnet go/no-go after reviewing Calibnet evidence, rollback status, dependency targets, and cross-repo status
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
+- [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) before or alongside stakeholder notification. Use the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md) for component, notification, update, and resolution guidance
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
 - [ ] Compute Mainnet `AFTER_EPOCH` and update the schedule table
 
@@ -632,6 +633,7 @@ git status --short service_contracts/abi
 
 ### Resources
 - [Changelog]({{CHANGELOG_LINK}})
+- [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md)
 - [Upgrade Checklist Source]({{CHECKLIST_LINK}})
 <!-- ISSUE_TEMPLATE_END -->
 
