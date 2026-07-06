@@ -1498,12 +1498,19 @@ contract FilecoinWarmStorageService is
 
         address authorizer = dataSetAuthorizer[dataSetId];
         if (authorizer == address(0)) {
-            return SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
+            return
+                SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
         }
 
         // Terminate carries no data beyond dataSetId, which the authorizer already receives directly.
         return SignatureVerificationLib.verifyAuthorizer(
-            payer, signature, digest, SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId, authorizer, bytes("")
+            payer,
+            signature,
+            digest,
+            SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH,
+            dataSetId,
+            authorizer,
+            bytes("")
         );
     }
 

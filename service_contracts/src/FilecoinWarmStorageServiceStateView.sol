@@ -95,6 +95,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getDataSet(dataSetId);
     }
 
+    function getDataSetAuthorizer(uint256 dataSetId) external view returns (address) {
+        return service.getDataSetAuthorizer(dataSetId);
+    }
+
     function getDataSetMetadata(uint256 dataSetId, string memory key)
         external
         view
@@ -170,10 +174,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 
     function railToDataSet(uint256 railId) external view returns (uint256) {
         return service.railToDataSet(railId);
-    }
-
-    function getDataSetAuthorizer(uint256 dataSetId) external view returns (address) {
-        return service.getDataSetAuthorizer(dataSetId);
     }
 
     function serviceCommissionBps() external view returns (uint256) {
