@@ -15,8 +15,6 @@ This directory contains the smart contracts for different Filecoin services usin
 - `test/` - Test files  
   - `FilecoinWarmStorageService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
-  - `create_data_set_with_payments.sh` - Script to create data sets with payments
-  - `warm-storage-deploy-calibnet.sh` - Deployment script for Warm Storage service on Calibnet
   - `warm-storage-deploy-all.sh` - Deployment script for all Warm Storage contracts
   - Note: deployment scripts now deploy and link `SignatureVerificationLib` when deploying `FilecoinWarmStorageService`.
     The scripts will deploy `src/lib/SignatureVerificationLib.sol` (or simulate it in dry-run) and pass the library address

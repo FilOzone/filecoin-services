@@ -1,8 +1,10 @@
 {
   "314": {
     "metadata": {
-      "commit": "a6dec30d61213c2eb9af2b5bbabb4ab36ec531b1",
-      "deployed_at": "2026-05-28T10:05:32Z"
+      "commit": "c2ff7f8ac574f62e5d9f9ace2cf2efbb64b0f3a4",
+      "deployed_at": "2026-06-11T16:25:30Z",
+      "fwss_version": "1.3.0",
+      "pdp_version": "3.4.0"
     },
     "FILECOIN_PAY_ADDRESS": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
     "PDP_VERIFIER_PROXY_ADDRESS": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
@@ -10,16 +12,125 @@
     "SESSION_KEY_REGISTRY_ADDRESS": "0x74FD50525A958aF5d484601E252271f9625231aB",
     "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS": "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS": "0x01293CaFdE24DE89fF26d1A19Bfc4E36CBF74F9B",
-    "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0x7BdDF92aaBA8a578C3F494729BfAC5190d84acda",
+    "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0xBbd3b82a9396156a997111D42c5356718522ed2D",
+    "RAILS_LIB_ADDRESS": "0x25649D27D556c64708D0BF9B20eC214eC991E223",
     "FWSS_PROXY_ADDRESS": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
-    "FWSS_IMPLEMENTATION_ADDRESS": "0xEBc8CD859d0D389235bDe59B97485936daA1aED5",
-    "FWSS_VIEW_ADDRESS": "0xB1B3A3d979c1f233c1021EF98dff9c0932FF1bb9",
-    "ENDORSEMENT_SET_ADDRESS": "0x59eFa2e8324E1551d46010d7B0B140eE2F5c726b"
+    "FWSS_IMPLEMENTATION_ADDRESS": "0xaF996097790c17D3C23Cc45A3035a29D293d1492",
+    "FWSS_VIEW_ADDRESS": "0xAD28BBF18A72f728Ed816D07F5a1d7Ec40D68b5e",
+    "ENDORSEMENT_SET_ADDRESS": "0x59eFa2e8324E1551d46010d7B0B140eE2F5c726b",
+    "contracts": {
+      "SIGNATURE_VERIFICATION_LIB": {
+        "initcode_hash": "0x7f289263c875cb7f516f44b8a29f4fc6b0b869727506ebcf4411e059346f7ada",
+        "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "RAILS_LIB": {
+        "initcode_hash": "0xdb1a76d51b4711b8c87a500c4eff2f6d2feff7a33c5fb52f782c3a597501ea77",
+        "artifact_contract": "src/lib/Rails.sol:Rails",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "FWSS_IMPLEMENTATION": {
+        "initcode_hash": "0x7209c0756c89cec7fd1120741c42e2401fea547635401b4028741e5b47ebb8e7",
+        "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+        "libraries": {
+          "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0xBbd3b82a9396156a997111D42c5356718522ed2D",
+          "src/lib/Rails.sol:Rails": "0x25649D27D556c64708D0BF9B20eC214eC991E223"
+        },
+        "constructor_args": [
+          "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
+          "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+          "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+          "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
+          "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
+          "0x74FD50525A958aF5d484601E252271f9625231aB",
+          "4"
+        ]
+      },
+      "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
+        "initcode_hash": "0x5b0aff042a9b3973ec1ec3e7ba3c22e9f73121f6739f4aca02b3088c4b01fabd",
+        "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
+        "libraries": {},
+        "constructor_args": [],
+        "pinned": true
+      },
+      "FWSS_PROXY": {
+        "initcode_hash": "0x3e2779ec9d23761f6466083f8c4f938dc2479a0d48037c1803b7b3592c58bd11",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0xaF996097790c17D3C23Cc45A3035a29D293d1492",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "SERVICE_PROVIDER_REGISTRY_PROXY": {
+        "initcode_hash": "0x3e2779ec9d23761f6466083f8c4f938dc2479a0d48037c1803b7b3592c58bd11",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0x01293CaFdE24DE89fF26d1A19Bfc4E36CBF74F9B",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "PDP_VERIFIER_PROXY": {
+        "initcode_hash": "0x3e2779ec9d23761f6466083f8c4f938dc2479a0d48037c1803b7b3592c58bd11",
+        "artifact_contract": "ERC1967/ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0xb41A97FEDD2D9497C639A643ec75E56CbCeDe8BA",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "FILECOIN_PAY": {
+        "initcode_hash": "0x7b6cdd8afb8e163aa5b38a930e337d43b1edd2c8e2475f9519cbaf7760af4352",
+        "artifact_contract": "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1",
+        "libraries": {},
+        "constructor_args": [],
+        "pinned": true
+      },
+      "SESSION_KEY_REGISTRY": {
+        "initcode_hash": "0x1ff3aaa830f4d7b24a89b622a740a03f0e5772a9725cb2272d57e6d07bf8df3b",
+        "artifact_contract": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry",
+        "libraries": {},
+        "constructor_args": [],
+        "pinned": true
+      },
+      "ENDORSEMENT_SET": {
+        "initcode_hash": "0x8c1e23722c664799417d2921502bd912e21417837519278a52b89d7e6275e5d6",
+        "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "FWSS_VIEW": {
+        "initcode_hash": "0xfe70d1438fdd7b7b5813842bb4c324aa65737efe0156b2d618bc8d08dc248a90",
+        "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
+        "libraries": {},
+        "constructor_args": [
+          "0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
+        ]
+      },
+      "PDP_VERIFIER_IMPLEMENTATION": {
+        "initcode_hash": "0xeafb9469e2aa231a3b2db2f01c79a0de89a8e45535d7688a6e64b83083ae57c9",
+        "artifact_contract": "lib/pdp/src/PDPVerifier.sol:PDPVerifier",
+        "libraries": {},
+        "constructor_args": [
+          "3",
+          "150"
+        ],
+        "pinned": true
+      }
+    }
   },
   "314159": {
     "metadata": {
       "commit": "c2ff7f8ac574f62e5d9f9ace2cf2efbb64b0f3a4",
-      "deployed_at": "2026-06-08T17:07:00Z"
+      "deployed_at": "2026-06-09T19:44:31Z",
+      "fwss_version": "1.3.0",
+      "pdp_version": "3.4.0"
     },
     "FILECOIN_PAY_ADDRESS": "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
     "PDP_VERIFIER_PROXY_ADDRESS": "0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C",
@@ -27,10 +138,116 @@
     "SESSION_KEY_REGISTRY_ADDRESS": "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
     "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS": "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS": "0x0A2E79efFC7DB1D15912E4F6722F527F493F18Ef",
-    "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0x3fD7BFFAcAfdf35083d1424c1feC6481c85087F6",
+    "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
+    "RAILS_LIB_ADDRESS": "0x05BB7B022645a68fB9c97A7afaD1017EC5B252B2",
     "FWSS_PROXY_ADDRESS": "0x02925630df557F957f70E112bA06e50965417CA0",
-    "FWSS_IMPLEMENTATION_ADDRESS": "0x68f9c0ACdA8489dc9F08eD279B33D0c5Eb39F95B",
+    "FWSS_IMPLEMENTATION_ADDRESS": "0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46",
     "FWSS_VIEW_ADDRESS": "0xF4B446171b3677fD2B9b183a9fB76d517365700a",
-    "ENDORSEMENT_SET_ADDRESS": "0xAA2f7CfC7ecAc616EC9C1f6d700fAd19087FAC84"
+    "ENDORSEMENT_SET_ADDRESS": "0xAA2f7CfC7ecAc616EC9C1f6d700fAd19087FAC84",
+    "contracts": {
+      "FILECOIN_PAY": {
+        "initcode_hash": "0x7b6cdd8afb8e163aa5b38a930e337d43b1edd2c8e2475f9519cbaf7760af4352",
+        "artifact_contract": "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1",
+        "libraries": {},
+        "constructor_args": [],
+        "pinned": true
+      },
+      "SIGNATURE_VERIFICATION_LIB": {
+        "initcode_hash": "0x7f289263c875cb7f516f44b8a29f4fc6b0b869727506ebcf4411e059346f7ada",
+        "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "SESSION_KEY_REGISTRY": {
+        "initcode_hash": "0xe86bf04ac10383355fc49667813f42688ed68a92e1d3414773cf34b2a1fd471f",
+        "artifact_contract": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry",
+        "libraries": {},
+        "constructor_args": [],
+        "pinned": true
+      },
+      "ENDORSEMENT_SET": {
+        "initcode_hash": "0x627e10a18cb5c30fdf02ef8886f04b3453b730d89114f28d4aeffd5663bc9d5d",
+        "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "RAILS_LIB": {
+        "initcode_hash": "0xa645f02922b1b7b5c56b97229eab2098eccc9b6786a65c7f19bc724aa38c5846",
+        "artifact_contract": "src/lib/Rails.sol:Rails",
+        "libraries": {},
+        "constructor_args": []
+      },
+      "FWSS_VIEW": {
+        "initcode_hash": "0xfe70d1438fdd7b7b5813842bb4c324aa65737efe0156b2d618bc8d08dc248a90",
+        "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
+        "libraries": {},
+        "constructor_args": [
+          "0x02925630df557F957f70E112bA06e50965417CA0"
+        ]
+      },
+      "FWSS_IMPLEMENTATION": {
+        "initcode_hash": "0x03cb62b55ab80de5dc7af2be5bc10485b6fc9ecc933d666d04f48e6100195a04",
+        "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+        "libraries": {
+          "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
+          "src/lib/Rails.sol:Rails": "0x05BB7B022645a68fB9c97A7afaD1017EC5B252B2"
+        },
+        "constructor_args": [
+          "0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C",
+          "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
+          "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0",
+          "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
+          "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
+          "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
+          "8"
+        ]
+      },
+      "PDP_VERIFIER_IMPLEMENTATION": {
+        "initcode_hash": "0xa42a013d8cde960793803edda950822224a5ea5beb373c46a6b048b74326e99d",
+        "artifact_contract": "lib/pdp/src/PDPVerifier.sol:PDPVerifier",
+        "libraries": {},
+        "constructor_args": [
+          "3",
+          "10"
+        ]
+      },
+      "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
+        "initcode_hash": "0x5b0aff042a9b3973ec1ec3e7ba3c22e9f73121f6739f4aca02b3088c4b01fabd",
+        "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
+        "libraries": {},
+        "constructor_args": [],
+        "pinned": true
+      },
+      "PDP_VERIFIER_PROXY": {
+        "initcode_hash": "0x460ab109982867b4e11bd02e84d83dfaef4aad379625b07382854b7199beab09",
+        "artifact_contract": "ERC1967Proxy.sol:MyERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0x2355Cb19BA1eFF51673562E1a5fc5eE292AF9D42",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "SERVICE_PROVIDER_REGISTRY_PROXY": {
+        "initcode_hash": "0x57cef7b58a4c5e3031590bb81e94f19c519bba5a3f2a5f26d58b76285a3a0868",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0xb32Bb530638d20f1B59B40CDD2Ce4208430f7DE3",
+          "0x"
+        ],
+        "pinned": true
+      },
+      "FWSS_PROXY": {
+        "initcode_hash": "0x57cef7b58a4c5e3031590bb81e94f19c519bba5a3f2a5f26d58b76285a3a0868",
+        "artifact_contract": "ERC1967Proxy.sol:ERC1967Proxy",
+        "libraries": {},
+        "constructor_args": [
+          "0x4BCc752555Bf08A5Bd9a4Ce467a12607277450bA",
+          "0x"
+        ],
+        "pinned": true
+      }
+    }
   }
 }

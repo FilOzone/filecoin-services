@@ -27,28 +27,40 @@ Options:
 
 Environment variables:
   NETWORK              Target network (Calibnet or Mainnet)
-  RELEASE_VERSION      FWSS release version for the issue title (default: vX.Y.Z)
+  RELEASE_VERSION      Stack release version for the issue title (default: vX.Y.Z)
+  FWSS_VERSION         Expected FilecoinWarmStorageService VERSION() without leading v (optional, default: TBD)
   UPGRADE_TYPE         Type of upgrade (Routine or Breaking Change)
-  CHANGELOG_PR         PR number or link for release-prep changelog updates (optional)
+  RELEASE_PREP_PR      PR number or link for release-prep updates (optional; CHANGELOG_PR also supported)
   CHANGES_SUMMARY      Summary of changes (use | for multiple lines, optional)
   ACTION_REQUIRED      Action required for integrators (optional, default: TBD)
+  GITHUB_SHA           Commit used for source links (provided by GitHub Actions; default: main)
   GITHUB_TOKEN         GitHub token (required when not using --dry-run)
   GITHUB_REPOSITORY    Repository in format owner/repo (required when not using --dry-run)
 
 Example:
-  NETWORK=Mainnet RELEASE_VERSION=v1.2.3 UPGRADE_TYPE=Routine \
+  NETWORK=Mainnet RELEASE_VERSION=v1.2.3 FWSS_VERSION=1.2.3 UPGRADE_TYPE=Routine \
   node .github/scripts/create-upgrade-announcement.js --dry-run
 `);
   process.exit(0);
 }
 
+function formatContractVersion(value) {
+  const trimmed = (value || "").trim();
+  if (!trimmed) {
+    return "TBD";
+  }
+  return trimmed.replace(/^v(?=\d)/, "");
+}
+
 const config = {
   network: process.env.NETWORK,
   releaseVersion: (process.env.RELEASE_VERSION || "vX.Y.Z").trim(),
+  fwssVersion: formatContractVersion(process.env.FWSS_VERSION),
   upgradeType: process.env.UPGRADE_TYPE,
-  changelogPr: (process.env.CHANGELOG_PR || "").trim(),
+  releasePrepPr: (process.env.RELEASE_PREP_PR || process.env.CHANGELOG_PR || "").trim(),
   changesSummary: (process.env.CHANGES_SUMMARY || "").trim(),
   actionRequired: (process.env.ACTION_REQUIRED || "TBD").trim(),
+  sourceRef: (process.env.GITHUB_SHA || process.env.GITHUB_REF_NAME || "main").trim(),
   githubToken: process.env.GITHUB_TOKEN,
   githubRepository: process.env.GITHUB_REPOSITORY,
 };
@@ -104,17 +116,26 @@ function formatActionRequired(value) {
   return value;
 }
 
-function formatChangelogPr(baseUrl) {
-  if (!config.changelogPr) {
+function formatReleasePrepPr(baseUrl) {
+  if (!config.releasePrepPr) {
     return "TBD (link PR after opening)";
   }
 
-  const normalized = config.changelogPr.replace(/^#/, "");
+  const normalized = config.releasePrepPr.replace(/^#/, "");
   if (/^\d+$/.test(normalized)) {
     return `[#${normalized}](${baseUrl}/pull/${normalized})`;
   }
 
-  return config.changelogPr;
+  return config.releasePrepPr;
+}
+
+function formatSourceLink(baseUrl, filePath) {
+  const sourceRef = config.sourceRef || "main";
+  return `${baseUrl}/blob/${sourceRef}/${filePath}`;
+}
+
+function formatMainLink(baseUrl, filePath) {
+  return `${baseUrl}/blob/main/${filePath}`;
 }
 
 function loadIssueTemplate() {
@@ -148,22 +169,26 @@ function generateTitle() {
 function generateBody() {
   const [owner, repo] = (config.githubRepository || "FilOzone/filecoin-services").split("/");
   const baseUrl = `https://github.com/${owner}/${repo}`;
-  const recommendedPrTitle = `feat: FWSS ${config.releaseVersion} upgrade`;
+  const recommendedPrTitle = `chore: prep FWSS ${config.releaseVersion} release`;
   const releaseBranch = `release-${config.releaseVersion}`;
 
   const replacements = {
     RELEASE_VERSION: config.releaseVersion,
+    FWSS_VERSION: config.fwssVersion,
     UPGRADE_TYPE: config.upgradeType,
-    CHANGELOG_PR: formatChangelogPr(baseUrl),
+    CHANGELOG_PR: formatReleasePrepPr(baseUrl),
+    RELEASE_PREP_PR: formatReleasePrepPr(baseUrl),
     CHANGES_SUMMARY: formatBulletList(config.changesSummary),
     ACTION_REQUIRED: formatActionRequired(config.actionRequired),
     RELEASE_BRANCH: releaseBranch,
     RECOMMENDED_PR_TITLE: recommendedPrTitle,
     CHANGELOG_LINK: `${baseUrl}/blob/main/CHANGELOG.md`,
     FWSS_CONTRACT_LINK: `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`,
-    CHECKLIST_LINK: `${baseUrl}/blob/main/service_contracts/tools/UPGRADE-CHECKLIST.md`,
+    CHECKLIST_LINK: formatSourceLink(baseUrl, "service_contracts/tools/UPGRADE-CHECKLIST.md"),
+    CHECKLIST_UPDATE_LINK: formatMainLink(baseUrl, "service_contracts/tools/UPGRADE-CHECKLIST.md"),
     DEPLOY_WORKFLOW_LINK: `${baseUrl}/actions/workflows/deploy-contract.yml`,
     CREATE_ISSUE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/create-upgrade-announcement-issue.yml`,
+    SYNAPSE_WORKFLOW_LINK: `${baseUrl}/actions/workflows/notify-synapse-sdk.yml`,
   };
 
   return replaceAll(loadIssueTemplate(), replacements);
