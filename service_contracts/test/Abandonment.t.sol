@@ -478,7 +478,8 @@ contract AbandonmentTest is MockFVMTest {
 
     // An underfunded payer's dataset must be abandonable
     function testAbandonment_underfundedPayer() public {
-        uint256 dataSetId = _createUnderfundedDataSet(address(0xdead1), 1);
+        address payer = address(0xdead1);
+        uint256 dataSetId = _createUnderfundedDataSet(payer, 1);
 
         FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
 
@@ -491,6 +492,10 @@ contract AbandonmentTest is MockFVMTest {
         _assertDataSetCleared(dataSetId);
         vm.expectRevert();
         payments.getRail(before.pdpRailId);
+
+        // The rail fully settled and finalized above, so the client recovers all its funds.
+        (, uint256 funds, uint256 available,) = payments.getAccountInfoIfSettled(usdfc, payer);
+        assertEq(available, funds, "client should recover all previously-locked funds");
     }
 
     // Inactive rail with some epochs settled
@@ -509,7 +514,20 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lifecycle reserve should be zero after abandonment");
+        FilecoinPayV1.RailView memory rail = payments.getRail(pdpRailId);
+        assertEq(rail.lockupFixed, 0, "lifecycle reserve should be zero after abandonment");
+
+        // This tail was previously stranded: validatePayment reverted once dataSetId was gone,
+        // so settleRail could never reach endEpoch. Confirm it now settles and funds return.
+        assertGt(rail.endEpoch, rail.settledUpTo, "test should exercise a real unsettled tail");
+        vm.roll(rail.endEpoch + 1);
+        payments.settleRail(pdpRailId, rail.endEpoch);
+
+        vm.expectRevert();
+        payments.getRail(pdpRailId);
+
+        (, uint256 funds, uint256 available,) = payments.getAccountInfoIfSettled(usdfc, payer);
+        assertEq(available, funds, "client should recover all previously-locked funds");
     }
 
     // An underfunded payer cannot consent to immediate termination: immediateTermination implies

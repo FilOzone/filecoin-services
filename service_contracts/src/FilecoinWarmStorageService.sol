@@ -1479,9 +1479,15 @@ contract FilecoinWarmStorageService is
         uint256 toEpoch,
         uint256 /* rate */
     ) external view override returns (ValidationResult memory result) {
-        // Get the data set ID associated with this rail
+        // Get the data set ID associated with this rail. A zero here means the rail's data set
+        // was abandoned and already torn down by dataSetDeleted -- the only way to release its
+        // remaining lockup, since the data set no longer exists to arbitrate proving -- or the
+        // rail was never one of ours to begin with. Either way, settle in the payer's favor.
         uint256 dataSetId = railToDataSet[railId];
-        require(dataSetId != 0, Errors.RailNotAssociated(railId));
+        if (dataSetId == 0) {
+            return
+                ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Rail not associated with a data set"});
+        }
 
         // Calculate the total number of epochs in the requested range
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
