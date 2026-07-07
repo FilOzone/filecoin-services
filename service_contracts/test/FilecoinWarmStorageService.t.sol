@@ -13,6 +13,7 @@ import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinW
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/Rails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
@@ -526,6 +527,17 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         keys[0] = key;
         values[0] = value;
         return (keys, values);
+    }
+
+    function _scheduledPieceMetadataRemovalsLength(uint256 dataSetId) internal view returns (uint256) {
+        bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
+        return uint256(vm.load(address(pdpServiceWithPayments), slot));
+    }
+
+    function _scheduledPieceMetadataRemovalAt(uint256 dataSetId, uint256 index) internal view returns (uint256) {
+        bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
+        bytes32 elementSlot = bytes32(uint256(keccak256(abi.encode(slot))) + index);
+        return uint256(vm.load(address(pdpServiceWithPayments), elementSlot));
     }
 
     function testCreateDataSetCreatesRail() public {
@@ -6444,6 +6456,69 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
         FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
+    }
+
+    /**
+     * @notice Test: Dataset deletion clears pending scheduled piece metadata removals
+     * @dev Reproduces the case where removals are scheduled but the dataset is deleted before
+     *      the next proving-period callback can process them.
+     */
+    function testDataSetDeleted_ClearsScheduledPieceMetadataRemovals() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](2);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256("piece-0"));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256("piece-1"));
+
+        string[] memory pieceMetadataKeys = new string[](1);
+        string[] memory pieceMetadataValues = new string[](1);
+        pieceMetadataKeys[0] = "filename";
+        pieceMetadataValues[0] = "test.bin";
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            7777,
+            FAKE_SIGNATURE,
+            pieceMetadataKeys,
+            pieceMetadataValues
+        );
+
+        uint256[] memory pieceIds = new uint256[](2);
+        pieceIds[0] = 0;
+        pieceIds[1] = 1;
+
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 2, "Removals should be queued before deletion");
+        assertEq(_scheduledPieceMetadataRemovalAt(dataSetId, 1), 1, "Queued removal element should exist before deletion");
+
+        (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
+        assertEq(storedKeys.length, 1, "Piece metadata should exist before deletion");
+
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        vm.roll(info.pdpEndEpoch + 1);
+
+        FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, railBefore.endEpoch);
+
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
+
+        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 0, "Queued removals should be cleared on deletion");
+        assertEq(_scheduledPieceMetadataRemovalAt(dataSetId, 1), 0, "Queued removal element should be cleared on deletion");
+
+        (storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
+        assertEq(storedKeys.length, 0, "Queued piece metadata should be cleaned up on deletion");
     }
 
     /**
