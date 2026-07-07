@@ -6497,7 +6497,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         );
 
         assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 2, "Removals should be queued before deletion");
-        assertEq(_scheduledPieceMetadataRemovalAt(dataSetId, 1), 1, "Queued removal element should exist before deletion");
+        assertEq(
+            _scheduledPieceMetadataRemovalAt(dataSetId, 1), 1, "Queued removal element should exist before deletion"
+        );
 
         (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
         assertEq(storedKeys.length, 1, "Piece metadata should exist before deletion");
@@ -6515,7 +6517,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
 
         assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 0, "Queued removals should be cleared on deletion");
-        assertEq(_scheduledPieceMetadataRemovalAt(dataSetId, 1), 0, "Queued removal element should be cleared on deletion");
+        assertEq(
+            _scheduledPieceMetadataRemovalAt(dataSetId, 1), 0, "Queued removal element should be cleared on deletion"
+        );
 
         (storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
         assertEq(storedKeys.length, 0, "Queued piece metadata should be cleaned up on deletion");
