@@ -17,7 +17,6 @@ Scripts are organized with prefixes for better discoverability:
 | `warm-storage-deploy-all.sh` | Deploy all contracts (PDPVerifier, FilecoinPayV1, FWSS, etc.) |
 | `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
 | `warm-storage-deploy-view.sh` | Deploy FilecoinWarmStorageServiceStateView |
-| `warm-storage-deploy-calibnet.sh` | Deploy FWSS only (requires existing dependencies) |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
 | `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
@@ -73,9 +72,6 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 ```bash
 # Deploy all contracts
 ./tools/warm-storage-deploy-all.sh
-
-# Deploy to Calibnet (FWSS only)
-./tools/warm-storage-deploy-calibnet.sh
 
 # Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
@@ -174,10 +170,6 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 - `ETH_FROM` - Optional: address to use as deployer (forge/cast default is taken from the keystore)
 
 ### Required for specific scripts:
-- `warm-storage-deploy-calibnet.sh` requires:
-  - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
-  - `FILECOIN_PAY_ADDRESS` - Address of deployed FilecoinPayV1 contract
-
 - `warm-storage-deploy-all.sh` requires:
   - Optional: `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier. Defaults to `10` on calibnet/devnet and `150` on mainnet.
 
@@ -200,18 +192,6 @@ export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainn
 export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
 
 ./warm-storage-deploy-all.sh
-```
-
-### Deploy FilecoinWarmStorageService Only
-
-```bash
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export PDP_VERIFIER_PROXY_ADDRESS="0x123..."
-export FILECOIN_PAY_ADDRESS="0x456..."
-
-./warm-storage-deploy-calibnet.sh
 ```
 
 ### Upgrade Existing Contract

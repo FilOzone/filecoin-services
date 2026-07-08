@@ -10,11 +10,15 @@ on:
         options:
           - Calibnet
           - Mainnet
-      fwss_version:
-        description: 'FWSS release version for the issue title, e.g. v1.2.3'
+      stack_version:
+        description: 'Stack release version for the issue title, e.g. v1.2.3'
         required: false
         type: string
-        default: 'vX.Y.Z'
+      fwss_contract_version:
+        description: 'Expected FilecoinWarmStorageService VERSION(), without leading v; use TBD when unchanged or unknown'
+        required: false
+        type: string
+        default: 'TBD'
       upgrade_type:
         description: 'Type of upgrade'
         required: true
@@ -45,7 +49,8 @@ jobs:
       - name: Create announcement issue
         env:
           NETWORK: ${{ inputs.network }}
-          RELEASE_VERSION: ${{ inputs.fwss_version }}
+          RELEASE_VERSION: ${{ inputs.stack_version || 'vX.Y.Z' }}
+          FWSS_VERSION: ${{ inputs.fwss_contract_version }}
           UPGRADE_TYPE: ${{ inputs.upgrade_type }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -61,7 +66,8 @@ jobs:
           {
             echo "## Release Issue ${{ inputs.dry_run == true && '(Dry Run)' || 'Created' }}"
             echo ""
-            echo "**Version**: ${{ inputs.fwss_version }}"
+            echo "**Stack version**: ${{ inputs.stack_version || 'vX.Y.Z' }}"
+            echo "**FWSS contract VERSION()**: ${{ inputs.fwss_contract_version }}"
             echo "**Network**: ${{ inputs.network }}"
             echo "**Workflow ref**: \\`${{ github.ref_name }}\\`"
             echo "**Checklist source**: \\`service_contracts/tools/UPGRADE-CHECKLIST.md\\` @ \\`${{ github.sha }}\\`"

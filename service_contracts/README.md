@@ -15,8 +15,6 @@ This directory contains the smart contracts for different Filecoin services usin
 - `test/` - Test files  
   - `FilecoinWarmStorageService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
-  - `create_data_set_with_payments.sh` - Script to create data sets with payments
-  - `warm-storage-deploy-calibnet.sh` - Deployment script for Warm Storage service on Calibnet
   - `warm-storage-deploy-all.sh` - Deployment script for all Warm Storage contracts
   - Note: deployment scripts now deploy and link `SignatureVerificationLib` when deploying `FilecoinWarmStorageService`.
     The scripts will deploy `src/lib/SignatureVerificationLib.sol` (or simulate it in dry-run) and pass the library address
@@ -165,15 +163,13 @@ The project maintains checked-in ABI files in the `abi/` directory for use by sc
 make update-abi
 ```
 
-This extracts the ABIs from the compiled contracts and saves them as JSON files:
+This extracts the checked-in ABIs, including:
 - `abi/FilecoinWarmStorageService.abi.json` - Main service contract ABI
+- `abi/FilecoinWarmStorageServiceStateLibrary.abi.json` - State library ABI used by generated view helpers
 - `abi/FilecoinWarmStorageServiceStateView.abi.json` - View contract ABI
 
 These ABIs are used by the code generation scripts in the `gen` target and should be updated whenever contract interfaces change.
-
-Note: `SignatureVerificationLib.sol` is an external library (public functions); if you rely on its ABI for external tooling or verification,
-you may also extract the library ABI via `make update-abi` after compilation. The primary consumer is the service implementation which
-is linked at deploy time by the scripts in `tools/`.
+`FilecoinWarmStorageService.abi.json` also includes first-party library event fragments emitted by the FWSS proxy at runtime.
 
 ### Dependencies
 
