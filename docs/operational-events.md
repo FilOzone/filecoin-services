@@ -45,10 +45,10 @@ assessed and link to the tracking issue.
 |---|---|---|
 | Scheduled FWSS or contract rollout | `Contract upgrades / maintenance` | Maintenance |
 | Contract incident or security issue | `Contract upgrades / maintenance` | Degraded or downtime |
-| Filecoin RPC, chain dependency, or upstream issue | `Filecoin RPC / dependencies` | Degraded or downtime |
-| FilBeam delivery issue | `FilBeam CDN` | Degraded or downtime |
-| Indexing or IPNI issue | `Indexing / IPNI` | Degraded or downtime |
-| Storage provider network issue | `Provider network health` | Degraded or downtime |
+| Filecoin RPC, chain dependency, or upstream issue | `Filecoin L1 dependencies` | Degraded or downtime |
+| FilBeam CDN delivery issue | `FilBeam CDN` | Degraded or downtime |
+| Content routing, discovery, or IPNI issue | `Content Routing / Discovery / IPNI` | Degraded or downtime |
+| Storage provider read/write issue | `Provider network health` | Degraded or downtime |
 
 ## Operational Incident Flow
 
