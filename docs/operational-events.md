@@ -32,7 +32,7 @@ Common triggers:
 
 - Mainnet contract upgrades or planned maintenance.
 - Active or suspected service degradation.
-- Major dependency issues such as Filecoin RPC, indexing, or IPNI.
+- Issues with major dependencies (e.g., RPC providers, IPNI) that affect FOC quality of service.
 - Contract or security events where users need clear guidance.
 
 If impact is uncertain, publish a short notice that says impact is being
