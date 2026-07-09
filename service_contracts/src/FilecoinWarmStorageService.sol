@@ -1553,6 +1553,9 @@ contract FilecoinWarmStorageService is
             fromEpoch = activationEpoch;
         }
         settleUpTo = fromEpoch;
+        if (toEpoch == activationEpoch) {
+            return (0, settleUpTo);
+        }
         uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1, maxProvingPeriod);
         uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch, maxProvingPeriod);
         uint256 deadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
