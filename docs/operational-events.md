@@ -4,7 +4,7 @@ Use this runbook when Filecoin Cloud users need a public operational update for
 an incident, service degradation, scheduled maintenance, or security-sensitive
 event.
 
-Use [FOC Operational Excellence](https://app.notion.com/p/filecoindev/FOC-Operational-Excellence-2b7dc41950c1802aa432fff8ecb801cc?source=copy_link#388dc41950c18004b0a7ee87400db860)
+Use [FOC Operational Excellence](https://app.notion.com/p/filecoindev/FOC-Operational-Excellence-2b7dc41950c1802aa432fff8ecb801cc#388dc41950c18004b0a7ee87400db860) (internal; requires Notion access)
 for Better Stack access details and current internal operating notes.
 
 ## Communication Model
