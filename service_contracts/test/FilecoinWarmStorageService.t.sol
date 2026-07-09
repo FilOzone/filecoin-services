@@ -6047,6 +6047,81 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.modifiedAmount, 0, "Should pay nothing for pre-activation epochs");
     }
 
+    function testValidatePayment_ActivationBoundarySettlesWithZeroPayment() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        uint256 proposedAmount = 1000e6;
+
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result = pdpServiceWithPayments.validatePayment(
+            info.pdpRailId, proposedAmount, activationEpoch - 1, activationEpoch, 0
+        );
+
+        assertEq(result.modifiedAmount, 0, "Activation boundary should not be payable");
+        assertEq(result.settleUpto, activationEpoch, "Should settle to activation boundary");
+        assertEq(result.note, "No proven epochs in the requested range");
+    }
+
+    function testSettleRail_EndEpochAtActivationBoundaryFinalizes() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("activation-boundary-piece"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinPayV1.RailView memory railBeforeActivation = payments.getRail(info.pdpRailId);
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        vm.roll(block.number + 3);
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, leafCount, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+        assertEq(viewContract.provingActivationEpoch(dataSetId), activationEpoch, "Activation epoch mismatch");
+        assertLt(railBeforeActivation.settledUpTo, activationEpoch, "Rail should need activation-boundary settlement");
+
+        bytes memory sig = abi.encode(FAKE_SIGNATURE);
+        makeSignaturePass(client);
+        vm.prank(sp1);
+        pdpServiceWithPayments.terminateService(dataSetId, sig);
+
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(dataSetId);
+        FilecoinPayV1.RailView memory terminatedRail = payments.getRail(terminatedInfo.pdpRailId);
+        assertEq(terminatedRail.lockupPeriod, 0, "Immediate termination should use zero lockup period");
+        assertEq(terminatedRail.endEpoch, activationEpoch, "End epoch should equal activation epoch");
+
+        (uint256 settledAmount,,,, uint256 finalEpoch,) =
+            payments.settleRail(terminatedInfo.pdpRailId, terminatedRail.endEpoch);
+
+        assertEq(settledAmount, 0, "Pre-activation settlement should not pay");
+        assertEq(finalEpoch, activationEpoch, "Rail should settle to activation boundary");
+
+        vm.roll(activationEpoch + 1);
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, "");
+        assertEq(viewContract.getDataSet(dataSetId).pdpRailId, 0, "Dataset should be deleted after finalization");
+    }
+
     /**
      * @notice Test: Partial period coverage - epochs span within a proven period
      */
