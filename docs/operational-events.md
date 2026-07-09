@@ -10,9 +10,9 @@ for Better Stack access details and current internal operating notes.
 ## Communication Model
 
 - Use [status.filecoin.cloud](https://status.filecoin.cloud/) for the short,
-  user-facing status notice.
+  user-facing status notice. (This is currently hosted on Better Stack.)
 - For an ongoing incident or degradation, create a GitHub issue in this repo and
-  link to it from the Better Stack notice.
+  link to it from the Better Stack notice above.
 - For a scheduled FWSS or contract upgrade, link the Better Stack maintenance
   notice to the release issue or GitHub Release instead of creating a separate
   incident issue.
