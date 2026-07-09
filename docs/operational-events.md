@@ -94,7 +94,7 @@ TBD
 No user action is required at this time.
 
 ## Public status notice
-TBD
+TODO: add relevant link to status.filecoin.cloud
 ```
 
 ## Scheduled Upgrade Flow
