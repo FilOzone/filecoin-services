@@ -6060,8 +6060,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 proposedAmount = 1000e6;
 
         vm.prank(address(payments));
-        IValidator.ValidationResult memory result =
-            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, activationEpoch - 1, activationEpoch, 0);
+        IValidator.ValidationResult memory result = pdpServiceWithPayments.validatePayment(
+            info.pdpRailId, proposedAmount, activationEpoch - 1, activationEpoch, 0
+        );
 
         assertEq(result.modifiedAmount, 0, "Activation boundary should not be payable");
         assertEq(result.settleUpto, activationEpoch, "Should settle to activation boundary");
@@ -6109,7 +6110,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(terminatedRail.lockupPeriod, 0, "Immediate termination should use zero lockup period");
         assertEq(terminatedRail.endEpoch, activationEpoch, "End epoch should equal activation epoch");
 
-        (uint256 settledAmount,,,, uint256 finalEpoch,) = payments.settleRail(terminatedInfo.pdpRailId, terminatedRail.endEpoch);
+        (uint256 settledAmount,,,, uint256 finalEpoch,) =
+            payments.settleRail(terminatedInfo.pdpRailId, terminatedRail.endEpoch);
 
         assertEq(settledAmount, 0, "Pre-activation settlement should not pay");
         assertEq(finalEpoch, activationEpoch, "Rail should settle to activation boundary");
