@@ -87,11 +87,11 @@ TBD
 ## Current status
 TBD
 
+## Suggested user action
+TBD.
+
 ## Timeline
 - <UTC time>: Event opened.
-
-## User action
-No user action is required at this time.
 
 ## Public status notice
 TODO: add relevant link to status.filecoin.cloud
