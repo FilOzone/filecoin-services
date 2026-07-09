@@ -11,7 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
-import {SponsoredDataSet, SponsoredDataSetFactory} from "../src/SponsoredDataSet.sol";
+import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
 import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
@@ -21,7 +21,7 @@ import {PDPOffering} from "./PDPOffering.sol";
 import {PROVING_ACTIVATION_EPOCH_SLOT, PROVEN_THIS_PERIOD_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {DATA_SET_LAST_PROVEN_EPOCH_SLOT} from "../lib/pdp/src/PDPVerifierLayout.sol";
 
-contract SponsoredDataSetTest is MockFVMTest {
+contract ExampleSponsoredDataSetTest is MockFVMTest {
     using PDPOffering for PDPOffering.Schema;
 
     uint256 constant CLEANUP_DEPOSIT = 0.1 ether;
@@ -44,7 +44,7 @@ contract SponsoredDataSetTest is MockFVMTest {
     MockERC20 token;
     SessionKeyRegistry sessionKeyRegistry;
     ServiceProviderRegistry serviceProviderRegistry;
-    SponsoredDataSetFactory factory;
+    ExampleSponsoredDataSetFactory factory;
 
     address serviceProvider;
     address payee;
@@ -126,7 +126,7 @@ contract SponsoredDataSetTest is MockFVMTest {
         );
         fwss.addApprovedProvider(1);
 
-        factory = new SponsoredDataSetFactory(fwss);
+        factory = new ExampleSponsoredDataSetFactory(fwss);
     }
 
     function _domainSeparator() internal view returns (bytes32) {
@@ -158,10 +158,10 @@ contract SponsoredDataSetTest is MockFVMTest {
         return keccak256(abi.encode(ADD_PIECES_TYPEHASH, uint256(0), nonce, cidsHash, pieceMetasHash));
     }
 
-    // Deploys a SponsoredDataSet with explicit curator/beneficiary, funds it, creates the data set on-chain, and binds it.
+    // Deploys a ExampleSponsoredDataSet with explicit curator/beneficiary, funds it, creates the data set on-chain, and binds it.
     function _setupDataSetWith(uint256 fundAmount, address _curator, address _beneficiary)
         internal
-        returns (SponsoredDataSet dataSet, uint256 dataSetId)
+        returns (ExampleSponsoredDataSet dataSet, uint256 dataSetId)
     {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
@@ -179,13 +179,13 @@ contract SponsoredDataSetTest is MockFVMTest {
         dataSet.bind(dataSetId);
     }
 
-    // Deploys a SponsoredDataSet, funds it, creates the data set on-chain, and binds it.
-    function _setupDataSet(uint256 fundAmount) internal returns (SponsoredDataSet dataSet, uint256 dataSetId) {
+    // Deploys a ExampleSponsoredDataSet, funds it, creates the data set on-chain, and binds it.
+    function _setupDataSet(uint256 fundAmount) internal returns (ExampleSponsoredDataSet dataSet, uint256 dataSetId) {
         return _setupDataSetWith(fundAmount, curator, beneficiary);
     }
 
     // Adds a single piece to the data set; curator signs the AddPieces message.
-    function _addPiece(SponsoredDataSet dataSet, Cids.Cid memory piece) internal {
+    function _addPiece(ExampleSponsoredDataSet dataSet, Cids.Cid memory piece) internal {
         uint256 nonce = ++addPiecesNonce;
         uint256 dataSetId = dataSet.dataSetId();
 
@@ -205,7 +205,7 @@ contract SponsoredDataSetTest is MockFVMTest {
     }
 
     // Schedules removal of pieces from the data set; curator signs the SchedulePieceRemovals message.
-    function _scheduleRemoval(SponsoredDataSet dataSet, uint256[] memory pieceIds) internal {
+    function _scheduleRemoval(ExampleSponsoredDataSet dataSet, uint256[] memory pieceIds) internal {
         uint256 dataSetId = dataSet.dataSetId();
 
         bytes32 structHash =
@@ -219,25 +219,25 @@ contract SponsoredDataSetTest is MockFVMTest {
     }
 
     function testAddPiece() public {
-        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
         Cids.Cid memory piece = Cids.CommPv2FromDigest(0, 4, keccak256("test piece"));
         _addPiece(dataSet, piece);
     }
 
     function testIsNotFinalizedInitially() public {
-        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
         assertFalse(dataSet.isFinalized());
     }
 
     function testFinalizeByCurator() public {
-        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
         vm.prank(curator);
         dataSet.finalize();
         assertTrue(dataSet.isFinalized());
     }
 
     function testFinalizeRevokesCuratorPermissions() public {
-        (SponsoredDataSet dataSet, uint256 dsId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet dataSet, uint256 dsId) = _setupDataSet(100 * 10 ** token.decimals());
         vm.prank(curator);
         dataSet.finalize();
 
@@ -260,27 +260,27 @@ contract SponsoredDataSetTest is MockFVMTest {
     }
 
     function testFinalizeRevertsIfNotCurator() public {
-        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
-        vm.expectRevert(abi.encodeWithSelector(SponsoredDataSet.NotCurator.selector, curator, address(this)));
+        (ExampleSponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        vm.expectRevert(abi.encodeWithSelector(ExampleSponsoredDataSet.NotCurator.selector, curator, address(this)));
         dataSet.finalize();
     }
 
     function testReleaseRevertsIfNotBound() public {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
-        SponsoredDataSet dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, curator, beneficiary);
-        vm.expectRevert(SponsoredDataSet.DataSetNotBound.selector);
+        ExampleSponsoredDataSet dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, curator, beneficiary);
+        vm.expectRevert(ExampleSponsoredDataSet.DataSetNotBound.selector);
         dataSet.release(IERC20(address(token)));
     }
 
     function testReleaseRevertsIfNotDeleted() public {
-        (SponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
-        vm.expectRevert(SponsoredDataSet.DataSetNotDeleted.selector);
+        (ExampleSponsoredDataSet dataSet,) = _setupDataSet(100 * 10 ** token.decimals());
+        vm.expectRevert(ExampleSponsoredDataSet.DataSetNotDeleted.selector);
         dataSet.release(IERC20(address(token)));
     }
 
     function testRelease() public {
-        (SponsoredDataSet dataSet, uint256 dsId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet dataSet, uint256 dsId) = _setupDataSet(100 * 10 ** token.decimals());
 
         vm.prank(serviceProvider);
         pdpVerifier.deleteDataSet(dsId, "");
@@ -315,62 +315,63 @@ contract SponsoredDataSetTest is MockFVMTest {
 
     function testMigrateRevertsIfNotFinalized() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
-        vm.expectRevert(SponsoredDataSet.NotFinalized.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.NotFinalized.selector);
         source.migrate(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateRevertsIfSuccessorNotFinalized() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
         vm.prank(curator);
         source.finalize();
         vm.prank(serviceProvider);
         fwss.terminateService(srcId, "");
-        vm.expectRevert(SponsoredDataSet.SuccessorNotFinalized.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorNotFinalized.selector);
         source.migrate(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateRevertsIfNotTerminated() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
-        SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce)).finalize();
+        ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce)).finalize();
         vm.roll(vm.getBlockNumber() + 1);
         _fakeProven(dstId);
-        vm.expectRevert(SponsoredDataSet.DataSetNotTerminated.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.DataSetNotTerminated.selector);
         source.migrate(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateRevertsIfSuccessorNotProven() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
-        SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce)).finalize();
+        ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce)).finalize();
         vm.prank(serviceProvider);
         fwss.terminateService(srcId, "");
-        vm.expectRevert(SponsoredDataSet.SuccessorNotProven.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorNotProven.selector);
         source.migrate(factory, sourceNonce, successorNonce);
     }
 
     function testMigrate() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
@@ -384,7 +385,7 @@ contract SponsoredDataSetTest is MockFVMTest {
         uint256 available = funds - lockupCurrent;
 
         vm.expectEmit(false, false, false, true);
-        emit SponsoredDataSet.Migrated(address(successor));
+        emit ExampleSponsoredDataSet.Migrated(address(successor));
         source.migrate(factory, sourceNonce, successorNonce);
 
         (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
@@ -395,10 +396,10 @@ contract SponsoredDataSetTest is MockFVMTest {
 
     struct PropMig {
         uint64 sourceNonce;
-        SponsoredDataSet source;
+        ExampleSponsoredDataSet source;
         uint256 srcId;
         uint64 successorNonce;
-        SponsoredDataSet successor;
+        ExampleSponsoredDataSet successor;
         uint256 dstId;
         uint256 migrationId;
     }
@@ -422,10 +423,11 @@ contract SponsoredDataSetTest is MockFVMTest {
 
     function testProposeMigration() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
@@ -436,7 +438,7 @@ contract SponsoredDataSetTest is MockFVMTest {
         _fakeProven(dstId);
 
         vm.expectEmit(true, false, false, true);
-        emit SponsoredDataSet.MigrationProposed(0, address(this), dstId);
+        emit ExampleSponsoredDataSet.MigrationProposed(0, address(this), dstId);
         uint256 migrationId =
             source.proposeMigration{value: source.MIGRATION_DEPOSIT()}(factory, sourceNonce, successorNonce);
 
@@ -448,27 +450,27 @@ contract SponsoredDataSetTest is MockFVMTest {
 
     function testProposeMigrationRevertsIfIncorrectDeposit() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
         uint256 deposit = source.MIGRATION_DEPOSIT();
-        vm.expectRevert(SponsoredDataSet.IncorrectDeposit.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.IncorrectDeposit.selector);
         source.proposeMigration{value: deposit - 1}(factory, sourceNonce, successorNonce);
     }
 
     function testProposeMigrationRevertsIfNotFinalized() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
         uint256 deposit = source.MIGRATION_DEPOSIT();
-        vm.expectRevert(SponsoredDataSet.NotFinalized.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.NotFinalized.selector);
         source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
     }
 
     function testProposeMigrationRevertsIfSuccessorNotFinalized() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
         vm.prank(curator);
@@ -476,16 +478,17 @@ contract SponsoredDataSetTest is MockFVMTest {
         vm.prank(serviceProvider);
         fwss.terminateService(srcId, "");
         uint256 deposit = source.MIGRATION_DEPOSIT();
-        vm.expectRevert(SponsoredDataSet.SuccessorNotFinalized.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorNotFinalized.selector);
         source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
     }
 
     function testProposeMigrationRevertsIfNotTerminated() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
@@ -493,16 +496,17 @@ contract SponsoredDataSetTest is MockFVMTest {
         vm.roll(vm.getBlockNumber() + 1);
         _fakeProven(dstId);
         uint256 deposit = source.MIGRATION_DEPOSIT();
-        vm.expectRevert(SponsoredDataSet.DataSetNotTerminated.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.DataSetNotTerminated.selector);
         source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
     }
 
     function testProposeMigrationRevertsIfSuccessorNotProven() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
@@ -510,16 +514,17 @@ contract SponsoredDataSetTest is MockFVMTest {
         vm.prank(serviceProvider);
         fwss.terminateService(srcId, "");
         uint256 deposit = source.MIGRATION_DEPOSIT();
-        vm.expectRevert(SponsoredDataSet.SuccessorNotProven.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorNotProven.selector);
         source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
     }
 
     function testProposeMigrationRevertsIfPieceMismatch() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         _addPiece(source, Cids.CommPv2FromDigest(0, 4, keccak256("piece A")));
         vm.prank(curator);
         source.finalize();
@@ -530,13 +535,13 @@ contract SponsoredDataSetTest is MockFVMTest {
         vm.roll(vm.getBlockNumber() + 1);
         _fakeProven(dstId);
         uint256 deposit = source.MIGRATION_DEPOSIT();
-        vm.expectRevert(SponsoredDataSet.PieceMismatch.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.PieceMismatch.selector);
         source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
     }
 
     function testCompleteMigrationRevertsIfChallengePeriodNotExpired() public {
         PropMig memory m = _setupProposedMigration();
-        vm.expectRevert(SponsoredDataSet.ChallengePeriodNotExpired.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.ChallengePeriodNotExpired.selector);
         m.source.completeMigration(m.migrationId);
     }
 
@@ -549,7 +554,7 @@ contract SponsoredDataSetTest is MockFVMTest {
         uint256 balanceBefore = address(this).balance;
 
         vm.expectEmit(true, false, false, true);
-        emit SponsoredDataSet.MigrationCompleted(m.migrationId, address(m.successor));
+        emit ExampleSponsoredDataSet.MigrationCompleted(m.migrationId, address(m.successor));
         m.source.completeMigration(m.migrationId);
 
         (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(m.successor));
@@ -605,10 +610,11 @@ contract SponsoredDataSetTest is MockFVMTest {
 
     function testChallengeMigrationRevertsIfPiecesMatch() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         Cids.Cid memory piece = Cids.CommPv2FromDigest(0, 4, keccak256("matching piece"));
         _addPiece(source, piece);
         _addPiece(successor, piece);
@@ -622,23 +628,24 @@ contract SponsoredDataSetTest is MockFVMTest {
         _fakeProven(dstId);
         uint256 migrationId =
             source.proposeMigration{value: source.MIGRATION_DEPOSIT()}(factory, sourceNonce, successorNonce);
-        vm.expectRevert(SponsoredDataSet.ChallengeFailed.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.ChallengeFailed.selector);
         source.challengeMigration(migrationId, 0);
     }
 
     function testChallengeMigrationRevertsIfChallengePeriodExpired() public {
         PropMig memory m = _setupProposedMigration();
         vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
-        vm.expectRevert(SponsoredDataSet.ChallengePeriodExpired.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.ChallengePeriodExpired.selector);
         m.source.challengeMigration(m.migrationId, 0);
     }
 
     function testChallengeMigration() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
         (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
-        SponsoredDataSet successor = SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
         _addPiece(source, Cids.CommPv2FromDigest(0, 4, keccak256("piece A")));
         _addPiece(successor, Cids.CommPv2FromDigest(0, 4, keccak256("piece B")));
         vm.prank(curator);
@@ -654,7 +661,7 @@ contract SponsoredDataSetTest is MockFVMTest {
 
         address challenger = address(0xc1);
         vm.expectEmit(true, false, false, true);
-        emit SponsoredDataSet.MigrationInvalid(migrationId, 0);
+        emit ExampleSponsoredDataSet.MigrationInvalid(migrationId, 0);
         vm.prank(challenger);
         source.challengeMigration(migrationId, 0);
 
@@ -669,9 +676,9 @@ contract SponsoredDataSetTest is MockFVMTest {
         internal
         returns (
             uint64 sourceNonce,
-            SponsoredDataSet source,
+            ExampleSponsoredDataSet source,
             uint64 successorNonce,
-            SponsoredDataSet successor,
+            ExampleSponsoredDataSet successor,
             uint256 dstId
         )
     {
@@ -688,15 +695,15 @@ contract SponsoredDataSetTest is MockFVMTest {
     }
 
     function testMigrateUnfinalized(bool finalizeSuccessor) public {
-        (uint64 sourceNonce, SponsoredDataSet source, uint64 successorNonce, SponsoredDataSet successor,) =
-            _setupUnfinalizedMigration(finalizeSuccessor);
+        (uint64 sourceNonce, ExampleSponsoredDataSet source, uint64 successorNonce, ExampleSponsoredDataSet successor,)
+        = _setupUnfinalizedMigration(finalizeSuccessor);
 
         (uint256 srcFunds, uint256 srcLockup,,) = payments.accounts(IERC20(address(token)), address(source));
         uint256 available = srcFunds - srcLockup;
         (uint256 dstFundsBefore,,,) = payments.accounts(IERC20(address(token)), address(successor));
 
         vm.expectEmit(false, false, false, true);
-        emit SponsoredDataSet.Migrated(address(successor));
+        emit ExampleSponsoredDataSet.Migrated(address(successor));
         vm.prank(curator);
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
 
@@ -705,61 +712,61 @@ contract SponsoredDataSetTest is MockFVMTest {
     }
 
     function testMigrateUnfinalizedRevertsIfNotCurator() public {
-        (uint64 sourceNonce, SponsoredDataSet source, uint64 successorNonce,,) = _setupUnfinalizedMigration(true);
-        vm.expectRevert(abi.encodeWithSelector(SponsoredDataSet.NotCurator.selector, curator, address(this)));
+        (uint64 sourceNonce, ExampleSponsoredDataSet source, uint64 successorNonce,,) = _setupUnfinalizedMigration(true);
+        vm.expectRevert(abi.encodeWithSelector(ExampleSponsoredDataSet.NotCurator.selector, curator, address(this)));
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateUnfinalizedRevertsIfAlreadyFinalized() public {
-        (uint64 sourceNonce, SponsoredDataSet source, uint64 successorNonce,,) = _setupUnfinalizedMigration(true);
+        (uint64 sourceNonce, ExampleSponsoredDataSet source, uint64 successorNonce,,) = _setupUnfinalizedMigration(true);
         vm.prank(curator);
         source.finalize();
         vm.prank(curator);
-        vm.expectRevert(SponsoredDataSet.AlreadyFinalized.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.AlreadyFinalized.selector);
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateUnfinalizedRevertsIfSuccessorNotProven() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         uint64 successorNonce = _factoryNonce();
-        (SponsoredDataSet successor,) = _setupDataSet(10 ** token.decimals());
+        (ExampleSponsoredDataSet successor,) = _setupDataSet(10 ** token.decimals());
         vm.prank(curator);
         successor.finalize();
         vm.prank(curator);
-        vm.expectRevert(SponsoredDataSet.SuccessorNotProven.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorNotProven.selector);
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateUnfinalizedRevertsIfSuccessorCuratorMismatch() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         address otherCurator = address(0xcc);
         uint64 successorNonce = _factoryNonce();
-        (SponsoredDataSet successor, uint256 dstId) =
+        (ExampleSponsoredDataSet successor, uint256 dstId) =
             _setupDataSetWith(10 ** token.decimals(), otherCurator, beneficiary);
         vm.prank(otherCurator);
         successor.finalize();
         vm.roll(vm.getBlockNumber() + 1);
         _fakeProven(dstId);
         vm.prank(curator);
-        vm.expectRevert(SponsoredDataSet.SuccessorCuratorMismatch.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorCuratorMismatch.selector);
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
     }
 
     function testMigrateUnfinalizedRevertsIfSuccessorBeneficiaryMismatch() public {
         uint64 sourceNonce = _factoryNonce();
-        (SponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
+        (ExampleSponsoredDataSet source,) = _setupDataSet(100 * 10 ** token.decimals());
         address otherBeneficiary = address(0xbb);
         uint64 successorNonce = _factoryNonce();
-        (SponsoredDataSet successor, uint256 dstId) =
+        (ExampleSponsoredDataSet successor, uint256 dstId) =
             _setupDataSetWith(10 ** token.decimals(), curator, otherBeneficiary);
         vm.prank(curator);
         successor.finalize();
         vm.roll(vm.getBlockNumber() + 1);
         _fakeProven(dstId);
         vm.prank(curator);
-        vm.expectRevert(SponsoredDataSet.SuccessorBeneficiaryMismatch.selector);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorBeneficiaryMismatch.selector);
         source.migrateUnfinalized(factory, sourceNonce, successorNonce);
     }
 }

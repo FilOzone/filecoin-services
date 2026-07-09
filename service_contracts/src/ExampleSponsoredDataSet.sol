@@ -27,16 +27,16 @@ function hashTypedDataV4(FilecoinWarmStorageService fwss, bytes32 structHash) vi
     return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
 }
 
-contract SponsoredDataSetFactory {
+contract ExampleSponsoredDataSetFactory {
     event NewSponsoredDataSet(
-        SponsoredDataSet indexed dataSet, address indexed curator, address indexed payee, address beneficiary
+        ExampleSponsoredDataSet indexed dataSet, address indexed curator, address indexed payee, address beneficiary
     );
 
     FilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
     FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     IERC20 public immutable TOKEN;
-    SponsoredDataSet public immutable IMPLEMENTATION;
+    ExampleSponsoredDataSet public immutable IMPLEMENTATION;
 
     constructor(FilecoinWarmStorageService fwss) {
         WARM_STORAGE_SERVICE = fwss;
@@ -46,7 +46,7 @@ contract SponsoredDataSetFactory {
         SESSION_KEY_REGISTRY = sessionKeyRegistry;
         IERC20 token = fwss.usdfcTokenAddress();
         TOKEN = token;
-        IMPLEMENTATION = new SponsoredDataSet(fwss, filecoinPay, sessionKeyRegistry, token);
+        IMPLEMENTATION = new ExampleSponsoredDataSet(fwss, filecoinPay, sessionKeyRegistry, token);
     }
 
     function initDataSet(
@@ -55,21 +55,25 @@ contract SponsoredDataSetFactory {
         string[] calldata metadataValues,
         address curator,
         address beneficiary
-    ) external returns (SponsoredDataSet) {
+    ) external returns (ExampleSponsoredDataSet) {
         bytes32 createDataSetStructHash =
             SignatureVerificationLib.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
         bytes32 createDataSetHash = hashTypedDataV4(WARM_STORAGE_SERVICE, createDataSetStructHash);
+        // Sign CreateDataSet using Nick's Method
         address createDataSetSigner = ecrecover(createDataSetHash, 0, 0, 0);
-        SponsoredDataSet dataSet = SponsoredDataSet(LibClone.clone(address(IMPLEMENTATION)));
+        ExampleSponsoredDataSet dataSet = ExampleSponsoredDataSet(LibClone.clone(address(IMPLEMENTATION)));
         dataSet.initialize(createDataSetSigner, curator, beneficiary);
         emit NewSponsoredDataSet(dataSet, curator, payee, beneficiary);
         return dataSet;
     }
 }
 
-contract SponsoredDataSet {
+/// @dev This is an example of how to implement a noncustodial data set.
+/// This contract pays for the data set and authorizes a key to perform its curation.
+contract ExampleSponsoredDataSet {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
 
+    error AlreadyInitialized();
     error NotPayer(address expected, address actual);
     error NotCurator(address expected, address actual);
     error AlreadyFinalized();
@@ -100,13 +104,13 @@ contract SponsoredDataSet {
 
     struct PendingMigration {
         address depositor;
-        SponsoredDataSetFactory factory;
+        ExampleSponsoredDataSetFactory factory;
         uint64 thisNonce;
         uint64 successorNonce;
         uint256 depositEpoch;
     }
 
-    string private constant ORIGIN = "SponsoredDataSet";
+    string private constant ORIGIN = "ExampleSponsoredDataSet";
 
     uint256 public constant CHALLENGE_PERIOD = 2880;
     uint256 public constant MIGRATION_DEPOSIT = 1 ether;
@@ -143,7 +147,7 @@ contract SponsoredDataSet {
     }
 
     function initialize(address createDataSetSigner, address curator, address beneficiary) external {
-        require(CURATOR == address(0));
+        require(CURATOR == address(0), AlreadyInitialized());
 
         bytes32[] memory createPerms = new bytes32[](1);
         createPerms[0] = SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH;
@@ -198,8 +202,8 @@ contract SponsoredDataSet {
     ///      same active pieces in the same order as the source.
     ///      The source and successor addresses are derived deterministically from (factory, nonce)
     ///      using the EVM CREATE address formula, proving both were deployed by the same factory.
-    function migrate(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
-        SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
+    function migrate(ExampleSponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
+        ExampleSponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
         uint256 successorDataSetId = _checkMigrationConditions(successor);
         _verifyPiecesMatch(dataSetId, successorDataSetId);
         _transferFunds(factory, successor);
@@ -209,10 +213,12 @@ contract SponsoredDataSet {
     /// @notice The curator migrates funds from a non-finalized data set to a successor with the same curator and beneficiary.
     /// @dev Requires the caller to be the curator, the source to be non-finalized, and the successor to be
     ///      bound and proven. Pieces are not checked; the curator vouches for the transition.
-    function migrateUnfinalized(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce) external {
+    function migrateUnfinalized(ExampleSponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
+        external
+    {
         require(msg.sender == CURATOR, NotCurator(CURATOR, msg.sender));
         require(!isFinalized(), AlreadyFinalized());
-        SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
+        ExampleSponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
         require(successor.CURATOR() == CURATOR, SuccessorCuratorMismatch());
         require(successor.BENEFICIARY() == BENEFICIARY, SuccessorBeneficiaryMismatch());
         uint256 successorDataSetId = successor.dataSetId();
@@ -225,13 +231,13 @@ contract SponsoredDataSet {
     /// @notice Proposes a challenged migration to a large-data successor without iterating all pieces.
     /// @dev Opens a challenge window during which anyone can disprove piece equality by index.
     ///      Requires a FIL deposit as a bond; depositor gets it back after the challenge period.
-    function proposeMigration(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
+    function proposeMigration(ExampleSponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
         external
         payable
         returns (uint256 migrationId)
     {
         require(msg.value == MIGRATION_DEPOSIT, IncorrectDeposit());
-        SponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
+        ExampleSponsoredDataSet successor = _resolveSuccessor(factory, thisNonce, successorNonce);
         uint256 successorDataSetId = _checkMigrationConditions(successor);
         migrationId = nextMigrationId++;
         pendingMigrations[migrationId] = PendingMigration({
@@ -251,8 +257,8 @@ contract SponsoredDataSet {
         require(migration.depositor != address(0), MigrationNotFound());
         require(block.number <= migration.depositEpoch + CHALLENGE_PERIOD, ChallengePeriodExpired());
 
-        SponsoredDataSet successor =
-            SponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
         uint256 dstId = successor.dataSetId();
 
         bool srcActive = PDP_VERIFIER.getPieceLeafCount(dataSetId, pieceIndex) != 0;
@@ -282,23 +288,27 @@ contract SponsoredDataSet {
 
         delete pendingMigrations[migrationId];
 
-        SponsoredDataSet successor =
-            SponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
         _transferFunds(migration.factory, successor);
         emit MigrationCompleted(migrationId, address(successor));
         require(FVMPay.pay(migration.depositor, MIGRATION_DEPOSIT), PayFailed());
     }
 
-    function _resolveSuccessor(SponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
+    function _resolveSuccessor(ExampleSponsoredDataSetFactory factory, uint64 thisNonce, uint64 successorNonce)
         internal
         view
-        returns (SponsoredDataSet)
+        returns (ExampleSponsoredDataSet)
     {
         require(LibRLP.computeAddress(address(factory), thisNonce) == address(this), FactoryMismatch());
-        return SponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        return ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
     }
 
-    function _checkMigrationConditions(SponsoredDataSet successor) internal view returns (uint256 successorDataSetId) {
+    function _checkMigrationConditions(ExampleSponsoredDataSet successor)
+        internal
+        view
+        returns (uint256 successorDataSetId)
+    {
         require(isFinalized(), NotFinalized());
         require(successor.isFinalized(), SuccessorNotFinalized());
 
@@ -327,7 +337,7 @@ contract SponsoredDataSet {
         );
     }
 
-    function _transferFunds(SponsoredDataSetFactory factory, SponsoredDataSet successor) internal {
+    function _transferFunds(ExampleSponsoredDataSetFactory factory, ExampleSponsoredDataSet successor) internal {
         IERC20 token = factory.TOKEN();
         (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
         uint256 available = funds - lockupCurrent;
