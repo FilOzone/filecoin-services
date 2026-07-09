@@ -19,6 +19,10 @@ Storage providers submit on-chain transactions on behalf of clients (piece addit
 
 The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct covering token, streaming rates, one-time fees, and lockup amounts/periods. See [SPEC.md](SPEC.md) for details on rate calculation, operation fees, pricing updates, and top-up/renewal behavior.
 
+## Service metadata
+
+FilecoinWarmStorageService implements `IFilecoinServiceMetadata`, exposing a `name()` and `description()` for `eth_call`. Other FOC services are encouraged to use this interface so explorers and clients can identify service operator contracts without hard-coded address maps. Consumers should note that this output should be treated as untrusted data and should only ever be presented to users in carefully escaped form.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
