@@ -15,7 +15,8 @@ for Better Stack access details and current internal operating notes.
   link to it from the Better Stack notice above.
 - For a scheduled FWSS or contract upgrade, link the Better Stack maintenance
   notice to the release issue or GitHub Release instead of creating a separate
-  incident issue.
+  incident issue. This is covered by the
+  [FWSS Upgrade Checklist and Runbook](../service_contracts/tools/UPGRADE-CHECKLIST.md).
 - Use the [foc-problems issue form](https://github.com/FilOzone/foc-problems/issues/new/choose)
   for inbound user reports.
 
@@ -49,12 +50,38 @@ assessed and link to the tracking issue.
 | Indexing or IPNI issue | `Indexing / IPNI` | Degraded or downtime |
 | Storage provider network issue | `Provider network health` | Degraded or downtime |
 
-## Ongoing Incident Flow
+## Operational Incident Flow
 
 1. Name the incident owner.
 2. Create a public issue in `FilOzone/filecoin-services` unless the event is
    security-sensitive and the owner decides details must stay private initially.
-3. Add the current facts to the issue:
+
+   Suggested issue title:
+
+   ```text
+   Operational event: <short user-facing summary> (<YYYY-MM-DD UTC>)
+   ```
+
+   Suggested issue body:
+
+   ```markdown
+   ## Impact
+   TBD
+
+   ## Current status
+   TBD
+
+   ## Suggested user action
+   TBD.
+
+   ## Timeline
+   - <UTC time>: Event opened.
+
+   ## Public status notice
+   TODO: add relevant link to status.filecoin.cloud
+   ```
+
+3. Fill in the current facts in the issue:
    - impact;
    - affected users or workflows;
    - start time in UTC, if known;
@@ -71,31 +98,14 @@ assessed and link to the tracking issue.
    public status changes, impact changes, and resolution.
 7. Resolve the Better Stack notice when user impact has ended, then close or
    follow up from the GitHub issue.
-
-Suggested issue title:
-
-```text
-Operational event: <short user-facing summary> (<YYYY-MM-DD UTC>)
-```
-
-Suggested issue body:
-
-```markdown
-## Impact
-TBD
-
-## Current status
-TBD
-
-## Suggested user action
-TBD.
-
-## Timeline
-- <UTC time>: Event opened.
-
-## Public status notice
-TODO: add relevant link to status.filecoin.cloud
-```
+8. Before closing, confirm:
+   - Better Stack notice resolved or updated to final state.
+   - GitHub issue, release issue, or GitHub Release contains the final public
+     status link.
+   - User reports through the
+     [foc-problems issue form](https://github.com/FilOzone/foc-problems/issues/new/choose)
+     have been checked.
+   - Follow-up work or lessons learned captured.
 
 ## Scheduled Upgrade Flow
 
@@ -114,12 +124,3 @@ For suspected contract or security issues, do not publish exploit details,
 credentials, private reports, or unreviewed analysis. If public tracking is not
 safe yet, keep the GitHub issue private/internal until the owner approves a
 public issue, advisory, or limited status-page wording.
-
-## Closeout
-
-- [ ] Better Stack notice resolved or updated to final state.
-- [ ] GitHub issue, release issue, or GitHub Release contains the final public
-      status link.
-- [ ] User reports through the [foc-problems issue form](https://github.com/FilOzone/foc-problems/issues/new/choose)
-      have been checked.
-- [ ] Follow-up work or lessons learned captured.
