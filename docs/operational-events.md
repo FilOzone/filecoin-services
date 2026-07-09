@@ -99,7 +99,7 @@ TODO: add relevant link to status.filecoin.cloud
 
 ## Scheduled Upgrade Flow
 
-For scheduled FWSS or contract upgrades:
+For scheduled FWSS or contract upgrades we follow https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/tools/UPGRADE-CHECKLIST.md. This includes:
 
 1. Use the release issue and GitHub Release as the durable rollout record.
 2. Create a Better Stack maintenance notice on `Contract upgrades / maintenance`
