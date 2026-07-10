@@ -189,6 +189,24 @@
   },
   {
     "type": "function",
+    "name": "announceUpgradePlan",
+    "inputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "delay",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "eip712Domain",
     "inputs": [],
     "outputs": [
