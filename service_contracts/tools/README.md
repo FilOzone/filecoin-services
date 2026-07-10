@@ -265,7 +265,7 @@ CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 
 This prints a formatted transaction block with the target address, function signature, and calldata to paste into the Safe UI transaction builder.
 
-The first rollout that installs `announceUpgradePlan()` must use the old interface exposed by the currently deployed proxy:
+The FWSS v1.3.0 contracts currently deployed on Calibnet and Mainnet do not expose `announceUpgradePlan()`. Their upgrade to v1.3.1 must therefore use the old interface:
 
 ```bash
 export ANNOUNCEMENT_MODE=legacy
@@ -277,7 +277,7 @@ unset UPGRADE_DELAY_EPOCHS
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
-This bootstrap-only mode is tracked for removal in the upgrade checklist after both Calibnet and Mainnet run the delay-aware implementation and any rollback path that still needs the old selector is retired.
+Treat this bootstrap-only mode as deprecated after FWSS v1.3.1 is live on both Calibnet and Mainnet. Remove it once rollback to v1.3.0 is no longer supported; until then it remains available only for that rollback path.
 
 ## Testing
 

@@ -5,7 +5,7 @@ set -o pipefail
 # warm-storage-announce-upgrade.sh: Announces a planned FWSS upgrade
 # Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_FWSS_IMPLEMENTATION_ADDRESS
 # Required in the default delay mode: UPGRADE_DELAY_EPOCHS
-# Required in bootstrap legacy mode: ANNOUNCEMENT_MODE=legacy, AFTER_EPOCH
+# Required for the v1.3.0 -> v1.3.1 bootstrap: ANNOUNCEMENT_MODE=legacy, AFTER_EPOCH
 # Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
 # Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending;
 #           ANNOUNCEMENT_MODE=delay|legacy (default: delay)
@@ -92,9 +92,9 @@ case "$ANNOUNCEMENT_MODE" in
     fi
     ;;
   legacy)
-    # Bootstrap only: the deployed FWSS version that predates announceUpgradePlan
-    # cannot use delay mode. Remove this branch after both networks are upgraded and
-    # rollback to a pre-selector implementation is retired (UPGRADE-CHECKLIST Phase 5).
+    # Bootstrap only: FWSS v1.3.0 predates announceUpgradePlan, so the v1.3.1
+    # rollout cannot use delay mode. Deprecate this branch after v1.3.1 is live on
+    # both networks; remove it once rollback to v1.3.0 is retired (checklist Phase 5).
     if [ -z "$AFTER_EPOCH" ]; then
       echo "Error: AFTER_EPOCH is not set for ANNOUNCEMENT_MODE=legacy"
       exit 1
@@ -120,7 +120,7 @@ case "$ANNOUNCEMENT_MODE" in
 
     CALL_SIGNATURE="announcePlannedUpgrade((address,uint96))"
     CALL_ARGS=("($NEW_FWSS_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)")
-    echo "Using bootstrap legacy mode; announcing upgrade after $((AFTER_EPOCH - CURRENT_EPOCH)) epochs"
+    echo "Using v1.3.0 bootstrap legacy mode; announcing upgrade after $((AFTER_EPOCH - CURRENT_EPOCH)) epochs"
     echo "Ensure AFTER_EPOCH includes enough Safe-signing buffer; legacy calldata can expire before execution"
     ;;
   *)
@@ -142,7 +142,7 @@ if ! cast call --rpc-url "$ETH_RPC_URL" --from "$PROXY_OWNER" \
   "$FWSS_PROXY_ADDRESS" "$CALL_SIGNATURE" "${CALL_ARGS[@]}" >/dev/null; then
   echo "Error: $CALL_SIGNATURE would revert against the current FWSS proxy"
   if [ "$ANNOUNCEMENT_MODE" = "delay" ]; then
-    echo "If this proxy predates announceUpgradePlan, rerun with ANNOUNCEMENT_MODE=legacy"
+    echo "For the FWSS v1.3.0 -> v1.3.1 bootstrap, rerun with ANNOUNCEMENT_MODE=legacy"
   fi
   exit 1
 fi

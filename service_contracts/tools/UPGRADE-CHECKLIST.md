@@ -158,7 +158,7 @@ echo "Requested upgrade delay: $UPGRADE_DELAY_EPOCHS epochs"
 
 ### Temporary Bootstrap Compatibility
 
-The rollout that first installs `announceUpgradePlan(address,uint96)` must announce through the currently deployed `announcePlannedUpgrade((address,uint96))` interface. Use `ANNOUNCEMENT_MODE=legacy` with an absolute `AFTER_EPOCH` for both Calibnet and Mainnet during that rollout. Include a conservative Safe-signing buffer so the legacy proposal is still in the future when it executes.
+FWSS v1.3.0 is currently deployed on Calibnet and Mainnet and does not expose `announceUpgradePlan(address,uint96)`. The v1.3.0 -> v1.3.1 rollout must announce through `announcePlannedUpgrade((address,uint96))`. Use `ANNOUNCEMENT_MODE=legacy` with an absolute `AFTER_EPOCH` for both networks and include a conservative Safe-signing buffer so the proposal is still in the future when it executes.
 
 ```bash
 export ANNOUNCEMENT_MODE=legacy
@@ -170,7 +170,7 @@ unset UPGRADE_DELAY_EPOCHS
 echo "Legacy target epoch: $AFTER_EPOCH"
 ```
 
-This is a bootstrap exception, not a second long-term workflow. After both networks run an implementation that exposes `announceUpgradePlan`, use the Phase 5 cleanup item to decide whether any rollback path still needs legacy mode and remove it once that path is retired.
+This is a v1.3.1 bootstrap exception, not a second long-term workflow. Treat legacy mode as deprecated once v1.3.1 is live on both networks, then use the Phase 5 cleanup item to remove it when rollback to v1.3.0 is retired.
 
 ### Post-Upgrade Evidence Required
 
@@ -392,7 +392,7 @@ export UPGRADE_DELAY_EPOCHS=240 # use a longer window if desired
 unset ANNOUNCEMENT_MODE AFTER_EPOCH
 ```
 
-For the temporary bootstrap rollout only, use this configuration instead:
+For the v1.3.0 -> v1.3.1 bootstrap rollout only, use this configuration instead:
 
 ```bash
 export ANNOUNCEMENT_MODE=legacy
@@ -559,7 +559,7 @@ export UPGRADE_DELAY_EPOCHS=2880 # use 20160 for breaking changes
 unset ANNOUNCEMENT_MODE AFTER_EPOCH
 ```
 
-For the temporary bootstrap rollout only, use this configuration instead:
+For the v1.3.0 -> v1.3.1 bootstrap rollout only, use this configuration instead:
 
 ```bash
 export ANNOUNCEMENT_MODE=legacy
@@ -702,7 +702,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
-- [ ] If this is the bootstrap rollout for `announceUpgradePlan`, decide whether rollback to an implementation without that selector is still supported. Once both networks are upgraded **and** that rollback path is retired, open and merge a follow-up PR that removes `ANNOUNCEMENT_MODE=legacy`, its `AFTER_EPOCH` handling, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If rollback remains supported, retain legacy mode or document the exact tagged helper that operators must use. For later releases, mark this `N/A` with the versions observed on both networks.
+- [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
