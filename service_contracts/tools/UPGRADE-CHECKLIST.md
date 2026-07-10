@@ -49,10 +49,12 @@ Field ownership for duplicated rollout data:
 
 ### Upgrade Schedule
 
-| Network | AFTER_EPOCH | Status |
-|---|---:|---|
-| Calibnet | `TBD` | Pending |
-| Mainnet | `TBD` | Pending |
+| Network | Announcement mode | Requested delay | Actual `AFTER_EPOCH` | Status |
+|---|---|---:|---:|---|
+| Calibnet | `TBD` | `TBD` | `TBD` | Pending |
+| Mainnet | `TBD` | `TBD` | `TBD` | Pending |
+
+Choose the announcement mode and requested delay before proposing the Safe transaction. In delay mode, fill in the actual `AFTER_EPOCH` from `nextUpgrade()` after the announcement executes. In bootstrap legacy mode, record the absolute target before Safe signing, include the notice duration and signing buffer in the requested-delay cell, and verify the same target on-chain after execution. The observed value is the source of truth for the execute step and external communications.
 
 ### Run Log
 
@@ -60,10 +62,10 @@ The Run Log is this release issue's operator journal for rollout facts discovere
 
 Keep this table current as values become known.
 
-| Network | New FWSS implementation | StateView / setView tx | Announce tx | Execute tx | Post-upgrade checks |
-|---|---|---|---|---|---|
-| Calibnet | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
-| Mainnet | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Network | New FWSS implementation | StateView / setView tx | Announce tx | Actual `afterEpoch` | Execute tx | Post-upgrade checks |
+|---|---|---|---|---:|---|---|
+| Calibnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Mainnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
 
 ### Scope
 - In scope: `FilecoinWarmStorageService` implementation upgrade behind the existing FWSS proxy.
@@ -137,7 +139,8 @@ Record validation that proves the planned upgrade works against the full contrac
 - Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `filecoin-pin` Data Set creation validation are complete.
 - Do not announce Mainnet until required cross-repo changes are merged/released or explicitly waived by the technical owner.
 - `service_contracts/deployments.json` reflects what is live behind proxies and View contracts. Update it only after the relevant proxy switch and, if applicable, View switch are complete, normally through follow-up PR(s) to `main`, and record PR links in Release Tracking.
-- If an `AFTER_EPOCH` changes, submit a new `announcePlannedUpgrade()` transaction and record that it supersedes the previous announcement.
+- In the normal delay-based flow, the requested delay starts when the Safe announcement executes. After execution, verify both fields returned by `nextUpgrade()` and record its exact `afterEpoch` as the source of truth.
+- A later announcement replaces the pending plan. Record the replacement transaction and explicitly mark it as superseding the previous announcement.
 
 ### Notice Guidance
 
@@ -146,14 +149,28 @@ Record validation that proves the planned upgrade works against the full contrac
 | Routine | `2880` epochs (~24h) | 1-2 days |
 | Breaking change | `20160` epochs (~1 week) | 1-2 weeks |
 
-Calibnet can use a shorter window for rehearsal and validation, but use enough time for signers to coordinate.
+Calibnet can use a shorter window for rehearsal and validation, but use enough time for signers to coordinate. Select a positive operational delay; the contract's one-epoch floor is an emergency safety bound, not the routine notice policy.
 
 ```bash
-export UPGRADE_WAIT_DURATION_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for breaking changes
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-AFTER_EPOCH=$((CURRENT_EPOCH + UPGRADE_WAIT_DURATION_EPOCHS))
-echo "Current: $CURRENT_EPOCH, Upgrade after: $AFTER_EPOCH"
+export UPGRADE_DELAY_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for breaking changes
+echo "Requested upgrade delay: $UPGRADE_DELAY_EPOCHS epochs"
 ```
+
+### Temporary Bootstrap Compatibility
+
+The rollout that first installs `announceUpgradePlan(address,uint96)` must announce through the currently deployed `announcePlannedUpgrade((address,uint96))` interface. Use `ANNOUNCEMENT_MODE=legacy` with an absolute `AFTER_EPOCH` for both Calibnet and Mainnet during that rollout. Include a conservative Safe-signing buffer so the legacy proposal is still in the future when it executes.
+
+```bash
+export ANNOUNCEMENT_MODE=legacy
+export LEGACY_NOTICE_EPOCHS=2880
+export SAFE_SIGNING_BUFFER_EPOCHS=240
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
+unset UPGRADE_DELAY_EPOCHS
+echo "Legacy target epoch: $AFTER_EPOCH"
+```
+
+This is a bootstrap exception, not a second long-term workflow. After both networks run an implementation that exposes `announceUpgradePlan`, use the Phase 5 cleanup item to decide whether any rollback path still needs legacy mode and remove it once that path is retired.
 
 ### Post-Upgrade Evidence Required
 
@@ -228,10 +245,10 @@ cat > /tmp/fwss-release-notes.md <<'EOF'
 
 ## Rollout Status
 
-| Network | FWSS Proxy | FWSS Implementation | StateView | Announce tx | Execute tx | Status |
-|---|---|---|---|---|---|---|
-| Calibnet | `0x02925630df557F957f70E112bA06e50965417CA0` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
-| Mainnet | `0x8408502033C418E1bbC97cE9ac48E5528F371A9f` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Network | FWSS Proxy | FWSS Implementation | StateView | Announce tx | Actual `afterEpoch` | Execute tx | Status |
+|---|---|---|---|---|---:|---|---|
+| Calibnet | `0x02925630df557F957f70E112bA06e50965417CA0` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Mainnet | `0x8408502033C418E1bbC97cE9ac48E5528F371A9f` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
 
 ## Action Required For Integrators
 - TBD
@@ -357,15 +374,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 ### Phase 3: Calibnet Announce + Execute
 
 **Announce**
-- [ ] Compute Calibnet `AFTER_EPOCH` and update the schedule table
-
-```bash
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export UPGRADE_WAIT_DURATION_EPOCHS=240 # use a longer window if desired
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-AFTER_EPOCH=$((CURRENT_EPOCH + UPGRADE_WAIT_DURATION_EPOCHS))
-echo "$CURRENT_EPOCH -> $AFTER_EPOCH"
-```
+- [ ] Choose the Calibnet announcement mode and requested delay, then update those fields in the schedule table
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
@@ -374,17 +383,75 @@ cd service_contracts/tools
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
-export AFTER_EPOCH="$AFTER_EPOCH"
+```
 
+For the normal delay-based flow:
+
+```bash
+export UPGRADE_DELAY_EPOCHS=240 # use a longer window if desired
+unset ANNOUNCEMENT_MODE AFTER_EPOCH
+```
+
+For the temporary bootstrap rollout only, use this configuration instead:
+
+```bash
+export ANNOUNCEMENT_MODE=legacy
+export LEGACY_NOTICE_EPOCHS=240
+export SAFE_SIGNING_BUFFER_EPOCHS=240
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
+unset UPGRADE_DELAY_EPOCHS
+```
+
+Generate the transaction after selecting exactly one configuration above:
+
+```bash
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
-- [ ] Record Calibnet announce tx link in the Run Log
-- [ ] Update the GitHub pre-release Calibnet rollout status with the announce tx and `AFTER_EPOCH`
+- [ ] After the Safe transaction executes, verify and read back the pending plan:
+
+```bash
+export ANNOUNCE_TX_HASH="0x..." # Safe execution transaction hash
+
+CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
+  "$FWSS_PROXY_ADDRESS" \
+  'viewContractAddress()(address)')
+
+UPGRADE_PLAN=($(cast call --rpc-url "$ETH_RPC_URL" \
+  "$CURRENT_VIEW" \
+  'nextUpgrade()(address,uint96)'))
+
+OBSERVED_IMPL=${UPGRADE_PLAN[0]}
+OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
+echo "Planned implementation: $OBSERVED_IMPL (expected $CALI_NEW_IMPL)"
+echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
+
+if [ "${ANNOUNCEMENT_MODE:-delay}" = "legacy" ]; then
+  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
+else
+  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
+  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
+  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
+  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
+fi
+
+if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$CALI_NEW_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
+  echo "ERROR: announced implementation mismatch"
+  exit 1
+fi
+if [ "$OBSERVED_AFTER_EPOCH" -ne "$EXPECTED_AFTER_EPOCH" ]; then
+  echo "ERROR: afterEpoch mismatch ($OBSERVED_AFTER_EPOCH != $EXPECTED_AFTER_EPOCH)"
+  exit 1
+fi
+```
+
+- [ ] Record the Calibnet announce tx and observed `afterEpoch` in the schedule and Run Log
+- [ ] Update the GitHub pre-release Calibnet rollout status with the announce tx and observed `afterEpoch`
 
 **Execute**
-- [ ] Wait for `AFTER_EPOCH`
+- [ ] Wait for the observed Calibnet `afterEpoch`
 - [ ] Generate execute calldata and submit/sign/execute in Safe UI:
 
 ```bash
@@ -474,15 +541,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] Technical owner records Mainnet go/no-go after reviewing Calibnet evidence, rollback status, dependency targets, and cross-repo status
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
-- [ ] Compute Mainnet `AFTER_EPOCH` and update the schedule table
-
-```bash
-export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
-export UPGRADE_WAIT_DURATION_EPOCHS=2880 # use 20160 for breaking changes
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-AFTER_EPOCH=$((CURRENT_EPOCH + UPGRADE_WAIT_DURATION_EPOCHS))
-echo "$CURRENT_EPOCH -> $AFTER_EPOCH"
-```
+- [ ] Choose the Mainnet announcement mode and requested delay, then update those fields in the schedule table
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
@@ -491,17 +550,75 @@ cd service_contracts/tools
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
-export AFTER_EPOCH="$AFTER_EPOCH"
+```
 
+For the normal delay-based flow:
+
+```bash
+export UPGRADE_DELAY_EPOCHS=2880 # use 20160 for breaking changes
+unset ANNOUNCEMENT_MODE AFTER_EPOCH
+```
+
+For the temporary bootstrap rollout only, use this configuration instead:
+
+```bash
+export ANNOUNCEMENT_MODE=legacy
+export LEGACY_NOTICE_EPOCHS=2880
+export SAFE_SIGNING_BUFFER_EPOCHS=2880
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
+unset UPGRADE_DELAY_EPOCHS
+```
+
+Generate the transaction after selecting exactly one configuration above:
+
+```bash
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
-- [ ] Record Mainnet announce tx link in the Run Log
-- [ ] Update the GitHub pre-release Mainnet rollout status with the announce tx and `AFTER_EPOCH`
+- [ ] After the Safe transaction executes, verify and read back the pending plan:
+
+```bash
+export ANNOUNCE_TX_HASH="0x..." # Safe execution transaction hash
+
+CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
+  "$FWSS_PROXY_ADDRESS" \
+  'viewContractAddress()(address)')
+
+UPGRADE_PLAN=($(cast call --rpc-url "$ETH_RPC_URL" \
+  "$CURRENT_VIEW" \
+  'nextUpgrade()(address,uint96)'))
+
+OBSERVED_IMPL=${UPGRADE_PLAN[0]}
+OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
+echo "Planned implementation: $OBSERVED_IMPL (expected $MAIN_NEW_IMPL)"
+echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
+
+if [ "${ANNOUNCEMENT_MODE:-delay}" = "legacy" ]; then
+  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
+else
+  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
+  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
+  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
+  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
+fi
+
+if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$MAIN_NEW_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
+  echo "ERROR: announced implementation mismatch"
+  exit 1
+fi
+if [ "$OBSERVED_AFTER_EPOCH" -ne "$EXPECTED_AFTER_EPOCH" ]; then
+  echo "ERROR: afterEpoch mismatch ($OBSERVED_AFTER_EPOCH != $EXPECTED_AFTER_EPOCH)"
+  exit 1
+fi
+```
+
+- [ ] Record the Mainnet announce tx and observed `afterEpoch` in the schedule and Run Log
+- [ ] Update the GitHub pre-release Mainnet rollout status with the announce tx and observed `afterEpoch`
 
 **Execute**
-- [ ] Wait for `AFTER_EPOCH`
+- [ ] Wait for the observed Mainnet `afterEpoch`
 - [ ] Generate execute calldata and submit/sign/execute in Safe UI:
 
 ```bash
@@ -585,6 +702,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
+- [ ] If this is the bootstrap rollout for `announceUpgradePlan`, decide whether rollback to an implementation without that selector is still supported. Once both networks are upgraded **and** that rollback path is retired, open and merge a follow-up PR that removes `ANNOUNCEMENT_MODE=legacy`, its `AFTER_EPOCH` handling, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If rollback remains supported, retain legacy mode or document the exact tagged helper that operators must use. For later releases, mark this `N/A` with the versions observed on both networks.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
