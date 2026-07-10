@@ -49,12 +49,14 @@ Field ownership for duplicated rollout data:
 
 ### Upgrade Schedule
 
-| Network | Announcement mode | Requested delay | Actual `AFTER_EPOCH` | Status |
+| Network | Announcement mode (v1.3.1 bootstrap only) | Requested delay | Actual `AFTER_EPOCH` | Status |
 |---|---|---:|---:|---|
 | Calibnet | `TBD` | `TBD` | `TBD` | Pending |
 | Mainnet | `TBD` | `TBD` | `TBD` | Pending |
 
-Choose the announcement mode and requested delay before proposing the Safe transaction. In delay mode, fill in the actual `AFTER_EPOCH` from `nextUpgrade()` after the announcement executes. In bootstrap legacy mode, record the absolute target before Safe signing, include the notice duration and signing buffer in the requested-delay cell, and verify the same target on-chain after execution. The observed value is the source of truth for the execute step and external communications.
+Set the requested delay before proposing the Safe transaction. For the normal delay-based flow, fill in the actual `AFTER_EPOCH` from `nextUpgrade()` after the announcement executes. The observed value is the source of truth for the execute step and external communications.
+
+> **v1.3.1 bootstrap only:** The announcement-mode column is temporary. Record `legacy` for the v1.3.0 -> v1.3.1 rollout; upgrades from v1.3.1 onward use `delay`. Record the absolute target before Safe signing, include the notice duration and signing buffer in the requested-delay cell, and verify the same target on-chain after execution.
 
 ### Run Log
 
@@ -374,7 +376,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 ### Phase 3: Calibnet Announce + Execute
 
 **Announce**
-- [ ] Choose the Calibnet announcement mode and requested delay, then update those fields in the schedule table
+- [ ] Set the Calibnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
@@ -541,7 +543,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] Technical owner records Mainnet go/no-go after reviewing Calibnet evidence, rollback status, dependency targets, and cross-repo status
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
-- [ ] Choose the Mainnet announcement mode and requested delay, then update those fields in the schedule table
+- [ ] Set the Mainnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
@@ -702,7 +704,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
-- [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
+- [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the temporary announcement-mode schedule column and bootstrap clauses, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
