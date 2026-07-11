@@ -9,6 +9,7 @@ import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
@@ -546,6 +547,29 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (plan.nextImplementation, plan.afterEpoch) = viewContract.nextUpgrade();
         assertEq(plan.nextImplementation, nextImplementation);
         assertEq(plan.afterEpoch, vm.getBlockNumber() + 1);
+    }
+
+    function testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) public {
+        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            mockUSDFC,
+            filBeamBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry,
+            4
+        );
+
+        vm.prank(client);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, client));
+        if (useDeprecatedMethod) {
+            FilecoinWarmStorageService.PlannedUpgrade memory plan;
+            plan.nextImplementation = address(newServiceImpl);
+            plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+            pdpServiceWithPayments.announcePlannedUpgrade(plan);
+        } else {
+            pdpServiceWithPayments.announceUpgradePlan(address(newServiceImpl), 2000);
+        }
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)
