@@ -259,7 +259,8 @@ export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
 export UPGRADE_DELAY_EPOCHS="2880"
-unset ANNOUNCEMENT_MODE AFTER_EPOCH
+export ANNOUNCEMENT_MODE=delay
+unset AFTER_EPOCH
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 

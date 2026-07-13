@@ -155,6 +155,7 @@ Calibnet can use a shorter window for rehearsal and validation, but use enough t
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for breaking changes
+export ANNOUNCEMENT_MODE=delay
 echo "Requested upgrade delay: $UPGRADE_DELAY_EPOCHS epochs"
 ```
 
@@ -391,7 +392,8 @@ For the normal delay-based flow:
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=240 # use a longer window if desired
-unset ANNOUNCEMENT_MODE AFTER_EPOCH
+export ANNOUNCEMENT_MODE=delay
+unset AFTER_EPOCH
 ```
 
 For the v1.3.0 -> v1.3.1 bootstrap rollout only, use this configuration instead:
@@ -430,7 +432,7 @@ OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
 echo "Planned implementation: $OBSERVED_IMPL (expected $CALI_NEW_IMPL)"
 echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
 
-if [ "${ANNOUNCEMENT_MODE:-delay}" = "legacy" ]; then
+if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
   EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
 else
   ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
@@ -558,7 +560,8 @@ For the normal delay-based flow:
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=2880 # use 20160 for breaking changes
-unset ANNOUNCEMENT_MODE AFTER_EPOCH
+export ANNOUNCEMENT_MODE=delay
+unset AFTER_EPOCH
 ```
 
 For the v1.3.0 -> v1.3.1 bootstrap rollout only, use this configuration instead:
@@ -597,7 +600,7 @@ OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
 echo "Planned implementation: $OBSERVED_IMPL (expected $MAIN_NEW_IMPL)"
 echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
 
-if [ "${ANNOUNCEMENT_MODE:-delay}" = "legacy" ]; then
+if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
   EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
 else
   ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)

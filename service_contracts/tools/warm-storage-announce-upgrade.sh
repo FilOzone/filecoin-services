@@ -8,7 +8,7 @@ set -o pipefail
 # Required for the v1.3.0 -> v1.3.1 bootstrap: ANNOUNCEMENT_MODE=legacy, AFTER_EPOCH
 # Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
 # Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending;
-#           ANNOUNCEMENT_MODE=delay|legacy (default: delay)
+#           ANNOUNCEMENT_MODE=delay|legacy (default: legacy)
 
 # Get script directory and source deployments.sh
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
@@ -16,7 +16,7 @@ source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
 
 CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
-ANNOUNCEMENT_MODE="${ANNOUNCEMENT_MODE:-delay}"
+ANNOUNCEMENT_MODE="${ANNOUNCEMENT_MODE:-legacy}"
 
 case "$CALLDATA_ONLY" in
   true | false) ;;
