@@ -301,12 +301,23 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         returns (uint256)
     {
         uint256 deadline = provingDeadline(service, setId);
+        uint64 maxProvingPeriod = getMaxProvingPeriod(service);
+        uint256 challengeWindowSize = challengeWindow(service);
 
         if (deadline == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
+            uint256 activationEpoch = provingActivationEpoch(service, setId);
+            if (activationEpoch == 0) {
+                revert Errors.ProvingPeriodNotInitialized(setId);
+            }
 
-        uint64 maxProvingPeriod = getMaxProvingPeriod(service);
+            // Leave one full proving period for PDP challenge finality and transaction
+            // inclusion, then align the window to the dataset's lifetime period origin.
+            uint256 minimumDeadline = block.number + maxProvingPeriod;
+            uint256 periodsFromActivation =
+                (minimumDeadline - activationEpoch + maxProvingPeriod - 1) / maxProvingPeriod;
+            deadline = activationEpoch + periodsFromActivation * maxProvingPeriod;
+            return deadline - challengeWindowSize;
+        }
 
         // If the current period is open this is the next period's challenge window
         if (block.number <= deadline) {

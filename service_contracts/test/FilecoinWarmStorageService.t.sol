@@ -6016,6 +6016,211 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertEq(result.modifiedAmount, 0, "No payment to SP for empty period after all pieces removed");
     }
 
+    function testEmptyDataset_ReactivationPreservesProvingTimeline() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Reactivated");
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("original-piece"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + maxProvingPeriod;
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
+        uint256 activationEpoch = vm.getBlockNumber();
+
+        vm.roll(firstDeadline - (challengeWindow / 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, leafCount, 12345, CHALLENGES_PER_PROOF);
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        vm.roll(firstDeadline + 1);
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
+
+        assertEq(viewContract.provingDeadline(dataSetId), 0, "Empty dataset should suspend proving");
+        assertEq(
+            viewContract.provingActivationEpoch(dataSetId),
+            activationEpoch,
+            "Empty dataset should retain its activation epoch"
+        );
+
+        vm.roll(activationEpoch + maxProvingPeriod * 3 + (maxProvingPeriod / 2));
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("reactivated-piece"));
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            1,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+        uint256 additionEpoch = vm.getBlockNumber();
+
+        uint256 challengeWindowStart = viewContract.nextPDPChallengeWindowStart(dataSetId);
+        uint256 reactivationDeadline = challengeWindowStart + challengeWindow;
+        uint256 challengeEpoch = challengeWindowStart + (challengeWindow / 2);
+        assertEq(
+            (reactivationDeadline - activationEpoch) % maxProvingPeriod,
+            0,
+            "Reactivation deadline should remain aligned to original activation"
+        );
+        assertGe(
+            challengeEpoch - additionEpoch,
+            maxProvingPeriod - (challengeWindow / 2),
+            "Challenge should retain finality headroom"
+        );
+        assertLt(
+            challengeEpoch - additionEpoch, maxProvingPeriod * 2, "Challenge should remain within two proving periods"
+        );
+
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, leafCount, "");
+
+        assertEq(
+            viewContract.provingActivationEpoch(dataSetId),
+            activationEpoch,
+            "Reactivation should preserve the original activation epoch"
+        );
+        assertEq(
+            viewContract.provingDeadline(dataSetId),
+            reactivationDeadline,
+            "Callback should accept the deadline returned by the state view"
+        );
+        assertTrue(viewContract.provenPeriods(dataSetId, 0), "Original proven period should remain recorded");
+
+        uint256 reactivationPeriod = pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, challengeEpoch);
+        assertFalse(
+            viewContract.provenPeriods(dataSetId, reactivationPeriod),
+            "Reactivated period should not inherit an old proof bit"
+        );
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        (uint256 oldSettlementAmount,,,, uint256 oldSettlementEpoch,) =
+            payments.settleRail(info.pdpRailId, firstDeadline);
+        assertGt(oldSettlementAmount, 0, "Original proven period should remain payable");
+        assertEq(oldSettlementEpoch, firstDeadline, "Original period should settle after reactivation");
+
+        vm.roll(challengeEpoch);
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, leafCount, 67890, CHALLENGES_PER_PROOF);
+        assertTrue(
+            viewContract.provenPeriods(dataSetId, reactivationPeriod),
+            "Reactivated proof should use its canonical period ID"
+        );
+
+        uint256 reactivationPeriodStart = reactivationDeadline - maxProvingPeriod;
+        uint256 requestedEpochs = challengeEpoch - additionEpoch;
+        uint256 provenEpochs = challengeEpoch - reactivationPeriodStart;
+        uint256 proposedAmount = requestedEpochs * 1e6;
+        vm.prank(address(payments));
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, additionEpoch, challengeEpoch, 0);
+        assertEq(
+            result.modifiedAmount,
+            provenEpochs * 1e6,
+            "Payment should cover only the proven canonical portion after reactivation"
+        );
+        assertEq(result.settleUpto, challengeEpoch, "Proven reactivation period should settle normally");
+    }
+
+    function testEmptyDataset_ReactivationRejectsPreviouslyProvenPeriod() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Reactivated");
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("original-piece"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + maxProvingPeriod;
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
+
+        vm.roll(firstDeadline - (challengeWindow / 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, leafCount, 12345, CHALLENGES_PER_PROOF);
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
+
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("reactivated-piece"));
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            1,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        uint256 firstAllowedDeadline = firstDeadline + maxProvingPeriod;
+        uint256 firstAllowedWindowStart = firstAllowedDeadline - challengeWindow;
+        assertEq(
+            viewContract.nextPDPChallengeWindowStart(dataSetId),
+            firstAllowedWindowStart,
+            "State view should skip the previously proven period"
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InvalidChallengeEpoch.selector,
+                dataSetId,
+                firstAllowedWindowStart,
+                firstAllowedDeadline,
+                firstDeadline
+            )
+        );
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
+
+        uint256 challengeEpoch = firstAllowedWindowStart + (challengeWindow / 2);
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, leafCount, "");
+
+        assertTrue(viewContract.provenPeriods(dataSetId, 0), "Original period should remain proven");
+        assertFalse(viewContract.provenPeriods(dataSetId, 1), "Reactivated period should require a new proof");
+        assertEq(
+            viewContract.provingDeadline(dataSetId),
+            firstAllowedDeadline,
+            "Reactivation should resume at the first safe deadline"
+        );
+    }
+
     /**
      * @notice Test: Request range before activation - should advance without payment
      */

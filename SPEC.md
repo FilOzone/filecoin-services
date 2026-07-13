@@ -156,6 +156,14 @@ The data set may also be terminated before proving activates. The first `nextPro
 
 The first `nextProvingPeriod()` sets `provingActivationEpoch` to the current epoch `A` and schedules the first deadline. `A` is a boundary marker, not a billable epoch; the first billable proving epoch is `A+1`.
 
+If all pieces are removed, PDPVerifier reports `NO_CHALLENGE_SCHEDULED` and FWSS suspends proving by clearing the current deadline. The original activation epoch remains the lifetime origin for proving-period deadlines, proof bitmap indices, and payment validation. Adding pieces later does not rebase this history.
+
+For an inactive data set with a prior activation, `nextPDPChallengeWindowStart()` returns a challenge window on the original timeline. Given the current epoch `C`, it chooses the earliest canonical deadline `D = A + n*M` with `D >= C+M`, and returns `D-W`, where `W` is the challenge-window size. The subsequent `nextProvingPeriod()` independently derives the earliest valid deadline at execution, accepts only a challenge epoch in its window, and preserves `A`.
+
+Periods elapsed while proving is suspended have no proof and settle with zero payment once their deadlines pass. Proof bits recorded before suspension retain their original period IDs and remain payable. Pieces added while proving is suspended update the rate and lockup immediately, but epochs before the selected reactivation period have no proof and therefore earn no streaming payment.
+
+Because the view call and transaction use their respective current epochs, the returned window can become stale before inclusion if the earliest valid deadline advances. A caller receiving `InvalidChallengeEpoch` must query `nextPDPChallengeWindowStart()` again and retry. The challenge must also satisfy PDPVerifier's normal minimum and maximum delay rules; the current mainnet and calibnet parameters provide ample headroom.
+
 Before activation, `piecesAdded()` still updates the Filecoin Pay rate and lockup requirement. This enforces funding before the provider commits storage, but does not make pre-activation epochs payable. When Filecoin Pay later presents a rate segment ending at or before `A`, `validatePayment()` advances `settleUpto` through the segment with zero payment. Segments crossing `A` exclude their pre-activation epochs from payment. This also lets terminated, never-activated data sets release their streaming lockup cleanly.
 
 One-time lifecycle fees are independent of proving activation and remain payable when their operations occur.
