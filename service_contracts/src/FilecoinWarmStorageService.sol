@@ -929,7 +929,7 @@ contract FilecoinWarmStorageService is
                 firstDeadline = activationEpoch + maxProvingPeriod;
             } else {
                 // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
-                // period of headroom (not challengeEpoch's period), keeping the window one period wide.
+                // period of headroom, keeping the window one period wide.
                 require(
                     challengeEpoch > activationEpoch,
                     Errors.InvalidChallengeEpoch(
