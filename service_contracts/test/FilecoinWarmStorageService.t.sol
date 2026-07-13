@@ -6221,6 +6221,72 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         );
     }
 
+    function testEmptyDataset_ReactivationRejectsFarFutureChallengeEpoch() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Reactivated");
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("original-piece"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + maxProvingPeriod;
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
+
+        vm.roll(firstDeadline - (challengeWindow / 2));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.possessionProven(dataSetId, leafCount, 12345, CHALLENGES_PER_PROOF);
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
+
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("reactivated-piece"));
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            1,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        uint256 firstAllowedDeadline = firstDeadline + maxProvingPeriod;
+        uint256 firstAllowedWindowStart = firstAllowedDeadline - challengeWindow;
+
+        // A challengeEpoch landing in the period *after* the earliest allowed one must still be
+        // rejected -- the SP cannot defer resumed proving by picking a later canonical period.
+        uint256 farFutureChallengeEpoch = firstAllowedDeadline + maxProvingPeriod - (challengeWindow / 2);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InvalidChallengeEpoch.selector,
+                dataSetId,
+                firstAllowedWindowStart,
+                firstAllowedDeadline,
+                farFutureChallengeEpoch
+            )
+        );
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, farFutureChallengeEpoch, leafCount, "");
+    }
+
     /**
      * @notice Test: Request range before activation - should advance without payment
      */
