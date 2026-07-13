@@ -206,7 +206,7 @@ The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two
 2. **Observe**: Read `nextUpgrade()` after the announcement lands and record its exact `afterEpoch`
 3. **Execute**: After the observed epoch, call `upgradeToAndCall()` to complete the upgrade
 
-The delay is measured from the block in which the announcement executes, so Safe signing time does not consume the requested notice window. ServiceProviderRegistry continues to use `announcePlannedUpgrade()` with an absolute epoch.
+The delay is measured from the block in which the announcement executes, so Safe signing time does not consume the requested notice window.
 
 **For complete FWSS upgrade documentation**, including:
 - Step-by-step upgrade workflows
