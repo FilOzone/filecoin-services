@@ -1489,11 +1489,11 @@ contract FilecoinWarmStorageService is
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // No proving activity: pay nothing, advance settleUpto = toEpoch so settleRail can
-        // discharge lockup. Hit by never-activated data sets and by the finalize leg of
-        // abandonment (which wipes activationEpoch between settles to unblock the open period)
+        // No active proving period covers epochs through the activation boundary. Advance
+        // settlement with zero payment so FilecoinPay can discharge pre-activation rate
+        // segments, including segments recorded before the first nextProvingPeriod call.
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
-        if (activationEpoch == 0) {
+        if (activationEpoch == 0 || toEpoch <= activationEpoch) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
 
@@ -1553,9 +1553,6 @@ contract FilecoinWarmStorageService is
             fromEpoch = activationEpoch;
         }
         settleUpTo = fromEpoch;
-        if (toEpoch == activationEpoch) {
-            return (0, settleUpTo);
-        }
         uint256 startingPeriod = _provingPeriodForEpoch(activationEpoch, fromEpoch + 1, maxProvingPeriod);
         uint256 endingPeriod = _provingPeriodForEpoch(activationEpoch, toEpoch, maxProvingPeriod);
         uint256 deadline = _calcPeriodDeadline(activationEpoch, startingPeriod);
