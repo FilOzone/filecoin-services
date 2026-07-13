@@ -920,19 +920,42 @@ contract FilecoinWarmStorageService is
         uint96 pending = info.pendingOneTimePayments;
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
-        // initialize state for new data set
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
-            uint256 firstDeadline = block.number + maxProvingPeriod;
+            uint256 firstDeadline;
+            if (activationEpoch == 0) {
+                // First activation establishes the lifetime proving-period origin.
+                activationEpoch = block.number;
+                firstDeadline = activationEpoch + maxProvingPeriod;
+            } else {
+                // Reactivation resumes the original proving-period timeline. The PDPVerifier
+                // guarantees a future challenge epoch; derive its canonical deadline without
+                // rebasing payment history or proven-period IDs.
+                require(
+                    challengeEpoch > activationEpoch,
+                    Errors.InvalidChallengeEpoch(
+                        dataSetId, activationEpoch + 1, activationEpoch + maxProvingPeriod, challengeEpoch
+                    )
+                );
+                uint256 period = _provingPeriodForEpoch(activationEpoch, challengeEpoch, maxProvingPeriod);
+                firstDeadline = _calcPeriodDeadline(activationEpoch, period);
+                if (firstDeadline < block.number + maxProvingPeriod) {
+                    uint256 minimumDeadline = block.number + maxProvingPeriod;
+                    uint256 periodsFromActivation =
+                        (minimumDeadline - activationEpoch + maxProvingPeriod - 1) / maxProvingPeriod;
+                    uint256 firstAllowedDeadline = activationEpoch + periodsFromActivation * maxProvingPeriod;
+                    revert Errors.InvalidChallengeEpoch(
+                        dataSetId, firstAllowedDeadline - challengeWindowSize, firstAllowedDeadline, challengeEpoch
+                    );
+                }
+            }
+
             uint256 minWindow = firstDeadline - challengeWindowSize;
-            uint256 maxWindow = firstDeadline;
-            if (challengeEpoch < minWindow || challengeEpoch > maxWindow) {
-                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
+            if (challengeEpoch < minWindow || challengeEpoch > firstDeadline) {
+                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, firstDeadline, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
-
-            // Initialize the activation epoch when proving first starts
-            // This marks when the data set became active for proving
-            provingActivationEpoch[dataSetId] = block.number;
+            provingActivationEpoch[dataSetId] = activationEpoch;
 
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
