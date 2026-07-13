@@ -96,7 +96,7 @@ Only the contract owner can update pricing, by upgrading the contract.
 
 Rate recalculation timing differs for additions and deletions due to proving semantics:
 
-- **Adding pieces**: The rate updates immediately when `piecesAdded()` is called. The client begins paying for new pieces right away, even though those pieces won't be included in proof challenges until the next proving period. This fail-fast behavior protects providers: if the client lacks sufficient funds for the new lockup, the transaction fails before the provider commits resources.
+- **Adding pieces**: The rate and corresponding lockup requirement update immediately when `piecesAdded()` is called, even before proving activation. This fail-fast behavior protects providers by rejecting additions the client cannot fund before the provider commits resources. Streaming storage payment becomes eligible only after the first `nextProvingPeriod()` activates proving; pre-activation epochs settle with zero payment. One-time lifecycle fees remain payable before activation.
 
 - **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized. This deferral is required because proofs may challenge any portion of the current data set during the proving period—the provider must continue storing and proving all existing data until the period ends.
 
@@ -104,11 +104,11 @@ Rate recalculation timing differs for additions and deletions due to proving sem
 
 During each proving period, proofs are generated over a fixed data set. The prover must maintain the complete data set because challenges can target any leaf:
 
-- **Additions expand the proof space** but don't affect existing challenges. New pieces simply won't be challenged until the next period. Payment starts immediately because storage resources are committed.
+- **Additions expand the proof space** but don't affect existing challenges. Before activation they update the rate and lockup without earning streaming payment. After activation the new rate becomes payable immediately, even though the added pieces won't be challenged until the next period.
 
 - **Deletions would shrink the proof space** mid-period, potentially invalidating challenges. The data must remain intact until `nextProvingPeriod()` finalizes the removal. Only then does the rate decrease.
 
-This ensures proof integrity while providing fair payment semantics: you pay when you add, and continue paying for deletions until the proving period boundary.
+This ensures proof integrity while providing fair payment semantics: additions reserve funding immediately and become payable once proving is active, while deletions remain payable until the proving period boundary.
 
 ### Rate Changes After Termination
 
@@ -147,6 +147,18 @@ Deposits extend the duration without changing the rate (unless adding pieces tri
 **Delinquency**: When a client's funded epoch falls below the current epoch, the payment rail can no longer be settled—no further payments flow to the provider. The provider may terminate the service to claim payment from the locked funds, guaranteeing up to 30 days of payment from the last funded epoch.
 
 ## Settlement and Payment Validation
+
+### Proving Activation Lifecycle
+
+Data set creation does not activate proving. Client tooling typically uses PDPVerifier's combined create-and-add operation. PDPVerifier delivers that operation to FWSS as separate `dataSetCreated()` and `piecesAdded()` callbacks. A data set may receive one or more such piece callbacks before the service provider's first `nextProvingPeriod()` call.
+
+The data set may also be terminated before proving activates. The first `nextProvingPeriod()` can still activate proving while the PDP rail's termination window remains open. A callback that modifies payment state must execute strictly before `pdpEndEpoch`; at `pdpEndEpoch`, activation succeeds only when no pending fee or scheduled removal requires a payment update. Consent-based immediate termination can therefore coincide with activation in the same epoch when no payment update is needed.
+
+The first `nextProvingPeriod()` sets `provingActivationEpoch` to the current epoch `A` and schedules the first deadline. `A` is a boundary marker, not a billable epoch; the first billable proving epoch is `A+1`.
+
+Before activation, `piecesAdded()` still updates the Filecoin Pay rate and lockup requirement. This enforces funding before the provider commits storage, but does not make pre-activation epochs payable. When Filecoin Pay later presents a rate segment ending at or before `A`, `validatePayment()` advances `settleUpto` through the segment with zero payment. Segments crossing `A` exclude their pre-activation epochs from payment. This also lets terminated, never-activated data sets release their streaming lockup cleanly.
+
+One-time lifecycle fees are independent of proving activation and remain payable when their operations occur.
 
 ### Proving Period Epoch Conventions
 

@@ -6017,34 +6017,28 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     }
 
     /**
-     * @notice Test: Request range before activation - should pay nothing
+     * @notice Test: Request range before activation - should advance without payment
      */
-    function testValidatePayment_BeforeActivation() public {
+    function testValidatePayment_BeforeActivationSettlesWithZeroPayment() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
-        // Move forward to create some block height
         vm.roll(block.number + 1000);
 
-        // Start proving
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
-
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
-
-        // Try to validate for epochs before activation
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch - 500;
         uint256 toEpoch = activationEpoch - 100;
-        uint256 proposedAmount = 1000e6;
 
         vm.prank(address(payments));
-        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidEpochRange.selector, fromEpoch, toEpoch));
         IValidator.ValidationResult memory result =
-            pdpServiceWithPayments.validatePayment(info.pdpRailId, proposedAmount, fromEpoch, toEpoch, 0);
+            pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e6, fromEpoch, toEpoch, 0);
 
-        assertEq(result.modifiedAmount, 0, "Should pay nothing for pre-activation epochs");
+        assertEq(result.modifiedAmount, 0, "Pre-activation epochs should not be payable");
+        assertEq(result.settleUpto, toEpoch, "Settlement should consume the pre-activation range");
     }
 
     function testValidatePayment_ActivationBoundarySettlesWithZeroPayment() public {
@@ -6066,7 +6060,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         assertEq(result.modifiedAmount, 0, "Activation boundary should not be payable");
         assertEq(result.settleUpto, activationEpoch, "Should settle to activation boundary");
-        assertEq(result.note, "No proven epochs in the requested range");
+        assertEq(result.note, "No proving activity");
     }
 
     function testSettleRail_EndEpochAtActivationBoundaryFinalizes() public {
@@ -6120,6 +6114,62 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(sp1);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, "");
         assertEq(viewContract.getDataSet(dataSetId).pdpRailId, 0, "Dataset should be deleted after finalization");
+    }
+
+    function testSettleRail_MultiplePreActivationRateSegmentsSettleWithZeroPayment() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("first-pre-activation-piece"));
+        uint256 leafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        vm.roll(block.number + 3);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("second-pre-activation-piece"));
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            1,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinPayV1.RailView memory railBeforeActivation = payments.getRail(info.pdpRailId);
+        assertLt(
+            railBeforeActivation.settledUpTo, block.number, "Second addition should leave a pre-activation rate segment"
+        );
+
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        vm.roll(block.number + 3);
+        uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
+        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, leafCount * 2, "");
+
+        uint256 activationEpoch = vm.getBlockNumber();
+        (uint256 settledAmount,,,, uint256 finalEpoch,) = payments.settleRail(info.pdpRailId, activationEpoch);
+
+        assertEq(settledAmount, 0, "Pre-activation rate segments should not be payable");
+        assertEq(finalEpoch, activationEpoch, "Settlement should consume every pre-activation rate segment");
+        assertEq(
+            payments.getRail(info.pdpRailId).settledUpTo,
+            activationEpoch,
+            "Rail should be settled to the activation boundary"
+        );
     }
 
     /**
