@@ -53,7 +53,15 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         registry.initialize();
     }
 
-    function testAnnouncePlannedUpgrade(bool useDeprecatedMethod) public {
+    function testAnnouncePlannedUpgrade() public {
+        _testAnnouncePlannedUpgrade(true);
+    }
+
+    function testAnnounceUpgradePlan() public {
+        _testAnnouncePlannedUpgrade(false);
+    }
+
+    function _testAnnouncePlannedUpgrade(bool useDeprecatedMethod) internal {
         // Initially, no upgrade is planned
         (address nextImplementation, uint96 afterEpoch) = registry.nextUpgrade();
         assertEq(nextImplementation, address(0));
@@ -122,7 +130,15 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(afterEpoch, uint96(0));
     }
 
-    function testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) public {
+    function testAnnouncePlannedUpgradeOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(true);
+    }
+
+    function testAnnounceUpgradePlanOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(false);
+    }
+
+    function _testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) internal {
         ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
 
         // Non-owner cannot announce upgrade
@@ -138,7 +154,15 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         }
     }
 
-    function testAnnouncePlannedUpgradeInvalidImplementation(bool useDeprecatedMethod) public {
+    function testAnnouncePlannedUpgradeInvalidImplementation() public {
+        _testAnnouncePlannedUpgradeInvalidImplementation(true);
+    }
+
+    function testAnnounceUpgradePlanInvalidImplementation() public {
+        _testAnnouncePlannedUpgradeInvalidImplementation(false);
+    }
+
+    function _testAnnouncePlannedUpgradeInvalidImplementation(bool useDeprecatedMethod) internal {
         if (useDeprecatedMethod) {
             ServiceProviderRegistry.PlannedUpgrade memory plan;
             plan.nextImplementation = address(0x123); // Invalid address with no code
@@ -152,7 +176,15 @@ contract ServiceProviderRegistryTest is MockFVMTest {
     }
 
     // A low or past afterEpoch/delay is clamped up to the minimum rather than reverting
-    function testAnnouncePlannedUpgradeMinimumDelay(bool useDeprecatedMethod) public {
+    function testAnnouncePlannedUpgradeMinimumDelay() public {
+        _testAnnouncePlannedUpgradeMinimumDelay(true);
+    }
+
+    function testAnnounceUpgradePlanMinimumDelay() public {
+        _testAnnouncePlannedUpgradeMinimumDelay(false);
+    }
+
+    function _testAnnouncePlannedUpgradeMinimumDelay(bool useDeprecatedMethod) internal {
         ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
 
         if (useDeprecatedMethod) {

@@ -448,7 +448,15 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
-    function testUpgrade(bool useDeprecatedMethod) public {
+    function testAnnouncePlannedUpgrade() public {
+        _testUpgrade(true);
+    }
+
+    function testAnnounceUpgradePlan() public {
+        _testUpgrade(false);
+    }
+
+    function _testUpgrade(bool useDeprecatedMethod) internal {
         FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
@@ -549,7 +557,15 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(plan.afterEpoch, vm.getBlockNumber() + 1);
     }
 
-    function testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) public {
+    function testAnnouncePlannedUpgradeOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(true);
+    }
+
+    function testAnnounceUpgradePlanOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(false);
+    }
+
+    function _testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) internal {
         FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
