@@ -929,26 +929,17 @@ contract FilecoinWarmStorageService is
                 provingActivationEpoch[dataSetId] = activationEpoch;
                 firstDeadline = activationEpoch + maxProvingPeriod;
             } else {
-                // Reactivation resumes the original proving-period timeline. The PDPVerifier
-                // guarantees a future challenge epoch; derive its canonical deadline without
-                // rebasing payment history or proven-period IDs.
+                // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
+                // period of headroom, keeping the window one period wide.
                 require(
                     challengeEpoch > activationEpoch,
                     Errors.InvalidChallengeEpoch(
                         dataSetId, activationEpoch + 1, activationEpoch + maxProvingPeriod, challengeEpoch
                     )
                 );
-                uint256 period = _provingPeriodForEpoch(activationEpoch, challengeEpoch, maxProvingPeriod);
+                uint256 minimumDeadline = block.number + maxProvingPeriod;
+                uint256 period = _provingPeriodForEpoch(activationEpoch, minimumDeadline, maxProvingPeriod);
                 firstDeadline = _calcPeriodDeadline(activationEpoch, period);
-                if (firstDeadline < block.number + maxProvingPeriod) {
-                    uint256 minimumDeadline = block.number + maxProvingPeriod;
-                    uint256 periodsFromActivation =
-                        (minimumDeadline - activationEpoch + maxProvingPeriod - 1) / maxProvingPeriod;
-                    uint256 firstAllowedDeadline = activationEpoch + periodsFromActivation * maxProvingPeriod;
-                    revert Errors.InvalidChallengeEpoch(
-                        dataSetId, firstAllowedDeadline - challengeWindowSize, firstAllowedDeadline, challengeEpoch
-                    );
-                }
             }
 
             uint256 minWindow = firstDeadline - challengeWindowSize;
