@@ -193,8 +193,8 @@ contract ExampleSponsoredDataSet {
         require(dataSetId != 0, DataSetNotBound());
         (address payer,) = WARM_STORAGE_SERVICE.getDataSetPayerAndRailId(dataSetId);
         require(payer == address(0), DataSetNotDeleted());
-        (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
-        PAYMENTS.withdrawTo(token, BENEFICIARY, funds - lockupCurrent);
+        (,, uint256 available,) = PAYMENTS.getAccountInfoIfSettled(token, address(this));
+        PAYMENTS.withdrawTo(token, BENEFICIARY, available);
     }
 
     /// @notice Migrates available funds to a verified successor data set from the same factory.
@@ -350,8 +350,7 @@ contract ExampleSponsoredDataSet {
 
     function _transferFunds(ExampleSponsoredDataSetFactory factory, ExampleSponsoredDataSet successor) internal {
         IERC20 token = factory.TOKEN();
-        (uint256 funds, uint256 lockupCurrent,,) = PAYMENTS.accounts(token, address(this));
-        uint256 available = funds - lockupCurrent;
+        (,, uint256 available,) = PAYMENTS.getAccountInfoIfSettled(token, address(this));
         if (available > 0) {
             PAYMENTS.withdrawTo(token, address(this), available);
             token.approve(address(PAYMENTS), available);

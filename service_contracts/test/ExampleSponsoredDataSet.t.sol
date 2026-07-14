@@ -9,7 +9,7 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
@@ -447,6 +447,59 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
 
         (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
         assertEq(dstFunds, 10 ** token.decimals() + available);
+    }
+
+    // `_transferFunds` computes `available` from a raw `PAYMENTS.accounts()` read, which is just
+    // the last-settled snapshot -- it doesn't account for lockup that has accrued on an active
+    // (non-terminated) rail since `lockupLastSettledAt`. `migrate()` is specifically reachable
+    // while the source rail is still active (the SP-inactivity branch of
+    // `_checkMigrationConditions` fires with `pdpEndEpoch == 0`), so a long-idle account can have
+    // a materially stale snapshot by the time `migrate()` runs. The migration should still
+    // succeed and move exactly the true (fully-settled) available balance.
+    function testMigrateSettlesStaleLockupBeforeTransferringFunds() public {
+        uint64 sourceNonce = _factoryNonce();
+        uint256 fundAmount = 500_000 * 10 ** token.decimals();
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(fundAmount);
+        uint64 successorNonce = _factoryNonce();
+        (, uint256 dstId) = _setupDataSet(10 ** token.decimals());
+        ExampleSponsoredDataSet successor =
+            ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), successorNonce));
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+
+        // Simulate the SP's rail still actively accruing lockup at a nonzero rate, as it would
+        // while genuinely storing data (normally driven by nextProvingPeriod/addPieces via FWSS;
+        // done directly here since FWSS is the rail operator).
+        uint256 rate = 1 * 10 ** token.decimals();
+        uint256 srcRailId = source.railId();
+        vm.prank(address(fwss));
+        payments.modifyRailPayment(srcRailId, rate, 0);
+        uint256 rateSetEpoch = vm.getBlockNumber();
+
+        // The source goes dark: nobody proves it, and -- crucially -- nobody touches its
+        // Payments account (deposit/withdraw/rail modification), so its lockup is never
+        // re-settled before migrate() is called.
+        _fakeProven(srcId);
+        vm.roll(rateSetEpoch + PDP_INACTIVITY_WINDOW / 2 + 10000);
+        _fakeProven(dstId);
+
+        (uint256 staleFunds, uint256 staleLockup,,) = payments.accounts(IERC20(address(token)), address(source));
+        uint256 elapsed = vm.getBlockNumber() - rateSetEpoch;
+        // True available if the account were settled right now -- the account is solvent
+        // (rate * elapsed is well within staleFunds - staleLockup), this is purely about
+        // `_transferFunds` trusting a stale read rather than the source running out of funds.
+        uint256 trueAvailable = staleFunds - staleLockup - rate * elapsed;
+
+        (uint256 dstFundsBefore,,,) = payments.accounts(IERC20(address(token)), address(successor));
+
+        vm.expectEmit(false, false, false, true);
+        emit ExampleSponsoredDataSet.Migrated(address(successor));
+        source.migrate(factory, sourceNonce, successorNonce);
+
+        (uint256 dstFunds,,,) = payments.accounts(IERC20(address(token)), address(successor));
+        assertEq(dstFunds, dstFundsBefore + trueAvailable);
     }
 
     // -------- Challenged migration --------
