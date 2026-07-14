@@ -635,19 +635,17 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         assertEq(dep, address(0));
     }
 
-    function testCompleteMigrationSuccessorDeleted() public {
+    function testCompleteMigrationRevertsIfSuccessorDeleted() public {
         PropMig memory m = _setupProposedMigration();
         uint256 lastProvenEpoch = pdpVerifier.getDataSetLastProvenEpoch(m.dstId);
         vm.roll(lastProvenEpoch + pdpVerifier.INACTIVITY_WINDOW() + 1);
         vm.prank(serviceProvider);
         pdpVerifier.deleteDataSet(m.dstId, "");
 
-        uint256 balanceBefore = address(this).balance;
+        // Migrated funds must land on a live successor; a deleted successor can never
+        // be completed to, even long after an uneventful challenge period.
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorDeleted.selector);
         m.source.completeMigration(m.migrationId);
-
-        assertEq(address(this).balance, balanceBefore + m.source.MIGRATION_DEPOSIT());
-        (address dep,,,,) = m.source.pendingMigrations(m.migrationId);
-        assertEq(dep, address(0));
     }
 
     function testCompleteMigrationOriginDeleted() public {
@@ -725,6 +723,60 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         assertEq(challenger.balance, source.MIGRATION_DEPOSIT() / 2);
         (address dep,,,,) = source.pendingMigrations(migrationId);
         assertEq(dep, address(0));
+    }
+
+    // Sets up a proposed migration with mismatched pieces between source and successor, then
+    // deletes the successor data set while the migration is still within its challenge period.
+    // The successor is left dormant past the inactivity window before proposeMigration so it can
+    // be deleted immediately afterward (proposeMigration's "proven after finalized" check still
+    // holds, since the last-proven epoch doesn't move while time passes without a proof).
+    function _setupProposedMigrationWithDeletedSuccessor() internal returns (PropMig memory m) {
+        m.sourceNonce = _factoryNonce();
+        (m.source, m.srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        m.successorNonce = _factoryNonce();
+        (, m.dstId) = _setupDataSet(10 ** token.decimals());
+        m.successor = ExampleSponsoredDataSet(LibRLP.computeAddress(address(factory), m.successorNonce));
+        _addPiece(m.source, Cids.CommPv2FromDigest(0, 4, keccak256("piece A")));
+        _addPiece(m.successor, Cids.CommPv2FromDigest(0, 4, keccak256("piece B")));
+        vm.prank(curator);
+        m.source.finalize();
+        vm.prank(curator);
+        m.successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(m.srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(m.dstId);
+
+        vm.roll(vm.getBlockNumber() + pdpVerifier.INACTIVITY_WINDOW() + 1);
+
+        m.migrationId =
+            m.source.proposeMigration{value: m.source.MIGRATION_DEPOSIT()}(factory, m.sourceNonce, m.successorNonce);
+
+        // The successor is now abandoned, so anyone can delete it immediately, hiding the piece
+        // mismatch from challengers before the migration's challenge period (2880 blocks) elapses.
+        pdpVerifier.deleteDataSet(m.dstId, "");
+    }
+
+    function testChallengeMigrationSucceedsIfSuccessorDeletedDuringChallenge() public {
+        PropMig memory m = _setupProposedMigrationWithDeletedSuccessor();
+
+        address challenger = address(0xc1);
+        vm.expectEmit(true, false, false, true);
+        emit ExampleSponsoredDataSet.MigrationInvalid(m.migrationId, 0);
+        vm.prank(challenger);
+        m.source.challengeMigration(m.migrationId, 0);
+
+        assertEq(challenger.balance, m.source.MIGRATION_DEPOSIT() / 2);
+        (address dep,,,,) = m.source.pendingMigrations(m.migrationId);
+        assertEq(dep, address(0));
+    }
+
+    function testCompleteMigrationRevertsIfSuccessorDeletedDuringChallenge() public {
+        PropMig memory m = _setupProposedMigrationWithDeletedSuccessor();
+        vm.roll(vm.getBlockNumber() + m.source.CHALLENGE_PERIOD() + 1);
+
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorDeleted.selector);
+        m.source.completeMigration(m.migrationId);
     }
 
     // -------- Unfinalized migration --------

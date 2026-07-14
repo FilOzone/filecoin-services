@@ -96,6 +96,7 @@ contract ExampleSponsoredDataSet {
     error BurnFailed();
     error SuccessorCuratorMismatch();
     error SuccessorBeneficiaryMismatch();
+    error SuccessorDeleted();
 
     event Migrated(address successor);
     event MigrationProposed(uint256 indexed migrationId, address depositor, uint256 successorDataSetId);
@@ -261,13 +262,21 @@ contract ExampleSponsoredDataSet {
             ExampleSponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
         uint256 dstId = successor.dataSetId();
 
-        bool srcActive = PDP_VERIFIER.getPieceLeafCount(dataSetId, pieceIndex) != 0;
-        bool dstActive = PDP_VERIFIER.getPieceLeafCount(dstId, pieceIndex) != 0;
-        bool mismatch = srcActive != dstActive;
-        if (!mismatch && srcActive) {
-            bytes memory srcCid = PDP_VERIFIER.getPieceCid(dataSetId, pieceIndex).data;
-            bytes memory dstCid = PDP_VERIFIER.getPieceCid(dstId, pieceIndex).data;
-            mismatch = !LibBytes.eq(srcCid, dstCid);
+        bool mismatch;
+        if (!PDP_VERIFIER.dataSetLive(dataSetId) || !PDP_VERIFIER.dataSetLive(dstId)) {
+            // Either side was deleted since the migration was proposed, so equality can no
+            // longer be verified. Treat this as a successful challenge rather than reverting,
+            // since a silent revert here would let the migration complete unchallenged.
+            mismatch = true;
+        } else {
+            uint256 srcLeafCount = PDP_VERIFIER.getPieceLeafCount(dataSetId, pieceIndex);
+            uint256 dstLeafCount = PDP_VERIFIER.getPieceLeafCount(dstId, pieceIndex);
+            mismatch = srcLeafCount != dstLeafCount;
+            if (!mismatch && srcLeafCount != 0) {
+                bytes memory srcCid = PDP_VERIFIER.getPieceCid(dataSetId, pieceIndex).data;
+                bytes memory dstCid = PDP_VERIFIER.getPieceCid(dstId, pieceIndex).data;
+                mismatch = !LibBytes.eq(srcCid, dstCid);
+            }
         }
         require(mismatch, ChallengeFailed());
 
@@ -286,10 +295,12 @@ contract ExampleSponsoredDataSet {
         require(migration.depositor != address(0), MigrationNotFound());
         require(block.number > migration.depositEpoch + CHALLENGE_PERIOD, ChallengePeriodNotExpired());
 
-        delete pendingMigrations[migrationId];
-
         ExampleSponsoredDataSet successor =
             ExampleSponsoredDataSet(LibRLP.computeAddress(address(migration.factory), migration.successorNonce));
+        require(PDP_VERIFIER.dataSetLive(successor.dataSetId()), SuccessorDeleted());
+
+        delete pendingMigrations[migrationId];
+
         _transferFunds(migration.factory, successor);
         emit MigrationCompleted(migrationId, address(successor));
         require(FVMPay.pay(migration.depositor, MIGRATION_DEPOSIT), PayFailed());
@@ -352,9 +363,9 @@ contract ExampleSponsoredDataSet {
         uint256 total = PDP_VERIFIER.getNextPieceId(srcId);
         require(total == PDP_VERIFIER.getNextPieceId(dstId), PieceMismatch());
         for (uint256 i = 0; i < total; i++) {
-            bool srcActive = PDP_VERIFIER.getPieceLeafCount(srcId, i) != 0;
-            require(srcActive == (PDP_VERIFIER.getPieceLeafCount(dstId, i) != 0), PieceMismatch());
-            if (srcActive) {
+            uint256 srcLeafCount = PDP_VERIFIER.getPieceLeafCount(srcId, i);
+            require(srcLeafCount == PDP_VERIFIER.getPieceLeafCount(dstId, i), PieceMismatch());
+            if (srcLeafCount != 0) {
                 require(
                     LibBytes.eq(PDP_VERIFIER.getPieceCid(srcId, i).data, PDP_VERIFIER.getPieceCid(dstId, i).data),
                     PieceMismatch()
