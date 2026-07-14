@@ -60,7 +60,7 @@ contract ExampleSponsoredDataSetFactory {
             SignatureVerificationLib.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
         bytes32 createDataSetHash = hashTypedDataV4(WARM_STORAGE_SERVICE, createDataSetStructHash);
         // Sign CreateDataSet using Nick's Method
-        address createDataSetSigner = ecrecover(createDataSetHash, 0, 0, 0);
+        address createDataSetSigner = ecrecover(createDataSetHash, 27, bytes32(uint256(1)), bytes32(uint256(1)));
         ExampleSponsoredDataSet dataSet = ExampleSponsoredDataSet(LibClone.clone(address(IMPLEMENTATION)));
         dataSet.initialize(createDataSetSigner, curator, beneficiary);
         emit NewSponsoredDataSet(dataSet, curator, payee, beneficiary);

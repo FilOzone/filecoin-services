@@ -12,6 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
+import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
 import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
@@ -117,12 +118,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         (string[] memory spKeys, bytes[] memory spValues) = schema.toCapabilities();
         vm.prank(serviceProvider);
         serviceProviderRegistry.registerProvider{value: 5 ether}(
-            serviceProvider,
-            "Test SP",
-            "Test storage provider",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            spKeys,
-            spValues
+            payee, "Test SP", "Test storage provider", ServiceProviderRegistryStorage.ProductType.PDP, spKeys, spValues
         );
         fwss.addApprovedProvider(1);
 
@@ -147,6 +143,65 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         return keccak256(abi.encodePacked("\x19\x01", _domainSeparator(), structHash));
     }
 
+    function _hashMetadataEntries(string[] memory keys, string[] memory values) internal pure returns (bytes32) {
+        bytes32[] memory entryHashes = new bytes32[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            entryHashes[i] = keccak256(
+                abi.encode(
+                    SignatureVerificationLib.METADATA_ENTRY_TYPEHASH,
+                    keccak256(bytes(keys[i])),
+                    keccak256(bytes(values[i]))
+                )
+            );
+        }
+        return keccak256(abi.encodePacked(entryHashes));
+    }
+
+    function _createDataSetStructHash(address _payee, string[] memory keys, string[] memory values)
+        internal
+        pure
+        returns (bytes32)
+    {
+        return keccak256(
+            abi.encode(
+                SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH,
+                uint256(0),
+                _payee,
+                _hashMetadataEntries(keys, values)
+            )
+        );
+    }
+
+    function _createDataSetSigner(address _payee, string[] memory keys, string[] memory values)
+        internal
+        view
+        returns (address)
+    {
+        bytes32 digest = _hashTypedDataV4(_createDataSetStructHash(_payee, keys, values));
+        return ecrecover(digest, 27, bytes32(uint256(1)), bytes32(uint256(1)));
+    }
+
+    function _assertCreateDataSetSignerAuthorized(
+        ExampleSponsoredDataSet dataSet,
+        string[] memory keys,
+        string[] memory values
+    ) internal {
+        address signer = _createDataSetSigner(payee, keys, values);
+        assertTrue(signer != address(0));
+        assertEq(
+            sessionKeyRegistry.authorizationExpiry(
+                address(dataSet), signer, SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH
+            ),
+            type(uint256).max
+        );
+        assertEq(
+            sessionKeyRegistry.authorizationExpiry(
+                address(dataSet), address(0), SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH
+            ),
+            0
+        );
+    }
+
     function _addPiecesStructHash(Cids.Cid memory piece, uint256 nonce) internal pure returns (bytes32) {
         bytes32 cidHash = keccak256(abi.encode(CID_TYPEHASH, keccak256(piece.data)));
         bytes32 cidsHash = keccak256(abi.encodePacked(cidHash));
@@ -167,12 +222,13 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         string[] memory emptyValues = new string[](0);
 
         dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, _curator, _beneficiary);
+        _assertCreateDataSetSignerAuthorized(dataSet, emptyKeys, emptyValues);
 
         token.approve(address(payments), fundAmount);
         payments.deposit(IERC20(address(token)), address(dataSet), fundAmount);
 
-        bytes memory zeroSig = new bytes(65);
-        bytes memory extraData = abi.encode(address(dataSet), uint256(0), emptyKeys, emptyValues, zeroSig);
+        bytes memory nicksSig = abi.encodePacked(bytes32(uint256(1)), bytes32(uint256(1)), uint8(27));
+        bytes memory extraData = abi.encode(address(dataSet), uint256(0), emptyKeys, emptyValues, nicksSig);
         vm.prank(serviceProvider);
         dataSetId = pdpVerifier.createDataSet{value: CLEANUP_DEPOSIT}(address(fwss), extraData);
 
@@ -269,6 +325,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         string[] memory emptyKeys = new string[](0);
         string[] memory emptyValues = new string[](0);
         ExampleSponsoredDataSet dataSet = factory.initDataSet(payee, emptyKeys, emptyValues, curator, beneficiary);
+        _assertCreateDataSetSignerAuthorized(dataSet, emptyKeys, emptyValues);
         vm.expectRevert(ExampleSponsoredDataSet.DataSetNotBound.selector);
         dataSet.release(IERC20(address(token)));
     }
