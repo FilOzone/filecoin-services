@@ -277,6 +277,12 @@ Datasets with CDN support have three payment rails: a **PDP rail** for storage p
 
 Both CDN rails have `paymentRate = 0` and use fixed lockup for one-time payments based on usage. At dataset creation the cache-miss rail is seeded with **0.3 USDFC** and the CDN rail with **0.7 USDFC**. Both CDN rails use a **5-day lockup period**, which sets the settle window FilBeam has after dataset deletion to claim any remaining fixed lockup.
 
+### Shared bandwidth rail (CDN subscriptions)
+
+The bandwidth rail can be shared across multiple data sets of the same payer so CDN is bought once even when a piece is stored in several data sets (for example multi-copy upload across providers). The `withCDN` metadata value carries an optional group id, and FWSS keys a shared bandwidth rail by `keccak256(abi.encode(payer, groupId))`. When a data set is created with a group id whose shared bandwidth rail already exists and is active, the data set joins it, no second bandwidth rail or 0.7 USDFC lockup is created. The shared `cdnRailId` is the subscription identity: every member data set resolves to the same rail, so the FilBeam controller meters and settles bandwidth once per rail via `settleCDNBandwidthRail(cdnRailId, cdnAmount)`.
+
+The cache-miss rail stays per data set, its payee is the data set's SP, which differs per copy. `cdnRailRefCount` counts the data sets referencing each shared bandwidth rail, and the rail is terminated only when the last member is torn down (via `terminateCDNService`, `dataSetDeleted`, or abandonment). An empty group id keeps the legacy one-rail-per-data-set behavior.
+
 ### Payment Models
 
 PDP and CDN rails use fundamentally different payment models:

@@ -30,6 +30,8 @@ event CDNServiceTerminated(
     address indexed caller, uint256 indexed dataSetId, uint256 cacheMissRailId, uint256 cdnRailId
 );
 
+event CDNSubscriptionJoined(uint256 indexed dataSetId, uint256 indexed cdnRailId, uint256 cacheMissRailId);
+
 event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId);
 
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
@@ -42,12 +44,15 @@ library Rails {
     /// @param payments The FilecoinPayV1 contract instance
     /// @param usdfcTokenAddress The USDFC token used for deposits and operator approvals
     /// @param payer The address of the payer
-    /// @param includeCDN Whether to include fixed CDN/cache-miss lockups in the requirement checks
+    /// @param includeCacheMiss Whether to include the fixed cache-miss lockup in the requirement checks
+    /// @param includeBandwidth Whether to include the fixed CDN bandwidth lockup. False when the data set
+    ///        joins an existing shared bandwidth rail, the bandwidth lockup was paid by the first member.
     function validatePayerOperatorApprovalAndFunds(
         FilecoinPayV1 payments,
         IERC20 usdfcTokenAddress,
         address payer,
-        bool includeCDN
+        bool includeCacheMiss,
+        bool includeBandwidth
     ) internal view {
         // Required capacity: lifecycle reserve plus per-dataset fee lockup at the default period.
         // Multiply-first preserves the exact monthly value for cleaner error messages; slightly
@@ -56,9 +61,13 @@ library Rails {
         uint256 requiredLockup =
             (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
 
-        // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
-        if (includeCDN) {
-            requiredLockup += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
+        // The cache-miss rail is always per data set (its payee is this data set's SP).
+        if (includeCacheMiss) {
+            requiredLockup += DEFAULT_CACHE_MISS_LOCKUP_AMOUNT;
+        }
+        // The bandwidth rail is shared across a subscription, only its first member locks it.
+        if (includeBandwidth) {
+            requiredLockup += DEFAULT_CDN_LOCKUP_AMOUNT;
         }
 
         // Check that payer has sufficient available funds
@@ -99,18 +108,40 @@ library Rails {
         );
     }
 
+    /// @notice Creates the PDP rail and, when CDN is enabled, a per-data-set cache-miss rail plus a
+    ///         CDN bandwidth rail.
+    /// @dev The bandwidth rail (payer -> FilBeam beneficiary) is shared across a CDN subscription:
+    ///      when `cdnGroupKey` is non-zero and an active rail already exists for that key, the new
+    ///      data set joins it instead of creating (and paying for) a second one. The cache-miss rail
+    ///      is always per data set because its payee is this data set's SP, which differs per copy.
+    ///      `cdnGroupRail` maps a subscription key to its shared bandwidth rail, `cdnRailRefCount`
+    ///      counts the data sets referencing each bandwidth rail so it is torn down only at zero.
     function createRails(
         FilecoinPayV1 payments,
         uint256 dataSetId,
         IERC20 usdfcTokenAddress,
         address payer,
         address payee,
-        address filBeamBeneficiaryAddress
+        address filBeamBeneficiaryAddress,
+        bytes32 cdnGroupKey,
+        mapping(bytes32 cdnGroupKey => uint256 cdnRailId) storage cdnGroupRail,
+        mapping(uint256 cdnRailId => uint256 refCount) storage cdnRailRefCount
     ) public returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
         bool hasCDN = filBeamBeneficiaryAddress != address(0);
-        // Validate payer has sufficient funds and operator approvals to cover the required lockup
-        // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, usdfcTokenAddress, payer, hasCDN);
+
+        // Resolve whether an active shared bandwidth rail can be reused before validating funds,
+        // so a joiner is not asked to lock the bandwidth amount again.
+        uint256 sharedCdnRailId = 0;
+        if (hasCDN && cdnGroupKey != bytes32(0)) {
+            uint256 existing = cdnGroupRail[cdnGroupKey];
+            if (existing != 0 && _railIsActive(payments, existing)) {
+                sharedCdnRailId = existing;
+            }
+        }
+        bool createBandwidthRail = hasCDN && sharedCdnRailId == 0;
+
+        // Validate payer has sufficient funds and operator approvals to cover the required lockup.
+        validatePayerOperatorApprovalAndFunds(payments, usdfcTokenAddress, payer, hasCDN, createBandwidthRail);
 
         pdpRailId = payments.createRail(
             usdfcTokenAddress, // token address
@@ -138,31 +169,59 @@ library Rails {
             );
             payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
-            cdnRailId = payments.createRail(
-                usdfcTokenAddress, // token address
-                payer, // from (payer)
-                filBeamBeneficiaryAddress, // to FilBeam beneficiary
-                address(0), // no validator
-                0, // no service commission
-                address(this) // controller
-            );
-            payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
+            if (createBandwidthRail) {
+                cdnRailId = payments.createRail(
+                    usdfcTokenAddress, // token address
+                    payer, // from (payer)
+                    filBeamBeneficiaryAddress, // to FilBeam beneficiary
+                    address(0), // no validator
+                    0, // no service commission
+                    address(this) // controller
+                );
+                payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, DEFAULT_CDN_LOCKUP_AMOUNT);
 
-            emit CDNPaymentRailsToppedUp(
-                dataSetId,
-                DEFAULT_CDN_LOCKUP_AMOUNT,
-                DEFAULT_CDN_LOCKUP_AMOUNT,
-                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
-                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT
-            );
+                // Register the freshly created rail as the subscription's shared bandwidth rail.
+                if (cdnGroupKey != bytes32(0)) {
+                    cdnGroupRail[cdnGroupKey] = cdnRailId;
+                }
+
+                emit CDNPaymentRailsToppedUp(
+                    dataSetId,
+                    DEFAULT_CDN_LOCKUP_AMOUNT,
+                    DEFAULT_CDN_LOCKUP_AMOUNT,
+                    DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
+                    DEFAULT_CACHE_MISS_LOCKUP_AMOUNT
+                );
+            } else {
+                // Join the existing shared bandwidth rail, no second bandwidth lockup is charged.
+                cdnRailId = sharedCdnRailId;
+                emit CDNSubscriptionJoined(dataSetId, cdnRailId, cacheMissRailId);
+            }
+
+            cdnRailRefCount[cdnRailId] += 1;
         }
     }
 
+    /// @notice Returns true if a rail exists and has not been terminated (endEpoch == 0).
+    /// @dev getRail reverts on a finalized (zeroed) rail, treated as inactive.
+    function _railIsActive(FilecoinPayV1 payments, uint256 railId) internal view returns (bool) {
+        try payments.getRail(railId) returns (FilecoinPayV1.RailView memory rail) {
+            return rail.endEpoch == 0;
+        } catch {
+            return false;
+        }
+    }
+
+    /// @notice Terminates a data set's cache-miss rail and, when supplied, its shared bandwidth rail.
+    /// @dev The caller passes `cdnRailId == 0` when the shared bandwidth rail is still referenced by
+    ///      sibling data sets, so only the last member tears the bandwidth rail down.
     function terminateCDNRails(FilecoinPayV1 payments, uint256 dataSetId, uint256 cacheMissRailId, uint256 cdnRailId)
         public
     {
         try payments.terminateRail(cacheMissRailId) {} catch {}
-        try payments.terminateRail(cdnRailId) {} catch {}
+        if (cdnRailId != 0) {
+            try payments.terminateRail(cdnRailId) {} catch {}
+        }
         emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
     }
 
@@ -184,9 +243,15 @@ library Rails {
         payments.settleRail(pdpRailId, block.number);
         payments.modifyRailLockup(pdpRailId, 0, 0);
 
-        if (cdnRailId != 0) {
+        // Cache-miss is per data set, the (possibly shared) bandwidth rail is supplied non-zero only
+        // when this is its last referencing data set.
+        if (cacheMissRailId != 0) {
             _teardownCDNRail(payments, cacheMissRailId);
+        }
+        if (cdnRailId != 0) {
             _teardownCDNRail(payments, cdnRailId);
+        }
+        if (cacheMissRailId != 0 || cdnRailId != 0) {
             emit CDNServiceTerminated(msg.sender, dataSetId, cacheMissRailId, cdnRailId);
         }
 

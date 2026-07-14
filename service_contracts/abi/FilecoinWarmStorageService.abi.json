@@ -655,6 +655,24 @@
   },
   {
     "type": "function",
+    "name": "settleCDNBandwidthRail",
+    "inputs": [
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cdnAmount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "settleFilBeamPaymentRails",
     "inputs": [
       {
@@ -2078,6 +2096,17 @@
         "name": "slot",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownCDNBandwidthRail",
+    "inputs": [
+      {
+        "name": "cdnRailId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ]
   },

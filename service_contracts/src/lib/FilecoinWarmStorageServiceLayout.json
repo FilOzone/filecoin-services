@@ -620,5 +620,47 @@
         }
       }
     }
+  },
+  {
+    "label": "cdnGroupRail",
+    "slot": "23",
+    "offset": 0,
+    "type": "mapping(bytes32 => uint256)",
+    "typeDetails": {
+      "label": "mapping(bytes32 => uint256)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "bytes32",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      }
+    }
+  },
+  {
+    "label": "cdnRailRefCount",
+    "slot": "24",
+    "offset": 0,
+    "type": "mapping(uint256 => uint256)",
+    "typeDetails": {
+      "label": "mapping(uint256 => uint256)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      }
+    }
   }
 ]
