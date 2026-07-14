@@ -322,6 +322,7 @@ contract ExampleSponsoredDataSet {
     {
         require(isFinalized(), NotFinalized());
         require(successor.isFinalized(), SuccessorNotFinalized());
+        require(successor.BENEFICIARY() == BENEFICIARY, SuccessorBeneficiaryMismatch());
 
         require(dataSetId != 0, DataSetNotBound());
         FilecoinWarmStorageService.DataSetInfoView memory info = WARM_STORAGE_SERVICE.getDataSet(dataSetId);

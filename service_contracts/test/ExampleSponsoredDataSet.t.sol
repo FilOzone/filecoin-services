@@ -422,6 +422,25 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         source.migrate(factory, sourceNonce, successorNonce);
     }
 
+    function testMigrateRevertsIfSuccessorBeneficiaryMismatch() public {
+        uint64 sourceNonce = _factoryNonce();
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        address otherBeneficiary = address(0xbb);
+        uint64 successorNonce = _factoryNonce();
+        (ExampleSponsoredDataSet successor, uint256 dstId) =
+            _setupDataSetWith(10 ** token.decimals(), curator, otherBeneficiary);
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorBeneficiaryMismatch.selector);
+        source.migrate(factory, sourceNonce, successorNonce);
+    }
+
     function testMigrate() public {
         uint64 sourceNonce = _factoryNonce();
         (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
@@ -625,6 +644,26 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         fwss.terminateService(srcId, "");
         uint256 deposit = source.MIGRATION_DEPOSIT();
         vm.expectRevert(ExampleSponsoredDataSet.SuccessorNotProven.selector);
+        source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
+    }
+
+    function testProposeMigrationRevertsIfSuccessorBeneficiaryMismatch() public {
+        uint64 sourceNonce = _factoryNonce();
+        (ExampleSponsoredDataSet source, uint256 srcId) = _setupDataSet(100 * 10 ** token.decimals());
+        address otherBeneficiary = address(0xbb);
+        uint64 successorNonce = _factoryNonce();
+        (ExampleSponsoredDataSet successor, uint256 dstId) =
+            _setupDataSetWith(10 ** token.decimals(), curator, otherBeneficiary);
+        vm.prank(curator);
+        source.finalize();
+        vm.prank(curator);
+        successor.finalize();
+        vm.prank(serviceProvider);
+        fwss.terminateService(srcId, "");
+        vm.roll(vm.getBlockNumber() + 1);
+        _fakeProven(dstId);
+        uint256 deposit = source.MIGRATION_DEPOSIT();
+        vm.expectRevert(ExampleSponsoredDataSet.SuccessorBeneficiaryMismatch.selector);
         source.proposeMigration{value: deposit}(factory, sourceNonce, successorNonce);
     }
 
