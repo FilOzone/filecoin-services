@@ -148,11 +148,6 @@ Record validation that proves the planned upgrade works against the full contrac
 
 | Upgrade Type | Minimum Notice | Recommended |
 |---|---:|---|
-| Routine | `2880` epochs (~24h) | 1-2 days |
-| Breaking change | `20160` epochs (~1 week) | 1-2 weeks |
-
-| Upgrade Type | Minimum Notice | Recommended |
-|---|---:|---|
 | Calibration | `240` epochs (~2h) | ~1 day |
 | Mainnet Routine | `2880` epochs (~24h) | 1-2 days |
 | Mainnet Breaking change | `20160` epochs (~1 week) | 1-2 weeks |
