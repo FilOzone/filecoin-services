@@ -155,7 +155,7 @@ Record validation that proves the planned upgrade works against the full contrac
 Select a positive operational delay; the contract's one-epoch floor is an emergency safety bound, not the routine notice policy.
 
 ```bash
-export UPGRADE_DELAY_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for breaking changes
+export UPGRADE_DELAY_EPOCHS="<ENTER_VALUE_FROM_TABLE_ABOVE>"
 export ANNOUNCEMENT_MODE=delay
 echo "Requested upgrade delay: $UPGRADE_DELAY_EPOCHS epochs"
 ```
@@ -392,7 +392,7 @@ export NEW_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
 For the normal delay-based flow:
 
 ```bash
-export UPGRADE_DELAY_EPOCHS=240 # use a longer window if desired
+export UPGRADE_DELAY_EPOCHS="<ENTER_VALUE_FROM_TABLE_ABOVE>"
 export ANNOUNCEMENT_MODE=delay
 unset AFTER_EPOCH
 ```
@@ -560,7 +560,7 @@ export NEW_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
 For the normal delay-based flow:
 
 ```bash
-export UPGRADE_DELAY_EPOCHS=2880 # use 20160 for breaking changes
+export UPGRADE_DELAY_EPOCHS="<ENTER_VALUE_FROM_TABLE_ABOVE>"
 export ANNOUNCEMENT_MODE=delay
 unset AFTER_EPOCH
 ```
