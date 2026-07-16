@@ -378,7 +378,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 ### Phase 3: Calibnet Announce + Execute
 
 **Announce**
-- [ ] Set the Calibnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
+- [ ] Update the Calibnet row in the upgrade schedule table with the requested delay. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata
 
@@ -546,7 +546,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] Technical owner records Mainnet go/no-go after reviewing Calibnet evidence, rollback status, dependency targets, and cross-repo status
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
-- [ ] Set the Mainnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
+- [ ] Update the Mainnet row in the upgrade schedule table with the requested delay. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
