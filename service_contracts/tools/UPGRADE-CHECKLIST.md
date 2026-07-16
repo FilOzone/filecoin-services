@@ -49,7 +49,7 @@ Field ownership for duplicated rollout data:
 
 ### Upgrade Schedule
 
-| Network | Announcement mode (v1.3.1 bootstrap only) | Requested delay | Actual `AFTER_EPOCH` | Status |
+| Network | Announcement mode (v1.3.1 bootstrap only) | Requested delay epochs | Actual `AFTER_EPOCH` | Status |
 |---|---|---:|---:|---|
 | Calibnet | `TBD` | `TBD` | `TBD` | Pending |
 | Mainnet | `TBD` | `TBD` | `TBD` | Pending |
@@ -151,7 +151,13 @@ Record validation that proves the planned upgrade works against the full contrac
 | Routine | `2880` epochs (~24h) | 1-2 days |
 | Breaking change | `20160` epochs (~1 week) | 1-2 weeks |
 
-Calibnet can use a shorter window for rehearsal and validation, but use enough time for signers to coordinate. Select a positive operational delay; the contract's one-epoch floor is an emergency safety bound, not the routine notice policy.
+| Upgrade Type | Minimum Notice | Recommended |
+|---|---:|---|
+| Calibration | `240` epochs (~2h) | ~1 day |
+| Mainnet Routine | `2880` epochs (~24h) | 1-2 days |
+| Mainnet Breaking change | `20160` epochs (~1 week) | 1-2 weeks |
+
+Select a positive operational delay; the contract's one-epoch floor is an emergency safety bound, not the routine notice policy.
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for breaking changes
@@ -379,7 +385,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 **Announce**
 - [ ] Set the Calibnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
-- [ ] Generate announce calldata and submit/sign/execute in Safe UI:
+- [ ] Generate announce calldata
 
 ```bash
 cd service_contracts/tools
