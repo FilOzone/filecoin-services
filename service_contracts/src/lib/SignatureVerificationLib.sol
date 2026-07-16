@@ -292,6 +292,11 @@ library SignatureVerificationLib {
         }
     }
 
+    /// @notice Gas ceiling for the authorizer subcall.
+    /// @dev Bounds what an untrusted authorizer can burn on the caller's behalf. EIP-150 forwards at
+    ///      most 63/64 of the remaining gas, so this only binds when the caller supplies more.
+    uint256 internal constant AUTHORIZER_GAS_LIMIT = 150_000_000;
+
     /// @notice Delegates the authorization decision for an operation to the data set's authorizer.
     /// @dev Called only when an authorizer is attached: it is the sole gate. FWSS forwards the raw signature
     ///      plus the operation's raw data (`operationData`) and lets the authorizer recover and decide.
@@ -306,7 +311,9 @@ library SignatureVerificationLib {
         bytes calldata operationData
     ) public view returns (address) {
         require(
-            IDataSetAuthorizer(authorizer).isAuthorized(dataSetId, payer, operation, digest, signature, operationData),
+            IDataSetAuthorizer(authorizer).isAuthorized{gas: AUTHORIZER_GAS_LIMIT}(
+                dataSetId, payer, operation, digest, signature, operationData
+            ),
             Errors.Unauthorized(payer, operation, digest, signature)
         );
         return payer;
