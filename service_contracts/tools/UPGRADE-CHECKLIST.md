@@ -415,41 +415,11 @@ CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
-- [ ] After the Safe transaction executes, verify and read back the pending plan:
+- [ ] After the Safe transaction executes, set the Calibnet verification inputs, then run the [shared pending-plan verification](#shared-pending-plan-verification):
 
 ```bash
 export ANNOUNCE_TX_HASH="0x..." # Safe execution transaction hash
-
-CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
-  "$FWSS_PROXY_ADDRESS" \
-  'viewContractAddress()(address)')
-
-UPGRADE_PLAN=($(cast call --rpc-url "$ETH_RPC_URL" \
-  "$CURRENT_VIEW" \
-  'nextUpgrade()(address,uint96)'))
-
-OBSERVED_IMPL=${UPGRADE_PLAN[0]}
-OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
-echo "Planned implementation: $OBSERVED_IMPL (expected $CALI_NEW_IMPL)"
-echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
-
-if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
-  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
-else
-  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
-  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
-  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
-  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
-fi
-
-if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$CALI_NEW_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
-  echo "ERROR: announced implementation mismatch"
-  exit 1
-fi
-if [ "$OBSERVED_AFTER_EPOCH" -ne "$EXPECTED_AFTER_EPOCH" ]; then
-  echo "ERROR: afterEpoch mismatch ($OBSERVED_AFTER_EPOCH != $EXPECTED_AFTER_EPOCH)"
-  exit 1
-fi
+export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
 ```
 
 - [ ] Record the Calibnet announce tx and observed `afterEpoch` in the schedule and Run Log
@@ -583,41 +553,11 @@ CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
 - [ ] In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`, and data to the printed calldata
-- [ ] After the Safe transaction executes, verify and read back the pending plan:
+- [ ] After the Safe transaction executes, set the Mainnet verification inputs, then run the [shared pending-plan verification](#shared-pending-plan-verification):
 
 ```bash
 export ANNOUNCE_TX_HASH="0x..." # Safe execution transaction hash
-
-CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
-  "$FWSS_PROXY_ADDRESS" \
-  'viewContractAddress()(address)')
-
-UPGRADE_PLAN=($(cast call --rpc-url "$ETH_RPC_URL" \
-  "$CURRENT_VIEW" \
-  'nextUpgrade()(address,uint96)'))
-
-OBSERVED_IMPL=${UPGRADE_PLAN[0]}
-OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
-echo "Planned implementation: $OBSERVED_IMPL (expected $MAIN_NEW_IMPL)"
-echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
-
-if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
-  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
-else
-  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
-  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
-  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
-  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
-fi
-
-if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$MAIN_NEW_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
-  echo "ERROR: announced implementation mismatch"
-  exit 1
-fi
-if [ "$OBSERVED_AFTER_EPOCH" -ne "$EXPECTED_AFTER_EPOCH" ]; then
-  echo "ERROR: afterEpoch mismatch ($OBSERVED_AFTER_EPOCH != $EXPECTED_AFTER_EPOCH)"
-  exit 1
-fi
+export EXPECTED_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
 ```
 
 - [ ] Record the Mainnet announce tx and observed `afterEpoch` in the schedule and Run Log
@@ -705,6 +645,43 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 - [ ] Verify the proxy on Blockscout
 - [ ] Update the GitHub pre-release Mainnet rollout status with execute tx, checks, and smoke/E2E evidence
+
+### Shared Pending-Plan Verification
+
+Run this after each Safe announcement transaction. Keep the network's `ETH_RPC_URL`, `FWSS_PROXY_ADDRESS`, `ANNOUNCEMENT_MODE`, and mode-specific `AFTER_EPOCH` or `UPGRADE_DELAY_EPOCHS` values in the environment, and set `ANNOUNCE_TX_HASH` and `EXPECTED_FWSS_IMPLEMENTATION_ADDRESS` in the relevant network phase above.
+
+```bash
+CURRENT_VIEW=$(cast call --rpc-url "$ETH_RPC_URL" \
+  "$FWSS_PROXY_ADDRESS" \
+  'viewContractAddress()(address)')
+
+UPGRADE_PLAN=($(cast call --rpc-url "$ETH_RPC_URL" \
+  "$CURRENT_VIEW" \
+  'nextUpgrade()(address,uint96)'))
+
+OBSERVED_IMPL=${UPGRADE_PLAN[0]}
+OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
+echo "Planned implementation: $OBSERVED_IMPL (expected $EXPECTED_FWSS_IMPLEMENTATION_ADDRESS)"
+echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
+
+if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
+  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
+else
+  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
+  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
+  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
+  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
+fi
+
+if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$EXPECTED_FWSS_IMPLEMENTATION_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
+  echo "ERROR: announced implementation mismatch"
+  exit 1
+fi
+if [ "$OBSERVED_AFTER_EPOCH" -ne "$EXPECTED_AFTER_EPOCH" ]; then
+  echo "ERROR: afterEpoch mismatch ($OBSERVED_AFTER_EPOCH != $EXPECTED_AFTER_EPOCH)"
+  exit 1
+fi
+```
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
