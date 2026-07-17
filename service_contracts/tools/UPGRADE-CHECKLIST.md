@@ -708,7 +708,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
-- [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the temporary announcement-mode schedule column and bootstrap clauses, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
+- [ ] Complete the post-v1.3.1 FWSS legacy-path cleanup tracked in [#554](https://github.com/FilOzone/filecoin-services/issues/554).
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
