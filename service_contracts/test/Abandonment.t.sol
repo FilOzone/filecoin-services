@@ -103,10 +103,7 @@ contract AbandonmentTest is MockFVMTest {
         );
         MyERC1967Proxy fwssProxy = new MyERC1967Proxy(
             address(fwssImpl),
-            abi.encodeCall(
-                FilecoinWarmStorageService.initialize,
-                (uint64(2880), uint256(60), filBeamController, "Test FWSS", "Abandonment test service")
-            )
+            abi.encodeCall(FilecoinWarmStorageService.initialize, (uint64(2880), uint256(60), filBeamController))
         );
         fwss = FilecoinWarmStorageService(address(fwssProxy));
 

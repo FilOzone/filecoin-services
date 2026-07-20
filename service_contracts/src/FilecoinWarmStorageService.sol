@@ -14,6 +14,7 @@ import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/crypt
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "./Errors.sol";
+import {IFilecoinServiceMetadata} from "./IFilecoinServiceMetadata.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
@@ -69,6 +70,7 @@ uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 256; // 256 bytes
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
+    IFilecoinServiceMetadata,
     PDPListener,
     IValidator,
     Initializable,
@@ -79,6 +81,9 @@ contract FilecoinWarmStorageService is
 {
     // Version tracking
     string public constant VERSION = "1.3.0";
+    string private constant SERVICE_NAME = "Filecoin Warm Storage Service";
+    string private constant SERVICE_DESCRIPTION =
+        "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
 
     using Rails for FilecoinPayV1;
 
@@ -363,20 +368,15 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Initialize the contract with PDP proving period parameters
+     * @notice Initialize the contract with PDP proving period parameters.
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      * @param _filBeamControllerAddress Address authorized to terminate CDN services
-     * @param _name Service name (max 256 characters, cannot be empty)
-     * @param _description Service description (max 256 characters, cannot be empty)
      */
-    function initialize(
-        uint64 _maxProvingPeriod,
-        uint256 _challengeWindowSize,
-        address _filBeamControllerAddress,
-        string memory _name,
-        string memory _description
-    ) public initializer {
+    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize, address _filBeamControllerAddress)
+        public
+        initializer
+    {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
@@ -390,19 +390,18 @@ contract FilecoinWarmStorageService is
         require(_filBeamControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
         filBeamControllerAddress = _filBeamControllerAddress;
 
-        uint256 serviceNameLength = bytes(_name).length;
-        require(serviceNameLength > 0, Errors.InvalidServiceNameLength(serviceNameLength));
-        require(serviceNameLength <= 256, Errors.InvalidServiceNameLength(serviceNameLength));
-
-        uint256 serviceDescriptionLength = bytes(_description).length;
-        require(serviceDescriptionLength > 0, Errors.InvalidServiceDescriptionLength(serviceDescriptionLength));
-        require(serviceDescriptionLength <= 256, Errors.InvalidServiceDescriptionLength(serviceDescriptionLength));
-
-        // Emit the FilecoinServiceDeployed event
-        emit FilecoinServiceDeployed(_name, _description);
+        emit FilecoinServiceDeployed(SERVICE_NAME, SERVICE_DESCRIPTION);
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
+    }
+
+    function name() external pure override returns (string memory) {
+        return SERVICE_NAME;
+    }
+
+    function description() external pure override returns (string memory) {
+        return SERVICE_DESCRIPTION;
     }
 
     function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {

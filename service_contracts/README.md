@@ -7,6 +7,7 @@ This directory contains the smart contracts for different Filecoin services usin
 - `src/` - Contract source files
   - `FilecoinWarmStorageService.sol` - A service contract with [PDP](https://github.com/FilOzone/pdp) (Proof of Data Possession) and payment integration
   - `FilecoinWarmStorageServiceStateView.sol` - View contract for reading `FilecoinWarmStorageService` with `eth_call`.
+  - `IFilecoinServiceMetadata.sol` - Minimal service identity interface (`name`, `description`)
   - `src/lib` - Library source files
     - `FilecoinWarmStorageServiceLayout.sol` - Constants conveying the storage layout of `FilecoinWarmStorageService`
     - `FilecoinWarmStorageServiceStateInternalLibrary.sol` - `internal` library for embedding logic to read `FilecoinWarmStorageService`
