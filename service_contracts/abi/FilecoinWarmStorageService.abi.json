@@ -2009,17 +2009,6 @@
   },
   {
     "type": "error",
-    "name": "RailNotAssociated",
-    "inputs": [
-      {
-        "name": "railId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "RailNotFullySettled",
     "inputs": [
       {

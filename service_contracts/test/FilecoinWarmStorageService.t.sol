@@ -6524,14 +6524,17 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     }
 
     /**
-     * @notice Test: Invalid rail ID - should revert
+     * @notice Test: Invalid rail ID - settles in the payer's favor instead of reverting.
      */
     function testValidatePayment_InvalidRailId() public {
         uint256 invalidRailId = 999999;
 
         vm.prank(address(payments));
-        vm.expectRevert(abi.encodeWithSelector(Errors.RailNotAssociated.selector, invalidRailId));
-        pdpServiceWithPayments.validatePayment(invalidRailId, 1000e6, 100, 200, 0);
+        IValidator.ValidationResult memory result =
+            pdpServiceWithPayments.validatePayment(invalidRailId, 1000e6, 100, 200, 0);
+
+        assertEq(result.modifiedAmount, 0, "unassociated rail should pay nothing");
+        assertEq(result.settleUpto, 200, "unassociated rail should settle to toEpoch");
     }
 
     /**
