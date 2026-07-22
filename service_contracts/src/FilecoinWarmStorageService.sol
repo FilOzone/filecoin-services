@@ -937,19 +937,33 @@ contract FilecoinWarmStorageService is
         uint96 pending = info.pendingOneTimePayments;
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
-        // initialize state for new data set
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
-            uint256 firstDeadline = block.number + maxProvingPeriod;
+            uint256 firstDeadline;
+            if (activationEpoch == 0) {
+                // First activation establishes the lifetime proving-period origin.
+                activationEpoch = block.number;
+                provingActivationEpoch[dataSetId] = activationEpoch;
+                firstDeadline = activationEpoch + maxProvingPeriod;
+            } else {
+                // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
+                // period of headroom, keeping the window one period wide.
+                require(
+                    challengeEpoch > activationEpoch,
+                    Errors.InvalidChallengeEpoch(
+                        dataSetId, activationEpoch + 1, activationEpoch + maxProvingPeriod, challengeEpoch
+                    )
+                );
+                uint256 minimumDeadline = block.number + maxProvingPeriod;
+                uint256 period = _provingPeriodForEpoch(activationEpoch, minimumDeadline, maxProvingPeriod);
+                firstDeadline = _calcPeriodDeadline(activationEpoch, period);
+            }
+
             uint256 minWindow = firstDeadline - challengeWindowSize;
-            uint256 maxWindow = firstDeadline;
-            if (challengeEpoch < minWindow || challengeEpoch > maxWindow) {
-                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
+            if (challengeEpoch < minWindow || challengeEpoch > firstDeadline) {
+                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, firstDeadline, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
-
-            // Initialize the activation epoch when proving first starts
-            // This marks when the data set became active for proving
-            provingActivationEpoch[dataSetId] = block.number;
 
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
@@ -1498,19 +1512,25 @@ contract FilecoinWarmStorageService is
         uint256 toEpoch,
         uint256 /* rate */
     ) external view override returns (ValidationResult memory result) {
-        // Get the data set ID associated with this rail
+        // Get the data set ID associated with this rail. A zero here means the rail's data set
+        // was abandoned and already torn down by dataSetDeleted -- the only way to release its
+        // remaining lockup, since the data set no longer exists to arbitrate proving -- or the
+        // rail was never one of ours to begin with. Either way, settle in the payer's favor.
         uint256 dataSetId = railToDataSet[railId];
-        require(dataSetId != 0, Errors.RailNotAssociated(railId));
+        if (dataSetId == 0) {
+            return
+                ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Rail not associated with a data set"});
+        }
 
         // Calculate the total number of epochs in the requested range
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // No proving activity: pay nothing, advance settleUpto = toEpoch so settleRail can
-        // discharge lockup. Hit by never-activated data sets and by the finalize leg of
-        // abandonment (which wipes activationEpoch between settles to unblock the open period)
+        // No active proving period covers epochs through the activation boundary. Advance
+        // settlement with zero payment so FilecoinPay can discharge pre-activation rate
+        // segments, including segments recorded before the first nextProvingPeriod call.
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
-        if (activationEpoch == 0) {
+        if (activationEpoch == 0 || toEpoch <= activationEpoch) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
 

@@ -96,7 +96,7 @@ Only the contract owner can update pricing, by upgrading the contract.
 
 Rate recalculation timing differs for additions and deletions due to proving semantics:
 
-- **Adding pieces**: The rate updates immediately when `piecesAdded()` is called. The client begins paying for new pieces right away, even though those pieces won't be included in proof challenges until the next proving period. This fail-fast behavior protects providers: if the client lacks sufficient funds for the new lockup, the transaction fails before the provider commits resources.
+- **Adding pieces**: The rate and corresponding lockup requirement update immediately when `piecesAdded()` is called, even before proving activation. This fail-fast behavior protects providers by rejecting additions the client cannot fund before the provider commits resources. Streaming storage payment becomes eligible only after the first `nextProvingPeriod()` activates proving; pre-activation epochs settle with zero payment. One-time lifecycle fees remain payable before activation.
 
 - **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized. This deferral is required because proofs may challenge any portion of the current data set during the proving period—the provider must continue storing and proving all existing data until the period ends.
 
@@ -104,11 +104,11 @@ Rate recalculation timing differs for additions and deletions due to proving sem
 
 During each proving period, proofs are generated over a fixed data set. The prover must maintain the complete data set because challenges can target any leaf:
 
-- **Additions expand the proof space** but don't affect existing challenges. New pieces simply won't be challenged until the next period. Payment starts immediately because storage resources are committed.
+- **Additions expand the proof space** but don't affect existing challenges. Before activation they update the rate and lockup without earning streaming payment. After activation the new rate becomes payable immediately, even though the added pieces won't be challenged until the next period.
 
 - **Deletions would shrink the proof space** mid-period, potentially invalidating challenges. The data must remain intact until `nextProvingPeriod()` finalizes the removal. Only then does the rate decrease.
 
-This ensures proof integrity while providing fair payment semantics: you pay when you add, and continue paying for deletions until the proving period boundary.
+This ensures proof integrity while providing fair payment semantics: additions reserve funding immediately and become payable once proving is active, while deletions remain payable until the proving period boundary.
 
 ### Rate Changes After Termination
 
@@ -147,6 +147,26 @@ Deposits extend the duration without changing the rate (unless adding pieces tri
 **Delinquency**: When a client's funded epoch falls below the current epoch, the payment rail can no longer be settled—no further payments flow to the provider. The provider may terminate the service to claim payment from the locked funds, guaranteeing up to 30 days of payment from the last funded epoch.
 
 ## Settlement and Payment Validation
+
+### Proving Activation Lifecycle
+
+Data set creation does not activate proving. Client tooling typically uses PDPVerifier's combined create-and-add operation. PDPVerifier delivers that operation to FWSS as separate `dataSetCreated()` and `piecesAdded()` callbacks. A data set may receive one or more such piece callbacks before the service provider's first `nextProvingPeriod()` call.
+
+The data set may also be terminated before proving activates. The first `nextProvingPeriod()` can still activate proving while the PDP rail's termination window remains open. A callback that modifies payment state must execute strictly before `pdpEndEpoch`; at `pdpEndEpoch`, activation succeeds only when no pending fee or scheduled removal requires a payment update. Consent-based immediate termination can therefore coincide with activation in the same epoch when no payment update is needed.
+
+The first `nextProvingPeriod()` sets `provingActivationEpoch` to the current epoch `A` and schedules the first deadline. `A` is a boundary marker, not a billable epoch; the first billable proving epoch is `A+1`.
+
+If all pieces are removed, PDPVerifier reports `NO_CHALLENGE_SCHEDULED` and FWSS suspends proving by clearing the current deadline. The original activation epoch remains the lifetime origin for proving-period deadlines, proof bitmap indices, and payment validation. Adding pieces later does not rebase this history.
+
+For an inactive data set with a prior activation, `nextPDPChallengeWindowStart()` returns a challenge window on the original timeline. Given the current epoch `C`, it chooses the earliest canonical deadline `D = A + n*M` with `D >= C+M`, and returns `D-W`, where `W` is the challenge-window size. The subsequent `nextProvingPeriod()` independently derives the earliest valid deadline at execution, accepts only a challenge epoch in its window, and preserves `A`.
+
+Periods elapsed while proving is suspended have no proof and settle with zero payment once their deadlines pass. Proof bits recorded before suspension retain their original period IDs and remain payable. Pieces added while proving is suspended update the rate and lockup immediately, but epochs before the selected reactivation period have no proof and therefore earn no streaming payment.
+
+Because the view call and transaction use their respective current epochs, the returned window can become stale before inclusion if the earliest valid deadline advances. A caller receiving `InvalidChallengeEpoch` must query `nextPDPChallengeWindowStart()` again and retry. The challenge must also satisfy PDPVerifier's normal minimum and maximum delay rules; the current mainnet and calibnet parameters provide ample headroom.
+
+Before activation, `piecesAdded()` still updates the Filecoin Pay rate and lockup requirement. This enforces funding before the provider commits storage, but does not make pre-activation epochs payable. When Filecoin Pay later presents a rate segment ending at or before `A`, `validatePayment()` advances `settleUpto` through the segment with zero payment. Segments crossing `A` exclude their pre-activation epochs from payment. This also lets terminated, never-activated data sets release their streaming lockup cleanly.
+
+One-time lifecycle fees are independent of proving activation and remain payable when their operations occur.
 
 ### Proving Period Epoch Conventions
 
@@ -210,9 +230,9 @@ Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the
 
 **Unilateral termination**: When the payer or SP terminates without a consent signature, `lockupPeriod` is left at its existing 30-day value and `endEpoch = block.number + lockupPeriod`. The payer's funds continue flowing to the provider during that window.
 
-**Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`, so `endEpoch = block.number` and the payer's streaming buffer is released immediately. The terminate fee is charged; any remaining lifecycle reserve is released at the next settlement.
+**Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`: `endEpoch = block.number` and the payer's streaming buffer is released immediately, along with the lifecycle reserve. A payer signature implies consent to releasing the lifecycle reserve and paying the terminate fee from `pending` in one step, so for underfunded payers this reverts (FilecoinPay blocks the lockup-period change) rather than falling back to the standard 30-day window.
 
-CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
+CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; for well-funded payers in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
 
 Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
 
@@ -240,13 +260,13 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset
 
-In the immediate termination case (`lockupPeriod = 0`, so `endEpoch = block.number`), steps 1–4 can all be batched into a single transaction: `terminateService` → `settleRail` → `deleteDataSet`.
+For well-funded payers in the immediate termination case (`lockupPeriod = 0`, so `endEpoch = block.number`), steps 1–4 can all be batched into a single transaction: `terminateService` → `settleRail` → `deleteDataSet`.
 
 **State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
 
 **CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated as part of the `dataSetDeleted` callback itself.
 
-**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `Rails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve and streaming buffer back to the payer, terminates and finalises the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away.
+**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `Rails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve back to the payer, terminates the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away. For well-funded payers the lockup period is zeroed before termination, releasing the streaming buffer immediately. For underfunded payers the lockup period cannot be zeroed, so the PDP rail retains its default 30-day window and the streaming buffer is released only after that window elapses.
 
 ## CDN Payment Rails
 
