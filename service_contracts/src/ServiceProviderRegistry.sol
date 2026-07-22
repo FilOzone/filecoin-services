@@ -772,12 +772,12 @@ contract ServiceProviderRegistry is
     /// @notice Announce a planned upgrade
     /// @dev Can only be called by the contract owner
     /// @param nextImplementation Address of the new implementation contract
-    /// @param delay Number of epochs from now before the upgrade may occur
-    function announceUpgradePlan(address nextImplementation, uint96 delay) external {
-        if (delay == 0) {
-            delay = 1;
+    /// @param delayEpochs Number of epochs from now before the upgrade may occur
+    function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
+        if (delayEpochs == 0) {
+            delayEpochs = 1;
         }
-        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delay);
+        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delayEpochs);
     }
 
     /// @notice Announce a planned upgrade

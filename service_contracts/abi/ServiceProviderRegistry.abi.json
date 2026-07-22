@@ -197,7 +197,7 @@
         "internalType": "address"
       },
       {
-        "name": "delay",
+        "name": "delayEpochs",
         "type": "uint96",
         "internalType": "uint96"
       }

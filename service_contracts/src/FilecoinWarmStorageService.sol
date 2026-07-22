@@ -406,11 +406,11 @@ contract FilecoinWarmStorageService is
         challengeWindowSize = _challengeWindowSize;
     }
 
-    function announceUpgradePlan(address nextImplementation, uint96 delay) external {
-        if (delay == 0) {
-            delay = 1;
+    function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
+        if (delayEpochs == 0) {
+            delayEpochs = 1;
         }
-        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delay);
+        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delayEpochs);
     }
 
     /// @custom:deprecated Use announceUpgradePlan instead
