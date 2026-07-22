@@ -171,7 +171,7 @@ library Rails {
     ///      For well-funded payers the rail is terminated with no lockup period, releasing the
     ///      reserve immediately.
     ///      For underfunded payers the PDP rail remains for DEFAULT_LOCKUP_PERIOD; the payer's
-    ///      reserve isn't released until that period elapses, though every proven epoch is paid
+    ///      streaming lockup tail isn't released until that period elapses, though every proven epoch is paid
     ///      out first.
     ///      CDN rails are best-effort, may have been terminated externally.
     function abandonRails(
