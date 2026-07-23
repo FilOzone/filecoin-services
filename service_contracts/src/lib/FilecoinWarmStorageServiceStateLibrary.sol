@@ -97,6 +97,19 @@ library FilecoinWarmStorageServiceStateLibrary {
         return service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
 
+    function hasBeenProvenRecently(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (bool) {
+        uint256 activation = provingActivationEpoch(service, dataSetId);
+        if (activation == 0 || block.number <= activation) {
+            return false;
+        }
+        uint256 maxPeriod = getMaxProvingPeriod(service);
+        uint256 currentPeriod = (block.number - activation - 1) / maxPeriod;
+        if (currentPeriod >= 1 && provenPeriods(service, dataSetId, currentPeriod - 1)) {
+            return true;
+        }
+        return provenThisPeriod(service, dataSetId);
+    }
+
     /**
      * @notice Get data set information by ID
      * @param dataSetId The ID of the data set
@@ -122,6 +135,19 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.pendingOneTimePayments = uint96(uint256(info11[10]));
         info.lifecycleReserveBalance = uint96(uint256(info11[10]) >> 96);
         info.dataSetId = dataSetId;
+    }
+
+    // TODO: measure whether loading 4 slots in one extsloadStruct call is cheaper than two
+    // separate extsload calls for slots 0 (pdpRailId) and 3 (payer) on Filecoin.
+    function getDataSetPayerAndRailId(FilecoinWarmStorageService service, uint256 dataSetId)
+        public
+        view
+        returns (address payer, uint256 pdpRailId)
+    {
+        bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
+        bytes32[] memory info4 = service.extsloadStruct(slot, 4);
+        pdpRailId = uint256(info4[0]);
+        payer = address(uint160(uint256(info4[3])));
     }
 
     /**
