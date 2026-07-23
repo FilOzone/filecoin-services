@@ -2,12 +2,14 @@
 pragma solidity ^0.8.13;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
+import {stdError} from "forge-std/StdError.sol";
 import {console, Test, Vm} from "forge-std/Test.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
@@ -446,7 +448,15 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         new MyERC1967Proxy(address(serviceImpl4), initDataLongDesc);
     }
 
-    function testUpgrade() public {
+    function testAnnouncePlannedUpgrade() public {
+        _testUpgrade(true);
+    }
+
+    function testAnnounceUpgradePlan() public {
+        _testUpgrade(false);
+    }
+
+    function _testUpgrade(bool useDeprecatedMethod) internal {
         FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
@@ -477,6 +487,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         bytes memory migrateData = abi.encodeWithSelector(FilecoinWarmStorageService.migrate.selector, viewContract);
 
+        // Upgrade plan should be cleared
         (address nextImplementation, uint96 afterEpoch) = viewContract.nextUpgrade();
         assertEq(nextImplementation, address(0));
         assertEq(afterEpoch, uint96(0));
@@ -495,12 +506,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             4
         );
 
+        // Another successful announcement
+        nextImplementation = address(newServiceImpl);
+        uint96 delay = 2000;
+        afterEpoch = uint96(vm.getBlockNumber()) + delay;
         FilecoinWarmStorageService.PlannedUpgrade memory plan;
-        plan.nextImplementation = address(newServiceImpl);
-        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
-        service.announcePlannedUpgrade(plan);
 
-        (nextImplementation, afterEpoch) = viewContract.nextUpgrade();
+        if (useDeprecatedMethod) {
+            plan.nextImplementation = nextImplementation;
+            plan.afterEpoch = afterEpoch;
+            service.announcePlannedUpgrade(plan);
+        } else {
+            service.announceUpgradePlan(nextImplementation, delay);
+        }
+        (plan.nextImplementation, plan.afterEpoch) = viewContract.nextUpgrade();
         assertEq(nextImplementation, plan.nextImplementation);
         assertEq(afterEpoch, plan.afterEpoch);
 
@@ -509,12 +528,64 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         service.upgradeToAndCall(nextImplementation, migrateData);
         vm.roll(plan.afterEpoch - 1);
         vm.expectRevert();
-        service.upgradeToAndCall(plan.nextImplementation, migrateData);
+        service.upgradeToAndCall(nextImplementation, migrateData);
 
         vm.roll(plan.afterEpoch);
         vm.expectEmit(false, false, false, true, address(service));
-        emit FilecoinWarmStorageService.ContractUpgraded(newServiceImpl.VERSION(), plan.nextImplementation);
-        service.upgradeToAndCall(plan.nextImplementation, migrateData);
+        emit FilecoinWarmStorageService.ContractUpgraded(newServiceImpl.VERSION(), nextImplementation);
+        service.upgradeToAndCall(nextImplementation, migrateData);
+
+        // Plan should be cleared
+        (plan.nextImplementation, plan.afterEpoch) = viewContract.nextUpgrade();
+        assertEq(address(0), plan.nextImplementation);
+        assertEq(0, plan.afterEpoch);
+
+        // Check behavior of minimum delay
+        if (useDeprecatedMethod) {
+            plan.nextImplementation = nextImplementation;
+            plan.afterEpoch = 0;
+            service.announcePlannedUpgrade(plan);
+        } else {
+            // prevent overflow
+            vm.expectRevert(stdError.arithmeticError);
+            service.announceUpgradePlan(nextImplementation, type(uint96).max);
+
+            service.announceUpgradePlan(nextImplementation, 0);
+        }
+        (plan.nextImplementation, plan.afterEpoch) = viewContract.nextUpgrade();
+        assertEq(plan.nextImplementation, nextImplementation);
+        assertEq(plan.afterEpoch, vm.getBlockNumber() + 1);
+    }
+
+    function testAnnouncePlannedUpgradeOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(true);
+    }
+
+    function testAnnounceUpgradePlanOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(false);
+    }
+
+    function _testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) internal {
+        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
+            address(mockPDPVerifier),
+            address(payments),
+            mockUSDFC,
+            filBeamBeneficiary,
+            serviceProviderRegistry,
+            sessionKeyRegistry,
+            4
+        );
+
+        vm.prank(client);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, client));
+        if (useDeprecatedMethod) {
+            FilecoinWarmStorageService.PlannedUpgrade memory plan;
+            plan.nextImplementation = address(newServiceImpl);
+            plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+            pdpServiceWithPayments.announcePlannedUpgrade(plan);
+        } else {
+            pdpServiceWithPayments.announceUpgradePlan(address(newServiceImpl), 2000);
+        }
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)

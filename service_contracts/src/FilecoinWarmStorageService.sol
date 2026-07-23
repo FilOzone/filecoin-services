@@ -294,6 +294,7 @@ contract FilecoinWarmStorageService is
     // The address allowed to terminate CDN services
     address private filBeamControllerAddress;
 
+    // Pending upgrade announcement
     PlannedUpgrade private nextUpgrade;
 
     // Pricing rates (mutable for future adjustments)
@@ -405,11 +406,27 @@ contract FilecoinWarmStorageService is
         challengeWindowSize = _challengeWindowSize;
     }
 
-    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
-        require(plannedUpgrade.nextImplementation.code.length > 3000);
-        require(plannedUpgrade.afterEpoch > block.number);
-        nextUpgrade = plannedUpgrade;
-        emit UpgradeAnnounced(plannedUpgrade);
+    function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
+        if (delayEpochs == 0) {
+            delayEpochs = 1;
+        }
+        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delayEpochs);
+    }
+
+    /// @custom:deprecated Use announceUpgradePlan instead
+    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
+        uint96 minAfterEpoch = uint96(block.number + 1);
+        _announcePlannedUpgrade(
+            plannedUpgrade.nextImplementation,
+            plannedUpgrade.afterEpoch < minAfterEpoch ? minAfterEpoch : plannedUpgrade.afterEpoch
+        );
+    }
+
+    function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
+        require(nextImplementation.code.length > 3000);
+        nextUpgrade.nextImplementation = nextImplementation;
+        nextUpgrade.afterEpoch = afterEpoch;
+        emit UpgradeAnnounced(nextUpgrade);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
