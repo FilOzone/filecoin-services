@@ -217,6 +217,16 @@ library FilecoinWarmStorageServiceStateLibrary {
         return uint256(service.extsload(keccak256(abi.encode(railId, StorageLayout.RAIL_TO_DATA_SET_SLOT))));
     }
 
+    function getDataSetAuthorizer(FilecoinWarmStorageService service, uint256 dataSetId)
+        public
+        view
+        returns (address)
+    {
+        return address(
+            uint160(uint256(service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_AUTHORIZER_SLOT)))))
+        );
+    }
+
     function provenPeriods(FilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId)
         public
         view

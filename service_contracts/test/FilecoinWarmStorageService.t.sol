@@ -12,6 +12,7 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {IDataSetAuthorizer} from "../src/interfaces/IDataSetAuthorizer.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
@@ -36,6 +37,136 @@ import {
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
+
+contract TestDataSetAuthorizer is IDataSetAuthorizer {
+    SessionKeyRegistry internal immutable sessionKeyRegistry;
+    mapping(uint256 => mapping(address => bool)) public allowed;
+    mapping(uint256 => address[]) internal allowedAccounts;
+
+    constructor(SessionKeyRegistry _sessionKeyRegistry) {
+        sessionKeyRegistry = _sessionKeyRegistry;
+    }
+
+    function allow(uint256 dataSetId, address account) external {
+        if (!allowed[dataSetId][account]) {
+            allowed[dataSetId][account] = true;
+            allowedAccounts[dataSetId].push(account);
+        }
+    }
+
+    function isAuthorized(
+        uint256 dataSetId,
+        address, // payer
+        bytes32 operation,
+        bytes32 digest,
+        bytes calldata signature,
+        bytes calldata // operationData
+    ) external view returns (bool) {
+        address signer = SignatureVerificationLib.recoverSigner(digest, signature);
+        if (allowed[dataSetId][signer]) {
+            return true;
+        }
+
+        address[] storage accounts = allowedAccounts[dataSetId];
+        for (uint256 i = 0; i < accounts.length; i++) {
+            if (sessionKeyRegistry.authorizationExpiry(accounts[i], signer, operation) >= block.timestamp) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
+
+contract RevertingDataSetAuthorizer is IDataSetAuthorizer {
+    function isAuthorized(uint256, address, bytes32, bytes32, bytes calldata, bytes calldata)
+        external
+        pure
+        returns (bool)
+    {
+        revert("authorizer called");
+    }
+}
+
+contract OperationDataCheckingAuthorizer is IDataSetAuthorizer {
+    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+        "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
+        "Cid(bytes data)" "MetadataEntry(string key,string value)"
+        "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
+    );
+    bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
+        keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
+    bytes32 private constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
+
+    address internal immutable signer;
+    bytes32 internal expectedOperation;
+    uint256 internal expectedDataSetId;
+    uint256 internal expectedClientDataSetId;
+    uint256 internal expectedNonce;
+    bytes32 internal expectedCidDataHash;
+    uint256 internal expectedPieceId;
+
+    constructor(address _signer) {
+        signer = _signer;
+    }
+
+    function expectAdd(uint256 dataSetId, uint256 clientDataSetId, uint256 nonce, bytes32 cidDataHash) external {
+        expectedOperation = ADD_PIECES_TYPEHASH;
+        expectedDataSetId = dataSetId;
+        expectedClientDataSetId = clientDataSetId;
+        expectedNonce = nonce;
+        expectedCidDataHash = cidDataHash;
+    }
+
+    function expectRemoval(uint256 dataSetId, uint256 clientDataSetId, uint256 pieceId) external {
+        expectedOperation = SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        expectedDataSetId = dataSetId;
+        expectedClientDataSetId = clientDataSetId;
+        expectedPieceId = pieceId;
+    }
+
+    function expectTerminate(uint256 dataSetId) external {
+        expectedOperation = TERMINATE_SERVICE_TYPEHASH;
+        expectedDataSetId = dataSetId;
+    }
+
+    function isAuthorized(
+        uint256 dataSetId,
+        address, // payer
+        bytes32 operation,
+        bytes32 digest,
+        bytes calldata signature,
+        bytes calldata operationData
+    ) external view returns (bool) {
+        if (
+            dataSetId != expectedDataSetId || operation != expectedOperation
+                || SignatureVerificationLib.recoverSigner(digest, signature) != signer
+        ) {
+            return false;
+        }
+
+        if (operation == ADD_PIECES_TYPEHASH) {
+            (
+                uint256 clientDataSetId,
+                uint256 nonce,
+                Cids.Cid[] memory pieces,
+                string[][] memory keys,
+                string[][] memory values
+            ) = abi.decode(operationData, (uint256, uint256, Cids.Cid[], string[][], string[][]));
+            return clientDataSetId == expectedClientDataSetId && nonce == expectedNonce && pieces.length == 1
+                && keccak256(pieces[0].data) == expectedCidDataHash && keys.length == 1 && keys[0].length == 1
+                && values.length == 1 && values[0].length == 1 && keccak256(bytes(keys[0][0])) == keccak256(bytes("path"))
+                && keccak256(bytes(values[0][0])) == keccak256(bytes("/acl/piece"));
+        }
+
+        if (operation == SCHEDULE_PIECE_REMOVALS_TYPEHASH) {
+            (uint256 clientDataSetId, uint256[] memory pieceIds) = abi.decode(operationData, (uint256, uint256[]));
+            return clientDataSetId == expectedClientDataSetId && pieceIds.length == 1 && pieceIds[0] == expectedPieceId;
+        }
+
+        // Terminate carries no operationData; dataSetId is passed directly and already checked above.
+        return dataSetId == expectedDataSetId;
+    }
+}
 
 contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
@@ -5345,6 +5476,259 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         makeSignaturePass(client);
         mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, 888, FAKE_SIGNATURE, keys, values);
     }
+
+    function testDataSetAuthorizerCanBeSetClearedAndRead() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+
+        vm.prank(serviceProvider);
+        vm.expectRevert(abi.encodeWithSelector(Errors.OnlyDataSetPayer.selector, dataSetId, serviceProvider));
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        vm.prank(client);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetAuthorizer.selector, sessionKey1));
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, sessionKey1);
+
+        vm.expectEmit(true, true, false, true);
+        emit FilecoinWarmStorageService.DataSetAuthorizerSet(dataSetId, address(authorizer));
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(0));
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0));
+    }
+
+    function testDataSetAuthorizerIsOptionalAndAllowsDelegatedAddPieces() public {
+        uint256 clientDataSetId = nextClientDataSetId;
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        address bob = address(0xb0b);
+
+        makeSignaturePass(bob);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, client, bob));
+        _addAuthorizerTestPiece(dataSetId, 1);
+
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+        authorizer.allow(dataSetId, bob);
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        makeSignaturePass(bob);
+        _addAuthorizerTestPiece(dataSetId, 2);
+
+        // End-to-end with a genuine signature: clear the ecrecover mock and drive the full
+        // FWSS -> authorizer -> recoverSigner path through a real vm.sign over the EIP-712 digest.
+        vm.clearMockedCalls();
+        uint256 signerKey = 0xA11CE;
+        address realSigner = vm.addr(signerKey);
+        authorizer.allow(dataSetId, realSigner);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_real_sig")));
+        string[] memory emptyMeta = new string[](0);
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = emptyMeta;
+        allValues[0] = emptyMeta;
+
+        bytes32 digest = _eip712Digest(
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 3, pieceData, allKeys, allValues)
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
+
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 3, abi.encodePacked(r, s, v), emptyMeta, emptyMeta
+        );
+    }
+
+    function testDataSetAuthorizerTreatsAuthorizedAccountSessionKeysAsAuthorized() public {
+        uint256 clientDataSetId = nextClientDataSetId;
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        address bob = address(0xb0b);
+
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+        authorizer.allow(dataSetId, bob);
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        bytes32[] memory permissions = new bytes32[](1);
+        permissions[0] = ADD_PIECES_TYPEHASH;
+        vm.prank(bob);
+        sessionKeyRegistry.login(sessionKey1, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
+
+        makeSignaturePass(sessionKey1);
+        _addAuthorizerTestPiece(dataSetId, 1);
+
+        permissions[0] = SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        vm.prank(bob);
+        sessionKeyRegistry.login(sessionKey2, block.timestamp, permissions, "FilecoinWarmStorageServiceTest");
+
+        // The authorizer returns false for sessionKey2 (wrong permission), so FWSS reverts Unauthorized.
+        Cids.Cid[] memory rejectedPieceData = new Cids.Cid[](1);
+        rejectedPieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_piece", uint256(2))));
+        string[] memory emptyMeta = new string[](0);
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = emptyMeta;
+        allValues[0] = emptyMeta;
+        bytes32 rejectedDigest = _eip712Digest(
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 2, rejectedPieceData, allKeys, allValues)
+        );
+
+        makeSignaturePass(sessionKey2);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.Unauthorized.selector, client, ADD_PIECES_TYPEHASH, rejectedDigest, FAKE_SIGNATURE
+            )
+        );
+        _addAuthorizerTestPiece(dataSetId, 2);
+    }
+
+    function testDataSetAuthorizerAllowsDelegatedScheduleRemovals() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        address bob = address(0xb0b);
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+        authorizer.allow(dataSetId, bob);
+        // Once an authorizer is attached it is the sole gate, so the payer must be allowed explicitly.
+        authorizer.allow(dataSetId, client);
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        makeSignaturePass(client);
+        _addAuthorizerTestPiece(dataSetId, 1);
+
+        makeSignaturePass(bob);
+        _scheduleAuthorizerTestPieceRemoval(dataSetId);
+    }
+
+    function testDataSetAuthorizerAllowsDelegatedTerminateService() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        address bob = address(0xb0b);
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+        authorizer.allow(dataSetId, bob);
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        makeSignaturePass(bob);
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
+
+        assertGt(viewContract.getDataSet(dataSetId).pdpEndEpoch, 0);
+    }
+
+    function testDataSetAuthorizerRevertBlocksAllWritesIncludingPayer() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        RevertingDataSetAuthorizer authorizer = new RevertingDataSetAuthorizer();
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        // A delegated signer is rejected: the authorizer is the sole gate and its revert bubbles up.
+        makeSignaturePass(sessionKey1);
+        vm.expectRevert(bytes("authorizer called"));
+        _addAuthorizerTestPiece(dataSetId, 1);
+
+        // The payer is no longer special-cased. Attaching an authorizer delegates every write
+        // decision to it, so a reverting authorizer locks out the payer too.
+        makeSignaturePass(client);
+        vm.expectRevert(bytes("authorizer called"));
+        _addAuthorizerTestPiece(dataSetId, 2);
+    }
+
+    function testDataSetAuthorizerReceivesOperationDataForEachWrite() public {
+        uint256 clientDataSetId = nextClientDataSetId;
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+        address bob = address(0xb0b);
+        OperationDataCheckingAuthorizer authorizer = new OperationDataCheckingAuthorizer(bob);
+
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_signed_data")));
+        (string[] memory pieceKeys, string[] memory pieceValues) = _getSingleMetadataKV("path", "/acl/piece");
+
+        // Authorizer returns false (nonce mismatch), so FWSS reverts with Errors.Unauthorized,
+        // distinct from an authorizer that itself reverts (whose revert would bubble up instead).
+        string[][] memory addKeys = new string[][](1);
+        string[][] memory addValues = new string[][](1);
+        addKeys[0] = pieceKeys;
+        addValues[0] = pieceValues;
+        bytes32 addDigest = _eip712Digest(
+            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 99, pieceData, addKeys, addValues)
+        );
+
+        authorizer.expectAdd(dataSetId, clientDataSetId, 100, keccak256(pieceData[0].data));
+        makeSignaturePass(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.Unauthorized.selector, client, ADD_PIECES_TYPEHASH, addDigest, FAKE_SIGNATURE)
+        );
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 99, FAKE_SIGNATURE, pieceKeys, pieceValues
+        );
+
+        authorizer.expectAdd(dataSetId, clientDataSetId, 99, keccak256(pieceData[0].data));
+        makeSignaturePass(bob);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments, dataSetId, 0, pieceData, 99, FAKE_SIGNATURE, pieceKeys, pieceValues
+        );
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        authorizer.expectRemoval(dataSetId, clientDataSetId, pieceIds[0]);
+        makeSignaturePass(bob);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        authorizer.expectTerminate(dataSetId);
+        makeSignaturePass(bob);
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
+    }
+
+    function _addAuthorizerTestPiece(uint256 dataSetId, uint256 nonce) internal {
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_piece", nonce)));
+        string[] memory keys = new string[](0);
+        string[] memory values = new string[](0);
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieceData, nonce, FAKE_SIGNATURE, keys, values);
+    }
+
+    function _scheduleAuthorizerTestPieceRemoval(uint256 dataSetId) internal {
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 0;
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+    }
+
+    // Wraps an EIP-712 struct hash with the live FWSS domain separator, matching _hashTypedDataV4.
+    function _eip712Digest(bytes32 structHash) internal view returns (bytes32) {
+        (, string memory name, string memory version, uint256 chainId, address verifyingContract,,) =
+            pdpServiceWithPayments.eip712Domain();
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                chainId,
+                verifyingContract
+            )
+        );
+        return keccak256(abi.encodePacked(hex"1901", domainSeparator, structHash));
+    }
 }
 
 contract SignatureCheckingService {
@@ -6891,6 +7275,12 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     function testDataSetDeleted_SucceedsAfterRailSettled() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
+        // Attach an authorizer so we can confirm it is cleared on deletion
+        TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
+
         // Start proving so we can settle with validated payments
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
@@ -6926,6 +7316,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
         FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
+        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0), "Authorizer should be cleared on deletion");
     }
 
     /**

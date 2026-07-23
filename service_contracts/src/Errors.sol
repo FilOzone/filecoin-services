@@ -96,6 +96,19 @@ library Errors {
     /// @param actual The recovered address from the signature
     error InvalidSignature(address expected, address actual);
 
+    /// @notice Only the data set's payer may perform this action
+    error OnlyDataSetPayer(uint256 dataSetId, address actual);
+
+    /// @notice A non-zero data set authorizer must be a deployed contract
+    error InvalidDataSetAuthorizer(address authorizer);
+
+    /// @notice The data set's authorizer rejected the operation
+    /// @param payer The data set's payer
+    /// @param operation The operation type hash that was attempted
+    /// @param digest The EIP-712 digest that was signed
+    /// @param signature The signature presented for the operation
+    error Unauthorized(address payer, bytes32 operation, bytes32 digest, bytes signature);
+
     /// @notice Extra data is required but was not provided
     error ExtraDataRequired();
 
