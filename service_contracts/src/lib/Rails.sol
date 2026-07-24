@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {EPOCHS_PER_MONTH, PriceList, storageRatePerEpoch} from "./PriceList.sol";
+import {DEFAULT_LOCKUP_PERIOD, EPOCHS_PER_MONTH, PriceList, storageRatePerEpoch} from "./PriceList.sol";
 import {SERVICE_COMMISSION_BPS, priceList as priceListUSDFC} from "./PriceListUSDFC.sol";
 import {priceListUSDC} from "./PriceListUSDC.sol";
 

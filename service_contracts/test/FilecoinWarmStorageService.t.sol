@@ -578,6 +578,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
