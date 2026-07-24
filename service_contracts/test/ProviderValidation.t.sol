@@ -74,6 +74,7 @@ contract ProviderValidationTest is MockFVMTest {
             address(pdpVerifier),
             address(payments),
             usdfc,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,

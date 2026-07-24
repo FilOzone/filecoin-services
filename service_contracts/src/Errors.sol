@@ -359,4 +359,15 @@ library Errors {
     /// @param requiredEpoch The first epoch at which abandonment is allowed
     /// @param currentBlock The current block number
     error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
+
+    /// @notice The `paymentToken` metadata value does not name a token this deployment supports
+    /// @param paymentToken The unsupported metadata value (supported: "USDFC", and "USDC" when configured)
+    error UnsupportedPaymentToken(string paymentToken);
+
+    /// @notice A data set's stored rail token matches neither of this implementation's token
+    ///         immutables. Guards against an upgrade changing `usdcTokenAddress` while data sets
+    ///         denominated in the previous token exist — failing loudly instead of silently
+    ///         pricing a 6-decimal token with the 18-decimal USDFC list.
+    /// @param token The stored rail token
+    error UnknownRailToken(address token);
 }

@@ -222,6 +222,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -307,6 +308,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -340,6 +342,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -363,6 +366,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -386,6 +390,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -419,6 +424,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -461,6 +467,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -500,6 +507,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -570,6 +578,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -5500,6 +5509,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -5637,7 +5647,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             if (logs[i].topics[0] == expectedTopic) {
                 // Decode and verify the event data
                 (string memory version, address implementation) = abi.decode(logs[i].data, (string, address));
-                assertEq(version, "1.3.0", "Version should be 1.3.0");
+                assertEq(version, "1.4.0", "Version should be 1.4.0");
                 assertTrue(implementation != address(0), "Implementation address should not be zero");
                 foundEvent = true;
                 break;

@@ -9,6 +9,7 @@ import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";
 import {PriceList} from "./lib/PriceList.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
     using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
@@ -103,6 +104,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getDataSetMetadata(dataSetId, key);
     }
 
+    function getDataSetPaymentToken(uint256 dataSetId) external view returns (IERC20 token) {
+        return service.getDataSetPaymentToken(dataSetId);
+    }
+
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256) {
         return FilecoinWarmStorageServiceStateInternalLibrary.getDataSetSizeInBytes(leafCount);
     }
@@ -138,6 +143,14 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 
     function getPriceList() external view returns (PriceList memory list) {
         return service.getPriceList();
+    }
+
+    function getPriceListUSDC() external view returns (PriceList memory list) {
+        return service.getPriceListUSDC();
+    }
+
+    function getUSDCCommissionBps() external view returns (uint256) {
+        return service.getUSDCCommissionBps();
     }
 
     function isProviderApproved(uint256 providerId) external view returns (bool) {

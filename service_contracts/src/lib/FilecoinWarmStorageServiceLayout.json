@@ -620,5 +620,37 @@
         }
       }
     }
+  },
+  {
+    "label": "dataSetPaymentToken",
+    "slot": "23",
+    "offset": 0,
+    "type": "mapping(uint256 => contract IERC20)",
+    "typeDetails": {
+      "label": "mapping(uint256 => contract IERC20)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "contract IERC20",
+        "encoding": "inplace",
+        "numberOfBytes": "20"
+      }
+    }
+  },
+  {
+    "label": "usdcCommissionBps",
+    "slot": "24",
+    "offset": 0,
+    "type": "uint256",
+    "typeDetails": {
+      "label": "uint256",
+      "encoding": "inplace",
+      "numberOfBytes": "32"
+    }
   }
 ]

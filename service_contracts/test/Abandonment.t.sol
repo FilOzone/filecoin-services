@@ -18,12 +18,8 @@ import {
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors as PaymentsErrors} from "@fws-payments/Errors.sol";
-import {
-    calculateStorageRate,
-    DEFAULT_LOCKUP_PERIOD,
-    EPOCHS_PER_DAY,
-    LIFECYCLE_RESERVE_TARGET
-} from "../src/lib/PriceListUSDFC.sol";
+import {calculateStorageRate, DEFAULT_LOCKUP_PERIOD, LIFECYCLE_RESERVE_TARGET} from "../src/lib/PriceListUSDFC.sol";
+import {EPOCHS_PER_DAY} from "../src/lib/PriceList.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/Rails.sol";
@@ -102,6 +98,7 @@ contract AbandonmentTest is MockFVMTest {
             address(pdpVerifier),
             address(payments),
             usdfc,
+            MockERC20(address(0)), // USDC disabled
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,

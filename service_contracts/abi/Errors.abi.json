@@ -931,6 +931,28 @@
   },
   {
     "type": "error",
+    "name": "UnknownRailToken",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedPaymentToken",
+    "inputs": [
+      {
+        "name": "paymentToken",
+        "type": "string",
+        "internalType": "string"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "UnsupportedSignatureV",
     "inputs": [
       {

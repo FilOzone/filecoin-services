@@ -70,7 +70,10 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
   exit 1
 fi
 
-# Set network-specific USDFC token address based on chain ID
+# Set network-specific token addresses based on chain ID. The bridged USDC (6 decimals) is
+# optional: the zero address disables USDC data sets. USDC-rail commission accrues to the
+# FilecoinPay contract itself, whose fee auction sells it for FIL and burns it.
+ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 case "$CHAIN" in
   "31415926")
     # Devnet requires explicit USDFC_TOKEN_ADDRESS (mock token)
@@ -79,12 +82,18 @@ case "$CHAIN" in
       echo "Please set USDFC_TOKEN_ADDRESS to your deployed MockUSDFC address"
       exit 1
     fi
+    # USDC optional on devnet (deploy a 6-decimal mock and set USDC_TOKEN_ADDRESS to enable)
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
     ;;
   "314159")
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0}" # calibnet
+    # No canonical axlUSDC on calibration; Axelar's testnet aUSDC (6 decimals) is
+    # 0xCb7996d51Ff923b2C6076d42C065a6ca000D32A1 — set USDC_TOKEN_ADDRESS explicitly to enable.
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
     ;;
   "314")
     USDFC_TOKEN_ADDRESS="${USDFC_TOKEN_ADDRESS:-0x80B98d3aa09ffff255c3ba4A241111Ff1262F045}" # mainnet
+    USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-0xEB466342C4d449BC9f53A865D5Cb90586f405215}" # mainnet axlUSDC
     ;;
   *)
     echo "Error: Unsupported network"
@@ -120,6 +129,7 @@ deploy_implementation_if_needed \
     "pdp_verifier=$PDP_VERIFIER_PROXY_ADDRESS" \
     "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
     "usdfc_token=$USDFC_TOKEN_ADDRESS" \
+    "usdc_token=$USDC_TOKEN_ADDRESS" \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
@@ -151,4 +161,3 @@ else
   echo
   echo "⏭️  Skipping automatic verification (export AUTO_VERIFY=true to enable)"
 fi
-
