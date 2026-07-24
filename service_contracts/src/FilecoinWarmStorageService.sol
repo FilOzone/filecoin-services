@@ -128,7 +128,7 @@ contract FilecoinWarmStorageService is
 
     /// @notice Emitted at data set creation with the rail token and the commission locked into
     ///         its rails. Commission on USDC rails is the network value-accrual fee (NVAF),
-    ///         routed to the ValueAccrualRouter and burned.
+    ///         accrued to the FilecoinPay contract itself and burned via its fee auction.
     event PaymentTokenSelected(uint256 indexed dataSetId, IERC20 token, uint256 commissionBps);
 
     /// @notice Emitted when the owner re-stages the NVAF for future USDC data sets.
@@ -241,9 +241,6 @@ contract FilecoinWarmStorageService is
     IERC20Metadata public immutable usdfcTokenAddress;
     // Optional second rail token (bridged USDC, 6 decimals); zero address = USDC support disabled
     IERC20Metadata public immutable usdcTokenAddress;
-    // Receives the USDC-rail commission (NVAF) as the rails' serviceFeeRecipient; sells it for
-    // FIL by Dutch auction and burns the FIL. Required when usdcTokenAddress is set.
-    address public immutable valueAccrualRouter;
     address public immutable filBeamBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -347,7 +344,6 @@ contract FilecoinWarmStorageService is
         address _paymentsContractAddress,
         IERC20Metadata _usdfc,
         IERC20Metadata _usdc,
-        address _valueAccrualRouter,
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry,
@@ -368,12 +364,10 @@ contract FilecoinWarmStorageService is
         // USDC is optional; deployments without a bridged USDC (or before enabling it) pass the
         // zero address and only USDFC data sets can be created.
         if (_usdc != IERC20Metadata(address(0))) {
-            require(_valueAccrualRouter != address(0), Errors.ZeroAddress(Errors.AddressField.ValueAccrualRouter));
             // Verify token decimals from the USDC token contract
             require(USDC_TOKEN_DECIMALS == _usdc.decimals());
         }
         usdcTokenAddress = _usdc;
-        valueAccrualRouter = _valueAccrualRouter;
 
         require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
         filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
@@ -670,14 +664,15 @@ contract FilecoinWarmStorageService is
         }
 
         // Resolve the rail token from the signed metadata (absent means USDFC). USDC rails carry
-        // the network value-accrual fee as their commission, routed to the ValueAccrualRouter.
+        // the network value-accrual fee as their commission, accrued to FilecoinPay itself so
+        // its fee auction sells the accrual for FIL and burns it.
         (IERC20 railToken, uint256 commissionBps, address serviceFeeRecipient) = Rails.resolvePaymentToken(
             createData.metadataKeys,
             createData.metadataValues,
             usdfcTokenAddress,
             usdcTokenAddress,
             usdcCommissionBps,
-            valueAccrualRouter,
+            paymentsContractAddress,
             address(this)
         );
         dataSetPaymentToken[dataSetId] = railToken;
@@ -707,7 +702,7 @@ contract FilecoinWarmStorageService is
             hasCDN ? filBeamBeneficiaryAddress : address(0),
             commissionBps,
             serviceFeeRecipient,
-            usdcTokenAddress
+            railToken == usdcTokenAddress
         );
 
         railToDataSet[pdpRailId] = dataSetId;
@@ -887,8 +882,7 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
 
-        (, uint256 addPiecesBaseFee, uint256 addPiecesPerPieceFee,,,) =
-            Rails.oneTimeFees(_paymentTokenOf(dataSetId), usdcTokenAddress);
+        (, uint256 addPiecesBaseFee, uint256 addPiecesPerPieceFee,,,) = Rails.oneTimeFees(_isUSDCDataSet(dataSetId));
         uint96 pending =
             info.pendingOneTimePayments + uint96(addPiecesBaseFee + pieceData.length * addPiecesPerPieceFee);
         uint96 reserveBalance = info.lifecycleReserveBalance;
@@ -960,15 +954,11 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
 
-        (,,, uint256 schedulePieceRemovalsFee,,) = Rails.oneTimeFees(_paymentTokenOf(dataSetId), usdcTokenAddress);
+        bool usdcDataSet = _isUSDCDataSet(dataSetId);
+        (,,, uint256 schedulePieceRemovalsFee,,) = Rails.oneTimeFees(usdcDataSet);
         uint96 newPending = info.pendingOneTimePayments + uint96(schedulePieceRemovalsFee);
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserve(
-            info.pdpRailId,
-            info.pdpEndEpoch,
-            info.lifecycleReserveBalance,
-            newPending,
-            _paymentTokenOf(dataSetId),
-            usdcTokenAddress
+            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, usdcDataSet
         );
         info.pendingOneTimePayments = newPending;
 
@@ -1160,7 +1150,7 @@ contract FilecoinWarmStorageService is
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             immediateTermination = true;
-            (,,,, uint256 terminateFee,) = Rails.oneTimeFees(_paymentTokenOf(dataSetId), usdcTokenAddress);
+            (,,,, uint256 terminateFee,) = Rails.oneTimeFees(_isUSDCDataSet(dataSetId));
             info.pendingOneTimePayments += uint96(terminateFee);
         } else {
             require(
@@ -1250,8 +1240,7 @@ contract FilecoinWarmStorageService is
             info.cdnRailId,
             cacheMissAmountToAdd,
             cdnAmountToAdd,
-            _paymentTokenOf(dataSetId),
-            usdcTokenAddress
+            _isUSDCDataSet(dataSetId)
         );
     }
 
@@ -1321,8 +1310,7 @@ contract FilecoinWarmStorageService is
             reserveBalance,
             info.pdpEndEpoch,
             immediateTermination,
-            _paymentTokenOf(dataSetId),
-            usdcTokenAddress
+            _isUSDCDataSet(dataSetId)
         );
         info.pendingOneTimePayments = 0;
     }
@@ -1340,6 +1328,12 @@ contract FilecoinWarmStorageService is
         } else if (token != usdfcTokenAddress && token != usdcTokenAddress) {
             revert Errors.UnknownRailToken(address(token));
         }
+    }
+
+    /// @notice Whether a data set's rail token is the deployment's USDC instance, keying the
+    ///         price list. Same guard semantics as {_paymentTokenOf}.
+    function _isUSDCDataSet(uint256 dataSetId) internal view returns (bool) {
+        return _paymentTokenOf(dataSetId) == usdcTokenAddress;
     }
 
     function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal returns (bool hadRemovals) {

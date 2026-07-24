@@ -9,16 +9,20 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {Dutch} from "@fws-payments/Dutch.sol";
 import {FIRST_AUCTION_START_PRICE, FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
-import {ValueAccrualRouter} from "../src/ValueAccrualRouter.sol";
 import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
-import {LIFECYCLE_RESERVE_TARGET, calculateStorageSizeBasedRatePerEpoch} from "../src/lib/PriceListUSDFC.sol";
+import {
+    ADD_PIECES_BASE_FEE,
+    ADD_PIECES_PER_PIECE_FEE,
+    CREATE_DATA_SET_FEE,
+    LIFECYCLE_RESERVE_TARGET,
+    calculateStorageSizeBasedRatePerEpoch
+} from "../src/lib/PriceListUSDFC.sol";
 import {
     MAX_USDC_SERVICE_COMMISSION_BPS,
     USDC_ADD_PIECES_BASE_FEE,
@@ -56,7 +60,6 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
     FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
     MockUSDC public mockUSDC;
-    ValueAccrualRouter public router;
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
 
@@ -112,14 +115,12 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         );
 
         payments = new FilecoinPayV1();
-        router = new ValueAccrualRouter(payments);
 
         FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
             mockUSDC,
-            address(router),
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -213,7 +214,7 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         assertEq(address(pdpRail.token), address(mockUSDC), "PDP rail should be denominated in USDC");
         assertEq(pdpRail.commissionRateBps, USDC_SERVICE_COMMISSION_BPS, "NVAF commission should be locked in");
-        assertEq(pdpRail.serviceFeeRecipient, address(router), "commission should route to the ValueAccrualRouter");
+        assertEq(pdpRail.serviceFeeRecipient, address(payments), "commission should accrue to FilecoinPay itself");
         assertEq(pdpRail.lockupFixed, USDC_LIFECYCLE_RESERVE_TARGET, "lifecycle reserve in 6-decimal units");
 
         assertEq(info.commissionBps, USDC_SERVICE_COMMISSION_BPS, "data set should record the commission");
@@ -234,12 +235,12 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(info.cacheMissRailId);
         assertEq(address(cacheMissRail.token), address(mockUSDC), "cache-miss rail in USDC");
         assertEq(cacheMissRail.commissionRateBps, USDC_SERVICE_COMMISSION_BPS, "NVAF on cache-miss rail");
-        assertEq(cacheMissRail.serviceFeeRecipient, address(router), "router on cache-miss rail");
+        assertEq(cacheMissRail.serviceFeeRecipient, address(payments), "FilecoinPay on cache-miss rail");
 
         FilecoinPayV1.RailView memory cdnRail = payments.getRail(info.cdnRailId);
         assertEq(address(cdnRail.token), address(mockUSDC), "CDN rail in USDC");
         assertEq(cdnRail.commissionRateBps, USDC_SERVICE_COMMISSION_BPS, "NVAF on CDN rail");
-        assertEq(cdnRail.serviceFeeRecipient, address(router), "router on CDN rail");
+        assertEq(cdnRail.serviceFeeRecipient, address(payments), "FilecoinPay on CDN rail");
     }
 
     function testUSDFCDataSetUnchangedByDefault() public {
@@ -288,7 +289,6 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -316,21 +316,6 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
 
     // ==================== Constructor validation ====================
 
-    function testConstructorRequiresRouterWhenUSDCConfigured() public {
-        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.ValueAccrualRouter));
-        new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            mockUSDC,
-            address(0), // missing router
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-    }
-
     function testConstructorRejectsWrongUSDCDecimals() public {
         MockERC20 eighteenDecimalToken = new MockERC20();
         vm.expectRevert();
@@ -339,7 +324,6 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             eighteenDecimalToken, // 18 decimals, must be 6
-            address(router),
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -439,11 +423,11 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
 
         // One-time op fees (create + addPieces) were paid at piecesAdded time; their commission
-        // is already credited to the router.
+        // is already credited to FilecoinPay's own fee account, alongside the network fee.
         uint256 opFees = USDC_CREATE_DATA_SET_FEE + USDC_ADD_PIECES_BASE_FEE + USDC_ADD_PIECES_PER_PIECE_FEE;
-        uint256 opFeeCommission = commissionOn(opFees, USDC_SERVICE_COMMISSION_BPS);
-        (uint256 routerFunds,,,) = payments.accounts(mockUSDC, address(router));
-        assertEq(routerFunds, opFeeCommission, "op-fee commission accrues to router at piecesAdded");
+        uint256 opFeeAccrual = networkFee(opFees) + commissionOn(opFees, USDC_SERVICE_COMMISSION_BPS);
+        (uint256 feeFunds,,,) = payments.accounts(mockUSDC, address(payments));
+        assertEq(feeFunds, opFeeAccrual, "op-fee NVAF accrues to FilecoinPay at piecesAdded");
 
         // Start proving, prove the first period, then settle past its deadline
         uint256 challengeEpoch = block.number + 2880 - 30;
@@ -461,21 +445,21 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         return (dataSetId, totalSettledAmount, totalOperatorCommission);
     }
 
-    function testUSDCSettlementSkimsCommissionToRouter() public {
+    function testUSDCSettlementSkimsCommissionToFilecoinPay() public {
         (, uint256 settled, uint256 commission) = _settleProvenUSDCPeriod();
 
         // One full proven proving period at the 1 TiB USDC rate
         assertEq(settled, usdcRatePerEpochFor1TiB() * 2880, "settled amount for one proven period");
         assertEq(commission, commissionOn(settled, USDC_SERVICE_COMMISSION_BPS), "2% NVAF after network fee");
 
-        // Router account holds the op-fee commission (asserted inside the helper) plus the
-        // streaming-settlement commission
+        // FilecoinPay's own fee account holds the op-fee accrual (asserted inside the helper)
+        // plus the streaming settlement's network fee and NVAF commission
         uint256 opFees = USDC_CREATE_DATA_SET_FEE + USDC_ADD_PIECES_BASE_FEE + USDC_ADD_PIECES_PER_PIECE_FEE;
-        (uint256 routerFunds,,,) = payments.accounts(mockUSDC, address(router));
+        (uint256 feeFunds,,,) = payments.accounts(mockUSDC, address(payments));
         assertEq(
-            routerFunds,
-            commissionOn(opFees, USDC_SERVICE_COMMISSION_BPS) + commission,
-            "router account holds op-fee and settlement commission"
+            feeFunds,
+            networkFee(opFees) + commissionOn(opFees, USDC_SERVICE_COMMISSION_BPS) + networkFee(settled) + commission,
+            "FilecoinPay fee account holds op-fee and settlement accruals"
         );
     }
 
@@ -499,101 +483,37 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         assertEq(commission, 0, "USDFC rails carry no commission");
     }
 
-    // ==================== ValueAccrualRouter ====================
+    // ==================== Commission burn via FilecoinPay's fee auction ====================
 
-    function testRouterCollectPullsCommission() public {
+    function testCommissionEntersFilecoinPayFeeAuction() public {
         _settleProvenUSDCPeriod();
 
-        (uint256 accrued,,,) = payments.accounts(mockUSDC, address(router));
-        assertGt(accrued, 0, "commission accrued in payments");
+        // Commission accrued to FilecoinPay's own account is indistinguishable from network
+        // fees: both sit in accounts[token][payments] and sell through the same rolling Dutch
+        // auction, armed by the first accrual.
+        (uint256 accrued,,,) = payments.accounts(mockUSDC, address(payments));
+        assertGt(accrued, 0, "commission + network fee accrued to FilecoinPay");
 
-        vm.expectEmit(true, false, false, true);
-        emit ValueAccrualRouter.CommissionCollected(mockUSDC, accrued);
-        uint256 collected = router.collect(mockUSDC);
-
-        assertEq(collected, accrued, "collect returns the pulled amount");
-        assertEq(mockUSDC.balanceOf(address(router)), accrued, "router holds the tokens");
-        (uint256 remaining,,,) = payments.accounts(mockUSDC, address(router));
-        assertEq(remaining, 0, "payments account drained");
-
-        (uint88 startPrice,) = router.auctionInfo(mockUSDC);
-        assertEq(uint256(startPrice), uint256(FIRST_AUCTION_START_PRICE), "auction armed at first price");
+        (uint88 startPrice,) = payments.auctionInfo(mockUSDC);
+        assertEq(uint256(startPrice), uint256(FIRST_AUCTION_START_PRICE), "fee auction armed at first price");
     }
 
-    function testRouterBurnForCommissionBurnsFILAndPaysTokens() public {
+    function testBurnForFeesBuysAccruedCommissionAndBurnsFIL() public {
         _settleProvenUSDCPeriod();
-        router.collect(mockUSDC);
-        uint256 available = mockUSDC.balanceOf(address(router));
+        (uint256 available,,,) = payments.accounts(mockUSDC, address(payments));
 
         address buyer = address(0xbeef);
         vm.deal(buyer, 1 ether);
         uint256 burnBalanceBefore = BURN_ADDRESS.balance;
 
-        // Underpaying the auction price reverts
+        // Paying the auction price takes the accrual (network fee + NVAF) and burns the FIL
         vm.prank(buyer);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.InsufficientNativeTokenForBurn.selector, FIRST_AUCTION_START_PRICE - 1, FIRST_AUCTION_START_PRICE
-            )
-        );
-        router.burnForCommission{value: FIRST_AUCTION_START_PRICE - 1}(mockUSDC, buyer, available);
+        payments.burnForFees{value: FIRST_AUCTION_START_PRICE}(mockUSDC, buyer, available);
 
-        // Requesting more than available reverts
-        vm.prank(buyer);
-        vm.expectRevert(abi.encodeWithSelector(Errors.CommissionExceedsAvailable.selector, available + 1, available));
-        router.burnForCommission{value: FIRST_AUCTION_START_PRICE}(mockUSDC, buyer, available + 1);
-
-        // Paying the price takes the lot and burns the FIL
-        vm.prank(buyer);
-        router.burnForCommission{value: FIRST_AUCTION_START_PRICE}(mockUSDC, buyer, available);
-
-        assertEq(mockUSDC.balanceOf(buyer), available, "buyer receives the commission tokens");
-        assertEq(mockUSDC.balanceOf(address(router)), 0, "router emptied");
+        assertEq(mockUSDC.balanceOf(buyer), available, "buyer receives the accrued tokens");
+        (uint256 remaining,,,) = payments.accounts(mockUSDC, address(payments));
+        assertEq(remaining, 0, "fee account emptied");
         assertEq(BURN_ADDRESS.balance - burnBalanceBefore, FIRST_AUCTION_START_PRICE, "FIL destroyed at the burn actor");
-
-        (uint88 startPrice,) = router.auctionInfo(mockUSDC);
-        assertEq(
-            uint256(startPrice), uint256(FIRST_AUCTION_START_PRICE) * Dutch.RESET_FACTOR, "auction price reset to 4x"
-        );
-    }
-
-    function testRouterBurnCollectsImplicitly() public {
-        // burnForCommission pulls pending commission from payments without a prior collect()
-        _settleProvenUSDCPeriod();
-        (uint256 accrued,,,) = payments.accounts(mockUSDC, address(router));
-
-        address buyer = address(0xbeef);
-        vm.deal(buyer, 1 ether);
-        vm.prank(buyer);
-        router.burnForCommission{value: FIRST_AUCTION_START_PRICE}(mockUSDC, buyer, accrued);
-        assertEq(mockUSDC.balanceOf(buyer), accrued, "implicit collect during burn");
-    }
-
-    function testRouterAuctionPriceDecays() public {
-        _settleProvenUSDCPeriod();
-        router.collect(mockUSDC);
-
-        uint256 priceAtStart = router.currentPrice(mockUSDC);
-        assertEq(priceAtStart, FIRST_AUCTION_START_PRICE, "starts at first auction price");
-
-        vm.warp(block.timestamp + 3.5 days);
-        uint256 priceAfterHalving = router.currentPrice(mockUSDC);
-        assertEq(priceAfterHalving, FIRST_AUCTION_START_PRICE / 2, "halves per 3.5 days");
-
-        // A fully decayed auction clears at zero, and the next collect re-arms it
-        vm.warp(block.timestamp + 365 days);
-        assertEq(router.currentPrice(mockUSDC), 0, "fully decayed");
-
-        address buyer = address(0xbeef);
-        uint256 available = mockUSDC.balanceOf(address(router));
-        vm.prank(buyer);
-        router.burnForCommission(mockUSDC, buyer, available);
-        assertEq(mockUSDC.balanceOf(buyer), available, "free claim after full decay");
-    }
-
-    function testRouterConstructorRejectsZeroPayments() public {
-        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV1));
-        new ValueAccrualRouter(FilecoinPayV1(address(0)));
     }
 
     // ==================== Legacy data sets and token-drift guard ====================
@@ -620,8 +540,12 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         FilecoinPayV1.RailView memory pdpRail = payments.getRail(info.pdpRailId);
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(2 ** 35));
         assertEq(pdpRail.paymentRate, expectedRate, "legacy data set streams at USDFC rates");
-        (uint256 routerFunds,,,) = payments.accounts(mockUSDFC, address(router));
-        assertEq(routerFunds, 0, "no commission accrues on legacy USDFC data sets");
+
+        // FilecoinPay's fee account holds exactly the 0.5% network fee on the op fees — no NVAF
+        // commission accrues on legacy USDFC data sets
+        uint256 opFees = CREATE_DATA_SET_FEE + ADD_PIECES_BASE_FEE + ADD_PIECES_PER_PIECE_FEE;
+        (uint256 feeFunds,,,) = payments.accounts(mockUSDFC, address(payments));
+        assertEq(feeFunds, networkFee(opFees), "only the network fee, no commission, on legacy USDFC data sets");
     }
 
     function testUnknownStoredRailTokenRevertsLoudly() public {
@@ -653,10 +577,10 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         service.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
 
         uint256 opFees = USDC_CREATE_DATA_SET_FEE + USDC_TERMINATE_FEE;
-        (uint256 routerFunds,,,) = payments.accounts(mockUSDC, address(router));
+        (uint256 feeFunds,,,) = payments.accounts(mockUSDC, address(payments));
         assertEq(
-            routerFunds,
-            commissionOn(opFees, USDC_SERVICE_COMMISSION_BPS),
+            feeFunds,
+            networkFee(opFees) + commissionOn(opFees, USDC_SERVICE_COMMISSION_BPS),
             "NVAF skimmed from USDC create+terminate fees"
         );
 
@@ -728,7 +652,7 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         values[1] = "true";
         uint256 dataSetId = createDataSet(keys, values);
 
-        (uint256 routerBefore,,,) = payments.accounts(mockUSDC, address(router));
+        (uint256 feeBefore,,,) = payments.accounts(mockUSDC, address(payments));
         (uint256 filBeamBefore,,,) = payments.accounts(mockUSDC, filBeamBeneficiary);
 
         uint256 cdnAmount = 400_000; // microUSDC, within the CDN lockup
@@ -736,12 +660,12 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
         vm.prank(filBeamController);
         service.settleFilBeamPaymentRails(dataSetId, cdnAmount, cacheMissAmount);
 
-        (uint256 routerAfter,,,) = payments.accounts(mockUSDC, address(router));
+        (uint256 feeAfter,,,) = payments.accounts(mockUSDC, address(payments));
         assertEq(
-            routerAfter - routerBefore,
-            commissionOn(cdnAmount, USDC_SERVICE_COMMISSION_BPS)
+            feeAfter - feeBefore,
+            networkFee(cdnAmount) + commissionOn(cdnAmount, USDC_SERVICE_COMMISSION_BPS) + networkFee(cacheMissAmount)
                 + commissionOn(cacheMissAmount, USDC_SERVICE_COMMISSION_BPS),
-            "NVAF skimmed from both FilBeam settlements"
+            "network fee + NVAF skimmed from both FilBeam settlements"
         );
 
         (uint256 filBeamAfter,,,) = payments.accounts(mockUSDC, filBeamBeneficiary);
@@ -817,7 +741,6 @@ contract MultiTokenValueAccrualTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             mockUSDC,
-            address(router),
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,

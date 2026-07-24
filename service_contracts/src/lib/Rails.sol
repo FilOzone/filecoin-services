@@ -8,13 +8,6 @@ import {EPOCHS_PER_MONTH, PriceList, storageRatePerEpoch} from "./PriceList.sol"
 import {SERVICE_COMMISSION_BPS, priceList as priceListUSDFC} from "./PriceListUSDFC.sol";
 import {priceListUSDC} from "./PriceListUSDC.sol";
 
-// Metadata key selecting the rail token at data set creation; the value is signed by the payer
-// along with the rest of the metadata. Absent means USDFC.
-uint256 constant METADATA_KEY_PAYMENT_TOKEN_SIZE = 12;
-bytes32 constant METADATA_KEY_PAYMENT_TOKEN_HASH = keccak256("paymentToken");
-bytes32 constant PAYMENT_TOKEN_VALUE_USDC_HASH = keccak256("USDC");
-bytes32 constant PAYMENT_TOKEN_VALUE_USDFC_HASH = keccak256("USDFC");
-
 event CDNPaymentRailsToppedUp(
     uint256 indexed dataSetId,
     uint256 cdnAmountAdded,
@@ -32,31 +25,29 @@ event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cac
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
 library Rails {
-    /// @notice Returns the price list applying to `token` for this deployment.
-    /// @dev Token-keyed dispatch: the USDC list when `token` is the deployment's configured USDC
-    ///      instance, the USDFC list otherwise. Lives here (external library) to keep the per-token
-    ///      price constants out of the main contract's code size. `pl.token` is populated with
-    ///      `token`.
-    function priceListFor(IERC20 token, IERC20 usdc) public pure returns (PriceList memory pl) {
-        if (address(usdc) != address(0) && token == usdc) {
-            pl = priceListUSDC();
-        } else {
-            pl = priceListUSDFC();
-        }
-        pl.token = token;
+    /// @notice Returns the price list for the caller-resolved token choice.
+    /// @dev The caller decides whether the rail token is the deployment's USDC instance (an
+    ///      immutable compare in the main contract); the library only keys the list off that
+    ///      decision. Lives here (external library) to keep the per-token price constants out
+    ///      of the main contract's code size. `pl.token` is left as the zero address; callers
+    ///      that expose the struct populate it themselves.
+    function priceListFor(bool usdc) internal pure returns (PriceList memory pl) {
+        return usdc ? priceListUSDC() : priceListUSDFC();
     }
 
     /// @notice Resolves the rail token, commission, and commission recipient from data set
     ///         creation metadata. An absent `paymentToken` key (or explicit "USDFC") selects
     ///         USDFC with the base commission; "USDC" selects the configured USDC instance
-    ///         carrying the network value-accrual fee, routed to the ValueAccrualRouter. Any
-    ///         other value reverts.
+    ///         carrying the network value-accrual fee, accrued to FilecoinPay itself so its
+    ///         fee auction sells and burns it. Any other value reverts.
     /// @param metadataKeys The data set creation metadata keys (payer-signed)
     /// @param metadataValues The data set creation metadata values (payer-signed)
     /// @param usdfc The deployment's USDFC instance
     /// @param usdc The deployment's USDC instance (zero address when disabled)
     /// @param usdcCommissionBps The NVAF to lock into USDC rails
-    /// @param valueAccrualRouter Receives USDC-rail commission (burned for FIL)
+    /// @param usdcFeeRecipient Receives USDC-rail commission: the FilecoinPay contract itself,
+    ///        whose fee auction sells the accrual for FIL and burns it (same mechanism as the
+    ///        network fee)
     /// @param usdfcFeeRecipient Commission recipient on USDFC rails (unused while base
     ///        commission is zero)
     function resolvePaymentToken(
@@ -65,23 +56,20 @@ library Rails {
         IERC20 usdfc,
         IERC20 usdc,
         uint256 usdcCommissionBps,
-        address valueAccrualRouter,
+        address usdcFeeRecipient,
         address usdfcFeeRecipient
     ) public pure returns (IERC20 token, uint256 commissionBps, address serviceFeeRecipient) {
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bytes memory keyBytes = bytes(metadataKeys[i]);
-            if (
-                keyBytes.length == METADATA_KEY_PAYMENT_TOKEN_SIZE
-                    && keccak256(keyBytes) == METADATA_KEY_PAYMENT_TOKEN_HASH
-            ) {
-                bytes32 valueHash = keccak256(bytes(metadataValues[i]));
-                if (valueHash == PAYMENT_TOKEN_VALUE_USDC_HASH) {
+            if (keyBytes.length == 12 && bytes12(keyBytes) == "paymentToken") {
+                bytes memory valueBytes = bytes(metadataValues[i]);
+                if (valueBytes.length == 4 && bytes4(valueBytes) == "USDC") {
                     if (address(usdc) == address(0)) {
                         revert Errors.UnsupportedPaymentToken(metadataValues[i]);
                     }
-                    return (usdc, usdcCommissionBps, valueAccrualRouter);
+                    return (usdc, usdcCommissionBps, usdcFeeRecipient);
                 }
-                if (valueHash != PAYMENT_TOKEN_VALUE_USDFC_HASH) {
+                if (valueBytes.length != 5 || bytes5(valueBytes) != "USDFC") {
                     revert Errors.UnsupportedPaymentToken(metadataValues[i]);
                 }
                 break; // explicit "USDFC" selects the default
@@ -90,9 +78,10 @@ library Rails {
         return (usdfc, SERVICE_COMMISSION_BPS, usdfcFeeRecipient);
     }
 
-    /// @notice The one-time fees and lifecycle reserve target for `token`, as flat words.
+    /// @notice The one-time fees and lifecycle reserve target for the rail token, as flat words.
     /// @dev Leaner for the main contract to decode than the full PriceList struct (code size).
-    function oneTimeFees(IERC20 token, IERC20 usdc)
+    /// @param usdc Whether the data set's rail token is the deployment's USDC instance
+    function oneTimeFees(bool usdc)
         public
         pure
         returns (
@@ -104,7 +93,7 @@ library Rails {
             uint256 lifecycleReserveTarget
         )
     {
-        PriceList memory pl = priceListFor(token, usdc);
+        PriceList memory pl = priceListFor(usdc);
         return (
             pl.fees.createDataSetFee,
             pl.fees.addPiecesBaseFee,
@@ -191,7 +180,7 @@ library Rails {
         address filBeamBeneficiaryAddress,
         uint256 commissionBps,
         address serviceFeeRecipient,
-        IERC20 usdc
+        bool usdc
     )
         public
         returns (
@@ -202,7 +191,7 @@ library Rails {
             uint256 lifecycleReserveTarget
         )
     {
-        PriceList memory pl = priceListFor(token, usdc);
+        PriceList memory pl = priceListFor(usdc);
         createDataSetFee = pl.fees.createDataSetFee;
         lifecycleReserveTarget = pl.lockups.lifecycleReserveTarget;
         bool hasCDN = filBeamBeneficiaryAddress != address(0);
@@ -325,10 +314,9 @@ library Rails {
         uint256 cdnRailId,
         uint256 cacheMissAmountToAdd,
         uint256 cdnAmountToAdd,
-        IERC20 token,
-        IERC20 usdc
+        bool usdc
     ) public {
-        PriceList memory pl = priceListFor(token, usdc);
+        PriceList memory pl = priceListFor(usdc);
         // Both rails must be active for any top-up operation
         FilecoinPayV1.RailView memory cdnRail = payments.getRail(cdnRailId);
         FilecoinPayV1.RailView memory cacheMissRail = payments.getRail(cacheMissRailId);
@@ -390,19 +378,16 @@ library Rails {
     }
 
     /// @notice Public entry point for {replenishReserveIfNeeded}, resolving the price list from
-    ///         the rail token. The internal variant stays inlined into in-library callers.
+    ///         the rail token choice. The internal variant stays inlined into in-library callers.
     function replenishReserve(
         FilecoinPayV1 payments,
         uint256 pdpRailId,
         uint256 pdpEndEpoch,
         uint96 reserveBalance,
         uint96 pending,
-        IERC20 token,
-        IERC20 usdc
+        bool usdc
     ) public returns (uint96) {
-        return replenishReserveIfNeeded(
-            payments, pdpRailId, pdpEndEpoch, reserveBalance, pending, priceListFor(token, usdc)
-        );
+        return replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending, priceListFor(usdc));
     }
 
     function updateStorageRates(
@@ -414,10 +399,9 @@ library Rails {
         uint96 reserveBalance,
         uint256 pdpEndEpoch,
         bool immediateTermination,
-        IERC20 token,
-        IERC20 usdc
+        bool usdc
     ) public returns (uint96 newReserveBalance) {
-        PriceList memory pl = priceListFor(token, usdc);
+        PriceList memory pl = priceListFor(usdc);
         uint256 newStorageRatePerEpoch = storageRatePerEpoch(pl, leafCount);
         if (immediateTermination) {
             // No try/catch: immediateTermination implies the payer consented and is solvent.

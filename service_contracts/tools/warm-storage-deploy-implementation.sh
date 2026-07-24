@@ -71,7 +71,8 @@ if [ -z "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
 fi
 
 # Set network-specific token addresses based on chain ID. The bridged USDC (6 decimals) is
-# optional: the zero address disables USDC data sets.
+# optional: the zero address disables USDC data sets. USDC-rail commission accrues to the
+# FilecoinPay contract itself, whose fee auction sells it for FIL and burns it.
 ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 case "$CHAIN" in
   "31415926")
@@ -115,18 +116,6 @@ deploy_implementation_if_needed \
     "src/lib/Rails.sol:Rails" \
     "Rails"
 
-# The ValueAccrualRouter receives the USDC-rail commission (network value-accrual fee), sells
-# it for FIL via Dutch auction, and burns the FIL. Required whenever USDC is enabled.
-if [ "$USDC_TOKEN_ADDRESS" != "$ZERO_ADDRESS" ]; then
-    deploy_implementation_if_needed \
-        "VALUE_ACCRUAL_ROUTER_ADDRESS" \
-        "src/ValueAccrualRouter.sol:ValueAccrualRouter" \
-        "ValueAccrualRouter" \
-        "filecoin_pay=$FILECOIN_PAY_ADDRESS"
-else
-    VALUE_ACCRUAL_ROUTER_ADDRESS="$ZERO_ADDRESS"
-fi
-
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
     FWSS_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS)
 else
@@ -141,7 +130,6 @@ deploy_implementation_if_needed \
     "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
     "usdfc_token=$USDFC_TOKEN_ADDRESS" \
     "usdc_token=$USDC_TOKEN_ADDRESS" \
-    "value_accrual_router=$VALUE_ACCRUAL_ROUTER_ADDRESS" \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
@@ -152,7 +140,6 @@ echo ""
 echo "# DEPLOYMENT COMPLETE"
 echo "SignatureVerificationLib: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 echo "Rails: $RAILS_LIB_ADDRESS"
-echo "ValueAccrualRouter: $VALUE_ACCRUAL_ROUTER_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo ""
 
@@ -168,8 +155,7 @@ if [ "${AUTO_VERIFY:-true}" = "true" ]; then
   verify_contracts_batch \
     "$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
     "$RAILS_LIB_ADDRESS,src/lib/Rails.sol:Rails" \
-    "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
-    "$VALUE_ACCRUAL_ROUTER_ADDRESS,src/ValueAccrualRouter.sol:ValueAccrualRouter"
+    "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
   popd >/dev/null
 else
   echo

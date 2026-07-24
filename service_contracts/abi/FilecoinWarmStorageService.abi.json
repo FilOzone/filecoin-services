@@ -23,11 +23,6 @@
         "internalType": "contract IERC20Metadata"
       },
       {
-        "name": "_valueAccrualRouter",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
         "name": "_filBeamBeneficiaryAddress",
         "type": "address",
         "internalType": "address"
@@ -952,19 +947,6 @@
             "internalType": "string"
           }
         ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "valueAccrualRouter",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "view"

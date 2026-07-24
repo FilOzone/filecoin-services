@@ -21,7 +21,8 @@ import {
 //    the USDFC-equivalent base.
 //
 // 2. Gross-up. USDC rails carry a network value-accrual fee (NVAF) as the rail's operator
-//    commission, routed to the ValueAccrualRouter and burned. All SP-bound amounts below are
+//    commission, accrued to the FilecoinPay contract itself — its fee auction sells the
+//    accrual for FIL and burns it, like the network fee. All SP-bound amounts below are
 //    grossed up by 1/(1 - 2%) — rounded up — so the SP nets the base amount after the
 //    commission; the customer bears the NVAF as a posted-price difference. (The 0.5% Filecoin
 //    Pay network fee applies identically on both tokens, so it does not enter the gross-up.)

@@ -150,22 +150,6 @@
   },
   {
     "type": "error",
-    "name": "CommissionExceedsAvailable",
-    "inputs": [
-      {
-        "name": "requested",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "available",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "CommissionExceedsMaximum",
     "inputs": [
       {
@@ -392,22 +376,6 @@
       },
       {
         "name": "requiredLockupPeriod",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientNativeTokenForBurn",
-    "inputs": [
-      {
-        "name": "provided",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "required",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -673,17 +641,6 @@
       },
       {
         "name": "length",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "NativeBurnFailed",
-    "inputs": [
-      {
-        "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
       }

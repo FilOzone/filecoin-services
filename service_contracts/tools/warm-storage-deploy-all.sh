@@ -381,19 +381,10 @@ deploy_implementation_if_needed \
     "src/lib/Rails.sol:Rails" \
     "Rails"
 
-# Step 7b: Deploy or use existing ValueAccrualRouter (only when USDC is enabled).
-# Receives the USDC-rail commission, sells it for FIL via Dutch auction, burns the FIL.
+# USDC is optional; the zero address disables it. USDC-rail commission accrues to the
+# FilecoinPay contract itself, whose fee auction sells it for FIL and burns it.
 ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 USDC_TOKEN_ADDRESS="${USDC_TOKEN_ADDRESS:-$ZERO_ADDRESS}"
-if [ "$USDC_TOKEN_ADDRESS" != "$ZERO_ADDRESS" ]; then
-    deploy_implementation_if_needed \
-        "VALUE_ACCRUAL_ROUTER_ADDRESS" \
-        "src/ValueAccrualRouter.sol:ValueAccrualRouter" \
-        "ValueAccrualRouter" \
-        "$FILECOIN_PAY_ADDRESS"
-else
-    VALUE_ACCRUAL_ROUTER_ADDRESS="$ZERO_ADDRESS"
-fi
 
 # Step 8: Deploy or use existing FilecoinWarmStorageService implementation
 # Set LIBRARIES variable for the deployment helper (comma-separated path:name:address)
@@ -411,7 +402,6 @@ deploy_implementation_if_needed \
     "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
     "usdfc_token=$USDFC_TOKEN_ADDRESS" \
     "usdc_token=$USDC_TOKEN_ADDRESS" \
-    "value_accrual_router=$VALUE_ACCRUAL_ROUTER_ADDRESS" \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \

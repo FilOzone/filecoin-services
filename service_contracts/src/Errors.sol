@@ -28,9 +28,7 @@ library Errors {
         /// FilBeam beneficiary address
         FilBeamBeneficiary,
         /// View contract address
-        View,
-        /// ValueAccrualRouter contract address
-        ValueAccrualRouter
+        View
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol
@@ -372,18 +370,4 @@ library Errors {
     ///         pricing a 6-decimal token with the 18-decimal USDFC list.
     /// @param token The stored rail token
     error UnknownRailToken(address token);
-
-    /// @notice Requested more accumulated commission than the router holds for this token
-    /// @param requested The requested token amount
-    /// @param available The token amount actually available
-    error CommissionExceedsAvailable(uint256 requested, uint256 available);
-
-    /// @notice The native FIL sent does not meet the current auction price
-    /// @param provided The attoFIL provided
-    /// @param required The current auction price in attoFIL
-    error InsufficientNativeTokenForBurn(uint256 provided, uint256 required);
-
-    /// @notice Burning native FIL via the burn actor failed
-    /// @param amount The attoFIL amount that failed to burn
-    error NativeBurnFailed(uint256 amount);
 }

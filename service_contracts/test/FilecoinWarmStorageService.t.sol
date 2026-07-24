@@ -223,7 +223,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -310,7 +309,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -345,7 +343,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -370,7 +367,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -395,7 +391,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -430,7 +425,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -474,7 +468,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -515,7 +508,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
@@ -5517,7 +5509,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             address(payments),
             mockUSDFC,
             MockERC20(address(0)), // USDC disabled
-            address(0), // no ValueAccrualRouter
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
