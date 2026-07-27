@@ -303,6 +303,16 @@ library SignatureVerificationLib {
     bytes32 internal constant AUTHORIZER_REENTRANCY_SLOT =
         keccak256("filecoin-warm-storage-service.authorizer.reentrancy.guard");
 
+    /// @dev Reentrancy latch for the authorizer subcall. The lock clears after `_;` (a `return` in the body
+    ///      still runs post-`_;` code) and, on any revert, via transient-storage rollback — so a second
+    ///      legitimate authorization in the same transaction is not blocked.
+    modifier nonReentrantAuthorizer() {
+        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
+        _setAuthorizerLock(true);
+        _;
+        _setAuthorizerLock(false);
+    }
+
     /// @notice Delegates the authorization decision for an operation to the data set's authorizer.
     /// @dev Called only when an authorizer is attached: it is the sole gate. FWSS forwards the raw signature
     ///      plus the operation's raw data (`operationData`) and lets the authorizer recover and decide.
@@ -317,16 +327,13 @@ library SignatureVerificationLib {
         uint256 dataSetId,
         address authorizer,
         bytes calldata operationData
-    ) public returns (address) {
-        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
-        _setAuthorizerLock(true);
+    ) public nonReentrantAuthorizer returns (address) {
         require(
             IDataSetAuthorizer(authorizer).isAuthorized{gas: AUTHORIZER_GAS_LIMIT}(
                 dataSetId, payer, operation, digest, signature, operationData
             ),
             Errors.Unauthorized(payer, operation, digest, signature)
         );
-        _setAuthorizerLock(false);
         return payer;
     }
 
