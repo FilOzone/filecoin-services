@@ -23,9 +23,9 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     uint256 constant PIECE_LEAVES = 1 << PIECE_HEIGHT;
     // Minimum N such that pending = CREATE_DATA_SET_FEE + ADD_PIECES_BASE_FEE + N * ADD_PIECES_PER_PIECE_FEE
     // satisfies LIFECYCLE_RESERVE_TARGET < pending + REPLENISH_THRESHOLD, i.e. triggers replenishment.
-    uint256 constant REPLENISH_BATCH = (
-        LIFECYCLE_RESERVE_TARGET - REPLENISH_THRESHOLD - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE
-    ) / ADD_PIECES_PER_PIECE_FEE + 1;
+    uint256 constant REPLENISH_BATCH =
+        (LIFECYCLE_RESERVE_TARGET - REPLENISH_THRESHOLD - CREATE_DATA_SET_FEE - ADD_PIECES_BASE_FEE)
+            / ADD_PIECES_PER_PIECE_FEE + 1;
     // Current upstream ceiling from PDPVerifier's PiecesAdded event under the FVM event value limit.
     uint256 constant BATCH_CAP = 41;
     // Fee drained by each full-BATCH_CAP addPieces call (CREATE_DATA_SET_FEE only appears in the first call).

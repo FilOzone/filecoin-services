@@ -862,11 +862,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with metadataKeys/metadataValues
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            payer: client,
-            clientDataSetId: 0,
-            metadataKeys: dsKeys,
-            metadataValues: dsValues,
-            signature: FAKE_SIGNATURE
+            payer: client, clientDataSetId: 0, metadataKeys: dsKeys, metadataValues: dsValues, signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData = abi.encode(
             createData.payer,
@@ -1745,7 +1741,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
     }
 
-    function deleteDataSetForClient(address provider, address, /* clientAddress */ uint256 dataSetId) internal {
+    function deleteDataSetForClient(
+        address provider,
+        address,
+        /* clientAddress */
+        uint256 dataSetId
+    )
+        internal
+    {
         // Delete the data set as the provider
         vm.prank(provider);
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
@@ -1881,7 +1884,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
      * @param clientAddress The client address
      * @return The created data set ID
      */
-    function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory /*metadata*/ )
+    function createDataSetForServiceProviderTest(
+        address provider,
+        address clientAddress,
+        string memory /*metadata*/
+    )
         internal
         returns (uint256)
     {

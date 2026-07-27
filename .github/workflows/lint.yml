@@ -23,5 +23,4 @@ jobs:
         run: |
           cd service_contracts
           forge fmt --check
-          forge build
-          ! (forge lint 2>&1 | grep "")
+          forge lint --deny notes --quiet
