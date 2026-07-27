@@ -1424,7 +1424,7 @@ contract FilecoinWarmStorageService is
         string[][] memory allKeys,
         string[][] memory allValues,
         bytes memory signature
-    ) internal view {
+    ) internal {
         bytes32 digest = _hashTypedDataV4(
             SignatureVerificationLib.addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
@@ -1460,7 +1460,7 @@ contract FilecoinWarmStorageService is
         uint256 clientDataSetId,
         uint256[] memory pieceIds,
         bytes memory signature
-    ) internal view {
+    ) internal {
         bytes32 digest = _hashTypedDataV4(
             keccak256(
                 abi.encode(
@@ -1490,7 +1490,6 @@ contract FilecoinWarmStorageService is
 
     function _verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature)
         internal
-        view
         returns (address signer)
     {
         bytes32 digest =

@@ -109,6 +109,9 @@ library Errors {
     /// @param signature The signature presented for the operation
     error Unauthorized(address payer, bytes32 operation, bytes32 digest, bytes signature);
 
+    /// @notice The authorizer re-entered the authorization path during its own isAuthorized call
+    error AuthorizerReentrancy();
+
     /// @notice Extra data is required but was not provided
     error ExtraDataRequired();
 

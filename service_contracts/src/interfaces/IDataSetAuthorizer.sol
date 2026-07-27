@@ -5,6 +5,9 @@ pragma solidity ^0.8.20;
 /// @notice Optional per-data-set write ACL. When a payer attaches an authorizer, FWSS
 ///         delegates the entire authorization decision for that data set to it.
 /// @dev A revert (or out-of-gas) means "not authorized": the operation reverts.
+///      `isAuthorized` is a state-mutating call (not `view`), so an authorizer may update its own
+///      state while deciding (e.g. consume a nonce or rate-limit). FWSS caps the call's gas and
+///      blocks re-entry into the authorization path; see SignatureVerificationLib.verifyAuthorizer.
 interface IDataSetAuthorizer {
     /// @param dataSetId The data set being operated on.
     /// @param payer The data set's payer (the on-chain owner of the rails).
@@ -24,5 +27,5 @@ interface IDataSetAuthorizer {
         bytes32 digest,
         bytes calldata signature,
         bytes calldata operationData
-    ) external view returns (bool authorized);
+    ) external returns (bool authorized);
 }

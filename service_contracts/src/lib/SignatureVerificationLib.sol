@@ -297,10 +297,18 @@ library SignatureVerificationLib {
     ///      most 63/64 of the remaining gas, so this only binds when the caller supplies more.
     uint256 internal constant AUTHORIZER_GAS_LIMIT = 150_000_000;
 
+    /// @dev Transient-storage slot for the authorizer reentrancy latch. This library is DELEGATECALL'd,
+    ///      so the slot lives in the calling contract's (FWSS's) transient storage and the latch therefore
+    ///      spans the whole FWSS call frame, not just this library invocation.
+    bytes32 internal constant AUTHORIZER_REENTRANCY_SLOT =
+        keccak256("filecoin-warm-storage-service.authorizer.reentrancy.guard");
+
     /// @notice Delegates the authorization decision for an operation to the data set's authorizer.
     /// @dev Called only when an authorizer is attached: it is the sole gate. FWSS forwards the raw signature
     ///      plus the operation's raw data (`operationData`) and lets the authorizer recover and decide.
-    ///      Reverts with `Unauthorized` if the authorizer returns false.
+    ///      Reverts with `Unauthorized` if the authorizer returns false. `isAuthorized` is an untrusted,
+    ///      state-mutating CALL: it is gas-capped and wrapped in a transient reentrancy latch so an
+    ///      authorizer cannot re-enter the authorization path while its own decision is in flight.
     function verifyAuthorizer(
         address payer,
         bytes calldata signature,
@@ -309,13 +317,30 @@ library SignatureVerificationLib {
         uint256 dataSetId,
         address authorizer,
         bytes calldata operationData
-    ) public view returns (address) {
+    ) public returns (address) {
+        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
+        _setAuthorizerLock(true);
         require(
             IDataSetAuthorizer(authorizer).isAuthorized{gas: AUTHORIZER_GAS_LIMIT}(
                 dataSetId, payer, operation, digest, signature, operationData
             ),
             Errors.Unauthorized(payer, operation, digest, signature)
         );
+        _setAuthorizerLock(false);
         return payer;
+    }
+
+    function _authorizerLocked() private view returns (bool locked) {
+        bytes32 slot = AUTHORIZER_REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            locked := tload(slot)
+        }
+    }
+
+    function _setAuthorizerLock(bool value) private {
+        bytes32 slot = AUTHORIZER_REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            tstore(slot, value)
+        }
     }
 }

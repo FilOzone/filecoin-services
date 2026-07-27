@@ -12,6 +12,11 @@
   },
   {
     "type": "error",
+    "name": "AuthorizerReentrancy",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CDNPaymentAlreadyTerminated",
     "inputs": [
       {

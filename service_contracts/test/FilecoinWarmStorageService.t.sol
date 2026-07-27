@@ -165,6 +165,47 @@ contract OperationDataCheckingAuthorizer is IDataSetAuthorizer {
     }
 }
 
+/// Mutates its own storage while deciding. Only succeeds because `isAuthorized` is now a CALL:
+/// under the old `view` surface FWSS STATICCALL'd it and any SSTORE would revert.
+contract StatefulDataSetAuthorizer is IDataSetAuthorizer {
+    uint256 public callCount;
+
+    function isAuthorized(uint256, address, bytes32, bytes32, bytes calldata, bytes calldata) external returns (bool) {
+        callCount++;
+        return true;
+    }
+}
+
+/// Calls the library exactly as FWSS does. A public library function is DELEGATECALL'd, so the
+/// transient reentrancy latch lives in this harness's context and spans the whole call frame.
+contract VerifyAuthorizerHarness {
+    address internal constant PAYER = address(0xBEEF);
+
+    function callVerify(address authorizer, uint256 dataSetId) external returns (address) {
+        return SignatureVerificationLib.verifyAuthorizer(PAYER, "", bytes32(0), bytes32(0), dataSetId, authorizer, "");
+    }
+}
+
+/// Re-enters the authorization path from inside `isAuthorized`. With a harness set, the nested
+/// verifyAuthorizer must trip the latch; with none it is a plain always-authorize implementation.
+contract ReenteringDataSetAuthorizer is IDataSetAuthorizer {
+    VerifyAuthorizerHarness public harness;
+
+    function setHarness(VerifyAuthorizerHarness _harness) external {
+        harness = _harness;
+    }
+
+    function isAuthorized(uint256 dataSetId, address, bytes32, bytes32, bytes calldata, bytes calldata)
+        external
+        returns (bool)
+    {
+        if (address(harness) != address(0)) {
+            harness.callVerify(address(this), dataSetId);
+        }
+        return true;
+    }
+}
+
 contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
     using PDPOffering for PDPOffering.Schema;
@@ -5613,6 +5654,46 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         makeSignaturePass(bob);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
+    }
+
+    function testDataSetAuthorizerCanMutateStateDuringAuthorization() public {
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "acl");
+        uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
+
+        StatefulDataSetAuthorizer authorizer = new StatefulDataSetAuthorizer();
+        vm.prank(client);
+        pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
+
+        // The authorizer writes to its own storage while deciding. This succeeds only because the
+        // authorizer is invoked with a CALL, not a STATICCALL — the old `view` surface would revert.
+        makeSignaturePass(client);
+        _addAuthorizerTestPiece(dataSetId, 1);
+        assertEq(authorizer.callCount(), 1, "authorizer should have mutated state once");
+
+        makeSignaturePass(client);
+        _addAuthorizerTestPiece(dataSetId, 2);
+        assertEq(authorizer.callCount(), 2, "authorizer state should accumulate across writes");
+    }
+
+    function testAuthorizerReentrancyLatchBlocksReentry() public {
+        VerifyAuthorizerHarness harness = new VerifyAuthorizerHarness();
+        ReenteringDataSetAuthorizer authorizer = new ReenteringDataSetAuthorizer();
+        authorizer.setHarness(harness);
+
+        // isAuthorized re-enters verifyAuthorizer in the same (harness) transient context. The latch
+        // is already held, so the nested call reverts and that revert bubbles out through the outer call.
+        vm.expectRevert(Errors.AuthorizerReentrancy.selector);
+        harness.callVerify(address(authorizer), 1);
+    }
+
+    function testAuthorizerReentrancyLatchClearsBetweenCalls() public {
+        VerifyAuthorizerHarness harness = new VerifyAuthorizerHarness();
+        ReenteringDataSetAuthorizer authorizer = new ReenteringDataSetAuthorizer(); // no harness -> no reentry
+
+        // Two independent authorizations in one transaction both succeed: the latch is released after
+        // each call and does not leak into the next.
+        assertEq(harness.callVerify(address(authorizer), 1), address(0xBEEF));
+        assertEq(harness.callVerify(address(authorizer), 2), address(0xBEEF));
     }
 
     function _addAuthorizerTestPiece(uint256 dataSetId, uint256 nonce) internal {
