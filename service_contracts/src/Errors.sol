@@ -209,10 +209,6 @@ library Errors {
     /// @param v The actual v value provided
     error UnsupportedSignatureV(uint8 v);
 
-    /// @notice Payment rail is not associated with any data set
-    /// @param railId The rail ID
-    error RailNotAssociated(uint256 railId);
-
     /// @notice The epoch range is invalid
     /// @notice Will be emitted if any of the following conditions is NOT met:
     /// @notice 1. fromEpoch must be less than toEpoch

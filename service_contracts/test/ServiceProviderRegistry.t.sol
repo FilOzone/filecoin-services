@@ -54,6 +54,14 @@ contract ServiceProviderRegistryTest is MockFVMTest {
     }
 
     function testAnnouncePlannedUpgrade() public {
+        _testAnnouncePlannedUpgrade(true);
+    }
+
+    function testAnnounceUpgradePlan() public {
+        _testAnnouncePlannedUpgrade(false);
+    }
+
+    function _testAnnouncePlannedUpgrade(bool useDeprecatedMethod) internal {
         // Initially, no upgrade is planned
         (address nextImplementation, uint96 afterEpoch) = registry.nextUpgrade();
         assertEq(nextImplementation, address(0));
@@ -63,13 +71,20 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
 
         // Announce upgrade
+        nextImplementation = address(newImplementation);
+        uint96 delay = 2000;
+        afterEpoch = uint96(vm.getBlockNumber()) + delay;
         ServiceProviderRegistry.PlannedUpgrade memory plan;
-        plan.nextImplementation = address(newImplementation);
-        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+        plan.nextImplementation = nextImplementation;
+        plan.afterEpoch = afterEpoch;
 
         vm.expectEmit(false, false, false, true);
         emit ServiceProviderRegistry.UpgradeAnnounced(plan);
-        registry.announcePlannedUpgrade(plan);
+        if (useDeprecatedMethod) {
+            registry.announcePlannedUpgrade(plan);
+        } else {
+            registry.announceUpgradePlan(nextImplementation, delay);
+        }
 
         // Verify upgrade plan is stored
         (nextImplementation, afterEpoch) = registry.nextUpgrade();
@@ -116,34 +131,74 @@ contract ServiceProviderRegistryTest is MockFVMTest {
     }
 
     function testAnnouncePlannedUpgradeOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(true);
+    }
+
+    function testAnnounceUpgradePlanOnlyOwner() public {
+        _testAnnouncePlannedUpgradeOnlyOwner(false);
+    }
+
+    function _testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) internal {
         ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
-        ServiceProviderRegistry.PlannedUpgrade memory plan;
-        plan.nextImplementation = address(newImplementation);
-        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
 
         // Non-owner cannot announce upgrade
         vm.prank(user1);
         vm.expectRevert();
-        registry.announcePlannedUpgrade(plan);
+        if (useDeprecatedMethod) {
+            ServiceProviderRegistry.PlannedUpgrade memory plan;
+            plan.nextImplementation = address(newImplementation);
+            plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+            registry.announcePlannedUpgrade(plan);
+        } else {
+            registry.announceUpgradePlan(address(newImplementation), 2000);
+        }
     }
 
     function testAnnouncePlannedUpgradeInvalidImplementation() public {
-        ServiceProviderRegistry.PlannedUpgrade memory plan;
-        plan.nextImplementation = address(0x123); // Invalid address with no code
-        plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
-
-        vm.expectRevert();
-        registry.announcePlannedUpgrade(plan);
+        _testAnnouncePlannedUpgradeInvalidImplementation(true);
     }
 
-    function testAnnouncePlannedUpgradeInvalidEpoch() public {
-        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
-        ServiceProviderRegistry.PlannedUpgrade memory plan;
-        plan.nextImplementation = address(newImplementation);
-        plan.afterEpoch = uint96(vm.getBlockNumber()); // Must be in the future
+    function testAnnounceUpgradePlanInvalidImplementation() public {
+        _testAnnouncePlannedUpgradeInvalidImplementation(false);
+    }
 
-        vm.expectRevert();
-        registry.announcePlannedUpgrade(plan);
+    function _testAnnouncePlannedUpgradeInvalidImplementation(bool useDeprecatedMethod) internal {
+        if (useDeprecatedMethod) {
+            ServiceProviderRegistry.PlannedUpgrade memory plan;
+            plan.nextImplementation = address(0x123); // Invalid address with no code
+            plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
+            vm.expectRevert();
+            registry.announcePlannedUpgrade(plan);
+        } else {
+            vm.expectRevert();
+            registry.announceUpgradePlan(address(0x123), 2000); // Invalid address with no code
+        }
+    }
+
+    // A low or past afterEpoch/delay is clamped up to the minimum rather than reverting
+    function testAnnouncePlannedUpgradeMinimumDelay() public {
+        _testAnnouncePlannedUpgradeMinimumDelay(true);
+    }
+
+    function testAnnounceUpgradePlanMinimumDelay() public {
+        _testAnnouncePlannedUpgradeMinimumDelay(false);
+    }
+
+    function _testAnnouncePlannedUpgradeMinimumDelay(bool useDeprecatedMethod) internal {
+        ServiceProviderRegistry newImplementation = new ServiceProviderRegistry(2);
+
+        if (useDeprecatedMethod) {
+            ServiceProviderRegistry.PlannedUpgrade memory plan;
+            plan.nextImplementation = address(newImplementation);
+            plan.afterEpoch = 0;
+            registry.announcePlannedUpgrade(plan);
+        } else {
+            registry.announceUpgradePlan(address(newImplementation), 0);
+        }
+
+        (address nextImplementation, uint96 afterEpoch) = registry.nextUpgrade();
+        assertEq(nextImplementation, address(newImplementation));
+        assertEq(afterEpoch, vm.getBlockNumber() + 1);
     }
 
     function testIsRegisteredProviderReturnsFalse() public view {

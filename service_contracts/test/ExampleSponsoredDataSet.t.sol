@@ -185,7 +185,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         ExampleSponsoredDataSet dataSet,
         string[] memory keys,
         string[] memory values
-    ) internal {
+    ) internal view {
         address signer = _createDataSetSigner(payee, keys, values);
         assertTrue(signer != address(0));
         assertEq(
@@ -896,8 +896,12 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
     }
 
     function testMigrateUnfinalized(bool finalizeSuccessor) public {
-        (uint64 sourceNonce, ExampleSponsoredDataSet source, uint64 successorNonce, ExampleSponsoredDataSet successor,)
-        = _setupUnfinalizedMigration(finalizeSuccessor);
+        (
+            uint64 sourceNonce,
+            ExampleSponsoredDataSet source,
+            uint64 successorNonce,
+            ExampleSponsoredDataSet successor,
+        ) = _setupUnfinalizedMigration(finalizeSuccessor);
 
         (uint256 srcFunds, uint256 srcLockup,,) = payments.accounts(IERC20(address(token)), address(source));
         uint256 available = srcFunds - srcLockup;

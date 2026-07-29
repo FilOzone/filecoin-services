@@ -106,6 +106,24 @@
   },
   {
     "type": "function",
+    "name": "announceUpgradePlan",
+    "inputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "delayEpochs",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "configureProvingPeriod",
     "inputs": [
       {
@@ -702,7 +720,7 @@
       }
     ],
     "outputs": [],
-    "stateMutability": "nonpayable"
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2002,17 +2020,6 @@
       },
       {
         "name": "nowBlock",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "RailNotAssociated",
-    "inputs": [
-      {
-        "name": "railId",
         "type": "uint256",
         "internalType": "uint256"
       }
