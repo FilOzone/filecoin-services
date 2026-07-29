@@ -95,7 +95,6 @@ contract MockERC20 is IERC20, IERC20Metadata {
 
 // MockPDPVerifier is used to simulate the PDPVerifier for our tests
 contract MockPDPVerifier {
-    uint256 public USDFC_SYBIL_FEE = 0.1e18;
     uint256 public nextDataSetId = 1;
 
     // Track data set service providers for testing
@@ -173,6 +172,25 @@ contract MockPDPVerifier {
         return dataSetLeafCount[setId];
     }
 
+    // Mirror of real PDPVerifier.nextProvingPeriod: rejects calls when the dataset has never had
+    // leaves, matching the real contract's "can only start proving once leaves are added" guard.
+    // Pass leafCount=0 with a non-zero dataSetLeafCount to simulate the real PDPVerifier calling
+    // the listener after all pieces have been removed (challengeEpoch=0 in that case).
+    function nextProvingPeriod(
+        PDPListener listenerAddr,
+        uint256 dataSetId,
+        uint256 challengeEpoch,
+        uint256 leafCount,
+        bytes calldata extraData
+    ) external {
+        require(dataSetLeafCount[dataSetId] > 0 || leafCount > 0, "can only start proving once leaves are added");
+        listenerAddr.nextProvingPeriod(dataSetId, challengeEpoch, leafCount, extraData);
+    }
+
+    function setDataSetLeafCount(uint256 dataSetId, uint256 count) external {
+        dataSetLeafCount[dataSetId] = count;
+    }
+
     /**
      * @notice Simulates service provider change for testing purposes
      * @dev This function mimics the PDPVerifier's claimDataSetOwnership functionality
@@ -201,9 +219,8 @@ contract MockPDPVerifier {
 
         // Call the listener's storageProviderChanged function
         if (listenerAddr != address(0)) {
-            PDPListener(listenerAddr).storageProviderChanged(
-                dataSetId, oldServiceProvider, newServiceProvider, extraData
-            );
+            PDPListener(listenerAddr)
+                .storageProviderChanged(dataSetId, oldServiceProvider, newServiceProvider, extraData);
         }
 
         emit DataSetServiceProviderChanged(dataSetId, oldServiceProvider, newServiceProvider);

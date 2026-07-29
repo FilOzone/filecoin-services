@@ -51,6 +51,7 @@ echo "✓ ProviderIdSet deployed at: $ENDORSEMENT_SET_ADDRESS"
 # Update deployments.json
 if [ -n "$ENDORSEMENT_SET_ADDRESS" ]; then
     update_deployment_address "$CHAIN" "ENDORSEMENT_SET_ADDRESS" "$ENDORSEMENT_SET_ADDRESS"
+    update_deployment_bytecode "$CHAIN" "ENDORSEMENT_SET" "src/ProviderIdSet.sol:ProviderIdSet" ""
 fi
 
 # Automatic contract verification

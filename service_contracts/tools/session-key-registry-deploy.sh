@@ -52,6 +52,7 @@ echo SessionKeyRegistry deployed at $SESSION_KEY_REGISTRY_ADDRESS
 # Update deployments.json
 if [ -n "$SESSION_KEY_REGISTRY_ADDRESS" ]; then
     update_deployment_address "$CHAIN" "SESSION_KEY_REGISTRY_ADDRESS" "$SESSION_KEY_REGISTRY_ADDRESS"
+    update_deployment_bytecode "$CHAIN" "SESSION_KEY_REGISTRY" "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry" ""
     update_deployment_metadata "$CHAIN"
 fi
 

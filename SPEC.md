@@ -6,6 +6,8 @@
 
 FilecoinWarmStorageService uses **static global pricing**. All payment rails use the same price regardless of which provider stores the data. The default storage price is 2.5 USDFC per TiB/month.
 
+All pricing constants (rates, fees, and lockup amounts) are defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). The on-chain entry point is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol) which assembles them into the `PriceList` struct.
+
 Providers may advertise their own prices in the ServiceProviderRegistry, but these are informational for other services, and does not affect actual payments in FilecoinWarmStorageService.
 
 ### Rate Calculation
@@ -18,22 +20,75 @@ EPOCHS_PER_MONTH              = 86400         # 2880 epochs/day × 30 days
 TiB                           = 1099511627776 # bytes
 
 # Default pricing (owner-adjustable)
-pricePerTiBPerMonth           = 2.5 USDFC
-minimumStorageRatePerMonth    = 0.06 USDFC
+STORAGE_PRICE_PER_TIB_PER_MONTH = 2.5 USDFC
+DATASET_FEE_PER_MONTH           = 0.024 USDFC
 
 # Per-epoch rate calculation
-sizeBasedRate = totalBytes × pricePerTiBPerMonth ÷ TiB ÷ EPOCHS_PER_MONTH
-minimumRate   = minimumStorageRatePerMonth ÷ EPOCHS_PER_MONTH
-finalRate     = max(sizeBasedRate, minimumRate)
+sizeBasedRate         = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
+DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH
+finalRate             = sizeBasedRate + DATASET_FEE_PER_EPOCH
 ```
 
-The default minimum floor ensures datasets below ~24.58 GiB still generate the minimum payment of 0.06 USDFC/month.
+Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. A 1 TiB dataset costs 2.524 USDFC/month. A dataset with no pieces is inactive: no proving is required and no payment accrues.
 
-**Precision note**: Integer division when computing `minimumRate` causes minor precision loss. The actual monthly payment (`minimumRate × EPOCHS_PER_MONTH`) is slightly less than `minimumStorageRatePerMonth`—under 0.0001% for typical floor prices. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+**Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+
+### Operation Fees
+
+In addition to the ongoing storage rate, FWSS charges one-time fees for specific lifecycle operations. These fees are deducted from a **lifecycle reserve** maintained as fixed lockup on the PDP rail.
+
+| Operation | Fee | Trigger | Recipient |
+|---|---|---|---|
+| Create dataset | $0.025 | `dataSetCreated` callback | SP |
+| Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
+| Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
+| Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |
+
+The terminate fee applies only in the **consent case**: when the SP calls `terminateService` with a valid payer signature in `extraData`. Direct termination by the payer or unilateral SP termination does not incur this fee.
+
+#### Lifecycle Reserve
+
+The lifecycle reserve is seeded at **$0.10** when the dataset is created, stored as `lockupFixed` on the PDP rail.
+
+```
+LIFECYCLE_RESERVE_TARGET = $0.10
+REPLENISH_THRESHOLD      = $0.005
+```
+
+**Flush mechanism**: Operation fees are not paid immediately. Each triggering operation increments `pendingOneTimePayments` (a local field in `DataSetInfo`). The accumulated amount is flushed the next time `updateStorageRates` runs—once per `piecesAdded` and once per `nextProvingPeriod`:
+
+```
+modifyRailPayment(pdpRailId, newStorageRate, pendingFees)
+lifecycleReserveBalance -= pendingFees
+pendingOneTimePayments   = 0
+```
+
+This keeps the hot path at one external call per event.
+
+**Replenishment**: When `lifecycleReserveBalance < pending + REPLENISH_THRESHOLD`, the reserve is topped back up via `modifyRailLockup`, setting `lockupFixed` to `LIFECYCLE_RESERVE_TARGET + pending`. After the next flush deducts the pending fees, the net balance returns to `LIFECYCLE_RESERVE_TARGET`. For `piecesAdded` and `nextProvingPeriod`, replenishment and flush happen together inside `updateStorageRates`. For `piecesScheduledRemove`, replenishment fires immediately at scheduling time—before the fee is deferred to the next flush—so the reserve covers accumulating debt even when piece removals precede the next proving period by a long interval.
+
+**Post-termination**: Once the PDP rail is terminated, `modifyRailLockup` can no longer raise `lockupFixed`. The reserve balance at termination time is the maximum available for wind-down fees. Clients anticipating many post-termination piece removals should pre-fund the reserve before terminating.
+
+**Manual top-up**: The payer can call `topUpLifecycleReserve(dataSetId, amount)` at any time before termination. The payer must have sufficient available funds and `lockupAllowance` to cover the increase; `modifyRailLockup` enforces this via the standard operator approval checks.
+
+### Price Discovery
+
+The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+
+```solidity
+struct PriceList {
+    IERC20 token;
+    PriceListRates rates;       // storage, dataset fee, CDN egress, cache-miss egress
+    PriceListFees fees;          // create, add-pieces base+per-piece, schedule-removals, terminate
+    PriceListLockups lockups;    // lifecycle reserve, replenish threshold, CDN amounts, lockup periods
+}
+```
+
+This is the canonical price discovery API for SDKs and dashboards. The struct is defined in [`service_contracts/src/lib/PriceList.sol`](service_contracts/src/lib/PriceList.sol) and populated from the constants in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol).
 
 ### Pricing Updates
 
-Only the contract owner can update pricing by calling `updatePricing(newStoragePrice, newMinimumRate)`. Maximum allowed values are 10 USDFC for storage price and 0.24 USDFC for minimum rate.
+Only the contract owner can update pricing, by upgrading the contract.
 
 **Effect on existing datasets**: Pricing changes do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
 
@@ -41,7 +96,7 @@ Only the contract owner can update pricing by calling `updatePricing(newStorageP
 
 Rate recalculation timing differs for additions and deletions due to proving semantics:
 
-- **Adding pieces**: The rate updates immediately when `piecesAdded()` is called. The client begins paying for new pieces right away, even though those pieces won't be included in proof challenges until the next proving period. This fail-fast behavior protects providers: if the client lacks sufficient funds for the new lockup, the transaction fails before the provider commits resources.
+- **Adding pieces**: The rate and corresponding lockup requirement update immediately when `piecesAdded()` is called, even before proving activation. This fail-fast behavior protects providers by rejecting additions the client cannot fund before the provider commits resources. Streaming storage payment becomes eligible only after the first `nextProvingPeriod()` activates proving; pre-activation epochs settle with zero payment. One-time lifecycle fees remain payable before activation.
 
 - **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized. This deferral is required because proofs may challenge any portion of the current data set during the proving period—the provider must continue storing and proving all existing data until the period ends.
 
@@ -49,11 +104,11 @@ Rate recalculation timing differs for additions and deletions due to proving sem
 
 During each proving period, proofs are generated over a fixed data set. The prover must maintain the complete data set because challenges can target any leaf:
 
-- **Additions expand the proof space** but don't affect existing challenges. New pieces simply won't be challenged until the next period. Payment starts immediately because storage resources are committed.
+- **Additions expand the proof space** but don't affect existing challenges. Before activation they update the rate and lockup without earning streaming payment. After activation the new rate becomes payable immediately, even though the added pieces won't be challenged until the next period.
 
 - **Deletions would shrink the proof space** mid-period, potentially invalidating challenges. The data must remain intact until `nextProvingPeriod()` finalizes the removal. Only then does the rate decrease.
 
-This ensures proof integrity while providing fair payment semantics: you pay when you add, and continue paying for deletions until the proving period boundary.
+This ensures proof integrity while providing fair payment semantics: additions reserve funding immediately and become payable once proving is active, while deletions remain payable until the proving period boundary.
 
 ### Rate Changes After Termination
 
@@ -77,9 +132,9 @@ Clients pay for storage by depositing USDFC into the Filecoin Pay contract. Thes
 lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-At minimum pricing, this equals `minimumStorageRatePerMonth` (0.06 USDFC at default settings). For larger datasets, the lockup equals one month's storage cost.
+For an empty dataset this equals `DATASET_FEE_PER_MONTH` (0.024 USDFC). For datasets with data, the lockup equals one month's total cost (size-based rate plus dataset fee).
 
-**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(minimumStorageRatePerMonth × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages (the configured floor price rather than a value with precision loss artifacts) and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
+**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(DATASET_FEE_PER_MONTH × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
 
 **Storage duration** extends as clients deposit additional funds:
 
@@ -92,6 +147,26 @@ Deposits extend the duration without changing the rate (unless adding pieces tri
 **Delinquency**: When a client's funded epoch falls below the current epoch, the payment rail can no longer be settled—no further payments flow to the provider. The provider may terminate the service to claim payment from the locked funds, guaranteeing up to 30 days of payment from the last funded epoch.
 
 ## Settlement and Payment Validation
+
+### Proving Activation Lifecycle
+
+Data set creation does not activate proving. Client tooling typically uses PDPVerifier's combined create-and-add operation. PDPVerifier delivers that operation to FWSS as separate `dataSetCreated()` and `piecesAdded()` callbacks. A data set may receive one or more such piece callbacks before the service provider's first `nextProvingPeriod()` call.
+
+The data set may also be terminated before proving activates. The first `nextProvingPeriod()` can still activate proving while the PDP rail's termination window remains open. A callback that modifies payment state must execute strictly before `pdpEndEpoch`; at `pdpEndEpoch`, activation succeeds only when no pending fee or scheduled removal requires a payment update. Consent-based immediate termination can therefore coincide with activation in the same epoch when no payment update is needed.
+
+The first `nextProvingPeriod()` sets `provingActivationEpoch` to the current epoch `A` and schedules the first deadline. `A` is a boundary marker, not a billable epoch; the first billable proving epoch is `A+1`.
+
+If all pieces are removed, PDPVerifier reports `NO_CHALLENGE_SCHEDULED` and FWSS suspends proving by clearing the current deadline. The original activation epoch remains the lifetime origin for proving-period deadlines, proof bitmap indices, and payment validation. Adding pieces later does not rebase this history.
+
+For an inactive data set with a prior activation, `nextPDPChallengeWindowStart()` returns a challenge window on the original timeline. Given the current epoch `C`, it chooses the earliest canonical deadline `D = A + n*M` with `D >= C+M`, and returns `D-W`, where `W` is the challenge-window size. The subsequent `nextProvingPeriod()` independently derives the earliest valid deadline at execution, accepts only a challenge epoch in its window, and preserves `A`.
+
+Periods elapsed while proving is suspended have no proof and settle with zero payment once their deadlines pass. Proof bits recorded before suspension retain their original period IDs and remain payable. Pieces added while proving is suspended update the rate and lockup immediately, but epochs before the selected reactivation period have no proof and therefore earn no streaming payment.
+
+Because the view call and transaction use their respective current epochs, the returned window can become stale before inclusion if the earliest valid deadline advances. A caller receiving `InvalidChallengeEpoch` must query `nextPDPChallengeWindowStart()` again and retry. The challenge must also satisfy PDPVerifier's normal minimum and maximum delay rules; the current mainnet and calibnet parameters provide ample headroom.
+
+Before activation, `piecesAdded()` still updates the Filecoin Pay rate and lockup requirement. This enforces funding before the provider commits storage, but does not make pre-activation epochs payable. When Filecoin Pay later presents a rate segment ending at or before `A`, `validatePayment()` advances `settleUpto` through the segment with zero payment. Segments crossing `A` exclude their pre-activation epochs from payment. This also lets terminated, never-activated data sets release their streaming lockup cleanly.
+
+One-time lifecycle fees are independent of proving activation and remain payable when their operations occur.
 
 ### Proving Period Epoch Conventions
 
@@ -125,6 +200,8 @@ Each proving period is in one of three states:
 - **Faulted**: Deadline has passed with no proof. Settlement advances but payment is zero.
 - **Open**: Deadline has not yet passed, no proof. Settlement is blocked at the period boundary because the provider may still submit a proof.
 
+When `provingActivationEpoch == 0` (data set created, possibly populated, but the SP has not yet called `nextProvingPeriod`), `validatePayment()` short-circuits with zero payment and `settleUpto = toEpoch`, so settlement can advance through pre-activation epochs. Without this, `settleRail()` reverts with `NoProgressInSettlement` on never-activated data sets.
+
 ### Partial-Period Settlement (FilecoinPay Rate Changes)
 
 Where base rail rate changes have occurred (e.g. pieces were added mid-period, changing the payment rate), FilecoinPay settles each rate "segment" independently (see `_settleWithRateChanges`). Each segment gets its own `validatePayment()` call with a `toEpoch` that may fall anywhere within a proving period. So `validatePayment()` must be able to handle settlement of near-arbitrary ranges (see `_findProvenEpochs`).
@@ -145,6 +222,22 @@ After termination, the payment rail enters a lockup period. Settlement continues
 
 The client's locked funds are released proportionally as settlement progresses. Unproven epochs result in funds returning to the client rather than flowing to the provider.
 
+### Service Termination
+
+Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the payer or the dataset's service provider is authorized.
+
+`terminateService` calls `FilecoinPay.terminateRail(pdpRailId)`. That call sets the rail's `endEpoch` and starts the lockup-period countdown to finalization. FilecoinPay then calls `railTerminated()` back into FWSS, since FWSS is the PDP rail's validator. The callback sets `info.pdpEndEpoch`, emits `PDPPaymentTerminated`, and verifies that the terminator is FWSS itself. The effect of that last check is that the PDP rail can only be terminated through `terminateService`. A direct `FilecoinPay.terminateRail` call from a client or SP is rejected inside the callback.
+
+**Unilateral termination**: When the payer or SP terminates without a consent signature, `lockupPeriod` is left at its existing 30-day value and `endEpoch = block.number + lockupPeriod`. The payer's funds continue flowing to the provider during that window.
+
+**Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`: `endEpoch = block.number` and the payer's streaming buffer is released immediately, along with the lifecycle reserve. A payer signature implies consent to releasing the lifecycle reserve and paying the terminate fee from `pending` in one step, so for underfunded payers this reverts (FilecoinPay blocks the lockup-period change) rather than falling back to the standard 30-day window.
+
+CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; for well-funded payers in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
+
+Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
+
+Data sets can also reach teardown without `terminateService` via the abandonment path; see below.
+
 ### Dataset Deletion Requirements
 
 Dataset deletion (`dataSetDeleted`) requires the payment rail to be fully settled before the dataset can be removed:
@@ -162,10 +255,18 @@ require(settledUpTo >= endEpoch, RailNotFullySettled)
 - Dataset deletion timing is controlled by proving period deadlines, not just the lockup period
 
 **Timing**: To delete a dataset after termination:
-1. Wait for `block.number > pdpEndEpoch` (lockup period elapsed)
+1. Wait for `block.number >= pdpEndEpoch` (lockup period elapsed)
 2. Wait for all proving period deadlines within the lockup to pass
 3. Call `settleRail()` to complete settlement (rail may auto-finalize)
 4. Call `deleteDataSet()` to remove the dataset
+
+For well-funded payers in the immediate termination case (`lockupPeriod = 0`, so `endEpoch = block.number`), steps 1–4 can all be batched into a single transaction: `terminateService` → `settleRail` → `deleteDataSet`.
+
+**State cleared**: The `dataSetDeleted` callback removes `dataSetInfo`, `provingDeadlines`, `provenThisPeriod`, `provingActivationEpoch`, `railToDataSet[pdpRailId]`, the dataset's entry in `clientDataSets[payer]`, and all `dataSetMetadata` entries. `clientNonces[payer][nonce]` is **not** cleared. It is retained to prevent replay of authorization signatures.
+
+**CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated as part of the `dataSetDeleted` callback itself.
+
+**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `Rails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve back to the payer, terminates the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away. For well-funded payers the lockup period is zeroed before termination, releasing the streaming buffer immediately. For underfunded payers the lockup period cannot be zeroed, so the PDP rail retains its default 30-day window and the streaming buffer is released only after that window elapses.
 
 ## CDN Payment Rails
 
@@ -174,7 +275,7 @@ Datasets with CDN support have three payment rails: a **PDP rail** for storage p
 - **Cache-miss rail** (`cacheMissRailId`): Pays to the storage provider (SP) for origin fetches
 - **Bandwidth rail** (`cdnRailId`): Pays to the FilBeam beneficiary address (immutably set at deployment)
 
-Both CDN rails have `paymentRate = 0` and use fixed lockup for one-time payments based on usage.
+Both CDN rails have `paymentRate = 0` and use fixed lockup for one-time payments based on usage. At dataset creation the cache-miss rail is seeded with **0.3 USDFC** and the CDN rail with **0.7 USDFC**. Both CDN rails use a **5-day lockup period**, which sets the settle window FilBeam has after dataset deletion to claim any remaining fixed lockup.
 
 ### Payment Models
 
@@ -202,11 +303,11 @@ FWSS tracks CDN-enabled datasets using a `withCDN` metadata key. This metadata i
 
 If CDN rails are terminated directly via FilecoinPay (bypassing FWSS), the `withCDN` metadata remains set because FWSS receives no callback. This creates an out-of-sync state where FWSS believes CDN is active but the underlying rails are terminated or finalized. Subsequent CDN operations (`topUpCDNPaymentRails`, `settleFilBeamPaymentRails`) will fail when they attempt to interact with the inactive rails.
 
-**Note**: There is currently no mechanism to clean up orphaned `withCDN` metadata. The practical impact is limited since `terminateService()` uses best-effort CDN termination (ignoring errors), so full service termination still succeeds.
+**Note**: There is currently no mechanism to clean up orphaned `withCDN` metadata. The practical impact is limited: `terminateService()` does not interact with CDN rails at all, so storage termination always succeeds; and CDN rail termination in `dataSetDeleted` is best-effort, so dataset deletion also succeeds.
 
 ### Service Termination
 
-When terminating a dataset's service, FWSS terminates the PDP rail (which it validates) and performs best-effort termination of CDN rails, ignoring any errors. This ensures service termination succeeds regardless of CDN rail state—whether rails are active, already terminated, or fully settled and finalized.
+`terminateService` only terminates the PDP rail. CDN rails remain active through the PDP rail's 30-day lockup window, allowing FilBeam to continue settling CDN usage during that period. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS terminates the CDN rails with best-effort error suppression. The CDN rails then enter their 5-day settle window; any remaining fixed lockup not claimed by FilBeam returns to the payer once the window closes.
 
 ## Contract Architecture
 
@@ -369,11 +470,12 @@ sequenceDiagram
 
   rect rgba(248, 248, 248, 0.2)
     Note over Client: 7. Termination
-    Client->>FWSS: (option 1) terminateService(datasetId)
-    SP->>FWSS: (option 2) terminateService(datasetId)
+    Client->>FWSS: (unilateral) terminateService(datasetId)
+    SP->>FWSS: (unilateral) terminateService(datasetId)
+    SP->>FWSS: (consent) terminateService(datasetId, payerSignature)
     FWSS->>FilecoinPayV1: terminateRail(railId)
     FilecoinPayV1-->>FWSS: rail terminated
-    Note over FilecoinPayV1: rail enters lockup, settlement continues
+    Note over FilecoinPayV1: unilateral enters 30-day lockup<br/>consent sets endEpoch = block.number
   end
 ```
 
@@ -458,7 +560,8 @@ Several concerns apply to any multi-contract migration, regardless of which comp
 - **Multisig flow**: All upgrades require owner authorization. If the owner is a multisig, the announce and execute steps each require separate multisig transactions with their own signing rounds.
 - **Rollback constraints**: UUPS upgrades are not reversible without another upgrade cycle. If a new implementation introduces a regression, the fix requires deploying yet another implementation and waiting through the announcement delay.
 - **Pre-upgrade testing**: New implementations should be tested against a fork of the live chain state to verify storage compatibility, correct immutable values, and expected behavior with existing data.
-- **Storage layout violations**: Reordering, inserting, or removing storage variables in a new implementation shifts slot assignments, corrupting all persisted proxy state. The codebase mitigates this through an auto-generated [`FilecoinWarmStorageServiceLayout.sol`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.sol) that documents every storage slot position using `forge inspect`. CI ([`check-gen`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates this file on every run and fails if the output diverges from the checked-in version, making unintentional slot changes visible in review. The contract source also includes explicit comments tying each variable to its layout slot. However, these are **detection** mechanisms — they surface layout drift in CI and pull-request diffs but do not structurally prevent a developer from reordering variables. The codebase does not use OpenZeppelin storage gaps (`uint256[50] __gap`) or ERC-7201 namespaced storage.
+- **Storage layout violations**: Reordering, inserting, or removing storage variables in a new implementation shifts slot assignments, corrupting all persisted proxy state. The codebase mitigates this through an auto-generated [`FilecoinWarmStorageServiceLayout.sol`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.sol) that documents every storage slot position using `forge inspect`. CI ([`check-gen`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates this file on every run and fails if the output diverges from the checked-in version, making unintentional slot changes visible in review. Additionally, CI explicitly verifies that new versions contain no destructive changes by comparing the full `forge inspect ... storageLayout` JSON metadata — a committed [`FilecoinWarmStorageServiceLayout.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.json) snapshot captures each variable's label, slot number, byte offset, and type. This catches not only slot removals and reorderings but also type changes (e.g., `uint256` → `uint128`) and offset repacking within the same slot that would silently corrupt proxy state. The contract source also includes explicit comments tying each variable to its layout slot. However, these are **detection** mechanisms — they surface layout drift in CI and pull-request diffs but do not structurally prevent a developer from reordering variables. The codebase does not use OpenZeppelin storage gaps (`uint256[50] __gap`) or ERC-7201 namespaced storage.
 - **Backwards incompatibility of implementation contracts**: Removing or changing the signature of a public/external function in a new implementation breaks callers that depend on the old ABI — most critically FilecoinPayV1, which is immutable and calls FWSS through the `IValidator` interface. The codebase checks in ABI JSON files under [`service_contracts/abi/`](https://github.com/FilOzone/filecoin-services/tree/main/service_contracts/abi) and CI ([`check-abi`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates them on every run, failing if any ABI has changed. This ensures that any function addition, removal, or signature change is surfaced as a diff during code review. As with storage layout, this is a **detection** mechanism — it flags changes but does not structurally prevent a breaking removal.
 
 **TODO:** Define concrete procedures for coordinated multi-contract upgrades. Document a pre-upgrade testing checklist. Specify rollback procedures and emergency response timelines. Evaluate adopting structural storage protections — such as OpenZeppelin storage gaps, [ERC-7201](https://eips.ethereum.org/EIPS/eip-7201) namespaced storage, [ERC-8042](https://eips.ethereum.org/EIPS/eip-8042), or the [Ithaca storage domain pattern](https://github.com/ithacaxyz/account/blob/ab0a493f04676abc71104623bcfcdede050da2ec/src/IthacaAccount.sol#L102) — for future contracts. Existing contracts will not be migrated to these patterns.
+

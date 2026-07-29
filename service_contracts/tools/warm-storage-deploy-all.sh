@@ -145,6 +145,7 @@ CHALLENGE_FINALITY="${CHALLENGE_FINALITY:-$DEFAULT_CHALLENGE_FINALITY}"
 MAX_PROVING_PERIOD="${MAX_PROVING_PERIOD:-$DEFAULT_MAX_PROVING_PERIOD}"
 CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-$DEFAULT_CHALLENGE_WINDOW_SIZE}"
 
+
 # ========================================
 # Deployment Helper Functions
 # ========================================
@@ -152,79 +153,6 @@ CHALLENGE_WINDOW_SIZE="${CHALLENGE_WINDOW_SIZE:-$DEFAULT_CHALLENGE_WINDOW_SIZE}"
 # ANSI formatting codes
 BOLD='\033[1m'
 RESET='\033[0m'
-
-# Deploy a contract implementation if address not already provided
-# Args: $1=var_name, $2=contract_path:contract_name, $3=description, $4...=constructor_args
-deploy_implementation_if_needed() {
-    local var_name="$1"
-    local contract="$2"
-    local description="$3"
-    shift 3
-    local constructor_args=("$@")
-
-    # Check if address already provided
-    if [ -n "${!var_name}" ]; then
-        echo -e "${BOLD}${description}${RESET}"
-        echo "  ✅ Using existing address: ${!var_name}"
-        echo
-        return 0
-    fi
-
-    echo -e "${BOLD}Deploying ${description}${RESET}"
-
-    if [ "$DRY_RUN" = "true" ]; then
-        echo "  🔍 Testing compilation..."
-        forge build --contracts "$contract" > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            # Generate a dummy address based on var name hash for consistency
-            local dummy_addr="0x$(printf '%s' "$var_name" | sha256sum | cut -c1-40)"
-            eval "$var_name='$dummy_addr'"
-            echo "  ✅ Compilation successful (dummy: ${!var_name})"
-        else
-            echo "  ❌ Compilation failed"
-            exit 1
-        fi
-    else
-        # Add libraries if LIBRARIES variable is set
-        if [ -n "$LIBRARIES" ]; then
-            echo "  📚 Using libraries: $LIBRARIES"
-        fi
-
-        # Add constructor args display if provided
-        if [ ${#constructor_args[@]} -gt 0 ]; then
-            echo "  🔧 Constructor args: ${#constructor_args[@]} arguments"
-        fi
-
-        # Build the forge create command
-        local forge_cmd=(forge create --password "$PASSWORD" $BROADCAST_FLAG --nonce "$NONCE")
-
-        if [ -n "$LIBRARIES" ]; then
-            forge_cmd+=(--libraries "$LIBRARIES")
-        fi
-
-        forge_cmd+=("$contract")
-
-        if [ ${#constructor_args[@]} -gt 0 ]; then
-            forge_cmd+=(--constructor-args "${constructor_args[@]}")
-        fi
-
-        local address=$("${forge_cmd[@]}" | grep "Deployed to" | awk '{print $3}')
-
-        if [ -z "$address" ]; then
-            echo "  ❌ Failed to extract address"
-            exit 1
-        fi
-
-        eval "$var_name='$address'"
-        echo "  ✅ Deployed at: ${!var_name}"
-        
-        # Update deployments.json
-        update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
-    fi
-
-    NONCE=$(expr $NONCE + "1")
-    echo
-}
 
 # Deploy a proxy contract if address not already provided
 # Args: $1=var_name, $2=implementation_address, $3=init_data, $4=description
@@ -263,8 +191,10 @@ deploy_proxy_if_needed() {
 
         eval "$var_name='$address'"
         echo "  ✅ Deployed at: ${!var_name}"
-        
+
         update_deployment_address "$CHAIN" "$var_name" "${!var_name}"
+        local contract_key="${var_name%_ADDRESS}"
+        update_deployment_bytecode "$CHAIN" "$contract_key" "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" "" "$implementation" "$init_data"
     fi
 
     NONCE=$(expr $NONCE + "1")
@@ -348,26 +278,15 @@ echo "  CHALLENGE_FINALITY=$CHALLENGE_FINALITY"
 echo "  MAX_PROVING_PERIOD=$MAX_PROVING_PERIOD"
 echo "  CHALLENGE_WINDOW_SIZE=$CHALLENGE_WINDOW_SIZE"
 
-# Test compilation of key contracts in dry-run mode
+# Build all contracts once in dry-run mode so per-step artifact checks hit the cache
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🔍 Testing compilation of core contracts..."
-    
-    # Test compilation without network interaction
-    echo "  - Testing FilecoinWarmStorageService compilation..."
-    forge build --contracts src/FilecoinWarmStorageService.sol > /dev/null 2>&1
+    echo "🔍 Building contracts..."
+    forge build
     if [ $? -ne 0 ]; then
-        echo "❌ FilecoinWarmStorageService compilation failed"
+        echo "❌ Contract compilation failed"
         exit 1
     fi
-    
-    echo "  - Testing ServiceProviderRegistry compilation..."
-    forge build --contracts src/ServiceProviderRegistry.sol > /dev/null 2>&1
-    if [ $? -ne 0 ]; then
-        echo "❌ ServiceProviderRegistry compilation failed"
-        exit 1
-    fi
-    
-    echo "✅ Core contract compilation tests passed"
+    echo "✅ Contract compilation passed"
 fi
 
 # ========================================
@@ -402,43 +321,44 @@ echo
 # Step 0: Deploy or use existing SessionKeyRegistry
 deploy_session_key_registry_if_needed
 
-# Step 1: Deploy or use existing PDPVerifier implementation
+# Step 1: Deploy or use existing FilecoinPayV1 contract
+deploy_implementation_if_needed \
+    "FILECOIN_PAY_ADDRESS" \
+    "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
+    "FilecoinPayV1"
+
+# Step 2: Deploy or use existing PDPVerifier implementation
 if [ -n "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
-    PDP_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $PDP_VERIFIER_PROXY_ADDRESS) + "1")
+    PDP_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $PDP_VERIFIER_PROXY_ADDRESS)
 else
-    PDP_INIT_COUNTER=1
+    PDP_INIT_COUNTER=0
 fi
 deploy_implementation_if_needed \
     "PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
     "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
     "PDPVerifier implementation" \
-    $PDP_INIT_COUNTER
+    "reinitializer=$PDP_INIT_COUNTER" \
+    "challenge_finality=$CHALLENGE_FINALITY"
 
-# Step 2: Deploy or use existing PDPVerifier proxy
-INIT_DATA=$(cast calldata "initialize(uint256)" $CHALLENGE_FINALITY)
+# Step 3: Deploy or use existing PDPVerifier proxy
+INIT_DATA=$(cast calldata "initialize()")
 deploy_proxy_if_needed \
     "PDP_VERIFIER_PROXY_ADDRESS" \
     "$PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
     "$INIT_DATA" \
     "PDPVerifier proxy"
 
-# Step 3: Deploy or use existing FilecoinPayV1 contract
-deploy_implementation_if_needed \
-    "FILECOIN_PAY_ADDRESS" \
-    "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
-    "FilecoinPayV1"
-
 # Step 4: Deploy or use existing ServiceProviderRegistry implementation
 if [ -n "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
-    SPR_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS) + "1")
+    SPR_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS)
 else
-    SPR_INIT_COUNTER=1
+    SPR_INIT_COUNTER=0
 fi
 deploy_implementation_if_needed \
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" \
     "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
     "ServiceProviderRegistry implementation" \
-    $SPR_INIT_COUNTER
+    "reinitializer=$SPR_INIT_COUNTER"
 
 # Step 5: Deploy or use existing ServiceProviderRegistry proxy
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
@@ -454,28 +374,34 @@ deploy_implementation_if_needed \
     "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
     "SignatureVerificationLib"
 
-# Step 7: Deploy or use existing FilecoinWarmStorageService implementation
-# Set LIBRARIES variable for the deployment helper (format: path:name:address)
+# Step 7: Deploy or use existing Rails
+deploy_implementation_if_needed \
+    "RAILS_LIB_ADDRESS" \
+    "src/lib/Rails.sol:Rails" \
+    "Rails"
+
+# Step 8: Deploy or use existing FilecoinWarmStorageService implementation
+# Set LIBRARIES variable for the deployment helper (comma-separated path:name:address)
 if [ -n "$FWSS_PROXY_ADDRESS" ]; then
-    FWSS_INIT_COUNTER=$(expr $($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS) + "1")
+    FWSS_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS)
 else
-    FWSS_INIT_COUNTER=1
+    FWSS_INIT_COUNTER=0
 fi
-LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS"
+LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/Rails.sol:Rails:$RAILS_LIB_ADDRESS"
 deploy_implementation_if_needed \
     "FWSS_IMPLEMENTATION_ADDRESS" \
     "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
     "FilecoinWarmStorageService implementation" \
-    "$PDP_VERIFIER_PROXY_ADDRESS" \
-    "$FILECOIN_PAY_ADDRESS" \
-    "$USDFC_TOKEN_ADDRESS" \
-    "$FILBEAM_BENEFICIARY_ADDRESS" \
-    "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
-    "$SESSION_KEY_REGISTRY_ADDRESS" \
-    "$FWSS_INIT_COUNTER"
+    "pdp_verifier=$PDP_VERIFIER_PROXY_ADDRESS" \
+    "filecoin_pay=$FILECOIN_PAY_ADDRESS" \
+    "usdfc_token=$USDFC_TOKEN_ADDRESS" \
+    "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
+    "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
+    "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
+    "reinitializer=$FWSS_INIT_COUNTER"
 unset LIBRARIES
 
-# Step 8: Deploy or use existing FilecoinWarmStorageService proxy
+# Step 9: Deploy or use existing FilecoinWarmStorageService proxy
 # Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
 INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
 deploy_proxy_if_needed \
@@ -484,9 +410,11 @@ deploy_proxy_if_needed \
     "$INIT_DATA" \
     "FilecoinWarmStorageService proxy"
 
-# Step 9: Deploy FilecoinWarmStorageServiceStateView
+# Step 10: Deploy FilecoinWarmStorageServiceStateView
 echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
-if [ "$DRY_RUN" = "true" ]; then
+if ! needs_deployment "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"; then
+    echo "  ✅ Up to date at: $FWSS_VIEW_ADDRESS"
+elif [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would deploy (skipping in dry-run)"
     FWSS_VIEW_ADDRESS="0x8901234567890123456789012345678901234567"  # Dummy address for dry-run
     echo "  ✅ Deployment planned (dummy: $FWSS_VIEW_ADDRESS)"
@@ -495,27 +423,28 @@ else
     source "$SCRIPT_DIR/warm-storage-deploy-view.sh"
     echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
     NONCE=$(expr $NONCE + "1")
-    
+
     # Update deployments.json
-    if [ -n "$FWSS_VIEW_ADDRESS" ]; then
-        update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
-    fi
+    update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
 fi
 echo
 
-# Step 10: Set the view contract address on the main contract
+# Step 11: Set the view contract address on the main contract
 echo -e "${BOLD}Setting view contract address${RESET}"
 if [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
 else
     echo "  🔧 Setting view address on FilecoinWarmStorageService..."
-    source "$SCRIPT_DIR/warm-storage-set-view.sh"
-    echo "  ✅ View address set"
-    NONCE=$(expr $NONCE + "1")
+    if source "$SCRIPT_DIR/warm-storage-set-view.sh"; then
+        echo "  ✅ View address set"
+        NONCE=$(expr $NONCE + "1")
+    else
+        echo "  ⚠️  setViewContract skipped — deployer is not owner (use multisig)"
+    fi
 fi
 echo
 
-# Step 11: Deploy Endorsements ProviderIdSet
+# Step 12: Deploy Endorsements ProviderIdSet
 deploy_endorsements_if_needed
 
 if [ "$DRY_RUN" = "true" ]; then
@@ -538,6 +467,8 @@ echo "PDPVerifier Proxy: $PDP_VERIFIER_PROXY_ADDRESS"
 echo "FilecoinPayV1 Contract: $FILECOIN_PAY_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
+echo "SignatureVerificationLib: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
+echo "Rails: $RAILS_LIB_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $FWSS_PROXY_ADDRESS"
 echo "FilecoinWarmStorageServiceStateView: $FWSS_VIEW_ADDRESS"
@@ -568,6 +499,8 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$FILECOIN_PAY_ADDRESS,lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
         "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
+        "$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
+        "$RAILS_LIB_ADDRESS,src/lib/Rails.sol:Rails" \
         "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
         "$FWSS_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
         "$FWSS_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"

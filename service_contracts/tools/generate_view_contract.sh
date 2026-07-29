@@ -11,6 +11,7 @@ echo
 echo 'import {FilecoinWarmStorageService} from "./FilecoinWarmStorageService.sol";'
 echo 'import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";'
 echo 'import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";'
+echo 'import {PriceList} from "./lib/PriceList.sol";'
 
 echo contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
 echo "    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;"
@@ -43,7 +44,7 @@ jq -rM 'reduce .abi.[] as {$type,$name,$inputs,$outputs,$stateMutability} (
                     ]
                 end
             ) | join(", ") ) +
-        ") external " +  $stateMutability + " returns (" +
+        ") external " + (if $inputs.[0].type == "FilecoinWarmStorageService" and $stateMutability == "pure" then "view" else $stateMutability end) + " returns (" +
             ( reduce $outputs.[] as {$type,$name,$internalType} (
                 []; 
                 . += [

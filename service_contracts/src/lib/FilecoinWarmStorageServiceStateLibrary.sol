@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
+import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
+import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
 import {
-    BYTES_PER_LEAF,
-    CHALLENGES_PER_PROOF,
-    NO_PROVING_DEADLINE,
-    FilecoinWarmStorageService
-} from "../FilecoinWarmStorageService.sol";
+    DATASET_FEE_PER_MONTH,
+    SERVICE_COMMISSION_BPS,
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    priceList
+} from "./PriceListUSDFC.sol";
+import {PriceList} from "./PriceList.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
 // bytes32(bytes4(keccak256(abi.encodePacked("extsloadStruct(bytes32,uint256)"))));
@@ -62,12 +66,17 @@ library FilecoinWarmStorageServiceStateLibrary {
     // --- Public getter functions ---
 
     /**
-     * @notice Get the total size of a data set in bytes
-     * @param leafCount Number of leaves in the data set
-     * @return totalBytes Total size in bytes
+     * @notice Approximate raw (pre-Fr32-expansion) data set size in bytes.
+     * @custom:deprecated Use Cids.leafCountToRawSize directly. Will be removed in a future release.
+     * @dev Overestimates by up to 31 bytes per piece. See leafCountToRawSize in the pdp Cids
+     *      library (lib/pdp/src/Cids.sol) for derivation.
+     * @param leafCount Sum of data-bearing leaves currently recorded in the data set
+     *      (PDPVerifier.getDataSetLeafCount). Decreases only when nextProvingPeriod
+     *      processes scheduled removals.
+     * @return totalBytes Approximate raw byte size
      */
     function getDataSetSizeInBytes(uint256 leafCount) public pure returns (uint256) {
-        return leafCount * BYTES_PER_LEAF;
+        return Cids.leafCountToRawSize(leafCount);
     }
 
     function clientNonces(FilecoinWarmStorageService service, address payer, uint256 nonce)
@@ -108,6 +117,8 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.clientDataSetId = uint256(info11[7]);
         info.pdpEndEpoch = uint256(info11[8]);
         info.providerId = uint256(info11[9]);
+        info.pendingOneTimePayments = uint96(uint256(info11[10]));
+        info.lifecycleReserveBalance = uint96(uint256(info11[10]) >> 96);
         info.dataSetId = dataSetId;
     }
 
@@ -210,12 +221,12 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (bool)
     {
         return uint256(
-            service.extsload(
+                service.extsload(
                 keccak256(
-                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
-                )
+                abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
             )
-        ) & (1 << (periodId & 255)) != 0;
+            )
+            ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
@@ -264,8 +275,8 @@ library FilecoinWarmStorageServiceStateLibrary {
         initChallengeWindowStart = block.number + maxProvingPeriod - challengeWindowSize;
     }
 
-    function serviceCommissionBps(FilecoinWarmStorageService service) public view returns (uint256) {
-        return uint256(service.extsload(StorageLayout.SERVICE_COMMISSION_BPS_SLOT));
+    function serviceCommissionBps(FilecoinWarmStorageService) public pure returns (uint256) {
+        return SERVICE_COMMISSION_BPS;
     }
 
     /**
@@ -280,12 +291,23 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (uint256)
     {
         uint256 deadline = provingDeadline(service, setId);
+        uint64 maxProvingPeriod = getMaxProvingPeriod(service);
+        uint256 challengeWindowSize = challengeWindow(service);
 
         if (deadline == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
+            uint256 activationEpoch = provingActivationEpoch(service, setId);
+            if (activationEpoch == 0) {
+                revert Errors.ProvingPeriodNotInitialized(setId);
+            }
 
-        uint64 maxProvingPeriod = getMaxProvingPeriod(service);
+            // Leave one full proving period for PDP challenge finality and transaction
+            // inclusion, then align the window to the dataset's lifetime period origin.
+            uint256 minimumDeadline = block.number + maxProvingPeriod;
+            uint256 periodsFromActivation =
+                (minimumDeadline - activationEpoch + maxProvingPeriod - 1) / maxProvingPeriod;
+            deadline = activationEpoch + periodsFromActivation * maxProvingPeriod;
+            return deadline - challengeWindowSize;
+        }
 
         // If the current period is open this is the next period's challenge window
         if (block.number <= deadline) {
@@ -597,16 +619,29 @@ library FilecoinWarmStorageServiceStateLibrary {
     /**
      * @notice Get the current pricing rates
      * @return storagePrice Current storage price per TiB per month
-     * @return minimumRate Current minimum monthly storage rate
+     * @return datasetFee Per-dataset additive monthly fee
+     * @custom:deprecated Use `getPriceList()` for the complete catalogue. The same values appear
+     *                    as `getPriceList().rates.storagePerTibPerMonth` and
+     *                    `getPriceList().rates.datasetFeePerMonth`.
      */
-    function getCurrentPricingRates(FilecoinWarmStorageService service)
+    function getCurrentPricingRates(FilecoinWarmStorageService)
         public
-        view
-        returns (uint256 storagePrice, uint256 minimumRate)
+        pure
+        returns (uint256 storagePrice, uint256 datasetFee)
     {
-        return (
-            uint256(service.extsload(StorageLayout.STORAGE_PRICE_PER_TIB_PER_MONTH_SLOT)),
-            uint256(service.extsload(StorageLayout.MINIMUM_STORAGE_RATE_PER_MONTH_SLOT))
-        );
+        return (STORAGE_PRICE_PER_TIB_PER_MONTH, DATASET_FEE_PER_MONTH);
+    }
+
+    /**
+     * @notice Get the full price catalogue for this FWSS deployment.
+     * @dev Single discovery point: streaming rates, one-time fees, and lockup amounts/periods in
+     *      one struct. The `token` field is populated from the FWSS proxy's `usdfcTokenAddress`
+     *      immutable; the rest comes from the on-chain price constants. Replaces the legacy
+     *      `getServicePrice`, `getCurrentPricingRates`, and `getEffectiveRates` for consumers
+     *      that want the complete price picture.
+     */
+    function getPriceList(FilecoinWarmStorageService service) public view returns (PriceList memory list) {
+        list = priceList();
+        list.token = IERC20(address(service.usdfcTokenAddress()));
     }
 }

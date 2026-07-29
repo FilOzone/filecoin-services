@@ -21,6 +21,8 @@ install:
 
 # Generated files
 LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
+LAYOUT_JSON=src/lib/FilecoinWarmStorageServiceLayout.json
+LAYOUT_SNAPSHOT_JQ=tools/storage_layout_snapshot.jq
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
 LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
@@ -33,6 +35,10 @@ build:
 # Storage layout generation
 $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
 	$^ | forge fmt -r - > $@
+
+# Storage layout JSON (full metadata for upgrade safety checks)
+$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
+	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
 
 # JSON compilation for library (depends on the source library)
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol
@@ -48,7 +54,7 @@ $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
 
 # Main code generation target with proper dependencies
 .PHONY: gen
-gen: check-tools $(LAYOUT) $(INTERNAL_LIB) $(VIEW_CONTRACT)
+gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
 	@echo "Code generation complete"
 
 # Force regeneration - useful when things are broken
@@ -60,7 +66,7 @@ force-gen: clean-gen gen
 .PHONY: clean-gen
 clean-gen:
 	@echo "Removing generated files..."
-	@rm -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_CONTRACT)
+	@rm -f $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
 	@rm -rf out/FilecoinWarmStorageServiceStateLibrary.sol
 	@echo "Generated files removed"
 
@@ -122,9 +128,15 @@ contract-size-check:
 	@echo "Checking contract sizes..."
 	bash tools/check-contract-size.sh src/
 
+# Storage layout validation
+.PHONY: check-layout
+check-layout:
+	@echo "Checking storage layout for destructive changes..."
+	@bash tools/check_storage_layout.sh
+
 # ABI Management
 
-# Core contracts we publish ABIs for
+# Core contracts we publish ABIs for.
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceStateLibrary \
@@ -137,25 +149,11 @@ ABI_CONTRACTS := \
 	SessionKeyRegistry \
 	Errors
 
-# Generate ABI file targets
-ABI_FILES := $(addprefix abi/,$(addsuffix .abi.json,$(ABI_CONTRACTS)))
-
-# Define a template for ABI extraction; we use a template approach instead of
-# defining a global pattern rule because patterns for files that don't exist
-# at parse-time will be rejected by make, so we'll be explicit instead.
-define ABI_RULE
-abi/$(1).abi.json: out/$(1).sol/$(1).json | abi
-	@echo "Extracting ABI for $(1)..."
-	@jq '.abi' $$< > $$@
-
-# Mark JSON as coming from build (unless it's the library which has its own rule)
-ifneq ($(1),FilecoinWarmStorageServiceStateLibrary)
-out/$(1).sol/$(1).json: | build
-endif
-endef
-
-# Generate rules for each contract using the template above
-$(foreach contract,$(ABI_CONTRACTS),$(eval $(call ABI_RULE,$(contract))))
+# Contract ABIs that should include event fragments emitted from first-party
+# libraries. Library events are logged from the calling contract/proxy address.
+ABI_CONTRACTS_WITH_LIBRARY_EVENTS := FilecoinWarmStorageService
+ABI_CONTRACTS_SIMPLE := $(filter-out $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS),$(ABI_CONTRACTS))
+FIRST_PARTY_LIBRARY_SOURCE_PREFIX := src/lib/
 
 # Directory for ABIs
 abi:
@@ -163,12 +161,30 @@ abi:
 
 # Update ABIs
 .PHONY: update-abi
-update-abi: $(ABI_FILES)
+update-abi: | abi
+	forge build --via-ir
+	@set -e; for contract in $(ABI_CONTRACTS_SIMPLE); do \
+		artifact="out/$$contract.sol/$$contract.json"; \
+		echo "Extracting ABI for $$contract..."; \
+		jq '.abi' "$$artifact" > "abi/$$contract.abi.json"; \
+	done
+	@jq -s --arg source_prefix "$(FIRST_PARTY_LIBRARY_SOURCE_PREFIX)" \
+		'def solc_metadata: if (.metadata | type) == "string" then (.metadata | try fromjson catch {}) else (.metadata // {}) end; def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); reduce ([.[] | select((((solc_metadata.settings.compilationTarget // {}) | to_entries[0]? | .key // "") | startswith($$source_prefix))) | (.abi // [])[] | select(.type == "event")][]) as $$event ([]; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
+		out/*.sol/*.json > abi/.library-events.abi.json
+	@set -e; for contract in $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS); do \
+		artifact="out/$$contract.sol/$$contract.json"; \
+		echo "Extracting ABI for $$contract with first-party library events..."; \
+		jq -s \
+			'def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); .[0].abi as $$contract_abi | .[1] as $$library_events | reduce $$library_events[] as $$event ($$contract_abi; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
+			"$$artifact" abi/.library-events.abi.json > "abi/$$contract.abi.json.tmp"; \
+		mv "abi/$$contract.abi.json.tmp" "abi/$$contract.abi.json"; \
+	done
+	@rm -f abi/.library-events.abi.json
 
 # Clean just the ABIs
 .PHONY: clean-abi
 clean-abi:
-	@rm -rf abi
+	@rm -f abi/*.abi.json
 
 # Help target
 .PHONY: help
@@ -188,11 +204,14 @@ help:
 	@echo "  force-gen  - Clean and regenerate all files (use when broken)"
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
-	@echo "  help       - Show this help message"
+	@echo "Validation targets:"
+	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
 	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
 	@echo ""
+	@echo "  help       - Show this help message"
+	@echo ""
 	@echo "ABI management targets:"
-	@echo "  update-abi - Update checked-in ABIs in abi/ directory (incremental)"
+	@echo "  update-abi - Update checked-in ABIs in abi/ directory from an incremental build"
 	@echo "  clean-abi  - Remove all ABI files"
 	@echo ""
 	@echo "Full cleanup:"

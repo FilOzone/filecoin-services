@@ -149,9 +149,10 @@ contract PoRepService is IPoRepService, IValidator {
                 iter = iter.readPiece(piece);
                 uint64 nonce = piece.payload.toUint64();
                 address deal = address(this).computeAddress(nonce);
-                PoRepDeal(deal).pieceAdded(
-                    minerActor, piece.digest, header.sector, uint64(header.minimumCommitmentEpoch), piece.paddedSize
-                );
+                PoRepDeal(deal)
+                    .pieceAdded(
+                        minerActor, piece.digest, header.sector, uint64(header.minimumCommitmentEpoch), piece.paddedSize
+                    );
                 //PAYMENTS.modifyRailPayment(railId, 0, payment);
                 //PAYMENTS.modifyRailLockup(railId, 0, remaining);
                 FVMSectorContentChanged.accept(ret.sectors[i], j);
@@ -187,12 +188,23 @@ contract PoRepService is IPoRepService, IValidator {
         uint256, // fromEpoch
         uint256 toEpoch,
         uint256 // rate
-    ) external pure returns (ValidationResult memory result) {
+    )
+        external
+        pure
+        returns (ValidationResult memory result)
+    {
         result.modifiedAmount = proposedAmount;
         result.settleUpto = toEpoch;
     }
 
-    function railTerminated(uint256, address terminator, uint256 /*endEpoch*/ ) external view {
+    function railTerminated(
+        uint256,
+        address terminator,
+        uint256 /*endEpoch*/
+    )
+        external
+        view
+    {
         // require(msg.sender == address(PAYMENTS));
         require(terminator == address(this), TerminationForbidden());
     }

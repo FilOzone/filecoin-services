@@ -14,18 +14,18 @@ library SignatureVerificationLib {
     // EIP-712 Type hashes
     // ============================================================================
 
-    bytes32 private constant METADATA_ENTRY_TYPEHASH = keccak256("MetadataEntry(string key,string value)");
+    bytes32 internal constant METADATA_ENTRY_TYPEHASH = keccak256("MetadataEntry(string key,string value)");
 
-    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
+    bytes32 internal constant CREATE_DATA_SET_TYPEHASH = keccak256(
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
     );
 
-    bytes32 private constant CID_TYPEHASH = keccak256("Cid(bytes data)");
+    bytes32 internal constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
-    bytes32 private constant PIECE_METADATA_TYPEHASH =
+    bytes32 internal constant PIECE_METADATA_TYPEHASH =
         keccak256("PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)MetadataEntry(string key,string value)");
 
-    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
+    bytes32 internal constant ADD_PIECES_TYPEHASH = keccak256(
         "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
         "Cid(bytes data)" "MetadataEntry(string key,string value)"
         "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
@@ -33,6 +33,8 @@ library SignatureVerificationLib {
 
     bytes32 internal constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
         keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
+
+    bytes32 internal constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
 
     // ============================================================================
     // Metadata Hashing Functions
@@ -70,8 +72,9 @@ library SignatureVerificationLib {
         string[] calldata keys,
         string[] calldata values
     ) public pure returns (bytes32 structHash) {
-        return
-            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values)));
+        return keccak256(
+            abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values))
+        );
     }
 
     function hashAllCids(Cids.Cid[] calldata pieceDataArray) internal pure returns (bytes32 cidHashesHash) {
@@ -262,5 +265,30 @@ library SignatureVerificationLib {
                 >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
+    }
+
+    /**
+     * @notice Verifies a signature for the TerminateService operation
+     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
+     * @param payer The address of the payer who should have signed the message
+     * @param signature The signature bytes (v, r, s)
+     * @param digest The EIP-712 digest to verify
+     * @param sessionKeyRegistry The session key registry contract
+     */
+    function verifyTerminateServiceSignature(
+        address payer,
+        bytes calldata signature,
+        bytes32 digest,
+        SessionKeyRegistry sessionKeyRegistry
+    ) public view returns (address recoveredSigner) {
+        recoveredSigner = recoverSigner(digest, signature);
+
+        if (payer != recoveredSigner) {
+            require(
+                sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, TERMINATE_SERVICE_TYPEHASH)
+                    >= block.timestamp,
+                Errors.InvalidSignature(payer, recoveredSigner)
+            );
+        }
     }
 }

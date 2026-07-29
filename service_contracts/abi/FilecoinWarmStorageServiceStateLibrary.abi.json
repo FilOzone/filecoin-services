@@ -298,6 +298,16 @@
             "internalType": "uint256"
           },
           {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
             "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
@@ -379,6 +389,16 @@
             "internalType": "uint256"
           },
           {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
             "name": "dataSetId",
             "type": "uint256",
             "internalType": "uint256"
@@ -417,7 +437,7 @@
     "name": "getCurrentPricingRates",
     "inputs": [
       {
-        "name": "service",
+        "name": "",
         "type": "FilecoinWarmStorageService",
         "internalType": "contract FilecoinWarmStorageService"
       }
@@ -429,12 +449,12 @@
         "internalType": "uint256"
       },
       {
-        "name": "minimumRate",
+        "name": "datasetFee",
         "type": "uint256",
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -506,6 +526,16 @@
             "name": "providerId",
             "type": "uint256",
             "internalType": "uint256"
+          },
+          {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
           },
           {
             "name": "dataSetId",
@@ -663,6 +693,128 @@
         "name": "value",
         "type": "string",
         "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPriceList",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "list",
+        "type": "tuple",
+        "internalType": "struct PriceList",
+        "components": [
+          {
+            "name": "token",
+            "type": "IERC20",
+            "internalType": "contract IERC20"
+          },
+          {
+            "name": "rates",
+            "type": "tuple",
+            "internalType": "struct PriceListRates",
+            "components": [
+              {
+                "name": "storagePerTibPerMonth",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "datasetFeePerMonth",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "cdnEgressPerTib",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "cacheMissEgressPerTib",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "fees",
+            "type": "tuple",
+            "internalType": "struct PriceListFees",
+            "components": [
+              {
+                "name": "createDataSetFee",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "addPiecesBaseFee",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "addPiecesPerPieceFee",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "schedulePieceRemovalsFee",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "terminateFee",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          },
+          {
+            "name": "lockups",
+            "type": "tuple",
+            "internalType": "struct PriceListLockups",
+            "components": [
+              {
+                "name": "lifecycleReserveTarget",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "replenishThreshold",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "defaultLockupPeriod",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "cdnLockupAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "cacheMissLockupAmount",
+                "type": "uint256",
+                "internalType": "uint256"
+              },
+              {
+                "name": "cdnLockupPeriod",
+                "type": "uint256",
+                "internalType": "uint256"
+              }
+            ]
+          }
+        ]
       }
     ],
     "stateMutability": "view"
@@ -869,7 +1021,7 @@
     "name": "serviceCommissionBps",
     "inputs": [
       {
-        "name": "service",
+        "name": "",
         "type": "FilecoinWarmStorageService",
         "internalType": "contract FilecoinWarmStorageService"
       }
@@ -881,7 +1033,7 @@
         "internalType": "uint256"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "error",

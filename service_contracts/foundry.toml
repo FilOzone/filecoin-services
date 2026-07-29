@@ -37,11 +37,17 @@ remappings = [
 fs_permissions = [{ access = "read", path = "./test" }]
 
 [lint]
+severity = ["high", "med", "low", "info", "gas", "code-size"]
 exclude_lints = [
     "asm-keccak256",
+    "block-timestamp",
+    "custom-errors",
     "incorrect-shift",
     "mixed-case-function",
     "mixed-case-variable",
+    "multi-contract-file",
     "pascal-case-struct",
     "screaming-snake-case-immutable",
+    "unsafe-cheatcode",
+    "unsafe-typecast",
 ]

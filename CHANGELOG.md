@@ -3,6 +3,77 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [Unreleased]
+
+### Removed
+- Removed stale service contract helper scripts and obsolete upgrade/deployment artifacts from `service_contracts/tools`.
+
+### Fixed
+- Fixed a lifecycle reserve underflow in `Rails.updateStorageRates()` that could cause `nextProvingPeriod` to fail ([#521](https://github.com/FilOzone/filecoin-services/pull/521)).
+- Fixed `abandonRails` to handle underfunded payers: when zeroing the lockup period is blocked by FilecoinPay, the lifecycle reserve is still released immediately but the PDP rail retains its default 30-day lockup period rather than finalizing at once ([#520](https://github.com/FilOzone/filecoin-services/pull/520)).
+
+## [1.3.0] - FWSS Upgrade
+
+This FWSS contract upgrade coincides with Filecoin Onchain Cloud's General Availability. It includes breaking changes for integrations that depend on the old pricing model, removed pricing helpers or events, or updated termination behavior.
+
+### Deployment / Rollout Status
+
+The Calibnet and Mainnet rollout is complete. See the [v1.3.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.0) for final implementation addresses, StateView addresses, epochs, transaction links, and validation evidence. The FWSS proxy addresses remain unchanged.
+
+### Breaking Changes
+- Removed `calculateRatePerEpoch()`, `updatePricing()`, and `updateServiceCommission()` from the FWSS ABI. Integrations must stop calling those methods; use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. Pricing changes are now delivered by contract upgrade instead of owner calls ([#478](https://github.com/FilOzone/filecoin-services/pull/478), [#488](https://github.com/FilOzone/filecoin-services/pull/488), [#501](https://github.com/FilOzone/filecoin-services/pull/501)).
+- Removed the `PricingUpdated`, `RailRateUpdated`, `CDNPaymentRailsToppedUp`, and `CDNServiceTerminated` events from the FWSS ABI. Indexers, dashboards, SDKs, and alerting jobs that subscribe to those events need to update their event handling ([#488](https://github.com/FilOzone/filecoin-services/pull/488)).
+- Replaced the previous minimum monthly storage-rate floor with a size-proportional storage rate plus a flat per-dataset fee of `0.024 USDFC/month`. Integrations that estimate required funds, lockup, or user-facing prices should not hard-code the old minimum-rate model; read the price list from `FilecoinWarmStorageServiceStateView.getPriceList()` ([#482](https://github.com/FilOzone/filecoin-services/pull/482), [#501](https://github.com/FilOzone/filecoin-services/pull/501)).
+- Added lifecycle reserve and one-time operation fees for dataset lifecycle actions. Client funding and allowance checks now need to account for the lifecycle reserve, dataset creation fee, add-pieces fees, removal-scheduling fee, and consent-based termination fee ([#488](https://github.com/FilOzone/filecoin-services/pull/488), [#497](https://github.com/FilOzone/filecoin-services/pull/497)).
+- Consent-based `terminateService(dataSetId, extraData)` now terminates the PDP rail immediately by setting its lockup period to zero. Integrations that assumed every service termination enters a 30-day PDP lockup window should update their settlement and deletion flow assumptions ([#506](https://github.com/FilOzone/filecoin-services/pull/506)).
+- CDN rails now persist until data-set deletion instead of being terminated by `terminateService`. Integrations that assumed service termination immediately winds down CDN rails should update their state model ([#488](https://github.com/FilOzone/filecoin-services/pull/488)).
+
+### Added
+- Added `FilecoinWarmStorageServiceStateView.getPriceList()` as the canonical on-chain price discovery API for token, streaming rates, one-time fees, and lockup amounts ([#501](https://github.com/FilOzone/filecoin-services/pull/501)).
+- Added lifecycle reserve accounting for FWSS operation fees, including one-time fees for dataset creation, add-pieces calls, removal scheduling, and consent-based service termination ([#488](https://github.com/FilOzone/filecoin-services/pull/488), [#497](https://github.com/FilOzone/filecoin-services/pull/497)).
+- Added `topUpLifecycleReserve(dataSetId, amount)` so payers can pre-fund the reserve before termination or wind-down operations ([#488](https://github.com/FilOzone/filecoin-services/pull/488)).
+- Added an abandonment cleanup path for inactive data sets that were never terminated through `terminateService` ([#500](https://github.com/FilOzone/filecoin-services/pull/500)).
+- Added a `terminateService(dataSetId, bytes extraData)` overload for signed payer-consent metadata ([#485](https://github.com/FilOzone/filecoin-services/pull/485)).
+
+### Changed
+- Set the dataset creation operation fee to `0.025 USDFC` ([#497](https://github.com/FilOzone/filecoin-services/pull/497)).
+- Priced PDP rails from raw data size rather than Fr32-expanded leaf size ([#471](https://github.com/FilOzone/filecoin-services/pull/471)).
+- Allowed consent-based service termination, settlement, and data-set deletion to be batched in a single transaction ([#506](https://github.com/FilOzone/filecoin-services/pull/506)).
+- Renamed payer validation language from "minimum" to "required" to reflect the new pricing model ([#498](https://github.com/FilOzone/filecoin-services/pull/498)).
+
+### Fixed
+- Fixed abandonment cleanup for activated data sets so `PDPVerifier.deleteDataSet` can complete final settlement after terminating rails, and cleared proving-period storage during data-set deletion ([#512](https://github.com/FilOzone/filecoin-services/pull/512)).
+- Removed the `addPieces` `extraData` byte cap while preserving dedicated metadata limits for operations that parse signed payloads ([#499](https://github.com/FilOzone/filecoin-services/pull/499)).
+- Updated warm-storage deployment scripts for current constructor arguments ([#472](https://github.com/FilOzone/filecoin-services/pull/472)).
+- Added deployment checksum validation and sync documentation to reduce release drift ([#464](https://github.com/FilOzone/filecoin-services/pull/464), [#489](https://github.com/FilOzone/filecoin-services/pull/489)).
+
+### Upgrade Notes
+- Existing FWSS proxy integrations continue using the same proxy addresses.
+- Integrations that call removed pricing helpers or consume removed pricing/CDN events must update before relying on this release.
+- Use `FilecoinWarmStorageServiceStateView.getPriceList()` for price discovery. The old mutable owner-pricing API is no longer available.
+- Payers can call `topUpLifecycleReserve(dataSetId, amount)` before termination if they expect many wind-down operations after the PDP rail has terminated.
+
+## [1.2.1] - 2026-05-28 - FWSS Hotfix
+
+This hotfix restores FWSS compatibility with PDPVerifier v3.4.0.
+
+### Deployment Addresses
+
+The FWSS proxy addresses remain unchanged. Implementation deployments were built from commit `a6dec30d61213c2eb9af2b5bbabb4ab36ec531b1`.
+
+| Network | FWSS Proxy | New Implementation | Status |
+| --- | --- | --- | --- |
+| Calibnet | [`0x02925630df557F957f70E112bA06e50965417CA0`](https://filecoin-testnet.blockscout.com/address/0x02925630df557F957f70E112bA06e50965417CA0) | [`0xC196EFddF64C4c2605284Ab66bdbc24fC795dE9E`](https://filecoin-testnet.blockscout.com/address/0xC196EFddF64C4c2605284Ab66bdbc24fC795dE9E) | Upgraded on 2026-05-28 via [`announcePlannedUpgrade`](https://filecoin-testnet.blockscout.com/tx/0x59a6423086a0ee728b118441f074f677e35d25cd8bdd1029f934b5b6ed0a6cce) and [`upgradeToAndCall`](https://filecoin-testnet.blockscout.com/tx/0xb1f6feeb4e7d360203810d7a95f24fbcd13c9e8b278c3756136b7409aa762c81) |
+| Mainnet | [`0x8408502033C418E1bbC97cE9ac48E5528F371A9f`](https://filecoin.blockscout.com/address/0x8408502033C418E1bbC97cE9ac48E5528F371A9f) | [`0xEBc8CD859d0D389235bDe59B97485936daA1aED5`](https://filecoin.blockscout.com/address/0xEBc8CD859d0D389235bDe59B97485936daA1aED5) | Upgraded on 2026-05-28 via [`announcePlannedUpgrade`](https://filecoin.blockscout.com/tx/0xe61059f8d764a2b4d664769c7eee7973a078fbbc0f7c2fd144e86ebba54d483e) and [`upgradeToAndCall`](https://filecoin.blockscout.com/tx/0x45c82cd462ae683e92636b158604bccec9c1dd65b95e45fb23ed7f53bf8a4a25) |
+
+### Fixed
+- Replaced the FWSS dependency on `IPDPVerifier.USDFC_SYBIL_FEE()` with a local `0.1 USDFC` sybil-fee constant during data-set creation and pre-flight lockup validation. This preserves the FWSS v1.2.0 sybil-fee burn rail while remaining compatible with PDPVerifier v3.4.0, which removed that getter.
+
+### Upgrade Notes
+- Existing FWSS proxy addresses remain unchanged.
+- New data-set creation still requires enough USDFC funds and lockup allowance for the FWSS `0.1 USDFC` sybil fee.
+- Curio/SP software also needs to send the 0.1 FIL cleanup deposit required by PDPVerifier v3.4.0 when creating new data sets.
+
 ## [1.2.0] - 2026-03-23 - FWSS Upgrade
 
 This release improves data set creation and data set query behavior in FWSS, while fixing proving-period settlement logic and clarifying funding requirements for new data sets.
@@ -11,9 +82,6 @@ This release improves data set creation and data set query behavior in FWSS, whi
 
 See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/v1.2.0/service_contracts/deployments.json) for the latest Mainnet (chain 314) and Calibnet (chain 314159) contract addresses. The FWSS proxy addresses remain unchanged in this release; the upgrade only changes the implementation behind the existing proxies.
 
-### Changed
-- Data set creation now charges the PDPVerifier USDFC sybil fee via a client-funded burn rail ([#437](https://github.com/FilOzone/filecoin-services/pull/437))
-
 ### Fixed
 - Corrected FWSS proving-period boundary handling to use exclusive-inclusive ranges ([#419](https://github.com/FilOzone/filecoin-services/pull/419))
 - Simplified and optimized validator-path settlement calculations in `_findProvenEpochs` ([#423](https://github.com/FilOzone/filecoin-services/pull/423), [#424](https://github.com/FilOzone/filecoin-services/pull/424))
@@ -21,9 +89,6 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 ### Upgrade Notes
 - Existing FWSS proxy integrations continue using the same proxy addresses.
 - No migration is required for existing data sets or existing integrations.
-- Clients creating new data sets should ensure they have enough available USDFC funds and lockup allowance to cover both the existing minimum lockup and the PDPVerifier sybil fee.
-  - The USDFC sybil fee is `0.1 USDFC`.
-  - The configured amount can be read on-chain by calling `USDFC_SYBIL_FEE()` on the PDPVerifier proxy for each network. See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/deployments.json) for the PDP proxy addresses.
 - No user action is required unless your integration depends on the exact pre-upgrade dataset-creation funding assumptions.
 
 ## [1.1.0] - 2026-01-30 - FWSS Upgrade
@@ -68,7 +133,7 @@ See [`service_contracts/deployments.json`](https://github.com/FilOzone/filecoin-
 - Deploy warm storage only script fix ([#348](https://github.com/FilOzone/filecoin-services/pull/348))
 
 ### Documentation
-- FWSS upgrade process documentation ([UPGRADE-PROCESS.md](./service_contracts/tools/UPGRADE-PROCESS.md))
+- FWSS upgrade process documentation ([UPGRADE-CHECKLIST.md](./service_contracts/tools/UPGRADE-CHECKLIST.md))
 - Pricing model specification document ([#366](https://github.com/FilOzone/filecoin-services/pull/366))
 - Added precision loss documentation for minimum rate calculation ([#378](https://github.com/FilOzone/filecoin-services/pull/378))
 - Clarified rate change semantics after termination

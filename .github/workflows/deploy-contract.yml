@@ -38,14 +38,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: v1.3.5
+          version: v1.7.1
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

@@ -2,7 +2,9 @@
 
 This directory contains scripts for deploying, upgrading, and operating the FilecoinWarmStorageService contract on Calibration testnet and Mainnet.
 
-> **For detailed upgrade procedures**, see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
+> **For the self-contained FWSS upgrade runbook and release issue template**, see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
+>
+> **For syncing a new PDPVerifier release** (bumping the submodule, ABI, and recorded address), see [PDP-VERIFIER-SYNC.md](./PDP-VERIFIER-SYNC.md).
 
 ## Scripts Overview
 
@@ -15,7 +17,6 @@ Scripts are organized with prefixes for better discoverability:
 | `warm-storage-deploy-all.sh` | Deploy all contracts (PDPVerifier, FilecoinPayV1, FWSS, etc.) |
 | `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
 | `warm-storage-deploy-view.sh` | Deploy FilecoinWarmStorageServiceStateView |
-| `warm-storage-deploy-calibnet.sh` | Deploy FWSS only (requires existing dependencies) |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
 | `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
@@ -58,6 +59,7 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 |--------|-------------|
 | `session-key-registry-deploy.sh` | Deploy SessionKeyRegistry |
 | `provider-id-set-deploy.sh` | Deploy ProviderIdSet |
+| `check_deployments_checksums.sh` | Validate EIP-55 checksum casing for every address in `deployments.json`. Run by the `check-deployments` CI job. |
 
 ### GitHub Workflows
 
@@ -71,12 +73,9 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 # Deploy all contracts
 ./tools/warm-storage-deploy-all.sh
 
-# Deploy to Calibnet (FWSS only)
-./tools/warm-storage-deploy-calibnet.sh
-
-# Upgrade existing deployment (see UPGRADE-PROCESS.md for details)
+# Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
-./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after AFTER_EPOCH)
+./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after the observed afterEpoch)
 ```
 
 ## Deployment Parameters
@@ -171,14 +170,10 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 - `ETH_FROM` - Optional: address to use as deployer (forge/cast default is taken from the keystore)
 
 ### Required for specific scripts:
-- `warm-storage-deploy-calibnet.sh` requires:
-  - `PDP_VERIFIER_PROXY_ADDRESS` - Address of deployed PDPVerifier contract
-  - `FILECOIN_PAY_ADDRESS` - Address of deployed FilecoinPayV1 contract
-
 - `warm-storage-deploy-all.sh` requires:
-  - `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier
+  - Optional: `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier. Defaults to `10` on calibnet/devnet and `150` on mainnet.
 
-- Upgrade scripts - see [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for complete environment variable reference
+- Upgrade scripts - see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete FWSS upgrade runbook
 
 ## Usage Examples
 
@@ -199,38 +194,27 @@ export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
 ./warm-storage-deploy-all.sh
 ```
 
-### Deploy FilecoinWarmStorageService Only
-
-```bash
-export ETH_KEYSTORE="/path/to/keystore.json"
-export PASSWORD="your-password"
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export PDP_VERIFIER_PROXY_ADDRESS="0x123..."
-export FILECOIN_PAY_ADDRESS="0x456..."
-
-./warm-storage-deploy-calibnet.sh
-```
-
 ### Upgrade Existing Contract
 
-See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md) for the complete two-step upgrade workflow.
+See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete two-step FWSS upgrade workflow.
 
 ## Contract Upgrade Process
 
-The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two-step upgrade process** for security:
+The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two-step upgrade process** for security. The normal FWSS flow is:
 
-1. **Announce**: Call `announcePlannedUpgrade()` with the new implementation address and a future epoch
-2. **Execute**: After the announced epoch, call `upgradeToAndCall()` to complete the upgrade
+1. **Announce**: Call `announceUpgradePlan()` with the new implementation address and a relative delay
+2. **Observe**: Read `nextUpgrade()` after the announcement lands and record its exact `afterEpoch`
+3. **Execute**: After the observed epoch, call `upgradeToAndCall()` to complete the upgrade
 
-This gives stakeholders time to review changes before execution.
+The delay is measured from the block in which the announcement executes, so Safe signing time does not consume the requested notice window.
 
-**For complete upgrade documentation**, including:
+**For complete FWSS upgrade documentation**, including:
 - Step-by-step upgrade workflows
 - Environment variable reference
 - Immutable dependency handling
 - Verification procedures
 
-See [UPGRADE-PROCESS.md](./UPGRADE-PROCESS.md).
+See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
 
 ## Ownership Transfer
 
@@ -274,11 +258,27 @@ The following scripts support `CALLDATA_ONLY=true`:
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
-export AFTER_EPOCH="123456"
+export UPGRADE_DELAY_EPOCHS="2880"
+export ANNOUNCEMENT_MODE=delay
+unset AFTER_EPOCH
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
 This prints a formatted transaction block with the target address, function signature, and calldata to paste into the Safe UI transaction builder.
+
+The FWSS v1.3.0 contracts currently deployed on Calibnet and Mainnet do not expose `announceUpgradePlan()`. Their upgrade to v1.3.1 must therefore use the old interface:
+
+```bash
+export ANNOUNCEMENT_MODE=legacy
+export LEGACY_NOTICE_EPOCHS=2880
+export SAFE_SIGNING_BUFFER_EPOCHS=2880
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
+unset UPGRADE_DELAY_EPOCHS
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+```
+
+Treat this bootstrap-only mode as deprecated after FWSS v1.3.1 is live on both Calibnet and Mainnet. Remove it once rollback to v1.3.0 is no longer supported; until then it remains available only for that rollback path.
 
 ## Testing
 

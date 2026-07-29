@@ -41,8 +41,8 @@ library Errors {
     enum PriceType {
         /// Storage price per TiB per month
         Storage,
-        /// Minimum monthly storage rate (floor price)
-        MinimumRate
+        /// Per-dataset additive monthly fee
+        DatasetFee
     }
 
     /// @notice An expected contract or participant address was the zero address
@@ -185,6 +185,12 @@ library Errors {
     /// @param caller The actual caller
     error CallerNotPayer(uint256 dataSetId, address expectedPayer, address caller);
 
+    /// @notice Only the service provider can perform this action
+    /// @param dataSetId The data set ID
+    /// @param expectedServiceProvider The service provider address
+    /// @param caller The actual caller
+    error CallerNotServiceProvider(uint256 dataSetId, address expectedServiceProvider, address caller);
+
     /// @notice Data set is beyond its payment end epoch
     /// @param dataSetId The data set ID
     /// @param pdpEndEpoch The payment end epoch for the data set
@@ -195,9 +201,6 @@ library Errors {
     /// @param dataSetId The data set ID
     error NoPDPPaymentRail(uint256 dataSetId);
 
-    /// @notice Division by zero: denominator was zero
-    error DivisionByZero();
-
     /// @notice Signature has an invalid length
     /// @param actualLength The length of the provided signature (should be 65)
     error InvalidSignatureLength(uint256 expectedLength, uint256 actualLength);
@@ -205,10 +208,6 @@ library Errors {
     /// @notice Signature uses an unsupported v value (should be 27 or 28)
     /// @param v The actual v value provided
     error UnsupportedSignatureV(uint8 v);
-
-    /// @notice Payment rail is not associated with any data set
-    /// @param railId The rail ID
-    error RailNotAssociated(uint256 railId);
 
     /// @notice The epoch range is invalid
     /// @notice Will be emitted if any of the following conditions is NOT met:
@@ -311,35 +310,35 @@ library Errors {
     /// @param productType The kind of service product attempted to be registered
     error InsufficientCapabilitiesForProduct(ServiceProviderRegistryStorage.ProductType productType);
 
-    /// @notice Payer has insufficient available funds to cover the minimum storage rate
+    /// @notice Payer has insufficient available funds to cover the required lockup
     /// @param payer The payer address
-    /// @param minimumRequired The minimum lockup required to cover the minimum storage rate
+    /// @param required The lockup required for dataset creation
     /// @param available The available funds in the payer's account
-    error InsufficientLockupFunds(address payer, uint256 minimumRequired, uint256 available);
+    error InsufficientLockupFunds(address payer, uint256 required, uint256 available);
 
     /// @notice Operator is not approved for the payer
     /// @param payer The payer address
     /// @param operator The operator address (warm storage service)
     error OperatorNotApproved(address payer, address operator);
 
-    /// @notice Operator has insufficient rate allowance for the minimum storage rate
+    /// @notice Operator has insufficient rate allowance to cover the per-dataset fee rate
     /// @param payer The payer address
     /// @param operator The operator address (warm storage service)
     /// @param rateAllowance The total rate allowance approved
     /// @param rateUsage The current rate usage
-    /// @param minimumRateRequired The minimum rate required per epoch
+    /// @param rateRequired The rate required per epoch
     error InsufficientRateAllowance(
-        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 minimumRateRequired
+        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 rateRequired
     );
 
-    /// @notice Operator has insufficient lockup allowance for the minimum lockup
+    /// @notice Operator has insufficient lockup allowance to cover the required lockup
     /// @param payer The payer address
     /// @param operator The operator address (warm storage service)
     /// @param lockupAllowance The total lockup allowance approved
     /// @param lockupUsage The current lockup usage
-    /// @param minimumLockupRequired The minimum lockup required
+    /// @param lockupRequired The required lockup
     error InsufficientLockupAllowance(
-        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 minimumLockupRequired
+        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 lockupRequired
     );
 
     /// @notice Operator's max lockup period is insufficient for the default lockup period
@@ -351,16 +350,13 @@ library Errors {
         address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
     );
 
-    /// @notice At least one price parameter must be non-zero when updating pricing
-    error AtLeastOnePriceMustBeNonZero();
-
-    /// @notice Price update exceeds the maximum allowed value
-    /// @param priceType The type of price being updated (see enum {PriceType})
-    /// @param maxAllowed The maximum allowed value for this price type
-    /// @param actual The attempted value that exceeds the maximum
-    error PriceExceedsMaximum(PriceType priceType, uint256 maxAllowed, uint256 actual);
-
     error ProviderIdMismatchAtIndex(uint256 index, uint256 providerId);
 
     error StorageProviderChangesNotSupported();
+
+    /// @notice The data set has not been inactive for the required inactivity window
+    /// @param dataSetId The data set ID
+    /// @param requiredEpoch The first epoch at which abandonment is allowed
+    /// @param currentBlock The current block number
+    error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
 }
