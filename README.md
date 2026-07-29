@@ -21,7 +21,7 @@ The complete on-chain price catalogue is exposed via `FilecoinWarmStorageService
 
 ## Service metadata
 
-FilecoinWarmStorageService implements `IFilecoinServiceMetadata`, exposing a `name()` and `description()` for `eth_call`. Other FOC services are encouraged to use this interface so explorers and clients can identify service operator contracts without hard-coded address maps. Consumers should note that this output should be treated as untrusted data and should only ever be presented to users in carefully escaped form.
+FilecoinWarmStorageService implements `IFilecoinServiceMetadata`, exposing `name()`, `description()`, and `homepage()` for `eth_call`. Other FOC services are encouraged to use this interface so explorers and clients can identify service operator contracts without hard-coded address maps. `description()` is capped at 256 bytes and should be treated as untrusted display-only text. `homepage()` is an optional URL, capped at 256 bytes, and returns an empty string when not provided. Consumers should validate metadata from unverified contracts and carefully escape all displayed values.
 
 ## 🚀 Quick Start
 
@@ -148,4 +148,3 @@ See [service_contracts/CONTRIBUTING.md](./service_contracts/CONTRIBUTING.md) for
 
 ## 📄 License
 Dual-licensed under [MIT](https://github.com/FilOzone/filecoin-services/blob/main/LICENSE.md) + [Apache 2.0](https://github.com/FilOzone/filecoin-services/blob/main/LICENSE.md)
-
