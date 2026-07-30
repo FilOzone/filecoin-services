@@ -339,6 +339,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         IFilecoinServiceMetadata metadata = IFilecoinServiceMetadata(address(pdpServiceWithPayments));
         string memory serviceName = metadata.name();
         string memory serviceDescription = metadata.description();
+        string memory serviceHomepage = metadata.homepage();
 
         assertEq(serviceName, "Filecoin Warm Storage Service", "Service name should match");
         assertEq(
@@ -346,6 +347,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.",
             "Service description should match"
         );
+        assertEq(serviceHomepage, "https://github.com/FilOzone/filecoin-services", "Service homepage should match");
+        assertLe(bytes(serviceDescription).length, 256, "Service description should not exceed 256 bytes");
+        assertLe(bytes(serviceHomepage).length, 256, "Service homepage should not exceed 256 bytes");
     }
 
     function testAnnouncePlannedUpgrade() public {

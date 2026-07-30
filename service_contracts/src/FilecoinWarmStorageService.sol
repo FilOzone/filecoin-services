@@ -84,6 +84,7 @@ contract FilecoinWarmStorageService is
     string private constant SERVICE_NAME = "Filecoin Warm Storage Service";
     string private constant SERVICE_DESCRIPTION =
         "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
+    string private constant SERVICE_HOMEPAGE = "https://github.com/FilOzone/filecoin-services";
 
     using Rails for FilecoinPayV1;
 
@@ -411,6 +412,10 @@ contract FilecoinWarmStorageService is
 
     function description() external pure override returns (string memory) {
         return SERVICE_DESCRIPTION;
+    }
+
+    function homepage() external pure override returns (string memory) {
+        return SERVICE_HOMEPAGE;
     }
 
     function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
