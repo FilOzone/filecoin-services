@@ -26,7 +26,7 @@ Scripts are organized with prefixes for better discoverability:
 
 | Script | Description |
 |--------|-------------|
-| `service-provider-registry-deploy.sh` | Deploy ServiceProviderRegistry |
+| `service-provider-registry-deploy.sh` | Plan or deploy a ServiceProviderRegistry implementation for an existing proxy; never deploys a replacement proxy |
 | `service-provider-registry-announce-upgrade.sh` | Announce a planned registry upgrade |
 | `service-provider-registry-execute-upgrade.sh` | Execute a previously announced registry upgrade |
 
@@ -215,6 +215,81 @@ The delay is measured from the block in which the announcement executes, so Safe
 - Verification procedures
 
 See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
+
+### ServiceProviderRegistry v1.2.0 companion upgrade
+
+`service-provider-registry-deploy.sh` is implementation-only. It reads the
+initializer counter from the existing proxy, derives the new implementation's
+constructor argument as `current + 1`, and refuses proxy creation or
+replacement. For the v1.1.0 -> v1.2.0 rollout the expected transition is
+`2 -> 3`.
+
+Run the read-only plan before allowing a live deployment:
+
+```bash
+export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
+export CHAIN=314159
+export SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0x839e5c9988e4e9977d40708d0094103c0839Ac9D"
+
+DRY_RUN=true AUTO_VERIFY=false ./tools/service-provider-registry-deploy.sh
+```
+
+The deployed v1.1.0 registry does not expose
+`announceUpgradePlan(address,uint96)`. Its upgrade to v1.2.0 must therefore use
+the deprecated absolute-epoch method once. The announcement helper requires the
+current proxy to report v1.1.0 in legacy mode; delay mode defaults that guard to
+v1.2.0 for subsequent upgrades. Before printing calldata, it simulates the
+selected announcement from the current proxy owner so a reverting Safe proposal
+is rejected locally. Allow enough time for Safe signing:
+
+```bash
+export NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="0x..."
+export ANNOUNCEMENT_MODE=legacy
+export LEGACY_NOTICE_EPOCHS=2880
+export SAFE_SIGNING_BUFFER_EPOCHS=2880
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
+unset UPGRADE_DELAY_EPOCHS
+
+CALLDATA_ONLY=true ./tools/service-provider-registry-announce-upgrade.sh
+```
+
+After the Safe transaction executes, set its execution hash and run the
+announcement helper in verification mode. This reads `nextUpgrade()` and
+requires the exact implementation and epoch:
+
+```bash
+export ANNOUNCE_TX_HASH="0x..."
+VERIFY_ANNOUNCEMENT_ONLY=true CALLDATA_ONLY=true \
+  ./tools/service-provider-registry-announce-upgrade.sh
+```
+
+At or after the observed epoch, generate the separate SPR execution
+transaction. `NEW_VERSION` is mandatory and is checked against the new
+implementation's `VERSION()`:
+
+```bash
+export NEW_VERSION="1.2.0"
+CALLDATA_ONLY=true ./tools/service-provider-registry-execute-upgrade.sh
+
+# Run after the Safe execution transaction lands.
+VERIFY_EXECUTION_ONLY=true CALLDATA_ONLY=true \
+  ./tools/service-provider-registry-execute-upgrade.sh
+```
+
+Once v1.2.0 is live, relative-delay announcements are the operational default
+for future SPR upgrades:
+
+```bash
+export ANNOUNCEMENT_MODE=delay
+export UPGRADE_DELAY_EPOCHS=2880
+export EXPECTED_NEW_SERVICE_PROVIDER_REGISTRY_VERSION="x.y.z"
+unset AFTER_EPOCH
+CALLDATA_ONLY=true ./tools/service-provider-registry-announce-upgrade.sh
+```
+
+Keep legacy mode only while rollback to an implementation that lacks
+`announceUpgradePlan(address,uint96)` remains supported.
 
 ## Ownership Transfer
 

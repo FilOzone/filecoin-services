@@ -80,7 +80,7 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable
 {
     // Version tracking
-    string public constant VERSION = "1.3.0";
+    string public constant VERSION = "1.3.1";
     string private constant SERVICE_NAME = "Filecoin Warm Storage Service";
     string private constant SERVICE_DESCRIPTION =
         "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
