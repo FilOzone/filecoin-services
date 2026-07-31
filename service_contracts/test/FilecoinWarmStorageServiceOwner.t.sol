@@ -104,12 +104,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
-            uint64(2880),
-            uint256(1440),
-            filBeamController,
-            "Test Service",
-            "Test Description"
+            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(1440), filBeamController
         );
         MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), serviceInitData);
         serviceContract = FilecoinWarmStorageService(address(serviceProxy));
