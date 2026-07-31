@@ -3,9 +3,7 @@ pragma solidity ^0.8.20;
 
 import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
-import {
-    CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService
-} from "../FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
@@ -217,11 +215,7 @@ library FilecoinWarmStorageServiceStateLibrary {
         return uint256(service.extsload(keccak256(abi.encode(railId, StorageLayout.RAIL_TO_DATA_SET_SLOT))));
     }
 
-    function getDataSetAuthorizer(FilecoinWarmStorageService service, uint256 dataSetId)
-        public
-        view
-        returns (address)
-    {
+    function getDataSetAuthorizer(FilecoinWarmStorageService service, uint256 dataSetId) public view returns (address) {
         return address(
             uint160(uint256(service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_AUTHORIZER_SLOT)))))
         );
@@ -233,12 +227,12 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (bool)
     {
         return uint256(
-            service.extsload(
+                service.extsload(
                 keccak256(
-                    abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
-                )
+                abi.encode(periodId >> 8, keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_PERIODS_SLOT)))
             )
-        ) & (1 << (periodId & 255)) != 0;
+            )
+            ) & (1 << (periodId & 255)) != 0;
     }
 
     function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
@@ -303,12 +297,23 @@ library FilecoinWarmStorageServiceStateLibrary {
         returns (uint256)
     {
         uint256 deadline = provingDeadline(service, setId);
+        uint64 maxProvingPeriod = getMaxProvingPeriod(service);
+        uint256 challengeWindowSize = challengeWindow(service);
 
         if (deadline == NO_PROVING_DEADLINE) {
-            revert Errors.ProvingPeriodNotInitialized(setId);
-        }
+            uint256 activationEpoch = provingActivationEpoch(service, setId);
+            if (activationEpoch == 0) {
+                revert Errors.ProvingPeriodNotInitialized(setId);
+            }
 
-        uint64 maxProvingPeriod = getMaxProvingPeriod(service);
+            // Leave one full proving period for PDP challenge finality and transaction
+            // inclusion, then align the window to the dataset's lifetime period origin.
+            uint256 minimumDeadline = block.number + maxProvingPeriod;
+            uint256 periodsFromActivation =
+                (minimumDeadline - activationEpoch + maxProvingPeriod - 1) / maxProvingPeriod;
+            deadline = activationEpoch + periodsFromActivation * maxProvingPeriod;
+            return deadline - challengeWindowSize;
+        }
 
         // If the current period is open this is the next period's challenge window
         if (block.number <= deadline) {

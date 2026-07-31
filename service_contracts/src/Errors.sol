@@ -74,14 +74,6 @@ library Errors {
     /// @param challengeWindowSize The provided challenge window size
     error InvalidChallengeWindowSize(uint256 maxProvingPeriod, uint256 challengeWindowSize);
 
-    /// @notice The service name length must be >0 and <= 256
-    /// @param length the attempted length
-    error InvalidServiceNameLength(uint256 length);
-
-    /// @notice The service description length must be >0 and <= 256
-    /// @param length the attempted length
-    error InvalidServiceDescriptionLength(uint256 length);
-
     /// @notice This function can only be called by the contract itself during upgrade
     /// @param expected The expected caller (the contract address)
     /// @param actual The actual caller address
@@ -224,10 +216,6 @@ library Errors {
     /// @notice Signature uses an unsupported v value (should be 27 or 28)
     /// @param v The actual v value provided
     error UnsupportedSignatureV(uint8 v);
-
-    /// @notice Payment rail is not associated with any data set
-    /// @param railId The rail ID
-    error RailNotAssociated(uint256 railId);
 
     /// @notice The epoch range is invalid
     /// @notice Will be emitted if any of the following conditions is NOT met:

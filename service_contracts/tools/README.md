@@ -75,7 +75,7 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 
 # Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
-./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after AFTER_EPOCH)
+./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after the observed afterEpoch)
 ```
 
 ## Deployment Parameters
@@ -200,12 +200,13 @@ See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete two-step FWS
 
 ## Contract Upgrade Process
 
-The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two-step upgrade process** for security:
+The FilecoinWarmStorageService and ServiceProviderRegistry contracts use a **two-step upgrade process** for security. The normal FWSS flow is:
 
-1. **Announce**: Call `announcePlannedUpgrade()` with the new implementation address and a future epoch
-2. **Execute**: After the announced epoch, call `upgradeToAndCall()` to complete the upgrade
+1. **Announce**: Call `announceUpgradePlan()` with the new implementation address and a relative delay
+2. **Observe**: Read `nextUpgrade()` after the announcement lands and record its exact `afterEpoch`
+3. **Execute**: After the observed epoch, call `upgradeToAndCall()` to complete the upgrade
 
-This gives stakeholders time to review changes before execution.
+The delay is measured from the block in which the announcement executes, so Safe signing time does not consume the requested notice window.
 
 **For complete FWSS upgrade documentation**, including:
 - Step-by-step upgrade workflows
@@ -257,11 +258,27 @@ The following scripts support `CALLDATA_ONLY=true`:
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
-export AFTER_EPOCH="123456"
+export UPGRADE_DELAY_EPOCHS="2880"
+export ANNOUNCEMENT_MODE=delay
+unset AFTER_EPOCH
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
 This prints a formatted transaction block with the target address, function signature, and calldata to paste into the Safe UI transaction builder.
+
+The FWSS v1.3.0 contracts currently deployed on Calibnet and Mainnet do not expose `announceUpgradePlan()`. Their upgrade to v1.3.1 must therefore use the old interface:
+
+```bash
+export ANNOUNCEMENT_MODE=legacy
+export LEGACY_NOTICE_EPOCHS=2880
+export SAFE_SIGNING_BUFFER_EPOCHS=2880
+CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
+export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
+unset UPGRADE_DELAY_EPOCHS
+CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
+```
+
+Treat this bootstrap-only mode as deprecated after FWSS v1.3.1 is live on both Calibnet and Mainnet. Remove it once rollback to v1.3.0 is no longer supported; until then it remains available only for that rollback path.
 
 ## Testing
 

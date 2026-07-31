@@ -113,27 +113,40 @@ contract ServiceProviderRegistry is
         uint96 afterEpoch;
     }
 
+    // Pending upgrade announcement
     PlannedUpgrade public nextUpgrade;
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     /// @notice Ensures the caller is the service provider
     modifier onlyServiceProvider(uint256 providerId) {
-        require(providers[providerId].serviceProvider == msg.sender, "Only service provider can call this function");
+        _onlyServiceProvider(providerId);
         _;
+    }
+
+    function _onlyServiceProvider(uint256 providerId) internal view {
+        require(providers[providerId].serviceProvider == msg.sender, "Only service provider can call this function");
     }
 
     /// @notice Ensures the provider exists
     modifier providerExists(uint256 providerId) {
+        _providerExists(providerId);
+        _;
+    }
+
+    function _providerExists(uint256 providerId) internal view {
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
         require(providers[providerId].serviceProvider != address(0), "Provider not found");
-        _;
     }
 
     /// @notice Ensures the provider is active
     modifier providerActive(uint256 providerId) {
-        require(providers[providerId].isActive, "Provider is not active");
+        _providerActive(providerId);
         _;
+    }
+
+    function _providerActive(uint256 providerId) internal view {
+        require(providers[providerId].isActive, "Provider is not active");
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -191,11 +204,7 @@ contract ServiceProviderRegistry is
 
         // Store provider info
         providers[providerId] = ServiceProviderInfo({
-            serviceProvider: msg.sender,
-            payee: payee,
-            name: name,
-            description: description,
-            isActive: true
+            serviceProvider: msg.sender, payee: payee, name: name, description: description, isActive: true
         });
 
         // Update address mapping
@@ -553,11 +562,7 @@ contract ServiceProviderRegistry is
     /// @notice Get provider info by address
     /// @param providerAddress The address of the service provider
     /// @return info The provider information (empty struct if not registered)
-    function getProviderByAddress(address providerAddress)
-        external
-        view
-        returns (ServiceProviderInfoView memory info)
-    {
+    function getProviderByAddress(address providerAddress) external view returns (ServiceProviderInfoView memory info) {
         uint256 providerId = addressToProviderId[providerAddress];
         if (providerId == 0) {
             return _getEmptyProviderInfoView();
@@ -660,11 +665,7 @@ contract ServiceProviderRegistry is
         return ServiceProviderInfoView({
             providerId: 0,
             info: ServiceProviderInfo({
-                serviceProvider: address(0),
-                payee: address(0),
-                name: "",
-                description: "",
-                isActive: false
+                serviceProvider: address(0), payee: address(0), name: "", description: "", isActive: false
             })
         });
     }
@@ -770,12 +771,32 @@ contract ServiceProviderRegistry is
 
     /// @notice Announce a planned upgrade
     /// @dev Can only be called by the contract owner
+    /// @param nextImplementation Address of the new implementation contract
+    /// @param delayEpochs Number of epochs from now before the upgrade may occur
+    function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
+        if (delayEpochs == 0) {
+            delayEpochs = 1;
+        }
+        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delayEpochs);
+    }
+
+    /// @notice Announce a planned upgrade
+    /// @dev Can only be called by the contract owner
     /// @param plannedUpgrade The planned upgrade details
-    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
-        require(plannedUpgrade.nextImplementation.code.length > 3000);
-        require(plannedUpgrade.afterEpoch > block.number);
-        nextUpgrade = plannedUpgrade;
-        emit UpgradeAnnounced(plannedUpgrade);
+    /// @custom:deprecated Use announceUpgradePlan instead
+    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
+        uint96 minAfterEpoch = uint96(block.number + 1);
+        _announcePlannedUpgrade(
+            plannedUpgrade.nextImplementation,
+            plannedUpgrade.afterEpoch < minAfterEpoch ? minAfterEpoch : plannedUpgrade.afterEpoch
+        );
+    }
+
+    function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
+        require(nextImplementation.code.length > 3000);
+        nextUpgrade.nextImplementation = nextImplementation;
+        nextUpgrade.afterEpoch = afterEpoch;
+        emit UpgradeAnnounced(nextUpgrade);
     }
 
     /// @notice Authorizes an upgrade to a new implementation

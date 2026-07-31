@@ -14,6 +14,7 @@ import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/crypt
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "./Errors.sol";
+import {IFilecoinServiceMetadata} from "./IFilecoinServiceMetadata.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
@@ -69,6 +70,7 @@ uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 256; // 256 bytes
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
+    IFilecoinServiceMetadata,
     PDPListener,
     IValidator,
     Initializable,
@@ -79,6 +81,10 @@ contract FilecoinWarmStorageService is
 {
     // Version tracking
     string public constant VERSION = "1.3.0";
+    string private constant SERVICE_NAME = "Filecoin Warm Storage Service";
+    string private constant SERVICE_DESCRIPTION =
+        "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
+    string private constant SERVICE_HOMEPAGE = "https://github.com/FilOzone/filecoin-services";
 
     using Rails for FilecoinPayV1;
 
@@ -294,6 +300,7 @@ contract FilecoinWarmStorageService is
     // The address allowed to terminate CDN services
     address private filBeamControllerAddress;
 
+    // Pending upgrade announcement
     PlannedUpgrade private nextUpgrade;
 
     // Pricing rates (mutable for future adjustments)
@@ -314,16 +321,24 @@ contract FilecoinWarmStorageService is
 
     // Modifier to ensure only the PDP verifier contract can call certain functions
     modifier onlyPDPVerifier() {
-        require(msg.sender == pdpVerifierAddress, Errors.OnlyPDPVerifierAllowed(pdpVerifierAddress, msg.sender));
+        _onlyPDPVerifier();
         _;
     }
 
+    function _onlyPDPVerifier() internal view {
+        require(msg.sender == pdpVerifierAddress, Errors.OnlyPDPVerifierAllowed(pdpVerifierAddress, msg.sender));
+    }
+
     modifier onlyFilBeamController() {
+        _onlyFilBeamController();
+        _;
+    }
+
+    function _onlyFilBeamController() internal view {
         require(
             msg.sender == filBeamControllerAddress,
             Errors.OnlyFilBeamControllerAllowed(filBeamControllerAddress, msg.sender)
         );
-        _;
     }
 
     /// @custom:oz-upgrades-unsafe-allow cstructor
@@ -368,20 +383,15 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Initialize the contract with PDP proving period parameters
+     * @notice Initialize the contract with PDP proving period parameters.
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
      * @param _filBeamControllerAddress Address authorized to terminate CDN services
-     * @param _name Service name (max 256 characters, cannot be empty)
-     * @param _description Service description (max 256 characters, cannot be empty)
      */
-    function initialize(
-        uint64 _maxProvingPeriod,
-        uint256 _challengeWindowSize,
-        address _filBeamControllerAddress,
-        string memory _name,
-        string memory _description
-    ) public initializer {
+    function initialize(uint64 _maxProvingPeriod, uint256 _challengeWindowSize, address _filBeamControllerAddress)
+        public
+        initializer
+    {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
         __EIP712_init("FilecoinWarmStorageService", "1");
@@ -395,26 +405,45 @@ contract FilecoinWarmStorageService is
         require(_filBeamControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
         filBeamControllerAddress = _filBeamControllerAddress;
 
-        uint256 serviceNameLength = bytes(_name).length;
-        require(serviceNameLength > 0, Errors.InvalidServiceNameLength(serviceNameLength));
-        require(serviceNameLength <= 256, Errors.InvalidServiceNameLength(serviceNameLength));
-
-        uint256 serviceDescriptionLength = bytes(_description).length;
-        require(serviceDescriptionLength > 0, Errors.InvalidServiceDescriptionLength(serviceDescriptionLength));
-        require(serviceDescriptionLength <= 256, Errors.InvalidServiceDescriptionLength(serviceDescriptionLength));
-
-        // Emit the FilecoinServiceDeployed event
-        emit FilecoinServiceDeployed(_name, _description);
+        emit FilecoinServiceDeployed(SERVICE_NAME, SERVICE_DESCRIPTION);
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
     }
 
-    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external onlyOwner {
-        require(plannedUpgrade.nextImplementation.code.length > 3000);
-        require(plannedUpgrade.afterEpoch > block.number);
-        nextUpgrade = plannedUpgrade;
-        emit UpgradeAnnounced(plannedUpgrade);
+    function name() external pure override returns (string memory) {
+        return SERVICE_NAME;
+    }
+
+    function description() external pure override returns (string memory) {
+        return SERVICE_DESCRIPTION;
+    }
+
+    function homepage() external pure override returns (string memory) {
+        return SERVICE_HOMEPAGE;
+    }
+
+    function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
+        if (delayEpochs == 0) {
+            delayEpochs = 1;
+        }
+        _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delayEpochs);
+    }
+
+    /// @custom:deprecated Use announceUpgradePlan instead
+    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
+        uint96 minAfterEpoch = uint96(block.number + 1);
+        _announcePlannedUpgrade(
+            plannedUpgrade.nextImplementation,
+            plannedUpgrade.afterEpoch < minAfterEpoch ? minAfterEpoch : plannedUpgrade.afterEpoch
+        );
+    }
+
+    function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
+        require(nextImplementation.code.length > 3000);
+        nextUpgrade.nextImplementation = nextImplementation;
+        nextUpgrade.afterEpoch = afterEpoch;
+        emit UpgradeAnnounced(nextUpgrade);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
@@ -645,7 +674,10 @@ contract FilecoinWarmStorageService is
         uint256 dataSetId,
         uint256, // deletedLeafCount, - not used
         bytes calldata // extraData, - not used
-    ) external onlyPDPVerifier {
+    )
+        external
+        onlyPDPVerifier
+    {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
@@ -715,6 +747,8 @@ contract FilecoinWarmStorageService is
             delete dataSetMetadata[dataSetId][metadataKeys[i]];
         }
         delete dataSetMetadataKeys[dataSetId];
+
+        processScheduledPieceMetadataRemovals(dataSetId);
 
         // Complete cleanup
         delete dataSetAuthorizer[dataSetId];
@@ -860,9 +894,8 @@ contract FilecoinWarmStorageService is
         verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
-        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).replenishReserveIfNeeded(
-            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending
-        );
+        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
+            .replenishReserveIfNeeded(info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending);
         info.pendingOneTimePayments = newPending;
 
         // Queue piece IDs for metadata cleanup at nextProvingPeriod
@@ -879,7 +912,10 @@ contract FilecoinWarmStorageService is
         uint256, /*challengedLeafCount*/
         uint256, /*seed*/
         uint256 challengeCount
-    ) external onlyPDPVerifier {
+    )
+        external
+        onlyPDPVerifier
+    {
         requirePaymentNotBeyondEndEpoch(dataSetId);
 
         if (provenThisPeriod[dataSetId]) {
@@ -926,19 +962,33 @@ contract FilecoinWarmStorageService is
         uint96 pending = info.pendingOneTimePayments;
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
-        // initialize state for new data set
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
-            uint256 firstDeadline = block.number + maxProvingPeriod;
+            uint256 firstDeadline;
+            if (activationEpoch == 0) {
+                // First activation establishes the lifetime proving-period origin.
+                activationEpoch = block.number;
+                provingActivationEpoch[dataSetId] = activationEpoch;
+                firstDeadline = activationEpoch + maxProvingPeriod;
+            } else {
+                // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
+                // period of headroom, keeping the window one period wide.
+                require(
+                    challengeEpoch > activationEpoch,
+                    Errors.InvalidChallengeEpoch(
+                        dataSetId, activationEpoch + 1, activationEpoch + maxProvingPeriod, challengeEpoch
+                    )
+                );
+                uint256 minimumDeadline = block.number + maxProvingPeriod;
+                uint256 period = _provingPeriodForEpoch(activationEpoch, minimumDeadline, maxProvingPeriod);
+                firstDeadline = _calcPeriodDeadline(activationEpoch, period);
+            }
+
             uint256 minWindow = firstDeadline - challengeWindowSize;
-            uint256 maxWindow = firstDeadline;
-            if (challengeEpoch < minWindow || challengeEpoch > maxWindow) {
-                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, maxWindow, challengeEpoch);
+            if (challengeEpoch < minWindow || challengeEpoch > firstDeadline) {
+                revert Errors.InvalidChallengeEpoch(dataSetId, minWindow, firstDeadline, challengeEpoch);
             }
             provingDeadlines[dataSetId] = firstDeadline;
-
-            // Initialize the activation epoch when proving first starts
-            // This marks when the data set became active for proving
-            provingActivationEpoch[dataSetId] = block.number;
 
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
@@ -1007,7 +1057,12 @@ contract FilecoinWarmStorageService is
         address, // oldServiceProvider
         address, // newServiceProvider
         bytes calldata // extraData - not used
-    ) external override onlyPDPVerifier {
+    )
+        external
+        view
+        override
+        onlyPDPVerifier
+    {
         revert Errors.StorageProviderChangesNotSupported();
     }
 
@@ -1097,9 +1152,8 @@ contract FilecoinWarmStorageService is
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1(paymentsContractAddress).settleCDNRails(
-            info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount
-        );
+        FilecoinPayV1(paymentsContractAddress)
+            .settleCDNRails(info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount);
     }
 
     /**
@@ -1121,9 +1175,8 @@ contract FilecoinWarmStorageService is
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1(paymentsContractAddress).topUpCDNRails(
-            dataSetId, info.cacheMissRailId, info.cdnRailId, cacheMissAmountToAdd, cdnAmountToAdd
-        );
+        FilecoinPayV1(paymentsContractAddress)
+            .topUpCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId, cacheMissAmountToAdd, cdnAmountToAdd);
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
@@ -1184,9 +1237,10 @@ contract FilecoinWarmStorageService is
         uint256 pdpRailId = info.pdpRailId;
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
 
-        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress).updateStorageRates(
-            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch, immediateTermination
-        );
+        info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
+            .updateStorageRates(
+                dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch, immediateTermination
+            );
         info.pendingOneTimePayments = 0;
     }
 
@@ -1492,8 +1546,9 @@ contract FilecoinWarmStorageService is
         internal
         returns (address signer)
     {
-        bytes32 digest =
-            _hashTypedDataV4(keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId)));
+        bytes32 digest = _hashTypedDataV4(
+            keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId))
+        );
 
         address authorizer = dataSetAuthorizer[dataSetId];
         if (authorizer == address(0)) {
@@ -1539,20 +1594,31 @@ contract FilecoinWarmStorageService is
         uint256 fromEpoch,
         uint256 toEpoch,
         uint256 /* rate */
-    ) external view override returns (ValidationResult memory result) {
-        // Get the data set ID associated with this rail
+    )
+        external
+        view
+        override
+        returns (ValidationResult memory result)
+    {
+        // Get the data set ID associated with this rail. A zero here means the rail's data set
+        // was abandoned and already torn down by dataSetDeleted -- the only way to release its
+        // remaining lockup, since the data set no longer exists to arbitrate proving -- or the
+        // rail was never one of ours to begin with. Either way, settle in the payer's favor.
         uint256 dataSetId = railToDataSet[railId];
-        require(dataSetId != 0, Errors.RailNotAssociated(railId));
+        if (dataSetId == 0) {
+            return
+                ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Rail not associated with a data set"});
+        }
 
         // Calculate the total number of epochs in the requested range
         uint256 totalEpochsRequested = toEpoch - fromEpoch;
         require(totalEpochsRequested > 0, Errors.InvalidEpochRange(fromEpoch, toEpoch));
 
-        // No proving activity: pay nothing, advance settleUpto = toEpoch so settleRail can
-        // discharge lockup. Hit by never-activated data sets and by the finalize leg of
-        // abandonment (which wipes activationEpoch between settles to unblock the open period)
+        // No active proving period covers epochs through the activation boundary. Advance
+        // settlement with zero payment so FilecoinPay can discharge pre-activation rate
+        // segments, including segments recorded before the first nextProvingPeriod call.
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
-        if (activationEpoch == 0) {
+        if (activationEpoch == 0 || toEpoch <= activationEpoch) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
 
@@ -1563,9 +1629,7 @@ contract FilecoinWarmStorageService is
         // If no epochs are proven, no payment is due (but settlement may still advance)
         if (provenEpochCount == 0) {
             return ValidationResult({
-                modifiedAmount: 0,
-                settleUpto: settleUpTo,
-                note: "No proven epochs in the requested range"
+                modifiedAmount: 0, settleUpto: settleUpTo, note: "No proven epochs in the requested range"
             });
         }
 

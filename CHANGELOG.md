@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Fixed
 - Fixed a lifecycle reserve underflow in `Rails.updateStorageRates()` that could cause `nextProvingPeriod` to fail ([#521](https://github.com/FilOzone/filecoin-services/pull/521)).
+- Fixed `abandonRails` to handle underfunded payers: when zeroing the lockup period is blocked by FilecoinPay, the lifecycle reserve is still released immediately but the PDP rail retains its default 30-day lockup period rather than finalizing at once ([#520](https://github.com/FilOzone/filecoin-services/pull/520)).
 
 ## [1.3.0] - FWSS Upgrade
 

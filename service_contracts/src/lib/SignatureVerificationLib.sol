@@ -73,8 +73,9 @@ library SignatureVerificationLib {
         string[] calldata keys,
         string[] calldata values
     ) public pure returns (bytes32 structHash) {
-        return
-            keccak256(abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values)));
+        return keccak256(
+            abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values))
+        );
     }
 
     function hashAllCids(Cids.Cid[] calldata pieceDataArray) internal pure returns (bytes32 cidHashesHash) {
@@ -303,12 +304,13 @@ library SignatureVerificationLib {
     bytes32 internal constant AUTHORIZER_REENTRANCY_SLOT =
         keccak256("filecoin-warm-storage-service.authorizer.reentrancy.guard");
 
-    /// @dev Reentrancy latch for the authorizer subcall. The lock clears after `_;` (a `return` in the body
-    ///      still runs post-`_;` code) and, on any revert, via transient-storage rollback — so a second
-    ///      legitimate authorization in the same transaction is not blocked.
+    /// @dev Reentrancy latch for the authorizer subcall. `_lockAuthorizer` takes the latch before the body;
+    ///      it clears after `_;` (a `return` in the body still runs post-`_;` code) and, on any revert, via
+    ///      transient-storage rollback — so a second legitimate authorization in the same transaction is not
+    ///      blocked. The pre-`_;` check-and-set is hoisted into a function so the modifier body stays a plain
+    ///      sequence of calls (forge-lint `unwrapped-modifier-logic`).
     modifier nonReentrantAuthorizer() {
-        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
-        _setAuthorizerLock(true);
+        _lockAuthorizer();
         _;
         _setAuthorizerLock(false);
     }
@@ -349,5 +351,11 @@ library SignatureVerificationLib {
         assembly ("memory-safe") {
             tstore(slot, value)
         }
+    }
+
+    /// @dev Pre-`_;` half of `nonReentrantAuthorizer`, split out to keep the modifier body call-only.
+    function _lockAuthorizer() private {
+        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
+        _setAuthorizerLock(true);
     }
 }

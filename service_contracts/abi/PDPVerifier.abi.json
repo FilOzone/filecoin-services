@@ -174,6 +174,24 @@
   },
   {
     "type": "function",
+    "name": "announceUpgradePlan",
+    "inputs": [
+      {
+        "name": "nextImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "delayEpochs",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "calculateProofFee",
     "inputs": [
       {
@@ -1471,6 +1489,17 @@
         "name": "minDelay",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InvalidImplementation",
+    "inputs": [
+      {
+        "name": "implementation",
+        "type": "address",
+        "internalType": "address"
       }
     ]
   },

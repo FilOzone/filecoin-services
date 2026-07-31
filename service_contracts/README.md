@@ -7,6 +7,7 @@ This directory contains the smart contracts for different Filecoin services usin
 - `src/` - Contract source files
   - `FilecoinWarmStorageService.sol` - A service contract with [PDP](https://github.com/FilOzone/pdp) (Proof of Data Possession) and payment integration
   - `FilecoinWarmStorageServiceStateView.sol` - View contract for reading `FilecoinWarmStorageService` with `eth_call`.
+  - `IFilecoinServiceMetadata.sol` - Minimal service identity interface (`name`, `description`, `homepage`)
   - `src/lib` - Library source files
     - `FilecoinWarmStorageServiceLayout.sol` - Constants conveying the storage layout of `FilecoinWarmStorageService`
     - `FilecoinWarmStorageServiceStateInternalLibrary.sol` - `internal` library for embedding logic to read `FilecoinWarmStorageService`
@@ -163,15 +164,13 @@ The project maintains checked-in ABI files in the `abi/` directory for use by sc
 make update-abi
 ```
 
-This extracts the ABIs from the compiled contracts and saves them as JSON files:
+This extracts the checked-in ABIs, including:
 - `abi/FilecoinWarmStorageService.abi.json` - Main service contract ABI
+- `abi/FilecoinWarmStorageServiceStateLibrary.abi.json` - State library ABI used by generated view helpers
 - `abi/FilecoinWarmStorageServiceStateView.abi.json` - View contract ABI
 
 These ABIs are used by the code generation scripts in the `gen` target and should be updated whenever contract interfaces change.
-
-Note: `SignatureVerificationLib.sol` is an external library (public functions); if you rely on its ABI for external tooling or verification,
-you may also extract the library ABI via `make update-abi` after compilation. The primary consumer is the service implementation which
-is linked at deploy time by the scripts in `tools/`.
+`FilecoinWarmStorageService.abi.json` also includes first-party library event fragments emitted by the FWSS proxy at runtime.
 
 ### Dependencies
 

@@ -3,7 +3,6 @@
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
 # Assumption: KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
 # and to a valid ETH_RPC_URL for the target network.
-# Assumption: Must configure SERVICE_NAME, SERVICE_DESCRIPTION
 # Assumption: forge, cast, jq are in the PATH
 # Assumption: called from contracts directory so forge paths work out
 #
@@ -102,34 +101,6 @@ if [ "$DRY_RUN" != "true" ] && [ -z "$ETH_KEYSTORE" ]; then
   exit 1
 fi
 
-# Service name and description - mandatory environment variables
-if [ -z "$SERVICE_NAME" ]; then
-  echo "Error: SERVICE_NAME is not set. Please set SERVICE_NAME environment variable (max 256 characters)"
-  exit 1
-fi
-
-if [ -z "$SERVICE_DESCRIPTION" ]; then
-  echo "Error: SERVICE_DESCRIPTION is not set. Please set SERVICE_DESCRIPTION environment variable (max 256 characters)"
-  exit 1
-fi
-
-# Validate name and description lengths
-NAME_LENGTH=${#SERVICE_NAME}
-DESC_LENGTH=${#SERVICE_DESCRIPTION}
-
-if [ $NAME_LENGTH -eq 0 ] || [ $NAME_LENGTH -gt 256 ]; then
-  echo "Error: SERVICE_NAME must be between 1 and 256 characters (current: $NAME_LENGTH)"
-  exit 1
-fi
-
-if [ $DESC_LENGTH -eq 0 ] || [ $DESC_LENGTH -gt 256 ]; then
-  echo "Error: SERVICE_DESCRIPTION must be between 1 and 256 characters (current: $DESC_LENGTH)"
-  exit 1
-fi
-
-echo "Service configuration:"
-echo "  Name: $SERVICE_NAME"
-echo "  Description: $SERVICE_DESCRIPTION"
 
 # Use environment variables if set, otherwise use network defaults
 if [ -z "$FILBEAM_CONTROLLER_ADDRESS" ]; then
@@ -402,8 +373,8 @@ deploy_implementation_if_needed \
 unset LIBRARIES
 
 # Step 9: Deploy or use existing FilecoinWarmStorageService proxy
-# Initialize with max proving period, challenge window size, FilBeam controller address, name, and description
-INIT_DATA=$(cast calldata "initialize(uint64,uint256,address,string,string)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS "$SERVICE_NAME" "$SERVICE_DESCRIPTION")
+# Initialize with max proving period, challenge window size, and FilBeam controller address
+INIT_DATA=$(cast calldata "initialize(uint64,uint256,address)" $MAX_PROVING_PERIOD $CHALLENGE_WINDOW_SIZE $FILBEAM_CONTROLLER_ADDRESS)
 deploy_proxy_if_needed \
     "FWSS_PROXY_ADDRESS" \
     "$FWSS_IMPLEMENTATION_ADDRESS" \
@@ -481,8 +452,6 @@ echo "Challenge window size: $CHALLENGE_WINDOW_SIZE epochs"
 echo "USDFC token address: $USDFC_TOKEN_ADDRESS"
 echo "FilBeam controller address: $FILBEAM_CONTROLLER_ADDRESS"
 echo "FilBeam beneficiary address: $FILBEAM_BENEFICIARY_ADDRESS"
-echo "Service name: $SERVICE_NAME"
-echo "Service description: $SERVICE_DESCRIPTION"
 
 # Contract verification
 if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
