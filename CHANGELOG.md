@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [1.3.1] - FWSS + ServiceProviderRegistry Upgrade
 
-This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.3.1 and ServiceProviderRegistry to v1.2.0. It contains the contract changes tracked in [#549](https://github.com/FilOzone/filecoin-services/issues/549) and preserves the existing proxy addresses and deployed state.
+This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.3.1 and ServiceProviderRegistry to v1.2.0.
 
 | Component | Version | Upgrade classification |
 |---|---|---|
