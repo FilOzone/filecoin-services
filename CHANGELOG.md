@@ -5,12 +5,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
-### Removed
-- Removed stale service contract helper scripts and obsolete upgrade/deployment artifacts from `service_contracts/tools`.
+## [1.3.1] - FWSS + ServiceProviderRegistry Upgrade
+
+This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.3.1 and ServiceProviderRegistry to v1.2.0.
+
+| Component | Version | Upgrade classification |
+|---|---|---|
+| Stack (`filecoin-services`) | `v1.3.1` | Routine |
+| `FilecoinWarmStorageService` | `1.3.1` | Backward-compatible implementation upgrade |
+| `ServiceProviderRegistry` | `1.2.0` | Backward-compatible implementation upgrade |
+
+### Deployment / Rollout Status
+
+Rollout status, network-by-network implementation addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.3.1 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.1). The FWSS and ServiceProviderRegistry proxy addresses remain unchanged.
+
+### Added
+
+- Added the `IFilecoinServiceMetadata` interface and implemented canonical `name()`, `description()`, and `homepage()` metadata on FWSS ([#551](https://github.com/FilOzone/filecoin-services/pull/551)).
+- Added deployment bytecode metadata and verification tooling to detect configuration or artifact drift before rollout ([#530](https://github.com/FilOzone/filecoin-services/pull/530)).
+- Published the FWSS library ABIs alongside the main contract ABI ([#522](https://github.com/FilOzone/filecoin-services/pull/522)).
+
+### Changed
+
+- Added `announceUpgradePlan(nextImplementation, delayEpochs)` to FWSS and ServiceProviderRegistry so an owner can schedule an upgrade relative to the current epoch. A zero delay is normalized to one epoch. The legacy `announcePlannedUpgrade` entry point remains available but is deprecated; current or past epochs are normalized to the next epoch instead of reverting ([#547](https://github.com/FilOzone/filecoin-services/pull/547)).
+- Preserved the original proving-period timeline and proof history when a data set is reactivated, and bounded its challenge epoch to the canonical reactivation window ([9fde09c](https://github.com/FilOzone/filecoin-services/commit/9fde09c5ff2d7606338c1aaf5dfb34544f4e6a06), [#553](https://github.com/FilOzone/filecoin-services/pull/553)).
 
 ### Fixed
+
 - Fixed a lifecycle reserve underflow in `Rails.updateStorageRates()` that could cause `nextProvingPeriod` to fail ([#521](https://github.com/FilOzone/filecoin-services/pull/521)).
-- Fixed `abandonRails` to handle underfunded payers: when zeroing the lockup period is blocked by FilecoinPay, the lifecycle reserve is still released immediately but the PDP rail retains its default 30-day lockup period rather than finalizing at once ([#520](https://github.com/FilOzone/filecoin-services/pull/520)).
+- Allowed abandonment and consent-based termination to complete for underfunded payers. When a zero lockup period cannot be set, the lifecycle reserve is released while the PDP rail retains its default 30-day lockup period ([#520](https://github.com/FilOzone/filecoin-services/pull/520)).
+- Settled pre-activation payment segments at zero payment so FilecoinPay can advance settlement through the proving-activation boundary ([8025fe3](https://github.com/FilOzone/filecoin-services/commit/8025fe300fc02d681a192d646484d7d217a12eda), [#545](https://github.com/FilOzone/filecoin-services/pull/545)).
+- Cleared scheduled piece-metadata removals when a data set is deleted ([#543](https://github.com/FilOzone/filecoin-services/pull/543)).
+
+### Operations and Documentation
+
+- Added an operational event communications runbook ([#542](https://github.com/FilOzone/filecoin-services/pull/542)).
+- Updated the FWSS upgrade checklist, documented the v1.3.0 pricing rationale and measurement harness, switched deployment verification to the maintained Filfox package, and removed stale service-contract helper scripts ([#508](https://github.com/FilOzone/filecoin-services/pull/508), [#537](https://github.com/FilOzone/filecoin-services/pull/537), [#532](https://github.com/FilOzone/filecoin-services/pull/532), [#538](https://github.com/FilOzone/filecoin-services/pull/538)).
+
+### Upgrade Notes
+
+- Existing FWSS and ServiceProviderRegistry integrations continue using the same proxy addresses.
+- The first rollout of these implementations must use the legacy `announcePlannedUpgrade` entry point. After the proxies have been upgraded, operators should use `announceUpgradePlan` for future announcements.
+- The legacy announcement entry point remains in the ABI for compatibility and rollback operations, but integrations should migrate to the relative-delay method.
 
 ## [1.3.0] - FWSS Upgrade
 
@@ -447,7 +483,11 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/FilOzone/filecoin-services/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/FilOzone/filecoin-services/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/FilOzone/filecoin-services/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/FilOzone/filecoin-services/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/FilOzone/filecoin-services/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/FilOzone/filecoin-services/compare/v0.3.0...v1.0.0
 [0.3.0]: https://github.com/FilOzone/filecoin-services/releases/tag/v0.3.0
