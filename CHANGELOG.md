@@ -17,7 +17,7 @@ This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.3.1
 
 ### Deployment / Rollout Status
 
-The rollout has not started. See the [v1.3.1 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.1) for network-by-network implementation addresses, announcement and execution epochs, transaction links, and validation evidence as the rollout progresses. The FWSS and ServiceProviderRegistry proxy addresses remain unchanged.
+Rollout status, network-by-network implementation addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.3.1 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.3.1). The FWSS and ServiceProviderRegistry proxy addresses remain unchanged.
 
 ### Added
 

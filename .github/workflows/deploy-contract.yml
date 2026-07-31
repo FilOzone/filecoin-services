@@ -20,7 +20,7 @@ on:
           - ServiceProviderRegistry
           - SessionKeyRegistry
       dry_run:
-        description: 'Dry run (SPR validates live state and deployment plan; other selections build only)'
+        description: 'Dry run (build only, no deployment)'
         required: false
         type: boolean
         default: true
@@ -110,24 +110,11 @@ jobs:
           echo "ETH_KEYSTORE=$RUNNER_TEMP/keystore/deployer" >> "$GITHUB_ENV"
           echo "PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Plan ServiceProviderRegistry deployment
-        if: inputs.dry_run == true && inputs.contract == 'ServiceProviderRegistry'
-        env:
-          ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
-          CHAIN: ${{ steps.network.outputs.chain_id }}
-          DRY_RUN: 'true'
-          AUTO_VERIFY: 'false'
-        run: |
-          cd service_contracts
-          bash "${{ steps.script.outputs.path }}" 2>&1 | tee "$RUNNER_TEMP/deploy-output.txt"
-          touch "$RUNNER_TEMP/deploy-plan-validated"
-
       - name: Deploy contract
         if: inputs.dry_run == false
         env:
           ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
           CHAIN: ${{ steps.network.outputs.chain_id }}
-          DRY_RUN: 'false'
         run: |
           cd service_contracts
           bash "${{ steps.script.outputs.path }}" 2>&1 | tee "$RUNNER_TEMP/deploy-output.txt"
@@ -145,13 +132,7 @@ jobs:
             if [ "${{ inputs.dry_run }}" = "true" ]; then
               echo "## Dry Run: ${{ steps.script.outputs.label }}"
               echo ""
-              if [ -f "$RUNNER_TEMP/deploy-plan-validated" ]; then
-                echo "> Live proxy state, artifact, and constructor deployment plan validated. Nothing was broadcast."
-              elif [ "${{ inputs.contract }}" = "ServiceProviderRegistry" ]; then
-                echo "> ServiceProviderRegistry deployment-plan validation did not complete; inspect the failed step logs."
-              else
-                echo "> Build completed successfully. Ready to deploy."
-              fi
+              echo "> Build completed successfully. Ready to deploy."
             else
               echo "## Deployment: ${{ steps.script.outputs.label }}"
             fi
@@ -164,15 +145,6 @@ jobs:
             echo "| **Commit** | \`${GITHUB_SHA::8}\` |"
             echo "| **Actor** | @${{ github.actor }} |"
             echo "| **Dry Run** | ${{ inputs.dry_run }} |"
-
-            if [ "${{ inputs.dry_run }}" = "true" ] && [ -f "$RUNNER_TEMP/deploy-plan-validated" ]; then
-              echo ""
-              echo "### Deployment Plan"
-              echo ""
-              echo '```'
-              cat "$RUNNER_TEMP/deploy-output.txt"
-              echo '```'
-            fi
 
             if [ "${{ inputs.dry_run }}" = "false" ] && [ -f "$RUNNER_TEMP/deploy-output.txt" ]; then
               echo ""
