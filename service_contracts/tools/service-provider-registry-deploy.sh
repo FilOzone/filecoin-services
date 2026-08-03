@@ -76,10 +76,30 @@ echo "Deployer balance: $BALANCE"
 NONCE="$(cast nonce "$ADDR")"
 echo "Starting nonce: $NONCE"
 
+# The implementation's migrate() reinitializer must be exactly one greater
+# than the counter already stored in the proxy. A fresh proxy starts at zero
+# before initialize() consumes version 1.
+if [ "$WITH_PROXY" = "true" ]; then
+  SPR_INIT_COUNTER=0
+else
+  if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+    echo "Error: SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS is required for implementation-only deployment"
+    exit 1
+  fi
+  SPR_INIT_COUNTER=$("$SCRIPT_DIR/get-initialized-counter.sh" "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS")
+  if ! [[ "$SPR_INIT_COUNTER" =~ ^[0-9]+$ ]]; then
+    echo "Error: Failed to read ServiceProviderRegistry initializer counter"
+    exit 1
+  fi
+fi
+SPR_REINITIALIZER_VERSION=$((SPR_INIT_COUNTER + 1))
+echo "ServiceProviderRegistry initializer counter: $SPR_INIT_COUNTER"
+echo "New implementation reinitializer version: $SPR_REINITIALIZER_VERSION"
+
 # Deploy ServiceProviderRegistry implementation
 echo ""
 echo "=== STEP 1: Deploying ServiceProviderRegistry Implementation ==="
-SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/ServiceProviderRegistry.sol:ServiceProviderRegistry --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
+SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce "$NONCE" src/ServiceProviderRegistry.sol:ServiceProviderRegistry --constructor-args "$SPR_REINITIALIZER_VERSION" --optimizer-runs 1 --via-ir | grep "Deployed to" | awk '{print $3}')
 if [ -z "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
   echo "Error: Failed to extract ServiceProviderRegistry implementation address"
   exit 1
