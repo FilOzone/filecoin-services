@@ -1252,6 +1252,25 @@
   },
   {
     "type": "event",
+    "name": "PiecesScheduledForRemoval",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceIds",
+        "type": "uint256[]",
+        "indexed": false,
+        "internalType": "uint256[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PiecesRemoved",
     "inputs": [
       {
