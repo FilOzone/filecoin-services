@@ -274,8 +274,8 @@ gh release create {{RELEASE_VERSION}} \
 ### Phase 2: Deploy Contracts
 Deploy both networks before any announce/execute.
 
-- [ ] Run the metadata-aware deploy dry-run for each target network before live deployment and record the deploy inventory in the Run Log: `SignatureVerificationLib`, `Rails`, `FilecoinWarmStorageService` implementation, `FilecoinWarmStorageServiceStateView`, and any other contract the tooling marks as needing deployment.
-- [ ] For every contract type marked as needing deployment by the dry-run, run the matching [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) before live announce. Use `contract=FWSS Implementation` for linked libraries or FWSS implementation changes, and `contract=FWSS StateView` for StateView changes.
+- [ ] Run the metadata-aware deploy dry-run for each target network before live deployment and record every `Deploying`/`Would deploy` and `Pinned/preserved` decision in the Run Log. The reviewed release ref must encode scope through deployment metadata; do not pin or unpin components ad hoc during rollout.
+- [ ] Review and approve the complete dry-run inventory, then run the [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) once per network with `contract=Warm Storage stack` and `dry_run=false`. The metadata-aware stack run deploys every changed, unpinned component in nonce order; do not select components manually or run separate FWSS/SPR deployment paths.
 - [ ] Run `service_contracts/tools/verify-deployments.sh --chain <CHAIN>` for each target network after deployment metadata is available. Resolve or explicitly waive any bytecode/metadata mismatch before live announce.
 - [ ] If linked libraries or StateView are newly deployed, record their addresses, verification status, and ABI-publishing decision in the Run Log.
 
@@ -292,50 +292,65 @@ ETH_RPC_URL="https://api.node.glif.io/rpc/v1" \
   ./tools/verify-deployments.sh --chain 314
 ```
 
-Use the deploy dry-run output to identify contracts that are `Up to date` versus `Would deploy` or otherwise need deployment. Record the final deploy set before any live announce transaction.
+Use the deploy dry-run output to distinguish contracts that are `Pinned/preserved`, `Up to date`, or `Would deploy`. Record the final deploy set before any live announce transaction.
 
 | Dry-run marks as needing deployment | Operator action |
 |---|---|
-| `SignatureVerificationLib` or `Rails` | Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS Implementation`; the implementation deploy script deploys linked libraries before deploying the FWSS implementation and records their addresses |
-| `FilecoinWarmStorageService` implementation | Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS Implementation` |
-| `FilecoinWarmStorageServiceStateView` | Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS StateView`, then follow the optional StateView switch steps below |
-| `ServiceProviderRegistry` or `SessionKeyRegistry` | Only deploy if the release explicitly includes that out-of-scope contract; use its matching Deploy Contract workflow option and add an exception section to this issue |
+| `SignatureVerificationLib`, `Rails`, or `FilecoinWarmStorageService` | The approved `contract=Warm Storage stack` live run deploys each changed, unpinned component automatically and records its address |
+| `ServiceProviderRegistry` | Only unpin in the reviewed release-prep PR when the release explicitly includes it; add an exception section to this issue, then let the approved `contract=Warm Storage stack` run deploy it |
+| `PDPVerifier`, `FilecoinPay`, `ProviderIdSet`, or `FilecoinWarmStorageServiceStateView` | Keep pinned in the reviewed release ref unless the release explicitly includes it and the technical owner approves the expanded scope before the live stack run |
+| `SessionKeyRegistry` | Only deploy if explicitly included; use the dedicated `contract=SessionKeyRegistry` workflow option and add an exception section to this issue |
 
 </details>
 
-**Calibnet FWSS Implementation**
-- [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=FWSS Implementation`, `dry_run=true`
+**Calibnet Warm Storage Stack**
+- [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=Warm Storage stack`, `dry_run=true`
+- [ ] Confirm the inventory exactly matches the approved release scope; stop and resolve any unexpected deployment before broadcasting
 - [ ] Re-run with `dry_run=false`
-- [ ] Capture `CALI_NEW_IMPL` and add it to the Run Log
-- [ ] Verify implementation on Sourcify and Blockscout
+- [ ] Capture `CALI_NEW_IMPL`, plus `CALI_NEW_SPR_IMPL`, new library addresses, and `CALI_NEW_VIEW` when those components are in the approved inventory, and add them to the Run Log
+- [ ] Verify every newly deployed contract on Sourcify and Blockscout
 - [ ] Attempt FilFox verification and record result
 
-**Mainnet FWSS Implementation**
-- [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Mainnet`, `contract=FWSS Implementation`, `dry_run=true`
+**Mainnet Warm Storage Stack**
+- [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Mainnet`, `contract=Warm Storage stack`, `dry_run=true`
+- [ ] Confirm the inventory exactly matches the approved release scope; stop and resolve any unexpected deployment before broadcasting
 - [ ] Re-run with `dry_run=false`
-- [ ] Capture `MAIN_NEW_IMPL` and add it to the Run Log
-- [ ] Verify implementation on Sourcify and Blockscout
+- [ ] Capture `MAIN_NEW_IMPL`, plus `MAIN_NEW_SPR_IMPL`, new library addresses, and `MAIN_NEW_VIEW` when those components are in the approved inventory, and add them to the Run Log
+- [ ] Verify every newly deployed contract on Sourcify and Blockscout
 - [ ] Attempt FilFox verification and record result
-- [ ] Add both implementation addresses to the GitHub pre-release rollout status. Do not update `service_contracts/deployments.json` until proxy slots are live.
+- [ ] Add both FWSS implementation addresses and every companion SPR, library, or StateView candidate address to the GitHub pre-release rollout status. Do not update `service_contracts/deployments.json` until proxy slots are live.
 
 Verification command pattern:
 
 ```bash
 cd service_contracts
 
-# Calibnet: CHAIN=314159 and FWSS_IMPL="$CALI_NEW_IMPL"
-# Mainnet: CHAIN=314 and FWSS_IMPL="$MAIN_NEW_IMPL"
+# Calibnet: use CALI_NEW_* values; Mainnet: use MAIN_NEW_* values.
 export CHAIN=314159
 export FWSS_IMPL="$CALI_NEW_IMPL"
+export SPR_IMPL="${CALI_NEW_SPR_IMPL:-}"
+export RAILS_IMPL="${CALI_NEW_RAILS:-}"
 
 source tools/verify-contracts.sh
-verify_sourcify "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
-verify_blockscout "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
-verify_filfox "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+
+verify_candidate() {
+  local address="$1"
+  local artifact="$2"
+  [ -z "$address" ] && return 0
+  verify_sourcify "$address" "$artifact"
+  verify_blockscout "$address" "$artifact"
+  verify_filfox "$address" "$artifact"
+}
+
+verify_candidate "$FWSS_IMPL" "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+verify_candidate "$SPR_IMPL" "src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
+verify_candidate "$RAILS_IMPL" "src/lib/Rails.sol:Rails"
 ```
 
+Repeat for every address in the approved live inventory, including a new StateView or other library when present. Supply explorer-specific constructor/library arguments when required, and record any verification failure or waiver in the Run Log.
+
 **Optional StateView Switch**
-- [ ] If the deploy inventory includes a new `FilecoinWarmStorageServiceStateView`, run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `contract=FWSS StateView`, `dry_run=true`, then `dry_run=false` for each affected network
+- [ ] If the stack deploy inventory includes a new `FilecoinWarmStorageServiceStateView`, confirm it was deployed by the approved live stack run; do not run a second StateView deployment
 - [ ] Capture `CALI_NEW_VIEW` and/or `MAIN_NEW_VIEW`, record the deployed StateView address and verification status in the Run Log, and add the StateView address to the GitHub pre-release rollout table
 - [ ] Generate `setViewContract(address)` calldata for each affected network and stage it in Safe UI. Execute the staged `setViewContract` transaction after the corresponding FWSS proxy upgrade execute transaction unless the technical owner approves a different ordering.
 - [ ] After each `setViewContract` transaction lands, record its tx link in the Run Log and verify `viewContractAddress()` equals the new StateView address
@@ -377,6 +392,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 ### Phase 3: Calibnet Announce + Execute
 
 **Announce**
+- [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet bootstrap announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" AFTER_EPOCH=<absolute-epoch> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and `afterEpoch` returned by `nextUpgrade()` before any execute transaction. This legacy absolute-epoch path is only for upgrading a registry that does not yet expose the relative-delay entrypoint.
 - [ ] Set the Calibnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
@@ -456,6 +472,7 @@ fi
 
 **Execute**
 - [ ] Wait for the observed Calibnet `afterEpoch`
+- [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet execution with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" NEW_VERSION=<version> CALLDATA_ONLY=true ./service-provider-registry-execute-upgrade.sh`, execute it in the approved transaction order, then verify and record its implementation slot, `VERSION()`, initializer counter, preserved registry state, and cleared `nextUpgrade()`
 - [ ] Generate execute calldata and submit/sign/execute in Safe UI:
 
 ```bash
@@ -546,6 +563,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
 - [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) before or alongside stakeholder notification. Use the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md) for component, notification, update, and resolution guidance
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
+- [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet bootstrap announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" AFTER_EPOCH=<absolute-epoch> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and `afterEpoch` returned by `nextUpgrade()` before any execute transaction. This legacy absolute-epoch path is only for upgrading a registry that does not yet expose the relative-delay entrypoint.
 - [ ] Set the Mainnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
@@ -625,6 +643,7 @@ fi
 
 **Execute**
 - [ ] Wait for the observed Mainnet `afterEpoch`
+- [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet execution with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" NEW_VERSION=<version> CALLDATA_ONLY=true ./service-provider-registry-execute-upgrade.sh`, execute it in the approved transaction order, then verify and record its implementation slot, `VERSION()`, initializer counter, preserved registry state, and cleared `nextUpgrade()`
 - [ ] Generate execute calldata and submit/sign/execute in Safe UI:
 
 ```bash
@@ -709,6 +728,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
 - [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the temporary announcement-mode schedule column and bootstrap clauses, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
+- [ ] After any ServiceProviderRegistry bootstrap upgrade is live on both networks, replace the legacy absolute-epoch announcement helper with the relative-delay `announceUpgradePlan(address,uint96)` flow before the next SPR upgrade, and record the cleanup PR link.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification

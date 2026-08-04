@@ -48,7 +48,25 @@ if [ -z "$NONCE" ]; then
   NONCE="$(cast nonce "$ADDR")"
 fi
 
-export FWSS_VIEW_ADDRESS=$(forge create --password "$PASSWORD" --broadcast --nonce $NONCE src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView --constructor-args $FWSS_PROXY_ADDRESS | grep "Deployed to" | awk '{print $3}')
+if ! DEPLOY_OUTPUT=$(forge create --password "$PASSWORD" --broadcast --nonce "$NONCE" \
+  src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView \
+  --constructor-args "$FWSS_PROXY_ADDRESS"); then
+  echo "Error: FilecoinWarmStorageServiceStateView deployment failed"
+  exit 1
+fi
+
+FWSS_VIEW_ADDRESS=$(printf '%s\n' "$DEPLOY_OUTPUT" | awk '/Deployed to/ {print $3; exit}')
+if [ -z "$FWSS_VIEW_ADDRESS" ]; then
+  echo "Error: Failed to extract FilecoinWarmStorageServiceStateView address"
+  exit 1
+fi
+export FWSS_VIEW_ADDRESS
+
+if ! FWSS_VIEW_CODE=$(cast code "$FWSS_VIEW_ADDRESS" 2>/dev/null) || \
+   [ -z "$FWSS_VIEW_CODE" ] || [ "$FWSS_VIEW_CODE" = "0x" ]; then
+  echo "Error: No contract code found at $FWSS_VIEW_ADDRESS after StateView deployment"
+  exit 1
+fi
 
 echo FilecoinWarmStorageServiceStateView deployed at $FWSS_VIEW_ADDRESS
 

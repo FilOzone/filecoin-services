@@ -14,7 +14,7 @@ Scripts are organized with prefixes for better discoverability:
 
 | Script | Description |
 |--------|-------------|
-| `warm-storage-deploy-all.sh` | Deploy all contracts (PDPVerifier, FilecoinPayV1, FWSS, etc.) |
+| `warm-storage-deploy-all.sh` | Plan and deploy every changed, unpinned Warm Storage component using reviewed deployment metadata; pinned components are preserved |
 | `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
 | `warm-storage-deploy-view.sh` | Deploy FilecoinWarmStorageServiceStateView |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
@@ -26,7 +26,6 @@ Scripts are organized with prefixes for better discoverability:
 
 | Script | Description |
 |--------|-------------|
-| `service-provider-registry-deploy.sh` | Deploy ServiceProviderRegistry |
 | `service-provider-registry-announce-upgrade.sh` | Announce a planned registry upgrade |
 | `service-provider-registry-execute-upgrade.sh` | Execute a previously announced registry upgrade |
 
@@ -70,8 +69,11 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 ### Usage
 
 ```bash
-# Deploy all contracts
-./tools/warm-storage-deploy-all.sh
+# Plan every changed, unpinned component for an existing deployment
+DEPLOYMENT_MODE=upgrade DRY_RUN=true ./tools/warm-storage-deploy-all.sh
+
+# After approving the exact inventory, deploy it without replacing proxies
+DEPLOYMENT_MODE=upgrade DRY_RUN=false ./tools/warm-storage-deploy-all.sh
 
 # Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce

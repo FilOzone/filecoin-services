@@ -11,19 +11,24 @@ on:
           - Calibnet
           - Mainnet
       contract:
-        description: 'Contract to deploy'
+        description: 'Deployment target'
         required: true
         type: choice
         options:
-          - FWSS Implementation
-          - FWSS StateView
-          - ServiceProviderRegistry
+          - Warm Storage stack
           - SessionKeyRegistry
       dry_run:
-        description: 'Dry run (build only, no deployment)'
+        description: 'Dry run (plan only, no transactions)'
         required: false
         type: boolean
         default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-contract-${{ inputs.network }}
+  cancel-in-progress: false
 
 # Required repository secrets:
 #   CALIBNET_CONTRACT_DEPLOYER_PRIVATE_KEY  - Raw private key for the Calibnet deployer wallet
@@ -67,21 +72,17 @@ jobs:
         id: script
         run: |
           case "${{ inputs.contract }}" in
-            "FWSS Implementation")
-              echo "path=tools/warm-storage-deploy-implementation.sh" >> "$GITHUB_OUTPUT"
-              echo "label=FilecoinWarmStorageService Implementation" >> "$GITHUB_OUTPUT"
-              ;;
-            "FWSS StateView")
-              echo "path=tools/warm-storage-deploy-view.sh" >> "$GITHUB_OUTPUT"
-              echo "label=FilecoinWarmStorageServiceStateView" >> "$GITHUB_OUTPUT"
-              ;;
-            "ServiceProviderRegistry")
-              echo "path=tools/service-provider-registry-deploy.sh" >> "$GITHUB_OUTPUT"
-              echo "label=ServiceProviderRegistry" >> "$GITHUB_OUTPUT"
+            "Warm Storage stack")
+              echo "path=tools/warm-storage-deploy-all.sh" >> "$GITHUB_OUTPUT"
+              echo "label=Warm Storage stack" >> "$GITHUB_OUTPUT"
+              echo "mode=upgrade" >> "$GITHUB_OUTPUT"
+              echo "auto_verify=false" >> "$GITHUB_OUTPUT"
               ;;
             "SessionKeyRegistry")
               echo "path=tools/session-key-registry-deploy.sh" >> "$GITHUB_OUTPUT"
               echo "label=SessionKeyRegistry" >> "$GITHUB_OUTPUT"
+              echo "mode=auto" >> "$GITHUB_OUTPUT"
+              echo "auto_verify=true" >> "$GITHUB_OUTPUT"
               ;;
           esac
 
@@ -91,6 +92,7 @@ jobs:
           make install
 
       - name: Build contracts
+        id: build
         run: |
           cd service_contracts
           make build
@@ -110,14 +112,34 @@ jobs:
           echo "ETH_KEYSTORE=$RUNNER_TEMP/keystore/deployer" >> "$GITHUB_ENV"
           echo "PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
 
-      - name: Deploy contract
-        if: inputs.dry_run == false
+      - name: Plan or deploy contracts
+        id: deployment
+        if: inputs.dry_run == false || inputs.contract == 'Warm Storage stack'
+        env:
+          ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
+          CHAIN: ${{ steps.network.outputs.chain_id }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DEPLOYMENT_MODE: ${{ steps.script.outputs.mode }}
+          AUTO_VERIFY: ${{ steps.script.outputs.auto_verify }}
+        run: |
+          set -o pipefail
+          ACTUAL_CHAIN=$(cast chain-id --rpc-url "$ETH_RPC_URL")
+          if [ "$ACTUAL_CHAIN" != "$CHAIN" ]; then
+            echo "RPC chain ID mismatch: expected $CHAIN, got $ACTUAL_CHAIN"
+            exit 1
+          fi
+          cd service_contracts
+          bash "${{ steps.script.outputs.path }}" 2>&1 | tee "$RUNNER_TEMP/deploy-output.txt"
+
+      - name: Verify deployed bytecode metadata
+        id: bytecode_verification
+        if: inputs.dry_run == false && inputs.contract == 'Warm Storage stack' && steps.deployment.outcome == 'success'
         env:
           ETH_RPC_URL: ${{ inputs.network == 'Calibnet' && secrets.CALIBNET_RPC_URL || secrets.MAINNET_RPC_URL }}
           CHAIN: ${{ steps.network.outputs.chain_id }}
         run: |
           cd service_contracts
-          bash "${{ steps.script.outputs.path }}" 2>&1 | tee "$RUNNER_TEMP/deploy-output.txt"
+          ./tools/verify-deployments.sh --chain "$CHAIN" --eth-call
 
       - name: Clean up keystore
         if: always()
@@ -132,9 +154,21 @@ jobs:
             if [ "${{ inputs.dry_run }}" = "true" ]; then
               echo "## Dry Run: ${{ steps.script.outputs.label }}"
               echo ""
-              echo "> Build completed successfully. Ready to deploy."
+              if [ "${{ steps.deployment.outcome }}" = "success" ] && [ -f "$RUNNER_TEMP/deploy-output.txt" ]; then
+                echo "> Metadata-aware deployment plan completed without broadcasting transactions."
+              elif [ "${{ steps.deployment.outcome }}" = "failure" ]; then
+                echo "> **Deployment plan failed. No live deployment should be started from this run.**"
+              elif [ "${{ steps.build.outcome }}" = "success" ]; then
+                echo "> Build completed successfully. This target does not provide a deployment plan."
+              else
+                echo "> **Setup or build did not complete successfully. No live deployment should be started from this run.**"
+              fi
             else
               echo "## Deployment: ${{ steps.script.outputs.label }}"
+              echo ""
+              if [ "${{ steps.deployment.outcome }}" != "success" ]; then
+                echo "> **Deployment did not complete successfully. Inspect the deployer nonce and chain history before retrying.**"
+              fi
             fi
 
             echo ""
@@ -145,6 +179,19 @@ jobs:
             echo "| **Commit** | \`${GITHUB_SHA::8}\` |"
             echo "| **Actor** | @${{ github.actor }} |"
             echo "| **Dry Run** | ${{ inputs.dry_run }} |"
+            echo "| **Build step** | ${{ steps.build.outcome }} |"
+            echo "| **Plan/deploy step** | ${{ steps.deployment.outcome }} |"
+            echo "| **Bytecode verification** | ${{ steps.bytecode_verification.outcome }} |"
+
+            if [ "${{ inputs.dry_run }}" = "true" ] && [ -f "$RUNNER_TEMP/deploy-output.txt" ]; then
+              echo ""
+              echo "### Deployment Plan"
+              echo ""
+              echo '```text'
+              grep -E "Initializer counters|Next implementation counters|initcode changed|constructor args changed|Deploying |Would deploy|Up to date|Pinned/preserved|Using existing|requires a separate Safe" \
+                "$RUNNER_TEMP/deploy-output.txt" || echo "No deployment decisions found in output"
+              echo '```'
+            fi
 
             if [ "${{ inputs.dry_run }}" = "false" ] && [ -f "$RUNNER_TEMP/deploy-output.txt" ]; then
               echo ""
@@ -170,8 +217,9 @@ jobs:
                 echo '```diff'
                 echo "$DIFF"
                 echo '```'
-                echo ""
-                echo "> **Note:** deployments.json was updated locally but NOT committed. Update it manually in your upgrade PR."
               fi
+              echo ""
+              echo "> **Note:** any deployments.json diff is ephemeral. Record candidate addresses in the release issue; update the repository snapshot only after the corresponding proxy/View switches are live."
+              echo "> **Do not rerun this deployment from unchanged release metadata, even after a partial failure.** Inspect the deployer nonce and chain history, then record and verify every candidate before any announce transaction."
             fi
           } >> "$GITHUB_STEP_SUMMARY"
