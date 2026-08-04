@@ -102,7 +102,8 @@
         "initcode_hash": "0x8c1e23722c664799417d2921502bd912e21417837519278a52b89d7e6275e5d6",
         "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "FWSS_VIEW": {
         "initcode_hash": "0xfe70d1438fdd7b7b5813842bb4c324aa65737efe0156b2d618bc8d08dc248a90",
@@ -169,7 +170,8 @@
         "initcode_hash": "0x627e10a18cb5c30fdf02ef8886f04b3453b730d89114f28d4aeffd5663bc9d5d",
         "artifact_contract": "src/ProviderIdSet.sol:ProviderIdSet",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "RAILS_LIB": {
         "initcode_hash": "0xa645f02922b1b7b5c56b97229eab2098eccc9b6786a65c7f19bc724aa38c5846",
