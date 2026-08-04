@@ -1252,7 +1252,7 @@
   },
   {
     "type": "event",
-    "name": "PiecesScheduledForRemoval",
+    "name": "PiecesRemoved",
     "inputs": [
       {
         "name": "setId",
@@ -1271,7 +1271,7 @@
   },
   {
     "type": "event",
-    "name": "PiecesRemoved",
+    "name": "PiecesScheduledForRemoval",
     "inputs": [
       {
         "name": "setId",
