@@ -7,17 +7,35 @@
 # Assumption: called from contracts directory so forge paths work out
 #
 
-# Set DRY_RUN=false to actually deploy and broadcast transactions (default is dry-run for safety)
+# Set DRY_RUN=false to deploy candidate contracts and broadcast transactions
+# (default is a metadata-aware plan for safety).
 DRY_RUN=${DRY_RUN:-true}
+DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-auto}
+
+case "$DRY_RUN" in
+  true|false) ;;
+  *)
+    echo "Error: DRY_RUN must be 'true' or 'false'"
+    exit 1
+    ;;
+esac
+
+case "$DEPLOYMENT_MODE" in
+  auto|upgrade) ;;
+  *)
+    echo "Error: DEPLOYMENT_MODE must be 'auto' or 'upgrade'"
+    exit 1
+    ;;
+esac
 
 # Default constants (same across all networks)
 DEFAULT_FILBEAM_BENEFICIARY_ADDRESS="0x1D60d2F5960Af6341e842C539985FA297E10d6eA"
 DEFAULT_FILBEAM_CONTROLLER_ADDRESS="0x5f7E5E2A756430EdeE781FF6e6F7954254Ef629A"
 
 if [ "$DRY_RUN" = "true" ]; then
-    echo "🧪 Running in DRY-RUN mode - simulation only, no actual deployment"
+    echo "🧪 Running in DRY-RUN mode - metadata plan only, no transactions"
 else
-    echo "🚀 Running in DEPLOYMENT mode - will actually deploy and upgrade contracts"
+    echo "🚀 Running in DEPLOYMENT mode - will deploy candidate contracts without switching existing proxies"
 fi
 
 # Get this script's directory so we can reliably source other scripts
@@ -88,6 +106,14 @@ echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 
 # Load deployment addresses from deployments.json
 load_deployment_addresses "$CHAIN"
+
+# Remember whether this is an upgrade of an existing FWSS proxy. A newly
+# deployed StateView may be set directly only for a fresh proxy owned by the
+# deployer; existing proxies require a separate owner/Safe action.
+FWSS_PROXY_WAS_EXISTING=false
+if [ -n "$FWSS_PROXY_ADDRESS" ]; then
+    FWSS_PROXY_WAS_EXISTING=true
+fi
 
 # Devnet requires USDFC_TOKEN_ADDRESS to be provided
 if [ "$CHAIN" = "31415926" ] && [ -z "$USDFC_TOKEN_ADDRESS" ]; then
@@ -227,9 +253,156 @@ deploy_endorsements_if_needed() {
     echo
 }
 
+# Require an existing contract with on-chain bytecode before an upgrade run.
+# This prevents a missing or stale deployments.json entry from turning an
+# implementation rollout into an accidental replacement deployment.
+require_existing_contract() {
+    local var_name="$1"
+    local address="${!var_name:-}"
+    local code
+
+    if [ -z "$address" ]; then
+        echo "Error: $var_name is required in upgrade mode"
+        exit 1
+    fi
+    if ! code=$(cast code "$address" 2>/dev/null); then
+        echo "Error: Failed to read code for $var_name at $address"
+        exit 1
+    fi
+    if [ -z "$code" ] || [ "$code" = "0x" ]; then
+        echo "Error: No contract code found for $var_name at $address"
+        exit 1
+    fi
+}
+
+require_proxy_implementation() {
+    local proxy_label="$1"
+    local proxy_address="$2"
+    local expected_implementation="$3"
+    local actual_implementation
+
+    if ! actual_implementation=$(env -u CHAIN cast implementation --rpc-url "$ETH_RPC_URL" \
+        "$proxy_address" 2>/dev/null); then
+        echo "Error: Failed to read $proxy_label implementation slot at $proxy_address"
+        exit 1
+    fi
+    if [ "$(printf '%s' "$actual_implementation" | tr '[:upper:]' '[:lower:]')" != \
+         "$(printf '%s' "$expected_implementation" | tr '[:upper:]' '[:lower:]')" ]; then
+        echo "Error: $proxy_label proxy points to $actual_implementation, but deployments.json records $expected_implementation"
+        exit 1
+    fi
+}
+
+require_fwss_dependency() {
+    local dependency_label="$1"
+    local getter_signature="$2"
+    local expected_address="$3"
+    local actual_address
+
+    if ! actual_address=$(env -u CHAIN cast call --rpc-url "$ETH_RPC_URL" \
+        "$FWSS_PROXY_ADDRESS" "$getter_signature" 2>/dev/null | tr -d '"'); then
+        echo "Error: Failed to read $dependency_label from FWSS proxy $FWSS_PROXY_ADDRESS"
+        exit 1
+    fi
+    if [ "$(printf '%s' "$actual_address" | tr '[:upper:]' '[:lower:]')" != \
+         "$(printf '%s' "$expected_address" | tr '[:upper:]' '[:lower:]')" ]; then
+        echo "Error: FWSS reports $dependency_label $actual_address, but candidate metadata uses $expected_address"
+        exit 1
+    fi
+}
+
+read_initializer_counter() {
+    local label="$1"
+    local address="$2"
+    local counter
+
+    if ! counter=$("$SCRIPT_DIR/get-initialized-counter.sh" "$address"); then
+        echo "Error: Failed to read $label initializer counter from $address" >&2
+        return 1
+    fi
+    if ! [[ "$counter" =~ ^[0-9]+$ ]]; then
+        echo "Error: Invalid $label initializer counter '$counter' from $address" >&2
+        return 1
+    fi
+    printf '%s' "$counter"
+}
+
 # ========================================
 # Validation
 # ========================================
+
+if [ "$DEPLOYMENT_MODE" = "upgrade" ]; then
+    echo "Validating existing upgrade deployment..."
+    for required_contract in \
+        FILECOIN_PAY_ADDRESS \
+        PDP_VERIFIER_IMPLEMENTATION_ADDRESS \
+        PDP_VERIFIER_PROXY_ADDRESS \
+        SESSION_KEY_REGISTRY_ADDRESS \
+        SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS \
+        SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS \
+        SIGNATURE_VERIFICATION_LIB_ADDRESS \
+        RAILS_LIB_ADDRESS \
+        FWSS_IMPLEMENTATION_ADDRESS \
+        FWSS_PROXY_ADDRESS \
+        FWSS_VIEW_ADDRESS \
+        ENDORSEMENT_SET_ADDRESS \
+        USDFC_TOKEN_ADDRESS; do
+        require_existing_contract "$required_contract"
+    done
+    echo "✅ Existing deployment addresses contain contract code"
+
+    require_proxy_implementation "PDPVerifier" \
+        "$PDP_VERIFIER_PROXY_ADDRESS" "$PDP_VERIFIER_IMPLEMENTATION_ADDRESS"
+    require_proxy_implementation "ServiceProviderRegistry" \
+        "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
+    require_proxy_implementation "FilecoinWarmStorageService" \
+        "$FWSS_PROXY_ADDRESS" "$FWSS_IMPLEMENTATION_ADDRESS"
+    echo "✅ Proxy implementation slots match deployments.json"
+
+    require_fwss_dependency "PDPVerifier" \
+        "pdpVerifierAddress()(address)" "$PDP_VERIFIER_PROXY_ADDRESS"
+    require_fwss_dependency "FilecoinPay" \
+        "paymentsContractAddress()(address)" "$FILECOIN_PAY_ADDRESS"
+    require_fwss_dependency "ServiceProviderRegistry" \
+        "serviceProviderRegistry()(address)" "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
+    require_fwss_dependency "SessionKeyRegistry" \
+        "sessionKeyRegistry()(address)" "$SESSION_KEY_REGISTRY_ADDRESS"
+    require_fwss_dependency "USDFC" \
+        "usdfcTokenAddress()(address)" "$USDFC_TOKEN_ADDRESS"
+    require_fwss_dependency "FilBeam beneficiary" \
+        "filBeamBeneficiaryAddress()(address)" "$FILBEAM_BENEFICIARY_ADDRESS"
+    echo "✅ FWSS dependency getters match candidate constructor addresses"
+
+    if ! CURRENT_FWSS_VIEW_ADDRESS=$(env -u CHAIN cast call --rpc-url "$ETH_RPC_URL" \
+        "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null | tr -d '"'); then
+        echo "Error: Failed to read StateView from FWSS proxy $FWSS_PROXY_ADDRESS"
+        exit 1
+    fi
+    if [ "$(printf '%s' "$CURRENT_FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" != \
+         "$(printf '%s' "$FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
+        echo "Error: FWSS proxy reports StateView $CURRENT_FWSS_VIEW_ADDRESS, but deployments.json records $FWSS_VIEW_ADDRESS"
+        exit 1
+    fi
+    echo "✅ FWSS proxy StateView matches deployments.json"
+fi
+
+PDP_INIT_COUNTER=0
+if [ -n "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
+    PDP_INIT_COUNTER=$(read_initializer_counter "PDPVerifier" "$PDP_VERIFIER_PROXY_ADDRESS") || exit 1
+fi
+
+SPR_INIT_COUNTER=0
+if [ -n "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
+    SPR_INIT_COUNTER=$(read_initializer_counter "ServiceProviderRegistry" "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS") || exit 1
+fi
+
+FWSS_INIT_COUNTER=0
+if [ -n "$FWSS_PROXY_ADDRESS" ]; then
+    FWSS_INIT_COUNTER=$(read_initializer_counter "FilecoinWarmStorageService" "$FWSS_PROXY_ADDRESS") || exit 1
+fi
+
+echo "Initializer counters: PDP=$PDP_INIT_COUNTER, SPR=$SPR_INIT_COUNTER, FWSS=$FWSS_INIT_COUNTER"
+echo "Next implementation counters: PDP=$((PDP_INIT_COUNTER + 1)), SPR=$((SPR_INIT_COUNTER + 1)), FWSS=$((FWSS_INIT_COUNTER + 1))"
 
 # Validate that the configuration will work with PDPVerifier's challengeFinality
 # The calculation: (MAX_PROVING_PERIOD - CHALLENGE_WINDOW_SIZE) + (CHALLENGE_WINDOW_SIZE/2) must be >= CHALLENGE_FINALITY
@@ -269,7 +442,7 @@ if [ "$DRY_RUN" = "true" ]; then
     NONCE="0"  # Use dummy nonce for dry-run
     BROADCAST_FLAG=""
     echo "Deploying contracts from address $ADDR (dry-run)"
-    echo "🧪 Will simulate all deployments without broadcasting transactions"
+    echo "🧪 Will plan metadata-selected deployments without broadcasting transactions"
 else
     if [ -z "$ETH_KEYSTORE" ]; then
         echo "Error: ETH_KEYSTORE is not set (required for actual deployment)"
@@ -299,11 +472,6 @@ deploy_implementation_if_needed \
     "FilecoinPayV1"
 
 # Step 2: Deploy or use existing PDPVerifier implementation
-if [ -n "$PDP_VERIFIER_PROXY_ADDRESS" ]; then
-    PDP_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $PDP_VERIFIER_PROXY_ADDRESS)
-else
-    PDP_INIT_COUNTER=0
-fi
 deploy_implementation_if_needed \
     "PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
     "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
@@ -320,11 +488,6 @@ deploy_proxy_if_needed \
     "PDPVerifier proxy"
 
 # Step 4: Deploy or use existing ServiceProviderRegistry implementation
-if [ -n "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
-    SPR_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS)
-else
-    SPR_INIT_COUNTER=0
-fi
 deploy_implementation_if_needed \
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" \
     "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
@@ -353,11 +516,6 @@ deploy_implementation_if_needed \
 
 # Step 8: Deploy or use existing FilecoinWarmStorageService implementation
 # Set LIBRARIES variable for the deployment helper (comma-separated path:name:address)
-if [ -n "$FWSS_PROXY_ADDRESS" ]; then
-    FWSS_INIT_COUNTER=$($SCRIPT_DIR/get-initialized-counter.sh $FWSS_PROXY_ADDRESS)
-else
-    FWSS_INIT_COUNTER=0
-fi
 LIBRARIES="src/lib/SignatureVerificationLib.sol:SignatureVerificationLib:$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/Rails.sol:Rails:$RAILS_LIB_ADDRESS"
 deploy_implementation_if_needed \
     "FWSS_IMPLEMENTATION_ADDRESS" \
@@ -383,15 +541,29 @@ deploy_proxy_if_needed \
 
 # Step 10: Deploy FilecoinWarmStorageServiceStateView
 echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
-if ! needs_deployment "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"; then
+FWSS_VIEW_DEPLOYED=false
+if deployment_is_pinned "$CHAIN" "FWSS_VIEW"; then
+    echo "  📌 Pinned/preserved at: $FWSS_VIEW_ADDRESS"
+elif ! needs_deployment "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"; then
     echo "  ✅ Up to date at: $FWSS_VIEW_ADDRESS"
 elif [ "$DRY_RUN" = "true" ]; then
     echo "  🔍 Would deploy (skipping in dry-run)"
     FWSS_VIEW_ADDRESS="0x8901234567890123456789012345678901234567"  # Dummy address for dry-run
+    FWSS_VIEW_DEPLOYED=true
     echo "  ✅ Deployment planned (dummy: $FWSS_VIEW_ADDRESS)"
 else
     echo "  🔧 Using external deployment script..."
     source "$SCRIPT_DIR/warm-storage-deploy-view.sh"
+    if [ -z "$FWSS_VIEW_ADDRESS" ]; then
+        echo "  ❌ StateView deployment did not return an address"
+        exit 1
+    fi
+    if ! FWSS_VIEW_CODE=$(cast code "$FWSS_VIEW_ADDRESS" 2>/dev/null) || \
+       [ -z "$FWSS_VIEW_CODE" ] || [ "$FWSS_VIEW_CODE" = "0x" ]; then
+        echo "  ❌ No contract code found at deployed StateView address $FWSS_VIEW_ADDRESS"
+        exit 1
+    fi
+    FWSS_VIEW_DEPLOYED=true
     echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
     NONCE=$(expr $NONCE + "1")
 
@@ -400,17 +572,31 @@ else
 fi
 echo
 
-# Step 11: Set the view contract address on the main contract
+# Step 11: Set the view contract address only for a fresh deployment. Existing
+# proxies are Safe-owned, so print the required follow-up instead of attempting
+# an owner transaction from the deployer key.
 echo -e "${BOLD}Setting view contract address${RESET}"
-if [ "$DRY_RUN" = "true" ]; then
-    echo "  🔍 Would set view contract address on main contract (skipping in dry-run)"
+if [ "$FWSS_VIEW_DEPLOYED" != "true" ]; then
+    echo "  ✅ No StateView change planned"
+elif [ "$FWSS_PROXY_WAS_EXISTING" = "true" ]; then
+    if [ "$DRY_RUN" = "true" ]; then
+        echo "  🔍 New StateView requires a separate Safe setViewContract transaction"
+    else
+        echo "  ℹ️  Existing FWSS proxy detected; no proxy change will be sent by the deployer"
+        echo "  Generate and execute the owner transaction with:"
+        echo "    CALLDATA_ONLY=true FWSS_PROXY_ADDRESS=$FWSS_PROXY_ADDRESS FWSS_VIEW_ADDRESS=$FWSS_VIEW_ADDRESS ./tools/warm-storage-set-view.sh"
+    fi
+elif [ "$DRY_RUN" = "true" ]; then
+    echo "  🔍 Would set the StateView on the newly deployed FWSS proxy"
 else
     echo "  🔧 Setting view address on FilecoinWarmStorageService..."
+    unset CALLDATA_ONLY
     if source "$SCRIPT_DIR/warm-storage-set-view.sh"; then
         echo "  ✅ View address set"
         NONCE=$(expr $NONCE + "1")
     else
-        echo "  ⚠️  setViewContract skipped — deployer is not owner (use multisig)"
+        echo "  ❌ Failed to set StateView on newly deployed FWSS proxy"
+        exit 1
     fi
 fi
 echo
@@ -421,7 +607,7 @@ deploy_endorsements_if_needed
 if [ "$DRY_RUN" = "true" ]; then
     echo
     echo "✅ Dry run completed successfully!"
-    echo "🔍 All contract compilations and simulations passed"
+    echo "🔍 Contract compilation and metadata planning passed"
     echo
     echo "To perform actual deployment, run with: DRY_RUN=false ./tools/warm-storage-deploy-all.sh"
     echo

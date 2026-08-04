@@ -279,6 +279,13 @@ _build_libs_json() {
 # Returns 0 (needs deployment) if stored metadata is absent or if initcode hash,
 # constructor args, or library deployed bytecode has changed. Returns 1 (up to date).
 # Args: $1=chain_id, $2=contract_key, $3=artifact_contract, $4=libraries_str, $5...=constructor_args
+deployment_is_pinned() {
+    local chain_id="$1"
+    local contract_key="$2"
+    [ "$(jq -r ".[\"$chain_id\"].contracts[\"$contract_key\"].pinned // false" \
+        "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)" = "true" ]
+}
+
 needs_deployment() {
     local chain_id="$1"
     local contract_key="$2"
@@ -295,10 +302,7 @@ needs_deployment() {
 
     # Pinned contracts must not be redeployed through normal deploy scripts.
     # Upgrades are handled out-of-band (e.g. proxy announcePlannedUpgrade/upgradeTo, manual governance).
-    local pinned
-    pinned=$(jq -r ".[\"$chain_id\"].contracts[\"$contract_key\"].pinned // false" \
-        "$DEPLOYMENTS_JSON_PATH" 2>/dev/null)
-    if [ "$pinned" = "true" ]; then
+    if deployment_is_pinned "$chain_id" "$contract_key"; then
         return 1
     fi
 
@@ -485,6 +489,13 @@ deploy_implementation_if_needed() {
         fi
         arg_idx=$(( arg_idx + 1 ))
     done
+
+    if deployment_is_pinned "$CHAIN" "$contract_key"; then
+        echo -e "${BOLD:-}${description}${RESET:-}"
+        echo "  📌 Pinned/preserved at: ${!var_name}"
+        echo
+        return 0
+    fi
 
     if ! needs_deployment "$CHAIN" "$contract_key" "$contract" "${LIBRARIES:-}" "${check_values[@]}"; then
         echo -e "${BOLD:-}${description}${RESET:-}"
