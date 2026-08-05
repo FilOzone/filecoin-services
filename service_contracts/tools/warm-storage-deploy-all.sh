@@ -543,7 +543,12 @@ deploy_proxy_if_needed \
 echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
 FWSS_VIEW_DEPLOYED=false
 if deployment_is_pinned "$CHAIN" "FWSS_VIEW"; then
-    echo "  📌 Pinned/preserved at: $FWSS_VIEW_ADDRESS"
+    report_pinned_deployment_status \
+        "$CHAIN" \
+        "FWSS_VIEW" \
+        "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" \
+        "" \
+        "$FWSS_PROXY_ADDRESS"
 elif ! needs_deployment "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"; then
     echo "  ✅ Up to date at: $FWSS_VIEW_ADDRESS"
 elif [ "$DRY_RUN" = "true" ]; then
@@ -577,7 +582,7 @@ echo
 # an owner transaction from the deployer key.
 echo -e "${BOLD}Setting view contract address${RESET}"
 if [ "$FWSS_VIEW_DEPLOYED" != "true" ]; then
-    echo "  ✅ No StateView change planned"
+    echo "  ✅ No StateView deployment planned by metadata; review any pinned candidate drift above"
 elif [ "$FWSS_PROXY_WAS_EXISTING" = "true" ]; then
     if [ "$DRY_RUN" = "true" ]; then
         echo "  🔍 New StateView requires a separate Safe setViewContract transaction"

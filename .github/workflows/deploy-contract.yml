@@ -188,7 +188,7 @@ jobs:
               echo "### Deployment Plan"
               echo ""
               echo '```text'
-              grep -E "Initializer counters|Next implementation counters|initcode changed|constructor args changed|Deploying |Would deploy|Up to date|Pinned/preserved|Using existing|requires a separate Safe" \
+              grep -E "Initializer counters|Next implementation counters|initcode changed|constructor args changed|deployment metadata missing|candidate artifact unavailable|library .* bytecode changed|Deploying |Would deploy|Up to date|Pinned/preserved|Using existing|requires a separate Safe" \
                 "$RUNNER_TEMP/deploy-output.txt" || echo "No deployment decisions found in output"
               echo '```'
             fi

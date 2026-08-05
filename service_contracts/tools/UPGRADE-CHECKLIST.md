@@ -88,7 +88,7 @@ Check every pre-seeded row and list each required cross-repo change or release. 
 
 ### Dependency Targets and Compatibility
 
-Record the intended deployed dependency versions or addresses, then verify actual deployed state against those targets before go/no-go.
+Populate this table while reviewing the Phase 1 deployment inventory. The dry-run supplies the observed addresses and pinned deployment-metadata comparison; the technical owner records the compatibility disposition for every changed pinned component before approving the inventory.
 
 | Dependency | Target version/address | Calibnet observed | Mainnet observed | Verification/status |
 |---|---|---|---|---|
@@ -212,8 +212,12 @@ forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService stor
 - [ ] Create release branch from `main` after the release-prep PR(s) land (recommended: `{{RELEASE_BRANCH}}`). Use this branch as the stable ref for rendering the release issue and as the landing branch for rollout patches if `main` moves on.
 - [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from the release branch so the issue is rendered from that branch's checklist template
 - [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
+- [ ] Run and obtain technical-owner approval of the complete Phase 1 two-network deployment inventory:
+  - From the release candidate, run the [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) for both Calibnet and Mainnet with `contract=Warm Storage stack` and `dry_run=true`.
+  - Populate Dependency Targets and Compatibility from the results and review every `Would deploy`, `Up to date`, `Using existing`, and `Pinned/preserved` result.
+  - Add a pinned component with `candidate drift; explicit review required` to the rollout scope or explicitly approve it as compatible while preserved.
+  - Stop, correct the release ref or deployment metadata, and rerun both plans for any unapproved difference.
 - [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
-- [ ] Fill Dependency Targets and Compatibility by comparing target versions/addresses with observed Calibnet and Mainnet deployed state
 - [ ] Fill Rollback Plan, including whether rollback is safe and the approved procedure/script link when available
 - [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
 - [ ] Freeze the deploy commit and record it in Release Tracking
@@ -274,8 +278,8 @@ gh release create {{RELEASE_VERSION}} \
 ### Phase 2: Deploy Contracts
 Deploy both networks before any announce/execute.
 
-- [ ] Run the metadata-aware deploy dry-run for each target network before live deployment and record every `Deploying`/`Would deploy` and `Pinned/preserved` decision in the Run Log. The reviewed release ref must encode scope through deployment metadata; do not pin or unpin components ad hoc during rollout.
-- [ ] Review and approve the complete dry-run inventory, then run the [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) once per network with `contract=Warm Storage stack` and `dry_run=false`. The metadata-aware stack run deploys every changed, unpinned component in nonce order; do not select components manually or run separate FWSS/SPR deployment paths.
+- [ ] Immediately before each live deployment, rerun the metadata-aware dry-run from the frozen release tag and confirm it exactly matches the Phase 1 approved inventory, including every pinned-drift disposition. Stop and return to scope review if it differs; do not change pins ad hoc during rollout.
+- [ ] Run the [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) once per network from the same frozen tag with `contract=Warm Storage stack` and `dry_run=false`. The metadata-aware stack run deploys every approved changed, unpinned component in nonce order; do not select components manually or run separate FWSS/SPR deployment paths.
 - [ ] Run `service_contracts/tools/verify-deployments.sh --chain <CHAIN>` for each target network after deployment metadata is available. Resolve or explicitly waive any bytecode/metadata mismatch before live announce.
 - [ ] If linked libraries or StateView are newly deployed, record their addresses, verification status, and ABI-publishing decision in the Run Log.
 
@@ -292,29 +296,25 @@ ETH_RPC_URL="https://api.node.glif.io/rpc/v1" \
   ./tools/verify-deployments.sh --chain 314
 ```
 
-Use the deploy dry-run output to distinguish contracts that are `Pinned/preserved`, `Up to date`, or `Would deploy`. Record the final deploy set before any live announce transaction.
+Use the deploy dry-run output to distinguish contracts that are `Pinned/preserved`, `Up to date`, or `Would deploy`. `Pinned/preserved` is a policy decision, not proof that candidate code is unchanged: the output reports whether the candidate matches recorded deployment metadata or requires explicit drift review. Record the approved deploy set and every preserve disposition before any live announce transaction.
 
 | Dry-run marks as needing deployment | Operator action |
 |---|---|
 | `SignatureVerificationLib`, `Rails`, or `FilecoinWarmStorageService` | The approved `contract=Warm Storage stack` live run deploys each changed, unpinned component automatically and records its address |
 | `ServiceProviderRegistry` | Only unpin in the reviewed release-prep PR when the release explicitly includes it; add an exception section to this issue, then let the approved `contract=Warm Storage stack` run deploy it |
-| `PDPVerifier`, `FilecoinPay`, `ProviderIdSet`, or `FilecoinWarmStorageServiceStateView` | Keep pinned in the reviewed release ref unless the release explicitly includes it and the technical owner approves the expanded scope before the live stack run |
+| `PDPVerifier`, `FilecoinPay`, `ProviderIdSet`, or `FilecoinWarmStorageServiceStateView` | If candidate metadata matches, keep pinned unless the release explicitly includes it. If candidate drift is reported, either expand the reviewed scope and unpin in the release ref or record the technical owner's compatibility approval for preserving the deployed version |
 | `SessionKeyRegistry` | Only deploy if explicitly included; use the dedicated `contract=SessionKeyRegistry` workflow option and add an exception section to this issue |
 
 </details>
 
 **Calibnet Warm Storage Stack**
-- [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Calibnet`, `contract=Warm Storage stack`, `dry_run=true`
-- [ ] Confirm the inventory exactly matches the approved release scope; stop and resolve any unexpected deployment before broadcasting
-- [ ] Re-run with `dry_run=false`
+- [ ] Complete the frozen-tag Calibnet drift check above, then rerun the same workflow inputs with `dry_run=false`
 - [ ] Capture `CALI_NEW_IMPL`, plus `CALI_NEW_SPR_IMPL`, new library addresses, and `CALI_NEW_VIEW` when those components are in the approved inventory, and add them to the Run Log
 - [ ] Verify every newly deployed contract on Sourcify and Blockscout
 - [ ] Attempt FilFox verification and record result
 
 **Mainnet Warm Storage Stack**
-- [ ] Run [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) with `network=Mainnet`, `contract=Warm Storage stack`, `dry_run=true`
-- [ ] Confirm the inventory exactly matches the approved release scope; stop and resolve any unexpected deployment before broadcasting
-- [ ] Re-run with `dry_run=false`
+- [ ] Complete the frozen-tag Mainnet drift check above, then rerun the same workflow inputs with `dry_run=false`
 - [ ] Capture `MAIN_NEW_IMPL`, plus `MAIN_NEW_SPR_IMPL`, new library addresses, and `MAIN_NEW_VIEW` when those components are in the approved inventory, and add them to the Run Log
 - [ ] Verify every newly deployed contract on Sourcify and Blockscout
 - [ ] Attempt FilFox verification and record result
