@@ -293,17 +293,22 @@ require_proxy_implementation() {
     fi
 }
 
+cast_call_read_only() {
+    env -u CHAIN -u ETH_KEYSTORE -u PASSWORD -u CAST_PASSWORD cast call "$@"
+}
+
 require_fwss_dependency() {
     local dependency_label="$1"
     local getter_signature="$2"
     local expected_address="$3"
     local actual_address
 
-    if ! actual_address=$(env -u CHAIN cast call --rpc-url "$ETH_RPC_URL" \
-        "$FWSS_PROXY_ADDRESS" "$getter_signature" 2>/dev/null | tr -d '"'); then
+    if ! actual_address=$(cast_call_read_only --rpc-url "$ETH_RPC_URL" \
+        "$FWSS_PROXY_ADDRESS" "$getter_signature"); then
         echo "Error: Failed to read $dependency_label from FWSS proxy $FWSS_PROXY_ADDRESS"
         exit 1
     fi
+    actual_address=${actual_address//\"/}
     if [ "$(printf '%s' "$actual_address" | tr '[:upper:]' '[:lower:]')" != \
          "$(printf '%s' "$expected_address" | tr '[:upper:]' '[:lower:]')" ]; then
         echo "Error: FWSS reports $dependency_label $actual_address, but candidate metadata uses $expected_address"
@@ -373,11 +378,12 @@ if [ "$DEPLOYMENT_MODE" = "upgrade" ]; then
         "filBeamBeneficiaryAddress()(address)" "$FILBEAM_BENEFICIARY_ADDRESS"
     echo "✅ FWSS dependency getters match candidate constructor addresses"
 
-    if ! CURRENT_FWSS_VIEW_ADDRESS=$(env -u CHAIN cast call --rpc-url "$ETH_RPC_URL" \
-        "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null | tr -d '"'); then
+    if ! CURRENT_FWSS_VIEW_ADDRESS=$(cast_call_read_only --rpc-url "$ETH_RPC_URL" \
+        "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)"); then
         echo "Error: Failed to read StateView from FWSS proxy $FWSS_PROXY_ADDRESS"
         exit 1
     fi
+    CURRENT_FWSS_VIEW_ADDRESS=${CURRENT_FWSS_VIEW_ADDRESS//\"/}
     if [ "$(printf '%s' "$CURRENT_FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" != \
          "$(printf '%s' "$FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
         echo "Error: FWSS proxy reports StateView $CURRENT_FWSS_VIEW_ADDRESS, but deployments.json records $FWSS_VIEW_ADDRESS"
