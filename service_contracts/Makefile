@@ -8,7 +8,7 @@ CHALLENGE_FINALITY ?=
 
 # Default target
 .PHONY: default
-default: build test
+default: build
 
 # All target including installation
 .PHONY: all
@@ -86,6 +86,7 @@ check-tools:
 .PHONY: test
 test:
 	forge test --via-ir -vv
+	@forge snapshot --isolate --no-match-test "Fuzz" --no-match-contract "MetadataSignatureFixturesTest"
 
 # Clean build artifacts
 .PHONY: clean
