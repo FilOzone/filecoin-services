@@ -12,10 +12,11 @@
 DRY_RUN=${DRY_RUN:-true}
 DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-auto}
 
-# Filecoin RPC inclusion can exceed Foundry's default broadcast receipt timeout.
-# Keep the value overrideable while allowing enough time for a mined CREATE
+# Filecoin RPC inclusion can exceed Foundry's default transaction and RPC timeouts.
+# Keep both values overrideable while allowing enough time for a mined CREATE
 # transaction to be observed before the deployment script decides it failed.
 export ETH_TIMEOUT="${ETH_TIMEOUT:-300}"
+export ETH_RPC_TIMEOUT="${ETH_RPC_TIMEOUT:-300}"
 
 case "$DRY_RUN" in
   true|false) ;;
