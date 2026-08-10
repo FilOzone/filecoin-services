@@ -127,9 +127,9 @@
   },
   "314159": {
     "metadata": {
-      "commit": "c2ff7f8ac574f62e5d9f9ace2cf2efbb64b0f3a4",
-      "deployed_at": "2026-06-09T19:44:31Z",
-      "fwss_version": "1.3.0",
+      "commit": "c1ae9e5e66c5e37bd150f1565d811eeb69387a4e",
+      "deployed_at": "2026-08-06T11:25:56Z",
+      "fwss_version": "1.3.1",
       "pdp_version": "3.4.0"
     },
     "FILECOIN_PAY_ADDRESS": "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
@@ -137,12 +137,12 @@
     "PDP_VERIFIER_IMPLEMENTATION_ADDRESS": "0xd60b90f6D3C42B26a246E141ec701a20Dde2fA61",
     "SESSION_KEY_REGISTRY_ADDRESS": "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
     "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS": "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
-    "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS": "0x0A2E79efFC7DB1D15912E4F6722F527F493F18Ef",
+    "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS": "0x0dF90c9a20b3f1E383c7196C06943565396c0956",
     "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
-    "RAILS_LIB_ADDRESS": "0x05BB7B022645a68fB9c97A7afaD1017EC5B252B2",
+    "RAILS_LIB_ADDRESS": "0x10F22f3Ab9C601950f3Fa829274faFCdC02A76c8",
     "FWSS_PROXY_ADDRESS": "0x02925630df557F957f70E112bA06e50965417CA0",
-    "FWSS_IMPLEMENTATION_ADDRESS": "0x9e4e6699d8F67dFc883d6b0A7344Bd56F7E80B46",
-    "FWSS_VIEW_ADDRESS": "0xF4B446171b3677fD2B9b183a9fB76d517365700a",
+    "FWSS_IMPLEMENTATION_ADDRESS": "0x51Bc9fB1e20280D57460a0a69a7077a9682AA164",
+    "FWSS_VIEW_ADDRESS": "0x9BF9e67e83EC8613883FDdDec4D3b38AEE937177",
     "ENDORSEMENT_SET_ADDRESS": "0xAA2f7CfC7ecAc616EC9C1f6d700fAd19087FAC84",
     "contracts": {
       "FILECOIN_PAY": {
@@ -173,13 +173,13 @@
         "pinned": true
       },
       "RAILS_LIB": {
-        "initcode_hash": "0xa645f02922b1b7b5c56b97229eab2098eccc9b6786a65c7f19bc724aa38c5846",
+        "initcode_hash": "0x1c47422c8af3befdd887aa049ad33594709b62d3dad84b48c99e2fd51125de17",
         "artifact_contract": "src/lib/Rails.sol:Rails",
         "libraries": {},
         "constructor_args": []
       },
       "FWSS_VIEW": {
-        "initcode_hash": "0xfe70d1438fdd7b7b5813842bb4c324aa65737efe0156b2d618bc8d08dc248a90",
+        "initcode_hash": "0x3d0559eb40bca9c43617e7cb88789905f2814d8e67634f054f89a84b6a60501d",
         "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
         "libraries": {},
         "constructor_args": [
@@ -187,11 +187,11 @@
         ]
       },
       "FWSS_IMPLEMENTATION": {
-        "initcode_hash": "0x03cb62b55ab80de5dc7af2be5bc10485b6fc9ecc933d666d04f48e6100195a04",
+        "initcode_hash": "0x7f63ba6b7953c05644cc59e5fbcafb451ea210a47d1f1d8b48bfb5a14f292a54",
         "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
         "libraries": {
           "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
-          "src/lib/Rails.sol:Rails": "0x05BB7B022645a68fB9c97A7afaD1017EC5B252B2"
+          "src/lib/Rails.sol:Rails": "0x10F22f3Ab9C601950f3Fa829274faFCdC02A76c8"
         },
         "constructor_args": [
           "0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C",
@@ -200,7 +200,7 @@
           "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
           "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
           "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
-          "8"
+          "9"
         ]
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
@@ -214,10 +214,12 @@
         "pinned": true
       },
       "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
-        "initcode_hash": "0x5b0aff042a9b3973ec1ec3e7ba3c22e9f73121f6739f4aca02b3088c4b01fabd",
+        "initcode_hash": "0xd0999d49e64712aa62f6139d4d98c4f1fab903734a713308bab3ef1a6397f542",
         "artifact_contract": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [
+          "3"
+        ]
       },
       "PDP_VERIFIER_PROXY": {
         "initcode_hash": "0x460ab109982867b4e11bd02e84d83dfaef4aad379625b07382854b7199beab09",
