@@ -38,6 +38,46 @@ import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 
+contract FilecoinWarmStorageServiceHarness is FilecoinWarmStorageService {
+    constructor(
+        address pdpVerifier,
+        address payments,
+        MockERC20 usdfc,
+        address filBeamBeneficiary,
+        ServiceProviderRegistry providerRegistry,
+        SessionKeyRegistry sessionKeyRegistry,
+        uint64 reinitializerVersion
+    )
+        FilecoinWarmStorageService(
+            pdpVerifier, payments, usdfc, filBeamBeneficiary, providerRegistry, sessionKeyRegistry, reinitializerVersion
+        )
+    {}
+
+    function seedLegacyPieceMetadata(
+        uint256 dataSetId,
+        uint256 pieceId,
+        string[] calldata keys,
+        string[] calldata values
+    ) external {
+        for (uint256 i = 0; i < keys.length; i++) {
+            dataSetPieceMetadata[dataSetId][pieceId][keys[i]] = values[i];
+            dataSetPieceMetadataKeys[dataSetId][pieceId].push(keys[i]);
+        }
+    }
+
+    function legacyPieceMetadataKeysLength(uint256 dataSetId, uint256 pieceId) external view returns (uint256) {
+        return dataSetPieceMetadataKeys[dataSetId][pieceId].length;
+    }
+
+    function legacyPieceMetadataValue(uint256 dataSetId, uint256 pieceId, string calldata key)
+        external
+        view
+        returns (string memory)
+    {
+        return dataSetPieceMetadata[dataSetId][pieceId][key];
+    }
+}
+
 contract FilecoinWarmStorageServiceTest is MockFVMTest {
     using SafeERC20 for MockERC20;
     using PDPOffering for PDPOffering.Schema;
@@ -219,7 +259,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         defaultTotalCDNLockup = defaultCacheMissLockup + defaultCDNLockup;
 
         // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageService(
+        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageServiceHarness(
             address(mockPDPVerifier),
             address(payments),
             mockUSDFC,
@@ -246,6 +286,27 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
         pdpServiceWithPayments.setViewContract(address(viewContract));
+    }
+
+    function _seedLegacyPieceMetadata(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)
+        internal
+    {
+        FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
+            .seedLegacyPieceMetadata(dataSetId, pieceId, keys, values);
+    }
+
+    function _legacyPieceMetadataKeysLength(uint256 dataSetId, uint256 pieceId) internal view returns (uint256) {
+        return FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
+            .legacyPieceMetadataKeysLength(dataSetId, pieceId);
+    }
+
+    function _legacyPieceMetadataValue(uint256 dataSetId, uint256 pieceId, string memory key)
+        internal
+        view
+        returns (string memory)
+    {
+        return FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
+            .legacyPieceMetadataValue(dataSetId, pieceId, key);
     }
 
     function makeSignaturePass(address signer) public {
@@ -820,23 +881,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             pdpServiceWithPayments, dataSetId, firstAdded, pieceData2, 2, FAKE_SIGNATURE, keys2, values2
         );
         firstAdded += pieceData2.length;
-
-        // Assert per-piece metadata
-        (bool e0, string memory v0) = viewContract.getPieceMetadata(dataSetId, 0, "meta");
-        assertTrue(e0);
-        assertEq(v0, metadataShort);
-        (bool e1, string memory v1) = viewContract.getPieceMetadata(dataSetId, 1, "meta");
-        assertTrue(e1);
-        assertEq(v1, metadataShort);
-        (bool e2, string memory v2) = viewContract.getPieceMetadata(dataSetId, 2, "meta");
-        assertTrue(e2);
-        assertEq(v2, metadataShort);
-        (bool e3, string memory v3) = viewContract.getPieceMetadata(dataSetId, 3, "meta");
-        assertTrue(e3);
-        assertEq(v3, metadataLong);
-        (bool e4, string memory v4) = viewContract.getPieceMetadata(dataSetId, 4, "meta");
-        assertTrue(e4);
-        assertEq(v4, metadataLong);
 
         // now with session keys
         bytes32[] memory permissions = new bytes32[](1);
@@ -3122,31 +3166,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         setup = PieceMetadataSetup({dataSetId: dataSetId, pieceId: pieceId, pieceData: pieceData, extraData: extraData});
     }
 
-    function testPieceMetadataStorageAndRetrieval() public {
-        // Test storing and retrieving piece metadata
-        uint256 pieceId = 42;
-
-        // Set metadata for the piece
-        string[] memory keys = new string[](2);
-        string[] memory values = new string[](2);
-        keys[0] = "filename";
-        values[0] = "dog.jpg";
-        keys[1] = "contentType";
-        values[1] = "image/jpeg";
-
-        PieceMetadataSetup memory setup =
-            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
-
-        // Verify piece metadata storage
-
-        (string[] memory storedKeys, string[] memory storedValues) =
-            viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
-        for (uint256 i = 0; i < values.length; i++) {
-            assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
-            assertEq(storedValues[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
-        }
-    }
-
     function testPieceMetadataKeyLengthBoundaries() public {
         uint256 pieceId = 42;
 
@@ -3185,24 +3204,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
-
-                // Verify piece metadata storage
-                (bool exists, string memory storedMetadata) =
-                    viewContract.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
-                assertTrue(exists, "Piece metadata key should exist");
-                assertEq(
-                    storedMetadata,
-                    string(values[0]),
-                    string.concat("Stored metadata should match for key length ", Strings.toString(keyLength))
-                );
-
-                (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, pieceId + i);
-                assertEq(storedKeys.length, 1, "Should have one metadata key");
-                assertEq(
-                    storedKeys[0],
-                    keys[0],
-                    string.concat("Stored key should match for key length ", Strings.toString(keyLength))
-                );
             } else {
                 // Should fail for exceeding max
                 vm.expectRevert(abi.encodeWithSelector(Errors.MetadataKeyExceedsMaxLength.selector, 0, 32, keyLength));
@@ -3250,20 +3251,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
-
-                // Verify piece metadata storage
-                (bool exists, string memory storedMetadata) =
-                    viewContract.getPieceMetadata(dataSetId, pieceId + i, keys[0]);
-                assertTrue(exists, "Piece metadata key should exist");
-                assertEq(
-                    storedMetadata,
-                    string(values[0]),
-                    string.concat("Stored metadata should match for value length ", Strings.toString(valueLength))
-                );
-
-                (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, pieceId + i);
-                assertEq(storedKeys.length, 1, "Should have one metadata key");
-                assertEq(storedKeys[0], keys[0], "Stored key should match 'filename'");
             } else {
                 // Should fail for exceeding max
                 vm.expectRevert(
@@ -3318,23 +3305,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
-
-                // Verify piece metadata storage
-                for (uint256 i = 0; i < keys.length; i++) {
-                    (bool exists, string memory storedMetadata) =
-                        viewContract.getPieceMetadata(dataSetId, pieceId + testIdx, keys[i]);
-                    assertTrue(exists, string.concat("Key ", keys[i], " should exist"));
-                    assertEq(
-                        storedMetadata, values[i], string.concat("Stored metadata should match for key: ", keys[i])
-                    );
-                }
-
-                (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, pieceId + testIdx);
-                assertEq(
-                    storedKeys.length,
-                    keys.length,
-                    string.concat("Should have ", Strings.toString(keyCount), " metadata keys")
-                );
             } else {
                 // Should fail for exceeding max
                 vm.expectRevert(
@@ -3429,32 +3399,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         }
     }
 
-    function testPieceMetadataForSameKeyCannotRewrite() public {
-        uint256 pieceId = 42;
-
-        // Set metadata for the piece
-        string[] memory keys = new string[](2);
-        string[] memory values = new string[](2);
-        keys[0] = "filename";
-        values[0] = "dog.jpg";
-        keys[1] = "contentType";
-        values[1] = "image/jpeg";
-
-        PieceMetadataSetup memory setup =
-            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
-
-        // Try to add the same piece again with different nonce but same metadata (to test duplicate key detection)
-        string[][] memory allKeys = new string[][](1);
-        string[][] memory allValues = new string[][](1);
-        allKeys[0] = keys;
-        allValues[0] = values;
-        bytes memory extraDataWithNewNonce = abi.encode(pieceId + 2000, allKeys, allValues, FAKE_SIGNATURE);
-
-        vm.expectRevert(abi.encodeWithSelector(Errors.DuplicateMetadataKey.selector, setup.dataSetId, keys[0]));
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.piecesAdded(setup.dataSetId, setup.pieceId, setup.pieceData, extraDataWithNewNonce);
-    }
-
     function testPieceMetadataCannotBeAddedByNonPDPVerifier() public {
         uint256 pieceId = 42;
 
@@ -3545,94 +3489,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData);
     }
 
-    function testGetPieceMetadata() public {
-        uint256 pieceId = 42;
-
-        // Set metadata for the piece
-        string[] memory keys = new string[](2);
-        string[] memory values = new string[](2);
-        keys[0] = "filename";
-        values[0] = "dog.jpg";
-        keys[1] = "contentType";
-        values[1] = "image/jpeg";
-
-        PieceMetadataSetup memory setup =
-            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
-
-        // Test getPieceMetadata for existing keys
-        (bool exists1, string memory filename) =
-            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "filename");
-        assertTrue(exists1, "filename key should exist");
-        assertEq(filename, "dog.jpg", "Filename metadata should match");
-
-        (bool exists2, string memory contentType) =
-            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "contentType");
-        assertTrue(exists2, "contentType key should exist");
-        assertEq(contentType, "image/jpeg", "Content type metadata should match");
-
-        // Test getPieceMetadata for non-existent key - this is the important false case!
-        (bool exists3, string memory nonExistentKey) =
-            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
-        assertFalse(exists3, "Non-existent key should not exist");
-        assertEq(bytes(nonExistentKey).length, 0, "Should return empty string for non-existent key");
-    }
-
-    function testGetPieceMetdataAllKeys() public {
-        uint256 pieceId = 42;
-
-        // Set metadata for the piece
-        string[] memory keys = new string[](2);
-        string[] memory values = new string[](2);
-        keys[0] = "filename";
-        values[0] = "dog.jpg";
-        keys[1] = "contentType";
-        values[1] = "image/jpeg";
-
-        PieceMetadataSetup memory setup =
-            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
-
-        // Test getPieceMetadataKeys
-        (string[] memory storedKeys, string[] memory storedValues) =
-            viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
-        assertEq(storedKeys.length, keys.length, "Should return correct number of metadata keys");
-        for (uint256 i = 0; i < keys.length; i++) {
-            assertEq(storedKeys[i], keys[i], string.concat("Stored key should match: ", keys[i]));
-            assertEq(storedValues[i], values[i], string.concat("Stored value should match for key: ", keys[i]));
-        }
-    }
-
-    function testGetPieceMetadata_NonExistentDataSet() public view {
-        uint256 nonExistentDataSetId = 999;
-        uint256 nonExistentPieceId = 43;
-
-        // Attempt to get metadata for a non-existent proof set
-        (bool exists, string memory filename) =
-            viewContract.getPieceMetadata(nonExistentDataSetId, nonExistentPieceId, "filename");
-        assertFalse(exists, "Key should not exist for non-existent data set");
-        assertTrue(bytes(filename).length == 0, "Should return empty string");
-        assertEq(bytes(filename).length, 0, "Should return empty string for non-existent proof set");
-    }
-
-    function testGetPieceMetadata_NonExistentKey() public {
-        uint256 pieceId = 42;
-
-        // Set metadata for the piece
-        string[] memory keys = new string[](1);
-        string[] memory values = new string[](1);
-        keys[0] = "filename";
-        values[0] = "dog.jpg";
-
-        PieceMetadataSetup memory setup =
-            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
-
-        // Attempt to get metadata for a non-existent key
-        (bool exists, string memory nonExistentMetadata) =
-            viewContract.getPieceMetadata(setup.dataSetId, setup.pieceId, "nonExistentKey");
-        assertFalse(exists, "Non-existent key should not exist");
-        assertTrue(bytes(nonExistentMetadata).length == 0, "Should return empty string");
-        assertEq(bytes(nonExistentMetadata).length, 0, "Should return empty string for non-existent key");
-    }
-
     function testPieceMetadataPerPieceDifferentMetadata() public {
         // Test different metadata for multiple pieces
         uint256 firstPieceId = 100;
@@ -3690,42 +3546,20 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
 
-        // Verify metadata for piece 0
-        (bool e0, string memory v0) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "filename");
-        assertTrue(e0, "filename key should exist");
-        assertEq(v0, "document.pdf", "Piece 0 filename should match");
-
-        (bool e1, string memory v1) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "contentType");
-        assertTrue(e1, "contentType key should exist");
-        assertEq(v1, "application/pdf", "Piece 0 contentType should match");
-
-        // Verify metadata for piece 1
-        (bool e2, string memory v2) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 1, "filename");
-        assertTrue(e2, "filename key should exist");
-        assertEq(v2, "image.jpg", "Piece 1 filename should match");
-
-        (bool e3, string memory v3) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 1, "size");
-        assertTrue(e3, "size key should exist");
-        assertEq(v3, "1024000", "Piece 1 size should match");
-
-        (bool e4, string memory v4) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 1, "compression");
-        assertTrue(e4, "compression key should exist");
-        assertEq(v4, "jpeg", "Piece 1 compression should match");
-
-        // Verify metadata for piece 2
-        (bool e5, string memory v5) = viewContract.getPieceMetadata(dataSetId, firstPieceId + 2, "filename");
-        assertTrue(e5, "filename key should exist");
-        assertEq(v5, "data.json", "Piece 2 filename should match");
-
-        // Verify getAllPieceMetadata returns correct data for each piece
-        (string[] memory keys0,) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId);
-        assertEq(keys0.length, 2, "Piece 0 should have 2 metadata keys");
-
-        (string[] memory keys1,) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 1);
-        assertEq(keys1.length, 3, "Piece 1 should have 3 metadata keys");
-
-        (string[] memory keys2,) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 2);
-        assertEq(keys2.length, 1, "Piece 2 should have 1 metadata key");
+        for (uint256 i = 0; i < numPieces; i++) {
+            assertEq(
+                _legacyPieceMetadataKeysLength(dataSetId, firstPieceId + i),
+                0,
+                "New piece metadata must not be stored on-chain"
+            );
+            for (uint256 j = 0; j < allKeys[i].length; j++) {
+                assertEq(
+                    _legacyPieceMetadataValue(dataSetId, firstPieceId + i, allKeys[i][j]),
+                    "",
+                    "New piece metadata values must not be stored on-chain"
+                );
+            }
+        }
     }
 
     function testEmptyStringMetadata() public {
@@ -3773,16 +3607,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         mockPDPVerifier.addPieces(
             pdpServiceWithPayments, dataSetId, pieceId, pieces, 1, FAKE_SIGNATURE, pieceKeys, pieceValues
         );
-
-        // Test empty string in piece metadata
-        (bool existsFilename, string memory filename) = viewContract.getPieceMetadata(dataSetId, pieceId, "filename");
-        assertTrue(existsFilename, "filename key should exist");
-        assertEq(filename, "", "Empty filename should be stored");
-
-        (bool existsSize, string memory nonExistentPieceMeta) =
-            viewContract.getPieceMetadata(dataSetId, pieceId, "size");
-        assertFalse(existsSize, "size key should not exist");
-        assertEq(nonExistentPieceMeta, "", "Non-existent piece metadata key returns empty string");
     }
 
     function testPieceMetadataArrayMismatchErrors() public {
@@ -3859,20 +3683,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
-
-        // Verify no metadata is stored
-        (string[] memory keys0, string[] memory values0) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId);
-        assertEq(keys0.length, 0, "Piece 0 should have no metadata keys");
-        assertEq(values0.length, 0, "Piece 0 should have no metadata values");
-
-        (string[] memory keys1, string[] memory values1) = viewContract.getAllPieceMetadata(dataSetId, firstPieceId + 1);
-        assertEq(keys1.length, 0, "Piece 1 should have no metadata keys");
-        assertEq(values1.length, 0, "Piece 1 should have no metadata values");
-
-        // Verify getting non-existent keys returns empty strings
-        (bool exists, string memory nonExistentValue) = viewContract.getPieceMetadata(dataSetId, firstPieceId, "anykey");
-        assertFalse(exists, "Non-existent key should return false");
-        assertEq(bytes(nonExistentValue).length, 0, "Non-existent key should return empty string");
     }
 
     function testRailTerminated_RevertsIfCallerNotPaymentsContract() public {
@@ -5124,12 +4934,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Use nonce 1 with firstAdded 1 - should succeed (nonce != firstAdded is fine)
         makeSignaturePass(client);
         mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 1, pieceData, 1, FAKE_SIGNATURE, keys, values);
-
-        // Verify pieces were added correctly
-        (bool exists0,) = viewContract.getPieceMetadata(dataSetId, 0, "");
-        (bool exists1,) = viewContract.getPieceMetadata(dataSetId, 1, "");
-        assertTrue(exists0 || !exists0); // Piece 0 exists (or doesn't based on metadata presence)
-        assertTrue(exists1 || !exists1); // Piece 1 exists (or doesn't based on metadata presence)
     }
 
     function testAddPiecesNonceUniquePerPayer() public {
@@ -6528,7 +6332,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
      *      2. Metadata is cleaned up after nextProvingPeriod
      */
     function testPieceMetadataRemovalDeferredToNextProvingPeriod() public {
-        // Setup: Create dataset with piece metadata
+        // Seed metadata as if it had been written by the pre-upgrade implementation.
         uint256 pieceId = 0;
         string[] memory keys = new string[](2);
         string[] memory values = new string[](2);
@@ -6539,13 +6343,11 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         PieceMetadataSetup memory setup =
             setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
+        _seedLegacyPieceMetadata(setup.dataSetId, setup.pieceId, keys, values);
 
-        // Verify metadata exists
-        (string[] memory storedKeys, string[] memory storedValues) =
-            viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
-        assertEq(storedKeys.length, 2, "Should have 2 metadata keys");
-        assertEq(storedKeys[0], keys[0], "Key 0 should match");
-        assertEq(storedValues[0], values[0], "Value 0 should match");
+        assertEq(_legacyPieceMetadataKeysLength(setup.dataSetId, setup.pieceId), 2);
+        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[0]), values[0]);
+        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[1]), values[1]);
 
         // Get proving period config
         (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
@@ -6563,9 +6365,11 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             setup.dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData
         );
 
-        // Metadata should STILL exist (deferred cleanup)
-        (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
-        assertEq(storedKeys.length, 2, "Metadata should persist after piecesScheduledRemove");
+        assertEq(
+            _legacyPieceMetadataKeysLength(setup.dataSetId, setup.pieceId),
+            2,
+            "Legacy metadata should persist after piecesScheduledRemove"
+        );
 
         // Move to next proving period
         vm.roll(block.number + provingPeriod + 1);
@@ -6574,9 +6378,13 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 nextDeadline = firstDeadline + provingPeriod;
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, nextDeadline, 100, "");
 
-        // Metadata should now be cleaned up
-        (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
-        assertEq(storedKeys.length, 0, "Metadata should be removed after nextProvingPeriod");
+        assertEq(
+            _legacyPieceMetadataKeysLength(setup.dataSetId, setup.pieceId),
+            0,
+            "Legacy metadata keys should be removed after nextProvingPeriod"
+        );
+        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[0]), "");
+        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[1]), "");
     }
 
     /**
@@ -6587,7 +6395,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Dataset");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
-        // Add 3 pieces with metadata
+        // Add three pieces, then seed metadata as if it came from the pre-upgrade implementation.
         uint256 numPieces = 3;
         Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
         string[][] memory allKeys = new string[][](numPieces);
@@ -6606,6 +6414,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieceData, encodedData);
         mockPDPVerifier.setDataSetLeafCount(dataSetId, numPieces);
+        for (uint256 i = 0; i < numPieces; i++) {
+            _seedLegacyPieceMetadata(dataSetId, i, allKeys[i], allValues[i]);
+        }
 
         // Get proving period config
         (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
@@ -6623,10 +6434,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         makeSignaturePass(client);
         mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
 
-        // Verify all metadata still exists
         for (uint256 i = 0; i < numPieces; i++) {
-            (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, i);
-            assertEq(storedKeys.length, 1, "Metadata should persist for each piece");
+            assertEq(_legacyPieceMetadataKeysLength(dataSetId, i), 1, "Legacy metadata should persist");
         }
 
         // Move to next proving period and trigger cleanup
@@ -6634,10 +6443,9 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 nextDeadline = firstDeadline + provingPeriod;
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, nextDeadline, 0, "");
 
-        // Verify all metadata is now cleaned up
         for (uint256 i = 0; i < numPieces; i++) {
-            (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, i);
-            assertEq(storedKeys.length, 0, "Metadata should be removed for each piece");
+            assertEq(_legacyPieceMetadataKeysLength(dataSetId, i), 0, "Legacy metadata keys should be removed");
+            assertEq(_legacyPieceMetadataValue(dataSetId, i, "index"), "");
         }
     }
 
@@ -6856,6 +6664,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             pieceMetadataKeys,
             pieceMetadataValues
         );
+        _seedLegacyPieceMetadata(dataSetId, 0, pieceMetadataKeys, pieceMetadataValues);
+        _seedLegacyPieceMetadata(dataSetId, 1, pieceMetadataKeys, pieceMetadataValues);
 
         uint256[] memory pieceIds = new uint256[](2);
         pieceIds[0] = 0;
@@ -6871,8 +6681,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             _scheduledPieceMetadataRemovalAt(dataSetId, 1), 1, "Queued removal element should exist before deletion"
         );
 
-        (string[] memory storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
-        assertEq(storedKeys.length, 1, "Piece metadata should exist before deletion");
+        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 1, "Legacy piece metadata should exist");
 
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
@@ -6891,8 +6700,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             _scheduledPieceMetadataRemovalAt(dataSetId, 1), 0, "Queued removal element should be cleared on deletion"
         );
 
-        (storedKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
-        assertEq(storedKeys.length, 0, "Queued piece metadata should be cleaned up on deletion");
+        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 0, "Legacy metadata keys should be cleaned up");
+        assertEq(_legacyPieceMetadataValue(dataSetId, 0, "filename"), "");
     }
 
     /**
