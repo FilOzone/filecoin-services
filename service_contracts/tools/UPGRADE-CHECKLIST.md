@@ -49,14 +49,12 @@ Field ownership for duplicated rollout data:
 
 ### Upgrade Schedule
 
-| Network | Announcement mode (v1.3.1 bootstrap only) | Requested delay | Actual `AFTER_EPOCH` | Status |
-|---|---|---:|---:|---|
-| Calibnet | `TBD` | `TBD` | `TBD` | Pending |
-| Mainnet | `TBD` | `TBD` | `TBD` | Pending |
+| Network | Requested delay | Actual `AFTER_EPOCH` | Status |
+|---|---:|---:|---|
+| Calibnet | `TBD` | `TBD` | Pending |
+| Mainnet | `TBD` | `TBD` | Pending |
 
-Set the requested delay before proposing the Safe transaction. For the normal delay-based flow, fill in the actual `AFTER_EPOCH` from `nextUpgrade()` after the announcement executes. The observed value is the source of truth for the execute step and external communications.
-
-> **v1.3.1 bootstrap only:** The announcement-mode column is temporary. Record `legacy` for the v1.3.0 -> v1.3.1 rollout; upgrades from v1.3.1 onward use `delay`. Record the absolute target before Safe signing, include the notice duration and signing buffer in the requested-delay cell, and verify the same target on-chain after execution.
+Set the requested delay before proposing the Safe transaction. Fill in the actual `AFTER_EPOCH` from `nextUpgrade()` after the announcement executes. The observed value is the source of truth for the execute step and external communications.
 
 ### Run Log
 
@@ -141,7 +139,7 @@ Record validation that proves the planned upgrade works against the full contrac
 - Do not announce Mainnet until Calibnet execution, on-chain checks, explorer checks, smoke/E2E checks, and `filecoin-pin` Data Set creation validation are complete.
 - Do not announce Mainnet until required cross-repo changes are merged/released or explicitly waived by the technical owner.
 - `service_contracts/deployments.json` reflects what is live behind proxies and View contracts. Update it only after the relevant proxy switch and, if applicable, View switch are complete, normally through follow-up PR(s) to `main`, and record PR links in Release Tracking.
-- In the normal delay-based flow, the requested delay starts when the Safe announcement executes. After execution, verify both fields returned by `nextUpgrade()` and record its exact `afterEpoch` as the source of truth.
+- The requested delay starts when the Safe announcement executes. After execution, verify both fields returned by `nextUpgrade()` and record its exact `afterEpoch` as the source of truth.
 - A later announcement replaces the pending plan. Record the replacement transaction and explicitly mark it as superseding the previous announcement.
 
 ### Notice Guidance
@@ -158,22 +156,6 @@ export UPGRADE_DELAY_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for br
 export ANNOUNCEMENT_MODE=delay
 echo "Requested upgrade delay: $UPGRADE_DELAY_EPOCHS epochs"
 ```
-
-### Temporary Bootstrap Compatibility
-
-FWSS v1.3.0 is currently deployed on Calibnet and Mainnet and does not expose `announceUpgradePlan(address,uint96)`. The v1.3.0 -> v1.3.1 rollout must announce through `announcePlannedUpgrade((address,uint96))`. Use `ANNOUNCEMENT_MODE=legacy` with an absolute `AFTER_EPOCH` for both networks and include a conservative Safe-signing buffer so the proposal is still in the future when it executes.
-
-```bash
-export ANNOUNCEMENT_MODE=legacy
-export LEGACY_NOTICE_EPOCHS=2880
-export SAFE_SIGNING_BUFFER_EPOCHS=240
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
-unset UPGRADE_DELAY_EPOCHS
-echo "Legacy target epoch: $AFTER_EPOCH"
-```
-
-This is a v1.3.1 bootstrap exception, not a second long-term workflow. Treat legacy mode as deprecated once v1.3.1 is live on both networks, then use the Phase 5 cleanup item to remove it when rollback to v1.3.0 is retired.
 
 ### Post-Upgrade Evidence Required
 
@@ -393,7 +375,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 
 **Announce**
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
-- [ ] Set the Calibnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
+- [ ] Set the Calibnet requested delay and update the schedule table.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
@@ -404,7 +386,7 @@ export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="$CALI_NEW_IMPL"
 ```
 
-For the normal delay-based flow:
+Configure the requested delay:
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=240 # use a longer window if desired
@@ -412,18 +394,7 @@ export ANNOUNCEMENT_MODE=delay
 unset AFTER_EPOCH
 ```
 
-For the v1.3.0 -> v1.3.1 bootstrap rollout only, use this configuration instead:
-
-```bash
-export ANNOUNCEMENT_MODE=legacy
-export LEGACY_NOTICE_EPOCHS=240
-export SAFE_SIGNING_BUFFER_EPOCHS=240
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
-unset UPGRADE_DELAY_EPOCHS
-```
-
-Generate the transaction after selecting exactly one configuration above:
+Generate the transaction:
 
 ```bash
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
@@ -448,14 +419,10 @@ OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
 echo "Planned implementation: $OBSERVED_IMPL (expected $CALI_NEW_IMPL)"
 echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
 
-if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
-  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
-else
-  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
-  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
-  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
-  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
-fi
+ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
+EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
+[ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
+EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
 
 if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$CALI_NEW_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
   echo "ERROR: announced implementation mismatch"
@@ -565,7 +532,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) for Mainnet before or alongside stakeholder notification. Identify the network and scheduled date/window, link the GitHub pre-release, and keep the maintenance window open through expected post-upgrade validation. Follow the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md).
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
-- [ ] Set the Mainnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
+- [ ] Set the Mainnet requested delay and update the schedule table.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
 
@@ -576,7 +543,7 @@ export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="$MAIN_NEW_IMPL"
 ```
 
-For the normal delay-based flow:
+Configure the requested delay:
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=2880 # use 20160 for breaking changes
@@ -584,18 +551,7 @@ export ANNOUNCEMENT_MODE=delay
 unset AFTER_EPOCH
 ```
 
-For the v1.3.0 -> v1.3.1 bootstrap rollout only, use this configuration instead:
-
-```bash
-export ANNOUNCEMENT_MODE=legacy
-export LEGACY_NOTICE_EPOCHS=2880
-export SAFE_SIGNING_BUFFER_EPOCHS=2880
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
-unset UPGRADE_DELAY_EPOCHS
-```
-
-Generate the transaction after selecting exactly one configuration above:
+Generate the transaction:
 
 ```bash
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
@@ -620,14 +576,10 @@ OBSERVED_AFTER_EPOCH=${UPGRADE_PLAN[1]}
 echo "Planned implementation: $OBSERVED_IMPL (expected $MAIN_NEW_IMPL)"
 echo "Actual afterEpoch: $OBSERVED_AFTER_EPOCH"
 
-if [ "${ANNOUNCEMENT_MODE:-legacy}" = "legacy" ]; then
-  EXPECTED_AFTER_EPOCH=$AFTER_EPOCH
-else
-  ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
-  EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
-  [ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
-  EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
-fi
+ANNOUNCE_EPOCH=$(cast receipt --rpc-url "$ETH_RPC_URL" "$ANNOUNCE_TX_HASH" blockNumber)
+EFFECTIVE_DELAY_EPOCHS=$UPGRADE_DELAY_EPOCHS
+[ "$EFFECTIVE_DELAY_EPOCHS" -eq 0 ] && EFFECTIVE_DELAY_EPOCHS=1
+EXPECTED_AFTER_EPOCH=$((ANNOUNCE_EPOCH + EFFECTIVE_DELAY_EPOCHS))
 
 if [ "$(printf '%s' "$OBSERVED_IMPL" | tr '[:upper:]' '[:lower:]')" != "$(printf '%s' "$MAIN_NEW_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
   echo "ERROR: announced implementation mismatch"
@@ -729,7 +681,6 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
 - [ ] Resolve or complete every public operational notice after the corresponding rollout and post-upgrade validation succeed. Publish a final status update and record each notice link and final state in Release Tracking.
-- [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the temporary announcement-mode schedule column and bootstrap clauses, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
