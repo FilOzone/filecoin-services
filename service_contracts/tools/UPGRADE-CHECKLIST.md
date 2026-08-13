@@ -3,8 +3,8 @@
 This file is the canonical, self-contained template for FWSS release issues.
 
 - Keep this template focused on the main `FilecoinWarmStorageService` contract upgrade path.
-- Update this file on your release branch if you want to improve or customize the checklist for the current rollout.
-- Run the [Create Release Issue](https://github.com/FilOzone/filecoin-services/actions/workflows/create-upgrade-announcement-issue.yml) workflow from that same branch so the issue body is rendered from this branch's copy of the template.
+- Start every rollout by running the [Create Release Issue](https://github.com/FilOzone/filecoin-services/actions/workflows/create-upgrade-announcement-issue.yml) workflow from `main`, before opening release-prep PRs or creating a release branch. The generated issue is the operator checklist for those steps as well as the rollout itself.
+- Customize the generated issue for release-specific exceptions. Put reusable process improvements in this file through a normal PR to `main`.
 - The generated issue should contain everything a release engineer needs for a normal FWSS upgrade.
 
 <!-- ISSUE_TEMPLATE_START -->
@@ -197,7 +197,8 @@ For each network, record evidence that:
 
 > Work through the phases in order. Do not announce Mainnet until the Calibnet execute transaction, on-chain checks, smoke/E2E test, and `filecoin-pin` Data Set creation validation are complete.
 
-### Phase 1: Branch, Issue, PR, and Checks
+### Phase 1: Issue, PR, Branch, and Checks
+- [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from `main`. Do this before the remaining release-prep and branch steps so the generated issue tracks the complete process.
 - [ ] All intended FWSS contract changes are merged into `main`
 - [ ] Release-prep PR(s) opened for review (prefer one PR when practical) with changelog/release notes, a Deployment note linking to the [GitHub Release page](https://github.com/FilOzone/filecoin-services/releases/tag/{{RELEASE_VERSION}}) for rollout status, addresses, and transaction links, and any applicable version/submodule bump. For FWSS contract changes, include the `FilecoinWarmStorageService` `VERSION()` bump. For PDP-only stack releases, use the PDP/submodule bump PR and leave the FWSS `VERSION()` unchanged. Suggested title: `{{RECOMMENDED_PR_TITLE}}`
 - [ ] Upgrade checks run:
@@ -209,8 +210,7 @@ forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService stor
 ```
 
 - [ ] Release-prep PR(s) merged so `main` contains the final release notes and applicable version/submodule changes before creating the release branch
-- [ ] Create release branch from `main` after the release-prep PR(s) land (recommended: `{{RELEASE_BRANCH}}`). Use this branch as the stable ref for rendering the release issue and as the landing branch for rollout patches if `main` moves on.
-- [ ] Create the release issue by running the [Create Release Issue]({{CREATE_ISSUE_WORKFLOW_LINK}}) workflow from the release branch so the issue is rendered from that branch's checklist template
+- [ ] Create the release branch from `main` after the release-prep PR(s) land (recommended: `{{RELEASE_BRANCH}}`), then record its name and commit in the existing release issue. Do not create a second release issue.
 - [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
 - [ ] Run and obtain technical-owner approval of the complete Phase 1 two-network deployment inventory:
   - From the release candidate, run the [Deploy Contract workflow]({{DEPLOY_WORKFLOW_LINK}}) for both Calibnet and Mainnet with `contract=Warm Storage stack` and `dry_run=true`.
@@ -469,6 +469,7 @@ fi
 
 - [ ] Record the Calibnet announce tx and observed `afterEpoch` in the schedule and Run Log
 - [ ] Update the GitHub pre-release Calibnet rollout status with the announce tx and observed `afterEpoch`
+- [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) for the Calibration network before execution. Identify the network and scheduled date/window, link the GitHub pre-release, and keep the maintenance window open through expected post-upgrade validation. Follow the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md).
 
 **Execute**
 - [ ] Wait for the observed Calibnet `afterEpoch`
@@ -561,7 +562,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 **Announce**
 - [ ] Technical owner records Mainnet go/no-go after reviewing Calibnet evidence, rollback status, dependency targets, and cross-repo status
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
-- [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) before or alongside stakeholder notification. Use the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md) for component, notification, update, and resolution guidance
+- [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) for Mainnet before or alongside stakeholder notification. Identify the network and scheduled date/window, link the GitHub pre-release, and keep the maintenance window open through expected post-upgrade validation. Follow the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md).
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Mainnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
@@ -727,6 +728,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
+- [ ] Resolve or complete every public operational notice after the corresponding rollout and post-upgrade validation succeed. Publish a final status update and record each notice link and final state in Release Tracking.
 - [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the temporary announcement-mode schedule column and bootstrap clauses, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
