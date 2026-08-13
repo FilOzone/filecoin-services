@@ -18,6 +18,11 @@ This file is the canonical, self-contained template for FWSS release issues.
 | **Technical Owner** | `TBD` |
 | **Go/No-Go Status** | `TBD` |
 
+> **Start here:** Work through the [Release Checklist](#release-checklist) from Phase 1. Expand the supporting sections below only when you need their context or evidence tables.
+
+<details>
+<summary><strong>Release tracking and rollout records</strong> — tags, versions, deployment snapshots, schedule, and transaction evidence</summary>
+
 ### Release Tracking
 
 The filecoin-services GitHub release version is the stack version. It may differ from an individual contract `VERSION()` when the stack changes without an FWSS code change.
@@ -67,6 +72,11 @@ Keep this table current as values become known.
 | Calibnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
 | Mainnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
 
+</details>
+
+<details>
+<summary><strong>Scope and validation plan</strong> — cross-repo impact, dependencies, rollback, and pre-live evidence</summary>
+
 ### Scope
 - In scope: `FilecoinWarmStorageService` implementation upgrade behind the existing FWSS proxy.
 - Out of scope by default: `FilecoinWarmStorageServiceStateView`, `ServiceProviderRegistry`, `PDPVerifier`, `FilecoinPay`, and `SessionKeyRegistry`.
@@ -115,6 +125,11 @@ Record validation that proves the planned upgrade works against the full contrac
 | foc-devnet post-upgrade state validation | `TBD` |
 | Pricing validation | `TBD`: link command output, test run, or issue comment confirming FWSS pricing values match the intended release pricing before live rollout. |
 | Synapse SDK integration build | `TBD`: link the Synapse SDK PR/check run that builds against the intended contract ABI/types and deployment-address state, or record the owner-approved exception. |
+
+</details>
+
+<details>
+<summary><strong>Operator reference</strong> — network constants, operating rules, notice guidance, and required post-upgrade evidence</summary>
 
 ### Network Constants
 
@@ -167,11 +182,18 @@ For each network, record evidence that:
 - A smoke/E2E test passes. The v1.2.0 rollout used the Synapse SDK storage E2E example.
 - A [`filecoin-pin`](https://github.com/filecoin-project/filecoin-pin) `add` flow succeeds after the upgrade with unique Data Set metadata, forcing creation of a new Data Set on the target network. Record the command output, metadata, Data Set ID, tx/link, SP, and timestamp in the Run Log.
 
+</details>
+
+<details>
+<summary><strong>Release notes and integrator action</strong> — summary of changes and any required downstream action</summary>
+
 ### Changes
 {{CHANGES_SUMMARY}}
 
 ### Action Required for Integrators
 {{ACTION_REQUIRED}}
+
+</details>
 
 ---
 
