@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # service-provider-registry-announce-upgrade.sh: Announces a planned upgrade for ServiceProviderRegistry
-# Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS, NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS, AFTER_EPOCH
+# Required args: ETH_RPC_URL, SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,
+#                NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS, UPGRADE_DELAY_EPOCHS
 # Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
 # Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending
 
@@ -41,28 +42,29 @@ if [ -z "$NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" ]; then
   exit 1
 fi
 
-if [ -z "$AFTER_EPOCH" ]; then
-  echo "AFTER_EPOCH is not set"
-  exit 1
-fi
-
-CURRENT_EPOCH=$(cast block-number 2>/dev/null)
-
-if [ "$CURRENT_EPOCH" -gt "$AFTER_EPOCH" ]; then
-  echo "Already past AFTER_EPOCH ($CURRENT_EPOCH > $AFTER_EPOCH)"
-  exit 1
-else
-  echo "Announcing planned upgrade after $(($AFTER_EPOCH - $CURRENT_EPOCH)) epochs"
-fi
-
 if [ -z "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" ]; then
   echo "Error: SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS is not set"
   exit 1
 fi
 
+if [ -z "$UPGRADE_DELAY_EPOCHS" ]; then
+  echo "Error: UPGRADE_DELAY_EPOCHS is not set"
+  exit 1
+fi
+
+if [ -n "$AFTER_EPOCH" ]; then
+  echo "Error: AFTER_EPOCH is no longer supported; use UPGRADE_DELAY_EPOCHS"
+  exit 1
+fi
+
+CALL_SIGNATURE="announceUpgradePlan(address,uint96)"
+CALL_ARGS=("$NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" "$UPGRADE_DELAY_EPOCHS")
+
+echo "Announcing ServiceProviderRegistry upgrade with a requested delay of $UPGRADE_DELAY_EPOCHS epochs"
+
 if [ "$CALLDATA_ONLY" = "true" ]; then
-  CALLDATA=$(cast calldata "announcePlannedUpgrade((address,uint96))" "($NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)")
-  print_safe_transaction "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "announcePlannedUpgrade((address,uint96))" "$CALLDATA"
+  CALLDATA=$(cast calldata "$CALL_SIGNATURE" "${CALL_ARGS[@]}")
+  print_safe_transaction "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "$CALL_SIGNATURE" "$CALLDATA"
   exit 0
 fi
 
@@ -78,14 +80,14 @@ if [ "$PROXY_OWNER" != "$ADDR" ]; then
   exit 1
 fi
 
-TX_HASH=$(cast send "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "announcePlannedUpgrade((address,uint96))" "($NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)" \
+TX_HASH=$(cast send "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" "$CALL_SIGNATURE" "${CALL_ARGS[@]}" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
   --json | jq -r '.transactionHash')
 
 if [ -z "$TX_HASH" ]; then
-  echo "Error: Failed to send announcePlannedUpgrade transaction"
+  echo "Error: Failed to send announceUpgradePlan transaction"
   exit 1
 fi
 
-echo "announcePlannedUpgrade transaction sent: $TX_HASH"
+echo "$CALL_SIGNATURE transaction sent: $TX_HASH"

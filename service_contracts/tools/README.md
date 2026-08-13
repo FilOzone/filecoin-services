@@ -268,6 +268,19 @@ CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 
 This prints a formatted transaction block with the target address, function signature, and calldata to paste into the Safe UI transaction builder.
 
+ServiceProviderRegistry v1.2.0 and later use the same relative-delay announcement flow:
+
+```bash
+export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
+export SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS="0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB"
+export NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="0x..."
+export UPGRADE_DELAY_EPOCHS="2880"
+unset AFTER_EPOCH
+CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh
+```
+
+The mainline ServiceProviderRegistry helper no longer accepts an absolute `AFTER_EPOCH`. If a proxy is rolled back to v1.1.0 and must be rolled forward again, use the immutable [`v1.3.1-rollout.1` legacy helper](https://github.com/FilOzone/filecoin-services/blob/v1.3.1-rollout.1/service_contracts/tools/service-provider-registry-announce-upgrade.sh).
+
 The FWSS v1.3.0 contracts currently deployed on Calibnet and Mainnet do not expose `announceUpgradePlan()`. Their upgrade to v1.3.1 must therefore use the old interface:
 
 ```bash

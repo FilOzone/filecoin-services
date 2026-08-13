@@ -392,7 +392,7 @@ In Safe Transaction Builder, set target to the printed FWSS proxy, value to `0`,
 ### Phase 3: Calibnet Announce + Execute
 
 **Announce**
-- [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet bootstrap announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" AFTER_EPOCH=<absolute-epoch> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and `afterEpoch` returned by `nextUpgrade()` before any execute transaction. This legacy absolute-epoch path is only for upgrading a registry that does not yet expose the relative-delay entrypoint.
+- [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Calibnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
@@ -563,7 +563,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] Confirm required cross-repo changes are merged/released or explicitly waived by the technical owner
 - [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) before or alongside stakeholder notification. Use the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md) for component, notification, update, and resolution guidance
 - [ ] Notify stakeholders before announcing Mainnet, including FilB so they can propagate the upgrade notice
-- [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet bootstrap announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" AFTER_EPOCH=<absolute-epoch> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and `afterEpoch` returned by `nextUpgrade()` before any execute transaction. This legacy absolute-epoch path is only for upgrading a registry that does not yet expose the relative-delay entrypoint.
+- [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Mainnet requested delay and update the schedule table. **v1.3.1 bootstrap only:** record the announcement mode as `legacy`; upgrades from v1.3.1 onward always use `delay`.
 
 - [ ] Generate announce calldata and submit/sign/execute in Safe UI:
@@ -728,7 +728,6 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet FWSS implementation slots match the new implementation addresses
 - [ ] After FWSS v1.3.1 is live on Calibnet and Mainnet, treat `ANNOUNCEMENT_MODE=legacy` as deprecated and decide whether rollback to v1.3.0 is still supported. Once that rollback path is retired, open and merge a follow-up PR that removes the legacy mode, its `AFTER_EPOCH` handling, the temporary announcement-mode schedule column and bootstrap clauses, the README bootstrap example, and the Temporary Bootstrap Compatibility instructions; record the cleanup PR link. If v1.3.0 rollback remains supported, retain legacy mode or document the exact v1.3.1-tagged helper that operators must use.
-- [ ] After any ServiceProviderRegistry bootstrap upgrade is live on both networks, replace the legacy absolute-epoch announcement helper with the relative-delay `announceUpgradePlan(address,uint96)` flow before the next SPR upgrade, and record the cleanup PR link.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Open or update follow-up PR(s) to `main` for `service_contracts/deployments.json` after the relevant Calibnet/Mainnet proxy switches and, if applicable, View switches are live. Include live implementation addresses, View addresses, deployment bytecode metadata, and `pdp_version` / `fwss_version` fields for each updated network.
 - [ ] Record the `service_contracts/deployments.json` PR link(s) in Release Tracking, then merge after checksum validation, bytecode metadata verification, and live-slot verification
