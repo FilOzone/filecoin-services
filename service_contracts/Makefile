@@ -52,6 +52,10 @@ $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
 %StateInternalLibrary.sol: %StateLibrary.sol
 	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' $< | awk 'NR == 4 { print "// Code generated - DO NOT EDIT.\n// This file is a generated binding and any changes will be lost.\n// Generated with make $@\n"} {print}' | forge fmt -r - > $@
 
+# These targets delete and recreate files consumed by later generation steps.
+# Keep their prerequisites ordered even when the caller enables parallel make.
+.NOTPARALLEL: gen force-gen
+
 # Main code generation target with proper dependencies
 .PHONY: gen
 gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
