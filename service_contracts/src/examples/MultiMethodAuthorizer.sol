@@ -58,6 +58,7 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         bytes32 rpIdHash; // Passkey only: expected RP-ID hash (0 = accept any origin)
         uint64 expiry; // 0 = no expiry
         bool enabled;
+        bytes32[] ops; // live grant list; addCredential replaces it, removeCredential wipes it
     }
 
     /// Sentinel dataSetId: credential applies to every data set this authorizer is attached to.
@@ -84,6 +85,7 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
 
     error NotOwner();
     error UnknownMethod(uint8 method);
+    error UnknownCredential(bytes32 credId);
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -112,7 +114,9 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
 
     // ───────────────────────── owner: registry management ─────────────────────────
 
-    /// Register (or overwrite) a credential and the operations it may authorize.
+    /// Register a credential and the operations it may authorize. Re-adding the same
+    /// (method, key, dataSetId) **replaces** the previous grant set (old ops are cleared).
+    /// After that, use `setOperationAllowed` to add or remove individual operations.
     /// `dataSetId` is a specific FWSS data set, or `WILDCARD_DATASET` to authorize on every data
     /// set this authorizer is attached to (session-key-registry equivalent for P256).
     function addCredential(
@@ -125,25 +129,29 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         bytes32[] calldata ops
     ) external onlyOwner returns (bytes32 credId) {
         credId = credentialId(method, pubKeyX, pubKeyY, dataSetId);
-        credentials[credId] = Credential({
-            method: method,
-            pubKeyX: pubKeyX,
-            pubKeyY: pubKeyY,
-            dataSetId: dataSetId,
-            rpIdHash: rpIdHash,
-            expiry: expiry,
-            enabled: true
-        });
+        _clearOps(credId);
+        Credential storage c = credentials[credId];
+        c.method = method;
+        c.pubKeyX = pubKeyX;
+        c.pubKeyY = pubKeyY;
+        c.dataSetId = dataSetId;
+        c.rpIdHash = rpIdHash;
+        c.expiry = expiry;
+        c.enabled = true;
         emit CredentialSet(credId, method, pubKeyX, pubKeyY, dataSetId);
         emit CredentialEnabled(credId, true);
         for (uint256 i = 0; i < ops.length; i++) {
-            allowedOp[credId][ops[i]] = true;
+            _grantOp(credId, ops[i]);
             emit OperationAllowed(credId, ops[i], true);
         }
     }
 
+    /// Add or remove a single operation on an existing credential. The only incremental
+    /// permission API — `addCredential` replaces the whole grant set, `removeCredential` wipes it.
     function setOperationAllowed(bytes32 credId, bytes32 operation, bool allowed) external onlyOwner {
-        allowedOp[credId][operation] = allowed;
+        if (!_exists(credId)) revert UnknownCredential(credId);
+        if (allowed) _grantOp(credId, operation);
+        else _revokeOp(credId, operation);
         emit OperationAllowed(credId, operation, allowed);
     }
 
@@ -156,16 +164,18 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         credentials[credId].expiry = expiry;
     }
 
-    /// Fully remove a credential and reclaim its storage (no unbounded growth). Pass the operations
-    /// the credential was granted so their `allowedOp` slots are cleared too; unknown/extra ops are
-    /// harmless no-ops. (Disabling via setCredentialEnabled(false) also stops it authorizing, but
-    /// leaves the entry in storage — this deletes it.)
-    function removeCredential(bytes32 credId, bytes32[] calldata ops) external onlyOwner {
+    /// Fully remove a credential and reclaim its storage, including every granted operation.
+    /// Callers do not list ops — the live grant list on the credential is the source of truth.
+    /// (Disabling via setCredentialEnabled(false) also stops it authorizing, but leaves the entry.)
+    function removeCredential(bytes32 credId) external onlyOwner {
+        _clearOps(credId);
         delete credentials[credId];
-        for (uint256 i = 0; i < ops.length; i++) {
-            delete allowedOp[credId][ops[i]];
-        }
         emit CredentialRemoved(credId);
+    }
+
+    /// Current grant list for a credential (same set `removeCredential` will wipe).
+    function credentialOps(bytes32 credId) external view returns (bytes32[] memory) {
+        return credentials[credId].ops;
     }
 
     function transferOwnership(address to) external onlyOwner {
@@ -257,6 +267,39 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         if (!_verifyP256(message, r, s, x, y)) return false;
         emit Authorized(credId, operation, Method.Passkey);
         return true;
+    }
+
+    function _exists(bytes32 credId) internal view returns (bool) {
+        Credential storage c = credentials[credId];
+        return c.enabled || c.expiry != 0 || c.pubKeyX != 0 || c.pubKeyY != 0 || c.ops.length != 0;
+    }
+
+    function _clearOps(bytes32 credId) internal {
+        bytes32[] storage existing = credentials[credId].ops;
+        for (uint256 i = 0; i < existing.length; i++) {
+            delete allowedOp[credId][existing[i]];
+        }
+        delete credentials[credId].ops;
+    }
+
+    function _grantOp(bytes32 credId, bytes32 operation) internal {
+        if (allowedOp[credId][operation]) return;
+        credentials[credId].ops.push(operation);
+        allowedOp[credId][operation] = true;
+    }
+
+    function _revokeOp(bytes32 credId, bytes32 operation) internal {
+        if (!allowedOp[credId][operation]) return;
+        delete allowedOp[credId][operation];
+        bytes32[] storage existing = credentials[credId].ops;
+        uint256 n = existing.length;
+        for (uint256 i = 0; i < n; i++) {
+            if (existing[i] == operation) {
+                existing[i] = existing[n - 1];
+                existing.pop();
+                return;
+            }
+        }
     }
 
     function _credentialAllows(bytes32 credId, bytes32 operation) internal view returns (bool) {

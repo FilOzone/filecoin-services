@@ -82,6 +82,7 @@ struct Credential {
     bytes32 rpIdHash;   // Passkey only: expected SHA-256(rpId); 0 = accept any origin
     uint64  expiry;     // unix seconds; 0 = no expiry
     bool    enabled;    // owner kill-switch
+    bytes32[] ops;      // live grant list (source of truth for remove / replace)
 }
 
 mapping(bytes32 credId => Credential) credentials;
@@ -108,9 +109,11 @@ The same P256 key may therefore be registered more than once — e.g. AddPieces-
 | TerminateService | `0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc` |
 
 **Owner API** (only the authorizer's `owner`; see PLAYBOOK for cast invocations):
-`addCredential(method, x, y, dataSetId, rpIdHash, expiry, ops[])`, `setOperationAllowed`,
-`setCredentialEnabled`, `setCredentialExpiry`, `removeCredential(credId, ops[])`,
-`transferOwnership`.
+`addCredential(method, x, y, dataSetId, rpIdHash, expiry, ops[])` — registers, or **replaces**
+the grant set if the same `(method, key, dataSetId)` already exists;
+`setOperationAllowed(credId, operation, allowed)` — the only incremental permission edit;
+`setCredentialEnabled`, `setCredentialExpiry`, `removeCredential(credId)` — wipes the credential
+*and* every granted op (callers do not list ops); `transferOwnership`.
 
 A credential **authorizes** `(operation, dataSetId)` iff:
 `enabled ∧ (expiry == 0 ∨ block.timestamp ≤ expiry) ∧ allowedOp[credId][operation]`
@@ -297,7 +300,9 @@ addCredential(0 /*MachineP256*/, x, y, type(uint256).max /*WILDCARD_DATASET*/, 0
 - **rpIdHash pinning:** set a non-zero `rpIdHash` on passkey credentials to bind them to a specific
   relying-party origin; `0` accepts any origin and should be used only for testing.
 - **Revocation is on-chain and immediate:** `setCredentialEnabled(credId, false)` disables;
-  `removeCredential(credId, ops[])` deletes the entry *and* its `allowedOp` slots (bounded storage).
+  `removeCredential(credId)` deletes the entry *and* every `allowedOp` slot on its grant list.
+  Re-adding the same key starts from a clean grant set. `addCredential` replace is also a full
+  replace — it does not union with leftover ops.
 - **Wildcard is a union, not a default-deny overlay.** A wildcard credential still authorizes on
   a data set that also has a more specific credential for the same key. There is no per-data-set
   exception list — restrict a key by dropping the wildcard and issuing specific grants.
