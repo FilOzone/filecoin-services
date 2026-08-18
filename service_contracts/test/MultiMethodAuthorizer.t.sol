@@ -6,29 +6,6 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {P256} from "@openzeppelin/contracts/utils/cryptography/P256.sol";
 import {MultiMethodAuthorizer} from "../src/examples/MultiMethodAuthorizer.sol";
 
-/// RIP-7212-shaped shim so tests do not depend on a native 0x100 precompile.
-contract Rip7212Shim {
-    fallback() external {
-        bytes32 hash;
-        bytes32 r;
-        bytes32 s;
-        bytes32 x;
-        bytes32 y;
-        assembly {
-            hash := calldataload(0)
-            r := calldataload(32)
-            s := calldataload(64)
-            x := calldataload(96)
-            y := calldataload(128)
-        }
-        bool ok = P256.verifySolidity(hash, r, s, x, y);
-        assembly {
-            mstore(0x00, ok)
-            return(0x00, 0x20)
-        }
-    }
-}
-
 contract MultiMethodAuthorizerTest is Test {
     using Clones for address;
 
@@ -47,7 +24,6 @@ contract MultiMethodAuthorizerTest is Test {
     address internal stranger;
 
     function setUp() public {
-        vm.etch(address(0x100), type(Rip7212Shim).runtimeCode);
         auth = new MultiMethodAuthorizer();
         (px, py) = vm.publicKeyP256(PRIV);
         stranger = makeAddr("stranger");

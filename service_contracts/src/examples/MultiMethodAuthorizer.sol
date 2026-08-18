@@ -76,6 +76,11 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     /// contract. A precompile-less-chain fallback would be a separate, separately-audited contract,
     /// not a per-deployer knob.
     address public constant P256_VERIFIER = address(0x100);
+
+    /// secp256r1 (P256) curve order n. High-S signatures (s > n/2) are malleable, and the 0x100
+    /// precompile does NOT reject them — so this authorizer enforces low-S itself (see _verifyP256).
+    uint256 internal constant _P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
+
     address public owner;
 
     mapping(bytes32 credId => Credential) public credentials;
@@ -327,6 +332,9 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     }
 
     function _verifyP256(bytes32 hash, bytes32 r, bytes32 s, uint256 x, uint256 y) internal view returns (bool) {
+        // Reject high-S (malleable) signatures: the 0x100 precompile accepts them, so we enforce
+        // low-S here to match the spec and prevent signature malleability.
+        if (uint256(s) > _P256_N / 2) return false;
         bytes memory input = abi.encodePacked(hash, r, s, bytes32(x), bytes32(y));
         (bool ok, bytes memory out) = P256_VERIFIER.staticcall(input);
         return ok && out.length == 32 && bytes32(out) == bytes32(uint256(1));

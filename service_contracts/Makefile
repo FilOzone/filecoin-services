@@ -82,10 +82,14 @@ check-tools:
 	fi
 	@which forge >/dev/null 2>&1 || (echo "Error: forge is required but not installed" && exit 1)
 
-# Test target
+# Test target.
+# MultiMethodAuthorizer.t.sol exercises the secp256r1 precompile at 0x100, which revm only implements
+# at evm_version=osaka (RIP-7212 / EIP-7951). The default evm_version reserves 0x100 but returns empty,
+# so that suite is run separately at osaka; every other test stays on the repo default.
 .PHONY: test
 test:
-	forge test --via-ir -vv
+	forge test --via-ir -vv --no-match-contract MultiMethodAuthorizerTest
+	FOUNDRY_EVM_VERSION=osaka forge test --via-ir -vv --match-contract MultiMethodAuthorizerTest
 
 # Clean build artifacts
 .PHONY: clean
