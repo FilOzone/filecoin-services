@@ -40,9 +40,9 @@ $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
 $(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
 	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
 
-# JSON compilation for library (depends on the source library)
-$(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol
-	forge build --via-ir $^
+# The library imports the generated storage layout.
+$(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol $(LAYOUT)
+	forge build --via-ir $<
 
 # View contract generation (depends on JSON)
 $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
@@ -59,7 +59,8 @@ gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
 
 # Force regeneration - useful when things are broken
 .PHONY: force-gen
-force-gen: clean-gen gen
+force-gen: clean-gen
+	$(MAKE) gen
 	@echo "Force regeneration complete"
 
 # Clean generated files only

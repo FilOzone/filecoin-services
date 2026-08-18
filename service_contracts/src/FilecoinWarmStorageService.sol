@@ -822,7 +822,7 @@ contract FilecoinWarmStorageService is
         uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
         updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance, false);
 
-        // Store metadata for each new piece
+        // Validate and emit metadata for each new piece. Metadata is indexed off-chain from this event.
         for (uint256 i = 0; i < pieceData.length; i++) {
             uint256 pieceId = firstAdded + i;
             string[] memory pieceKeys = metadataKeys[i];
@@ -843,19 +843,17 @@ contract FilecoinWarmStorageService is
                 string memory value = pieceValues[k];
 
                 require(
-                    bytes(dataSetPieceMetadata[dataSetId][pieceId][key]).length == 0,
-                    Errors.DuplicateMetadataKey(dataSetId, key)
-                );
-                require(
                     bytes(key).length <= MAX_KEY_LENGTH,
                     Errors.MetadataKeyExceedsMaxLength(k, MAX_KEY_LENGTH, bytes(key).length)
                 );
+                bytes32 keyHash = keccak256(bytes(key));
+                for (uint256 j = 0; j < k; j++) {
+                    require(keyHash != keccak256(bytes(pieceKeys[j])), Errors.DuplicateMetadataKey(dataSetId, key));
+                }
                 require(
                     bytes(value).length <= MAX_VALUE_LENGTH,
                     Errors.MetadataValueExceedsMaxLength(k, MAX_VALUE_LENGTH, bytes(value).length)
                 );
-                dataSetPieceMetadata[dataSetId][pieceId][key] = string(value);
-                dataSetPieceMetadataKeys[dataSetId][pieceId].push(key);
             }
             emit PieceAdded(dataSetId, pieceId, pieceData[i], pieceKeys, pieceValues);
         }

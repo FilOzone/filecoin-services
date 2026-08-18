@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Newly added piece metadata is no longer persisted in FWSS contract storage and must instead be indexed from `PieceAdded` events. The `getPieceMetadata` and `getAllPieceMetadata` helpers have been removed from `FilecoinWarmStorageServiceStateView`, the state library, and their published ABIs. Existing on-chain piece metadata remains eligible for cleanup when pieces are removed ([#577](https://github.com/FilOzone/filecoin-services/pull/577)).
+
 ## [1.3.1] - FWSS + ServiceProviderRegistry Upgrade
 
 This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.3.1 and ServiceProviderRegistry to v1.2.0.
