@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Errors} from "../Errors.sol";
+import {IDataSetAuthorizer} from "../interfaces/IDataSetAuthorizer.sol";
 
 /// @title SignatureVerificationLib
 /// @notice Library for EIP-712 signature verification and metadata hashing
@@ -290,5 +291,71 @@ library SignatureVerificationLib {
                 Errors.InvalidSignature(payer, recoveredSigner)
             );
         }
+    }
+
+    /// @notice Gas ceiling for the authorizer subcall.
+    /// @dev Bounds what an untrusted authorizer can burn on the caller's behalf. EIP-150 forwards at
+    ///      most 63/64 of the remaining gas, so this only binds when the caller supplies more.
+    uint256 internal constant AUTHORIZER_GAS_LIMIT = 150_000_000;
+
+    /// @dev Transient-storage slot for the authorizer reentrancy latch. This library is DELEGATECALL'd,
+    ///      so the slot lives in the calling contract's (FWSS's) transient storage and the latch therefore
+    ///      spans the whole FWSS call frame, not just this library invocation.
+    bytes32 internal constant AUTHORIZER_REENTRANCY_SLOT =
+        keccak256("filecoin-warm-storage-service.authorizer.reentrancy.guard");
+
+    /// @dev Reentrancy latch for the authorizer subcall. `_lockAuthorizer` takes the latch before the body;
+    ///      it clears after `_;` (a `return` in the body still runs post-`_;` code) and, on any revert, via
+    ///      transient-storage rollback — so a second legitimate authorization in the same transaction is not
+    ///      blocked. The pre-`_;` check-and-set is hoisted so the modifier body stays call-only
+    ///      (forge-lint `unwrapped-modifier-logic`).
+    modifier nonReentrantAuthorizer() {
+        _lockAuthorizer();
+        _;
+        _setAuthorizerLock(false);
+    }
+
+    /// @notice Delegates the authorization decision for an operation to the data set's authorizer.
+    /// @dev Called only when an authorizer is attached: it is the sole gate. FWSS forwards the raw signature
+    ///      plus the operation's raw data (`operationData`) and lets the authorizer recover and decide.
+    ///      Reverts with `Unauthorized` if the authorizer returns false. `isAuthorized` is an untrusted,
+    ///      state-mutating CALL: it is gas-capped and wrapped in a transient reentrancy latch so an
+    ///      authorizer cannot re-enter the authorization path while its own decision is in flight.
+    function verifyAuthorizer(
+        address payer,
+        bytes calldata signature,
+        bytes32 digest,
+        bytes32 operation,
+        uint256 dataSetId,
+        address authorizer,
+        bytes calldata operationData
+    ) public nonReentrantAuthorizer returns (address) {
+        require(
+            IDataSetAuthorizer(authorizer).isAuthorized{gas: AUTHORIZER_GAS_LIMIT}(
+                dataSetId, payer, operation, digest, signature, operationData
+            ),
+            Errors.Unauthorized(payer, operation, digest, signature)
+        );
+        return payer;
+    }
+
+    function _authorizerLocked() private view returns (bool locked) {
+        bytes32 slot = AUTHORIZER_REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            locked := tload(slot)
+        }
+    }
+
+    function _setAuthorizerLock(bool value) private {
+        bytes32 slot = AUTHORIZER_REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            tstore(slot, value)
+        }
+    }
+
+    /// @dev Pre-`_;` half of `nonReentrantAuthorizer`, split out to keep the modifier body call-only.
+    function _lockAuthorizer() private {
+        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
+        _setAuthorizerLock(true);
     }
 }
