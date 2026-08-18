@@ -316,3 +316,76 @@ addCredential(0 /*MachineP256*/, x, y, type(uint256).max /*WILDCARD_DATASET*/, 0
   data sets the payer has not attached it to.
 - **The signature envelope proves authentication only:** never treat a valid signature as
   authorization without the registry check.
+
+## 9. Reproducible build & code identity
+
+Storage providers' authorizer allowlists match by the `keccak256` of contract **runtime bytecode**,
+so standard/blessed contracts require reproducible builds in order to match a default configuration.
+
+Codehash is **not** affected by deployment: the contract has no immutables and no constructor
+arguments that touch runtime code, so anyone can deploy it — any network, any account — and get
+byte-identical runtime code. **Reproduce the build exactly as below, then you can deploy and manage your own instance for your datasets.**
+
+### Pinned build inputs
+
+NOTE: <COMMIT_SHA> and <CANONICAL_HASH> will be updated in a fast-follow PR AFTER this is merged to main.
+
+| Input | Value |
+|---|---|
+| Source | `src/examples/MultiMethodAuthorizer.sol` @ commit `<COMMIT_SHA>` |
+| solc | **0.8.30** (exact) |
+| `via_ir` | **true** |
+| optimizer | **enabled**, `runs = 200` |
+| `evm_version` | **prague** — the solc-0.8.30 default and the version FWSS compiles to (FEVM-compatible). Pinning is mandatory; an unpinned / `osaka` / `cancun` build yields a different hash. |
+| `bytecode_hash` | **none** |
+| `cbor_metadata` | **false** — removes the trailing CBOR metadata blob so the raw runtime hash equals what an SP computes (no tail to strip). |
+
+### Build (self-contained; independent of the repo's default `foundry.toml`)
+
+```bash
+cd service_contracts
+git checkout <COMMIT_SHA>          # pin the exact source
+
+FOUNDRY_BYTECODE_HASH=none \
+FOUNDRY_CBOR_METADATA=false \
+FOUNDRY_EVM_VERSION=prague \
+FOUNDRY_OPTIMIZER=true \
+FOUNDRY_OPTIMIZER_RUNS=200 \
+FOUNDRY_VIA_IR=true \
+forge build --use 0.8.30 --skip '*.s.sol' --skip 'test/**' --force
+```
+
+### Derive the code identity
+
+```bash
+cast keccak 0x$(jq -r '.deployedBytecode.object' \
+  out/MultiMethodAuthorizer.sol/MultiMethodAuthorizer.json | sed 's/^0x//')
+```
+
+Canonical runtime codehash for this source + these inputs:
+
+```
+<CANONICAL_HASH>>
+```
+
+Sanity checks on the artifact: `deployedBytecode.immutableReferences` must be `{}` (no immutables),
+and the bytecode must **not** end in the solc CBOR marker `…0033` (no metadata tail).
+
+### Verify a deployed instance
+
+```bash
+cast code <AUTHORIZER_ADDRESS> --rpc-url <RPC> | xargs -I{} cast keccak {}
+# must equal the canonical codehash above
+```
+
+### Registry entry
+
+```toml
+[[Subsystems.PDPAuthorizers.ApprovedAuthorizers]]
+  Label    = "MultiMethodAuthorizer v1 (standalone)"
+  Kind     = "codehash"
+  CodeHash = "0x433290b66652670f1930fe8e12b8a64f648a580355d08ca39fce44f69b43e955"
+  Notes    = "solc 0.8.30, via_ir, runs=200, evm_version=prague, no metadata; source @ <COMMIT_SHA>; audit: <ref>"
+```
+
+Toolchain used to produce the hash above: `forge`/`cast` 1.5.1, solc 0.8.30, based on code at commit `<COMMIT_SHA>`
