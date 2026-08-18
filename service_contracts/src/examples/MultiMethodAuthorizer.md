@@ -4,7 +4,7 @@ Formal description of the wire format ("UCAN"-style delegation envelope) and the
 registry entries consumed by `MultiMethodAuthorizer`, an `IDataSetAuthorizer` for
 filecoin-services PR #536. This document is normative for anyone building a client that signs
 for this authorizer or a contract that interoperates with it. Source of truth:
-[`src/MultiMethodAuthorizer.sol`](src/MultiMethodAuthorizer.sol).
+[`MultiMethodAuthorizer.sol`](MultiMethodAuthorizer.sol).
 
 ---
 
@@ -15,9 +15,18 @@ The authorizer splits a delegated authorization into two halves:
 - **Authentication** travels in the *signature envelope* that FWSS forwards to `isAuthorized`
   (Sections 4–5). It proves possession of a P256 key — and, for the passkey method, proves a
   human was *present and verified* (biometric) at signing time. It carries **no policy**.
-- **Authorization** ("what may this key do") lives in the **on-chain credential registry**
-  (Section 3), managed by the data set's owner. Each credential enumerates exactly which
-  operations it may authorize, plus an optional expiry and an enable/disable switch.
+- **Authorization** ("what may this key do, on which data set") lives in the **on-chain
+  credential registry** (Section 3), managed by the authorizer's owner. Each credential names
+  a data set (`WILDCARD_DATASET` = every data set this authorizer is attached to) and
+  enumerates exactly which operations it may authorize, plus an optional expiry and an
+  enable/disable switch.
+
+**Deployment model:** one clone (or standalone deploy) **per client**, not per data set. The
+client attaches that same address as authorizer on each FWSS data set they want it to govern,
+then scopes grants in the registry. Wildcard credentials do **not** auto-attach the authorizer
+to data sets — FWSS attachment is still per data set; wildcard only means "once attached, this
+key may act." This is the cheap on-chain analogue of the session-key registry (one P256 grant
+across all the client's data sets) while still allowing per-data-set grants on the same clone.
 
 ### 1.1 Relationship to UCAN
 
@@ -26,9 +35,9 @@ capability and caveats are held **on-chain**, not inside a signed token. Mapping
 
 | UCAN concept | Here |
 |---|---|
-| Issuer (`iss`) | The data set **owner** (payer) who calls `addCredential` |
-| Audience (`aud`) | The registered **credential** (a P256 public key `(x, y)`) |
-| Capability (`can` / resource) | An `(operation, dataSetId)` pair — `allowedOp[credId][operation]` on-chain |
+| Issuer (`iss`) | The authorizer **owner** (the client) who calls `addCredential` |
+| Audience (`aud`) | The registered **credential** (a P256 public key `(x, y)` scoped to a `dataSetId`) |
+| Capability (`can` / resource) | An `(operation, dataSetId)` pair — `allowedOp[credId][operation]` plus the credential's `dataSetId` (or `WILDCARD_DATASET`) |
 | Caveats | `expiry`, `enabled`, and (passkey) `rpIdHash` + user-verification requirement |
 | Proof / invocation signature | The P256 signature over the FWSS operation `digest` (Section 6) |
 
@@ -63,24 +72,31 @@ operation digest itself. Replay/ordering is **not** in this envelope; it is FWSS
 ```solidity
 enum Method { MachineP256 /*0*/, Passkey /*1*/ }
 
+uint256 constant WILDCARD_DATASET = type(uint256).max; // all attached data sets
+
 struct Credential {
-    Method  method;    // 0 = machine key, 1 = WebAuthn passkey
-    uint256 pubKeyX;   // P256 public key X
-    uint256 pubKeyY;   // P256 public key Y
-    bytes32 rpIdHash;  // Passkey only: expected SHA-256(rpId); 0 = accept any origin
-    uint64  expiry;    // unix seconds; 0 = no expiry
-    bool    enabled;   // owner kill-switch
+    Method  method;     // 0 = machine key, 1 = WebAuthn passkey
+    uint256 pubKeyX;    // P256 public key X
+    uint256 pubKeyY;    // P256 public key Y
+    uint256 dataSetId;  // specific FWSS data set, or WILDCARD_DATASET
+    bytes32 rpIdHash;   // Passkey only: expected SHA-256(rpId); 0 = accept any origin
+    uint64  expiry;     // unix seconds; 0 = no expiry
+    bool    enabled;    // owner kill-switch
 }
 
 mapping(bytes32 credId => Credential) credentials;
 mapping(bytes32 credId => mapping(bytes32 operation => bool)) allowedOp;
 ```
 
-**Credential identifier** (deterministic, collision-resistant per method+key):
+**Credential identifier** (deterministic, collision-resistant per method+key+data set):
 
 ```
-credId = keccak(abi.encode(Method method, uint256 x, uint256 y))
+credId = keccak(abi.encode(Method method, uint256 x, uint256 y, uint256 dataSetId))
 ```
+
+The same P256 key may therefore be registered more than once — e.g. AddPieces-only on data set
+7, and a separate wildcard credential for Terminate on every attached data set. Those are two
+`credId`s.
 
 **Operation identifiers** — the FWSS EIP-712 struct type-hashes (the `operation` argument of
 `isAuthorized` and the key of `allowedOp`):
@@ -92,12 +108,20 @@ credId = keccak(abi.encode(Method method, uint256 x, uint256 y))
 | TerminateService | `0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc` |
 
 **Owner API** (only the authorizer's `owner`; see PLAYBOOK for cast invocations):
-`addCredential(method, x, y, rpIdHash, expiry, ops[])`, `setOperationAllowed`,
+`addCredential(method, x, y, dataSetId, rpIdHash, expiry, ops[])`, `setOperationAllowed`,
 `setCredentialEnabled`, `setCredentialExpiry`, `removeCredential(credId, ops[])`,
 `transferOwnership`.
 
-A credential **authorizes** `operation` iff:
-`enabled ∧ (expiry == 0 ∨ block.timestamp ≤ expiry) ∧ allowedOp[credId][operation]`.
+A credential **authorizes** `(operation, dataSetId)` iff:
+`enabled ∧ (expiry == 0 ∨ block.timestamp ≤ expiry) ∧ allowedOp[credId][operation]`
+**and** the credential's `dataSetId` is either the requested data set or `WILDCARD_DATASET`.
+
+Lookup in `isAuthorized` prefers the **specific** credential `(method, x, y, dataSetId)` and, if
+that does not currently authorize the operation, falls back to the **wildcard** credential
+`(method, x, y, WILDCARD_DATASET)`. The two grants are a union: a wildcard AddPieces still
+authorizes AddPieces on data set 7 even if a specific credential for data set 7 exists but
+does not list AddPieces. To deny a key on one data set while keeping a wildcard, remove the
+wildcard and register per-data-set credentials instead.
 
 ### 3.1 `expiry` and time on FEVM
 
@@ -152,7 +176,7 @@ payload = abi.encode(uint256 x, uint256 y, bytes32 r, bytes32 s)
 
 | Field | Type | Meaning |
 |---|---|---|
-| `x`, `y` | `uint256` | P256 public key; selects the credential `credId = keccak(abi.encode(0, x, y))` |
+| `x`, `y` | `uint256` | P256 public key; selects `credId = keccak(abi.encode(0, x, y, dataSetId))` (then wildcard fallback) |
 | `r`, `s` | `bytes32` | P256 signature over the FWSS `digest` (low-`s`) |
 
 Signed message = the FWSS `digest` **verbatim**.
@@ -165,7 +189,7 @@ payload = abi.encode(uint256 x, uint256 y, bytes authenticatorData, string clien
 
 | Field | Type | Meaning |
 |---|---|---|
-| `x`, `y` | `uint256` | P256 public key; selects `credId = keccak(abi.encode(1, x, y))` |
+| `x`, `y` | `uint256` | P256 public key; selects `credId = keccak(abi.encode(1, x, y, dataSetId))` (then wildcard fallback) |
 | `authenticatorData` | `bytes` | WebAuthn authenticator data (≥ 37 bytes) |
 | `clientDataJSON` | `string` | WebAuthn client data JSON |
 | `r`, `s` | `bytes32` | P256 signature over the WebAuthn **message** (below), low-`s` |
@@ -203,13 +227,14 @@ message = H( authenticatorData ‖ H(clientDataJSON) )
 `isAuthorized(dataSetId, payer, operation, digest, signature, operationData)`:
 
 1. Decode the envelope → `(method, payload)`. Unknown `method` ⇒ **revert**.
-2. **Machine (0):** decode `(x, y, r, s)`; `credId = keccak(abi.encode(0, x, y))`.
-   - If credential does not *authorize* `operation` (Section 3) ⇒ return `false`.
+2. Resolve the credential: specific `credId = keccak(abi.encode(method, x, y, dataSetId))` if it
+   currently authorizes `operation` (Section 3); otherwise the wildcard
+   `credId = keccak(abi.encode(method, x, y, WILDCARD_DATASET))`. If neither authorizes ⇒ `false`.
+   (`payer` is not consulted — FWSS attachment is what bound this authorizer to the data set.)
+3. **Machine (0):** decode `(x, y, r, s)`.
    - If `P256Verify(digest, r, s, x, y) ≠ 1` ⇒ return `false`.
    - Else emit `Authorized(credId, operation, MachineP256)`; return `true`.
-3. **Passkey (1):** decode `(x, y, authenticatorData, clientDataJSON, r, s)`;
-   `credId = keccak(abi.encode(1, x, y))`.
-   - If credential does not *authorize* `operation` ⇒ return `false`.
+4. **Passkey (1):** decode `(x, y, authenticatorData, clientDataJSON, r, s)`.
    - If `authenticatorData.length < 37` ⇒ return `false`.
    - If `flags & 0x01 == 0` (no user-present) ⇒ return `false`.
    - If `flags & 0x04 == 0` (**no user-verified / biometric**) ⇒ return `false`.
@@ -253,8 +278,11 @@ signature = abi.encode(uint8(0), payload)             # method 0 + payload
 Registration that makes it pass (owner tx):
 
 ```
-addCredential(0 /*MachineP256*/, x, y, 0 /*rpIdHash n/a*/, 0 /*no expiry*/,
+addCredential(0 /*MachineP256*/, x, y, dataSetId, 0 /*rpIdHash n/a*/, 0 /*no expiry*/,
               [0x954bdc…d183]  /*AddPieces only*/)
+# session-key equivalent — same key, every attached data set:
+addCredential(0 /*MachineP256*/, x, y, type(uint256).max /*WILDCARD_DATASET*/, 0, 0,
+              [0x954bdc…d183])
 ```
 
 ---
@@ -270,5 +298,10 @@ addCredential(0 /*MachineP256*/, x, y, 0 /*rpIdHash n/a*/, 0 /*no expiry*/,
   relying-party origin; `0` accepts any origin and should be used only for testing.
 - **Revocation is on-chain and immediate:** `setCredentialEnabled(credId, false)` disables;
   `removeCredential(credId, ops[])` deletes the entry *and* its `allowedOp` slots (bounded storage).
+- **Wildcard is a union, not a default-deny overlay.** A wildcard credential still authorizes on
+  a data set that also has a more specific credential for the same key. There is no per-data-set
+  exception list — restrict a key by dropping the wildcard and issuing specific grants.
+- **Attachment is still per data set.** `WILDCARD_DATASET` does not make the authorizer apply to
+  data sets the payer has not attached it to.
 - The signature envelope proves authentication only — never treat a valid signature as
   authorization without the registry check.

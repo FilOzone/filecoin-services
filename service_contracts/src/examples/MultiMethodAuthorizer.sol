@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
-// Reference authorizer for the optional per-data-set write ACL (PR #536). Deployable standalone or
-// as an EIP-1167 minimal-proxy clone; built here with the repo's deterministic profile
-// (solc 0.8.30, via_ir, optimizer_runs=200, bytecode_hash="none") so it has a stable code identity
-// for SP allowlisting. See MultiMethodAuthorizer.md for the wire-format spec.
+// Reference authorizer for the optional per-data-set write ACL (PR #536). One clone (or standalone
+// deploy) per client: the payer attaches the same address to each of their data sets and scopes
+// credentials by dataSetId (WILDCARD_DATASET = all of them). Built with the repo's deterministic
+// profile (solc 0.8.30, via_ir, optimizer_runs=200, bytecode_hash="none") so it has a stable code
+// identity for SP allowlisting. See MultiMethodAuthorizer.md for the wire-format spec.
 //
 // The IDataSetAuthorizer interface is inlined so this compiles before #536 merges. Once #536 lands,
 // replace this inline copy with an import of the canonical `src/interfaces/IDataSetAuthorizer.sol`.
@@ -33,8 +34,11 @@ interface IDataSetAuthorizer {
 ///                                     flag. Delegation to a human on a device ("you are + you have").
 ///
 ///         The owner keeps a registry of credentials. Each credential declares its method, its P256
-///         public key, and exactly which operations it may authorize — so e.g. a machine agent can
-///         AddPieces while only your passkey may Terminate. The `signature` blob is:
+///         public key, the data set it applies to (`WILDCARD_DATASET` = every data set this
+///         authorizer is attached to), and exactly which operations it may authorize — so e.g. a
+///         machine agent can AddPieces on one data set while only your passkey may Terminate, or a
+///         single P256 key can act across all data sets like the session-key registry. The
+///         `signature` blob is:
 ///
 ///           abi.encode(uint8 method, bytes payload)
 ///             machine payload = abi.encode(uint256 x, uint256 y, bytes32 r, bytes32 s)
@@ -50,10 +54,15 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         Method method;
         uint256 pubKeyX;
         uint256 pubKeyY;
+        uint256 dataSetId; // specific data set, or WILDCARD_DATASET for every attached data set
         bytes32 rpIdHash; // Passkey only: expected RP-ID hash (0 = accept any origin)
         uint64 expiry; // 0 = no expiry
         bool enabled;
     }
+
+    /// Sentinel dataSetId: credential applies to every data set this authorizer is attached to.
+    /// Chosen as type(uint256).max so it cannot collide with a real FWSS data set id.
+    uint256 public constant WILDCARD_DATASET = type(uint256).max;
 
     /// The on-chain secp256r1 verifier, hardwired to the 0x100 precompile. Kept a `constant` (not a
     /// constructor immutable) so every deployment has identical runtime bytecode — a stable code
@@ -67,7 +76,7 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     mapping(bytes32 credId => mapping(bytes32 operation => bool)) public allowedOp;
 
     event OwnershipTransferred(address indexed from, address indexed to);
-    event CredentialSet(bytes32 indexed credId, Method method, uint256 pubKeyX, uint256 pubKeyY);
+    event CredentialSet(bytes32 indexed credId, Method method, uint256 pubKeyX, uint256 pubKeyY, uint256 dataSetId);
     event CredentialEnabled(bytes32 indexed credId, bool enabled);
     event OperationAllowed(bytes32 indexed credId, bytes32 indexed operation, bool allowed);
     event Authorized(bytes32 indexed credId, bytes32 indexed operation, Method method);
@@ -89,7 +98,9 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     }
 
     /// One-shot initializer for EIP-1167 minimal-proxy clones, which never run the constructor (so
-    /// their `owner` starts at zero). No-op / reverts once set, so a standalone deploy can't be
+    /// their `owner` starts at zero). Intended model: one clone per client, initialized to that
+    /// client's owner address; the client then attaches this same address as authorizer on each
+    /// data set they want it to govern. Reverts once set, so a standalone deploy can't be
     /// re-initialized. Deploy and initialize a clone atomically (factory/script) so a fresh clone
     /// can't be initialize-front-run.
     function initialize(address initialOwner) external {
@@ -102,18 +113,28 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     // ───────────────────────── owner: registry management ─────────────────────────
 
     /// Register (or overwrite) a credential and the operations it may authorize.
+    /// `dataSetId` is a specific FWSS data set, or `WILDCARD_DATASET` to authorize on every data
+    /// set this authorizer is attached to (session-key-registry equivalent for P256).
     function addCredential(
         Method method,
         uint256 pubKeyX,
         uint256 pubKeyY,
+        uint256 dataSetId,
         bytes32 rpIdHash,
         uint64 expiry,
         bytes32[] calldata ops
     ) external onlyOwner returns (bytes32 credId) {
-        credId = credentialId(method, pubKeyX, pubKeyY);
-        credentials[credId] =
-            Credential({method: method, pubKeyX: pubKeyX, pubKeyY: pubKeyY, rpIdHash: rpIdHash, expiry: expiry, enabled: true});
-        emit CredentialSet(credId, method, pubKeyX, pubKeyY);
+        credId = credentialId(method, pubKeyX, pubKeyY, dataSetId);
+        credentials[credId] = Credential({
+            method: method,
+            pubKeyX: pubKeyX,
+            pubKeyY: pubKeyY,
+            dataSetId: dataSetId,
+            rpIdHash: rpIdHash,
+            expiry: expiry,
+            enabled: true
+        });
+        emit CredentialSet(credId, method, pubKeyX, pubKeyY, dataSetId);
         emit CredentialEnabled(credId, true);
         for (uint256 i = 0; i < ops.length; i++) {
             allowedOp[credId][ops[i]] = true;
@@ -152,8 +173,8 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         owner = to;
     }
 
-    function credentialId(Method method, uint256 x, uint256 y) public pure returns (bytes32) {
-        return keccak256(abi.encode(method, x, y));
+    function credentialId(Method method, uint256 x, uint256 y, uint256 dataSetId) public pure returns (bytes32) {
+        return keccak256(abi.encode(method, x, y, dataSetId));
     }
 
     /// Helper for clients: base64url(challenge) as it must appear in WebAuthn clientDataJSON.
@@ -164,21 +185,41 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     // ───────────────────────────── authorization ─────────────────────────────
 
     /// @inheritdoc IDataSetAuthorizer
-    function isAuthorized(uint256, address, bytes32 operation, bytes32 digest, bytes calldata signature, bytes calldata)
-        external
-        returns (bool)
-    {
+    function isAuthorized(
+        uint256 dataSetId,
+        address,
+        bytes32 operation,
+        bytes32 digest,
+        bytes calldata signature,
+        bytes calldata
+    ) external returns (bool) {
         (uint8 method, bytes memory payload) = abi.decode(signature, (uint8, bytes));
-        if (method == uint8(Method.MachineP256)) return _machine(operation, digest, payload);
-        if (method == uint8(Method.Passkey)) return _passkey(operation, digest, payload);
+        if (method == uint8(Method.MachineP256)) return _machine(dataSetId, operation, digest, payload);
+        if (method == uint8(Method.Passkey)) return _passkey(dataSetId, operation, digest, payload);
         revert UnknownMethod(method); // malformed → revert (bubbles); in-scope failures → false
     }
 
+    /// Resolve a credential for this key on `dataSetId`, falling back to the wildcard credential.
+    /// Returns the matching credId (specific preferred) and whether it currently authorizes `operation`.
+    function _lookupCred(Method method, uint256 x, uint256 y, uint256 dataSetId, bytes32 operation)
+        internal
+        view
+        returns (bytes32 credId, bool allowed)
+    {
+        credId = credentialId(method, x, y, dataSetId);
+        if (_credentialAllows(credId, operation)) return (credId, true);
+        if (dataSetId != WILDCARD_DATASET) {
+            credId = credentialId(method, x, y, WILDCARD_DATASET);
+            if (_credentialAllows(credId, operation)) return (credId, true);
+        }
+        return (credId, false);
+    }
+
     /// method 0 — machine key signs the FWSS digest directly.
-    function _machine(bytes32 operation, bytes32 digest, bytes memory payload) internal returns (bool) {
+    function _machine(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload) internal returns (bool) {
         (uint256 x, uint256 y, bytes32 r, bytes32 s) = abi.decode(payload, (uint256, uint256, bytes32, bytes32));
-        bytes32 credId = credentialId(Method.MachineP256, x, y);
-        if (!_credentialAllows(credId, operation)) return false;
+        (bytes32 credId, bool allowed) = _lookupCred(Method.MachineP256, x, y, dataSetId, operation);
+        if (!allowed) return false;
         if (!_verifyP256(digest, r, s, x, y)) return false;
         emit Authorized(credId, operation, Method.MachineP256);
         return true;
@@ -186,12 +227,12 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
 
     /// method 1 — WebAuthn passkey: verify presence+verification and that the assertion's
     /// challenge is exactly the FWSS digest, then P256-verify the WebAuthn message.
-    function _passkey(bytes32 operation, bytes32 digest, bytes memory payload) internal returns (bool) {
+    function _passkey(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload) internal returns (bool) {
         (uint256 x, uint256 y, bytes memory authData, string memory clientDataJSON, bytes32 r, bytes32 s) =
             abi.decode(payload, (uint256, uint256, bytes, string, bytes32, bytes32));
-        bytes32 credId = credentialId(Method.Passkey, x, y);
+        (bytes32 credId, bool allowed) = _lookupCred(Method.Passkey, x, y, dataSetId, operation);
+        if (!allowed) return false;
         Credential storage c = credentials[credId];
-        if (!_credentialAllows(credId, operation)) return false;
 
         // authenticatorData: rpIdHash(32) | flags(1) | signCount(4) | ...
         if (authData.length < 37) return false;
