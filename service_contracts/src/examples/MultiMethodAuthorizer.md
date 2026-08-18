@@ -1,8 +1,8 @@
-# MultiMethodAuthorizer — authorization envelope & credential registry (formal spec)
+# MultiMethodAuthorizer — P256 direct sig and passkeys with fine-grained operation delegation in FWSS.
 
-Formal description of the wire format ("UCAN"-style delegation envelope) and the on-chain
-registry entries consumed by `MultiMethodAuthorizer`, an `IDataSetAuthorizer` for
-filecoin-services PR #536. This document is normative for anyone building a client that signs
+This document contains a formal description of the wire format and the on-chain registry
+entries consumed by `MultiMethodAuthorizer`, an `IDataSetAuthorizer` for
+filecoin-services. This document is normative for anyone building a client that signs
 for this authorizer or a contract that interoperates with it. Source of truth:
 [`MultiMethodAuthorizer.sol`](MultiMethodAuthorizer.sol).
 
@@ -21,31 +21,26 @@ The authorizer splits a delegated authorization into two halves:
   enumerates exactly which operations it may authorize, plus an optional expiry and an
   enable/disable switch.
 
-**Deployment model:** one clone (or standalone deploy) **per client**, not per data set. The
+**Recommended deployment model:** one clone (or standalone deploy) **per client**. The
 client attaches that same address as authorizer on each FWSS data set they want it to govern,
-then scopes grants in the registry. Wildcard credentials do **not** auto-attach the authorizer
-to data sets — FWSS attachment is still per data set; wildcard only means "once attached, this
-key may act." This is the cheap on-chain analogue of the session-key registry (one P256 grant
-across all the client's data sets) while still allowing per-data-set grants on the same clone.
+then grants per-dataset permissions in its registry, with a wildcard option to apply to all
+datasets with this Authorizer attached. 
 
-### 1.1 Relationship to UCAN
+### On-chain verification
 
-This is a UCAN-style *delegation* — a key other than the payer is authorized to act — but the
-capability and caveats are held **on-chain**, not inside a signed token. Mapping to UCAN terms:
+This is a standard *delegation* — a key other than the payer is authorized to act — but the
+capability and caveats are held **on-chain**, not inside a signed token. 
 
-| UCAN concept | Here |
-|---|---|
-| Issuer (`iss`) | The authorizer **owner** (the client) who calls `addCredential` |
-| Audience (`aud`) | The registered **credential** (a P256 public key `(x, y)` scoped to a `dataSetId`) |
-| Capability (`can` / resource) | An `(operation, dataSetId)` pair — `allowedOp[credId][operation]` plus the credential's `dataSetId` (or `WILDCARD_DATASET`) |
-| Caveats | `expiry`, `enabled`, and (passkey) `rpIdHash` + user-verification requirement |
-| Proof / invocation signature | The P256 signature over the FWSS operation `digest` (Section 6) |
+Consequence: unlike a token-carried delegation such as UCAN, EIP-712 voucher, or JWT, **there is
+no off-chain capability object to parse or revoke** — delegation is granted and revoked by owner
+transactions (`addCredential` /`removeCredential` / `setCredentialEnabled`), and the "challenge"
+being signed for Passkey operations is the FWSS operation digest itself. Replay/ordering is **not**
+in this envelope; it is FWSS's responsibility (AddPieces: per-payer nonce; Terminate: terminal-state
+guard).
 
-Consequence: unlike a token-carried UCAN, **there is no off-chain capability object to parse or
-revoke** — delegation is granted and revoked by owner transactions (`addCredential` /
-`removeCredential` / `setCredentialEnabled`), and the "challenge" being signed is the FWSS
-operation digest itself. Replay/ordering is **not** in this envelope; it is FWSS's responsibility
-(see [PLAYBOOK reviewer note](../../repos/filecoin_stuff/synapse-sdk/examples/authz/PLAYBOOK.md)).
+Since all this happens in SP-proxied calls there is nothing special required for Curio (or
+equivalent node software) to do: if FWSS's `isAuthorized` fails then the operation reverts
+and the call errors out.
 
 ---
 
@@ -72,7 +67,7 @@ operation digest itself. Replay/ordering is **not** in this envelope; it is FWSS
 ```solidity
 enum Method { MachineP256 /*0*/, Passkey /*1*/ }
 
-uint256 constant WILDCARD_DATASET = type(uint256).max; // all attached data sets
+uint256 constant WILDCARD_DATASET = type(uint256).max; // should never clash
 
 struct Credential {
     Method  method;     // 0 = machine key, 1 = WebAuthn passkey
@@ -81,7 +76,7 @@ struct Credential {
     uint256 dataSetId;  // specific FWSS data set, or WILDCARD_DATASET
     bytes32 rpIdHash;   // Passkey only: expected SHA-256(rpId); 0 = accept any origin
     uint64  expiry;     // unix seconds; 0 = no expiry
-    bool    enabled;    // owner kill-switch
+    bool    enabled;    // temporary revocation
     bytes32[] ops;      // live grant list (source of truth for remove / replace)
 }
 
@@ -97,7 +92,8 @@ credId = keccak(abi.encode(Method method, uint256 x, uint256 y, uint256 dataSetI
 
 The same P256 key may therefore be registered more than once — e.g. AddPieces-only on data set
 7, and a separate wildcard credential for Terminate on every attached data set. Those are two
-`credId`s.
+`credId`s. If taking advantage of this capability ensure you delete all credentials for a key
+if you wish to revoke it.
 
 **Operation identifiers** — the FWSS EIP-712 struct type-hashes (the `operation` argument of
 `isAuthorized` and the key of `allowedOp`):
@@ -108,28 +104,42 @@ The same P256 key may therefore be registered more than once — e.g. AddPieces-
 | SchedulePieceRemovals | `0x5415701e313bb627e755b16924727217bb356574fe20e7061442c200b0822b22` |
 | TerminateService | `0x522bd88a11de1cdc6574394dde7a21ae488ff13e16e7408d0ea721dd8479dffc` |
 
-**Owner API** (only the authorizer's `owner`; see PLAYBOOK for cast invocations):
+**Owner API** (only the authorizer's `owner` can call):
 `addCredential(method, x, y, dataSetId, rpIdHash, expiry, ops[])` — registers, or **replaces**
 the grant set if the same `(method, key, dataSetId)` already exists;
-`setOperationAllowed(credId, operation, allowed)` — the only incremental permission edit;
-`setCredentialEnabled`, `setCredentialExpiry`, `removeCredential(credId)` — wipes the credential
-*and* every granted op (callers do not list ops); `transferOwnership`.
+`setOperationAllowed(credId, operation, allowed)` — edit permissions on an existing credential;
+`setCredentialExpiry`, `setCredentialEnabled`, `removeCredential(credId)` — increasingly powerful revocation operations; 
+`transferOwnership` (rejects `address(0)`).
+
+**Usage** — deploy once per client, attach per data set, then grant keys:
+
+```
+auth = new MultiMethodAuthorizer()                    # owner = msg.sender (constructor)
+fwss.setDataSetAuthorizer(dataSetId, address(auth))   # must be called by dataset payer
+
+# machine key, AddPieces on one data set only:
+auth.addCredential(0, x, y, dataSetId, 0, 0, [ADD_PIECES_TYPEHASH])
+
+# or grant that key addPieces on every data set this authorizer is attached to:
+auth.addCredential(0, x, y, type(uint256).max, 0, 0, [ADD_PIECES_TYPEHASH])
+
+# client envelope for a machine signature over the FWSS digest:
+signature = abi.encode(uint8(0), abi.encode(x, y, r, s))
+```
 
 A credential **authorizes** `(operation, dataSetId)` iff:
 `enabled ∧ (expiry == 0 ∨ block.timestamp ≤ expiry) ∧ allowedOp[credId][operation]`
 **and** the credential's `dataSetId` is either the requested data set or `WILDCARD_DATASET`.
 
-Lookup in `isAuthorized` prefers the **specific** credential `(method, x, y, dataSetId)` and, if
-that does not currently authorize the operation, falls back to the **wildcard** credential
-`(method, x, y, WILDCARD_DATASET)`. The two grants are a union: a wildcard AddPieces still
-authorizes AddPieces on data set 7 even if a specific credential for data set 7 exists but
-does not list AddPieces. To deny a key on one data set while keeping a wildcard, remove the
-wildcard and register per-data-set credentials instead.
+Lookup in `isAuthorized` prefers a **specific** credential for the dataSet/key pair 
+`(method, x, y, dataSetId)` if available, then falls back to **wildcard** credentials
+for that key `(method, x, y, WILDCARD_DATASET)`. 
 
 ### 3.1 `expiry` and time on FEVM
 
-`expiry` is compared against `block.timestamp`. The FEVM does **not** read wall-clock time — it
-synthesizes `block.timestamp` deterministically from the tipset height:
+For ease of use and clarity of intention, expiries are expressed as real-world times and dates, not
+block numbers or epochs or the like. When chcking expiry, `expiry` is compared against 
+`block.timestamp`, synthesized deterministically from the tipset height:
 
 ```
 block.timestamp = genesis_unix + epoch × blocktime      # blocktime = 30 s mainnet, 4 s on the FOC devnet
@@ -143,10 +153,7 @@ Consequences an implementer must respect:
   is safe to gate on — a stronger guarantee than Ethereum's proposer-influenced timestamp.
 - **Anchor `expiry` to chain time, not the local clock.** Chain time only advances when blocks are
   produced, so on a devnet (or any idle chain) it can diverge from real wall-clock by hours. Clients
-  MUST set `expiry = <latest block.timestamp> + duration_seconds`, never `Date.now()/1000 + duration`.
-- Epoch-native alternative: a variant could gate on `block.number` (which on FEVM is the Filecoin
-  epoch) and express `expiry` in epochs, removing the genesis/blocktime conversion. This contract
-  uses `block.timestamp` for EVM-tooling legibility; the semantics above are identical either way.
+  SHOULD set `expiry = <latest block.timestamp> + duration_seconds`, not `Date.now()/1000 + duration`.
 
 ---
 
@@ -255,11 +262,13 @@ subclasses that want content-level ACLs (e.g. metadata/path gating).
 ### 6.1 What the digest binds (and what it doesn't)
 
 The `digest` is FWSS's EIP-712 operation digest. It cryptographically binds the operation to its
-parameters (for AddPieces: `clientDataSetId, nonce, pieceData[], metadata` — including a per-payer
-nonce). The passkey path additionally binds `digest` into the WebAuthn challenge, so a passkey
-assertion cannot be re-pointed at a different operation. This authorizer keeps **no nonce of its
-own**; replay protection for each operation is FWSS's (AddPieces: client nonce; Terminate:
-terminal-state guard; SchedulePieceRemovals: delegated upstream — flagged for reviewers).
+parameters (for AddPieces: `clientDataSetId, nonce, pieceData[], metadata`). The passkey path
+additionally binds `digest` into the WebAuthn challenge, so a passkey assertion cannot be
+re-pointed at a different operation. 
+
+This authorizer keeps **no nonce of its own**; replay protection for each operation is FWSS's
+(AddPieces: client nonce; Terminate: terminal-state guard; SchedulePieceRemovals: delegated
+upstream).
 
 ---
 
@@ -294,7 +303,7 @@ addCredential(0 /*MachineP256*/, x, y, type(uint256).max /*WILDCARD_DATASET*/, 0
 
 - **Always low-`s` normalize** before sending; the precompile rejects high-`s`, which reads as an
   auth failure.
-- **UV is load-bearing** for the passkey method: it is the on-chain evidence that a human verified
+- **UV is required** for the passkey method: it is the on-chain evidence that a human verified
   (Touch ID / secure enclave). A client that requests a non-verifying assertion (`userVerification`
   ≠ `required`) will be rejected (`flags & 0x04 == 0`).
 - **rpIdHash pinning:** set a non-zero `rpIdHash` on passkey credentials to bind them to a specific
@@ -302,11 +311,8 @@ addCredential(0 /*MachineP256*/, x, y, type(uint256).max /*WILDCARD_DATASET*/, 0
 - **Revocation is on-chain and immediate:** `setCredentialEnabled(credId, false)` disables;
   `removeCredential(credId)` deletes the entry *and* every `allowedOp` slot on its grant list.
   Re-adding the same key starts from a clean grant set. `addCredential` replace is also a full
-  replace — it does not union with leftover ops.
-- **Wildcard is a union, not a default-deny overlay.** A wildcard credential still authorizes on
-  a data set that also has a more specific credential for the same key. There is no per-data-set
-  exception list — restrict a key by dropping the wildcard and issuing specific grants.
+  replace — it does not union with leftover ops. `transferOwnership` rejects `address(0)`.
 - **Attachment is still per data set.** `WILDCARD_DATASET` does not make the authorizer apply to
   data sets the payer has not attached it to.
-- The signature envelope proves authentication only — never treat a valid signature as
+- **The signature envelope proves authentication only:** never treat a valid signature as
   authorization without the registry check.

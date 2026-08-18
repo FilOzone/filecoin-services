@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.21;
 
 // Reference authorizer for the optional per-data-set write ACL (PR #536). One clone (or standalone
@@ -7,8 +7,10 @@ pragma solidity ^0.8.21;
 // profile (solc 0.8.30, via_ir, optimizer_runs=200, bytecode_hash="none") so it has a stable code
 // identity for SP allowlisting. See MultiMethodAuthorizer.md for the wire-format spec.
 //
-// The IDataSetAuthorizer interface is inlined so this compiles before #536 merges. Once #536 lands,
-// replace this inline copy with an import of the canonical `src/interfaces/IDataSetAuthorizer.sol`.
+// IDataSetAuthorizer is inlined (not imported) so this example compiles on its own, independent of
+// whether PR #536 has merged. Merge order is up to maintainers: once
+// `src/interfaces/IDataSetAuthorizer.sol` exists on the target branch, replace this copy with that
+// import. Keep the function signature identical to #536's interface.
 
 /// filecoin-services PR #536 IDataSetAuthorizer (state-mutating CALL).
 interface IDataSetAuthorizer {
@@ -86,6 +88,7 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     error NotOwner();
     error UnknownMethod(uint8 method);
     error UnknownCredential(bytes32 credId);
+    error ZeroOwner();
 
     modifier onlyOwner() {
         if (msg.sender != owner) revert NotOwner();
@@ -179,6 +182,7 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     }
 
     function transferOwnership(address to) external onlyOwner {
+        if (to == address(0)) revert ZeroOwner();
         emit OwnershipTransferred(owner, to);
         owner = to;
     }

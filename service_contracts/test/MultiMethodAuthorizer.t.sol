@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
 import {Test} from "forge-std/Test.sol";
@@ -204,10 +204,18 @@ contract MultiMethodAuthorizerTest is Test {
         clone.initialize(address(0));
     }
 
-    function test_transferOwnershipToZeroLocksRegistry() public {
+    function test_transferOwnershipRejectsZero() public {
+        vm.expectRevert(MultiMethodAuthorizer.ZeroOwner.selector);
         auth.transferOwnership(address(0));
-        assertEq(auth.owner(), address(0));
+        assertEq(auth.owner(), address(this));
+    }
+
+    function test_transferOwnershipMovesAdmin() public {
+        auth.transferOwnership(stranger);
+        assertEq(auth.owner(), stranger);
         vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        _addMachine(1, _ops(ADD_PIECES));
+        vm.prank(stranger);
         _addMachine(1, _ops(ADD_PIECES));
     }
 
