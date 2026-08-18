@@ -3413,6 +3413,33 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(this));
     }
 
+    function testPieceMetadataRejectsDuplicateKeys() public {
+        uint256 pieceId = 42;
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        keys[0] = "filename";
+        values[0] = "dog.jpg";
+        keys[1] = "filename";
+        values[1] = "cat.jpg";
+
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file")));
+
+        string[][] memory allKeys = new string[][](1);
+        string[][] memory allValues = new string[][](1);
+        allKeys[0] = keys;
+        allValues[0] = values;
+        bytes memory encodedData = abi.encode(pieceId + 6000, allKeys, allValues, FAKE_SIGNATURE);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.DuplicateMetadataKey.selector, dataSetId, keys[1]));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+    }
+
     function testPieceMetadataCannotBeCalledWithMoreValues() public {
         uint256 pieceId = 42;
 

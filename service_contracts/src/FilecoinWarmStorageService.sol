@@ -846,6 +846,10 @@ contract FilecoinWarmStorageService is
                     bytes(key).length <= MAX_KEY_LENGTH,
                     Errors.MetadataKeyExceedsMaxLength(k, MAX_KEY_LENGTH, bytes(key).length)
                 );
+                bytes32 keyHash = keccak256(bytes(key));
+                for (uint256 j = 0; j < k; j++) {
+                    require(keyHash != keccak256(bytes(pieceKeys[j])), Errors.DuplicateMetadataKey(dataSetId, key));
+                }
                 require(
                     bytes(value).length <= MAX_VALUE_LENGTH,
                     Errors.MetadataValueExceedsMaxLength(k, MAX_VALUE_LENGTH, bytes(value).length)
