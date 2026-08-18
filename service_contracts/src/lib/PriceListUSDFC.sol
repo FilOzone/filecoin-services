@@ -17,7 +17,7 @@ uint256 constant EPOCHS_PER_MONTH = EPOCHS_PER_DAY * 30;
 
 // USDFC has 18 decimals, so $1 = 10**18 (a.k.a. ether)
 uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-uint256 constant DATASET_FEE_PER_MONTH = (24 * 10 ** TOKEN_DECIMALS) / 1000; // 0.024 USDFC
+uint256 constant DATASET_FEE_PER_MONTH = (2 * 10 ** TOKEN_DECIMALS) / 10; // 0.20 USDFC
 uint256 constant DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH / EPOCHS_PER_MONTH;
 
 uint256 constant CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
@@ -28,17 +28,23 @@ uint256 constant DEFAULT_CACHE_MISS_LOCKUP_AMOUNT = (3 * 10 ** TOKEN_DECIMALS) /
 
 uint256 constant SERVICE_COMMISSION_BPS = 0;
 
-// Operation fees (one-time, paid from the lifecycle reserve on the PDP rail)
+// Operation fees (one-time, paid from the lifecycle reserve on the PDP rail).
+// Recalibrated 2026-08: 10x headroom at the post-FIP-0115-era effective gas price
+// (1.912M attoFIL/gas, tx-weighted average 2026-05-27..2026-08-17), gas measured on the
+// with-metadata path, plus a 150M-gas budget for the per-data-set authorizer (#536)
+// in every authorizer-gated fee. Derivation: docs/pricing-rationale.md section 3.
 uint256 constant CREATE_DATA_SET_FEE = (25 * 10 ** TOKEN_DECIMALS) / 1000; // $0.025 per dataset created
-uint256 constant ADD_PIECES_BASE_FEE = (5 * 10 ** TOKEN_DECIMALS) / 10000; // $0.0005 base per addPieces call
-uint256 constant ADD_PIECES_PER_PIECE_FEE = (3 * 10 ** TOKEN_DECIMALS) / 10000; // $0.0003 per piece added
-uint256 constant SCHEDULE_PIECE_REMOVALS_FEE = (2 * 10 ** TOKEN_DECIMALS) / 1000; // $0.002 per schedulePieceRemovals call
-uint256 constant TERMINATE_FEE = (112 * 10 ** TOKEN_DECIMALS) / 100000; // $0.00112 per user-initiated termination
+uint256 constant ADD_PIECES_BASE_FEE = (8 * 10 ** TOKEN_DECIMALS) / 1000; // $0.008 base per addPieces call (incl. authorizer budget)
+uint256 constant ADD_PIECES_PER_PIECE_FEE = (3 * 10 ** TOKEN_DECIMALS) / 1000; // $0.003 per piece added
+uint256 constant SCHEDULE_PIECE_REMOVALS_FEE = (7 * 10 ** TOKEN_DECIMALS) / 1000; // $0.007 per schedulePieceRemovals call (incl. authorizer budget)
+uint256 constant TERMINATE_FEE = (6 * 10 ** TOKEN_DECIMALS) / 1000; // $0.006 per user-initiated termination (incl. authorizer budget)
 
-// Lifecycle reserve: fixed lockup on the PDP rail covering per-op fees during wind-down
-uint256 constant LIFECYCLE_RESERVE_TARGET = (10 * 10 ** TOKEN_DECIMALS) / 100; // $0.10
-// Replenish when reserve drops below this; ~25 ops of headroom before we top up again
-uint256 constant REPLENISH_THRESHOLD = (5 * 10 ** TOKEN_DECIMALS) / 1000; // $0.005
+// Lifecycle reserve: fixed lockup on the PDP rail covering per-op fees during wind-down.
+// Scaled 10x with the 2026-08 fee recalibration to preserve the original ops-of-headroom
+// ratios (a single max-batch addPieces now drains ~$0.131).
+uint256 constant LIFECYCLE_RESERVE_TARGET = 1 * 10 ** TOKEN_DECIMALS; // $1.00
+// Replenish when reserve drops below this; ~7 max-batch addPieces calls of headroom before top-up
+uint256 constant REPLENISH_THRESHOLD = (5 * 10 ** TOKEN_DECIMALS) / 100; // $0.05
 
 /**
  * @notice Calculate a per-epoch rate based on total storage size
