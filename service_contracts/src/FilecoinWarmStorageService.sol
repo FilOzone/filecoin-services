@@ -307,8 +307,12 @@ contract FilecoinWarmStorageService is
     uint256 private deprecatedStoragePricePerTibPerMonth;
     uint256 private deprecatedMinimumStorageRatePerMonth;
 
-    // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
+    // Piece IDs awaiting metadata cleanup; consumed as PDPVerifier processes removal batches.
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
+
+    // True after PDPVerifier invalidates the current challenge for a removal-driven rollover.
+    // The existing proving deadline and proof status remain unchanged until rollover completes.
+    mapping(uint256 dataSetId => bool) private provingPeriodRolloverPending;
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
@@ -725,6 +729,7 @@ contract FilecoinWarmStorageService is
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
         delete provenThisPeriod[dataSetId];
+        delete provingPeriodRolloverPending[dataSetId];
         if (activation != 0) {
             uint256 lastPeriod = _provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
             uint256 lastSlot = lastPeriod >> 8;
@@ -743,7 +748,7 @@ contract FilecoinWarmStorageService is
         }
         delete dataSetMetadataKeys[dataSetId];
 
-        processScheduledPieceMetadataRemovals(dataSetId);
+        processScheduledPieceMetadataRemovals(dataSetId, scheduledPieceMetadataRemovals[dataSetId].length);
 
         // Complete cleanup
         delete dataSetInfo[dataSetId];
@@ -890,11 +895,52 @@ contract FilecoinWarmStorageService is
             .replenishReserveIfNeeded(info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending);
         info.pendingOneTimePayments = newPending;
 
-        // Queue piece IDs for metadata cleanup at nextProvingPeriod
+        // Mirror PDP's removal queue so each processed suffix can clean up the same metadata.
         uint256[] storage scheduled = scheduledPieceMetadataRemovals[dataSetId];
         for (uint256 i = 0; i < pieceIds.length; i++) {
             scheduled.push(pieceIds[i]);
         }
+    }
+
+    function piecesRemoved(uint256 dataSetId, uint256 removalCount) external onlyPDPVerifier {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+
+        uint256 deadline = provingDeadlines[dataSetId];
+        if (
+            deadline != NO_PROVING_DEADLINE && !provenThisPeriod[dataSetId] && !provingPeriodRolloverPending[dataSetId]
+                && block.number <= deadline
+        ) {
+            revert Errors.PieceRemovalNotAllowed(dataSetId, deadline, block.number);
+        }
+
+        uint256 pendingRemovalCount = scheduledPieceMetadataRemovals[dataSetId].length;
+        if (removalCount == 0 || removalCount > pendingRemovalCount) {
+            revert Errors.InvalidPieceRemovalCount(dataSetId, pendingRemovalCount, removalCount);
+        }
+
+        processScheduledPieceMetadataRemovals(dataSetId, removalCount);
+
+        uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
+        updatePaymentRates(dataSetId, info, leafCount, info.pendingOneTimePayments, info.lifecycleReserveBalance, false);
+    }
+
+    function provingPeriodRolloverStarted(uint256 dataSetId) external onlyPDPVerifier {
+        requirePaymentNotBeyondEndEpoch(dataSetId);
+        require(dataSetInfo[dataSetId].pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+
+        uint256 deadline = provingDeadlines[dataSetId];
+        require(deadline != NO_PROVING_DEADLINE, Errors.ProvingNotStarted(dataSetId));
+        require(!provingPeriodRolloverPending[dataSetId], Errors.ProvingPeriodRolloverAlreadyStarted(dataSetId));
+
+        uint256 previousDeadline = deadline - maxProvingPeriod;
+        require(
+            block.number > previousDeadline,
+            Errors.NextProvingPeriodAlreadyCalled(dataSetId, previousDeadline, block.number)
+        );
+
+        provingPeriodRolloverPending[dataSetId] = true;
     }
 
     // possession proven checks for correct challenge count and reverts if too low
@@ -956,6 +1002,7 @@ contract FilecoinWarmStorageService is
 
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
+            require(!provingPeriodRolloverPending[dataSetId], Errors.ProvingPeriodRolloverAlreadyStarted(dataSetId));
             uint256 firstDeadline;
             if (activationEpoch == 0) {
                 // First activation establishes the lifetime proving-period origin.
@@ -982,8 +1029,8 @@ contract FilecoinWarmStorageService is
             }
             provingDeadlines[dataSetId] = firstDeadline;
 
-            // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
-            if (processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
+            // Rate was already set in piecesAdded. Processed removals update it in piecesRemoved.
+            if (pending > 0) {
                 updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance, false);
             }
 
@@ -1031,11 +1078,11 @@ contract FilecoinWarmStorageService is
         provingDeadlines[dataSetId] = nextDeadline;
         provenThisPeriod[dataSetId] = false;
 
-        // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
-        bool hadRemovals = processScheduledPieceMetadataRemovals(dataSetId);
-        if (hadRemovals || pending > 0) {
+        // Additions and processed removals update the rate in their own callbacks.
+        if (pending > 0) {
             updatePaymentRates(dataSetId, info, leafCount, pending, reserveBalance, false);
         }
+        delete provingPeriodRolloverPending[dataSetId];
     }
 
     /**
@@ -1236,17 +1283,16 @@ contract FilecoinWarmStorageService is
         info.pendingOneTimePayments = 0;
     }
 
-    function processScheduledPieceMetadataRemovals(uint256 dataSetId) internal returns (bool hadRemovals) {
+    function processScheduledPieceMetadataRemovals(uint256 dataSetId, uint256 removalCount) internal {
         uint256[] storage pieceIds = scheduledPieceMetadataRemovals[dataSetId];
         uint256 len = pieceIds.length;
-        if (len == 0) {
-            return false;
-        }
+        if (removalCount == 0) return;
 
         mapping(uint256 => string[]) storage pieceMetadataKeys = dataSetPieceMetadataKeys[dataSetId];
         mapping(uint256 => mapping(string => string)) storage pieceMetadata = dataSetPieceMetadata[dataSetId];
 
-        for (uint256 i = 0; i < len; i++) {
+        uint256 firstRemoved = len - removalCount;
+        for (uint256 i = firstRemoved; i < len; i++) {
             uint256 pieceId = pieceIds[i];
             string[] storage metadataKeys = pieceMetadataKeys[pieceId];
             mapping(string => string) storage metadata = pieceMetadata[pieceId];
@@ -1257,8 +1303,9 @@ contract FilecoinWarmStorageService is
             delete pieceMetadataKeys[pieceId];
         }
 
-        delete scheduledPieceMetadataRemovals[dataSetId];
-        return true;
+        for (uint256 i = 0; i < removalCount; i++) {
+            pieceIds.pop();
+        }
     }
 
     /**

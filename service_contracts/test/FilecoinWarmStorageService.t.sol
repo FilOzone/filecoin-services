@@ -16,7 +16,10 @@ import {IFilecoinServiceMetadata} from "../src/IFilecoinServiceMetadata.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {
+    SCHEDULED_PIECE_METADATA_REMOVALS_SLOT,
+    PROVING_PERIOD_ROLLOVER_PENDING_SLOT
+} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/Rails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
@@ -504,6 +507,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
         bytes32 elementSlot = bytes32(uint256(keccak256(abi.encode(slot))) + index);
         return uint256(vm.load(address(pdpServiceWithPayments), elementSlot));
+    }
+
+    function _provingPeriodRolloverPending(uint256 dataSetId) internal view returns (bool) {
+        bytes32 slot = keccak256(abi.encode(dataSetId, PROVING_PERIOD_ROLLOVER_PENDING_SLOT));
+        return uint256(vm.load(address(pdpServiceWithPayments), slot)) != 0;
     }
 
     function testCreateDataSetCreatesRail() public {
@@ -1254,7 +1262,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
     }
 
-    function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
+    function testUpdatePaymentRates_PiecesRemovedUsesRawSize() public {
         address payer = makeAddr("rawSizeRemovalClient");
         mockUSDFC.safeTransfer(payer, 100e18);
         vm.startPrank(payer);
@@ -1291,11 +1299,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
 
-        // Advance past the deadline and call nextProvingPeriod with the post-removal leaf count.
+        // Advance past the deadline and process the removal with the post-removal leaf count.
         vm.roll(firstDeadline + 1);
-        mockPDPVerifier.nextProvingPeriod(
-            pdpServiceWithPayments, dataSetId, firstDeadline + provingPeriod, perPieceLeaves, ""
-        );
+        mockPDPVerifier.piecesRemoved(dataSetId, pieceIds.length, perPieceLeaves, address(pdpServiceWithPayments));
 
         uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
@@ -1308,6 +1314,77 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             1,
             "post-removal ratio between raw and Fr32 rates is 127/128"
         );
+    }
+
+    function testRemovalDrivenRolloverPreservesPeriodUntilCompletion() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Rollover");
+        Cids.Cid[] memory pieces = new Cids.Cid[](2);
+        pieces[0] = Cids.CommPv2FromDigest(0, 35, keccak256("rollover_piece_0"));
+        pieces[1] = Cids.CommPv2FromDigest(0, 35, keccak256("rollover_piece_1"));
+        uint256 pieceLeafCount = Cids.leafCount(0, 35);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            pdpServiceWithPayments,
+            dataSetId,
+            0,
+            pieces,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        uint256 previousDeadline = block.number;
+        uint256 deadline = previousDeadline + maxProvingPeriod;
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, deadline, pieceLeafCount * pieces.length, ""
+        );
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 1;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.PieceRemovalNotAllowed.selector, dataSetId, deadline, block.number)
+        );
+        mockPDPVerifier.piecesRemoved(dataSetId, 1, pieceLeafCount, address(pdpServiceWithPayments));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.NextProvingPeriodAlreadyCalled.selector, dataSetId, previousDeadline, block.number
+            )
+        );
+        mockPDPVerifier.provingPeriodRolloverStarted(dataSetId, address(pdpServiceWithPayments));
+
+        vm.roll(block.number + 1);
+        vm.recordLogs();
+        mockPDPVerifier.provingPeriodRolloverStarted(dataSetId, address(pdpServiceWithPayments));
+        Vm.Log[] memory beginLogs = vm.getRecordedLogs();
+        bytes32 faultSignature = keccak256("FaultRecord(uint256,uint256,uint256)");
+        for (uint256 i = 0; i < beginLogs.length; i++) {
+            assertTrue(beginLogs[i].topics.length == 0 || beginLogs[i].topics[0] != faultSignature);
+        }
+
+        assertTrue(_provingPeriodRolloverPending(dataSetId));
+        assertEq(viewContract.provingDeadline(dataSetId), deadline);
+
+        mockPDPVerifier.piecesRemoved(dataSetId, 1, pieceLeafCount, address(pdpServiceWithPayments));
+        assertTrue(_provingPeriodRolloverPending(dataSetId));
+        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 0);
+
+        vm.expectEmit(true, false, false, true, address(pdpServiceWithPayments));
+        emit FilecoinWarmStorageService.FaultRecord(dataSetId, 1, deadline);
+        mockPDPVerifier.nextProvingPeriod(
+            pdpServiceWithPayments, dataSetId, deadline + maxProvingPeriod, pieceLeafCount, ""
+        );
+
+        assertFalse(_provingPeriodRolloverPending(dataSetId));
+        assertEq(viewContract.provingDeadline(dataSetId), deadline + maxProvingPeriod);
     }
 
     function testGetDataSetSizeInBytes_ReturnsRawSize() public view {
@@ -5962,6 +6039,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.piecesScheduledRemove(
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
+        mockPDPVerifier.piecesRemoved(dataSetId, pieceIds.length, 0, address(pdpServiceWithPayments));
 
         // Advance past the first deadline; PDPVerifier signals the dataset is now empty by
         // passing challengeEpoch = NO_CHALLENGE_SCHEDULED (0).
@@ -6020,10 +6098,10 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.piecesScheduledRemove(
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
+        mockPDPVerifier.piecesRemoved(dataSetId, pieceIds.length, 0, address(pdpServiceWithPayments));
 
         vm.roll(firstDeadline + 1);
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
-        mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
 
         assertEq(viewContract.provingDeadline(dataSetId), 0, "Empty dataset should suspend proving");
         assertEq(
@@ -6145,8 +6223,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.piecesScheduledRemove(
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
+        mockPDPVerifier.piecesRemoved(dataSetId, pieceIds.length, 0, address(pdpServiceWithPayments));
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
-        mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
 
         pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("reactivated-piece"));
         makeSignaturePass(client);
@@ -6224,8 +6302,8 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.piecesScheduledRemove(
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
+        mockPDPVerifier.piecesRemoved(dataSetId, pieceIds.length, 0, address(pdpServiceWithPayments));
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, 0, 0, "");
-        mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
 
         pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("reactivated-piece"));
         makeSignaturePass(client);
@@ -6522,12 +6600,12 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
     }
 
     /**
-     * @notice Test: Piece metadata removal is deferred until nextProvingPeriod
+     * @notice Test: Piece metadata removal is deferred until the scheduled deletion is processed
      * @dev Verifies that:
      *      1. Metadata persists after piecesScheduledRemove
-     *      2. Metadata is cleaned up after nextProvingPeriod
+     *      2. Metadata is cleaned up by piecesRemoved
      */
-    function testPieceMetadataRemovalDeferredToNextProvingPeriod() public {
+    function testPieceMetadataRemovalDeferredUntilProcessed() public {
         // Setup: Create dataset with piece metadata
         uint256 pieceId = 0;
         string[] memory keys = new string[](2);
@@ -6567,22 +6645,19 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
         assertEq(storedKeys.length, 2, "Metadata should persist after piecesScheduledRemove");
 
-        // Move to next proving period
+        // Process after the missed proving deadline.
         vm.roll(block.number + provingPeriod + 1);
-
-        // Call nextProvingPeriod to trigger cleanup
-        uint256 nextDeadline = firstDeadline + provingPeriod;
-        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, nextDeadline, 100, "");
+        mockPDPVerifier.piecesRemoved(setup.dataSetId, pieceIds.length, 0, address(pdpServiceWithPayments));
 
         // Metadata should now be cleaned up
         (storedKeys, storedValues) = viewContract.getAllPieceMetadata(setup.dataSetId, setup.pieceId);
-        assertEq(storedKeys.length, 0, "Metadata should be removed after nextProvingPeriod");
+        assertEq(storedKeys.length, 0, "Metadata should be removed after piecesRemoved");
     }
 
     /**
      * @notice Test: Multiple pieces scheduled for removal are all cleaned up
      */
-    function testMultiplePieceMetadataRemovalAtNextProvingPeriod() public {
+    function testMultiplePieceMetadataRemovalWhenProcessed() public {
         // Create dataset
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Dataset");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
@@ -6629,10 +6704,19 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             assertEq(storedKeys.length, 1, "Metadata should persist for each piece");
         }
 
-        // Move to next proving period and trigger cleanup
+        // Process after the missed proving deadline and trigger cleanup.
         vm.roll(block.number + provingPeriod + 1);
-        uint256 nextDeadline = firstDeadline + provingPeriod;
-        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, nextDeadline, 0, "");
+        mockPDPVerifier.piecesRemoved(dataSetId, 2, 1, address(pdpServiceWithPayments));
+
+        (string[] memory firstPieceKeys,) = viewContract.getAllPieceMetadata(dataSetId, 0);
+        (string[] memory secondPieceKeys,) = viewContract.getAllPieceMetadata(dataSetId, 1);
+        (string[] memory thirdPieceKeys,) = viewContract.getAllPieceMetadata(dataSetId, 2);
+        assertEq(firstPieceKeys.length, 1, "Unprocessed prefix metadata should remain");
+        assertEq(secondPieceKeys.length, 0, "Processed suffix metadata should be removed");
+        assertEq(thirdPieceKeys.length, 0, "Processed suffix metadata should be removed");
+        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 1);
+
+        mockPDPVerifier.piecesRemoved(dataSetId, 1, 0, address(pdpServiceWithPayments));
 
         // Verify all metadata is now cleaned up
         for (uint256 i = 0; i < numPieces; i++) {

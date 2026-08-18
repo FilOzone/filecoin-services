@@ -620,5 +620,26 @@
         }
       }
     }
+  },
+  {
+    "label": "provingPeriodRolloverPending",
+    "slot": "23",
+    "offset": 0,
+    "type": "mapping(uint256 => bool)",
+    "typeDetails": {
+      "label": "mapping(uint256 => bool)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "uint256",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "bool",
+        "encoding": "inplace",
+        "numberOfBytes": "1"
+      }
+    }
   }
 ]

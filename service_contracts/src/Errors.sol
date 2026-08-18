@@ -138,6 +138,22 @@ library Errors {
     /// @param nowBlock The current block number
     error NextProvingPeriodAlreadyCalled(uint256 dataSetId, uint256 periodDeadline, uint256 nowBlock);
 
+    /// @notice A proving-period rollover has already been started for the data set
+    /// @param dataSetId The data set ID
+    error ProvingPeriodRolloverAlreadyStarted(uint256 dataSetId);
+
+    /// @notice Piece removals are not allowed while the current proof is still open
+    /// @param dataSetId The data set ID
+    /// @param deadline The current proving deadline
+    /// @param nowBlock The current block number
+    error PieceRemovalNotAllowed(uint256 dataSetId, uint256 deadline, uint256 nowBlock);
+
+    /// @notice The processed-removal count does not match the listener's pending queue
+    /// @param dataSetId The data set ID
+    /// @param pendingCount The listener's pending-removal count
+    /// @param removalCount The count reported by PDPVerifier
+    error InvalidPieceRemovalCount(uint256 dataSetId, uint256 pendingCount, uint256 removalCount);
+
     /// @notice Old service provider address does not match data set payee
     /// @param dataSetId The data set ID
     /// @param expected The expected (current) payee address

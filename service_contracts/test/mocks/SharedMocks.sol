@@ -6,6 +6,11 @@ import {Cids} from "@pdp/Cids.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+interface PDPRemovalListener {
+    function piecesRemoved(uint256 dataSetId, uint256 removalCount) external;
+    function provingPeriodRolloverStarted(uint256 dataSetId) external;
+}
+
 // Mock implementation of the USDFC token
 contract MockERC20 is IERC20, IERC20Metadata {
     string private _name = "USD Filecoin";
@@ -101,6 +106,7 @@ contract MockPDPVerifier {
     mapping(uint256 => address) public dataSetServiceProviders;
     // Track simple leaf counts per data set for tests (approximate via bytes length)
     mapping(uint256 => uint256) public dataSetLeafCount;
+    mapping(uint256 => bool) public provingLifecycleActive;
 
     event DataSetCreated(uint256 indexed setId, address indexed owner);
     event DataSetServiceProviderChanged(
@@ -134,6 +140,7 @@ contract MockPDPVerifier {
 
         delete dataSetServiceProviders[setId];
         delete dataSetLeafCount[setId];
+        delete provingLifecycleActive[setId];
         emit DataSetDeleted(setId, 0);
     }
 
@@ -183,8 +190,12 @@ contract MockPDPVerifier {
         uint256 leafCount,
         bytes calldata extraData
     ) external {
-        require(dataSetLeafCount[dataSetId] > 0 || leafCount > 0, "can only start proving once leaves are added");
+        require(
+            dataSetLeafCount[dataSetId] > 0 || leafCount > 0 || provingLifecycleActive[dataSetId],
+            "can only start proving once leaves are added"
+        );
         listenerAddr.nextProvingPeriod(dataSetId, challengeEpoch, leafCount, extraData);
+        provingLifecycleActive[dataSetId] = challengeEpoch != 0;
     }
 
     function setDataSetLeafCount(uint256 dataSetId, uint256 count) external {
@@ -239,5 +250,16 @@ contract MockPDPVerifier {
         if (listenerAddr != address(0)) {
             PDPListener(listenerAddr).piecesScheduledRemove(dataSetId, pieceIds, extraData);
         }
+    }
+
+    function piecesRemoved(uint256 dataSetId, uint256 removalCount, uint256 remainingLeafCount, address listenerAddr)
+        external
+    {
+        dataSetLeafCount[dataSetId] = remainingLeafCount;
+        PDPRemovalListener(listenerAddr).piecesRemoved(dataSetId, removalCount);
+    }
+
+    function provingPeriodRolloverStarted(uint256 dataSetId, address listenerAddr) external {
+        PDPRemovalListener(listenerAddr).provingPeriodRolloverStarted(dataSetId);
     }
 }

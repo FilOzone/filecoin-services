@@ -551,6 +551,24 @@
   },
   {
     "type": "function",
+    "name": "piecesRemoved",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "removalCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "piecesScheduledRemove",
     "inputs": [
       {
@@ -593,6 +611,19 @@
       },
       {
         "name": "challengeCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "provingPeriodRolloverStarted",
+    "inputs": [
+      {
+        "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1756,6 +1787,27 @@
   },
   {
     "type": "error",
+    "name": "InvalidPieceRemovalCount",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pendingCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "removalCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "MaxProvingPeriodZero",
     "inputs": []
   },
@@ -1942,6 +1994,27 @@
   },
   {
     "type": "error",
+    "name": "PieceRemovalNotAllowed",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "nowBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ProofAlreadySubmitted",
     "inputs": [
       {
@@ -2027,6 +2100,17 @@
       },
       {
         "name": "nowBlock",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProvingPeriodRolloverAlreadyStarted",
+    "inputs": [
+      {
+        "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
       }
