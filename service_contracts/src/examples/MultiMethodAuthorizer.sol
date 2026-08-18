@@ -50,7 +50,10 @@ interface IDataSetAuthorizer {
 /// Replay is handled by FWSS itself (the digest is operation-unique and FWSS enforces its own
 /// nonces / termination state), so this authorizer stays a pure authenticate-and-authorize gate.
 contract MultiMethodAuthorizer is IDataSetAuthorizer {
-    enum Method { MachineP256, Passkey }
+    enum Method {
+        MachineP256,
+        Passkey
+    }
 
     struct Credential {
         Method method;
@@ -230,7 +233,10 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     }
 
     /// method 0 — machine key signs the FWSS digest directly.
-    function _machine(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload) internal returns (bool) {
+    function _machine(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload)
+        internal
+        returns (bool)
+    {
         (uint256 x, uint256 y, bytes32 r, bytes32 s) = abi.decode(payload, (uint256, uint256, bytes32, bytes32));
         (bytes32 credId, bool allowed) = _lookupCred(Method.MachineP256, x, y, dataSetId, operation);
         if (!allowed) return false;
@@ -241,7 +247,10 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
 
     /// method 1 — WebAuthn passkey: verify presence+verification and that the assertion's
     /// challenge is exactly the FWSS digest, then P256-verify the WebAuthn message.
-    function _passkey(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload) internal returns (bool) {
+    function _passkey(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload)
+        internal
+        returns (bool)
+    {
         (uint256 x, uint256 y, bytes memory authData, string memory clientDataJSON, bytes32 r, bytes32 s) =
             abi.decode(payload, (uint256, uint256, bytes, string, bytes32, bytes32));
         (bytes32 credId, bool allowed) = _lookupCred(Method.Passkey, x, y, dataSetId, operation);
