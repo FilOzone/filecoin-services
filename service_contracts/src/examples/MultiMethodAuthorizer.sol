@@ -94,8 +94,12 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     error ZeroOwner();
 
     modifier onlyOwner() {
-        if (msg.sender != owner) revert NotOwner();
+        _onlyOwner();
         _;
+    }
+
+    function _onlyOwner() internal view {
+        if (msg.sender != owner) revert NotOwner();
     }
 
     /// Standalone deploys set the owner here. Constructor logic lives in creation code, not runtime

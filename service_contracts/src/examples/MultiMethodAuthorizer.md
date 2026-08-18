@@ -365,7 +365,7 @@ cast keccak 0x$(jq -r '.deployedBytecode.object' \
 Canonical runtime codehash for this source + these inputs:
 
 ```
-<CANONICAL_HASH>>
+<CANONICAL_HASH>
 ```
 
 Sanity checks on the artifact: `deployedBytecode.immutableReferences` must be `{}` (no immutables),
@@ -384,7 +384,7 @@ cast code <AUTHORIZER_ADDRESS> --rpc-url <RPC> | xargs -I{} cast keccak {}
 [[Subsystems.PDPAuthorizers.ApprovedAuthorizers]]
   Label    = "MultiMethodAuthorizer v1 (standalone)"
   Kind     = "codehash"
-  CodeHash = "0x433290b66652670f1930fe8e12b8a64f648a580355d08ca39fce44f69b43e955"
+  CodeHash = "<CANONICAL_HASH>"
   Notes    = "solc 0.8.30, via_ir, runs=200, evm_version=prague, no metadata; source @ <COMMIT_SHA>; audit: <ref>"
 ```
 
