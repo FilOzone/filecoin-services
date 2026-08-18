@@ -30,7 +30,12 @@ LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageS
 # Build target
 .PHONY: build
 build:
-	forge build --via-ir
+	forge build
+
+# Fast local build target (non-IR, optimizer disabled)
+.PHONY: build-fast
+build-fast:
+	FOUNDRY_PROFILE=fast forge build
 
 # Storage layout generation
 $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
@@ -85,7 +90,12 @@ check-tools:
 # Test target
 .PHONY: test
 test:
-	forge test --via-ir -vv
+	forge test -vv
+
+# Fast local test target (non-IR, optimizer disabled)
+.PHONY: test-fast
+test-fast:
+	FOUNDRY_PROFILE=fast forge test -vv
 
 # Clean build artifacts
 .PHONY: clean

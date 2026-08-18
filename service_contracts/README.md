@@ -28,6 +28,30 @@ This directory contains the smart contracts for different Filecoin services usin
   - `pdp` - PDP verifier contract (from main branch)
 
 
+## Development
+
+Build contracts using the production compiler configuration:
+```sh
+make build
+```
+
+For faster local feedback, use the non-IR, unoptimized profile:
+```sh
+make build-fast
+```
+Fast-profile artifacts are written to `out-fast/` with compiler state in `cache-fast/`. Use the default build for deployment artifacts, gas measurements, and contract-size checks.
+
+Run the test suite using the production compiler configuration:
+```sh
+make test
+```
+
+For faster behavioral test feedback:
+```sh
+make test-fast
+```
+Run `make test` before submitting changes to verify the production compiler configuration.
+
 ## Dataset Status & Lifecycle
 
 Datasets have a simplified two-state lifecycle system to track their operational status:

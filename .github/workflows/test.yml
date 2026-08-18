@@ -36,6 +36,12 @@ jobs:
           cd service_contracts
           make test
 
+      - name: Run fast profile tests
+        run: |
+          export PATH="/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          make test-fast
+
       - name: Generate coverage report
         run: |
           export PATH="/home/runner/.config/.foundry/bin:$PATH"
