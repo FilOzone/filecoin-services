@@ -25,7 +25,17 @@ printf "| %-60s | %-15s | %-15s | %-10s | %-10s | %-18s |\n" "Contract" "Current
 printf "| %-.60s | %-.15s | %-.15s | %-.10s | %-.10s | %-.18s |\n" \
   "------------------------------------------------------------" "---------------" "---------------" "----------" "----------" "------------------"
 
-jq -s --argjson limit "$CONTRACT_SIZE_LIMIT" '
+jq -n --rawfile current "$CURRENT" --rawfile base "$BASE" --argjson limit "$CONTRACT_SIZE_LIMIT" '
+  def sizes:
+    [split("\n")[]
+      | fromjson?
+      | select(
+          type == "object"
+          and length > 0
+          and all(.[]; type == "object" and has("runtime_size"))
+        )]
+    | last
+    | if . == null then error("no contract size JSON found") else . end;
   def bytes_fmt(n): "\(n) bytes";
   def pct(curr; base; is_new):
     if is_new then "New"
@@ -46,14 +56,16 @@ jq -s --argjson limit "$CONTRACT_SIZE_LIMIT" '
     end
     end;
 
-  ((.[0] | keys) + (.[1] | keys) | unique) as $all_keys
+  ($current | sizes) as $current_sizes
+  | ($base | sizes) as $base_sizes
+  | (($current_sizes | keys) + ($base_sizes | keys) | unique) as $all_keys
   | $all_keys[] as $k
   | {
       contract: $k,
-      curr: (.[0][$k].runtime_size // 0),
-      base: (.[1][$k].runtime_size // 0),
-      is_new: (.[1][$k] == null),
-      is_removed: (.[0][$k] == null)
+      curr: ($current_sizes[$k].runtime_size // 0),
+      base: ($base_sizes[$k].runtime_size // 0),
+      is_new: ($base_sizes[$k] == null),
+      is_removed: ($current_sizes[$k] == null)
     }
   | .delta = (.curr - .base)
   | {
@@ -64,7 +76,7 @@ jq -s --argjson limit "$CONTRACT_SIZE_LIMIT" '
       pct: pct(.curr; .base; .is_new),
       status: status(.delta; .curr; .is_new; .is_removed)
     }
-' "$CURRENT" "$BASE" \
+' \
 | jq -r '[.c, .curr, .base, .delta, .pct, .status] | @tsv' \
 | while IFS=$'\t' read -r c curr base delta pct status; do
     printf "| %-60s | %-15s | %-15s | %-10s | %-10s | %-18s |\n" "$c" "$curr" "$base" "$delta" "$pct" "$status"
