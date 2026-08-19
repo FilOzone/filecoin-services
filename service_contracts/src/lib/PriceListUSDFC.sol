@@ -39,12 +39,16 @@ uint256 constant ADD_PIECES_PER_PIECE_FEE = (3 * 10 ** TOKEN_DECIMALS) / 1000; /
 uint256 constant SCHEDULE_PIECE_REMOVALS_FEE = (7 * 10 ** TOKEN_DECIMALS) / 1000; // $0.007 per schedulePieceRemovals call (incl. authorizer budget)
 uint256 constant TERMINATE_FEE = (6 * 10 ** TOKEN_DECIMALS) / 1000; // $0.006 per user-initiated termination (incl. authorizer budget)
 
-// Lifecycle reserve: fixed lockup on the PDP rail covering per-op fees during wind-down.
-// Scaled 10x with the 2026-08 fee recalibration to preserve the original ops-of-headroom
-// ratios (a single max-batch addPieces now drains ~$0.131).
-uint256 constant LIFECYCLE_RESERVE_TARGET = 1 * 10 ** TOKEN_DECIMALS; // $1.00
-// Replenish when reserve drops below this; ~7 max-batch addPieces calls of headroom before top-up
-uint256 constant REPLENISH_THRESHOLD = (5 * 10 ** TOKEN_DECIMALS) / 100; // $0.05
+// Lifecycle reserve: fixed lockup on the PDP rail that pays the one-time fees. Sized to
+// the wind-down budget: after rail termination the lockup cannot be raised, so whatever
+// reserve remains must fund the remaining lifecycle ops -- the consent terminate (0.006)
+// plus ~70 schedulePieceRemovals calls (0.007 each) over the 30-day lockup period.
+// Secondary check: keeps ~3.7 max-batch addPieces calls (0.128 each) of headroom between
+// replenishments, so batch uploads do not pay a lockup-modify (+187M gas measured on
+// mainnet) on every call.
+uint256 constant LIFECYCLE_RESERVE_TARGET = (5 * 10 ** TOKEN_DECIMALS) / 10; // $0.50
+// Replenish when the reserve would drop below this after paying pending fees.
+uint256 constant REPLENISH_THRESHOLD = (25 * 10 ** TOKEN_DECIMALS) / 1000; // $0.025
 
 /**
  * @notice Calculate a per-epoch rate based on total storage size

@@ -24,7 +24,7 @@ FWSS bills in two forms, both in USDFC (18 decimals), both through FilecoinPay r
 | Schedule piece removals | 0.007 USDFC | one-time, per call | SP | `SCHEDULE_PIECE_REMOVALS_FEE` |
 | Terminate service | 0.006 USDFC | one-time | SP | `TERMINATE_FEE` |
 | CDN egress | 7 USDFC / TiB | usage (FilBeam) | SP / FilBeam | `CDN_EGRESS_PRICE_PER_TIB`, `CACHE_MISS_EGRESS_PRICE_PER_TIB` |
-| Lifecycle reserve | 1.00 target / 0.05 replenish | lockup | refunded | `LIFECYCLE_RESERVE_TARGET`, `REPLENISH_THRESHOLD` |
+| Lifecycle reserve | 0.50 target / 0.025 replenish | lockup | refunded | `LIFECYCLE_RESERVE_TARGET`, `REPLENISH_THRESHOLD` |
 
 `N` is the piece count in the `addPieces` call. The reserve is a lockup, not a charge: unused balance returns at rail finalization.
 
@@ -52,7 +52,7 @@ FWSS bills in two forms, both in USDFC (18 decimals), both through FilecoinPay r
 
 **Terminate service: 0.006, consent path only.** Covers the measured consent-termination gas (~148.5M observed on mainnet) plus the authorizer budget (termination is authorizer-gated too). The fee is charged only on the consent-based immediate termination: the SP calls `terminateService` with the payer's signed authorization in `extraData` (the contract requires the caller to be the SP here), which terminates the PDP rail immediately by zeroing its lockup. A no-signature termination (empty `extraData`, callable by either the payer or the SP) takes the non-immediate path and charges nothing. CDN rails persist until data-set deletion rather than being torn down here.
 
-**Lifecycle reserve: how one-time fees are paid.** The PDP rail holds a small fixed-lockup pool (1.00 target, replenished below 0.05 — roughly seven max-batch `addPieces` calls of headroom), so most ops cost one FilecoinPay interaction. Terminating settles the pending one-time payments; since FilecoinPay forbids raising a terminated rail's lockup, the reserve cannot be refilled afterward, so post-termination wind-down ops draw from whatever remains and a client needing more must pre-fund before terminating. Refunded at finalization if unused.
+**Lifecycle reserve: how one-time fees are paid.** The PDP rail holds a fixed-lockup pool (0.50 target, replenished below 0.025), refunded at finalization if unused. It is sized to the wind-down budget: FilecoinPay forbids raising a terminated rail's lockup, so after termination the remaining reserve is the only source for the remaining lifecycle ops — the consent terminate (0.006) plus about 70 `schedulePieceRemovals` calls (0.007 each) over the 30-day lockup period; a client needing more must pre-fund before terminating. During normal operation the target also keeps ~3.7 max-batch `addPieces` calls of headroom between replenishments, so most ops cost one FilecoinPay interaction instead of an extra lockup-modify (+187M gas measured on mainnet, and a live dependency on the payer's unlocked balance) per call. Mainnet check at the current 0.10/0.005 config: a steady app replenishes about every 7 days; 0.50 preserves that cadence at the new fee levels.
 
 ---
 
