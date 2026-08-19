@@ -3797,7 +3797,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        uint256 depositAmount = 1e18 + defaultTotalCDNLockup;
+        uint256 depositAmount = LIFECYCLE_RESERVE_TARGET + 1e18 + defaultTotalCDNLockup;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -3850,7 +3850,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        uint256 depositAmount = 1e18 + defaultTotalCDNLockup;
+        uint256 depositAmount = LIFECYCLE_RESERVE_TARGET + 1e18 + defaultTotalCDNLockup;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();

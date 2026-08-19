@@ -1,10 +1,10 @@
 # FWSS Pricing Rationale
 
-The durable record of the FilecoinWarmStorageService v1.3.0 pricing schedule that shipped with FOC general availability (June 2026): why each fee exists, how it was derived, and how to re-derive it. Resolves [#468](https://github.com/FilOzone/filecoin-services/issues/468); supersedes the pre-GA pricing drafts.
+The durable record of the FilecoinWarmStorageService pricing schedule: why each fee exists, how it was derived, and how to re-derive it. Resolves [#468](https://github.com/FilOzone/filecoin-services/issues/468); supersedes the pre-GA pricing drafts.
 
 The contract is the source of truth, not this document. List prices are `internal constant` literals in [`PriceListUSDFC.sol`](../service_contracts/src/lib/PriceListUSDFC.sol), and the live schedule is readable on-chain via `FilecoinWarmStorageServiceStateView.getPriceList()`. This doc explains those numbers, it does not define them.
 
-> **Calibration caveat (read first).** An SP pays the *effective gas price* (base fee + priority tip) per gas, not the base fee alone. These fees were sized when that effective price was ~250,000 attoFIL/gas, with the base fee pinned at its ~100 floor so the price was essentially the priority-fee floor. [FIP-0115](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0115.md) (NV28, mainnet June 2026) changed the base fee calculation and improved its responsiveness to congestion, so as of writing the trailing-30d average has more than doubled to ~540,000 (spiking to ~650,000+). Because the fees are fixed USDFC constants, at the time of writing the design ~10x safety margin has compressed to ~3-5x for the cost-recovery fees. That compression, and the FIL:USDFC assumption (section 3), are the things to watch on recalibration. See sections 4 and 5.
+> **Calibration basis (read first).** An SP pays the *effective gas price* (base fee + priority tip) per gas, not the base fee alone. [FIP-0115](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0115.md) (NV28, mainnet June 2026) made the base fee responsive to congestion, so the effective price now swings widely (week-scale spikes reach several times the sustained level). The schedule is sized at the tx-weighted mean effective price over the post-FIP-0115 regime — 1.912M attoFIL/gas at the last derivation (2026-08) — with 10x headroom absorbing spikes, gas drift, and FIL:USDFC moves. The price level and the FIL = $1 assumption (section 3) are the two things to watch for recalibration (section 4).
 
 ---
 
@@ -18,13 +18,13 @@ FWSS bills in two forms, both in USDFC (18 decimals), both through FilecoinPay r
 | Component | List price | Kind | Paid to | Constant |
 |---|---|---|---|---|
 | Storage | 2.50 USDFC / TiB / month | streaming | SP | `STORAGE_PRICE_PER_TIB_PER_MONTH` |
-| Proving (per data set) | 0.024 USDFC / month | streaming, additive | SP | `DATASET_FEE_PER_MONTH` |
+| Proving (per data set) | 0.20 USDFC / month | streaming, additive | SP | `DATASET_FEE_PER_MONTH` |
 | Create data set | 0.025 USDFC | one-time | SP | `CREATE_DATA_SET_FEE` |
-| Add pieces | 0.0005 + 0.0003 x N USDFC | one-time, per call | SP | `ADD_PIECES_BASE_FEE`, `ADD_PIECES_PER_PIECE_FEE` |
-| Schedule piece removals | 0.002 USDFC | one-time, per call | SP | `SCHEDULE_PIECE_REMOVALS_FEE` |
-| Terminate service | 0.00112 USDFC | one-time | SP | `TERMINATE_FEE` |
+| Add pieces | 0.008 + 0.003 x N USDFC | one-time, per call | SP | `ADD_PIECES_BASE_FEE`, `ADD_PIECES_PER_PIECE_FEE` |
+| Schedule piece removals | 0.007 USDFC | one-time, per call | SP | `SCHEDULE_PIECE_REMOVALS_FEE` |
+| Terminate service | 0.006 USDFC | one-time | SP | `TERMINATE_FEE` |
 | CDN egress | 7 USDFC / TiB | usage (FilBeam) | SP / FilBeam | `CDN_EGRESS_PRICE_PER_TIB`, `CACHE_MISS_EGRESS_PRICE_PER_TIB` |
-| Lifecycle reserve | 0.10 target / 0.005 replenish | lockup | refunded | `LIFECYCLE_RESERVE_TARGET`, `REPLENISH_THRESHOLD` |
+| Lifecycle reserve | 0.50 target / 0.025 replenish | lockup | refunded | `LIFECYCLE_RESERVE_TARGET`, `REPLENISH_THRESHOLD` |
 
 `N` is the piece count in the `addPieces` call. The reserve is a lockup, not a charge: unused balance returns at rail finalization.
 
@@ -42,45 +42,38 @@ FWSS bills in two forms, both in USDFC (18 decimals), both through FilecoinPay r
 
 **Streaming: storage + proving, additive not floored.** The rate is `naturalRate(bytes) + provingFee`, replacing the old `max(naturalRate, floor)` clamp. Storage scales with TiB; proving gas is flat per data set (5 challenges per period regardless of size), so a per-TiB term plus a fixed per-data-set term fits SP cost better than one clamp. Side effect: empty data sets pay zero, retiring the separate "floor on empty data sets" design.
 
-**Create data set: 0.025, a deliberate over-charge.** Measured `createDataSet` gas is ~500M (~0.0001-0.0003 USDFC as of writing); the 0.025 price is ~90-200x that. Intentional: a soft sybil deterrent replacing the old 0.1 FIL burn at lower magnitude, now paid to the SP (covering its create gas and lifecycle admin, and raising the cost of spamming empty data sets).
+**Create data set: 0.025, a deliberate over-charge.** A soft sybil deterrent replacing the old 0.1 FIL burn at lower magnitude, paid to the SP (covering its create gas and lifecycle admin, and raising the cost of spamming empty data sets). Measured `createDataSet` gas is ~618M; the 10x cost figure is ~0.012, so the deterrent margin has eroded from ~200x at first calibration to ~2x. Held at 0.025; restoring the deterrent is out of scope here.
 
-**Add pieces: base + per-piece.** Two terms for two gas components: fixed per-call overhead (base) and marginal per piece (calldata plus storage). `0.0005 + 0.0003 x N` tracks SP cost from one piece to a full batch. Batches cap at 41 pieces (the per-event data-size limit, not a contract constant; the repo's `OpFees` tests use `BATCH_CAP = 41`), so `N` is bounded. SDK/Curio apply a conservative 40 in practice.
+**Add pieces: base + per-piece.** Two terms for two gas components: fixed per-call overhead (base) and marginal per piece (calldata plus storage). `0.008 + 0.003 x N` tracks SP cost from one piece to a full batch. Batches cap at 41 pieces (the per-event data-size limit, not a contract constant; the repo's `OpFees` tests use `BATCH_CAP = 41`), so `N` is bounded. SDK/Curio apply a conservative 40 in practice.
 
-**Schedule piece removals: 0.002 flat.** Removal gas is awkward: the enqueue emits no event ([FilOzone/pdp#281](https://github.com/FilOzone/pdp/issues/281) proposes adding one) and the delete is processed later inside `nextProvingPeriod`, entangled with proving. A flat 0.002 under-recovers very large batches (`schedulePieceDeletions` is bounded only by PDPVerifier's 2000-deep queue); accepted for simplicity.
+**The authorizer budget rides in the gated fees.** The per-data-set authorizer ([#536](https://github.com/FilOzone/filecoin-services/pull/536)) runs a client-programmable `isAuthorized` subcall inside `addPieces`, `schedulePieceRemovals`, and `terminateService`, hard-capped at 150M gas (`AUTHORIZER_GAS_LIMIT`). The fees are fixed gas pass-throughs, so each gated fee funds the full cap in its base; measured worst case is +146-156M gas per call. Users without an authorizer over-pay by a sub-cent amount.
 
-**Terminate service: 0.00112, consent path only.** The fee is charged only on the consent-based immediate termination: the SP calls `terminateService` with the payer's signed authorization in `extraData` (the contract requires the caller to be the SP here), which terminates the PDP rail immediately by zeroing its lockup. A no-signature termination (empty `extraData`, callable by either the payer or the SP) takes the non-immediate path and charges nothing. The fee reimburses the SP for processing the consented wind-down. CDN rails persist until data-set deletion rather than being torn down here.
+**Schedule piece removals: 0.007.** Covers the enqueue leg plus the authorizer budget. Removal gas splits in two: the enqueue (`schedulePieceDeletions`, ~218M measured on an fvm-anvil fork of mainnet state — it emits no event on mainnet, [FilOzone/pdp#281](https://github.com/FilOzone/pdp/issues/281) proposes one) and the delete, processed later inside `nextProvingPeriod`, entangled with proving and unrecovered by this fee. A flat fee under-recovers very large batches (`schedulePieceDeletions` is bounded only by PDPVerifier's 2000-deep queue); accepted for simplicity.
 
-**Lifecycle reserve: how one-time fees are paid.** The PDP rail holds a small fixed-lockup pool (0.10 target, replenished below 0.005), so most ops cost one FilecoinPay interaction. Terminating settles the pending one-time payments; since FilecoinPay forbids raising a terminated rail's lockup, the reserve cannot be refilled afterward, so post-termination wind-down ops draw from whatever remains and a client needing more must pre-fund before terminating. Refunded at finalization if unused.
+**Terminate service: 0.006, consent path only.** Covers the measured consent-termination gas (~148.5M observed on mainnet) plus the authorizer budget (termination is authorizer-gated too). The fee is charged only on the consent-based immediate termination: the SP calls `terminateService` with the payer's signed authorization in `extraData` (the contract requires the caller to be the SP here), which terminates the PDP rail immediately by zeroing its lockup. A no-signature termination (empty `extraData`, callable by either the payer or the SP) takes the non-immediate path and charges nothing. CDN rails persist until data-set deletion rather than being torn down here.
+
+**Lifecycle reserve: how one-time fees are paid.** The PDP rail holds a fixed-lockup pool (0.50 target, replenished below 0.025), refunded at finalization if unused. It is sized to the wind-down budget: FilecoinPay forbids raising a terminated rail's lockup, so after termination the remaining reserve is the only source for the remaining lifecycle ops — the consent terminate (0.006) plus about 70 `schedulePieceRemovals` calls (0.007 each) over the 30-day lockup period; a client needing more must pre-fund before terminating. During normal operation the target also keeps ~3.7 max-batch `addPieces` calls of headroom between replenishments, so most ops cost one FilecoinPay interaction instead of an extra lockup-modify (+187M gas measured on mainnet, and a live dependency on the payer's unlocked balance) per call. Mainnet check at the current 0.10/0.005 config: a steady app replenishes about every 7 days; 0.50 preserves that cadence at the new fee levels.
 
 ---
 
 ## 3. How the numbers were derived
 
-The listed prices were set in Q2 2026. The methodology, per operation:
+The listed prices were last derived in August 2026. The methodology, per operation:
 
-1. **Measure gas, no metadata**, from the FWSS gas calculator and early foc-observer queries. Supporting rules: subtract in **gas units, not FIL** (base-fee-independent, so a "combo minus baseline" difference holds across sample times); **isolate FWSS** from other PDPVerifier users (`set_id IN (SELECT data_set_id FROM fwss_data_set_created)`); **derive by difference** where an op never runs alone (`createDataSet` = create+add combo - warm add; `addPieces` per-piece = slope over batch size).
-2. **Convert to USDFC:** gas x the prevailing *effective gas price* (`effective_gas_price`, base fee + tip; ~250K attoFIL/gas then) / 1e18, at the stated assumption **FIL = $1** (`usdfc_per_fil = 1.0`; section 5).
-3. **x10** for headroom against price spikes, gas drift, and FIL:USDFC moves. Not profit (commission is zero).
+1. **Measure gas on the with-metadata path** (~99% of mainnet adds carry metadata; the original no-metadata basis left it structurally unpriced). Supporting rules: subtract in **gas units, not FIL** (base-fee-independent, so a "combo minus baseline" difference holds across sample times); **isolate FWSS** from other PDPVerifier users (`set_id IN (SELECT data_set_id FROM fwss_data_set_created)`); **derive by difference** where an op never runs alone (`createDataSet` = create+add combo - warm add; `addPieces` per-piece = least-squares slope over batch size); ops mainnet can't isolate (the removals enqueue) are measured on an fvm-anvil fork of mainnet state.
+2. **Convert to USDFC:** gas x the *effective gas price* (tx-weighted mean over the post-FIP-0115 regime; 1.912M attoFIL/gas at derivation — see block [0] of `pricing-measurement.sql` for the standing window and spike cross-check) / 1e18, at the stated assumption **FIL = $1** (`usdfc_per_fil = 1.0`; section 5).
+3. **x10** for headroom against price spikes, gas drift, and FIL:USDFC moves. Not profit (commission is zero). Authorizer-gated ops add the 150M budget to their gas basis before pricing (section 2).
 
-Applied at the calibration inputs, this reproduces the listed prices at ~10x. For example a no-metadata N=1 `addPieces` was ~295M gas at ~250K and FIL=$1 -> ~0.00008 USDFC, x10 = 0.0008, i.e. the 0.0005 base plus one piece at 0.0003. The companion [`pricing-measurement.sql`](pricing-measurement.sql) (run against [foc-observer](https://github.com/FilOzone/foc-observer)) holds the queries.
+| Component | Gas basis | Raw 10x | Listed |
+|---|---|---|---|
+| `ADD_PIECES_BASE_FEE` | 258.4M + 150M authorizer | 0.00781 | 0.008 |
+| `ADD_PIECES_PER_PIECE_FEE` | 156.7M | 0.00300 | 0.003 |
+| `SCHEDULE_PIECE_REMOVALS_FEE` | 218.0M enqueue + 150M authorizer | 0.00704 | 0.007 |
+| `TERMINATE_FEE` | 148.5M + 150M authorizer | 0.00571 | 0.006 |
+| `DATASET_FEE_PER_MONTH` | 10.52B/month (nextPP 131.5M + prove 219.2M, x30) | 0.20118 | 0.20 |
+| `CREATE_DATA_SET_FEE` | 617.7M | 0.01181 | 0.025 (deliberate over-charge, section 2) |
 
-| Op | calibration gas (no meta) | listed | coverage at calibration | realized (as of writing) |
-|---|---|---|---|---|
-| addPieces, per call (N=1) | ~295M | 0.0008 (base + 1 piece) | ~10x | ~4x no-meta / ~3x with meta |
-| addPieces, per added piece | ~120M (estimate; no mainnet batching yet) | 0.0003 | ~10x | ~4x |
-| proving / month | ~9.3B (nextProvingPeriod + provePossession, x30) | 0.024 | ~10x | ~4.7x |
-| terminateService | gas basis ~0.000112 | 0.00112 | ~10x (nominal) | ~13x |
-| createDataSet | ~500M | 0.025 | ~200x (deliberate) | ~92x |
-
-`createDataSet` is the deliberate exception, a sybil deterrent (section 2), never a 10x cost-recovery fee. `terminateService` was set at 10x of an assumed gas basis; its new consent method (measured ~159M post-upgrade) turned out cheaper, so it now over-covers.
-
-**What moved since calibration.** The realized multiple is below 10x because the inputs shifted, not because the calibration was wrong:
-
-- **Effective gas price** is ~540K as of writing, ~2x the ~250K calibration snapshot, and volatile (it ranged ~250K-650K across 2026). FIP-0115 (NV28, June 2026) changed the base-fee mechanism, making it far more responsive to congestion (it had been stuck near its floor rather than tracking load as the design intended). This alone roughly halves every multiple.
-- **Gas units** drifted up ~20% from contract-state growth (no-meta N=1 ~295M -> ~357M); affects the gas-measured ops.
-- **Metadata** now rides ~99% of adds (~+100M gas at N=1, ~460M total), unpriced by the no-metadata calibration; specific to addPieces.
-
-Realized figures are measured on mainnet after the 2026-06-12 v1.3.0 upgrade (earlier `createDataSet` gas is inflated by the since-removed sybil burn rail). Proving, price-only, sits near ~10x / 2 ~= ~4.7x; addPieces is eroded further by gas drift and metadata to ~3-4x in realistic use. The schedule still over-recovers (>1x); the shrinking headroom is the watch-item (section 5).
+The companion [`pricing-measurement.sql`](pricing-measurement.sql) (run against [foc-observer](https://github.com/FilOzone/foc-observer)) holds the queries. Every cost-recovery fee holds >=1x coverage to FIL = $10, a proportional gas-price rise, or any combination multiplying to <=10x.
 
 ---
 
@@ -96,7 +89,7 @@ Re-derive periodically and after anything touching gas: a protocol upgrade, an F
 
 **Schema note:** the indexer keeps receipt fields (`gas_used`, `effective_gas_price`) in a `tx_meta` view (one row per tx), joined by `tx_hash`, not on event rows. Dedupe to one row per tx (`MAX(m.gas_used)` grouped by `tx_hash`) so multi-event and multi-piece `addPieces` txs are not double- or piece-weighted.
 
-**Live data can't give you** a clean standalone `createDataSet` (mainnet bundles an add), the `+CDN` creation premium at identical state, or the `schedulePieceDeletions` enqueue cost (no event).
+**Live data can't give you** a clean standalone `createDataSet` (mainnet bundles an add), the `+CDN` creation premium at identical state, or the `schedulePieceDeletions` enqueue cost (no event) — measure those on an fvm-anvil fork of mainnet state instead.
 
 To change a price: edit the literal in `PriceListUSDFC.sol` and ship a UUPS announce-then-execute upgrade.
 
@@ -104,9 +97,10 @@ To change a price: edit the literal in `PriceListUSDFC.sol` and ship a UUPS anno
 
 ## 5. Open sensitivities and gray areas
 
-- **Effective-price compression.** FIP-0115 made the base fee far more responsive to congestion, so the effective gas price now swings widely. At the ~540K regime as of writing, cost-recovery fees give ~3-5x headroom vs the design ~10x, and a spike to ~650K pushes addPieces base toward ~2x. Still above 1x, but the buffer is largely spent. Primary recalibration trigger.
-- **FIL:USDFC (a second, independent compressor).** Cost is in FIL, fees in USDFC. Coverage above assumes the schedule's FIL = $1, so divide by the live FIL price: at FIL = $2 the cost-recovery fees sit ~1.5-2.5x. Stacks on effective-price compression; re-evaluate at the live rate, not the 1:1 pin.
+- **Effective-price volatility.** FIP-0115 made the base fee responsive to congestion, so the effective price swings widely — week-scale spikes have reached ~4x the sustained mean, with single-tx outliers far beyond. The schedule prices at the regime mean and lets the 10x headroom absorb spikes; a doubling of the sustained mean is the primary recalibration trigger (section 4).
+- **FIL:USDFC (a second, independent multiplier).** Cost is in FIL, fees in USDFC, and the schedule pins FIL = $1. Divide coverage by the live FIL price: with FIL below $1 today the fees over-recover (coverage sits above the nominal 10x); at FIL = $2 they would sit ~5x. Stacks on effective-price moves; recalibration evaluates at the live rate, not the pin.
 - **CDN creation premium thinly measured.** ~334M gas from n=3 post-upgrade combos; directional, confirm on devnet.
-- **Removal cost entangled.** Removal gas splits in two: the enqueue (`schedulePieceDeletions`) and the actual deletion, processed later inside `nextProvingPeriod`. An enqueue event ([FilOzone/pdp#281](https://github.com/FilOzone/pdp/issues/281)) would expose the enqueue leg, but the deletion leg, the larger and piece-count-dependent one, stays fused with proving in the same tx. Isolating it means pairing a scheduled removal with the next `nextProvingPeriod` and subtracting that data set's no-removal baseline, which is approximate and awkward. The flat 0.002 under-recovers large batches; best-effort either way.
+- **Removal cost entangled.** The fee covers the enqueue leg only (section 2); the deletion leg, the larger and piece-count-dependent one, stays fused with proving inside `nextProvingPeriod` (~240M gas/piece observed) and is unrecovered. It is being disentangled in [FilOzone/pdp#297](https://github.com/FilOzone/pdp/pull/297) (resumable scheduled piece deletion); re-measure once that deploys.
 - **Cleanup gas vs the 0.1 FIL deposit (abandonment).** Deleting a data set's pieces costs gas the SP normally recovers via its 0.1 FIL PDPVerifier cleanup deposit, so routine teardown nets out. With many pieces the cleanup gas can exceed 0.1 FIL, and a rational SP may abandon the set: it stops proving and charging and frees the data server-side, leaving the inert data set on-chain and forfeiting the deposit. After `INACTIVITY_WINDOW` (86400 epochs, ~30 days) cleanup becomes permissionless and the deposit goes to whoever completes it, so abandoned sets get cleaned by profit-seekers (few pieces) or network-aligned parties (chain hygiene). The residual is large-piece-count sets uneconomic for anyone to clean, which linger on-chain though effectively deleted.
-- **terminateService over-provisioned.** The new consent method, introduced along with the new pricing scheme in 1.3.0, is measurably cheaper (~159M) than the original guess, so 0.00112 is ~13x.
+- **Authorizer budget sized to the cap, not typical use.** The gated fees fund the full 150M worst case; a trivial authorizer costs ~nothing and P256 ~105M, so cheap-authorizer users over-pay within the fee. If real authorizers settle far below the cap (e.g. a P256 syscall FIP at ~2M), the bi-annual recalibration reclaims it.
+
