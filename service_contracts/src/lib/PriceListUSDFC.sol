@@ -17,7 +17,11 @@ uint256 constant EPOCHS_PER_MONTH = EPOCHS_PER_DAY * 30;
 
 // USDFC has 18 decimals, so $1 = 10**18 (a.k.a. ether)
 uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
-uint256 constant DATASET_FEE_PER_MONTH = (2 * 10 ** TOKEN_DECIMALS) / 10; // 0.20 USDFC
+// Proving fee: sized to the post-upgrade proving cycle (pdp#292 compact storage +
+// pdp#297), measured on an fvm-anvil fork of mainnet state. Compact (new) datasets
+// carry ~8.3x headroom, legacy (pre-upgrade) datasets ~6.3x, worst observed spike
+// week ~1.5x. Derivation: docs/pricing-rationale.md section 3.
+uint256 constant DATASET_FEE_PER_MONTH = (12 * 10 ** TOKEN_DECIMALS) / 100; // 0.12 USDFC
 uint256 constant DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH / EPOCHS_PER_MONTH;
 
 uint256 constant CDN_EGRESS_PRICE_PER_TIB = 7 * 10 ** TOKEN_DECIMALS; // 7 USDFC per TiB
