@@ -44,12 +44,12 @@ jobs:
           mkdir base_build
           git worktree add base_build origin/main
           cd base_build/service_contracts
-          if forge build --offline --sizes --json > ../base_sizes.json 2>/dev/null; then
+          if forge build --offline --sizes --json > "$GITHUB_WORKSPACE/service_contracts/base_sizes.json" 2>/dev/null; then
             echo "Offline build succeeded"
           else
             echo "Offline build failed, installing dependencies"
             forge install
-            forge build --sizes --json > ../base_sizes.json
+            forge build --sizes --json > "$GITHUB_WORKSPACE/service_contracts/base_sizes.json"
           fi
           cd ../..
           git worktree remove --force base_build
