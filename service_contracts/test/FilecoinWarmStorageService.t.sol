@@ -227,12 +227,14 @@ contract VerifyAuthorizerHarness {
     address internal constant PAYER = address(0xBEEF);
 
     function callVerify(address authorizer, uint256 dataSetId) external returns (address) {
-        return SignatureVerificationLib.verifyAuthorizer(PAYER, "", bytes32(0), bytes32(0), dataSetId, authorizer, "");
+        return SignatureVerificationLib.verifyTerminateServiceAuthorization(
+            PAYER, dataSetId, authorizer, "", bytes32(0), SessionKeyRegistry(address(0))
+        );
     }
 }
 
 /// Re-enters the authorization path from inside `isAuthorized`. With a harness set, the nested
-/// verifyAuthorizer must trip the latch; with none it is a plain always-authorize implementation.
+/// authorization must trip the latch; with none it is a plain always-authorize implementation.
 contract ReenteringDataSetAuthorizer is IDataSetAuthorizer {
     VerifyAuthorizerHarness public harness;
 
@@ -5560,8 +5562,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         ReenteringDataSetAuthorizer authorizer = new ReenteringDataSetAuthorizer();
         authorizer.setHarness(harness);
 
-        // isAuthorized re-enters verifyAuthorizer in the same (harness) transient context. The latch
-        // is already held, so the nested call reverts and that revert bubbles out through the outer call.
+        // isAuthorized re-enters authorization in the same (harness) transient context. The latch is
+        // already held, so the nested call reverts and that revert bubbles out through the outer call.
         vm.expectRevert(Errors.AuthorizerReentrancy.selector);
         harness.callVerify(address(authorizer), 1);
     }

@@ -7,7 +7,7 @@ pragma solidity ^0.8.20;
 /// @dev A revert (or out-of-gas) means "not authorized": the operation reverts.
 ///      `isAuthorized` is a state-mutating call (not `view`), so an authorizer may update its own
 ///      state while deciding (e.g. consume a nonce or rate-limit). FWSS caps the call's gas and
-///      blocks re-entry into the authorization path; see SignatureVerificationLib.verifyAuthorizer.
+///      blocks re-entry into the authorization path; see SignatureVerificationLib.
 interface IDataSetAuthorizer {
     /// @param dataSetId The data set being operated on.
     /// @param payer The data set's payer (the on-chain owner of the rails).
