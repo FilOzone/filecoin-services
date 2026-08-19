@@ -3885,6 +3885,69 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
     }
 
+    function testPieceMetadataCompactEmptyMetadataForAllPieces() public {
+        uint256 firstPieceId = 300;
+        uint256 numPieces = 2;
+
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("compact-file1")));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("compact-file2")));
+
+        string[][] memory allKeys = new string[][](0);
+        string[][] memory allValues = new string[][](0);
+        string[] memory emptyMetadata = new string[](0);
+        bytes memory encodedData = abi.encode(firstPieceId + 8000, allKeys, allValues, FAKE_SIGNATURE);
+
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], emptyMetadata, emptyMetadata);
+        vm.expectEmit(true, false, false, true);
+        emit FilecoinWarmStorageService.PieceAdded(
+            dataSetId, firstPieceId + 1, pieceData[1], emptyMetadata, emptyMetadata
+        );
+
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+
+        assertEq(
+            _legacyPieceMetadataKeysLength(dataSetId, firstPieceId), 0, "Piece 0 metadata must not be stored on-chain"
+        );
+        assertEq(
+            _legacyPieceMetadataKeysLength(dataSetId, firstPieceId + 1),
+            0,
+            "Piece 1 metadata must not be stored on-chain"
+        );
+    }
+
+    function testPieceMetadataCompactEmptyMetadataRequiresBothArraysEmpty() public {
+        uint256 firstPieceId = 400;
+        uint256 numPieces = 2;
+
+        (string[] memory metadataKeys, string[] memory metadataValues) =
+            _getSingleMetadataKV("label", "Test Root Metadata");
+        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
+
+        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("asymmetric-file1")));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("asymmetric-file2")));
+
+        string[][] memory emptyMetadata = new string[][](0);
+        string[][] memory perPieceMetadata = new string[][](numPieces);
+
+        bytes memory encodedData = abi.encode(firstPieceId + 8000, emptyMetadata, perPieceMetadata, FAKE_SIGNATURE);
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 0, numPieces));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+
+        encodedData = abi.encode(firstPieceId + 8001, perPieceMetadata, emptyMetadata, FAKE_SIGNATURE);
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 0, numPieces));
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+    }
+
     function testRailTerminated_RevertsIfCallerNotPaymentsContract() public {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
@@ -3970,7 +4033,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        uint256 depositAmount = 1e18 + defaultTotalCDNLockup;
+        uint256 depositAmount = LIFECYCLE_RESERVE_TARGET + 1e18 + defaultTotalCDNLockup;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();
@@ -4023,7 +4086,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.startPrank(client);
         payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        uint256 depositAmount = 1e18 + defaultTotalCDNLockup;
+        uint256 depositAmount = LIFECYCLE_RESERVE_TARGET + 1e18 + defaultTotalCDNLockup;
         mockUSDFC.approve(address(payments), depositAmount);
         payments.deposit(mockUSDFC, client, depositAmount);
         vm.stopPrank();

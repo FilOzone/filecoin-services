@@ -777,12 +777,13 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Handles pieces being added to a data set and stores associated metadata
+     * @notice Handles pieces being added to a data set and emits associated metadata
      * @dev Called by the PDPVerifier contract when pieces are added to a data set.
      * @param dataSetId The ID of the data set
      * @param firstAdded The ID of the first piece added (from PDPVerifier, used for piece ID assignment)
      * @param pieceData Array of piece data objects
-     * @param extraData Encoded (nonce, metadata keys, metadata values, signature)
+     * @param extraData Encoded (nonce, metadata keys, metadata values, signature). The metadata outer arrays may
+     *                  both be empty to indicate that no piece in the batch has metadata.
      */
     function piecesAdded(uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes calldata extraData)
         external
@@ -797,7 +798,6 @@ contract FilecoinWarmStorageService is
         address payer = info.payer;
         uint256 len = extraData.length;
         require(len > 0, Errors.ExtraDataRequired());
-        // PDPVerifier currently hits the FVM PiecesAdded event size limit before FWSS needs a byte cap.
         // Decode the extra data
         (uint256 nonce, string[][] memory metadataKeys, string[][] memory metadataValues, bytes memory signature) =
             abi.decode(extraData, (uint256, string[][], string[][], bytes));
@@ -807,15 +807,19 @@ contract FilecoinWarmStorageService is
         // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
         clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
 
-        // Check that we have metadata arrays for each piece
-        require(
-            metadataKeys.length == pieceData.length,
-            Errors.MetadataArrayCountMismatch(metadataKeys.length, pieceData.length)
-        );
-        require(
-            metadataValues.length == pieceData.length,
-            Errors.MetadataArrayCountMismatch(metadataValues.length, pieceData.length)
-        );
+        // Empty outer arrays compactly represent a batch with no metadata. Otherwise, require
+        // one metadata array per piece.
+        bool metadataOmitted = metadataKeys.length == 0 && metadataValues.length == 0;
+        if (!metadataOmitted) {
+            require(
+                metadataKeys.length == pieceData.length,
+                Errors.MetadataArrayCountMismatch(metadataKeys.length, pieceData.length)
+            );
+            require(
+                metadataValues.length == pieceData.length,
+                Errors.MetadataArrayCountMismatch(metadataValues.length, pieceData.length)
+            );
+        }
 
         // Verify the signature
         verifyAddPiecesSignature(
@@ -829,6 +833,14 @@ contract FilecoinWarmStorageService is
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
         uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
         updatePaymentRates(dataSetId, info, currentLeafCount, pending, reserveBalance, false);
+
+        if (metadataOmitted) {
+            string[] memory emptyMetadata = new string[](0);
+            for (uint256 i = 0; i < pieceData.length; i++) {
+                emit PieceAdded(dataSetId, firstAdded + i, pieceData[i], emptyMetadata, emptyMetadata);
+            }
+            return;
+        }
 
         // Validate and emit metadata for each new piece. Metadata is indexed off-chain from this event.
         for (uint256 i = 0; i < pieceData.length; i++) {
