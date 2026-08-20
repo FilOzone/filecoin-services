@@ -81,31 +81,6 @@
   },
   {
     "type": "function",
-    "name": "announcePlannedUpgrade",
-    "inputs": [
-      {
-        "name": "plannedUpgrade",
-        "type": "tuple",
-        "internalType": "struct FilecoinWarmStorageService.PlannedUpgrade",
-        "components": [
-          {
-            "name": "nextImplementation",
-            "type": "address",
-            "internalType": "address"
-          },
-          {
-            "name": "afterEpoch",
-            "type": "uint96",
-            "internalType": "uint96"
-          }
-        ]
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "announceUpgradePlan",
     "inputs": [
       {

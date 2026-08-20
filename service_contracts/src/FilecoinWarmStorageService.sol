@@ -433,15 +433,6 @@ contract FilecoinWarmStorageService is
         _announcePlannedUpgrade(nextImplementation, uint96(block.number) + delayEpochs);
     }
 
-    /// @custom:deprecated Use announceUpgradePlan instead
-    function announcePlannedUpgrade(PlannedUpgrade calldata plannedUpgrade) external {
-        uint96 minAfterEpoch = uint96(block.number + 1);
-        _announcePlannedUpgrade(
-            plannedUpgrade.nextImplementation,
-            plannedUpgrade.afterEpoch < minAfterEpoch ? minAfterEpoch : plannedUpgrade.afterEpoch
-        );
-    }
-
     function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
         require(nextImplementation.code.length > 3000);
         nextUpgrade.nextImplementation = nextImplementation;

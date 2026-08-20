@@ -168,7 +168,6 @@ Calibnet can use a shorter window for rehearsal and validation, but use enough t
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=2880 # use 240+ for Calibnet rehearsal, 20160 for breaking changes
-export ANNOUNCEMENT_MODE=delay
 echo "Requested upgrade delay: $UPGRADE_DELAY_EPOCHS epochs"
 ```
 
@@ -412,8 +411,6 @@ Configure the requested delay:
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=240 # use a longer window if desired
-export ANNOUNCEMENT_MODE=delay
-unset AFTER_EPOCH
 ```
 
 Generate the transaction:
@@ -569,8 +566,6 @@ Configure the requested delay:
 
 ```bash
 export UPGRADE_DELAY_EPOCHS=2880 # use 20160 for breaking changes
-export ANNOUNCEMENT_MODE=delay
-unset AFTER_EPOCH
 ```
 
 Generate the transaction:
