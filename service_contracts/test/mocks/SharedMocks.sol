@@ -141,7 +141,7 @@ contract MockPDPVerifier {
         PDPListener listenerAddr,
         uint256 dataSetId,
         uint256 firstAdded,
-        Cids.Cid[] memory pieceData,
+        Cids.Cid[] calldata pieceData,
         uint256 nonce,
         bytes memory signature,
         string[] memory metadataKeys,

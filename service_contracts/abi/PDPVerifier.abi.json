@@ -811,6 +811,19 @@
   },
   {
     "type": "function",
+    "name": "legacyPieceStorageIdLimit",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "migrate",
     "inputs": [],
     "outputs": [],
@@ -917,6 +930,24 @@
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "processPieceDeletions",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "removalCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1252,6 +1283,43 @@
   },
   {
     "type": "event",
+    "name": "PiecesAddedV2",
+    "inputs": [
+      {
+        "name": "setId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "firstPieceId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "pieceCids",
+        "type": "tuple[]",
+        "indexed": false,
+        "internalType": "struct Cids.PackedCid[]",
+        "components": [
+          {
+            "name": "header",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "root",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PiecesRemoved",
     "inputs": [
       {
@@ -1414,6 +1482,11 @@
   },
   {
     "type": "error",
+    "name": "CidTooShort",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CleanupDepositRequired",
     "inputs": []
   },
@@ -1456,6 +1529,11 @@
   {
     "type": "error",
     "name": "ERC1967NonPayable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "EmptyRemovalBatch",
     "inputs": []
   },
   {
@@ -1513,6 +1591,21 @@
   },
   {
     "type": "error",
+    "name": "InvalidCommPv2DigestLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCommPv2MultihashLength",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidCommPv2Prefix",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidImplementation",
     "inputs": [
       {
@@ -1529,7 +1622,22 @@
   },
   {
     "type": "error",
+    "name": "InvalidPieceDeletionBatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "MaxPiecesMustBePositive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NoPiecesToProve",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NonMinimalUvarint",
     "inputs": []
   },
   {
@@ -1539,12 +1647,7 @@
   },
   {
     "type": "error",
-    "name": "OnlyStorageProviderCanCleanupPieces",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OnlyStorageProviderCanDelete",
+    "name": "OnlyStorageProvider",
     "inputs": []
   },
   {
@@ -1571,6 +1674,22 @@
   },
   {
     "type": "error",
+    "name": "PendingPieceDeletions",
+    "inputs": [
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PieceMetadataOverflow",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "TransferFailed",
     "inputs": []
   },
@@ -1589,5 +1708,15 @@
         "internalType": "bytes32"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "UnterminatedUvarint",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UvarintOverflow",
+    "inputs": []
   }
 ]
