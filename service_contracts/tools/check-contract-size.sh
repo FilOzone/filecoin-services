@@ -97,7 +97,7 @@ if ! jq -e '
                 .value
                 | type == "object"
                 and only(["artifact", "runtimeLimit", "initcodeLimit", "minimumRuntimeHeadroom", "maximumConstructorArgsSize"])
-                and (.artifact | type == "string" and test("^[^:]+\\.sol:[A-Za-z_][A-Za-z0-9_]*$"))
+                and (.artifact | type == "string" and test("^[A-Za-z0-9_][A-Za-z0-9_./-]*\\.sol:[A-Za-z_][A-Za-z0-9_]*$"))
                 and ((has("runtimeLimit") | not) or (.runtimeLimit | uint and . > 0))
                 and ((has("initcodeLimit") | not) or (.initcodeLimit | uint and . > 0))
                 and ((has("minimumRuntimeHeadroom") | not) or (.minimumRuntimeHeadroom | uint))
