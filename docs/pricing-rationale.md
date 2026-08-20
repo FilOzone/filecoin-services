@@ -18,7 +18,7 @@ FWSS bills in two forms, both in USDFC (18 decimals), both through FilecoinPay r
 | Component | List price | Kind | Paid to | Constant |
 |---|---|---|---|---|
 | Storage | 2.50 USDFC / TiB / month | streaming | SP | `STORAGE_PRICE_PER_TIB_PER_MONTH` |
-| Proving (per data set) | 0.20 USDFC / month | streaming, additive | SP | `DATASET_FEE_PER_MONTH` |
+| Proving (per data set) | 0.12 USDFC / month | streaming, additive | SP | `DATASET_FEE_PER_MONTH` |
 | Create data set | 0.025 USDFC | one-time | SP | `CREATE_DATA_SET_FEE` |
 | Add pieces | 0.008 + 0.003 x N USDFC | one-time, per call | SP | `ADD_PIECES_BASE_FEE`, `ADD_PIECES_PER_PIECE_FEE` |
 | Schedule piece removals | 0.007 USDFC | one-time, per call | SP | `SCHEDULE_PIECE_REMOVALS_FEE` |
@@ -70,10 +70,12 @@ The listed prices were last derived in August 2026. The methodology, per operati
 | `ADD_PIECES_PER_PIECE_FEE` | 156.7M | 0.00300 | 0.003 |
 | `SCHEDULE_PIECE_REMOVALS_FEE` | 218.0M enqueue + 150M authorizer | 0.00704 | 0.007 |
 | `TERMINATE_FEE` | 148.5M + 150M authorizer | 0.00571 | 0.006 |
-| `DATASET_FEE_PER_MONTH` | 10.52B/month (nextPP 131.5M + prove 219.2M, x30) | 0.20118 | 0.20 |
+| `DATASET_FEE_PER_MONTH` | 7.58B/month compact / 9.95B legacy (nextPP + prove daily, post-upgrade) | 0.145 / 0.190 | 0.12 (below raw 10x; see note) |
 | `CREATE_DATA_SET_FEE` | 617.7M | 0.01181 | 0.025 (deliberate over-charge, section 2) |
 
-The companion [`pricing-measurement.sql`](pricing-measurement.sql) (run against [foc-observer](https://github.com/FilOzone/foc-observer)) holds the queries. Every cost-recovery fee holds >=1x coverage to FIL = $10, a proportional gas-price rise, or any combination multiplying to <=10x.
+The companion [`pricing-measurement.sql`](pricing-measurement.sql) (run against [foc-observer](https://github.com/FilOzone/foc-observer)) holds the queries. Every one-time fee holds >=1x coverage to FIL = $10, a proportional gas-price rise, or any combination multiplying to <=10x.
+
+**Proving fee note.** The proving basis is priced post-upgrade: pdp#292 (compact piece storage) and pdp#297 (deletion out of `nextProvingPeriod`) ship in the same window as this schedule. Measured on an fvm-anvil fork of mainnet state (`fvm-anvil benchmarks/pdp-verifier/run_proving.py`, deletion-free daily cycle, 5-challenge proofs, deltas applied to the mainnet-observed basis): datasets created post-upgrade prove at 7.58B gas/month (-34% vs deployed), pre-upgrade datasets at 9.95B (-6.7%; their storage layout is permanent). 0.12 prices the compact fleet — all future growth — at ~8.3x and the legacy fleet at ~6.3x; the worst observed spike week (8.1M attoFIL/gas) still covers at ~1.5x. The legacy population is capped at pre-upgrade dataset IDs and only shrinks, and the recalibration cadence (section 4) catches gas-unit drift before headroom thins.
 
 ---
 
