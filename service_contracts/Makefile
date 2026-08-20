@@ -125,8 +125,8 @@ coverage-lcov:
 
 .PHONY: contract-size-check
 contract-size-check:
-	@echo "Checking contract sizes..."
-	bash tools/check-contract-size.sh src/
+	@echo "Checking deployable contract sizes..."
+	bash tools/check-contract-size.sh --check
 
 # Storage layout validation
 .PHONY: check-layout
@@ -207,7 +207,7 @@ help:
 	@echo ""
 	@echo "Validation targets:"
 	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
-	@echo "  contract-size-check - Check contract sizes against EIP-170 and EIP-3860 limits"
+	@echo "  contract-size-check - Check deployable contracts against size and headroom policy"
 	@echo ""
 	@echo "  help       - Show this help message"
 	@echo ""
