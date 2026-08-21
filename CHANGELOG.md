@@ -5,6 +5,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.4.0] - FWSS Breaking Upgrade
+
+This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.4.0 and updates the PDPVerifier integration baseline to v3.5.0.
+
+| Component | Version | Upgrade classification |
+|---|---|---|
+| Stack (`filecoin-services`) | `v1.4.0` | Breaking |
+| `FilecoinWarmStorageService` | `1.4.0` | Breaking implementation upgrade |
+| `PDPVerifier` | `3.5.0` | Independent dependency upgrade |
+
+### Deployment / Rollout Status
+
+Rollout status, network-by-network implementation addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.4.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.4.0). The FWSS proxy addresses remain unchanged.
+
 ### Breaking Changes
 
 - Newly added piece metadata is no longer persisted in FWSS contract storage and must instead be indexed from `PieceAdded` events. The `getPieceMetadata` and `getAllPieceMetadata` helpers have been removed from `FilecoinWarmStorageServiceStateView`, the state library, and their published ABIs. Existing on-chain piece metadata remains eligible for cleanup when pieces are removed ([#577](https://github.com/FilOzone/filecoin-services/pull/577)).
@@ -21,6 +35,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 
 - Increased FWSS `extraData` limits to support programmable ACL payloads: data-set creation increased from 4 KiB to 5 KiB, while removal scheduling and service termination increased from 256 bytes to 1 KiB ([#560](https://github.com/FilOzone/filecoin-services/pull/560)).
+
+- Updated the PDPVerifier dependency and published ABI for the v3.5.0 integration surface ([#596](https://github.com/FilOzone/filecoin-services/pull/596)).
 
 ### Upgrade Notes
 
@@ -504,7 +520,8 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/FilOzone/filecoin-services/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/FilOzone/filecoin-services/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/FilOzone/filecoin-services/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/FilOzone/filecoin-services/compare/v1.2.0...v1.2.1
