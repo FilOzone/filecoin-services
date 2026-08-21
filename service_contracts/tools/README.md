@@ -261,8 +261,6 @@ export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="0x..."
 export UPGRADE_DELAY_EPOCHS="2880"
-export ANNOUNCEMENT_MODE=delay
-unset AFTER_EPOCH
 CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
 ```
 
@@ -281,19 +279,6 @@ CALLDATA_ONLY=true ./service-provider-registry-announce-upgrade.sh
 
 The mainline ServiceProviderRegistry helper no longer accepts an absolute `AFTER_EPOCH`. If a proxy is rolled back to v1.1.0 and must be rolled forward again, use the immutable [`v1.3.1-rollout.1` legacy helper](https://github.com/FilOzone/filecoin-services/blob/v1.3.1-rollout.1/service_contracts/tools/service-provider-registry-announce-upgrade.sh).
 
-The FWSS v1.3.0 contracts currently deployed on Calibnet and Mainnet do not expose `announceUpgradePlan()`. Their upgrade to v1.3.1 must therefore use the old interface:
-
-```bash
-export ANNOUNCEMENT_MODE=legacy
-export LEGACY_NOTICE_EPOCHS=2880
-export SAFE_SIGNING_BUFFER_EPOCHS=2880
-CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL")
-export AFTER_EPOCH=$((CURRENT_EPOCH + SAFE_SIGNING_BUFFER_EPOCHS + LEGACY_NOTICE_EPOCHS))
-unset UPGRADE_DELAY_EPOCHS
-CALLDATA_ONLY=true ./warm-storage-announce-upgrade.sh
-```
-
-Treat this bootstrap-only mode as deprecated after FWSS v1.3.1 is live on both Calibnet and Mainnet. Remove it once rollback to v1.3.0 is no longer supported; until then it remains available only for that rollback path.
 
 ## Testing
 

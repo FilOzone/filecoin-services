@@ -588,15 +588,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertLe(bytes(serviceHomepage).length, 256, "Service homepage should not exceed 256 bytes");
     }
 
-    function testAnnouncePlannedUpgrade() public {
-        _testUpgrade(true);
-    }
-
     function testAnnounceUpgradePlan() public {
-        _testUpgrade(false);
-    }
-
-    function _testUpgrade(bool useDeprecatedMethod) internal {
         FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
@@ -643,13 +635,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         afterEpoch = uint96(vm.getBlockNumber()) + delay;
         FilecoinWarmStorageService.PlannedUpgrade memory plan;
 
-        if (useDeprecatedMethod) {
-            plan.nextImplementation = nextImplementation;
-            plan.afterEpoch = afterEpoch;
-            service.announcePlannedUpgrade(plan);
-        } else {
-            service.announceUpgradePlan(nextImplementation, delay);
-        }
+        service.announceUpgradePlan(nextImplementation, delay);
         (plan.nextImplementation, plan.afterEpoch) = viewContract.nextUpgrade();
         assertEq(nextImplementation, plan.nextImplementation);
         assertEq(afterEpoch, plan.afterEpoch);
@@ -671,32 +657,17 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(address(0), plan.nextImplementation);
         assertEq(0, plan.afterEpoch);
 
-        // Check behavior of minimum delay
-        if (useDeprecatedMethod) {
-            plan.nextImplementation = nextImplementation;
-            plan.afterEpoch = 0;
-            service.announcePlannedUpgrade(plan);
-        } else {
-            // prevent overflow
-            vm.expectRevert(stdError.arithmeticError);
-            service.announceUpgradePlan(nextImplementation, type(uint96).max);
+        // Check overflow and minimum delay behavior
+        vm.expectRevert(stdError.arithmeticError);
+        service.announceUpgradePlan(nextImplementation, type(uint96).max);
 
-            service.announceUpgradePlan(nextImplementation, 0);
-        }
+        service.announceUpgradePlan(nextImplementation, 0);
         (plan.nextImplementation, plan.afterEpoch) = viewContract.nextUpgrade();
         assertEq(plan.nextImplementation, nextImplementation);
         assertEq(plan.afterEpoch, vm.getBlockNumber() + 1);
     }
 
-    function testAnnouncePlannedUpgradeOnlyOwner() public {
-        _testAnnouncePlannedUpgradeOnlyOwner(true);
-    }
-
     function testAnnounceUpgradePlanOnlyOwner() public {
-        _testAnnouncePlannedUpgradeOnlyOwner(false);
-    }
-
-    function _testAnnouncePlannedUpgradeOnlyOwner(bool useDeprecatedMethod) internal {
         FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
             address(payments),
@@ -709,14 +680,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.prank(client);
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, client));
-        if (useDeprecatedMethod) {
-            FilecoinWarmStorageService.PlannedUpgrade memory plan;
-            plan.nextImplementation = address(newServiceImpl);
-            plan.afterEpoch = uint96(vm.getBlockNumber()) + 2000;
-            pdpServiceWithPayments.announcePlannedUpgrade(plan);
-        } else {
-            pdpServiceWithPayments.announceUpgradePlan(address(newServiceImpl), 2000);
-        }
+        pdpServiceWithPayments.announceUpgradePlan(address(newServiceImpl), 2000);
     }
 
     function _getSingleMetadataKV(string memory key, string memory value)
