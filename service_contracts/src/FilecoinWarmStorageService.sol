@@ -47,21 +47,24 @@ uint256 constant PDP_INACTIVITY_WINDOW = 86400;
 
 /*
 * Maximum extraData for createDataSet
-* Supports: 10 metadata entries with max sizes
+* Supports: 10 metadata entries with max sizes; plus
+*           1 Authorizer payload (perms + WebAuthn + P256 ~1024 bytes)
 */
-uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 4096; // 4 KiB
+uint256 constant MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE = 5120; // 5 KiB
 
 /*
 * Maximum extraData for schedulePieceRemovals
-* Supports: signature (160 bytes needed)
+* Supports: legacy signature (160 bytes needed); or
+*           1 Authorizer payload (perms + WebAuthn + P256 ~1024 bytes)
 */
-uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 256; // 256 bytes
+uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 1024; // 1KiB
 
 /*
 * Maximum extraData for terminateService
-* Supports: signature (160 bytes needed)
+* Supports: legacy signature (160 bytes needed); or
+*           1 Authorizer payload (perms + WebAuthn + P256 ~512 bytes)
 */
-uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 256; // 256 bytes
+uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 1024; // 1KiB
 
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
@@ -310,7 +313,12 @@ contract FilecoinWarmStorageService is
     // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
 
+    // Optional per-data-set authorizer (address(0) = default payer/session-key behavior).
+    mapping(uint256 dataSetId => address authorizer) internal dataSetAuthorizer;
+
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
+
+    event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
 
     // =========================================================================
 
@@ -746,6 +754,7 @@ contract FilecoinWarmStorageService is
         processScheduledPieceMetadataRemovals(dataSetId);
 
         // Complete cleanup
+        delete dataSetAuthorizer[dataSetId];
         delete dataSetInfo[dataSetId];
     }
 
@@ -816,7 +825,9 @@ contract FilecoinWarmStorageService is
         }
 
         // Verify the signature
-        verifyAddPiecesSignature(payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature);
+        verifyAddPiecesSignature(
+            dataSetId, payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature
+        );
 
         uint96 pending =
             info.pendingOneTimePayments + uint96(ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE);
@@ -893,7 +904,7 @@ contract FilecoinWarmStorageService is
         bytes memory signature = abi.decode(extraData, (bytes));
 
         // Verify the signature
-        verifySchedulePieceRemovalsSignature(payer, info.clientDataSetId, pieceIds, signature);
+        verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
@@ -1462,6 +1473,7 @@ contract FilecoinWarmStorageService is
 
     /**
      * @notice Verifies a signature for the AddPieces operation
+     * @param dataSetId The data set being operated on
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceDataArray Array of piece CID structures
@@ -1471,6 +1483,7 @@ contract FilecoinWarmStorageService is
      * @param signature The signature bytes (v, r, s)
      */
     function verifyAddPiecesSignature(
+        uint256 dataSetId,
         address payer,
         uint256 clientDataSetId,
         Cids.Cid[] memory pieceDataArray,
@@ -1478,52 +1491,66 @@ contract FilecoinWarmStorageService is
         string[][] memory allKeys,
         string[][] memory allValues,
         bytes memory signature
-    ) internal view {
-        // Compute the EIP-712 digest
-        bytes32 digest = _hashTypedDataV4(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
+    ) internal {
+        SignatureVerificationLib.verifyAddPiecesAuthorization(
+            payer,
+            dataSetId,
+            dataSetAuthorizer[dataSetId],
+            clientDataSetId,
+            pieceDataArray,
+            nonce,
+            allKeys,
+            allValues,
+            signature,
+            _domainSeparatorV4(),
+            sessionKeyRegistry
         );
-
-        // Delegate to library for verification
-        SignatureVerificationLib.verifyAddPiecesSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     /**
      * @notice Verifies a signature for the SchedulePieceRemovals operation
+     * @param dataSetId The data set being operated on
      * @param payer The address of the payer who should have signed the message
      * @param clientDataSetId The ID of the data set
      * @param pieceIds Array of piece IDs to be removed
      * @param signature The signature bytes (v, r, s)
      */
     function verifySchedulePieceRemovalsSignature(
+        uint256 dataSetId,
         address payer,
         uint256 clientDataSetId,
         uint256[] memory pieceIds,
         bytes memory signature
-    ) internal view {
-        // Compute the EIP-712 digest
-        bytes32 structHash = keccak256(
-            abi.encode(
-                SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
-                clientDataSetId,
-                keccak256(abi.encodePacked(pieceIds))
-            )
+    ) internal {
+        SignatureVerificationLib.verifySchedulePieceRemovalsAuthorization(
+            payer,
+            dataSetId,
+            dataSetAuthorizer[dataSetId],
+            clientDataSetId,
+            pieceIds,
+            signature,
+            _domainSeparatorV4(),
+            sessionKeyRegistry
         );
-
-        bytes32 digest = _hashTypedDataV4(structHash);
-
-        // Delegate to library for verification
-        SignatureVerificationLib.verifySchedulePieceRemovalsSignature(payer, signature, digest, sessionKeyRegistry);
     }
 
     function _verifyTerminateServiceSignature(address payer, uint256 dataSetId, bytes memory signature)
         internal
-        view
         returns (address signer)
     {
-        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId));
-        bytes32 digest = _hashTypedDataV4(structHash);
-        return SignatureVerificationLib.verifyTerminateServiceSignature(payer, signature, digest, sessionKeyRegistry);
+        return SignatureVerificationLib.verifyTerminateServiceAuthorization(
+            payer, dataSetId, dataSetAuthorizer[dataSetId], signature, _domainSeparatorV4(), sessionKeyRegistry
+        );
+    }
+
+    /**
+     * @notice Attach, rotate, or clear the optional authorizer for a data set.
+     */
+    function setDataSetAuthorizer(uint256 dataSetId, address authorizer) external {
+        require(dataSetInfo[dataSetId].payer == msg.sender, Errors.OnlyDataSetPayer(dataSetId, msg.sender));
+        require(authorizer == address(0) || authorizer.code.length > 0, Errors.InvalidDataSetAuthorizer(authorizer));
+        dataSetAuthorizer[dataSetId] = authorizer;
+        emit DataSetAuthorizerSet(dataSetId, authorizer);
     }
 
     /**

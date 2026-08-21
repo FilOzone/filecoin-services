@@ -9,9 +9,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Newly added piece metadata is no longer persisted in FWSS contract storage and must instead be indexed from `PieceAdded` events. The `getPieceMetadata` and `getAllPieceMetadata` helpers have been removed from `FilecoinWarmStorageServiceStateView`, the state library, and their published ABIs. Existing on-chain piece metadata remains eligible for cleanup when pieces are removed ([#577](https://github.com/FilOzone/filecoin-services/pull/577)).
 
+- Recalibrated FWSS pricing because FIP-0115 increased the observed effective gas-price basis from roughly `250K` to `1.912M attoFIL/gas`, reducing the original 10× cost headroom to roughly 1.3–2×. The new prices also budget for the worst-case gas allowance of programmable data-set authorizers. The per-data-set proving fee increased from `0.024` to `0.12 USDFC/month`; add-pieces fees increased from `0.0005 + 0.0003 × pieces` to `0.008 + 0.003 × pieces`; removal scheduling increased from `0.002` to `0.007 USDFC`; termination increased from `0.00112` to `0.006 USDFC`; and the lifecycle reserve target and replenishment threshold increased from `0.10 / 0.005` to `0.50 / 0.025 USDFC`. The final proving fee accounts for the lower proving gas of the PDPVerifier changes shipping in the same upgrade window ([#583](https://github.com/FilOzone/filecoin-services/pull/583), [#592](https://github.com/FilOzone/filecoin-services/pull/592)).
+
 ### Added
 
-- Allowed `addPieces` batches without piece metadata to encode both metadata outer arrays as empty, avoiding four calldata slots per piece ([#575](https://github.com/FilOzone/filecoin-services/issues/575)).
+- Added optional per-data-set programmable authorization through `IDataSetAuthorizer`. Payers can set, rotate, or clear an authorizer with `setDataSetAuthorizer`, and integrations can query it through `getDataSetAuthorizer`. Once configured, the authorizer becomes the sole authorization gate for adding pieces, scheduling removals, and signed service termination; data sets without an authorizer retain the existing payer and session-key behavior ([#536](https://github.com/FilOzone/filecoin-services/pull/536)).
+
+- Allowed `addPieces` batches without piece metadata to encode both metadata outer arrays as empty, avoiding four calldata slots per piece ([#582](https://github.com/FilOzone/filecoin-services/pull/582)).
+
+### Changed
+
+- Increased FWSS `extraData` limits to support programmable ACL payloads: data-set creation increased from 4 KiB to 5 KiB, while removal scheduling and service termination increased from 256 bytes to 1 KiB ([#560](https://github.com/FilOzone/filecoin-services/pull/560)).
+
+### Upgrade Notes
+
+- The new one-time operation fees apply immediately to existing and new data sets. Existing data sets adopt the new proving rate on their next rate-touching operation: `piecesAdded`, `nextProvingPeriod` when processing removals or pending fees, or termination. The next fee-charging operation may also raise the lifecycle-reserve lockup toward `0.50 USDFC`; underfunded payers can therefore receive `InsufficientLockupFunds` until their FilecoinPay balance is topped up ([#583](https://github.com/FilOzone/filecoin-services/pull/583)).
 
 ## [1.3.1] - FWSS + ServiceProviderRegistry Upgrade
 

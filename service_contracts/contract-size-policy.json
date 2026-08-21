@@ -1,0 +1,40 @@
+{
+  "defaults": {
+    "runtimeLimit": 24576,
+    "initcodeLimit": 49152,
+    "minimumRuntimeHeadroom": 1024,
+    "maximumConstructorArgsSize": 256
+  },
+  "targets": {
+    "FilecoinWarmStorageService": {
+      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+    },
+    "FilecoinWarmStorageServiceStateView": {
+      "artifact": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
+    },
+    "ServiceProviderRegistry": {
+      "artifact": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
+    },
+    "ProviderIdSet": {
+      "artifact": "src/ProviderIdSet.sol:ProviderIdSet"
+    },
+    "SignatureVerificationLib": {
+      "artifact": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib"
+    },
+    "Rails": {
+      "artifact": "src/lib/Rails.sol:Rails"
+    },
+    "PDPVerifier": {
+      "artifact": "lib/pdp/src/PDPVerifier.sol:PDPVerifier"
+    },
+    "FilecoinPayV1": {
+      "artifact": "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1"
+    },
+    "SessionKeyRegistry": {
+      "artifact": "lib/session-key-registry/src/SessionKeyRegistry.sol:SessionKeyRegistry"
+    },
+    "MyERC1967Proxy": {
+      "artifact": "lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy"
+    }
+  }
+}

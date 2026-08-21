@@ -192,7 +192,7 @@ contract AbandonmentTest is MockFVMTest {
         vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW / 2);
 
         vm.prank(keeper);
-        vm.expectRevert(PDPVerifier.OnlyStorageProviderCanDelete.selector);
+        vm.expectRevert(PDPVerifier.OnlyStorageProvider.selector);
         pdpVerifier.deleteDataSet(dataSetId, "");
     }
 
