@@ -573,35 +573,6 @@
   },
   {
     "type": "function",
-    "name": "getDataSetPayerAndRailId",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "pdpRailId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getDataSetSizeInBytes",
     "inputs": [
       {
@@ -795,30 +766,6 @@
             ]
           }
         ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "hasBeenProvenRecently",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
