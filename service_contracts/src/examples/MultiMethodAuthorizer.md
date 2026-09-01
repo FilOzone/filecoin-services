@@ -336,7 +336,7 @@ NOTE: <COMMIT_SHA> and <CANONICAL_HASH> will be updated in a fast-follow PR AFTE
 | solc | **0.8.30** (exact) |
 | `via_ir` | **true** |
 | optimizer | **enabled**, `runs = 200` |
-| `evm_version` | **prague** — the solc-0.8.30 default and the version FWSS compiles to (FEVM-compatible). Pinning is mandatory; an unpinned / `osaka` / `cancun` build yields a different hash. |
+| `evm_version` | **osaka** — required so the toolchain models the secp256r1 precompile at `0x100` (RIP-7212 / EIP-7951) that this authorizer calls; it is also the repo default (`foundry.toml`). Pinning is mandatory; a different `evm_version` yields a different hash. |
 | `bytecode_hash` | **none** |
 | `cbor_metadata` | **false** — removes the trailing CBOR metadata blob so the raw runtime hash equals what an SP computes (no tail to strip). |
 
@@ -348,7 +348,7 @@ git checkout <COMMIT_SHA>          # pin the exact source
 
 FOUNDRY_BYTECODE_HASH=none \
 FOUNDRY_CBOR_METADATA=false \
-FOUNDRY_EVM_VERSION=prague \
+FOUNDRY_EVM_VERSION=osaka \
 FOUNDRY_OPTIMIZER=true \
 FOUNDRY_OPTIMIZER_RUNS=200 \
 FOUNDRY_VIA_IR=true \
@@ -385,7 +385,7 @@ cast code <AUTHORIZER_ADDRESS> --rpc-url <RPC> | xargs -I{} cast keccak {}
   Label    = "MultiMethodAuthorizer v1 (standalone)"
   Kind     = "codehash"
   CodeHash = "<CANONICAL_HASH>"
-  Notes    = "solc 0.8.30, via_ir, runs=200, evm_version=prague, no metadata; source @ <COMMIT_SHA>; audit: <ref>"
+  Notes    = "solc 0.8.30, via_ir, runs=200, evm_version=osaka, no metadata; source @ <COMMIT_SHA>; audit: <ref>"
 ```
 
 Toolchain used to produce the hash above: `forge`/`cast` 1.5.1, solc 0.8.30, based on code at commit `<COMMIT_SHA>`

@@ -6,23 +6,8 @@ pragma solidity ^0.8.21;
 // credentials by dataSetId (WILDCARD_DATASET = all of them). Built with the repo's deterministic
 // profile (solc 0.8.30, via_ir, optimizer_runs=200, bytecode_hash="none") so it has a stable code
 // identity for SP allowlisting. See MultiMethodAuthorizer.md for the wire-format spec.
-//
-// IDataSetAuthorizer is inlined (not imported) so this example compiles on its own, independent of
-// whether PR #536 has merged. Merge order is up to maintainers: once
-// `src/interfaces/IDataSetAuthorizer.sol` exists on the target branch, replace this copy with that
-// import. Keep the function signature identical to #536's interface.
 
-/// filecoin-services PR #536 IDataSetAuthorizer (state-mutating CALL).
-interface IDataSetAuthorizer {
-    function isAuthorized(
-        uint256 dataSetId,
-        address payer,
-        bytes32 operation,
-        bytes32 digest,
-        bytes calldata signature,
-        bytes calldata operationData
-    ) external returns (bool authorized);
-}
+import {IDataSetAuthorizer} from "../interfaces/IDataSetAuthorizer.sol";
 
 /// @title MultiMethodAuthorizer
 /// @notice One authorizer that recognises TWO legitimate delegation paths for the SAME P256
