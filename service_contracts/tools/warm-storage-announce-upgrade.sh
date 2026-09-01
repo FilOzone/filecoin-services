@@ -3,12 +3,10 @@
 set -o pipefail
 
 # warm-storage-announce-upgrade.sh: Announces a planned FWSS upgrade
-# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_FWSS_IMPLEMENTATION_ADDRESS
-# Required in the default delay mode: UPGRADE_DELAY_EPOCHS
-# Required for the v1.3.0 -> v1.3.1 bootstrap: ANNOUNCEMENT_MODE=legacy, AFTER_EPOCH
+# Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_FWSS_IMPLEMENTATION_ADDRESS,
+#                UPGRADE_DELAY_EPOCHS
 # Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
-# Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending;
-#           ANNOUNCEMENT_MODE=delay|legacy (default: legacy)
+# Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending
 
 # Get script directory and source deployments.sh
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
@@ -16,7 +14,6 @@ source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
 
 CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
-ANNOUNCEMENT_MODE="${ANNOUNCEMENT_MODE:-legacy}"
 
 case "$CALLDATA_ONLY" in
   true | false) ;;
@@ -65,69 +62,21 @@ is_non_negative_integer() {
   [[ "$1" =~ ^(0|[1-9][0-9]*)$ ]]
 }
 
-CALL_SIGNATURE=""
-CALL_ARGS=()
+if [ -z "$UPGRADE_DELAY_EPOCHS" ]; then
+  echo "Error: UPGRADE_DELAY_EPOCHS is not set"
+  exit 1
+fi
+if ! is_non_negative_integer "$UPGRADE_DELAY_EPOCHS"; then
+  echo "Error: UPGRADE_DELAY_EPOCHS must be a non-negative base-10 integer without leading zeros"
+  exit 1
+fi
 
-case "$ANNOUNCEMENT_MODE" in
-  delay)
-    if [ -z "$UPGRADE_DELAY_EPOCHS" ]; then
-      echo "Error: UPGRADE_DELAY_EPOCHS is not set"
-      exit 1
-    fi
-    if ! is_non_negative_integer "$UPGRADE_DELAY_EPOCHS"; then
-      echo "Error: UPGRADE_DELAY_EPOCHS must be a non-negative base-10 integer without leading zeros"
-      exit 1
-    fi
-    if [ -n "$AFTER_EPOCH" ]; then
-      echo "Error: AFTER_EPOCH is only valid with ANNOUNCEMENT_MODE=legacy"
-      exit 1
-    fi
-
-    CALL_SIGNATURE="announceUpgradePlan(address,uint96)"
-    CALL_ARGS=("$NEW_FWSS_IMPLEMENTATION_ADDRESS" "$UPGRADE_DELAY_EPOCHS")
-    echo "Announcing upgrade with a requested delay of $UPGRADE_DELAY_EPOCHS epochs"
-    echo "Delay mode requires the deployed FWSS implementation to expose announceUpgradePlan"
-    if [ "$UPGRADE_DELAY_EPOCHS" = "0" ]; then
-      echo "The contract will enforce a minimum delay of one epoch"
-    fi
-    ;;
-  legacy)
-    # Bootstrap only: FWSS v1.3.0 predates announceUpgradePlan, so the v1.3.1
-    # rollout cannot use delay mode. Deprecate this branch after v1.3.1 is live on
-    # both networks; remove it once rollback to v1.3.0 is retired (checklist Phase 5).
-    if [ -z "$AFTER_EPOCH" ]; then
-      echo "Error: AFTER_EPOCH is not set for ANNOUNCEMENT_MODE=legacy"
-      exit 1
-    fi
-    if ! is_non_negative_integer "$AFTER_EPOCH"; then
-      echo "Error: AFTER_EPOCH must be a non-negative base-10 integer without leading zeros"
-      exit 1
-    fi
-    if [ -n "$UPGRADE_DELAY_EPOCHS" ]; then
-      echo "Error: UPGRADE_DELAY_EPOCHS is not valid with ANNOUNCEMENT_MODE=legacy"
-      exit 1
-    fi
-
-    CURRENT_EPOCH=$(cast block-number --rpc-url "$ETH_RPC_URL" 2>/dev/null)
-    if ! is_non_negative_integer "$CURRENT_EPOCH"; then
-      echo "Error: Failed to read the current epoch"
-      exit 1
-    fi
-    if [ "$CURRENT_EPOCH" -ge "$AFTER_EPOCH" ]; then
-      echo "Error: legacy AFTER_EPOCH must be in the future ($CURRENT_EPOCH >= $AFTER_EPOCH)"
-      exit 1
-    fi
-
-    CALL_SIGNATURE="announcePlannedUpgrade((address,uint96))"
-    CALL_ARGS=("($NEW_FWSS_IMPLEMENTATION_ADDRESS,$AFTER_EPOCH)")
-    echo "Using v1.3.0 bootstrap legacy mode; announcing upgrade after $((AFTER_EPOCH - CURRENT_EPOCH)) epochs"
-    echo "Ensure AFTER_EPOCH includes enough Safe-signing buffer; legacy calldata can expire before execution"
-    ;;
-  *)
-    echo "Error: ANNOUNCEMENT_MODE must be 'delay' or 'legacy'"
-    exit 1
-    ;;
-esac
+CALL_SIGNATURE="announceUpgradePlan(address,uint96)"
+CALL_ARGS=("$NEW_FWSS_IMPLEMENTATION_ADDRESS" "$UPGRADE_DELAY_EPOCHS")
+echo "Announcing upgrade with a requested delay of $UPGRADE_DELAY_EPOCHS epochs"
+if [ "$UPGRADE_DELAY_EPOCHS" = "0" ]; then
+  echo "The contract will enforce a minimum delay of one epoch"
+fi
 
 ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 if ! PROXY_OWNER=$(cast call --rpc-url "$ETH_RPC_URL" --from "$ZERO_ADDRESS" \
@@ -136,14 +85,11 @@ if ! PROXY_OWNER=$(cast call --rpc-url "$ETH_RPC_URL" --from "$ZERO_ADDRESS" \
   exit 1
 fi
 
-# Simulate from the owner before producing calldata. This catches unsupported
-# announcement modes, invalid implementation addresses, and delay overflow.
+# Simulate from the owner before producing calldata. This catches invalid
+# implementation addresses and delay overflow.
 if ! cast call --rpc-url "$ETH_RPC_URL" --from "$PROXY_OWNER" \
   "$FWSS_PROXY_ADDRESS" "$CALL_SIGNATURE" "${CALL_ARGS[@]}" >/dev/null; then
   echo "Error: $CALL_SIGNATURE would revert against the current FWSS proxy"
-  if [ "$ANNOUNCEMENT_MODE" = "delay" ]; then
-    echo "For the FWSS v1.3.0 -> v1.3.1 bootstrap, rerun with ANNOUNCEMENT_MODE=legacy"
-  fi
   exit 1
 fi
 

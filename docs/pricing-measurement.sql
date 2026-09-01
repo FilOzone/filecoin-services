@@ -24,10 +24,22 @@
 -- ============================================================================
 -- [0] REFERENCE GAS PRICE  (mainnet)  -- tx-weighted, attoFIL per gas unit
 -- ============================================================================
+-- Default for future recalibrations: trailing 90d (rolling, self-updating),
+-- statistic = tx-weighted MEAN. The mean is deliberate: these fees are cost
+-- recovery, and an SP's outlay over many txs tracks the mean price including
+-- spike periods; 90d is wide enough that no single spike dominates (post-115
+-- the distribution has week-scale spikes -- observed 2026-07: weekly avg 8.1M
+-- vs 90d mean 1.74M -- so a 30d window can sit entirely inside one).
+-- Cross-check the 90d MEDIAN (nearest-rank; percentile_cont is blocked in the
+-- query sandbox): a mean >> median gap means a spike is still in the window;
+-- judge whether it reflects the sustained regime before pricing on it.
+-- The 2026-08 recalibration itself used the whole post-FIP-0115 era
+-- (>= 2026-05-27, mean 1.912M) since the era was barely longer than 90d;
+-- see pricing-rationale.md section 3.
 SELECT ROUND(AVG(effective_gas_price::numeric)) AS ref_price_attofil,
        COUNT(*)                                 AS n_txs
 FROM tx_meta
-WHERE timestamp::bigint > (SELECT MAX(timestamp::bigint) FROM tx_meta) - 2592000
+WHERE timestamp::bigint > (SELECT MAX(timestamp::bigint) FROM tx_meta) - 7776000
 
 
 -- ============================================================================

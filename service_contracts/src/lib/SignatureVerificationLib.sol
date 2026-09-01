@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Errors} from "../Errors.sol";
+import {IDataSetAuthorizer} from "../interfaces/IDataSetAuthorizer.sol";
 
 /// @title SignatureVerificationLib
 /// @notice Library for EIP-712 signature verification and metadata hashing
@@ -208,87 +209,169 @@ library SignatureVerificationLib {
         );
     }
 
-    /**
-     * @notice Verifies a signature for the AddPieces operation
-     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
-     * @param payer The address of the payer who should have signed the message
-     * @param signature The signature bytes (v, r, s)
-     * @param digest The EIP-712 digest to verify
-     * @param sessionKeyRegistry The session key registry contract
-     */
-    function verifyAddPiecesSignature(
+    /// @notice Verifies and authorizes an AddPieces operation.
+    function verifyAddPiecesAuthorization(
         address payer,
+        uint256 dataSetId,
+        address authorizer,
+        uint256 clientDataSetId,
+        Cids.Cid[] calldata pieceDataArray,
+        uint256 nonce,
+        string[][] calldata allKeys,
+        string[][] calldata allValues,
         bytes calldata signature,
-        bytes32 digest,
+        bytes32 domainSeparator,
         SessionKeyRegistry sessionKeyRegistry
-    ) public view {
-        // The digest is already computed by the calling contract
-        // Just use it directly for signature verification
+    ) public {
+        bytes32 digest = _toTypedDataHash(
+            domainSeparator, addPiecesStructHash(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
+        );
 
-        // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(digest, signature);
-
-        if (payer == recoveredSigner) {
+        if (authorizer == address(0)) {
+            _verifySignature(payer, signature, digest, ADD_PIECES_TYPEHASH, sessionKeyRegistry);
             return;
         }
-        require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, ADD_PIECES_TYPEHASH) >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
+
+        _verifyAuthorizer(
+            payer,
+            signature,
+            digest,
+            ADD_PIECES_TYPEHASH,
+            dataSetId,
+            authorizer,
+            abi.encode(clientDataSetId, nonce, pieceDataArray, allKeys, allValues)
         );
     }
 
-    /**
-     * @notice Verifies a signature for the SchedulePieceRemovals operation
-     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
-     * @param payer The address of the payer who should have signed the message
-     * @param signature The signature bytes (v, r, s)
-     * @param digest The EIP-712 digest to verify
-     * @param sessionKeyRegistry The session key registry contract
-     */
-    function verifySchedulePieceRemovalsSignature(
+    /// @notice Verifies and authorizes a SchedulePieceRemovals operation.
+    function verifySchedulePieceRemovalsAuthorization(
         address payer,
+        uint256 dataSetId,
+        address authorizer,
+        uint256 clientDataSetId,
+        uint256[] calldata pieceIds,
         bytes calldata signature,
-        bytes32 digest,
+        bytes32 domainSeparator,
         SessionKeyRegistry sessionKeyRegistry
-    ) public view {
-        // The digest is already computed by the calling contract
-        // Just use it directly for signature verification
+    ) public {
+        bytes32 digest = _toTypedDataHash(
+            domainSeparator,
+            keccak256(
+                abi.encode(SCHEDULE_PIECE_REMOVALS_TYPEHASH, clientDataSetId, keccak256(abi.encodePacked(pieceIds)))
+            )
+        );
 
-        // Recover signer address from the signature
-        address recoveredSigner = recoverSigner(digest, signature);
-
-        if (payer == recoveredSigner) {
+        if (authorizer == address(0)) {
+            _verifySignature(payer, signature, digest, SCHEDULE_PIECE_REMOVALS_TYPEHASH, sessionKeyRegistry);
             return;
         }
-        require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, SCHEDULE_PIECE_REMOVALS_TYPEHASH)
-                >= block.timestamp,
-            Errors.InvalidSignature(payer, recoveredSigner)
+
+        _verifyAuthorizer(
+            payer,
+            signature,
+            digest,
+            SCHEDULE_PIECE_REMOVALS_TYPEHASH,
+            dataSetId,
+            authorizer,
+            abi.encode(clientDataSetId, pieceIds)
         );
     }
 
-    /**
-     * @notice Verifies a signature for the TerminateService operation
-     * @dev The digest parameter already contains the EIP-712 wrapped struct hash computed by the caller
-     * @param payer The address of the payer who should have signed the message
-     * @param signature The signature bytes (v, r, s)
-     * @param digest The EIP-712 digest to verify
-     * @param sessionKeyRegistry The session key registry contract
-     */
-    function verifyTerminateServiceSignature(
+    /// @notice Verifies and authorizes a TerminateService operation.
+    function verifyTerminateServiceAuthorization(
+        address payer,
+        uint256 dataSetId,
+        address authorizer,
+        bytes calldata signature,
+        bytes32 domainSeparator,
+        SessionKeyRegistry sessionKeyRegistry
+    ) public returns (address) {
+        bytes32 digest = _toTypedDataHash(domainSeparator, keccak256(abi.encode(TERMINATE_SERVICE_TYPEHASH, dataSetId)));
+
+        if (authorizer == address(0)) {
+            return _verifySignature(payer, signature, digest, TERMINATE_SERVICE_TYPEHASH, sessionKeyRegistry);
+        }
+
+        return _verifyAuthorizer(payer, signature, digest, TERMINATE_SERVICE_TYPEHASH, dataSetId, authorizer, bytes(""));
+    }
+
+    /// @notice Gas ceiling for the authorizer subcall.
+    /// @dev Bounds what an untrusted authorizer can burn on the caller's behalf. EIP-150 forwards at
+    ///      most 63/64 of the remaining gas, so this only binds when the caller supplies more.
+    uint256 internal constant AUTHORIZER_GAS_LIMIT = 150_000_000;
+
+    /// @dev Transient-storage slot for the authorizer reentrancy latch. This library is DELEGATECALL'd,
+    ///      so the slot lives in the calling contract's (FWSS's) transient storage and the latch therefore
+    ///      spans the whole FWSS call frame, not just this library invocation.
+    bytes32 internal constant AUTHORIZER_REENTRANCY_SLOT =
+        keccak256("filecoin-warm-storage-service.authorizer.reentrancy.guard");
+
+    /// @dev Reentrancy latch for the authorizer subcall. `_lockAuthorizer` takes the latch before the body;
+    ///      it clears after `_;` (a `return` in the body still runs post-`_;` code) and, on any revert, via
+    ///      transient-storage rollback — so a second legitimate authorization in the same transaction is not
+    ///      blocked. The pre-`_;` check-and-set is hoisted so the modifier body stays call-only
+    ///      (forge-lint `unwrapped-modifier-logic`).
+    modifier nonReentrantAuthorizer() {
+        _lockAuthorizer();
+        _;
+        _setAuthorizerLock(false);
+    }
+
+    function _verifyAuthorizer(
         address payer,
         bytes calldata signature,
         bytes32 digest,
+        bytes32 operation,
+        uint256 dataSetId,
+        address authorizer,
+        bytes memory operationData
+    ) private nonReentrantAuthorizer returns (address) {
+        require(
+            IDataSetAuthorizer(authorizer).isAuthorized{gas: AUTHORIZER_GAS_LIMIT}(
+                dataSetId, payer, operation, digest, signature, operationData
+            ),
+            Errors.Unauthorized(payer, operation, digest, signature)
+        );
+        return payer;
+    }
+
+    function _verifySignature(
+        address payer,
+        bytes calldata signature,
+        bytes32 digest,
+        bytes32 operation,
         SessionKeyRegistry sessionKeyRegistry
-    ) public view returns (address recoveredSigner) {
+    ) private view returns (address recoveredSigner) {
         recoveredSigner = recoverSigner(digest, signature);
-
         if (payer != recoveredSigner) {
             require(
-                sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, TERMINATE_SERVICE_TYPEHASH)
-                    >= block.timestamp,
+                sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, operation) >= block.timestamp,
                 Errors.InvalidSignature(payer, recoveredSigner)
             );
         }
+    }
+
+    function _toTypedDataHash(bytes32 domainSeparator, bytes32 structHash) private pure returns (bytes32) {
+        return keccak256(abi.encodePacked(hex"1901", domainSeparator, structHash));
+    }
+
+    function _authorizerLocked() private view returns (bool locked) {
+        bytes32 slot = AUTHORIZER_REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            locked := tload(slot)
+        }
+    }
+
+    function _setAuthorizerLock(bool value) private {
+        bytes32 slot = AUTHORIZER_REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            tstore(slot, value)
+        }
+    }
+
+    /// @dev Pre-`_;` half of `nonReentrantAuthorizer`, split out to keep the modifier body call-only.
+    function _lockAuthorizer() private {
+        require(!_authorizerLocked(), Errors.AuthorizerReentrancy());
+        _setAuthorizerLock(true);
     }
 }

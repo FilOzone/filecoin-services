@@ -5,6 +5,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.4.0] - FWSS Breaking Upgrade
+
+This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.4.0 and updates the PDPVerifier integration baseline to v3.5.0.
+
+| Component | Version | Upgrade classification |
+|---|---|---|
+| Stack (`filecoin-services`) | `v1.4.0` | Breaking |
+| `FilecoinWarmStorageService` | `1.4.0` | Breaking implementation upgrade |
+| `PDPVerifier` | `3.5.0` | Independent dependency upgrade |
+
+### Deployment / Rollout Status
+
+Rollout status, network-by-network implementation addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.4.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.4.0). The FWSS proxy addresses remain unchanged.
+
+### Breaking Changes
+
+- Newly added piece metadata is no longer persisted in FWSS contract storage and must instead be indexed from `PieceAdded` events. The `getPieceMetadata` and `getAllPieceMetadata` helpers have been removed from `FilecoinWarmStorageServiceStateView`, the state library, and their published ABIs. Existing on-chain piece metadata remains eligible for cleanup when pieces are removed ([#577](https://github.com/FilOzone/filecoin-services/pull/577)).
+- Removed the deprecated FWSS `announcePlannedUpgrade` entry point and legacy absolute-epoch announcement tooling. Operators must use `announceUpgradePlan(nextImplementation, delayEpochs)` for future FWSS upgrades ([#554](https://github.com/FilOzone/filecoin-services/issues/554)).
+
+- Recalibrated FWSS pricing because FIP-0115 increased the observed effective gas-price basis from roughly `250K` to `1.912M attoFIL/gas`, reducing the original 10× cost headroom to roughly 1.3–2×. The new prices also budget for the worst-case gas allowance of programmable data-set authorizers. The per-data-set proving fee increased from `0.024` to `0.12 USDFC/month`; add-pieces fees increased from `0.0005 + 0.0003 × pieces` to `0.008 + 0.003 × pieces`; removal scheduling increased from `0.002` to `0.007 USDFC`; termination increased from `0.00112` to `0.006 USDFC`; and the lifecycle reserve target and replenishment threshold increased from `0.10 / 0.005` to `0.50 / 0.025 USDFC`. The final proving fee accounts for the lower proving gas of the PDPVerifier changes shipping in the same upgrade window ([#583](https://github.com/FilOzone/filecoin-services/pull/583), [#592](https://github.com/FilOzone/filecoin-services/pull/592)).
+
+### Added
+
+- Added optional per-data-set programmable authorization through `IDataSetAuthorizer`. Payers can set, rotate, or clear an authorizer with `setDataSetAuthorizer`, and integrations can query it through `getDataSetAuthorizer`. Once configured, the authorizer becomes the sole authorization gate for adding pieces, scheduling removals, and signed service termination; data sets without an authorizer retain the existing payer and session-key behavior ([#536](https://github.com/FilOzone/filecoin-services/pull/536)).
+
+- Allowed `addPieces` batches without piece metadata to encode both metadata outer arrays as empty, avoiding four calldata slots per piece ([#582](https://github.com/FilOzone/filecoin-services/pull/582)).
+
+### Changed
+
+- Increased FWSS `extraData` limits to support programmable ACL payloads: data-set creation increased from 4 KiB to 5 KiB, while removal scheduling and service termination increased from 256 bytes to 1 KiB ([#560](https://github.com/FilOzone/filecoin-services/pull/560)).
+
+- Updated the PDPVerifier dependency and published ABI for the v3.5.0 integration surface ([#596](https://github.com/FilOzone/filecoin-services/pull/596)).
+
+### Upgrade Notes
+
+- The new one-time operation fees apply immediately to existing and new data sets. Existing data sets adopt the new proving rate on their next rate-touching operation: `piecesAdded`, `nextProvingPeriod` when processing removals or pending fees, or termination. The next fee-charging operation may also raise the lifecycle-reserve lockup toward `0.50 USDFC`; underfunded payers can therefore receive `InsufficientLockupFunds` until their FilecoinPay balance is topped up ([#583](https://github.com/FilOzone/filecoin-services/pull/583)).
+
 ## [1.3.1] - FWSS + ServiceProviderRegistry Upgrade
 
 This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.3.1 and ServiceProviderRegistry to v1.2.0.
@@ -483,7 +520,8 @@ This release contains breaking changes that rename core concepts throughout the 
 
 The underlying functionality remains unchanged; this release only updates terminology for consistency.
 
-[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/FilOzone/filecoin-services/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/FilOzone/filecoin-services/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/FilOzone/filecoin-services/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/FilOzone/filecoin-services/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/FilOzone/filecoin-services/compare/v1.2.0...v1.2.1

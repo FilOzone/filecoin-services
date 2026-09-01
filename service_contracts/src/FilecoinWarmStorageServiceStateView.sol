@@ -47,14 +47,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getAllDataSetMetadata(dataSetId);
     }
 
-    function getAllPieceMetadata(uint256 dataSetId, uint256 pieceId)
-        external
-        view
-        returns (string[] memory keys, string[] memory values)
-    {
-        return service.getAllPieceMetadata(dataSetId, pieceId);
-    }
-
     function getApprovedProviders(uint256 offset, uint256 limit) external view returns (uint256[] memory providerIds) {
         return service.getApprovedProviders(offset, limit);
     }
@@ -95,6 +87,10 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         return service.getDataSet(dataSetId);
     }
 
+    function getDataSetAuthorizer(uint256 dataSetId) external view returns (address) {
+        return service.getDataSetAuthorizer(dataSetId);
+    }
+
     function getDataSetMetadata(uint256 dataSetId, string memory key)
         external
         view
@@ -126,14 +122,6 @@ contract FilecoinWarmStorageServiceStateView is IPDPProvingSchedule {
         )
     {
         return service.getPDPConfig();
-    }
-
-    function getPieceMetadata(uint256 dataSetId, uint256 pieceId, string memory key)
-        external
-        view
-        returns (bool exists, string memory value)
-    {
-        return service.getPieceMetadata(dataSetId, pieceId, key);
     }
 
     function getPriceList() external view returns (PriceList memory list) {

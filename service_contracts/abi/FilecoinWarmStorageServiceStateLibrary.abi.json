@@ -136,40 +136,6 @@
   },
   {
     "type": "function",
-    "name": "getAllPieceMetadata",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "pieceId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "keys",
-        "type": "string[]",
-        "internalType": "string[]"
-      },
-      {
-        "name": "values",
-        "type": "string[]",
-        "internalType": "string[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "getApprovedProviders",
     "inputs": [
       {
@@ -549,6 +515,30 @@
   },
   {
     "type": "function",
+    "name": "getDataSetAuthorizer",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "FilecoinWarmStorageService",
+        "internalType": "contract FilecoinWarmStorageService"
+      },
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getDataSetMetadata",
     "inputs": [
       {
@@ -654,45 +644,6 @@
         "name": "initChallengeWindowStart",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getPieceMetadata",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "pieceId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "key",
-        "type": "string",
-        "internalType": "string"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "exists",
-        "type": "bool",
-        "internalType": "bool"
-      },
-      {
-        "name": "value",
-        "type": "string",
-        "internalType": "string"
       }
     ],
     "stateMutability": "view"

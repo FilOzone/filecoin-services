@@ -12,6 +12,11 @@
   },
   {
     "type": "error",
+    "name": "AuthorizerReentrancy",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "CDNPaymentAlreadyTerminated",
     "inputs": [
       {
@@ -477,6 +482,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidDataSetAuthorizer",
+    "inputs": [
+      {
+        "name": "authorizer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidDataSetId",
     "inputs": [
       {
@@ -669,6 +685,22 @@
         "name": "expected",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "actual",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "OnlyDataSetPayer",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
       },
       {
         "name": "actual",
@@ -904,6 +936,32 @@
         "name": "keysLength",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "Unauthorized",
+    "inputs": [
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "operation",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "digest",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "signature",
+        "type": "bytes",
+        "internalType": "bytes"
       }
     ]
   },

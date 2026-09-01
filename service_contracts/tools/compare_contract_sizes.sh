@@ -1,72 +1,72 @@
 #!/usr/bin/env bash
-#
-# Script for comparing Solidity contract sizes between the current branch and the base branch.
-# Intended for use in CI to report runtime and init code size changes per EIP-170 compliance.
-# Usage: ./tools/compare_contract_sizes.sh <current_sizes.json> <base_sizes.json>
-# Requires: jq
-#
-# Exits 0. Prints table of contract sizes and their delta/status.
-# Author: [Your Name]
 
 set -euo pipefail
 
 if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <current_sizes.json> <base_sizes.json>"
-  exit 1
+    echo "Usage: $0 <current_sizes.json> <base_sizes.json>" >&2
+    exit 2
 fi
 
 CURRENT="$1"
 BASE="$2"
-CONTRACT_SIZE_LIMIT=24576
 
-command -v jq >/dev/null 2>&1 || { echo >&2 "jq is required but not installed."; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "Error: jq is required" >&2; exit 1; }
 
-printf "| %-60s | %-15s | %-15s | %-10s | %-10s | %-18s |\n" "Contract" "Current Size" "Base Size" "Delta" "% Change" "Status"
-printf "| %-.60s | %-.15s | %-.15s | %-.10s | %-.10s | %-.18s |\n" \
-  "------------------------------------------------------------" "---------------" "---------------" "----------" "----------" "------------------"
-
-jq -s --argjson limit "$CONTRACT_SIZE_LIMIT" '
-  def bytes_fmt(n): "\(n) bytes";
-  def pct(curr; base; is_new):
-    if is_new then "New"
-    else if base == 0 then "N/A"
-    else (((curr - base) / base) * 100 | tostring + "%")
-    end
-    end;
-  def status(delta; curr; is_new; is_removed):
-    if is_new then "New"
-    else if is_removed then "Removed"
-    else if curr > $limit then "Limit Exceeded"
-    else if delta > 0 then "Increased"
-    else if delta < 0 then "Decreased"
-    else "Unchanged"
-    end
-    end
-    end
-    end
-    end;
-
-  ((.[0] | keys) + (.[1] | keys) | unique) as $all_keys
-  | $all_keys[] as $k
-  | {
-      contract: $k,
-      curr: (.[0][$k].runtime_size // 0),
-      base: (.[1][$k].runtime_size // 0),
-      is_new: (.[1][$k] == null),
-      is_removed: (.[0][$k] == null)
-    }
-  | .delta = (.curr - .base)
-  | {
-      c: .contract,
-      curr: bytes_fmt(.curr),
-      base: bytes_fmt(.base),
-      delta: ((if .delta > 0 then "+" else if .delta == 0 then "±" else "" end end) + bytes_fmt(.delta)),
-      pct: pct(.curr; .base; .is_new),
-      status: status(.delta; .curr; .is_new; .is_removed)
-    }
-' "$CURRENT" "$BASE" \
-| jq -r '[.c, .curr, .base, .delta, .pct, .status] | @tsv' \
-| while IFS=$'\t' read -r c curr base delta pct status; do
-    printf "| %-60s | %-15s | %-15s | %-10s | %-10s | %-18s |\n" "$c" "$curr" "$base" "$delta" "$pct" "$status"
+for report in "$CURRENT" "$BASE"; do
+    [[ -f "$report" ]] || { echo "Error: size report not found: $report" >&2; exit 1; }
+    if ! jq -e '
+        .schema_version == 1
+        and (.contracts | type == "object")
+        and all(
+            .contracts[];
+            type == "object"
+            and (.runtime_size | type == "number")
+            and (.init_size | type == "number")
+            and (.runtime_limit | type == "number")
+            and (.initcode_limit | type == "number")
+            and (.minimum_runtime_headroom | type == "number")
+            and (.runtime_headroom | type == "number")
+        )
+    ' "$report" >/dev/null; then
+        echo "Error: invalid normalized contract-size report: $report" >&2
+        exit 1
+    fi
 done
 
+jq -nr --rawfile current "$CURRENT" --rawfile base "$BASE" '
+    ($current | fromjson) as $current_report
+    | ($base | fromjson) as $base_report
+    | $current_report.contracts as $current_contracts
+    | $base_report.contracts as $base_contracts
+    | (($current_contracts | keys) + ($base_contracts | keys) | unique) as $keys
+    | def bytes($value):
+        if $value == null then "—" else "\($value) B" end;
+    def delta($current; $base):
+        if $current == null or $base == null then "—"
+        else
+            ($current - $base) as $change
+            | (if $change > 0 then "+" else "" end) + "\($change) B"
+        end;
+    def status($current; $base):
+        if $current == null then "Removed"
+        elif $current.runtime_size > $current.runtime_limit
+            or $current.init_size > $current.initcode_limit
+            or $current.runtime_headroom < $current.minimum_runtime_headroom
+        then "Policy exceeded"
+        elif $base == null then "New"
+        elif $current.runtime_size == $base.runtime_size and $current.init_size == $base.init_size then "Unchanged"
+        elif $current.runtime_size == $base.runtime_size then
+            if $current.init_size > $base.init_size then "Initcode increased" else "Initcode decreased" end
+        elif $current.init_size == $base.init_size then
+            if $current.runtime_size > $base.runtime_size then "Runtime increased" else "Runtime decreased" end
+        else "Runtime/initcode changed"
+        end;
+    "| Contract | Current runtime | Base runtime | Runtime delta | Current initcode | Base initcode | Initcode delta | Current headroom | Required headroom | Status |",
+    "|---|---:|---:|---:|---:|---:|---:|---:|---:|---|",
+    (
+        $keys[] as $key
+        | ($current_contracts[$key] // null) as $current_contract
+        | ($base_contracts[$key] // null) as $base_contract
+        | "| \($key) | \(bytes($current_contract.runtime_size)) | \(bytes($base_contract.runtime_size)) | \(delta($current_contract.runtime_size; $base_contract.runtime_size)) | \(bytes($current_contract.init_size)) | \(bytes($base_contract.init_size)) | \(delta($current_contract.init_size; $base_contract.init_size)) | \(bytes($current_contract.runtime_headroom)) | \(bytes($current_contract.minimum_runtime_headroom)) | \(status($current_contract; $base_contract)) |"
+    )
+'
