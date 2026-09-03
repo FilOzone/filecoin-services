@@ -93,10 +93,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
             address(
                 new MyERC1967Proxy(
                     address(fwssImpl),
-                    abi.encodeCall(
-                        FilecoinWarmStorageService.initialize,
-                        (uint64(2880), uint256(60), address(0xfc), "FWSS Test", "Filecoin Warm Storage Service Test")
-                    )
+                    abi.encodeCall(FilecoinWarmStorageService.initialize, (uint64(2880), uint256(60), address(0xfc)))
                 )
             )
         );
