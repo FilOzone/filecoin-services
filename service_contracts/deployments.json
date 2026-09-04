@@ -1,42 +1,42 @@
 {
   "314": {
     "metadata": {
-      "commit": "c1ae9e5e66c5e37bd150f1565d811eeb69387a4e",
-      "deployed_at": "2026-08-06T11:46:32Z",
-      "fwss_version": "1.3.1",
-      "pdp_version": "3.4.0"
+      "commit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec",
+      "deployed_at": "2026-08-21T16:29:02Z",
+      "fwss_version": "1.4.0",
+      "pdp_version": "3.5.0"
     },
     "FILECOIN_PAY_ADDRESS": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
     "PDP_VERIFIER_PROXY_ADDRESS": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
-    "PDP_VERIFIER_IMPLEMENTATION_ADDRESS": "0xb41A97FEDD2D9497C639A643ec75E56CbCeDe8BA",
+    "PDP_VERIFIER_IMPLEMENTATION_ADDRESS": "0x04D4CdB99E34D7e9a366E7eba7A835e034bc41b1",
     "SESSION_KEY_REGISTRY_ADDRESS": "0x74FD50525A958aF5d484601E252271f9625231aB",
     "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS": "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS": "0x1Bb676392272313598930FEf8D5B66FFECcE02F0",
-    "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0xBbd3b82a9396156a997111D42c5356718522ed2D",
-    "RAILS_LIB_ADDRESS": "0x2086790553080c615C7a9913687789dD3553501b",
+    "SIGNATURE_VERIFICATION_LIB_ADDRESS": "0x63904443e46cc9F3db35CB4Fe16c76E7ffCA453e",
+    "RAILS_LIB_ADDRESS": "0x54aC29E68B3C7C5F7F315CeF1a85ECA848B88a9b",
     "FWSS_PROXY_ADDRESS": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
-    "FWSS_IMPLEMENTATION_ADDRESS": "0x3583e9fc40243924C6f8eBE3d17e5364Bb6A01a9",
-    "FWSS_VIEW_ADDRESS": "0xdDd8F083a3fe9C66547D46bee24e5AaF56BCa0ab",
+    "FWSS_IMPLEMENTATION_ADDRESS": "0xa874C7333c8e1689C33155AD7bEE980926086e21",
+    "FWSS_VIEW_ADDRESS": "0xcf184Ab1FD8D1a563054d30Aa1fFb08136998172",
     "ENDORSEMENT_SET_ADDRESS": "0x59eFa2e8324E1551d46010d7B0B140eE2F5c726b",
     "contracts": {
       "SIGNATURE_VERIFICATION_LIB": {
-        "initcode_hash": "0x7f289263c875cb7f516f44b8a29f4fc6b0b869727506ebcf4411e059346f7ada",
+        "initcode_hash": "0xddcbe59b3ccf54d3f47c15dd4dda953aaf43d8b004811693aad2f1b3aaedffdc",
         "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
         "libraries": {},
         "constructor_args": []
       },
       "RAILS_LIB": {
-        "initcode_hash": "0x1c47422c8af3befdd887aa049ad33594709b62d3dad84b48c99e2fd51125de17",
+        "initcode_hash": "0x67d94fb169bf3563a279a006eb936594c4bef7db610512fb05db306ecbc2b0f4",
         "artifact_contract": "src/lib/Rails.sol:Rails",
         "libraries": {},
         "constructor_args": []
       },
       "FWSS_IMPLEMENTATION": {
-        "initcode_hash": "0x063c85cd280ad763831154d587c85aa51d5075a1bd9ff4ec13cbc8646bc08cdd",
+        "initcode_hash": "0x0e6588ee8d338abe2d311709c7ebf75953d54e4f8cbb209d14692fbbe445fb92",
         "artifact_contract": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
         "libraries": {
-          "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0xBbd3b82a9396156a997111D42c5356718522ed2D",
-          "src/lib/Rails.sol:Rails": "0x2086790553080c615C7a9913687789dD3553501b"
+          "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib": "0x63904443e46cc9F3db35CB4Fe16c76E7ffCA453e",
+          "src/lib/Rails.sol:Rails": "0x54aC29E68B3C7C5F7F315CeF1a85ECA848B88a9b"
         },
         "constructor_args": [
           "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
@@ -45,7 +45,7 @@
           "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
           "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
           "0x74FD50525A958aF5d484601E252271f9625231aB",
-          "5"
+          "6"
         ]
       },
       "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
@@ -108,7 +108,7 @@
         "pinned": true
       },
       "FWSS_VIEW": {
-        "initcode_hash": "0x3d0559eb40bca9c43617e7cb88789905f2814d8e67634f054f89a84b6a60501d",
+        "initcode_hash": "0x3daadee16ed5f238f76fd90c913a10c9bb6db2aa6d99e5c02ee29b727b31222c",
         "artifact_contract": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
         "libraries": {},
         "constructor_args": [
@@ -116,11 +116,11 @@
         ]
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
-        "initcode_hash": "0xeafb9469e2aa231a3b2db2f01c79a0de89a8e45535d7688a6e64b83083ae57c9",
+        "initcode_hash": "0x43f5be1a5e546cfd7200624a02c53fdf46caa8150f16b0663a2e8c67d68e3dfe",
         "artifact_contract": "lib/pdp/src/PDPVerifier.sol:PDPVerifier",
         "libraries": {},
         "constructor_args": [
-          "3",
+          "4",
           "150"
         ],
         "pinned": true
