@@ -8,6 +8,8 @@ pragma solidity ^0.8.21;
 // identity for SP allowlisting. See MultiMethodAuthorizer.md for the wire-format spec.
 
 import {IDataSetAuthorizer} from "../interfaces/IDataSetAuthorizer.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 
 /// @title MultiMethodAuthorizer
 /// @notice One authorizer that recognises TWO legitimate delegation paths for the SAME P256
@@ -29,12 +31,14 @@ import {IDataSetAuthorizer} from "../interfaces/IDataSetAuthorizer.sol";
 ///
 ///           abi.encode(uint8 method, bytes payload)
 ///             machine payload = abi.encode(uint256 x, uint256 y, bytes32 r, bytes32 s)
-///             passkey payload = abi.encode(uint256 x, uint256 y, bytes authenticatorData,
-///                                          string clientDataJSON, bytes32 r, bytes32 s)
+///             passkey payload = abi.encode(uint256 x, uint256 y, bytes32 r, bytes32 s,
+///                                          bytes authenticatorData, string clientDataJSON)
+///           Both payloads lead with the same P256 fields (x, y, r, s); the passkey adds the WebAuthn
+///           envelope after them, so isAuthorized decodes (x, y, r, s) once for either method.
 ///
 /// Replay is handled by FWSS itself (the digest is operation-unique and FWSS enforces its own
 /// nonces / termination state), so this authorizer stays a pure authenticate-and-authorize gate.
-contract MultiMethodAuthorizer is IDataSetAuthorizer {
+contract MultiMethodAuthorizer is Initializable, OwnableUpgradeable, IDataSetAuthorizer {
     enum Method {
         MachineP256,
         Passkey
@@ -66,50 +70,47 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     /// precompile does NOT reject them — so this authorizer enforces low-S itself (see _verifyP256).
     uint256 internal constant _P256_N = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFFBCE6FAADA7179E84F3B9CAC2FC632551;
 
-    address public owner;
-
     mapping(bytes32 credId => Credential) public credentials;
     mapping(bytes32 credId => mapping(bytes32 operation => bool)) public allowedOp;
 
-    event OwnershipTransferred(address indexed from, address indexed to);
+    // OwnershipTransferred is inherited from OwnableUpgradeable.
     event CredentialSet(bytes32 indexed credId, Method method, uint256 pubKeyX, uint256 pubKeyY, uint256 dataSetId);
     event CredentialEnabled(bytes32 indexed credId, bool enabled);
     event OperationAllowed(bytes32 indexed credId, bytes32 indexed operation, bool allowed);
     event Authorized(bytes32 indexed credId, bytes32 indexed operation, Method method);
     event CredentialRemoved(bytes32 indexed credId);
 
-    error NotOwner();
     error UnknownMethod(uint8 method);
     error UnknownCredential(bytes32 credId);
-    error ZeroOwner();
+    error RenounceDisabled();
 
-    modifier onlyOwner() {
-        _onlyOwner();
-        _;
-    }
+    // Ownership (owner(), onlyOwner, transferOwnership, OwnableUnauthorizedAccount/OwnableInvalidOwner)
+    // comes from OwnableUpgradeable; the initializer machinery (one-shot guard, InvalidInitialization)
+    // from Initializable. Both are pure runtime/logic dependencies — no immutables — so the runtime
+    // bytecode / code identity used for SP allowlisting stays deployment-independent.
 
-    function _onlyOwner() internal view {
-        if (msg.sender != owner) revert NotOwner();
-    }
-
-    /// Standalone deploys set the owner here. Constructor logic lives in creation code, not runtime
-    /// code, so it does not affect the runtime bytecode / code identity used for SP allowlisting.
-    constructor() {
-        owner = msg.sender;
-        emit OwnershipTransferred(address(0), msg.sender);
+    /// Standalone deploys set the owner here: the constructor runs the `initializer` (during
+    /// construction `code.length == 0`, the Initializable branch that permits this), so a standalone
+    /// instance is born initialized to its deployer and cannot be re-initialized. Constructor logic
+    /// lives in creation code, not runtime code, so it does not affect the code identity.
+    constructor() initializer {
+        __Ownable_init(msg.sender);
     }
 
     /// One-shot initializer for EIP-1167 minimal-proxy clones, which never run the constructor (so
-    /// their `owner` starts at zero). Intended model: one clone per client, initialized to that
-    /// client's owner address; the client then attaches this same address as authorizer on each
-    /// data set they want it to govern. Reverts once set, so a standalone deploy can't be
-    /// re-initialized. Deploy and initialize a clone atomically (factory/script) so a fresh clone
-    /// can't be initialize-front-run.
-    function initialize(address initialOwner) external {
-        require(owner == address(0), "already initialized");
-        require(initialOwner != address(0), "zero owner");
-        owner = initialOwner;
-        emit OwnershipTransferred(address(0), initialOwner);
+    /// their storage starts zeroed and `_initialized == 0`). Intended model: one clone per client,
+    /// initialized to that client's owner address; the client then attaches this same address as
+    /// authorizer on each data set they want it to govern. Reverts once set (InvalidInitialization),
+    /// so re-initialization is impossible. Deploy and initialize a clone atomically (factory/script)
+    /// so a fresh clone can't be initialize-front-run. `__Ownable_init` rejects a zero owner.
+    function initialize(address initialOwner) external initializer {
+        __Ownable_init(initialOwner);
+    }
+
+    /// Disabled: an ownerless authorizer could never manage credentials again, silently freezing
+    /// every data set it gates. Transfer ownership to a new key instead of renouncing.
+    function renounceOwnership() public view override onlyOwner {
+        revert RenounceDisabled();
     }
 
     // ───────────────────────── owner: registry management ─────────────────────────
@@ -178,12 +179,6 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         return credentials[credId].ops;
     }
 
-    function transferOwnership(address to) external onlyOwner {
-        if (to == address(0)) revert ZeroOwner();
-        emit OwnershipTransferred(owner, to);
-        owner = to;
-    }
-
     function credentialId(Method method, uint256 x, uint256 y, uint256 dataSetId) public pure returns (bytes32) {
         return keccak256(abi.encode(method, x, y, dataSetId));
     }
@@ -198,16 +193,34 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
     /// @inheritdoc IDataSetAuthorizer
     function isAuthorized(
         uint256 dataSetId,
-        address,
+        address, /* payer */
         bytes32 operation,
         bytes32 digest,
         bytes calldata signature,
-        bytes calldata
+        bytes calldata /* operationData */
     ) external returns (bool) {
         (uint8 method, bytes memory payload) = abi.decode(signature, (uint8, bytes));
-        if (method == uint8(Method.MachineP256)) return _machine(dataSetId, operation, digest, payload);
-        if (method == uint8(Method.Passkey)) return _passkey(dataSetId, operation, digest, payload);
-        revert UnknownMethod(method); // malformed → revert (bubbles); in-scope failures → false
+        // malformed / unrecognised method → revert (bubbles); in-scope authorization failures → false.
+        if (method > uint8(Method.Passkey)) revert UnknownMethod(method);
+
+        // Both payloads lead with the same P256 fields, so decode them once here; the passkey's
+        // WebAuthn envelope trails and is decoded in _verifyPasskey.
+        (uint256 x, uint256 y, bytes32 r, bytes32 s) = abi.decode(payload, (uint256, uint256, bytes32, bytes32));
+
+        (bytes32 credId, bool allowed) = _lookupCred(Method(method), x, y, dataSetId, operation);
+        if (!allowed) return false;
+
+        if (method == uint8(Method.MachineP256)) {
+            // machine key signs the FWSS digest directly.
+            if (!_verifyP256(digest, x, y, r, s)) return false;
+        } else {
+            // WebAuthn passkey: presence + verification, challenge-binds to the digest, then
+            // P256-verifies the WebAuthn message. rpIdHash is pinned per-credential.
+            if (!_verifyPasskey(payload, digest, x, y, r, s, credentials[credId].rpIdHash)) return false;
+        }
+
+        emit Authorized(credId, operation, Method(method));
+        return true;
     }
 
     /// Resolve a credential for this key on `dataSetId`, falling back to the wildcard credential.
@@ -226,42 +239,33 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         return (credId, false);
     }
 
-    /// method 0 — machine key signs the FWSS digest directly.
-    function _machine(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload)
-        internal
-        returns (bool)
-    {
-        (uint256 x, uint256 y, bytes32 r, bytes32 s) = abi.decode(payload, (uint256, uint256, bytes32, bytes32));
-        (bytes32 credId, bool allowed) = _lookupCred(Method.MachineP256, x, y, dataSetId, operation);
-        if (!allowed) return false;
-        if (!_verifyP256(digest, r, s, x, y)) return false;
-        emit Authorized(credId, operation, Method.MachineP256);
-        return true;
-    }
-
-    /// method 1 — WebAuthn passkey: verify presence+verification and that the assertion's
-    /// challenge is exactly the FWSS digest, then P256-verify the WebAuthn message.
-    function _passkey(uint256 dataSetId, bytes32 operation, bytes32 digest, bytes memory payload)
-        internal
-        returns (bool)
-    {
-        (uint256 x, uint256 y, bytes memory authData, string memory clientDataJSON, bytes32 r, bytes32 s) =
-            abi.decode(payload, (uint256, uint256, bytes, string, bytes32, bytes32));
-        (bytes32 credId, bool allowed) = _lookupCred(Method.Passkey, x, y, dataSetId, operation);
-        if (!allowed) return false;
-        Credential storage c = credentials[credId];
+    /// WebAuthn passkey verification (method 1). Decodes the WebAuthn envelope trailing the shared
+    /// (x, y, r, s) prefix, requires presence + verification, binds the assertion challenge to the
+    /// FWSS digest, pins rpIdHash, then P256-verifies the WebAuthn signed message. Pure check (no
+    /// state writes / events); the caller resolves the credential and emits.
+    function _verifyPasskey(
+        bytes memory payload,
+        bytes32 digest,
+        uint256 x,
+        uint256 y,
+        bytes32 r,
+        bytes32 s,
+        bytes32 rpIdHash
+    ) internal view returns (bool) {
+        (,,,, bytes memory authData, string memory clientDataJSON) =
+            abi.decode(payload, (uint256, uint256, bytes32, bytes32, bytes, string));
 
         // authenticatorData: rpIdHash(32) | flags(1) | signCount(4) | ...
         if (authData.length < 37) return false;
         uint8 flags = uint8(authData[32]);
         if (flags & 0x01 == 0) return false; // UP: user present
         if (flags & 0x04 == 0) return false; // UV: user VERIFIED (biometric) — what makes this "a human"
-        if (c.rpIdHash != bytes32(0)) {
+        if (rpIdHash != bytes32(0)) {
             bytes32 rp;
             assembly {
                 rp := mload(add(authData, 32))
             } // first 32 bytes of authData
-            if (rp != c.rpIdHash) return false;
+            if (rp != rpIdHash) return false;
         }
 
         // challenge binding: clientDataJSON must be a webauthn.get whose challenge == base64url(digest)
@@ -271,9 +275,7 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
 
         // WebAuthn signed message = sha256(authenticatorData || sha256(clientDataJSON))
         bytes32 message = sha256(abi.encodePacked(authData, sha256(cd)));
-        if (!_verifyP256(message, r, s, x, y)) return false;
-        emit Authorized(credId, operation, Method.Passkey);
-        return true;
+        return _verifyP256(message, x, y, r, s);
     }
 
     function _exists(bytes32 credId) internal view returns (bool) {
@@ -316,7 +318,9 @@ contract MultiMethodAuthorizer is IDataSetAuthorizer {
         return allowedOp[credId][operation];
     }
 
-    function _verifyP256(bytes32 hash, bytes32 r, bytes32 s, uint256 x, uint256 y) internal view returns (bool) {
+    // Params are ordered (key x, y, then signature r, s) to match the payload decode and the rest of
+    // this contract; the precompile's own input layout is hash‖r‖s‖x‖y (RIP-7212), applied below.
+    function _verifyP256(bytes32 hash, uint256 x, uint256 y, bytes32 r, bytes32 s) internal view returns (bool) {
         // Reject high-S (malleable) signatures: the 0x100 precompile accepts them, so we enforce
         // low-S here to match the spec and prevent signature malleability.
         if (uint256(s) > _P256_N / 2) return false;

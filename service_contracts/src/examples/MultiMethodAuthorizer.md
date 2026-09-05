@@ -194,15 +194,19 @@ Signed message = the FWSS `digest` **verbatim**.
 ### 5.2 Method 1 — Passkey (WebAuthn assertion; proves human presence + verification)
 
 ```
-payload = abi.encode(uint256 x, uint256 y, bytes authenticatorData, string clientDataJSON, bytes32 r, bytes32 s)
+payload = abi.encode(uint256 x, uint256 y, bytes32 r, bytes32 s, bytes authenticatorData, string clientDataJSON)
 ```
+
+The `(x, y, r, s)` prefix is laid out identically to the Machine payload (§5.1); the WebAuthn
+envelope (`authenticatorData`, `clientDataJSON`) follows. `isAuthorized` decodes the shared prefix
+once for either method.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `x`, `y` | `uint256` | P256 public key; selects `credId = keccak(abi.encode(1, x, y, dataSetId))` (then wildcard fallback) |
+| `r`, `s` | `bytes32` | P256 signature over the WebAuthn **message** (below), low-`s` |
 | `authenticatorData` | `bytes` | WebAuthn authenticator data (≥ 37 bytes) |
 | `clientDataJSON` | `string` | WebAuthn client data JSON |
-| `r`, `s` | `bytes32` | P256 signature over the WebAuthn **message** (below), low-`s` |
 
 **`authenticatorData` layout** (only the fixed prefix is inspected):
 
@@ -244,7 +248,7 @@ message = H( authenticatorData ‖ H(clientDataJSON) )
 3. **Machine (0):** decode `(x, y, r, s)`.
    - If `P256Verify(digest, r, s, x, y) ≠ 1` ⇒ return `false`.
    - Else emit `Authorized(credId, operation, MachineP256)`; return `true`.
-4. **Passkey (1):** decode `(x, y, authenticatorData, clientDataJSON, r, s)`.
+4. **Passkey (1):** decode `(x, y, r, s, authenticatorData, clientDataJSON)`.
    - If `authenticatorData.length < 37` ⇒ return `false`.
    - If `flags & 0x01 == 0` (no user-present) ⇒ return `false`.
    - If `flags & 0x04 == 0` (**no user-verified / biometric**) ⇒ return `false`.

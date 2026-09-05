@@ -4,6 +4,8 @@ pragma solidity ^0.8.30;
 import {Test} from "forge-std/Test.sol";
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {P256} from "@openzeppelin/contracts/utils/cryptography/P256.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {MultiMethodAuthorizer} from "../src/examples/MultiMethodAuthorizer.sol";
 
 contract MultiMethodAuthorizerTest is Test {
@@ -76,7 +78,7 @@ contract MultiMethodAuthorizerTest is Test {
     function _passkeyBlob(bytes memory ad, string memory cd) internal view returns (bytes memory) {
         bytes32 message = sha256(abi.encodePacked(ad, sha256(bytes(cd))));
         (bytes32 r, bytes32 s) = _sign(message);
-        return abi.encode(uint8(1), abi.encode(px, py, ad, cd, r, s));
+        return abi.encode(uint8(1), abi.encode(px, py, r, s, ad, cd));
     }
 
     function _goodPasskey(bytes32 digest, bytes32 rpIdHash) internal view returns (bytes memory) {
@@ -139,26 +141,27 @@ contract MultiMethodAuthorizerTest is Test {
     }
 
     function test_nonOwnerCannotMutateRegistry() public {
+        bytes memory notOwner = abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, stranger);
         vm.startPrank(stranger);
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(notOwner);
         _addMachine(1, _ops(ADD_PIECES));
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(notOwner);
         auth.setOperationAllowed(bytes32(0), ADD_PIECES, true);
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(notOwner);
         auth.setCredentialEnabled(bytes32(0), false);
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(notOwner);
         auth.setCredentialExpiry(bytes32(0), 1);
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(notOwner);
         auth.removeCredential(bytes32(0));
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(notOwner);
         auth.transferOwnership(stranger);
         vm.stopPrank();
     }
 
     function test_standaloneCannotBeReinitialized() public {
-        vm.expectRevert("already initialized");
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
         auth.initialize(stranger);
-        vm.expectRevert("already initialized");
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
         auth.initialize(address(0));
     }
 
@@ -170,26 +173,32 @@ contract MultiMethodAuthorizerTest is Test {
         clone.initialize(stranger);
         assertEq(clone.owner(), stranger);
 
-        vm.expectRevert("already initialized");
+        vm.expectRevert(Initializable.InvalidInitialization.selector);
         clone.initialize(address(this));
     }
 
     function test_cloneInitializeRejectsZeroOwner() public {
         MultiMethodAuthorizer clone = MultiMethodAuthorizer(address(auth).clone());
-        vm.expectRevert("zero owner");
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
         clone.initialize(address(0));
     }
 
     function test_transferOwnershipRejectsZero() public {
-        vm.expectRevert(MultiMethodAuthorizer.ZeroOwner.selector);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
         auth.transferOwnership(address(0));
+        assertEq(auth.owner(), address(this));
+    }
+
+    function test_renounceOwnershipDisabled() public {
+        vm.expectRevert(MultiMethodAuthorizer.RenounceDisabled.selector);
+        auth.renounceOwnership();
         assertEq(auth.owner(), address(this));
     }
 
     function test_transferOwnershipMovesAdmin() public {
         auth.transferOwnership(stranger);
         assertEq(auth.owner(), stranger);
-        vm.expectRevert(MultiMethodAuthorizer.NotOwner.selector);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, address(this)));
         _addMachine(1, _ops(ADD_PIECES));
         vm.prank(stranger);
         _addMachine(1, _ops(ADD_PIECES));
