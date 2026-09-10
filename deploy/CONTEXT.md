@@ -9,7 +9,7 @@ The authoritative declaration of what a single network is or will be. It contain
 _Avoid_: Desired-state file, rollout plan, deployment cache
 
 **Source Commit**:
-The frozen repository revision from which tooling derives candidate contract changes for a Network Manifest.
+The frozen repository revision from which one managed component's deployment identity is reproduced.
 _Avoid_: Working tree, release branch
 
 **Observed State**:
@@ -37,20 +37,24 @@ The condition where a component's Observed State agrees with its declaration in 
 _Avoid_: Transaction succeeded, rollout attempted
 
 **Safe Action**:
-One currently executable owner-governed transaction, or atomic transaction batch, presented for human review and signing.
+One currently executable owner-governed transaction presented for human review and signing.
 _Avoid_: Upgrade approval, automatic execution
 
 **Action Dependency**:
-An explicit requirement that blocks one generated action until another component has reached a named state. Operational readiness that humans express by withholding a Safe Action is not an Action Dependency.
+A persistent requirement that blocks one generated action until another component has reached a named state. Operational readiness that humans express by withholding a Safe Action is not an Action Dependency.
 _Avoid_: Operational gate, rollout wave
 
 **Pin**:
-A justified, expiring declaration that retains a component instead of selecting the version derived from the Source Commit.
+A justified, expiring declaration that protects a managed component from bulk source updates while continuing to verify it.
 _Avoid_: Per-rollout waiver, silent exclusion
 
 **Adoption**:
-An explicit manifest change that accepts previously unexpected Observed State as the declared network state.
+An explicit manifest change that accepts Observed State as the declared network state, including state that normal provenance checks cannot reproduce.
 _Avoid_: Automatic import, drift acceptance
+
+**Unreproducible**:
+An explicit property of adopted state whose deployment identity cannot be reproduced from a known Source Commit.
+_Avoid_: Verified exception, assumed source
 
 **Supersession**:
 Replacement of an active rollout target by a newly merged Network Manifest. Reconciliation restarts from Observed State without interpreting or migrating the prior rollout's progress.

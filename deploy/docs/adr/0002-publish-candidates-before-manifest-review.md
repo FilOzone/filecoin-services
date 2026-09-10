@@ -10,4 +10,4 @@ The manifest records each candidate address together with reproducible deploymen
 
 ## Consequences
 
-Candidate addresses are concrete during review without requiring deterministic deployment. The deployment command must build the selected Source Commit rather than the author's working tree. Invalid candidate identity or provenance blocks merge; verification evidence belongs in CI rather than committed manifest state.
+Candidate addresses are concrete during review without requiring deterministic deployment. The deployment command must build the selected Source Commit rather than the author's working tree. Invalid normal-candidate identity or provenance blocks merge; the explicitly marked Unreproducible Adoption escape hatch is distinct. Verification evidence belongs in CI rather than committed manifest state.
