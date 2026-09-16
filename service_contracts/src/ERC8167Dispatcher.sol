@@ -8,6 +8,7 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
     error SelectorAlreadyInstalled(bytes4 selector);
     error FixedSelector(bytes4 selector);
     error InvalidDelegate(address delegate);
+    error DelegateUnchanged(bytes4 selector);
 
     address internal immutable dispatcherAddress = address(this);
 
@@ -51,6 +52,29 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
             delegate != address(this) && delegate != dispatcherAddress && delegate.code.length != 0,
             InvalidDelegate(delegate)
         );
+    }
+
+    function _replaceRoute(bytes4 selector, address delegate) internal {
+        require(!_isFixedSelector(selector), FixedSelector(selector));
+        _checkDelegate(delegate);
+        Route storage route = _routingStorage().routes[selector];
+        require(route.delegate != address(0), FunctionNotFound(selector));
+        require(route.delegate != delegate, DelegateUnchanged(selector));
+        route.delegate = delegate;
+        emit SelectorDelegated(selector, delegate);
+    }
+
+    function _removeRoute(bytes4 selector) internal {
+        require(!_isFixedSelector(selector), FixedSelector(selector));
+        RoutingStorage storage state = _routingStorage();
+        Route memory route = state.routes[selector];
+        require(route.delegate != address(0), FunctionNotFound(selector));
+        bytes4 last = state.selectors[state.selectors.length - 1];
+        state.selectors[route.index] = last;
+        state.routes[last].index = route.index;
+        state.selectors.pop();
+        delete state.routes[selector];
+        emit SelectorDelegated(selector, address(0));
     }
 
     function implementation(bytes4 selector) public view returns (address) {
