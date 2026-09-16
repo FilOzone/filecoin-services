@@ -125,6 +125,7 @@ contract ServiceProviderRegistry is
     }
 
     function _onlyServiceProvider(uint256 providerId) internal view {
+        // forge-lint: disable-next-line(custom-errors)
         require(providers[providerId].serviceProvider == msg.sender, "Only service provider can call this function");
     }
 
@@ -135,7 +136,9 @@ contract ServiceProviderRegistry is
     }
 
     function _providerExists(uint256 providerId) internal view {
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
+        // forge-lint: disable-next-line(custom-errors)
         require(providers[providerId].serviceProvider != address(0), "Provider not found");
     }
 
@@ -146,6 +149,7 @@ contract ServiceProviderRegistry is
     }
 
     function _providerActive(uint256 providerId) internal view {
+        // forge-lint: disable-next-line(custom-errors)
         require(providers[providerId].isActive, "Provider is not active");
     }
 
@@ -182,21 +186,27 @@ contract ServiceProviderRegistry is
         bytes[] calldata capabilityValues
     ) external payable returns (uint256 providerId) {
         // Only support PDP for now
+        // forge-lint: disable-next-line(custom-errors)
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         // Validate payee address
+        // forge-lint: disable-next-line(custom-errors)
         require(payee != address(0), "Payee cannot be zero address");
 
         // Check if address is already registered
+        // forge-lint: disable-next-line(custom-errors)
         require(addressToProviderId[msg.sender] == 0, "Address already registered");
 
         // Check payment amount is exactly the registration fee
+        // forge-lint: disable-next-line(custom-errors)
         require(msg.value == REGISTRATION_FEE, "Incorrect fee amount");
 
         // Validate name (optional, so empty is allowed)
+        // forge-lint: disable-next-line(custom-errors)
         require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
 
         // Validate description
+        // forge-lint: disable-next-line(custom-errors)
         require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
 
         // Assign provider ID
@@ -222,6 +232,7 @@ contract ServiceProviderRegistry is
         emit ProductAdded(providerId, productType, msg.sender, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
+        // forge-lint: disable-next-line(custom-errors)
         require(FVMPay.burn(REGISTRATION_FEE), "Burn failed");
     }
 
@@ -233,9 +244,11 @@ contract ServiceProviderRegistry is
         external
     {
         // Only support PDP for now
+        // forge-lint: disable-next-line(custom-errors)
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         uint256 providerId = addressToProviderId[msg.sender];
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId != 0, "Provider not registered");
 
         _addProduct(providerId, productType, capabilityKeys, capabilityValues);
@@ -249,6 +262,7 @@ contract ServiceProviderRegistry is
         bytes[] calldata capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Check product doesn't already exist
+        // forge-lint: disable-next-line(custom-errors)
         require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
 
         // Validate and store product
@@ -294,9 +308,11 @@ contract ServiceProviderRegistry is
         external
     {
         // Only support PDP for now
+        // forge-lint: disable-next-line(custom-errors)
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         uint256 providerId = addressToProviderId[msg.sender];
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId != 0, "Provider not registered");
 
         _updateProduct(providerId, productType, capabilityKeys, capabilityValues);
@@ -313,6 +329,7 @@ contract ServiceProviderRegistry is
         ServiceProduct storage product = providerProducts[providerId][productType];
 
         // Check product exists
+        // forge-lint: disable-next-line(custom-errors)
         require(product.isActive, "Product does not exist for this provider");
 
         // Validate product data
@@ -345,9 +362,11 @@ contract ServiceProviderRegistry is
     /// @param productType The type of product to remove
     function removeProduct(ProductType productType) external {
         // Only support PDP for now
+        // forge-lint: disable-next-line(custom-errors)
         require(productType == ProductType.PDP, "Only PDP product type currently supported");
 
         uint256 providerId = addressToProviderId[msg.sender];
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId != 0, "Provider not registered");
 
         _removeProduct(providerId, productType);
@@ -361,6 +380,7 @@ contract ServiceProviderRegistry is
         onlyServiceProvider(providerId)
     {
         // Check product exists
+        // forge-lint: disable-next-line(custom-errors)
         require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
 
         // Clear capabilities from mapping
@@ -387,15 +407,21 @@ contract ServiceProviderRegistry is
     /// @param description New provider description (max 256 chars)
     function updateProviderInfo(string calldata name, string calldata description) external {
         uint256 providerId = addressToProviderId[msg.sender];
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId != 0, "Provider not registered");
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
+        // forge-lint: disable-next-line(custom-errors)
         require(providers[providerId].serviceProvider != address(0), "Provider not found");
+        // forge-lint: disable-next-line(custom-errors)
         require(providers[providerId].isActive, "Provider is not active");
 
         // Validate name (optional, so empty is allowed)
+        // forge-lint: disable-next-line(custom-errors)
         require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
 
         // Validate description
+        // forge-lint: disable-next-line(custom-errors)
         require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
 
         // Update name and description
@@ -409,6 +435,7 @@ contract ServiceProviderRegistry is
     /// @notice Remove provider registration (soft delete)
     function removeProvider() external {
         uint256 providerId = addressToProviderId[msg.sender];
+        // forge-lint: disable-next-line(custom-errors)
         require(providerId != 0, "Provider not registered");
 
         _removeProvider(providerId);
@@ -741,6 +768,7 @@ contract ServiceProviderRegistry is
         if (productType == ProductType.PDP) {
             requiredKeys = REQUIRED_PDP_KEYS;
         } else {
+            // forge-lint: disable-next-line(custom-errors)
             revert("Unsupported product type");
         }
         uint256 foundKeys = BloomSet16.EMPTY;
@@ -758,13 +786,19 @@ contract ServiceProviderRegistry is
     /// @param keys Array of capability keys
     /// @param values Array of capability values
     function _validateCapabilities(string[] memory keys, bytes[] calldata values) private pure {
+        // forge-lint: disable-next-line(custom-errors)
         require(keys.length == values.length, "Keys and values arrays must have same length");
+        // forge-lint: disable-next-line(custom-errors)
         require(keys.length <= MAX_CAPABILITIES, "Too many capabilities");
 
         for (uint256 i = 0; i < keys.length; i++) {
+            // forge-lint: disable-next-line(custom-errors)
             require(bytes(keys[i]).length > 0, "Capability key cannot be empty");
+            // forge-lint: disable-next-line(custom-errors)
             require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
+            // forge-lint: disable-next-line(custom-errors)
             require(values[i].length > 0, "Capability value cannot be empty");
+            // forge-lint: disable-next-line(custom-errors)
             require(values[i].length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
         }
     }
