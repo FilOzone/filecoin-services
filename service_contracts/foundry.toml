@@ -31,7 +31,6 @@ severity = ["high", "med", "low", "info", "gas", "code-size"]
 exclude_lints = [
     "asm-keccak256",
     "block-timestamp",
-    "custom-errors",
     "incorrect-shift",
     "mixed-case-function",
     "mixed-case-variable",
