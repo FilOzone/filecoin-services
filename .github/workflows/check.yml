@@ -47,6 +47,11 @@ jobs:
           cd service_contracts
           bash tools/check_storage_layout.sh
 
+      - name: Check FWSSStorage descendant layouts
+        run: |
+          cd service_contracts
+          make check-fwss-module-layout
+
   check-abi:
     name: Check ABI Changes
     runs-on: ubuntu-latest

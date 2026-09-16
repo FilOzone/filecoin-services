@@ -19,6 +19,7 @@ Run from `service_contracts/`:
 ```sh
 make gen
 make check-layout
+make check-fwss-module-layout
 forge test
 make update-abi
 ```
@@ -28,6 +29,14 @@ and compares the snapshot against the PR base. Inherited fields are included, so
 shifts caused by this extraction are checked by the same workflow. Local
 `make check-layout` compares against HEAD~1 when available; it is not a deployed
 implementation check. No new upgrade validator is required by this extraction.
+
+`make check-fwss-module-layout` builds production `src/` into a fresh artifact
+folder, discovers direct and indirect `FWSSStorage` descendants from Forge's
+compiler-derived inheritance linearization, and compares each complete normalized
+layout exactly against the compiled shared base. No module list or interfaces are
+required. Module-specific ordinary fields are rejected; namespaced storage and
+business behavior need separate review and tests. The historical additive
+`make check-layout` policy remains unchanged.
 
 The snapshot normalizer maps only the declaring-contract names of `DataSetInfo` and
 `PlannedUpgrade` to their historical names. Slots, offsets, widths and recursive

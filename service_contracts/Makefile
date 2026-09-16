@@ -136,6 +136,10 @@ check-layout:
 	@echo "Checking storage layout for destructive changes..."
 	@bash tools/check_storage_layout.sh
 
+.PHONY: check-fwss-module-layout
+check-fwss-module-layout:
+	bash tools/check_fwss_module_layouts.sh
+
 # ABI Management
 
 # Core contracts we publish ABIs for.
@@ -209,6 +213,7 @@ help:
 	@echo ""
 	@echo "Validation targets:"
 	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
+	@echo "  check-fwss-module-layout - Compare all production FWSSStorage descendants with shared storage"
 	@echo "  contract-size-check - Check deployable contracts against size and headroom policy"
 	@echo ""
 	@echo "  help       - Show this help message"
