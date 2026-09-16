@@ -10,6 +10,9 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
+# secp256r1 precompile at 0x100 (RIP-7212 / EIP-7951) is implemented by revm only at evm_version=osaka.
+# MultiMethodAuthorizer and its tests exercise it; osaka is a superset for everything else here.
+evm_version = "osaka"
 
 # For dependencies
 remappings = [
