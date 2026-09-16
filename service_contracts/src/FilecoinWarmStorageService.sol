@@ -13,7 +13,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
-import {FilecoinWarmStorageServiceStorage} from "./storage/FilecoinWarmStorageServiceStorage.sol";
+import {FWSSStorage} from "./storage/FWSSStorage.sol";
 import {Errors} from "./Errors.sol";
 import {IFilecoinServiceMetadata} from "./IFilecoinServiceMetadata.sol";
 
@@ -82,7 +82,7 @@ contract FilecoinWarmStorageService is
     OwnableUpgradeable,
     Extsload,
     EIP712Upgradeable,
-    FilecoinWarmStorageServiceStorage
+    FWSSStorage
 {
     // Version tracking
     string public constant VERSION = "1.4.0";

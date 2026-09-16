@@ -1,6 +1,6 @@
 # FWSS shared storage
 
-`FilecoinWarmStorageServiceStorage` declares the complete legacy application layout,
+`FWSSStorage` declares the complete legacy application layout,
 including retired fields and stored structs. FWSS inherits it and uses the same field
 names. Previously private fields become internal to allow inherited access.
 
