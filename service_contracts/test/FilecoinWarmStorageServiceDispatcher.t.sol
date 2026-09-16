@@ -9,6 +9,14 @@ import {IERC8167} from "../src/interfaces/IERC8167.sol";
 import {ERC8167Dispatcher} from "../src/ERC8167Dispatcher.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+
+contract WrongUUIDDispatcher is Dispatcher {
+    function proxiableUUID() external pure override returns (bytes32) {
+        return bytes32(0);
+    }
+}
 
 contract FilecoinWarmStorageServiceDispatcherTest is Test {
     Dispatcher internal dispatcher;
@@ -41,6 +49,173 @@ contract FilecoinWarmStorageServiceDispatcherTest is Test {
     function testInitialOwnerAndRoutesAreInstalled() public view {
         assertEq(proxy.owner(), owner);
         assertEq(proxy.implementation(RoutingDelegate.store.selector), address(module));
+    }
+
+    function testDispatcherUpgradeRequiresOwnerAnnouncedAddressAndDelay() public {
+        Dispatcher replacement = new Dispatcher();
+        Dispatcher other = new Dispatcher();
+        vm.expectRevert();
+        proxy.announceUpgradePlan(address(replacement), 0);
+        vm.prank(owner);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(address(replacement), "");
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(replacement), 0);
+        (, uint96 afterEpoch) = proxy.pendingDispatcherUpgrade();
+        assertEq(afterEpoch, block.number + 1);
+        vm.prank(owner);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(address(replacement), "");
+        vm.roll(afterEpoch);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(address(replacement), "");
+        vm.prank(owner);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(address(other), "");
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(other), 5);
+        vm.prank(owner);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(address(replacement), "");
+        vm.prank(owner);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(address(other), "");
+        vm.roll(block.number + 5);
+        vm.prank(owner);
+        proxy.upgradeToAndCall(address(other), "");
+        assertEq(proxy.implementation(proxy.owner.selector), address(other));
+    }
+
+    function testRevertedUpgradeCallPreservesBothAnnouncements() public {
+        _assertUpgradeRollback(false);
+    }
+
+    function testRejectedUUPSImplementationPreservesBothAnnouncements() public {
+        _assertUpgradeRollback(true);
+    }
+
+    function _assertUpgradeRollback(bool wrongUUID) internal {
+        Dispatcher.RouteChange[] memory changes =
+            _change(RoutingDelegate.fail.selector, Dispatcher.Action.Add, address(module));
+        vm.prank(owner);
+        proxy.announceRouteUpgrade(changes, 1);
+        (bytes32 routeHash, uint96 routeEpoch) = proxy.pendingRouteUpgrade();
+        address replacement = wrongUUID ? address(new WrongUUIDDispatcher()) : address(new Dispatcher());
+        vm.prank(owner);
+        proxy.announceUpgradePlan(replacement, 1);
+        (, uint96 upgradeEpoch) = proxy.pendingDispatcherUpgrade();
+        vm.roll(upgradeEpoch);
+        bytes memory migration = wrongUUID ? bytes("") : abi.encodeCall(Dispatcher.initialize, (owner, changes));
+        vm.prank(owner);
+        vm.expectRevert();
+        proxy.upgradeToAndCall(replacement, migration);
+        assertEq(proxy.implementation(proxy.owner.selector), address(dispatcher));
+        (bytes32 remainingHash, uint96 remainingEpoch) = proxy.pendingRouteUpgrade();
+        assertEq(remainingHash, routeHash);
+        assertEq(remainingEpoch, routeEpoch);
+        (address remainingImplementation, uint96 remainingUpgradeEpoch) = proxy.pendingDispatcherUpgrade();
+        assertEq(remainingImplementation, replacement);
+        assertEq(remainingUpgradeEpoch, upgradeEpoch);
+        vm.prank(owner);
+        proxy.executeRouteUpgrade(changes);
+        assertEq(proxy.implementation(RoutingDelegate.fail.selector), address(module));
+        (remainingImplementation,) = proxy.pendingDispatcherUpgrade();
+        assertEq(remainingImplementation, replacement);
+    }
+
+    function testRouteCancellationDoesNotCancelDispatcherUpgrade() public {
+        Dispatcher replacement = new Dispatcher();
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(replacement), 10);
+        Dispatcher.RouteChange[] memory changes =
+            _change(RoutingDelegate.fail.selector, Dispatcher.Action.Add, address(module));
+        vm.prank(owner);
+        proxy.announceRouteUpgrade(changes, 1);
+        vm.prank(owner);
+        proxy.cancelRouteUpgrade();
+        (address remaining, uint96 afterEpoch) = proxy.pendingDispatcherUpgrade();
+        assertEq(remaining, address(replacement));
+        assertEq(afterEpoch, block.number + 10);
+    }
+
+    function testUUPSCallContextGuardsArePreserved() public {
+        assertEq(dispatcher.proxiableUUID(), ERC1967Utils.IMPLEMENTATION_SLOT);
+        vm.expectRevert(UUPSUpgradeable.UUPSUnauthorizedCallContext.selector);
+        proxy.proxiableUUID();
+        vm.prank(owner);
+        vm.expectRevert(UUPSUpgradeable.UUPSUnauthorizedCallContext.selector);
+        dispatcher.upgradeToAndCall(address(dispatcher), "");
+    }
+
+    function testAnnouncementDelayOverflowAndSmallUpgradeTargetAreRejected() public {
+        Dispatcher.RouteChange[] memory changes =
+            _change(RoutingDelegate.fail.selector, Dispatcher.Action.Add, address(module));
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", uint256(0x11)));
+        proxy.announceRouteUpgrade(changes, type(uint96).max);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", uint256(0x11)));
+        proxy.announceUpgradePlan(address(dispatcher), type(uint96).max);
+        vm.prank(owner);
+        vm.expectRevert(abi.encodeWithSelector(Dispatcher.InvalidUpgradeImplementation.selector, address(module)));
+        proxy.announceUpgradePlan(address(module), 1);
+    }
+
+    function testInitializationRejectsInvalidOwnerActionsAndReservedSelectors() public {
+        Dispatcher.RouteChange[] memory initial = new Dispatcher.RouteChange[](0);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableInvalidOwner.selector, address(0)));
+        new ERC1967Proxy(address(dispatcher), abi.encodeCall(Dispatcher.initialize, (address(0), initial)));
+        initial = _change(RoutingDelegate.store.selector, Dispatcher.Action.Replace, address(module));
+        vm.expectRevert(Dispatcher.InvalidInitialAction.selector);
+        new ERC1967Proxy(address(dispatcher), abi.encodeCall(Dispatcher.initialize, (owner, initial)));
+        initial = _change(proxy.upgradeToAndCall.selector, Dispatcher.Action.Add, address(module));
+        vm.expectRevert(
+            abi.encodeWithSelector(ERC8167Dispatcher.FixedSelector.selector, proxy.upgradeToAndCall.selector)
+        );
+        new ERC1967Proxy(address(dispatcher), abi.encodeCall(Dispatcher.initialize, (owner, initial)));
+    }
+
+    function testSuccessfulDispatcherUpgradeInvalidatesThePendingRoutePlan() public {
+        Dispatcher.RouteChange[] memory changes =
+            _change(RoutingDelegate.fail.selector, Dispatcher.Action.Add, address(module));
+        vm.prank(owner);
+        proxy.announceRouteUpgrade(changes, 1);
+        Dispatcher replacement = new Dispatcher();
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(replacement), 1);
+        vm.roll(block.number + 1);
+        vm.prank(owner);
+        proxy.upgradeToAndCall(address(replacement), "");
+        (bytes32 commitment, uint96 afterEpoch) = proxy.pendingRouteUpgrade();
+        assertEq(commitment, bytes32(0));
+        assertEq(afterEpoch, 0);
+        vm.prank(owner);
+        vm.expectRevert(Dispatcher.NoRouteUpgradePlanned.selector);
+        proxy.executeRouteUpgrade(changes);
+        _execute(changes);
+    }
+
+    function testDispatcherUpgradePreservesOwnerRoutesAndStoredValues() public {
+        _execute(_change(bytes4(keccak256("value()")), Dispatcher.Action.Add, address(module)));
+        RoutingDelegate(address(proxy)).store(42, "");
+        Dispatcher replacement = new Dispatcher();
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(replacement), 5);
+        (address next, uint96 afterEpoch) = proxy.pendingDispatcherUpgrade();
+        assertEq(next, address(replacement));
+        assertEq(afterEpoch, block.number + 5);
+        vm.roll(afterEpoch);
+        vm.prank(owner);
+        proxy.upgradeToAndCall(address(replacement), "");
+        assertEq(proxy.implementation(proxy.selectors.selector), address(replacement));
+        assertEq(proxy.owner(), owner);
+        assertEq(proxy.implementation(RoutingDelegate.store.selector), address(module));
+        assertEq(RoutingDelegate(address(proxy)).value(), 42);
+        (next, afterEpoch) = proxy.pendingDispatcherUpgrade();
+        assertEq(next, address(0));
+        assertEq(afterEpoch, 0);
+        _execute(_change(RoutingDelegate.fail.selector, Dispatcher.Action.Add, address(module)));
+        assertEq(proxy.implementation(RoutingDelegate.fail.selector), address(module));
     }
 
     function testBatchFailureRollsBackEarlierChangesAndKeepsTheAnnouncement() public {
@@ -183,7 +358,7 @@ contract FilecoinWarmStorageServiceDispatcherTest is Test {
     }
 
     function testAdministrationIsDiscoverableAndCannotBeAddedReplacedOrRemoved() public {
-        bytes4[8] memory fixedSelectors = [
+        bytes4[14] memory fixedSelectors = [
             proxy.owner.selector,
             proxy.transferOwnership.selector,
             proxy.renounceOwnership.selector,
@@ -191,7 +366,13 @@ contract FilecoinWarmStorageServiceDispatcherTest is Test {
             proxy.announceRouteUpgrade.selector,
             proxy.executeRouteUpgrade.selector,
             proxy.pendingRouteUpgrade.selector,
-            proxy.cancelRouteUpgrade.selector
+            proxy.cancelRouteUpgrade.selector,
+            proxy.announceUpgradePlan.selector,
+            proxy.pendingDispatcherUpgrade.selector,
+            proxy.upgradeToAndCall.selector,
+            proxy.proxiableUUID.selector,
+            proxy.UPGRADE_INTERFACE_VERSION.selector,
+            proxy.viewContractAddress.selector
         ];
         for (uint256 i; i < fixedSelectors.length; ++i) {
             assertEq(proxy.implementation(fixedSelectors[i]), address(dispatcher));

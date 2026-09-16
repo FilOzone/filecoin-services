@@ -3,14 +3,19 @@ pragma solidity 0.8.30;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {ERC8167Dispatcher} from "./ERC8167Dispatcher.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {FWSSStorage} from "./storage/FWSSStorage.sol";
 
 /// @notice Selector routing and upgrade administration; business delegates are installed separately.
-contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgradeable {
+contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeable, FWSSStorage {
     error InvalidInitialAction();
     error NoRouteUpgradePlanned();
     error RouteUpgradeMismatch();
     error RouteUpgradeNotReady(uint96 afterEpoch);
     error EmptyRouteUpgrade();
+    error InvalidUpgradeImplementation(address implementation);
+    error UpgradeNotAnnounced(address implementation);
+    error UpgradeNotReady(uint96 afterEpoch);
     enum Action {
         Add,
         Replace,
@@ -36,6 +41,7 @@ contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgra
     event RouteUpgradeAnnounced(bytes32 indexed changeHash, uint96 afterEpoch, RouteChange[] changes);
     event RouteUpgradeExecuted(bytes32 indexed changeHash);
     event RouteUpgradeCancelled(bytes32 indexed changeHash);
+    event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     function _routeUpgradeStorage() internal pure returns (RouteUpgradeStorage storage state) {
         assembly {
@@ -45,6 +51,28 @@ contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgra
 
     constructor() {
         _disableInitializers();
+    }
+
+    function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external onlyOwner {
+        // Preserve the current FWSS announcement policy, including the minimum implementation size.
+        require(nextImplementation.code.length > 3000, InvalidUpgradeImplementation(nextImplementation));
+        if (delayEpochs == 0) delayEpochs = 1;
+        nextUpgrade.nextImplementation = nextImplementation;
+        nextUpgrade.afterEpoch = uint96(block.number) + delayEpochs;
+        emit UpgradeAnnounced(nextUpgrade);
+    }
+
+    function pendingDispatcherUpgrade() external view returns (address, uint96) {
+        return (nextUpgrade.nextImplementation, nextUpgrade.afterEpoch);
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
+        require(newImplementation == nextUpgrade.nextImplementation, UpgradeNotAnnounced(newImplementation));
+        require(block.number >= nextUpgrade.afterEpoch, UpgradeNotReady(nextUpgrade.afterEpoch));
+        delete nextUpgrade;
+        // Invalidate the old plan before the new implementation or its migration can execute.
+        bytes32 changeHash = _clearRouteUpgrade();
+        if (changeHash != bytes32(0)) emit RouteUpgradeCancelled(changeHash);
     }
 
     function cancelRouteUpgrade() external onlyOwner {
@@ -97,8 +125,9 @@ contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgra
     }
 
     /// @dev Fresh-proxy setup only. Existing FWSS proxies require a separate migration entry point.
-    function initialize(address initialOwner, RouteChange[] calldata initialRoutes) external initializer {
+    function initialize(address initialOwner, RouteChange[] calldata initialRoutes) external initializer onlyProxy {
         __Ownable_init(initialOwner);
+        __UUPSUpgradeable_init();
         for (uint256 i; i < initialRoutes.length; ++i) {
             require(initialRoutes[i].action == Action.Add, InvalidInitialAction());
             _addRoute(initialRoutes[i].selector, initialRoutes[i].delegate);
@@ -106,7 +135,7 @@ contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgra
     }
 
     function _fixedSelectors() internal pure override returns (bytes4[] memory result) {
-        result = new bytes4[](10);
+        result = new bytes4[](16);
         result[0] = this.implementation.selector;
         result[1] = this.selectors.selector;
         result[2] = this.owner.selector;
@@ -117,5 +146,11 @@ contract FilecoinWarmStorageServiceDispatcher is ERC8167Dispatcher, OwnableUpgra
         result[7] = this.executeRouteUpgrade.selector;
         result[8] = this.pendingRouteUpgrade.selector;
         result[9] = this.cancelRouteUpgrade.selector;
+        result[10] = this.announceUpgradePlan.selector;
+        result[11] = this.pendingDispatcherUpgrade.selector;
+        result[12] = this.upgradeToAndCall.selector;
+        result[13] = this.proxiableUUID.selector;
+        result[14] = this.UPGRADE_INTERFACE_VERSION.selector;
+        result[15] = this.viewContractAddress.selector;
     }
 }

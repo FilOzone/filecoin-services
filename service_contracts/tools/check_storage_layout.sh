@@ -245,6 +245,18 @@ case $# in
             exit 1
         fi
 
+        # Dispatch and business delegates share every legacy root. New routing state must use a namespace.
+        TEMP_DISPATCHER_LAYOUT=$(mktemp)
+        TEMP_FILES+=("$TEMP_DISPATCHER_LAYOUT")
+        forge inspect src/FilecoinWarmStorageServiceDispatcher.sol:FilecoinWarmStorageServiceDispatcher \
+            storageLayout --json | jq -f tools/storage_layout_snapshot.jq > "$TEMP_DISPATCHER_LAYOUT"
+        validate_layout_json "$TEMP_DISPATCHER_LAYOUT"
+        if ! diff -u "$LAYOUT_JSON" "$TEMP_DISPATCHER_LAYOUT"; then
+            echo "Error: Dispatcher storage differs from the FWSS legacy layout" >&2
+            exit 1
+        fi
+        echo "Dispatcher legacy storage matches FWSS"
+
         # Get the base commit (HEAD for regular check, or base branch for PRs)
         if [ -n "${GITHUB_BASE_REF:-}" ]; then
             BASE_REF="origin/$GITHUB_BASE_REF"
