@@ -6,8 +6,8 @@
     "maximumConstructorArgsSize": 256
   },
   "targets": {
-    "FilecoinWarmStorageServiceDispatcher": {
-      "artifact": "src/FilecoinWarmStorageServiceDispatcher.sol:FilecoinWarmStorageServiceDispatcher"
+    "FWSSDispatcher": {
+      "artifact": "src/FWSSDispatcher.sol:FWSSDispatcher"
     },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"

@@ -40,10 +40,13 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
     function _addRoute(bytes4 selector, address delegate) internal {
         require(!_isFixedSelector(selector), FixedSelector(selector));
         _checkDelegate(delegate);
+
         RoutingStorage storage state = _routingStorage();
         require(state.routes[selector].delegate == address(0), SelectorAlreadyInstalled(selector));
+
         state.routes[selector] = Route({delegate: delegate, index: uint96(state.selectors.length)});
         state.selectors.push(selector);
+
         emit SelectorDelegated(selector, delegate);
     }
 
@@ -57,23 +60,29 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
     function _replaceRoute(bytes4 selector, address delegate) internal {
         require(!_isFixedSelector(selector), FixedSelector(selector));
         _checkDelegate(delegate);
+
         Route storage route = _routingStorage().routes[selector];
         require(route.delegate != address(0), FunctionNotFound(selector));
         require(route.delegate != delegate, DelegateUnchanged(selector));
+
         route.delegate = delegate;
+
         emit SelectorDelegated(selector, delegate);
     }
 
     function _removeRoute(bytes4 selector) internal {
         require(!_isFixedSelector(selector), FixedSelector(selector));
+
         RoutingStorage storage state = _routingStorage();
         Route memory route = state.routes[selector];
         require(route.delegate != address(0), FunctionNotFound(selector));
+
         bytes4 last = state.selectors[state.selectors.length - 1];
         state.selectors[route.index] = last;
         state.routes[last].index = route.index;
         state.selectors.pop();
         delete state.routes[selector];
+
         emit SelectorDelegated(selector, address(0));
     }
 
@@ -81,6 +90,7 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
         if (_isFixedSelector(selector)) {
             return dispatcherAddress;
         }
+
         return _routingStorage().routes[selector].delegate;
     }
 
@@ -88,9 +98,11 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
         bytes4[] memory fixedSelectors = _fixedSelectors();
         bytes4[] storage routedSelectors = _routingStorage().selectors;
         result = new bytes4[](fixedSelectors.length + routedSelectors.length);
+
         for (uint256 i; i < fixedSelectors.length; ++i) {
             result[i] = fixedSelectors[i];
         }
+
         for (uint256 i; i < routedSelectors.length; ++i) {
             result[fixedSelectors.length + i] = routedSelectors[i];
         }
@@ -98,9 +110,11 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
 
     function _isFixedSelector(bytes4 selector) internal pure returns (bool) {
         bytes4[] memory fixedSelectors = _fixedSelectors();
+
         for (uint256 i; i < fixedSelectors.length; ++i) {
             if (selector == fixedSelectors[i]) return true;
         }
+
         return false;
     }
 
@@ -114,6 +128,7 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
     function _implementation() internal view override returns (address) {
         address delegate = _routingStorage().routes[msg.sig].delegate;
         require(delegate != address(0), FunctionNotFound(msg.sig));
+
         return delegate;
     }
 }

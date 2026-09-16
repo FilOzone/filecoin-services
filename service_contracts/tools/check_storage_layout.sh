@@ -248,7 +248,7 @@ case $# in
         # Dispatch and business delegates share every legacy root. New routing state must use a namespace.
         TEMP_DISPATCHER_LAYOUT=$(mktemp)
         TEMP_FILES+=("$TEMP_DISPATCHER_LAYOUT")
-        forge inspect src/FilecoinWarmStorageServiceDispatcher.sol:FilecoinWarmStorageServiceDispatcher \
+        forge inspect src/FWSSDispatcher.sol:FWSSDispatcher \
             storageLayout --json | jq -f tools/storage_layout_snapshot.jq > "$TEMP_DISPATCHER_LAYOUT"
         validate_layout_json "$TEMP_DISPATCHER_LAYOUT"
         if ! diff -u "$LAYOUT_JSON" "$TEMP_DISPATCHER_LAYOUT"; then

@@ -32,7 +32,7 @@
       {
         "name": "changes",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageServiceDispatcher.RouteChange[]",
+        "internalType": "struct FWSSDispatcher.RouteChange[]",
         "components": [
           {
             "name": "selector",
@@ -42,7 +42,7 @@
           {
             "name": "action",
             "type": "uint8",
-            "internalType": "enum FilecoinWarmStorageServiceDispatcher.Action"
+            "internalType": "enum FWSSDispatcher.Action"
           },
           {
             "name": "delegate",
@@ -92,7 +92,7 @@
       {
         "name": "changes",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageServiceDispatcher.RouteChange[]",
+        "internalType": "struct FWSSDispatcher.RouteChange[]",
         "components": [
           {
             "name": "selector",
@@ -102,7 +102,7 @@
           {
             "name": "action",
             "type": "uint8",
-            "internalType": "enum FilecoinWarmStorageServiceDispatcher.Action"
+            "internalType": "enum FWSSDispatcher.Action"
           },
           {
             "name": "delegate",
@@ -146,7 +146,7 @@
       {
         "name": "initialRoutes",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageServiceDispatcher.RouteChange[]",
+        "internalType": "struct FWSSDispatcher.RouteChange[]",
         "components": [
           {
             "name": "selector",
@@ -156,7 +156,7 @@
           {
             "name": "action",
             "type": "uint8",
-            "internalType": "enum FilecoinWarmStorageServiceDispatcher.Action"
+            "internalType": "enum FWSSDispatcher.Action"
           },
           {
             "name": "delegate",
@@ -347,7 +347,7 @@
         "name": "changes",
         "type": "tuple[]",
         "indexed": false,
-        "internalType": "struct FilecoinWarmStorageServiceDispatcher.RouteChange[]",
+        "internalType": "struct FWSSDispatcher.RouteChange[]",
         "components": [
           {
             "name": "selector",
@@ -357,7 +357,7 @@
           {
             "name": "action",
             "type": "uint8",
-            "internalType": "enum FilecoinWarmStorageServiceDispatcher.Action"
+            "internalType": "enum FWSSDispatcher.Action"
           },
           {
             "name": "delegate",

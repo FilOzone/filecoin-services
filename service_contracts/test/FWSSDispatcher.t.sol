@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {FilecoinWarmStorageServiceDispatcher as Dispatcher} from "../src/FilecoinWarmStorageServiceDispatcher.sol";
+import {FWSSDispatcher as Dispatcher} from "../src/FWSSDispatcher.sol";
 import {RoutingDelegate} from "./ERC8167Dispatcher.t.sol";
 import {IERC8167} from "../src/interfaces/IERC8167.sol";
 import {ERC8167Dispatcher} from "../src/ERC8167Dispatcher.sol";
@@ -18,7 +18,7 @@ contract WrongUUIDDispatcher is Dispatcher {
     }
 }
 
-contract FilecoinWarmStorageServiceDispatcherTest is Test {
+contract FWSSDispatcherTest is Test {
     Dispatcher internal dispatcher;
     Dispatcher internal proxy;
     RoutingDelegate internal module;
