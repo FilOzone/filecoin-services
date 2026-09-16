@@ -2,7 +2,7 @@
 pragma solidity 0.8.30;
 
 /// @dev Legacy slots 0-23. Preserve field order, types and packing in every inheriting module.
-abstract contract FilecoinWarmStorageServiceStorage {
+abstract contract FWSSStorage {
     struct DataSetInfo {
         uint256 pdpRailId; // ID of the PDP payment rail
         uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
