@@ -453,12 +453,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
         pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
 
-        // Add providers to approved list
-        pdpServiceWithPayments.addApprovedProvider(1); // serviceProvider
-        pdpServiceWithPayments.addApprovedProvider(2); // sp1
-        pdpServiceWithPayments.addApprovedProvider(3); // sp2
-        pdpServiceWithPayments.addApprovedProvider(4); // sp3
-
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
         pdpServiceWithPayments.setViewContract(address(viewContract));
     }
