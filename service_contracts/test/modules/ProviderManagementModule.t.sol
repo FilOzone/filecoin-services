@@ -185,9 +185,7 @@ contract ProviderManagementModuleTest is Test {
 
         // Verify removed ones are not approved
         assertFalse(providerManagementModule.isProviderApproved(3), "Provider 3 should not be approved after removal");
-        assertFalse(
-            providerManagementModule.isProviderApproved(15), "Provider 15 should not be approved after removal"
-        );
+        assertFalse(providerManagementModule.isProviderApproved(15), "Provider 15 should not be approved after removal");
     }
 
     function testRemoveApprovedProviderNotInList() public {
