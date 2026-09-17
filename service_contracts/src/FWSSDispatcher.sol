@@ -7,6 +7,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
 
 /// @notice Selector routing and upgrade administration; business delegates are installed separately.
+/// @dev Runs behind an ERC1967Proxy: inspection executes in this delegate; business calls delegate once more.
 contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeable, FWSSStorage {
     error InvalidInitialAction();
     error NoRouteUpgradePlanned();
@@ -75,6 +76,7 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
 
         delete nextUpgrade;
 
+        // Future upgrades that change fixed selectors must reconcile overlapping routes atomically in migration.
         // Invalidate the old plan before the new implementation or its migration can execute.
         bytes32 changeHash = _clearRouteUpgrade();
         if (changeHash != bytes32(0)) emit RouteUpgradeCancelled(changeHash);
@@ -112,6 +114,8 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
         return (state.changeHash, state.afterEpoch);
     }
 
+    /// @dev Routing changes only; no module initialization call is performed.
+    /// TODO(module integration): design atomic initialization before installing a module that needs new state.
     function executeRouteUpgrade(RouteChange[] calldata changes) external onlyOwner {
         RouteUpgradeStorage storage state = _routeUpgradeStorage();
         bytes32 changeHash = state.changeHash;
@@ -139,6 +143,7 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
     }
 
     /// @dev Fresh-proxy setup only. Existing FWSS proxies require a separate migration entry point.
+    /// TODO(integration): migrate populated FWSS proxies and verify existing StateView/extsload reads still work.
     function initialize(address initialOwner, RouteChange[] calldata initialRoutes) external initializer onlyProxy {
         __Ownable_init(initialOwner);
         __UUPSUpgradeable_init();
@@ -171,6 +176,8 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
         result[13] = this.proxiableUUID.selector;
         result[14] = this.UPGRADE_INTERFACE_VERSION.selector;
 
+        // The public legacy storage field generates this getter, so it cannot be routed to a business delegate.
+        // TODO(module integration): revisit getter ownership while preserving its ABI and legacy storage slot.
         result[15] = this.viewContractAddress.selector;
     }
 }

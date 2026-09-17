@@ -51,6 +51,35 @@ contract FWSSDispatcherTest is Test {
         assertEq(proxy.implementation(RoutingDelegate.store.selector), address(module));
     }
 
+    function testInspectionMatchesCompiledDispatcherMethods() public {
+        Dispatcher emptyProxy = Dispatcher(
+            payable(address(
+                    new ERC1967Proxy(
+                        address(dispatcher),
+                        abi.encodeCall(Dispatcher.initialize, (owner, new Dispatcher.RouteChange[](0)))
+                    )
+                ))
+        );
+        string memory artifact = vm.readFile("out/FWSSDispatcher.sol/FWSSDispatcher.json");
+        string[] memory signatures = vm.parseJsonKeys(artifact, ".methodIdentifiers");
+        bytes4[] memory installed = emptyProxy.selectors();
+
+        assertGt(signatures.length, 0);
+        assertEq(installed.length, signatures.length);
+
+        for (uint256 i; i < signatures.length; ++i) {
+            bytes4 selector = bytes4(keccak256(bytes(signatures[i])));
+            uint256 occurrences;
+
+            for (uint256 j; j < installed.length; ++j) {
+                if (installed[j] == selector) ++occurrences;
+            }
+
+            assertEq(occurrences, 1, signatures[i]);
+            assertEq(emptyProxy.implementation(selector), address(dispatcher), signatures[i]);
+        }
+    }
+
     function testDispatcherUpgradeRequiresOwnerAnnouncedAddressAndDelay() public {
         Dispatcher replacement = new Dispatcher();
         Dispatcher other = new Dispatcher();
@@ -358,7 +387,7 @@ contract FWSSDispatcherTest is Test {
     }
 
     function testAdministrationIsDiscoverableAndCannotBeAddedReplacedOrRemoved() public {
-        bytes4[14] memory fixedSelectors = [
+        bytes4[14] memory administrationSelectors = [
             proxy.owner.selector,
             proxy.transferOwnership.selector,
             proxy.renounceOwnership.selector,
@@ -374,12 +403,14 @@ contract FWSSDispatcherTest is Test {
             proxy.UPGRADE_INTERFACE_VERSION.selector,
             proxy.viewContractAddress.selector
         ];
-        for (uint256 i; i < fixedSelectors.length; ++i) {
-            assertEq(proxy.implementation(fixedSelectors[i]), address(dispatcher));
+        for (uint256 i; i < administrationSelectors.length; ++i) {
+            assertEq(proxy.implementation(administrationSelectors[i]), address(dispatcher));
             for (uint256 j; j < 3; ++j) {
                 Dispatcher.Action action = Dispatcher.Action(j);
                 Dispatcher.RouteChange[] memory changes = _change(
-                    fixedSelectors[i], action, action == Dispatcher.Action.Remove ? address(0) : address(module)
+                    administrationSelectors[i],
+                    action,
+                    action == Dispatcher.Action.Remove ? address(0) : address(module)
                 );
                 vm.prank(owner);
                 proxy.announceRouteUpgrade(changes, 1);
@@ -389,7 +420,11 @@ contract FWSSDispatcherTest is Test {
                 proxy.executeRouteUpgrade(changes);
             }
         }
-        assertEq(proxy.selectors().length, fixedSelectors.length + 3);
+        uint256 inspectionSelectorCount = 2;
+        uint256 installedRouteCount = 1;
+        assertEq(
+            proxy.selectors().length, administrationSelectors.length + inspectionSelectorCount + installedRouteCount
+        );
     }
 
     function _execute(Dispatcher.RouteChange[] memory changes) internal {

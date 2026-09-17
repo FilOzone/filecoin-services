@@ -23,8 +23,11 @@ remappings = [
     '@pythnetwork/pyth-sdk-solidity/=lib/pdp/lib/pyth-sdk-solidity/',
 ]
 
-# Allow reading test data files
-fs_permissions = [{ access = "read", path = "./test" }]
+# Allow test fixtures and the compiler-derived dispatcher selector check.
+fs_permissions = [
+    { access = "read", path = "./test" },
+    { access = "read", path = "./out/FWSSDispatcher.sol/FWSSDispatcher.json" },
+]
 
 [lint]
 severity = ["high", "med", "low", "info", "gas", "code-size"]
