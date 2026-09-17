@@ -7,15 +7,13 @@ import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
-import {FWSSStorage} from "./storage/FWSSStorage.sol";
+import {AdminModule} from "./modules/AdminModule.sol";
 import {Errors} from "./Errors.sol";
-import {IFilecoinServiceMetadata} from "./IFilecoinServiceMetadata.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
@@ -74,22 +72,17 @@ uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 1024; // 1KiB
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
-    IFilecoinServiceMetadata,
     PDPListener,
     IValidator,
     Initializable,
     UUPSUpgradeable,
-    OwnableUpgradeable,
     Extsload,
     EIP712Upgradeable,
-    FWSSStorage
+    AdminModule
 {
-    // Version tracking
-    string public constant VERSION = "1.4.0";
     string private constant SERVICE_NAME = "Filecoin Warm Storage Service";
     string private constant SERVICE_DESCRIPTION =
         "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
-    string private constant SERVICE_HOMEPAGE = "https://github.com/FilOzone/filecoin-services";
 
     using Rails for FilecoinPayV1;
 
@@ -137,8 +130,6 @@ contract FilecoinWarmStorageService is
     event CDNPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 cacheMissRailId, uint256 cdnRailId);
 
     event FilBeamControllerChanged(address oldController, address newController);
-
-    event ViewContractSet(address indexed viewContract);
 
     // =========================================================================
     // Structs
@@ -319,18 +310,6 @@ contract FilecoinWarmStorageService is
         challengeWindowSize = _challengeWindowSize;
     }
 
-    function name() external pure override returns (string memory) {
-        return SERVICE_NAME;
-    }
-
-    function description() external pure override returns (string memory) {
-        return SERVICE_DESCRIPTION;
-    }
-
-    function homepage() external pure override returns (string memory) {
-        return SERVICE_HOMEPAGE;
-    }
-
     function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
         if (delayEpochs == 0) {
             delayEpochs = 1;
@@ -382,29 +361,6 @@ contract FilecoinWarmStorageService is
         }
 
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
-    }
-
-    /**
-     * @notice Sets the view contract address (one-time setup)
-     * @dev Only callable by the contract owner. This is intended to be called once after deployment
-     * or during migration. The view contract should not be changed after initial setup as external
-     * systems may cache this address. If a view contract upgrade is needed, deploy a new main
-     * contract with the updated view contract reference.
-     * @param _viewContract Address of the view contract
-     */
-    function setViewContract(address _viewContract) external onlyOwner {
-        // Ensure the view contract address is not the zero address
-        require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
-
-        // Require that the existing set address is still zero (one-time setup only)
-        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
-        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
-        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
-
-        // require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
-
-        viewContractAddress = _viewContract;
-        emit ViewContractSet(_viewContract);
     }
 
     // Listener interface methods

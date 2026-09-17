@@ -565,23 +565,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertTrue(found, "FilecoinServiceDeployed event should be emitted");
     }
 
-    function testServiceMetadata() public view {
-        IFilecoinServiceMetadata metadata = IFilecoinServiceMetadata(address(pdpServiceWithPayments));
-        string memory serviceName = metadata.name();
-        string memory serviceDescription = metadata.description();
-        string memory serviceHomepage = metadata.homepage();
-
-        assertEq(serviceName, "Filecoin Warm Storage Service", "Service name should match");
-        assertEq(
-            serviceDescription,
-            "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.",
-            "Service description should match"
-        );
-        assertEq(serviceHomepage, "https://github.com/FilOzone/filecoin-services", "Service homepage should match");
-        assertLe(bytes(serviceDescription).length, 256, "Service description should not exceed 256 bytes");
-        assertLe(bytes(serviceHomepage).length, 256, "Service homepage should not exceed 256 bytes");
-    }
-
     function testAnnounceUpgradePlan() public {
         FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
             address(mockPDPVerifier),
@@ -5754,35 +5737,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = viewContract.getPDPConfig();
         assertEq(updatedMaxProvingPeriod, newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(updatedChallengeWindow, newChallengeWindowSize, "Challenge window size should be updated");
-    }
-
-    function testSetViewContract() public {
-        // Deploy view contract
-        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
-
-        // Set view contract
-        warmStorageService.setViewContract(address(viewContract));
-
-        // Verify it was set
-        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
-
-        // Test that non-owner cannot set view contract
-        vm.prank(address(0x123));
-        vm.expectRevert();
-        warmStorageService.setViewContract(address(0x456));
-
-        // Test that it cannot be set again (one-time only)
-        // NOTE: This check is commented out to allow setting the view contract easily during migrations prior to GA
-        //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
-        //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
-
-        // FilecoinWarmStorageServiceStateView newViewContract =
-        //     new FilecoinWarmStorageServiceStateView(warmStorageService);
-        // vm.expectRevert(abi.encodeWithSelector(Errors.AddressAlreadySet.selector, Errors.AddressField.View));
-        // warmStorageService.setViewContract(address(newViewContract));
-
-        // Test that zero address is rejected (would need a new contract to test this properly)
-        // This is now unreachable in this test since view contract is already set
     }
 
     function testMigrateWithViewContract() public {
