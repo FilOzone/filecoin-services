@@ -245,19 +245,19 @@ case $# in
             exit 1
         fi
 
-        # Dispatch and business delegates share every legacy root. New routing state must use a namespace.
+        # These delegates access selected legacy slots explicitly; declared fields could overwrite business state.
         TEMP_DISPATCHER_LAYOUT=$(mktemp)
         TEMP_FILES+=("$TEMP_DISPATCHER_LAYOUT")
         # Match Makefile layout generation: normal build artifacts may be cached without storageLayout output.
-        forge inspect --out out/storage-layout --cache-path cache/storage-layout \
-            src/FWSSDispatcher.sol:FWSSDispatcher \
-            storageLayout --json | jq -f tools/storage_layout_snapshot.jq > "$TEMP_DISPATCHER_LAYOUT"
-        validate_layout_json "$TEMP_DISPATCHER_LAYOUT"
-        if ! diff -u "$LAYOUT_JSON" "$TEMP_DISPATCHER_LAYOUT"; then
-            echo "Error: Dispatcher storage differs from the FWSS legacy layout" >&2
-            exit 1
-        fi
-        echo "Dispatcher legacy storage matches FWSS"
+        for CONTRACT in FWSSDispatcher FWSSStateViewManager; do
+            forge inspect --out out/storage-layout --cache-path cache/storage-layout \
+                "src/$CONTRACT.sol:$CONTRACT" storageLayout --json > "$TEMP_DISPATCHER_LAYOUT"
+            if ! jq -e '.storage == []' "$TEMP_DISPATCHER_LAYOUT" > /dev/null; then
+                echo "Error: $CONTRACT must not declare linear storage" >&2
+                exit 1
+            fi
+        done
+        echo "Dispatcher and StateView manager declare no linear storage"
 
         # Get the base commit (HEAD for regular check, or base branch for PRs)
         if [ -n "${GITHUB_BASE_REF:-}" ]; then

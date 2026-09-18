@@ -142,6 +142,7 @@ check-layout:
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FWSSDispatcher \
+	FWSSStateViewManager \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \

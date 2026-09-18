@@ -5,10 +5,11 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {ERC8167Dispatcher} from "./ERC8167Dispatcher.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
+import {NEXT_UPGRADE_SLOT} from "./lib/FilecoinWarmStorageServiceLayout.sol";
 
 /// @notice Selector routing and upgrade administration; business delegates are installed separately.
 /// @dev Runs behind an ERC1967Proxy: inspection executes in this delegate; business calls delegate once more.
-contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeable, FWSSStorage {
+contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeable {
     error InvalidInitialAction();
     error NoRouteUpgradePlanned();
     error RouteUpgradeMismatch();
@@ -43,7 +44,15 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
     event RouteUpgradeAnnounced(bytes32 indexed changeHash, uint96 afterEpoch, RouteChange[] changes);
     event RouteUpgradeExecuted(bytes32 indexed changeHash);
     event RouteUpgradeCancelled(bytes32 indexed changeHash);
-    event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
+    event UpgradeAnnounced(FWSSStorage.PlannedUpgrade plannedUpgrade);
+
+    function _upgradePlan() internal pure returns (FWSSStorage.PlannedUpgrade storage plan) {
+        // Keep the legacy slot so existing StateView readers can still read upgrade announcements.
+        bytes32 slot = NEXT_UPGRADE_SLOT;
+        assembly {
+            plan.slot := slot
+        }
+    }
 
     function _routeUpgradeStorage() internal pure returns (RouteUpgradeStorage storage state) {
         assembly {
@@ -60,6 +69,7 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
         require(nextImplementation.code.length > 3000, InvalidUpgradeImplementation(nextImplementation));
         if (delayEpochs == 0) delayEpochs = 1;
 
+        FWSSStorage.PlannedUpgrade storage nextUpgrade = _upgradePlan();
         nextUpgrade.nextImplementation = nextImplementation;
         nextUpgrade.afterEpoch = uint96(block.number) + delayEpochs;
 
@@ -67,14 +77,17 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
     }
 
     function pendingDispatcherUpgrade() external view returns (address, uint96) {
+        FWSSStorage.PlannedUpgrade storage nextUpgrade = _upgradePlan();
         return (nextUpgrade.nextImplementation, nextUpgrade.afterEpoch);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
+        FWSSStorage.PlannedUpgrade storage nextUpgrade = _upgradePlan();
         require(newImplementation == nextUpgrade.nextImplementation, UpgradeNotAnnounced(newImplementation));
         require(block.number >= nextUpgrade.afterEpoch, UpgradeNotReady(nextUpgrade.afterEpoch));
 
-        delete nextUpgrade;
+        delete nextUpgrade.nextImplementation;
+        delete nextUpgrade.afterEpoch;
 
         // Future upgrades that change fixed selectors must reconcile overlapping routes atomically in migration.
         // Invalidate the old plan before the new implementation or its migration can execute.
@@ -155,7 +168,7 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
     }
 
     function _fixedSelectors() internal pure override returns (bytes4[] memory result) {
-        result = new bytes4[](16);
+        result = new bytes4[](15);
 
         result[0] = this.implementation.selector;
         result[1] = this.selectors.selector;
@@ -175,9 +188,5 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
         result[12] = this.upgradeToAndCall.selector;
         result[13] = this.proxiableUUID.selector;
         result[14] = this.UPGRADE_INTERFACE_VERSION.selector;
-
-        // The public legacy storage field generates this getter, so it cannot be routed to a business delegate.
-        // TODO(module integration): revisit getter ownership while preserving its ABI and legacy storage slot.
-        result[15] = this.viewContractAddress.selector;
     }
 }

@@ -9,6 +9,11 @@ fields remain reserved. Appending ordinary fields independently in different
 modules can make them write to the same proxy slots. OpenZeppelin state uses its
 existing bases and namespaces.
 
+`FWSSDispatcher` and `FWSSStateViewManager` access selected legacy fields through
+typed accessors and generated slot constants instead of inheriting the full layout.
+They declare no linear storage; `make check-layout` verifies this. Tests check their
+accesses against legacy slots and existing StateView readers.
+
 ## Verification
 
 Run from `service_contracts/`:

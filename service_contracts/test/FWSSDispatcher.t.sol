@@ -11,6 +11,9 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {Extsload} from "../src/Extsload.sol";
+import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 
 contract WrongUUIDDispatcher is Dispatcher {
     function proxiableUUID() external pure override returns (bytes32) {
@@ -49,6 +52,35 @@ contract FWSSDispatcherTest is Test {
     function testInitialOwnerAndRoutesAreInstalled() public view {
         assertEq(proxy.owner(), owner);
         assertEq(proxy.implementation(RoutingDelegate.store.selector), address(module));
+    }
+
+    function testViewContractGetterCanBeRouted() public {
+        bytes4 getter = bytes4(keccak256("viewContractAddress()"));
+        _execute(_change(getter, Dispatcher.Action.Add, address(module)));
+
+        assertEq(proxy.implementation(getter), address(module));
+    }
+
+    function testStateViewReadsUpgradePlanBeforeAndAfterExecution() public {
+        Extsload reader = new Extsload();
+        _execute(_change(Extsload.extsload.selector, Dispatcher.Action.Add, address(reader)));
+        FilecoinWarmStorageServiceStateView stateView =
+            new FilecoinWarmStorageServiceStateView(FilecoinWarmStorageService(address(proxy)));
+        Dispatcher replacement = new Dispatcher();
+
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(replacement), 10);
+        (address implementation, uint96 afterEpoch) = stateView.nextUpgrade();
+        assertEq(implementation, address(replacement));
+        assertEq(afterEpoch, block.number + 10);
+
+        vm.roll(afterEpoch);
+        vm.prank(owner);
+        proxy.upgradeToAndCall(address(replacement), "");
+
+        (implementation, afterEpoch) = stateView.nextUpgrade();
+        assertEq(implementation, address(0));
+        assertEq(afterEpoch, 0);
     }
 
     function testInspectionMatchesCompiledDispatcherMethods() public {
@@ -387,7 +419,7 @@ contract FWSSDispatcherTest is Test {
     }
 
     function testAdministrationIsDiscoverableAndCannotBeAddedReplacedOrRemoved() public {
-        bytes4[14] memory administrationSelectors = [
+        bytes4[13] memory administrationSelectors = [
             proxy.owner.selector,
             proxy.transferOwnership.selector,
             proxy.renounceOwnership.selector,
@@ -400,8 +432,7 @@ contract FWSSDispatcherTest is Test {
             proxy.pendingDispatcherUpgrade.selector,
             proxy.upgradeToAndCall.selector,
             proxy.proxiableUUID.selector,
-            proxy.UPGRADE_INTERFACE_VERSION.selector,
-            proxy.viewContractAddress.selector
+            proxy.UPGRADE_INTERFACE_VERSION.selector
         ];
         for (uint256 i; i < administrationSelectors.length; ++i) {
             assertEq(proxy.implementation(administrationSelectors[i]), address(dispatcher));
