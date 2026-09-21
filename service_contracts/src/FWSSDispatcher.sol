@@ -65,8 +65,8 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
     }
 
     function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external onlyOwner {
-        // Preserve the current FWSS announcement policy, including the minimum implementation size.
-        require(nextImplementation.code.length > 3000, InvalidUpgradeImplementation(nextImplementation));
+        // Reject undeployed targets before starting the delay; UUPS compatibility is checked at execution.
+        require(nextImplementation.code.length != 0, InvalidUpgradeImplementation(nextImplementation));
         if (delayEpochs == 0) delayEpochs = 1;
 
         FWSSStorage.PlannedUpgrade storage nextUpgrade = _upgradePlan();
@@ -89,8 +89,8 @@ contract FWSSDispatcher is ERC8167Dispatcher, OwnableUpgradeable, UUPSUpgradeabl
         delete nextUpgrade.nextImplementation;
         delete nextUpgrade.afterEpoch;
 
-        // Future upgrades that change fixed selectors must reconcile overlapping routes atomically in migration.
-        // Invalidate the old plan before the new implementation or its migration can execute.
+        // Fixed-selector changes require atomic route reconciliation through the new implementation's migration call.
+        // Route plans approved under this implementation must not survive a change to its upgrade policy.
         bytes32 changeHash = _clearRouteUpgrade();
         if (changeHash != bytes32(0)) emit RouteUpgradeCancelled(changeHash);
     }

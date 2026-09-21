@@ -2,30 +2,16 @@
 pragma solidity 0.8.30;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 import {Errors} from "./Errors.sol";
 import {VIEW_CONTRACT_ADDRESS_SLOT} from "./lib/FilecoinWarmStorageServiceLayout.sol";
 
 contract FWSSStateViewManager is OwnableUpgradeable {
-    struct ViewContractStorage {
-        address viewContractAddress;
-    }
-
     event ViewContractSet(address indexed viewContract);
 
-    constructor() {
-        _disableInitializers();
-    }
-
-    function _viewContractStorage() internal pure returns (ViewContractStorage storage state) {
-        // Preserve the address slot used by legacy storage readers without inheriting business storage.
-        bytes32 slot = VIEW_CONTRACT_ADDRESS_SLOT;
-        assembly {
-            state.slot := slot
-        }
-    }
-
     function viewContractAddress() external view returns (address) {
-        return _viewContractStorage().viewContractAddress;
+        // Legacy storage readers discover StateView through this slot.
+        return StorageSlot.getAddressSlot(VIEW_CONTRACT_ADDRESS_SLOT).value;
     }
 
     /**
@@ -36,7 +22,7 @@ contract FWSSStateViewManager is OwnableUpgradeable {
     function setViewContract(address _viewContract) external onlyOwner {
         require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
 
-        _viewContractStorage().viewContractAddress = _viewContract;
+        StorageSlot.getAddressSlot(VIEW_CONTRACT_ADDRESS_SLOT).value = _viewContract;
 
         emit ViewContractSet(_viewContract);
     }

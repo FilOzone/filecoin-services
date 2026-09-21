@@ -21,6 +21,10 @@ contract WrongUUIDDispatcher is Dispatcher {
     }
 }
 
+contract SmallUUPSImplementation is UUPSUpgradeable {
+    function _authorizeUpgrade(address) internal override {}
+}
+
 contract FWSSDispatcherTest is Test {
     Dispatcher internal dispatcher;
     Dispatcher internal proxy;
@@ -208,7 +212,7 @@ contract FWSSDispatcherTest is Test {
         dispatcher.upgradeToAndCall(address(dispatcher), "");
     }
 
-    function testAnnouncementDelayOverflowAndSmallUpgradeTargetAreRejected() public {
+    function testAnnouncementDelayOverflowAndEmptyUpgradeTargetAreRejected() public {
         Dispatcher.RouteChange[] memory changes =
             _change(RoutingDelegate.fail.selector, Dispatcher.Action.Add, address(module));
         vm.prank(owner);
@@ -217,9 +221,25 @@ contract FWSSDispatcherTest is Test {
         vm.prank(owner);
         vm.expectRevert(abi.encodeWithSignature("Panic(uint256)", uint256(0x11)));
         proxy.announceUpgradePlan(address(dispatcher), type(uint96).max);
+        address emptyTarget = makeAddr("emptyTarget");
         vm.prank(owner);
-        vm.expectRevert(abi.encodeWithSelector(Dispatcher.InvalidUpgradeImplementation.selector, address(module)));
-        proxy.announceUpgradePlan(address(module), 1);
+        vm.expectRevert(abi.encodeWithSelector(Dispatcher.InvalidUpgradeImplementation.selector, emptyTarget));
+        proxy.announceUpgradePlan(emptyTarget, 1);
+    }
+
+    function testSmallUUPSImplementationCanBeAnnouncedAndInstalled() public {
+        SmallUUPSImplementation replacement = new SmallUUPSImplementation();
+        assertLt(address(replacement).code.length, 3000);
+
+        vm.prank(owner);
+        proxy.announceUpgradePlan(address(replacement), 1);
+        vm.roll(block.number + 1);
+        vm.prank(owner);
+        proxy.upgradeToAndCall(address(replacement), "");
+
+        assertEq(
+            vm.load(address(proxy), ERC1967Utils.IMPLEMENTATION_SLOT), bytes32(uint256(uint160(address(replacement))))
+        );
     }
 
     function testInitializationRejectsInvalidOwnerActionsAndReservedSelectors() public {

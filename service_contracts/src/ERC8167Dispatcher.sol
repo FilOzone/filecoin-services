@@ -10,8 +10,10 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
     error InvalidDelegate(address delegate);
     error DelegateUnchanged(bytes4 selector);
 
-    address internal immutable dispatcherAddress = address(this);
+    // Delegatecalls retain this implementation address while address(this) becomes the proxy.
+    address internal immutable dispatcherImplementation = address(this);
 
+    // Empty calldata must not invoke a route installed for the four-byte zero selector.
     receive() external payable {
         revert FunctionNotFound(bytes4(0));
     }
@@ -52,7 +54,7 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
 
     function _checkDelegate(address delegate) internal view {
         require(
-            delegate != address(this) && delegate != dispatcherAddress && delegate.code.length != 0,
+            delegate != address(this) && delegate != dispatcherImplementation && delegate.code.length != 0,
             InvalidDelegate(delegate)
         );
     }
@@ -88,7 +90,7 @@ abstract contract ERC8167Dispatcher is Proxy, IERC8167 {
 
     function implementation(bytes4 selector) public view returns (address) {
         if (_isFixedSelector(selector)) {
-            return dispatcherAddress;
+            return dispatcherImplementation;
         }
 
         return _routingStorage().routes[selector].delegate;
