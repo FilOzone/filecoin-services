@@ -13,9 +13,9 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {MetadataModule} from "./modules/MetadataModule.sol";
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
 import {Errors} from "./Errors.sol";
-import {IFilecoinServiceMetadata} from "./IFilecoinServiceMetadata.sol";
 
 import {ServiceProviderRegistry} from "./ServiceProviderRegistry.sol";
 
@@ -74,7 +74,7 @@ uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 1024; // 1KiB
 /// and adjusts payment rates based on storage size. Also implements validation
 /// to reduce payments for faulted epochs.
 contract FilecoinWarmStorageService is
-    IFilecoinServiceMetadata,
+    MetadataModule,
     PDPListener,
     IValidator,
     Initializable,
@@ -84,13 +84,6 @@ contract FilecoinWarmStorageService is
     EIP712Upgradeable,
     FWSSStorage
 {
-    // Version tracking
-    string public constant VERSION = "1.4.0";
-    string private constant SERVICE_NAME = "Filecoin Warm Storage Service";
-    string private constant SERVICE_DESCRIPTION =
-        "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
-    string private constant SERVICE_HOMEPAGE = "https://github.com/FilOzone/filecoin-services";
-
     using Rails for FilecoinPayV1;
 
     // Events
@@ -317,18 +310,6 @@ contract FilecoinWarmStorageService is
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
-    }
-
-    function name() external pure override returns (string memory) {
-        return SERVICE_NAME;
-    }
-
-    function description() external pure override returns (string memory) {
-        return SERVICE_DESCRIPTION;
-    }
-
-    function homepage() external pure override returns (string memory) {
-        return SERVICE_HOMEPAGE;
     }
 
     function announceUpgradePlan(address nextImplementation, uint96 delayEpochs) external {
