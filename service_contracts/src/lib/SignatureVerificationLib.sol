@@ -131,6 +131,7 @@ library SignatureVerificationLib {
         pure
         returns (bytes32)
     {
+        // forge-lint: disable-next-line(custom-errors)
         require(allKeys.length == allValues.length, "Keys/values array length mismatch");
 
         bytes32[] memory pieceHashes = new bytes32[](allKeys.length);
