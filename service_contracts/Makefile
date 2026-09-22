@@ -141,6 +141,8 @@ check-layout:
 # Core contracts we publish ABIs for.
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
+	FWSSDispatcher \
+	FWSSStateViewManager \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
@@ -155,7 +157,7 @@ ABI_CONTRACTS := \
 # Contract ABIs that should include event fragments emitted from first-party
 # libraries. Library events are logged from the calling contract/proxy address.
 ABI_CONTRACTS_WITH_LIBRARY_EVENTS := FilecoinWarmStorageService
-ABI_CONTRACTS_SIMPLE := $(filter-out $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS),$(ABI_CONTRACTS))
+ABI_CONTRACTS_SIMPLE := $(filter-out $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS) Errors,$(ABI_CONTRACTS))
 FIRST_PARTY_LIBRARY_SOURCE_PREFIX := src/lib/
 
 # Directory for ABIs
@@ -171,6 +173,8 @@ update-abi: | abi
 		echo "Extracting ABI for $$contract..."; \
 		jq '.abi' "$$artifact" > "abi/$$contract.abi.json"; \
 	done
+	# OpenZeppelin also defines Errors; the source-qualified lookup avoids artifact-name collisions.
+	forge inspect src/Errors.sol:Errors abi --json > abi/Errors.abi.json
 	@jq -s --arg source_prefix "$(FIRST_PARTY_LIBRARY_SOURCE_PREFIX)" \
 		'def solc_metadata: if (.metadata | type) == "string" then (.metadata | try fromjson catch {}) else (.metadata // {}) end; def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); reduce ([.[] | select((((solc_metadata.settings.compilationTarget // {}) | to_entries[0]? | .key // "") | startswith($$source_prefix))) | (.abi // [])[] | select(.type == "event")][]) as $$event ([]; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
 		out/*.sol/*.json > abi/.library-events.abi.json

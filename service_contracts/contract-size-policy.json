@@ -6,6 +6,12 @@
     "maximumConstructorArgsSize": 256
   },
   "targets": {
+    "FWSSDispatcher": {
+      "artifact": "src/FWSSDispatcher.sol:FWSSDispatcher"
+    },
+    "FWSSStateViewManager": {
+      "artifact": "src/FWSSStateViewManager.sol:FWSSStateViewManager"
+    },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
     },

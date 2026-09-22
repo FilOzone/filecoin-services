@@ -245,6 +245,21 @@ case $# in
             exit 1
         fi
 
+        # These delegates access selected legacy slots explicitly; declared fields could overwrite business state.
+        TEMP_DISPATCHER_LAYOUT=$(mktemp)
+        TEMP_FILES+=("$TEMP_DISPATCHER_LAYOUT")
+        # Match Makefile layout generation: normal build artifacts may be cached without storageLayout output.
+        # TODO(module integration): include narrow-access modules in discovery when the shared module checker lands.
+        for CONTRACT in FWSSDispatcher FWSSStateViewManager; do
+            forge inspect --out out/storage-layout --cache-path cache/storage-layout \
+                "src/$CONTRACT.sol:$CONTRACT" storageLayout --json > "$TEMP_DISPATCHER_LAYOUT"
+            if ! jq -e '.storage == []' "$TEMP_DISPATCHER_LAYOUT" > /dev/null; then
+                echo "Error: $CONTRACT must not declare linear storage" >&2
+                exit 1
+            fi
+        done
+        echo "Dispatcher and StateView manager declare no linear storage"
+
         # Get the base commit (HEAD for regular check, or base branch for PRs)
         if [ -n "${GITHUB_BASE_REF:-}" ]; then
             BASE_REF="origin/$GITHUB_BASE_REF"
