@@ -1357,7 +1357,7 @@
         "name": "plannedUpgrade",
         "type": "tuple",
         "indexed": false,
-        "internalType": "struct FilecoinWarmStorageService.PlannedUpgrade",
+        "internalType": "struct FWSSStorage.PlannedUpgrade",
         "components": [
           {
             "name": "nextImplementation",
