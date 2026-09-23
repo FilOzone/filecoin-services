@@ -33,12 +33,14 @@ build:
 	forge build --via-ir
 
 # Storage layout generation
-$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
-	$^ | forge fmt -r - > $@
+$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
+	bash -o pipefail -c 'bash tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol | forge fmt -r - > "$@.tmp"'
+	mv $@.tmp $@
 
 # Storage layout JSON (full metadata for upgrade safety checks)
-$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
-	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
+$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol $(LAYOUT_SNAPSHOT_JQ)
+	bash -o pipefail -c 'forge inspect --out out/storage-layout --cache-path cache/storage-layout --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > "$@.tmp"'
+	mv $@.tmp $@
 
 # The library imports the generated storage layout.
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol $(LAYOUT)
