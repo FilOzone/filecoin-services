@@ -664,29 +664,6 @@
   },
   {
     "type": "function",
-    "name": "settleFilBeamPaymentRails",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cacheMissAmount",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "storageProviderChanged",
     "inputs": [
       {
@@ -712,19 +689,6 @@
     ],
     "outputs": [],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "terminateCDNService",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -759,29 +723,6 @@
   },
   {
     "type": "function",
-    "name": "topUpCDNPaymentRails",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cdnAmountToAdd",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "cacheMissAmountToAdd",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "topUpLifecycleReserve",
     "inputs": [
       {
@@ -793,19 +734,6 @@
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "transferFilBeamController",
-    "inputs": [
-      {
-        "name": "newController",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -1112,25 +1040,6 @@
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "FilBeamControllerChanged",
-    "inputs": [
-      {
-        "name": "oldController",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
-      },
-      {
-        "name": "newController",
-        "type": "address",
-        "indexed": false,
-        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -1605,17 +1514,6 @@
   },
   {
     "type": "error",
-    "name": "FilBeamServiceNotConfigured",
-    "inputs": [
-      {
-        "name": "dataSetId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InvalidChallengeCount",
     "inputs": [
       {
@@ -1844,22 +1742,6 @@
         "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
-      },
-      {
-        "name": "actual",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "OnlyFilBeamControllerAllowed",
-    "inputs": [
-      {
-        "name": "expected",
-        "type": "address",
-        "internalType": "address"
       },
       {
         "name": "actual",

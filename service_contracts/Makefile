@@ -143,6 +143,7 @@ ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceMetadataModule \
 	FilecoinWarmStorageServiceProviderManagementModule \
+	FilecoinWarmStorageServiceFilBeamModule \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
@@ -156,7 +157,7 @@ ABI_CONTRACTS := \
 
 # Contract ABIs that should include event fragments emitted from first-party
 # libraries. Library events are logged from the calling contract/proxy address.
-ABI_CONTRACTS_WITH_LIBRARY_EVENTS := FilecoinWarmStorageService
+ABI_CONTRACTS_WITH_LIBRARY_EVENTS := FilecoinWarmStorageService FilecoinWarmStorageServiceFilBeamModule
 ABI_CONTRACTS_SIMPLE := $(filter-out $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS),$(ABI_CONTRACTS))
 FIRST_PARTY_LIBRARY_SOURCE_PREFIX := src/lib/
 
