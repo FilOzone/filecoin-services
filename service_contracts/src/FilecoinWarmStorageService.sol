@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.37;
 
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";

@@ -29,8 +29,14 @@ LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageS
 
 # Build target
 .PHONY: build
-build:
+build: erc8167
 	forge build --via-ir
+
+# Compile the upstream dispatcher unchanged. No Solidity wrapper or bytecode padding.
+.PHONY: erc8167
+erc8167:
+	@command -v evm >/dev/null || (echo 'Install wjmelements/evm to build the ERC-8167 dispatcher'; exit 1)
+	FOUNDRY_SOLC_VERSION=$$(forge config --json | jq -r .solc) $(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
 
 # Storage layout generation
 $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
@@ -87,7 +93,7 @@ check-tools:
 
 # Test target
 .PHONY: test
-test:
+test: erc8167
 	forge test --via-ir -vv
 
 # Clean build artifacts

@@ -24,6 +24,16 @@ jobs:
           cd service_contracts
           make install
 
+      - name: Build ERC-8167 assembler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
+          git clone https://github.com/wjmelements/evm.git "$RUNNER_TEMP/erc8167-evm"
+          git -C "$RUNNER_TEMP/erc8167-evm" checkout 4123f3a47e8032499fc0ddfe178f35c034ae77a7
+          git -C "$RUNNER_TEMP/erc8167-evm" submodule update --init --recursive
+          make -C "$RUNNER_TEMP/erc8167-evm" bin/evm
+          echo "$RUNNER_TEMP/erc8167-evm/bin" >> "$GITHUB_PATH"
+
       - name: Run build
         run: |
           export PATH="/home/runner/.config/.foundry/bin:$PATH"

@@ -6,10 +6,13 @@ out = 'out'
 libs = ['lib']
 cache_path = 'cache'
 solc = "0.8.37"
+# FEVM supports the Cancun opcodes used by Solidity and the migration library.
+evm_version = "cancun"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
+cbor_metadata = false
 
 # Foundry's defaults, plus Solidity 0.8.37 warnings from fws-payments (9170),
 # OpenZeppelin/forge-std (6335), forge-std (8506), and the warning limit (4591).
@@ -31,6 +34,7 @@ remappings = [
     '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
     '@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/',
     'forge-std/=lib/forge-std/src/',
+    '@erc8167/=lib/erc8167/src/',
     '@fws-payments/=lib/fws-payments/src/',
     '@pdp/=lib/pdp/src/',
     '@session-key-registry/=lib/session-key-registry/src/',
@@ -40,7 +44,11 @@ remappings = [
 ]
 
 # Allow reading test data files
-fs_permissions = [{ access = "read", path = "./test" }]
+fs_permissions = [
+    { access = "read", path = "./test" },
+    { access = "read", path = "./out" },
+    { access = "read", path = "./lib/erc8167/out" },
+]
 
 [lint]
 severity = ["high", "med", "low", "info", "gas", "code-size"]
