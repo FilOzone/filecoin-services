@@ -146,6 +146,8 @@ check-layout:
 
 # Core contracts we publish ABIs for.
 ABI_CONTRACTS := \
+	MigrateModule \
+	IERC8167 \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceProviderManagementModule \
 	IFilecoinServiceMetadata \

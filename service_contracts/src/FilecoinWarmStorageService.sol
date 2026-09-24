@@ -12,6 +12,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
+import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
+import {Migrate} from "@erc8167/interfaces/Migrate.sol";
+import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
+import {IMigrateModule} from "./interfaces/IMigrateModule.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
 import {Errors} from "./Errors.sol";
@@ -223,6 +229,17 @@ contract FilecoinWarmStorageService is
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
+    // ERC-7201: filecoin.storage.DispatcherMigration. The target and epoch remain in nextUpgrade.
+    bytes32 private constant DISPATCHER_MIGRATION_SLOT =
+        0x7b62b12cbd4199ba0937db5d3be14c1a07bb43e1b460ef3f381e506cd4e2a800;
+
+    event DispatcherUpgradeAnnounced(address indexed dispatcher, address indexed migration, uint96 afterEpoch);
+
+    error InvalidDispatcherTarget(address target);
+    error DispatcherMigrationMismatch();
+    error DispatcherUpgradePending();
+    error MissingDispatcherDelegate(bytes4 selector);
+
     event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
 
     // =========================================================================
@@ -340,16 +357,69 @@ contract FilecoinWarmStorageService is
 
     function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
         require(nextImplementation.code.length > 3000);
+        _setUpgradePlan(nextImplementation, afterEpoch);
+    }
+
+    function _setUpgradePlan(address nextImplementation, uint96 afterEpoch) private {
+        delete StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value;
         nextUpgrade.nextImplementation = nextImplementation;
         nextUpgrade.afterEpoch = afterEpoch;
         emit UpgradeAnnounced(nextUpgrade);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
+        if (StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value != address(0)) {
+            revert DispatcherUpgradePending();
+        }
+        _consumeUpgradePlan(newImplementation);
+    }
+
+    function _consumeUpgradePlan(address newImplementation) private {
         // zero address already checked by ERC1967Utils._setImplementation
         require(newImplementation == nextUpgrade.nextImplementation);
         require(block.number >= nextUpgrade.afterEpoch);
         delete nextUpgrade;
+    }
+
+    /// @notice Announces the one-time transition to ERC-8167 using a Josuke-generated migration.
+    function announceDispatcherUpgrade(address dispatcher, address migration, uint96 delayEpochs) external onlyOwner {
+        if (dispatcher.code.length == 0 || dispatcher == address(this)) revert InvalidDispatcherTarget(dispatcher);
+        if (migration.code.length == 0 || migration == address(this)) revert InvalidDispatcherTarget(migration);
+
+        uint96 afterEpoch = uint96(block.number) + (delayEpochs == 0 ? 1 : delayEpochs);
+        _setUpgradePlan(dispatcher, afterEpoch);
+        StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value = migration;
+
+        emit DispatcherUpgradeAnnounced(dispatcher, migration, afterEpoch);
+    }
+
+    /// @dev Consumes the same delayed plan as UUPS upgrades, binding both target addresses.
+    function upgradeToDispatcher(address dispatcher, address migration) external onlyProxy onlyOwner {
+        if (migration == address(0) || migration != StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value) {
+            revert DispatcherMigrationMismatch();
+        }
+
+        delete StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value;
+        _consumeUpgradePlan(dispatcher);
+
+        emit Migrate.DiamondDelegateCall(migration, "");
+        Address.functionDelegateCall(migration, "");
+
+        bytes4[4] memory requiredSelectors = [
+            IERC8167.implementation.selector,
+            IERC8167.selectors.selector,
+            IMigrateModule.announceMigration.selector,
+            Migrate.migrate.selector
+        ];
+        for (uint256 i; i < requiredSelectors.length; ++i) {
+            bytes4 selector = requiredSelectors[i];
+            address delegate = ProxyStorage.get().delegates[selector];
+            if (delegate.code.length == 0 || delegate == address(this) || delegate == dispatcher) {
+                revert MissingDispatcherDelegate(selector);
+            }
+        }
+
+        ERC1967Utils.upgradeToAndCall(dispatcher, "");
     }
 
     /**

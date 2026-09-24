@@ -68,6 +68,29 @@
   },
   {
     "type": "function",
+    "name": "announceDispatcherUpgrade",
+    "inputs": [
+      {
+        "name": "dispatcher",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "migration",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "delayEpochs",
+        "type": "uint96",
+        "internalType": "uint96"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "announceUpgradePlan",
     "inputs": [
       {
@@ -844,6 +867,24 @@
   },
   {
     "type": "function",
+    "name": "upgradeToDispatcher",
+    "inputs": [
+      {
+        "name": "dispatcher",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "migration",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "usdfcTokenAddress",
     "inputs": [],
     "outputs": [
@@ -1081,6 +1122,50 @@
         "type": "address",
         "indexed": true,
         "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DiamondDelegateCall",
+    "inputs": [
+      {
+        "name": "delegate",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "delegateCalldata",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DispatcherUpgradeAnnounced",
+    "inputs": [
+      {
+        "name": "dispatcher",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "migration",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "afterEpoch",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
       }
     ],
     "anonymous": false
@@ -1547,6 +1632,16 @@
   },
   {
     "type": "error",
+    "name": "DispatcherMigrationMismatch",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "DispatcherUpgradePending",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "DuplicateMetadataKey",
     "inputs": [
       {
@@ -1701,6 +1796,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidDispatcherTarget",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidEpochRange",
     "inputs": [
       {
@@ -1796,6 +1902,17 @@
         "name": "length",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "MissingDispatcherDelegate",
+    "inputs": [
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "internalType": "bytes4"
       }
     ]
   },

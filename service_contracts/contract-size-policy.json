@@ -6,6 +6,9 @@
     "maximumConstructorArgsSize": 256
   },
   "targets": {
+    "MigrateModule": {
+      "artifact": "src/modules/MigrateModule.sol:MigrateModule"
+    },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
     },
