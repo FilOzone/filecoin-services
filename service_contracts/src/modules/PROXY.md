@@ -31,8 +31,9 @@ Solidity builds disable both the metadata hash and CBOR trailer with
 
 First deploy this intermediate `FilecoinWarmStorageService` release and install
 it through the existing delayed UUPS upgrade. Its constructor and business logic
-are unchanged. The monolith naturally satisfies the old `code.length > 3000`
-check, which remains in place. There is no separate conversion contract or
+are unchanged. The monolith naturally satisfies the already-deployed release's
+`code.length > 3000` check. This intermediate release changes that condition to
+`code.length > 3000 || code.length == 88`. There is no separate conversion contract or
 bytecode padding.
 
 For the first `josuke deploy`, point the ledger at the blank upstream dispatcher.
@@ -43,7 +44,7 @@ owner then calls:
 ```solidity
 service.announceDispatcherUpgrade(dispatcher, migration, delayEpochs);
 // Wait until StateView.nextUpgrade().afterEpoch.
-service.upgradeToDispatcher(dispatcher, migration);
+service.upgradeToAndCall(dispatcher, "");
 ```
 
 Both addresses are bound to the announcement, with a minimum delay of one block.
@@ -54,7 +55,9 @@ accessed through OpenZeppelin `StorageSlot`; no legacy business slots move.
 
 There is one pending plan. Either kind of announcement replaces the previous
 one. An ordinary UUPS announcement clears the pending dispatcher migration, and
-ordinary `upgradeToAndCall` rejects an active dispatcher plan. The transition
+an attempt to execute an ordinary UUPS target rejects an active dispatcher plan.
+`upgradeToAndCall(dispatcher, "")` consumes the stored migration address; the
+caller cannot replace it with different calldata. The transition
 consumes the plan before delegatecalling the migration. It requires deployed
 delegates for `implementation`, `selectors`, `announceMigration` and `migrate`,
 then switches the ERC-1967 implementation to the dispatcher. Any revert restores
@@ -65,6 +68,35 @@ After the transition, update `josuke.json` to the existing FWSS proxy address,
 verify the installed routes and accept the migration. The monolith is no longer
 the active implementation and must not be included as a facet. Its legacy
 `migrate(address)` sets StateView; it is not the migration entry point below.
+
+## The 3000-byte gate and UUPS exception
+
+The old size check belongs to implementation code, so it cannot be changed by
+writing a storage field in an initializer. The first delayed UUPS upgrade installs
+the intermediate release that contains the relaxed check. Direct upgrades from
+the old deployed release to the raw dispatcher remain impossible.
+
+Allowing 88 bytes is not enough on its own: OpenZeppelin UUPS also calls
+`proxiableUUID()` on the candidate. The blank dispatcher has no such route.
+This release overrides `upgradeToAndCall` for an announced dispatcher migration.
+Without that migration announcement, it retains OpenZeppelin's UUPS path. The runtime hash is
+`0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a`.
+Both the dispatcher announcement and execution check that hash. Updating the
+upstream proxy bytecode requires reviewing and updating this constant too.
+
+Use `announceDispatcherUpgrade` for the final transition. An ordinary
+`announceUpgradePlan(dispatcher, delay)` passes the new size check but does not
+bind a migration and cannot execute the transition. Dispatcher execution requires
+empty calldata and zero FIL; the migration comes from the delayed announcement.
+The generated migration runs before the implementation changes, because an empty
+selector map cannot dispatch an initializer after the switch.
+
+There is no new initializer or constructor argument. Moving an arbitrary migration
+address into first-upgrade initializer calldata would stop binding the migration
+to the announcement delay. The paired announcement is retained for that reason.
+The separate `upgradeToDispatcher` execution method is removed. An invalid target
+reverts with `InvalidDispatcherTarget()`; nonempty dispatcher calldata is rejected
+before the migration executes.
 
 ## Later migrations
 

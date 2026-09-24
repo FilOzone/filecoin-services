@@ -7,11 +7,14 @@ import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MigrateModule} from "../src/modules/MigrateModule.sol";
 import {ProviderManagementModule} from "../src/modules/ProviderManagementModule.sol";
+import {FWSSStorage} from "../src/storage/FWSSStorage.sol";
 import {LibAccessControl} from "../src/lib/LibAccessControl.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
@@ -53,6 +56,26 @@ contract RevertingMigrationFixture {
     fallback() external {
         ProxyStorage.get().delegates[IERC8167.implementation.selector] = address(0xDEAD);
         revert MigrationFailed();
+    }
+}
+
+/// @dev Models only the historical >3000-byte announcement rule and UUPS slot-19 plan.
+contract LegacyUpgradeGateFixture is FWSSStorage, OwnableUpgradeable, UUPSUpgradeable {
+    function initialize() external initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+    }
+
+    function announceUpgradePlan(address target, uint96 delay) external onlyOwner {
+        require(target.code.length > 3000);
+        nextUpgrade =
+            PlannedUpgrade({nextImplementation: target, afterEpoch: uint96(block.number) + (delay == 0 ? 1 : delay)});
+    }
+
+    function _authorizeUpgrade(address target) internal override onlyOwner {
+        require(target == nextUpgrade.nextImplementation);
+        require(block.number >= nextUpgrade.afterEpoch);
+        delete nextUpgrade;
     }
 }
 
@@ -349,7 +372,7 @@ contract FWSSDispatcherTest is Test {
         assertEq(announced, dispatcher);
         assertEq(afterEpoch, block.number + 1);
         vm.roll(afterEpoch);
-        service.upgradeToDispatcher(dispatcher, migration);
+        service.upgradeToAndCall(dispatcher, "");
 
         _assertDispatcherRoutes(proxy);
         assertEq(vm.load(proxy, OWNER_SLOT), ownerBefore);
@@ -366,12 +389,80 @@ contract FWSSDispatcherTest is Test {
         ProviderManagementModule(proxy).addApprovedProvider(43);
     }
 
-    function testNormalAnnouncementRejectsSmallRawDispatcherButIntermediatePasses() public {
+    function testNormalAnnouncementAcceptsRawSizeButRequiresMigrationPair() public {
         (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
-        assertLe(dispatcher.code.length, 3000);
-        vm.expectRevert();
+        assertEq(dispatcher.code.length, 88);
         service.announceUpgradePlan(dispatcher, 0);
+        (, uint96 epoch) = _plan(address(service));
+        vm.roll(epoch);
+        vm.expectRevert(abi.encodeWithSelector(ERC1967Utils.ERC1967InvalidImplementation.selector, dispatcher));
+        service.upgradeToAndCall(dispatcher, "");
         _intermediate(service, token);
+    }
+
+    function testHistoricalSizeGateRequiresLargeIntermediate() public {
+        LegacyUpgradeGateFixture old = new LegacyUpgradeGateFixture();
+        LegacyUpgradeGateFixture legacy = LegacyUpgradeGateFixture(
+            address(new ERC1967Proxy(address(old), abi.encodeCall(LegacyUpgradeGateFixture.initialize, ())))
+        );
+        vm.expectRevert();
+        legacy.announceUpgradePlan(dispatcher, 0);
+        FilecoinWarmStorageService intermediate = _newMonolith(new MockERC20());
+        legacy.announceUpgradePlan(address(intermediate), 0);
+        (, uint96 epoch) = _plan(address(legacy));
+        vm.roll(epoch);
+        legacy.upgradeToAndCall(address(intermediate), "");
+        assertEq(address(uint160(uint256(vm.load(address(legacy), IMPLEMENTATION_SLOT)))), address(intermediate));
+
+        FilecoinWarmStorageService service = FilecoinWarmStorageService(address(legacy));
+        service.announceDispatcherUpgrade(dispatcher, _createMigration(bytes4(0)), 0);
+        vm.roll(block.number + 1);
+        service.upgradeToAndCall(dispatcher, "");
+        _assertDispatcherRoutes(address(service));
+    }
+
+    function testNormalAnnouncementSizeBoundary() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        uint256[6] memory sizes = [uint256(0), 87, 88, 89, 3000, 3001];
+        for (uint256 i; i < sizes.length; ++i) {
+            address candidate = address(uint160(0xA000 + i));
+            vm.etch(candidate, new bytes(sizes[i]));
+            if (sizes[i] == 88 || sizes[i] == 3001) {
+                service.announceUpgradePlan(candidate, 0);
+                (address target,) = _plan(address(service));
+                assertEq(target, candidate);
+            } else {
+                vm.expectRevert();
+                service.announceUpgradePlan(candidate, 0);
+            }
+        }
+    }
+
+    function testPairedAnnouncementRejectsFakeEightyEightByteRuntime() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        address fake = address(0xF00D);
+        vm.etch(fake, new bytes(88));
+        address migration = _createMigration(bytes4(0));
+        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTarget.selector);
+        service.announceDispatcherUpgrade(fake, migration, 0);
+        (address target,) = _plan(address(service));
+        assertEq(target, address(0));
+    }
+
+    function testDispatcherRuntimeIsCheckedAgainAtExecution() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        service.announceDispatcherUpgrade(dispatcher, _createMigration(bytes4(0)), 0);
+        vm.roll(block.number + 1);
+        bytes memory runtime = dispatcher.code;
+        vm.etch(dispatcher, new bytes(88));
+        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTarget.selector);
+        service.upgradeToAndCall(dispatcher, "");
+        (address target,) = _plan(address(service));
+        assertEq(target, dispatcher);
+
+        vm.etch(dispatcher, runtime);
+        service.upgradeToAndCall(dispatcher, "");
+        _assertDispatcherRoutes(address(service));
     }
 
     function testDispatcherAnnouncementValidatesTargetsAndOwner() public {
@@ -380,15 +471,11 @@ contract FWSSDispatcherTest is Test {
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         service.announceDispatcherUpgrade(dispatcher, migration, 1);
-        vm.expectRevert(
-            abi.encodeWithSelector(FilecoinWarmStorageService.InvalidDispatcherTarget.selector, address(0x1234))
-        );
+        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTarget.selector);
         service.announceDispatcherUpgrade(address(0x1234), migration, 1);
-        vm.expectRevert(
-            abi.encodeWithSelector(FilecoinWarmStorageService.InvalidDispatcherTarget.selector, address(0x1234))
-        );
+        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTarget.selector);
         service.announceDispatcherUpgrade(dispatcher, address(0x1234), 1);
-        vm.expectRevert(abi.encodeWithSelector(FilecoinWarmStorageService.InvalidDispatcherTarget.selector, address(0)));
+        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTarget.selector);
         service.announceDispatcherUpgrade(dispatcher, address(0), 1);
         (address target, uint96 epoch) = _plan(address(service));
         assertEq(target, address(0));
@@ -398,30 +485,26 @@ contract FWSSDispatcherTest is Test {
     function testDispatcherTransitionChecksDelayTargetsAndOwner() public {
         (FilecoinWarmStorageService service,,) = _realLegacy();
         address migration = _createMigration(bytes4(0));
-        address wrongMigration = _createMigration(bytes4(0));
         service.announceDispatcherUpgrade(dispatcher, migration, 2);
         vm.expectRevert();
-        service.upgradeToDispatcher(dispatcher, migration);
+        service.upgradeToAndCall(dispatcher, "");
         vm.roll(block.number + 2);
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        service.upgradeToDispatcher(dispatcher, migration);
-        vm.expectRevert(FilecoinWarmStorageService.DispatcherMigrationMismatch.selector);
-        service.upgradeToDispatcher(dispatcher, wrongMigration);
+        service.upgradeToAndCall(dispatcher, "");
         vm.expectRevert();
-        service.upgradeToDispatcher(address(0x1234), migration);
+        service.upgradeToAndCall(address(0x1234), "");
         (address target,) = _plan(address(service));
         assertEq(target, dispatcher);
-        service.upgradeToDispatcher(dispatcher, migration);
+        service.upgradeToAndCall(dispatcher, "");
         _assertDispatcherRoutes(address(service));
     }
 
-    function testDirectImplementationCannotUpgradeToDispatcher() public {
+    function testDirectImplementationCannotUpgradeToRawDispatcher() public {
         MockERC20 token = new MockERC20();
         FilecoinWarmStorageService implementation = _newMonolith(token);
-        address migration = _createMigration(bytes4(0));
         vm.expectRevert(UUPSUpgradeable.UUPSUnauthorizedCallContext.selector);
-        implementation.upgradeToDispatcher(dispatcher, migration);
+        implementation.upgradeToAndCall(dispatcher, "");
     }
 
     function testRevertingMigrationRollsBackPlanAndRoutes() public {
@@ -433,7 +516,7 @@ contract FWSSDispatcherTest is Test {
         vm.roll(block.number + 1);
         for (uint256 i; i < 2; ++i) {
             vm.expectRevert(RevertingMigrationFixture.MigrationFailed.selector);
-            service.upgradeToDispatcher(dispatcher, address(migration));
+            service.upgradeToAndCall(dispatcher, "");
             (address target, uint96 epoch) = _plan(address(service));
             assertEq(target, dispatcher);
             assertEq(epoch, block.number);
@@ -457,7 +540,7 @@ contract FWSSDispatcherTest is Test {
                     FilecoinWarmStorageService.MissingDispatcherDelegate.selector, IERC8167.selectors.selector
                 )
             );
-            service.upgradeToDispatcher(dispatcher, migration);
+            service.upgradeToAndCall(dispatcher, "");
             (address target, uint96 epoch) = _plan(address(service));
             assertEq(target, dispatcher);
             assertEq(epoch, block.number);
@@ -480,7 +563,7 @@ contract FWSSDispatcherTest is Test {
                 FilecoinWarmStorageService.MissingDispatcherDelegate.selector, MigrateModule.announceMigration.selector
             )
         );
-        service.upgradeToDispatcher(dispatcher, migration);
+        service.upgradeToAndCall(dispatcher, "");
         assertEq(address(uint160(uint256(vm.load(proxy, IMPLEMENTATION_SLOT)))), original);
         (address target,) = _plan(address(service));
         assertEq(target, dispatcher);
@@ -493,8 +576,8 @@ contract FWSSDispatcherTest is Test {
         service.announceDispatcherUpgrade(dispatcher, migration, 0);
         service.announceUpgradePlan(address(next), 0);
         vm.roll(block.number + 1);
-        vm.expectRevert(FilecoinWarmStorageService.DispatcherMigrationMismatch.selector);
-        service.upgradeToDispatcher(dispatcher, migration);
+        vm.expectRevert(bytes(""));
+        service.upgradeToAndCall(dispatcher, "");
         service.upgradeToAndCall(address(next), "");
         assertEq(address(uint160(uint256(vm.load(address(service), IMPLEMENTATION_SLOT)))), address(next));
     }
@@ -504,22 +587,17 @@ contract FWSSDispatcherTest is Test {
         FilecoinWarmStorageService next = _newMonolith(token);
         address migration = _createMigration(bytes4(0));
         service.announceUpgradePlan(address(next), 0);
-        service.announceDispatcherUpgrade(address(next), migration, 0);
-        vm.roll(block.number + 1);
-        vm.expectRevert(FilecoinWarmStorageService.DispatcherUpgradePending.selector);
-        service.upgradeToAndCall(address(next), "");
         service.announceDispatcherUpgrade(dispatcher, migration, 0);
-        (, uint96 readyAt) = _plan(address(service));
-        vm.roll(readyAt);
-        vm.expectRevert(FilecoinWarmStorageService.DispatcherUpgradePending.selector);
+        vm.roll(block.number + 1);
+        vm.expectRevert();
+        service.upgradeToAndCall(address(next), "");
         service.upgradeToAndCall(dispatcher, "");
-        service.upgradeToDispatcher(dispatcher, migration);
         _assertDispatcherRoutes(address(service));
     }
 
     function testDispatcherReplacementBindsNewMigrationAndResetsDelay() public {
         (FilecoinWarmStorageService service,,) = _realLegacy();
-        address firstMigration = _createMigration(bytes4(0));
+        address firstMigration = _createMigration(IERC8167.selectors.selector);
         address secondMigration = _createMigration(bytes4(0));
         service.announceDispatcherUpgrade(dispatcher, firstMigration, 1);
         vm.roll(block.number + 1);
@@ -527,16 +605,49 @@ contract FWSSDispatcherTest is Test {
         (address target, uint96 readyAt) = _plan(address(service));
         assertEq(target, dispatcher);
         assertEq(readyAt, block.number + 3);
-        vm.expectRevert(FilecoinWarmStorageService.DispatcherMigrationMismatch.selector);
-        service.upgradeToDispatcher(dispatcher, firstMigration);
         vm.expectRevert();
-        service.upgradeToDispatcher(dispatcher, secondMigration);
+        service.upgradeToAndCall(dispatcher, "");
         vm.roll(readyAt - 1);
         vm.expectRevert();
-        service.upgradeToDispatcher(dispatcher, secondMigration);
+        service.upgradeToAndCall(dispatcher, "");
         vm.roll(readyAt);
-        service.upgradeToDispatcher(dispatcher, secondMigration);
+        service.upgradeToAndCall(dispatcher, "");
         _assertDispatcherRoutes(address(service));
+    }
+
+    function testFinalUpgradeRejectsCalldataAndValueAtomically() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        address migration = _createMigration(bytes4(0));
+        service.announceDispatcherUpgrade(dispatcher, migration, 0);
+        (, uint96 epoch) = _plan(address(service));
+        vm.roll(epoch);
+        address original = address(uint160(uint256(vm.load(address(service), IMPLEMENTATION_SLOT))));
+
+        vm.expectRevert();
+        service.upgradeToAndCall(dispatcher, hex"1234");
+        vm.deal(address(this), 1 ether);
+        vm.expectRevert(ERC1967Utils.ERC1967NonPayable.selector);
+        service.upgradeToAndCall{value: 1}(dispatcher, "");
+
+        (address target, uint96 readyAt) = _plan(address(service));
+        assertEq(target, dispatcher);
+        assertEq(readyAt, epoch);
+        assertEq(address(uint160(uint256(vm.load(address(service), IMPLEMENTATION_SLOT)))), original);
+        service.upgradeToAndCall(dispatcher, "");
+        _assertDispatcherRoutes(address(service));
+    }
+
+    function testLargeNonUUPSTargetRetainsOrdinaryUUPSCheck() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        address fake = address(0xB000);
+        vm.etch(fake, new bytes(3001));
+        service.announceUpgradePlan(fake, 0);
+        (, uint96 epoch) = _plan(address(service));
+        vm.roll(epoch);
+        vm.expectRevert();
+        service.upgradeToAndCall(fake, "");
+        (address target,) = _plan(address(service));
+        assertEq(target, fake);
     }
 
     function testTransferredOwnerControlsDispatcherTransitionAndProviderModule() public {
@@ -547,7 +658,7 @@ contract FWSSDispatcherTest is Test {
         service.announceDispatcherUpgrade(dispatcher, migration, 0);
         vm.roll(block.number + 1);
         vm.prank(address(0xB0B));
-        service.upgradeToDispatcher(dispatcher, migration);
+        service.upgradeToAndCall(dispatcher, "");
         vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(this)));
         ProviderManagementModule(address(service)).addApprovedProvider(43);
         vm.prank(address(0xB0B));

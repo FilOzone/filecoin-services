@@ -867,24 +867,6 @@
   },
   {
     "type": "function",
-    "name": "upgradeToDispatcher",
-    "inputs": [
-      {
-        "name": "dispatcher",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "migration",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
     "name": "usdfcTokenAddress",
     "inputs": [],
     "outputs": [
@@ -1632,16 +1614,6 @@
   },
   {
     "type": "error",
-    "name": "DispatcherMigrationMismatch",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "DispatcherUpgradePending",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "DuplicateMetadataKey",
     "inputs": [
       {
@@ -1797,13 +1769,7 @@
   {
     "type": "error",
     "name": "InvalidDispatcherTarget",
-    "inputs": [
-      {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
+    "inputs": []
   },
   {
     "type": "error",
