@@ -98,6 +98,11 @@ else
 fi
 
 if [ -n "$FWSS_DISPATCHER_ADDRESS" ]; then
+  PLANNED_DISPATCHER=$(cast call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "dispatcherAddress()(address)" 2>/dev/null)
+  if [ "$(echo "$PLANNED_DISPATCHER" | tr '[:upper:]' '[:lower:]')" != "$(echo "$FWSS_DISPATCHER_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
+    echo "Error: $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS was deployed with dispatcher '$PLANNED_DISPATCHER', not $FWSS_DISPATCHER_ADDRESS"
+    exit 1
+  fi
   echo "Completing the ERC-8167 dispatcher transition ($FWSS_DISPATCHER_ADDRESS)"
   MIGRATE_DATA=$(cast calldata "completeDispatcherTransition()")
   MIGRATE_CALL="completeDispatcherTransition"

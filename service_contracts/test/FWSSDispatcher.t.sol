@@ -555,7 +555,9 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         _newImplementation(token, address(0), migration);
 
         _newImplementation(token, address(0), address(0));
-        _newImplementation(token, dispatcher, migration);
+        FilecoinWarmStorageService intermediate = _newImplementation(token, dispatcher, migration);
+        assertEq(intermediate.dispatcherAddress(), dispatcher);
+        assertEq(intermediate.dispatcherMigrationAddress(), migration);
     }
 
     function testTransitionRequiresDelayAndOwner() public {
@@ -613,8 +615,18 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         service.completeDispatcherTransition();
 
+        // A plan announced while the intermediate is live must not survive as a migration.
+        FilecoinWarmStorageService next = _newMonolith(token);
+        service.announceUpgradePlan(address(next), 0);
+
         service.completeDispatcherTransition();
         _assertDispatcherRoutes(proxy);
+        (address pending, uint96 readyAt) = _plan(proxy);
+        assertEq(pending, address(0));
+        assertEq(readyAt, 0);
+        vm.roll(block.number + 1);
+        vm.expectRevert(abi.encodeWithSelector(MigrateModule.MigrationNotAnnounced.selector, address(next)));
+        MigrateModule(proxy).migrate(address(next));
     }
 
     function testDirectImplementationCannotUpgradeToRawDispatcher() public {

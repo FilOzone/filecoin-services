@@ -227,9 +227,10 @@ contract FilecoinWarmStorageService is
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     // One-time switch to the ERC-8167 dispatcher; both zero on implementations that stay monolithic.
-    // Immutable so the announced upgrade delay also covers the dispatcher and its Josuke migration.
-    address private immutable DISPATCHER;
-    address private immutable DISPATCHER_MIGRATION;
+    // Immutable so the announced upgrade delay also covers the dispatcher and its Josuke migration;
+    // public so reviewers can read them from the announced implementation during the delay.
+    address public immutable dispatcherAddress;
+    address public immutable dispatcherMigrationAddress;
 
     // Runtime hash of Proxy.evm at the pinned ERC-8167 revision.
     bytes32 private constant DISPATCHER_CODE_HASH = 0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a;
@@ -310,8 +311,8 @@ contract FilecoinWarmStorageService is
                 InvalidDispatcherTransition()
             );
         }
-        DISPATCHER = _dispatcher;
-        DISPATCHER_MIGRATION = _dispatcherMigration;
+        dispatcherAddress = _dispatcher;
+        dispatcherMigrationAddress = _dispatcherMigration;
     }
 
     /**
@@ -382,14 +383,17 @@ contract FilecoinWarmStorageService is
      * transaction. The raw dispatcher has no proxiableUUID(), so it cannot be a UUPS upgrade target itself.
      */
     function completeDispatcherTransition() external onlyProxy onlyOwner {
-        require(DISPATCHER != address(0), InvalidDispatcherTransition());
+        require(dispatcherAddress != address(0), InvalidDispatcherTransition());
 
-        emit Migrate.DiamondDelegateCall(DISPATCHER_MIGRATION, "");
-        Address.functionDelegateCall(DISPATCHER_MIGRATION, "");
+        // MigrateModule reuses this slot; an implementation plan must not become an announced migration.
+        delete nextUpgrade;
 
-        LibUpgradeRoutes.requireUpgradeRoutes(DISPATCHER);
+        emit Migrate.DiamondDelegateCall(dispatcherMigrationAddress, "");
+        Address.functionDelegateCall(dispatcherMigrationAddress, "");
 
-        ERC1967Utils.upgradeToAndCall(DISPATCHER, "");
+        LibUpgradeRoutes.requireUpgradeRoutes(dispatcherAddress);
+
+        ERC1967Utils.upgradeToAndCall(dispatcherAddress, "");
     }
 
     /**
