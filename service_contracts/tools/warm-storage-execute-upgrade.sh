@@ -100,12 +100,15 @@ fi
 if [ -n "$FWSS_DISPATCHER_ADDRESS" ]; then
   echo "Completing the ERC-8167 dispatcher transition ($FWSS_DISPATCHER_ADDRESS)"
   MIGRATE_DATA=$(cast calldata "completeDispatcherTransition()")
+  MIGRATE_CALL="completeDispatcherTransition"
 elif [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
   echo "Using provided view contract address: $NEW_FWSS_VIEW_ADDRESS"
   MIGRATE_DATA=$(cast calldata "migrate(address)" "$NEW_FWSS_VIEW_ADDRESS")
+  MIGRATE_CALL="migrate"
 else
   echo "Keeping previous view contract address ($FWSS_VIEW_ADDRESS)"
   MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
+  MIGRATE_CALL="migrate"
 fi
 
 if [ "$CALLDATA_ONLY" = "true" ]; then
@@ -114,8 +117,8 @@ if [ "$CALLDATA_ONLY" = "true" ]; then
   exit 0
 fi
 
-# Call upgradeToAndCall on the proxy with migrate function
-echo "Upgrading proxy and calling migrate..."
+# Call upgradeToAndCall on the proxy with the migration or transition call
+echo "Upgrading proxy and calling $MIGRATE_CALL..."
 TX_HASH=$(cast send "$FWSS_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
