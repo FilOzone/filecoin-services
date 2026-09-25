@@ -9,6 +9,12 @@
     "MigrateModule": {
       "artifact": "src/modules/MigrateModule.sol:MigrateModule"
     },
+    "OwnershipModule": {
+      "artifact": "src/modules/OwnershipModule.sol:OwnershipModule"
+    },
+    "ViewContractModule": {
+      "artifact": "src/modules/ViewContractModule.sol:ViewContractModule"
+    },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
     },

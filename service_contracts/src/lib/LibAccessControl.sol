@@ -32,13 +32,25 @@ library LibAccessControl {
      * @return The current owner address.
      */
     function owner() internal view returns (address) {
-        OwnableStorage storage ownableStorage;
+        return _ownableStorage().owner;
+    }
+
+    /**
+     * @notice Replaces the owner stored by OpenZeppelin OwnableUpgradeable.
+     * @param newOwner The new owner address, or zero to renounce ownership.
+     * @return previousOwner The replaced owner address.
+     */
+    function setOwner(address newOwner) internal returns (address previousOwner) {
+        OwnableStorage storage ownableStorage = _ownableStorage();
+        previousOwner = ownableStorage.owner;
+        ownableStorage.owner = newOwner;
+    }
+
+    function _ownableStorage() private pure returns (OwnableStorage storage ownableStorage) {
         bytes32 location = OWNABLE_STORAGE_LOCATION;
 
         assembly ("memory-safe") {
             ownableStorage.slot := location
         }
-
-        return ownableStorage.owner;
     }
 }

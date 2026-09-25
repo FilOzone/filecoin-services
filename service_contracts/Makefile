@@ -149,7 +149,9 @@ ABI_CONTRACTS := \
 	MigrateModule \
 	IERC8167 \
 	FilecoinWarmStorageService \
+	OwnershipModule \
 	FilecoinWarmStorageServiceProviderManagementModule \
+	ViewContractModule \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
