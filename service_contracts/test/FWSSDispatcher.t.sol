@@ -51,6 +51,29 @@ contract RevertingMigrationFixture {
     }
 }
 
+/// @dev Runs in the proxy's storage context and calls back into the proxy, as a hostile migration would.
+contract ReentrantMigrationFixture {
+    bytes4 private immutable SELECTOR;
+    address private immutable SELF;
+
+    constructor(bytes4 selector) {
+        SELECTOR = selector;
+        SELF = address(this);
+    }
+
+    fallback() external {
+        bytes memory data = SELECTOR == Migrate.migrate.selector
+            ? abi.encodeWithSelector(SELECTOR, SELF)
+            : abi.encodeWithSelector(SELECTOR);
+        (bool ok, bytes memory result) = address(this).call(data);
+        if (!ok) {
+            assembly ("memory-safe") {
+                revert(add(result, 0x20), mload(result))
+            }
+        }
+    }
+}
+
 /// @dev Models only the historical >3000-byte announcement rule and UUPS slot-19 plan.
 contract LegacyUpgradeGateFixture is FWSSStorage, OwnableUpgradeable, UUPSUpgradeable {
     function initialize() external initializer {
@@ -272,6 +295,21 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, MigrateModule.migrate.selector)
         );
         MigrateModule(proxy).migrate(migration);
+    }
+
+    function testMigrationCannotReenterMigrate() public {
+        address proxy = _rawProxy();
+        _migration(proxy);
+        ReentrantMigrationFixture migration = new ReentrantMigrationFixture(Migrate.migrate.selector);
+        MigrateModule(proxy).announceMigration(address(migration), 0);
+        (, uint96 readyAt) = _plan(proxy);
+        vm.roll(readyAt);
+
+        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, proxy));
+        MigrateModule(proxy).migrate(address(migration));
+        (address target, uint96 epoch) = _plan(proxy);
+        assertEq(target, address(migration));
+        assertEq(epoch, readyAt);
     }
 
     function testProviderModuleDoesNotExposeOwnerFunctions() public {
@@ -604,6 +642,21 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             service.upgradeToAndCall(address(intermediate), _transitionData());
             _assertUntouched(proxy, original, address(intermediate), epoch);
         }
+    }
+
+    function testMigrationCannotReenterTransition() public {
+        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        address proxy = address(service);
+        address original = _implementation(proxy);
+        ReentrantMigrationFixture migration =
+            new ReentrantMigrationFixture(FilecoinWarmStorageService.completeDispatcherTransition.selector);
+        FilecoinWarmStorageService intermediate = _newIntermediate(token, address(migration));
+        uint96 epoch = _announce(service, address(intermediate));
+        vm.roll(epoch);
+
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, proxy));
+        service.upgradeToAndCall(address(intermediate), _transitionData());
+        _assertUntouched(proxy, original, address(intermediate), epoch);
     }
 
     function testMissingUpgradeRouteRollsBackBothUpgrades() public {
