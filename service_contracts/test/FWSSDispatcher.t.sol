@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {Test} from "forge-std/Test.sol";
 import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
-import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -13,13 +11,16 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MigrateModule} from "../src/modules/MigrateModule.sol";
+import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {ProviderManagementModule} from "../src/modules/ProviderManagementModule.sol";
+import {ViewContractModule} from "../src/modules/ViewContractModule.sol";
 import {FWSSStorage} from "../src/storage/FWSSStorage.sol";
 import {LibAccessControl} from "../src/lib/LibAccessControl.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
 
 contract CallContextFixture {
     function record(bytes calldata payload) external payable returns (address, uint256, bytes memory) {
@@ -36,18 +37,6 @@ contract CallContextFixture {
     }
 
     error Failure(uint256 value);
-}
-
-contract SelectorsFixture {
-    function selectors() external pure returns (bytes4[] memory result) {
-        result = new bytes4[](6);
-        result[0] = IERC8167.implementation.selector;
-        result[1] = IERC8167.selectors.selector;
-        result[2] = MigrateModule.announceMigration.selector;
-        result[3] = MigrateModule.migrate.selector;
-        result[4] = ProviderManagementModule.addApprovedProvider.selector;
-        result[5] = ProviderManagementModule.removeApprovedProvider.selector;
-    }
 }
 
 contract RevertingMigrationFixture {
@@ -79,19 +68,21 @@ contract LegacyUpgradeGateFixture is FWSSStorage, OwnableUpgradeable, UUPSUpgrad
     }
 }
 
-contract FWSSDispatcherTest is Test {
+contract FWSSDispatcherTest is JosukeFacetSet {
     bytes32 private constant DELEGATES_SLOT = 0xf27774d37a8b3bf2306f60b561e4e8ec22cfb23796f1f777608c0e466ef52600;
     bytes32 private constant OWNER_SLOT = 0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     address internal dispatcher;
-    address internal introspection;
     MigrateModule internal migrateModule;
     ProviderManagementModule internal providerModule;
 
+    // Routes installed by the latest _createMigration.
+    bytes4[] internal exportedSelectors;
+    mapping(bytes4 selector => address delegate) internal routedTo;
+
     function setUp() public {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
-        introspection = deployCode("lib/erc8167/out/Implementation.evm/Implementation.json");
         migrateModule = new MigrateModule();
         providerModule = new ProviderManagementModule();
     }
@@ -191,7 +182,9 @@ contract FWSSDispatcherTest is Test {
         (target, epoch) = _plan(proxy);
         assertEq(target, address(0));
         assertEq(epoch, 0);
-        assertEq(IERC8167(proxy).implementation(IERC8167.implementation.selector), introspection);
+        assertEq(
+            IERC8167(proxy).implementation(IERC8167.implementation.selector), routedTo[IERC8167.implementation.selector]
+        );
         vm.expectRevert(abi.encodeWithSelector(MigrateModule.MigrationNotAnnounced.selector, address(second)));
         MigrateModule(proxy).migrate(address(second));
     }
@@ -235,7 +228,7 @@ contract FWSSDispatcherTest is Test {
         assertEq(vm.load(proxy, OWNER_SLOT), bytes32(uint256(uint160(address(this)))));
     }
 
-    function testMigrationRoutesMatchCompiledModuleAbis() public {
+    function testMigrationInstallsJosukeFacetSet() public {
         address proxy = _rawProxy();
         _migration(proxy);
         address migration = _createMigration(bytes4(0));
@@ -243,48 +236,21 @@ contract FWSSDispatcherTest is Test {
         vm.roll(block.number + 1);
         MigrateModule(proxy).migrate(migration);
 
-        bytes4[] memory migrationSelectors = AbiCheats.getSelectors(vm, "out/MigrateModule.sol/MigrateModule.json");
-        bytes4[] memory providerSelectors =
-            AbiCheats.getSelectors(vm, "out/ProviderManagementModule.sol/ProviderManagementModule.json");
-        bytes4 viewSelector = bytes4(keccak256("viewContractAddress()"));
-        uint256 routedSelectors = 2; // Upstream implementation() and the selectors() fixture.
-        for (uint256 i; i < migrationSelectors.length; ++i) {
-            assertEq(IERC8167(proxy).implementation(migrationSelectors[i]), address(migrateModule));
-            ++routedSelectors;
-        }
-        for (uint256 i; i < providerSelectors.length; ++i) {
-            // Shared storage currently exports this getter from every business facet.
-            if (providerSelectors[i] == viewSelector) continue;
-            assertEq(IERC8167(proxy).implementation(providerSelectors[i]), address(providerModule));
-            ++routedSelectors;
-        }
-        assertEq(IERC8167(proxy).implementation(viewSelector), address(0));
-        assertEq(IERC8167(proxy).selectors().length, routedSelectors);
+        _assertFacetRoutes(proxy);
     }
 
     function _createMigration(bytes4 omittedSelector) internal returns (address) {
-        SelectorsFixture selectorsModule = new SelectorsFixture();
-        SetDelegateOperation[] memory operations = new SetDelegateOperation[](6);
-        operations[0] = SetDelegateOperation({selector: IERC8167.implementation.selector, delegate: introspection});
-        operations[1] =
-            SetDelegateOperation({selector: IERC8167.selectors.selector, delegate: address(selectorsModule)});
-        operations[2] = SetDelegateOperation({
-            selector: MigrateModule.announceMigration.selector, delegate: address(migrateModule)
-        });
-        operations[3] =
-            SetDelegateOperation({selector: MigrateModule.migrate.selector, delegate: address(migrateModule)});
-        operations[4] = SetDelegateOperation({
-            selector: ProviderManagementModule.addApprovedProvider.selector, delegate: address(providerModule)
-        });
-        operations[5] = SetDelegateOperation({
-            selector: ProviderManagementModule.removeApprovedProvider.selector, delegate: address(providerModule)
-        });
+        SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolveFacets(MAINNET_LEDGER));
+        SetDelegateOperationLibrary.validate(routes);
 
-        SetDelegateOperationLibrary.validate(operations);
-        for (uint256 i; i < operations.length; ++i) {
-            if (operations[i].selector == omittedSelector) operations[i].delegate = address(0);
+        delete exportedSelectors;
+        for (uint256 i; i < routes.length; ++i) {
+            exportedSelectors.push(routes[i].selector);
+            routedTo[routes[i].selector] = routes[i].delegate;
+            if (routes[i].selector == omittedSelector) routes[i].delegate = address(0);
         }
-        return Migration.createMigration(operations);
+
+        return Migration.createMigration(routes);
     }
 
     function _newMonolith(MockERC20 token) internal returns (FilecoinWarmStorageService) {
@@ -333,17 +299,18 @@ contract FWSSDispatcherTest is Test {
 
     function _assertDispatcherRoutes(address proxy) internal view {
         assertEq(address(uint160(uint256(vm.load(proxy, IMPLEMENTATION_SLOT)))), dispatcher);
-        assertEq(IERC8167(proxy).implementation(MigrateModule.migrate.selector), address(migrateModule));
-        assertEq(
-            IERC8167(proxy).implementation(ProviderManagementModule.addApprovedProvider.selector),
-            address(providerModule)
-        );
+        _assertFacetRoutes(proxy);
+    }
+
+    function _assertFacetRoutes(address proxy) internal view {
+        for (uint256 i; i < exportedSelectors.length; ++i) {
+            assertEq(IERC8167(proxy).implementation(exportedSelectors[i]), routedTo[exportedSelectors[i]]);
+        }
+
         bytes4[] memory exported = IERC8167(proxy).selectors();
-        assertEq(exported.length, 6);
+        assertEq(exported.length, exportedSelectors.length);
         for (uint256 i; i < exported.length; ++i) {
-            assertTrue(IERC8167(proxy).implementation(exported[i]) != address(0));
-            assertTrue(exported[i] != bytes4(keccak256("owner()")));
-            assertTrue(exported[i] != bytes4(keccak256("transferOwnership(address)")));
+            assertEq(IERC8167(proxy).implementation(exported[i]), routedTo[exported[i]]);
         }
     }
 
@@ -382,6 +349,8 @@ contract FWSSDispatcherTest is Test {
         (address pending, uint96 readyAt) = _plan(proxy);
         assertEq(pending, address(0));
         assertEq(readyAt, 0);
+        assertEq(OwnershipModule(proxy).owner(), address(this));
+        assertEq(ViewContractModule(proxy).viewContractAddress(), address(viewContract));
         ProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
         vm.prank(address(0xB0B));
@@ -663,5 +632,24 @@ contract FWSSDispatcherTest is Test {
         ProviderManagementModule(address(service)).addApprovedProvider(43);
         vm.prank(address(0xB0B));
         ProviderManagementModule(address(service)).addApprovedProvider(43);
+    }
+
+    function testOwnershipModuleTransfersControlAfterTransition() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        address proxy = address(service);
+        service.announceDispatcherUpgrade(dispatcher, _createMigration(bytes4(0)), 0);
+        vm.roll(block.number + 1);
+        service.upgradeToAndCall(dispatcher, "");
+
+        OwnershipModule(proxy).transferOwnership(address(0xB0B));
+        assertEq(OwnershipModule(proxy).owner(), address(0xB0B));
+
+        address migration = _createMigration(bytes4(0));
+        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(this)));
+        MigrateModule(proxy).announceMigration(migration, 0);
+
+        vm.prank(address(0xB0B));
+        ViewContractModule(proxy).setViewContract(address(0x1234));
+        assertEq(ViewContractModule(proxy).viewContractAddress(), address(0x1234));
     }
 }
