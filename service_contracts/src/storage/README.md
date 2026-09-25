@@ -29,17 +29,12 @@ shifts caused by this extraction are checked by the same workflow. Local
 `make check-layout` compares against HEAD~1 when available; it is not a deployed
 implementation check. No new upgrade validator is required by this extraction.
 
-`tools/storage_layout_names.jq` keeps published layout names stable. It maps the
-declaring-contract names of `DataSetInfo` and `PlannedUpgrade` to their historical
-names, and the `viewContract` field to its historical label `viewContractAddress`.
-The snapshot and the generated `*_SLOT` constants both use it. Slots, offsets, widths
-and recursive member types remain part of the comparison. The ABI's
-`PlannedUpgrade.internalType` changes its declaring-contract name; tuple encoding is
-unchanged.
+The snapshot normalizer maps only the declaring-contract names of `DataSetInfo` and
+`PlannedUpgrade` to their historical names. Slots, offsets, widths and recursive
+member types remain part of the comparison. The ABI's `PlannedUpgrade.internalType`
+changes its declaring-contract name; tuple encoding is unchanged.
 
 Fields are internal so that modules inheriting `FWSSStorage` do not export getters.
-`viewContract` was renamed from the former public `viewContractAddress` so that
-`viewContractAddress()` can be an explicit function in the modules that own it.
 
 Layout checks do not execute a historical upgrade or prove migration behavior.
 This PR changes declarations and inheritance; dispatcher and module behavior belong

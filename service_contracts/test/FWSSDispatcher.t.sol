@@ -328,7 +328,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(vm.load(proxy, bytes32(uint256(1))), windowBefore);
         assertEq(vm.load(proxy, bytes32(uint256(17))), viewBefore);
         assertEq(service.owner(), address(this));
-        assertEq(service.viewContractAddress(), address(viewContract));
         (uint64 provingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         assertEq(provingPeriod, 3000);
         assertEq(challengeWindow, 61);

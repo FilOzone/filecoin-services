@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
+import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 import {Errors} from "../Errors.sol";
 import {LibAccessControl} from "../lib/LibAccessControl.sol";
-import {FWSSStorage} from "../storage/FWSSStorage.sol";
+import {VIEW_CONTRACT_ADDRESS_SLOT} from "../lib/FilecoinWarmStorageServiceLayout.sol";
 
 /// @title ViewContractModule
 /// @notice Manages the FWSS view contract address used for read-only integrations.
-contract ViewContractModule is FWSSStorage {
+/// @dev Reads the slot directly: inheriting FWSSStorage would clash with its internal viewContractAddress field.
+contract ViewContractModule {
     event ViewContractSet(address indexed viewContract);
 
     /// @notice Ensures the caller is the FWSS owner
@@ -21,7 +23,7 @@ contract ViewContractModule is FWSSStorage {
      * @return The address of the view contract
      */
     function viewContractAddress() external view returns (address) {
-        return viewContract;
+        return StorageSlot.getAddressSlot(VIEW_CONTRACT_ADDRESS_SLOT).value;
     }
 
     /**
@@ -32,7 +34,7 @@ contract ViewContractModule is FWSSStorage {
     function setViewContract(address _viewContract) external onlyOwner {
         require(_viewContract != address(0), Errors.ZeroAddress(Errors.AddressField.View));
 
-        viewContract = _viewContract;
+        StorageSlot.getAddressSlot(VIEW_CONTRACT_ADDRESS_SLOT).value = _viewContract;
 
         emit ViewContractSet(_viewContract);
     }

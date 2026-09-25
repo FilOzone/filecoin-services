@@ -39,13 +39,13 @@ erc8167:
 	FOUNDRY_SOLC_VERSION=$$(forge config --json | jq -r .solc) $(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
 
 # Storage layout generation
-$(LAYOUT): tools/generate_storage_layout.sh tools/storage_layout_names.jq src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
+$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
 	bash -o pipefail -c 'bash tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol | forge fmt -r - > "$@.tmp"'
 	mv $@.tmp $@
 
 # Storage layout JSON (full metadata for upgrade safety checks)
-$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol $(LAYOUT_SNAPSHOT_JQ) tools/storage_layout_names.jq
-	bash -o pipefail -c 'forge inspect --out out/storage-layout --cache-path cache/storage-layout --json $< storageLayout | jq -L tools -f $(LAYOUT_SNAPSHOT_JQ) > "$@.tmp"'
+$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol $(LAYOUT_SNAPSHOT_JQ)
+	bash -o pipefail -c 'forge inspect --out out/storage-layout --cache-path cache/storage-layout --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > "$@.tmp"'
 	mv $@.tmp $@
 
 # The library imports the generated storage layout.
