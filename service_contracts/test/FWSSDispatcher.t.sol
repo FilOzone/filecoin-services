@@ -77,6 +77,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
 
     address internal dispatcher;
+    MockERC20 internal usdfc;
     MigrateModule internal migrateModule;
     ProviderManagementModule internal providerModule;
 
@@ -86,8 +87,16 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     function setUp() public {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
+        usdfc = new MockERC20();
         migrateModule = new MigrateModule();
         providerModule = new ProviderManagementModule();
+    }
+
+    function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/UsdfcTokenModule.sol:UsdfcTokenModule")) {
+            return abi.encode(usdfc);
+        }
+        return "";
     }
 
     function _route(address proxy, bytes4 selector, address target) internal {
@@ -329,7 +338,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         internal
         returns (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract, MockERC20 token)
     {
-        token = new MockERC20();
+        token = usdfc;
         FilecoinWarmStorageService implementation = _newMonolith(token);
         service = FilecoinWarmStorageService(
             address(
@@ -436,6 +445,16 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(ViewContractModule(proxy).viewContractAddress(), address(viewContract));
         ProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
+
+        // The existing StateView keeps working through ExtsloadModule and UsdfcTokenModule.
+        (uint64 provingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        assertEq(provingPeriod, 3000);
+        assertEq(challengeWindow, 61);
+        assertTrue(viewContract.isProviderApproved(42));
+        assertEq(address(viewContract.getPriceList().token), address(usdfc));
+        (address next,) = viewContract.nextUpgrade();
+        assertEq(next, address(0));
+
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         ProviderManagementModule(proxy).addApprovedProvider(43);

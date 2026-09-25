@@ -152,6 +152,8 @@ ABI_CONTRACTS := \
 	OwnershipModule \
 	FilecoinWarmStorageServiceProviderManagementModule \
 	ViewContractModule \
+	ExtsloadModule \
+	UsdfcTokenModule \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
