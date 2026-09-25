@@ -26,14 +26,23 @@ abstract contract JosukeFacetSet is Test {
         return vm.parseJsonStringArray(vm.readFile(ledger), ".[0].facetSrc");
     }
 
-    function _resolveFacets(string memory ledger) internal view returns (Facet[] memory facets) {
-        string[] memory patterns = _facetSources(ledger);
+    function _resolveFacets(string memory ledger) internal view returns (Facet[] memory) {
+        return _resolvePatterns(_facetSources(ledger));
+    }
+
+    /// @dev Like Josuke, keeps the first facet for each source ID when patterns overlap.
+    function _resolvePatterns(string[] memory patterns) internal view returns (Facet[] memory facets) {
         for (uint256 i; i < patterns.length; ++i) {
             Facet[] memory found = _resolve(patterns[i]);
             require(found.length != 0, NoDeployableFacet(patterns[i]));
-            facets = _concat(facets, found);
+            for (uint256 j; j < found.length; ++j) {
+                if (!_contains(facets, found[j].sourceId)) facets = _append(facets, found[j]);
+            }
         }
     }
+
+    /// @dev ABI-encoded constructor arguments, which Josuke records per chain as `constructorArgs`.
+    function _facetConstructorArgs(string memory sourceId) internal view virtual returns (bytes memory) {}
 
     /// @dev Deploys every facet and returns one route per exported selector, plus the generated `selectors()`.
     function _deployFacetRoutes(Facet[] memory facets) internal returns (SetDelegateOperation[] memory routes) {
@@ -46,7 +55,7 @@ abstract contract JosukeFacetSet is Test {
         bytes4[] memory exported = new bytes4[](count);
         uint256 next;
         for (uint256 i; i < facets.length; ++i) {
-            address delegate = deployCode(facets[i].artifact);
+            address delegate = deployCode(facets[i].artifact, _facetConstructorArgs(facets[i].sourceId));
             for (uint256 j; j < facets[i].selectors.length; ++j) {
                 routes[next] = SetDelegateOperation({selector: facets[i].selectors[j], delegate: delegate});
                 exported[next++] = facets[i].selectors[j];
@@ -123,6 +132,21 @@ abstract contract JosukeFacetSet is Test {
     function _single(string memory sourceId, string memory artifact) private view returns (Facet[] memory facet) {
         facet = new Facet[](1);
         facet[0] = Facet({sourceId: sourceId, artifact: artifact, selectors: AbiCheats.getSelectors(vm, artifact)});
+    }
+
+    function _contains(Facet[] memory facets, string memory sourceId) private pure returns (bool) {
+        for (uint256 i; i < facets.length; ++i) {
+            if (keccak256(bytes(facets[i].sourceId)) == keccak256(bytes(sourceId))) return true;
+        }
+        return false;
+    }
+
+    function _append(Facet[] memory facets, Facet memory facet) private pure returns (Facet[] memory result) {
+        result = new Facet[](facets.length + 1);
+        for (uint256 i; i < facets.length; ++i) {
+            result[i] = facets[i];
+        }
+        result[facets.length] = facet;
     }
 
     function _concat(Facet[] memory a, Facet[] memory b) private pure returns (Facet[] memory result) {

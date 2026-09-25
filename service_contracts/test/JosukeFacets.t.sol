@@ -39,6 +39,20 @@ contract JosukeFacetsTest is JosukeFacetSet {
         assertEq(_owners(facets, IERC8167.selectors.selector), 0);
     }
 
+    function testOverlappingPatternsResolveEachFacetOnce() public view {
+        string[] memory glob = new string[](1);
+        glob[0] = "src/modules/*.sol";
+        string[] memory overlapping = new string[](3);
+        overlapping[0] = "src/modules/MigrateModule.sol:MigrateModule";
+        overlapping[1] = "src/modules/*.sol";
+        overlapping[2] = "src/modules/*.sol";
+
+        Facet[] memory once = _resolvePatterns(glob);
+        Facet[] memory deduplicated = _resolvePatterns(overlapping);
+        assertEq(deduplicated.length, once.length);
+        assertEq(deduplicated[0].sourceId, "src/modules/MigrateModule.sol:MigrateModule");
+    }
+
     function _owners(Facet[] memory facets, bytes4 selector) private pure returns (uint256 owners) {
         for (uint256 i; i < facets.length; ++i) {
             for (uint256 j; j < facets[i].selectors.length; ++j) {
