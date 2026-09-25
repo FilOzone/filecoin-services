@@ -1,9 +1,10 @@
 # ERC-8167 proxy integration
 
-The dispatcher is the unmodified `Proxy.evm` from `wjmelements/erc8167`.
-`implementation(bytes4)` is a separate upstream delegate. Josuke supplies
-`selectors()` and migration bytecode. No administrative selector is built into
-the dispatcher.
+The dispatcher is the unmodified `Proxy.evm` from `wjmelements/erc8167`. It runs
+behind the existing FWSS ERC-1967 proxy, so business state stays at the same
+address. `implementation(bytes4)` is the upstream `Implementation.evm` delegate.
+Josuke generates `selectors()` and the migration bytecode. No administrative
+selector is built into the dispatcher.
 
 The dependency is pinned to `44b41a1a94a491b54920ae8dd3c16aa974b6bf09`.
 FWSS uses Solidity 0.8.37 with `via_ir` and the explicit `cancun` EVM target.
@@ -21,25 +22,69 @@ Initialize Git submodules, then run from `service_contracts/`:
 make build test
 ```
 
-`make erc8167` builds the upstream proxy and introspection
-artifacts under `lib/erc8167/out/`. Run it before using `forge test` directly.
-The upstream ABI build uses the project's configured Solidity version.
-Solidity builds disable both the metadata hash and CBOR trailer with
-`bytecode_hash = "none"` and `cbor_metadata = false`.
+`make erc8167` builds the upstream proxy and introspection artifacts under
+`lib/erc8167/out/`. Run it before using `forge test` directly. Solidity builds
+disable both the metadata hash and CBOR trailer with `bytecode_hash = "none"`
+and `cbor_metadata = false`.
+
+## Josuke
+
+Josuke is pinned to `0c8917f9e4343557025bdecd19c3a303dbbde623`:
+
+```sh
+uvx --from git+https://github.com/wjmelements/josuke@0c8917f9e4343557025bdecd19c3a303dbbde623 josuke --help
+```
+
+`josuke.mainnet.json` and `josuke.calibnet.json` are the deployment ledgers.
+Josuke assumes one proxy address across chains, so each network has its own
+ledger. Both use the same `facetSrc`:
+
+- `src/modules/*.sol`: every contract with creation bytecode in this directory
+  is a facet. Keep libraries, helpers and abstract bases elsewhere.
+- `lib/erc8167/src/Implementation.evm`: upstream `implementation(bytes4)`.
+
+No facet implements `selectors()`; Josuke generates it from the facet set.
+Run Josuke from `service_contracts/` with `-f <ledger>`.
+
+Each selector must belong to exactly one facet. `FWSSStorage` fields are
+internal, so inheriting modules do not export getters; a shared getter belongs
+to one module. Every Josuke command needs an RPC, so `test/JosukeFacets.t.sol`
+resolves `facetSrc` offline from build artifacts. It fails on duplicate
+selectors and on missing transition routes. The dispatcher tests install the
+same facet set.
+
+Current facets:
+
+| Facet | Selectors |
+|---|---|
+| `MigrateModule` | `announceMigration`, `migrate` |
+| `OwnershipModule` | `owner`, `transferOwnership`, `renounceOwnership` |
+| `ProviderManagementModule` | `addApprovedProvider`, `removeApprovedProvider` |
+| `ViewContractModule` | `viewContractAddress`, `setViewContract` |
+| `Implementation.evm` | `implementation` |
+
+The business logic remains only in `FilecoinWarmStorageService`. Do not run
+the transition on a live network until the business modules are in
+`src/modules/`. Without them, proving, payment callbacks and data set
+operations stop working.
 
 ## Existing proxy transition
 
 First deploy this intermediate `FilecoinWarmStorageService` release and install
-it through the existing delayed UUPS upgrade. Its constructor and business logic
-are unchanged. The monolith naturally satisfies the already-deployed release's
-`code.length > 3000` check. This intermediate release changes that condition to
-`code.length > 3000 || code.length == 88`. There is no separate conversion contract or
-bytecode padding.
+it through the existing delayed UUPS upgrade. Its business logic is unchanged.
+The deployed release accepts it because of its `code.length > 3000` check. The
+intermediate release relaxes that check to `code.length > 3000 || code.length == 88`.
+Provider approval moved to `ProviderManagementModule`, so it is unavailable
+between this upgrade and the transition.
 
-For the first `josuke deploy`, point the ledger at the blank upstream dispatcher.
-This lets Josuke find selector-storage slots before the existing FWSS proxy uses
-them. Review the generated migration and complete facet set. The existing proxy's
-owner then calls:
+Deploy the blank upstream dispatcher and check its runtime hash:
+`0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a`.
+
+The FWSS proxy cannot serve as the ledger address for the first
+`josuke deploy`. Its fallback reads the ERC-1967 implementation slot before any
+selector slot. For the first deploy, the ledger `address` is the blank
+dispatcher. Josuke then finds the selector slots, which are the same in the FWSS
+proxy's storage. Review `josuke verify`, then the proxy owner calls:
 
 ```solidity
 service.announceDispatcherUpgrade(dispatcher, migration, delayEpochs);
@@ -49,100 +94,58 @@ service.upgradeToAndCall(dispatcher, "");
 
 Both addresses are bound to the announcement, with a minimum delay of one block.
 The dispatcher address and epoch use the existing packed `nextUpgrade` slot. The
-migration address uses the ERC-7201 namespace `filecoin.storage.DispatcherMigration`,
-accessed through OpenZeppelin `StorageSlot`; no legacy business slots move.
+migration address uses the ERC-7201 namespace `filecoin.storage.DispatcherMigration`.
 `DispatcherUpgradeAnnounced` records both addresses and the execution epoch.
 
 There is one pending plan. Either kind of announcement replaces the previous
 one. An ordinary UUPS announcement clears the pending dispatcher migration, and
 an attempt to execute an ordinary UUPS target rejects an active dispatcher plan.
-`upgradeToAndCall(dispatcher, "")` consumes the stored migration address; the
-caller cannot replace it with different calldata. The transition
-consumes the plan before delegatecalling the migration. It requires deployed
-delegates for `implementation`, `selectors`, `announceMigration` and `migrate`,
-then switches the ERC-1967 implementation to the dispatcher. Any revert restores
-the whole plan, route writes and implementation. Business state stays at the same
-proxy address.
+`upgradeToAndCall(dispatcher, "")` consumes the stored migration address and
+requires empty calldata and zero FIL. It runs the migration before switching the
+implementation, because an empty selector map cannot dispatch an initializer
+afterwards. It then requires deployed delegates for `implementation`,
+`selectors`, `announceMigration` and `migrate`. Any revert restores the plan,
+route writes and implementation.
 
-After the transition, update `josuke.json` to the existing FWSS proxy address,
-verify the installed routes and accept the migration. The monolith is no longer
-the active implementation and must not be included as a facet. Its legacy
-`migrate(address)` sets StateView; it is not the migration entry point below.
+The OpenZeppelin UUPS path calls `proxiableUUID()` on the candidate, which the
+blank dispatcher does not route. The intermediate release therefore overrides
+`upgradeToAndCall` for an announced dispatcher migration and checks the runtime
+hash at announcement and execution. Updating the upstream proxy bytecode
+requires updating `DISPATCHER_CODE_HASH`. An ordinary
+`announceUpgradePlan(dispatcher, delay)` passes the size check but cannot
+execute the transition.
 
-## The 3000-byte gate and UUPS exception
+After the transition, set the ledger `address` to the FWSS proxy and run
+`josuke accept`. The old monolith is not a facet: its legacy `migrate(address)`
+sets StateView and shares a selector with `MigrateModule.migrate`.
 
-The old size check belongs to implementation code, so it cannot be changed by
-writing a storage field in an initializer. The first delayed UUPS upgrade installs
-the intermediate release that contains the relaxed check. Direct upgrades from
-the old deployed release to the raw dispatcher remain impossible.
-
-Allowing 88 bytes is not enough on its own: OpenZeppelin UUPS also calls
-`proxiableUUID()` on the candidate. The blank dispatcher has no such route.
-This release overrides `upgradeToAndCall` for an announced dispatcher migration.
-Without that migration announcement, it retains OpenZeppelin's UUPS path. The runtime hash is
-`0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a`.
-Both the dispatcher announcement and execution check that hash. Updating the
-upstream proxy bytecode requires reviewing and updating this constant too.
-
-Use `announceDispatcherUpgrade` for the final transition. An ordinary
-`announceUpgradePlan(dispatcher, delay)` passes the new size check but does not
-bind a migration and cannot execute the transition. Dispatcher execution requires
-empty calldata and zero FIL; the migration comes from the delayed announcement.
-The generated migration runs before the implementation changes, because an empty
-selector map cannot dispatch an initializer after the switch.
-
-There is no new initializer or constructor argument. Moving an arbitrary migration
-address into first-upgrade initializer calldata would stop binding the migration
-to the announcement delay. The paired announcement is retained for that reason.
-The separate `upgradeToDispatcher` execution method is removed. An invalid target
-reverts with `InvalidDispatcherTarget()`; nonempty dispatcher calldata is rejected
-before the migration executes.
+`josuke accept`, `verify` and later `deploy` runs against the FWSS proxy need
+[Josuke #3](https://github.com/wjmelements/josuke/issues/3). Until then they
+read the ERC-1967 implementation slot as every selector's route.
 
 ## Later migrations
 
-Include `MigrateModule` once in Josuke's facet list. It imports `LibAccessControl`
-from PR #611 and exports only `announceMigration(address,uint96)` and
-`migrate(address)`. It implements the upstream `Migrate` interface and does not
-inherit business storage or ownership getters.
+`MigrateModule` is FWSS code, not part of Josuke. Josuke generates and verifies
+migration bytecode and records the `DiamondDelegateCall` event, but leaves
+authorization to the proxy. The upstream `Migrate.evm` fixes its deployer as
+owner, with no delay. FWSS keeps its transferable OpenZeppelin owner and the
+existing announcement delay.
 
-The current owner announces the generated migration address, waits at least one
-block, then calls `migrate(address)`. Zero requested delay means one block. A new
-announcement replaces the pending one. The module clears the pending plan before
+The current owner announces the generated migration with
+`announceMigration(address,uint96)`, waits at least one block, then calls
+`migrate(address)`. Zero requested delay means one block. A new announcement
+replaces the pending one. The module clears the pending plan before
 delegatecall; a failure restores both the plan and all migration writes. It emits
 `DiamondDelegateCall(address,bytes)` with empty delegate calldata for Josuke.
 
 The existing packed `nextUpgrade` slot and `UpgradeAnnounced` event are reused.
-After transition, the address in `StateView.nextUpgrade()` identifies a migration
-contract, not a replacement ERC-1967 implementation. Callers must account for
-this change. Existing deployment scripts still target the old UUPS API.
+After the transition, the address in `StateView.nextUpgrade()` identifies a
+migration contract, not a replacement ERC-1967 implementation. Existing
+deployment scripts still target the old UUPS API.
 
-Migration bytecode is privileged code. Josuke verification and acceptance of the
-complete facet set remain required before execution. The on-chain checks do not
-prove business coverage, storage safety, or correct selectors in arbitrary code.
-
-## Integration requirements
-
-- Josuke issue #3 must support selector-storage detection behind the outer
-  ERC-1967 proxy. There is no local workaround.
-- Use a Josuke revision containing PR #4, which removes selectors deleted from
-  retained facets.
-- Finish the business and admin facets separately. In particular, route ownership,
-  StateView discovery and `extsload` methods once, and preserve module constructor
-  dependencies. `FWSSStorage` currently exposes `viewContractAddress()` from every
-  inheriting facet; resolve that duplication in the shared module work.
-- Test the complete generated migration against the exact deployed monolith,
-  populated datasets and payment rails, then exercise proof, settlement and
-  retrieval after the upgrade. Tests using this source's monolith and routing
-  fixtures do not replace that release gate.
-- Standard contract-size checks cover the intermediate monolith and MigrateModule.
-  The assembler output is checked separately in the proxy tests.
-
-The proxy tests use upstream `SetDelegateOperation[]`, duplicate-selector
-validation and `Migration.createMigration` for route installation. `AbiCheats`
-checks the installed module routes against the compiled ABIs, excluding the
-shared `viewContractAddress()` getter until its owner is assigned.
-An intentionally reverting fixture verifies rollback. Transition tests use the
-monolith and its existing UUPS and delay checks without padding or a relaxed shell.
+Migration bytecode is privileged code. Run `josuke verify` before announcing it.
+The on-chain checks do not prove business coverage, storage safety, or correct
+selectors in arbitrary code.
 
 See [PR #615](https://github.com/FilOzone/filecoin-services/pull/615),
 [Will's first-migration procedure](https://github.com/FilOzone/filecoin-services/pull/615#discussion_r4082439880),
