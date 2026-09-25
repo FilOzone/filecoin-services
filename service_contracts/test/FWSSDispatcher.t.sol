@@ -221,6 +221,50 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(vm.load(proxy, keccak256(abi.encode(IERC8167.implementation.selector, DELEGATES_SLOT))), bytes32(0));
     }
 
+    function testMigrationThatDropsUpgradeRouteReverts() public {
+        bytes4[4] memory critical = [
+            IERC8167.implementation.selector,
+            IERC8167.selectors.selector,
+            MigrateModule.announceMigration.selector,
+            MigrateModule.migrate.selector
+        ];
+        for (uint256 i; i < critical.length; ++i) {
+            address proxy = _rawProxy();
+            _migration(proxy);
+            address migration = _createMigration(critical[i]);
+            MigrateModule(proxy).announceMigration(migration, 0);
+            (, uint96 readyAt) = _plan(proxy);
+            vm.roll(readyAt);
+
+            vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, critical[i]));
+            MigrateModule(proxy).migrate(migration);
+            (address target, uint96 epoch) = _plan(proxy);
+            assertEq(target, migration);
+            assertEq(epoch, readyAt);
+            assertEq(
+                vm.load(proxy, keccak256(abi.encode(MigrateModule.migrate.selector, DELEGATES_SLOT))),
+                bytes32(uint256(uint160(address(migrateModule))))
+            );
+        }
+    }
+
+    function testMigrationCannotRouteUpgradesToTheDispatcher() public {
+        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        address proxy = address(service);
+        _transition(service, token);
+
+        SetDelegateOperation[] memory routes = new SetDelegateOperation[](1);
+        routes[0] = SetDelegateOperation({selector: MigrateModule.migrate.selector, delegate: dispatcher});
+        address migration = Migration.createMigration(routes);
+        MigrateModule(proxy).announceMigration(migration, 0);
+        vm.roll(block.number + 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, MigrateModule.migrate.selector)
+        );
+        MigrateModule(proxy).migrate(migration);
+    }
+
     function testProviderModuleDoesNotExposeOwnerFunctions() public {
         address proxy = _rawProxy();
         _route(proxy, ProviderManagementModule.addApprovedProvider.selector, address(providerModule));

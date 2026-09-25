@@ -125,6 +125,17 @@
   },
   {
     "type": "error",
+    "name": "MissingUpgradeRoute",
+    "inputs": [
+      {
+        "name": "selector",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "OwnableUnauthorizedAccount",
     "inputs": [
       {

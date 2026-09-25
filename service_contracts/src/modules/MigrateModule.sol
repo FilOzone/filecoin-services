@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IMigrateModule} from "../interfaces/IMigrateModule.sol";
 import {LibAccessControl} from "../lib/LibAccessControl.sol";
 import {NEXT_UPGRADE_SLOT} from "../lib/FilecoinWarmStorageServiceLayout.sol";
+import {LibUpgradeRoutes} from "../lib/LibUpgradeRoutes.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @notice Executes owner-announced Josuke migrations through the ERC-8167 proxy.
@@ -42,6 +44,9 @@ contract MigrateModule is IMigrateModule {
 
         emit DiamondDelegateCall(migration, "");
         Address.functionDelegateCall(migration, "");
+
+        // FWSS sits behind an ERC-1967 proxy whose implementation is the dispatcher.
+        LibUpgradeRoutes.requireUpgradeRoutes(ERC1967Utils.getImplementation());
     }
 
     function _plan() private pure returns (FWSSStorage.PlannedUpgrade storage plan) {
