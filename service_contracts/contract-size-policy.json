@@ -22,7 +22,8 @@
       "artifact": "src/modules/UsdfcTokenModule.sol:UsdfcTokenModule"
     },
     "FilecoinWarmStorageService": {
-      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+      "maximumConstructorArgsSize": 288
     },
     "FilecoinWarmStorageServiceStateView": {
       "artifact": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
