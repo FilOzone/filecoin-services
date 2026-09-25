@@ -4,6 +4,8 @@
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
+# Optional: FWSS_DISPATCHER_ADDRESS and FWSS_DISPATCHER_MIGRATION_ADDRESS build the one-time ERC-8167
+# transition implementation; complete it with warm-storage-execute-upgrade.sh and FWSS_DISPATCHER_ADDRESS.
 
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source $SCRIPT_DIR/deployments.sh
@@ -123,7 +125,9 @@ deploy_implementation_if_needed \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
-    "reinitializer=$FWSS_INIT_COUNTER"
+    "reinitializer=$FWSS_INIT_COUNTER" \
+    "dispatcher=${FWSS_DISPATCHER_ADDRESS:-0x0000000000000000000000000000000000000000}" \
+    "dispatcher_migration=${FWSS_DISPATCHER_MIGRATION_ADDRESS:-0x0000000000000000000000000000000000000000}"
 unset LIBRARIES
 
 echo ""

@@ -105,7 +105,9 @@ contract AbandonmentTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
         MyERC1967Proxy fwssProxy = new MyERC1967Proxy(
             address(fwssImpl),

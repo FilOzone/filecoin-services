@@ -4,6 +4,8 @@
 # Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
 # Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
 # Optional args: NEW_FWSS_VIEW_ADDRESS, CALLDATA_ONLY=true
+# ERC-8167 transition: FWSS_DISPATCHER_ADDRESS, the dispatcher the new implementation was deployed with.
+#   Calls completeDispatcherTransition() instead of migrate(address); NEW_FWSS_VIEW_ADDRESS does not apply.
 # Calculated if unset: CHAIN, FWSS_VIEW_ADDRESS
 
 # Get script directory and source deployments.sh
@@ -13,7 +15,12 @@ source "$SCRIPT_DIR/multisig.sh"
 
 CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
 
-if [ -z "$NEW_FWSS_VIEW_ADDRESS" ]; then
+if [ -n "$FWSS_DISPATCHER_ADDRESS" ] && [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
+  echo "Error: NEW_FWSS_VIEW_ADDRESS cannot be combined with FWSS_DISPATCHER_ADDRESS"
+  exit 1
+fi
+
+if [ -z "$NEW_FWSS_VIEW_ADDRESS" ] && [ -z "$FWSS_DISPATCHER_ADDRESS" ]; then
   echo "Warning: NEW_FWSS_VIEW_ADDRESS is not set. Keeping previous view contract."
 fi
 
@@ -90,7 +97,10 @@ else
   echo "Upgrade ready ($CURRENT_EPOCH > $AFTER_EPOCH)"
 fi
 
-if [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
+if [ -n "$FWSS_DISPATCHER_ADDRESS" ]; then
+  echo "Completing the ERC-8167 dispatcher transition ($FWSS_DISPATCHER_ADDRESS)"
+  MIGRATE_DATA=$(cast calldata "completeDispatcherTransition()")
+elif [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
   echo "Using provided view contract address: $NEW_FWSS_VIEW_ADDRESS"
   MIGRATE_DATA=$(cast calldata "migrate(address)" "$NEW_FWSS_VIEW_ADDRESS")
 else
@@ -133,7 +143,16 @@ NEW_IMPL=$(cast rpc eth_getStorageAt "$FWSS_PROXY_ADDRESS" 0x360894a13ba1a321066
 # Compare to lowercase
 export EXPECTED_IMPL=$(echo $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')
 
-if [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
+if [ -n "$FWSS_DISPATCHER_ADDRESS" ]; then
+    # The intermediate implementation replaces itself with the dispatcher in the same transaction.
+    # Record the facet set in the Josuke ledger; deployments.json tracks only UUPS implementations.
+    if [ "$NEW_IMPL" = "$(echo $FWSS_DISPATCHER_ADDRESS | tr '[:upper:]' '[:lower:]')" ]; then
+        echo "Transition successful! Proxy now points to the dispatcher: $FWSS_DISPATCHER_ADDRESS"
+    else
+        echo "Error: expected dispatcher $FWSS_DISPATCHER_ADDRESS, got $NEW_IMPL"
+        exit 1
+    fi
+elif [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
     echo "Upgrade successful! Proxy now points to: $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS"
 
     # Update deployments.json with new implementation address

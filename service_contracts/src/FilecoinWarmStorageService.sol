@@ -13,11 +13,8 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
-import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
-import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
-import {IMigrateModule} from "./interfaces/IMigrateModule.sol";
+import {LibUpgradeRoutes} from "./lib/LibUpgradeRoutes.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
 import {Errors} from "./Errors.sol";
@@ -229,17 +226,15 @@ contract FilecoinWarmStorageService is
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
-    // ERC-7201: filecoin.storage.DispatcherMigration. The target and epoch remain in nextUpgrade.
-    bytes32 private constant DISPATCHER_MIGRATION_SLOT =
-        0x7b62b12cbd4199ba0937db5d3be14c1a07bb43e1b460ef3f381e506cd4e2a800;
+    // One-time switch to the ERC-8167 dispatcher; both zero on implementations that stay monolithic.
+    // Immutable so the announced upgrade delay also covers the dispatcher and its Josuke migration.
+    address private immutable DISPATCHER;
+    address private immutable DISPATCHER_MIGRATION;
 
-    // Runtime hash of Proxy.evm at the pinned ERC-8167 revision. Size alone cannot identify a safe UUPS exception.
+    // Runtime hash of Proxy.evm at the pinned ERC-8167 revision.
     bytes32 private constant DISPATCHER_CODE_HASH = 0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a;
 
-    event DispatcherUpgradeAnnounced(address indexed dispatcher, address indexed migration, uint96 afterEpoch);
-
-    error InvalidDispatcherTarget();
-    error MissingDispatcherDelegate(bytes4 selector);
+    error InvalidDispatcherTransition();
 
     event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
 
@@ -275,7 +270,9 @@ contract FilecoinWarmStorageService is
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry,
-        uint64 _reinitializer_version
+        uint64 _reinitializer_version,
+        address _dispatcher,
+        address _dispatcherMigration
     ) {
         _disableInitializers();
         REINITIALIZER_VERSION = _reinitializer_version;
@@ -306,6 +303,15 @@ contract FilecoinWarmStorageService is
 
         // Verify token decimals from the USDFC token contract
         require(TOKEN_DECIMALS == _usdfc.decimals());
+
+        if (_dispatcher != address(0) || _dispatcherMigration != address(0)) {
+            require(
+                _dispatcher.codehash == DISPATCHER_CODE_HASH && _dispatcherMigration.code.length != 0,
+                InvalidDispatcherTransition()
+            );
+        }
+        DISPATCHER = _dispatcher;
+        DISPATCHER_MIGRATION = _dispatcherMigration;
     }
 
     /**
@@ -357,13 +363,7 @@ contract FilecoinWarmStorageService is
     }
 
     function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
-        uint256 size = nextImplementation.code.length;
-        require(size > 3000 || size == 88);
-        _setUpgradePlan(nextImplementation, afterEpoch);
-    }
-
-    function _setUpgradePlan(address nextImplementation, uint96 afterEpoch) private {
-        delete StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value;
+        require(nextImplementation.code.length > 3000);
         nextUpgrade.nextImplementation = nextImplementation;
         nextUpgrade.afterEpoch = afterEpoch;
         emit UpgradeAnnounced(nextUpgrade);
@@ -376,51 +376,20 @@ contract FilecoinWarmStorageService is
         delete nextUpgrade;
     }
 
-    /// @notice Announces the one-time transition to ERC-8167 using a Josuke-generated migration.
-    function announceDispatcherUpgrade(address dispatcher, address migration, uint96 delayEpochs) external {
-        if (dispatcher.codehash != DISPATCHER_CODE_HASH) revert InvalidDispatcherTarget();
-        if (migration.code.length == 0 || migration == address(this)) revert InvalidDispatcherTarget();
+    /**
+     * @notice Replaces this implementation with the ERC-8167 dispatcher after running the Josuke migration.
+     * @dev Pass as the data of the delayed upgrade to this implementation, so both switches happen in one
+     * transaction. The raw dispatcher has no proxiableUUID(), so it cannot be a UUPS upgrade target itself.
+     */
+    function completeDispatcherTransition() external onlyProxy onlyOwner {
+        require(DISPATCHER != address(0), InvalidDispatcherTransition());
 
-        uint96 afterEpoch = uint96(block.number) + (delayEpochs == 0 ? 1 : delayEpochs);
-        _announcePlannedUpgrade(dispatcher, afterEpoch);
-        StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value = migration;
+        emit Migrate.DiamondDelegateCall(DISPATCHER_MIGRATION, "");
+        Address.functionDelegateCall(DISPATCHER_MIGRATION, "");
 
-        emit DispatcherUpgradeAnnounced(dispatcher, migration, afterEpoch);
-    }
+        LibUpgradeRoutes.requireUpgradeRoutes(DISPATCHER);
 
-    /// @dev The raw dispatcher has no proxiableUUID(); only the pinned runtime uses the announced migration path.
-    function upgradeToAndCall(address newImplementation, bytes memory data) public payable override {
-        address migration = StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value;
-        if (migration == address(0)) {
-            super.upgradeToAndCall(newImplementation, data);
-            return;
-        }
-
-        _checkProxy();
-        _authorizeUpgrade(newImplementation);
-        if (newImplementation.codehash != DISPATCHER_CODE_HASH) revert InvalidDispatcherTarget();
-        require(data.length == 0);
-
-        delete StorageSlot.getAddressSlot(DISPATCHER_MIGRATION_SLOT).value;
-
-        emit Migrate.DiamondDelegateCall(migration, "");
-        Address.functionDelegateCall(migration, "");
-
-        bytes4[4] memory requiredSelectors = [
-            IERC8167.implementation.selector,
-            IERC8167.selectors.selector,
-            IMigrateModule.announceMigration.selector,
-            Migrate.migrate.selector
-        ];
-        for (uint256 i; i < requiredSelectors.length; ++i) {
-            bytes4 selector = requiredSelectors[i];
-            address delegate = ProxyStorage.get().delegates[selector];
-            if (delegate.code.length == 0 || delegate == address(this) || delegate == newImplementation) {
-                revert MissingDispatcherDelegate(selector);
-            }
-        }
-
-        ERC1967Utils.upgradeToAndCall(newImplementation, "");
+        ERC1967Utils.upgradeToAndCall(DISPATCHER, "");
     }
 
     /**

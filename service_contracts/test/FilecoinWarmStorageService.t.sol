@@ -53,7 +53,15 @@ contract FilecoinWarmStorageServiceHarness is FilecoinWarmStorageService {
         uint64 reinitializerVersion
     )
         FilecoinWarmStorageService(
-            pdpVerifier, payments, usdfc, filBeamBeneficiary, providerRegistry, sessionKeyRegistry, reinitializerVersion
+            pdpVerifier,
+            payments,
+            usdfc,
+            filBeamBeneficiary,
+            providerRegistry,
+            sessionKeyRegistry,
+            reinitializerVersion,
+            address(0),
+            address(0)
         )
     {}
 
@@ -541,7 +549,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
 
         bytes memory initData = abi.encodeWithSelector(
@@ -593,7 +603,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
 
         bytes memory initData = abi.encodeWithSelector(
@@ -623,7 +635,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
 
         // Another successful announcement
@@ -672,7 +686,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
 
         vm.prank(client);
@@ -5728,7 +5744,9 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,

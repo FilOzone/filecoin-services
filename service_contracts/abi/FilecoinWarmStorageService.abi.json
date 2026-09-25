@@ -36,6 +36,16 @@
         "name": "_reinitializer_version",
         "type": "uint64",
         "internalType": "uint64"
+      },
+      {
+        "name": "_dispatcher",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_dispatcherMigration",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -68,15 +78,10 @@
   },
   {
     "type": "function",
-    "name": "announceDispatcherUpgrade",
+    "name": "announceUpgradePlan",
     "inputs": [
       {
-        "name": "dispatcher",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "migration",
+        "name": "nextImplementation",
         "type": "address",
         "internalType": "address"
       },
@@ -91,19 +96,8 @@
   },
   {
     "type": "function",
-    "name": "announceUpgradePlan",
-    "inputs": [
-      {
-        "name": "nextImplementation",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "delayEpochs",
-        "type": "uint96",
-        "internalType": "uint96"
-      }
-    ],
+    "name": "completeDispatcherTransition",
+    "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -1116,31 +1110,6 @@
   },
   {
     "type": "event",
-    "name": "DispatcherUpgradeAnnounced",
-    "inputs": [
-      {
-        "name": "dispatcher",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "migration",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "afterEpoch",
-        "type": "uint96",
-        "indexed": false,
-        "internalType": "uint96"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
     "anonymous": false
@@ -1755,7 +1724,7 @@
   },
   {
     "type": "error",
-    "name": "InvalidDispatcherTarget",
+    "name": "InvalidDispatcherTransition",
     "inputs": []
   },
   {
@@ -1860,7 +1829,7 @@
   },
   {
     "type": "error",
-    "name": "MissingDispatcherDelegate",
+    "name": "MissingUpgradeRoute",
     "inputs": [
       {
         "name": "selector",

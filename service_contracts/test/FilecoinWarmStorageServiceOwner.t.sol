@@ -100,7 +100,9 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
             filBeamBeneficiary,
             providerRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(

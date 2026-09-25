@@ -78,7 +78,9 @@ contract ProviderValidationTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
         bytes memory warmStorageInitData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60), filBeamController
