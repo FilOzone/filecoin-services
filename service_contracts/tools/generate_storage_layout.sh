@@ -10,8 +10,10 @@ echo // Generated with tools/generate_storage_layout.sh
 echo
 
 forge inspect --out out/storage-layout --cache-path cache/storage-layout --json "$1" storageLayout \
-    | jq -rM 'reduce .storage.[] as {$label,$slot} (null; . += "bytes32 constant " + (
+    | jq -rM -L "$(dirname "$0")" 'include "storage_layout_names";
+        reduce .storage.[] as {$label,$slot} (null; . += "bytes32 constant " + (
             $label
+                | stable_storage_label
                 | [scan("[A-Z]+(?=[A-Z][a-z]|$)|[A-Z]?[a-z0-9]+")]
                 | map(ascii_upcase)
                 | join("_")
