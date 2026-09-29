@@ -423,6 +423,9 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract (optional, can be address(0))
      */
     function migrate(address _viewContract) public onlyProxy onlyOwner reinitializer(REINITIALIZER_VERSION) {
+        // A transition implementation must not be left installed by the ordinary upgrade call.
+        require(dispatcherAddress == address(0), InvalidDispatcherTransition());
+
         // Set view contract if provided
         if (_viewContract != address(0)) {
             viewContractAddress = _viewContract;
