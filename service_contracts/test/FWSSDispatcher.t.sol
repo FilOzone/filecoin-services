@@ -6,7 +6,6 @@ import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -16,7 +15,6 @@ import {MigrateModule} from "../src/modules/MigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {ProviderManagementModule} from "../src/modules/ProviderManagementModule.sol";
 import {ViewContractModule} from "../src/modules/ViewContractModule.sol";
-import {FWSSStorage} from "../src/storage/FWSSStorage.sol";
 import {LibAccessControl} from "../src/lib/LibAccessControl.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
@@ -68,34 +66,16 @@ contract ReentrantMigrationFixture {
     }
 }
 
-/// @dev Models only the historical >3000-byte announcement rule and UUPS slot-19 plan.
-contract LegacyUpgradeGateFixture is FWSSStorage, OwnableUpgradeable, UUPSUpgradeable {
-    function initialize() external initializer {
-        __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
-    }
-
-    function announceUpgradePlan(address target, uint96 delay) external onlyOwner {
-        require(target.code.length > 3000);
-        nextUpgrade =
-            PlannedUpgrade({nextImplementation: target, afterEpoch: uint96(block.number) + (delay == 0 ? 1 : delay)});
-    }
-
-    function _authorizeUpgrade(address target) internal override onlyOwner {
-        require(target == nextUpgrade.nextImplementation);
-        require(block.number >= nextUpgrade.afterEpoch);
-        delete nextUpgrade;
-    }
-}
-
 contract FWSSDispatcherTest is JosukeFacetSet {
     bytes32 private constant DELEGATES_SLOT = 0xf27774d37a8b3bf2306f60b561e4e8ec22cfb23796f1f777608c0e466ef52600;
     bytes32 private constant OWNER_SLOT = 0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;
+    string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
 
     address internal dispatcher;
     MockERC20 internal usdfc;
     MigrateModule internal migrateModule;
+    uint256 private legacyProxies;
 
     // Routes installed by the latest _createMigration.
     bytes4[] internal exportedSelectors;
@@ -317,20 +297,24 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         );
     }
 
+    /// @dev A proxy running the deployed mainnet v1.4.0 proxy and implementation bytecode, not a rebuild.
     function _realLegacy()
         internal
         returns (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract, MockERC20 token)
     {
         token = usdfc;
-        FilecoinWarmStorageService implementation = _newMonolith(token);
-        service = FilecoinWarmStorageService(
-            address(
-                new ERC1967Proxy(
-                    address(implementation),
-                    abi.encodeCall(FilecoinWarmStorageService.initialize, (uint64(2880), uint256(60), address(0x16)))
-                )
-            )
-        );
+        string memory fixture = vm.readFile(V1_4_0_MAINNET);
+
+        // Its UUPS onlyProxy check compares the implementation slot with its own mainnet address.
+        address implementation = vm.parseJsonAddress(fixture, ".implementation.address");
+        vm.etch(implementation, vm.parseJsonBytes(fixture, ".implementation.code"));
+
+        address proxy = address(uint160(uint256(keccak256(abi.encode(V1_4_0_MAINNET, ++legacyProxies)))));
+        vm.etch(proxy, vm.parseJsonBytes(fixture, ".proxy.code"));
+        vm.store(proxy, IMPLEMENTATION_SLOT, bytes32(uint256(uint160(implementation))));
+
+        service = FilecoinWarmStorageService(proxy);
+        service.initialize(2880, 60, address(0x16));
         viewContract = new FilecoinWarmStorageServiceStateView(service);
         service.setViewContract(address(viewContract));
         service.configureProvingPeriod(3000, 61);
@@ -393,6 +377,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         bytes32 periodBefore = vm.load(proxy, bytes32(uint256(0)));
         bytes32 windowBefore = vm.load(proxy, bytes32(uint256(1)));
         bytes32 viewBefore = vm.load(proxy, bytes32(uint256(17)));
+        ProviderManagementModule(proxy).addApprovedProvider(7);
 
         address migration = _createMigration(bytes4(0));
         FilecoinWarmStorageService intermediate = _newIntermediate(token, migration);
@@ -433,6 +418,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (uint64 provingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         assertEq(provingPeriod, 3000);
         assertEq(challengeWindow, 61);
+        assertTrue(viewContract.isProviderApproved(7));
         assertTrue(viewContract.isProviderApproved(42));
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
@@ -454,20 +440,10 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         service.completeDispatcherTransition();
     }
 
-    function testHistoricalSizeGateAcceptsIntermediateButNotDispatcher() public {
-        LegacyUpgradeGateFixture old = new LegacyUpgradeGateFixture();
-        LegacyUpgradeGateFixture legacy = LegacyUpgradeGateFixture(
-            address(new ERC1967Proxy(address(old), abi.encodeCall(LegacyUpgradeGateFixture.initialize, ())))
-        );
+    function testLegacyRejectsRawDispatcherAsUpgradeTarget() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         vm.expectRevert();
-        legacy.announceUpgradePlan(dispatcher, 0);
-
-        FilecoinWarmStorageService intermediate = _newIntermediate(new MockERC20(), _createMigration(bytes4(0)));
-        legacy.announceUpgradePlan(address(intermediate), 0);
-        (, uint96 epoch) = _plan(address(legacy));
-        vm.roll(epoch);
-        legacy.upgradeToAndCall(address(intermediate), _transitionData());
-        _assertDispatcherRoutes(address(legacy));
+        service.announceUpgradePlan(dispatcher, 0);
     }
 
     function testConstructorValidatesDispatcherTransition() public {
