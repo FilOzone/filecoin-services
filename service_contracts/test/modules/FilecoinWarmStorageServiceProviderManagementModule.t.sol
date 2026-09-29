@@ -5,9 +5,13 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {Errors} from "../../src/Errors.sol";
-import {ProviderManagementModule} from "../../src/modules/ProviderManagementModule.sol";
+import {
+    FilecoinWarmStorageServiceProviderManagementModule
+} from "../../src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol";
 
-contract ProviderManagementModuleHarness is ProviderManagementModule {
+contract FilecoinWarmStorageServiceProviderManagementModuleHarness is
+    FilecoinWarmStorageServiceProviderManagementModule
+{
     function isProviderApproved(uint256 providerId) external view returns (bool) {
         return approvedProviders[providerId];
     }
@@ -21,11 +25,11 @@ contract ProviderManagementModuleHarness is ProviderManagementModule {
     }
 }
 
-contract ProviderManagementModuleTest is Test {
+contract FilecoinWarmStorageServiceProviderManagementModuleTest is Test {
     bytes32 private constant OWNABLE_STORAGE_LOCATION =
         0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
 
-    ProviderManagementModuleHarness public providerManagementModule;
+    FilecoinWarmStorageServiceProviderManagementModuleHarness public providerManagementModule;
 
     address public owner;
     address public provider1;
@@ -34,9 +38,10 @@ contract ProviderManagementModuleTest is Test {
         owner = address(this);
         provider1 = address(0x1);
 
-        ProviderManagementModuleHarness implementation = new ProviderManagementModuleHarness();
+        FilecoinWarmStorageServiceProviderManagementModuleHarness implementation =
+            new FilecoinWarmStorageServiceProviderManagementModuleHarness();
         MyERC1967Proxy proxy = new MyERC1967Proxy(address(implementation), "");
-        providerManagementModule = ProviderManagementModuleHarness(address(proxy));
+        providerManagementModule = FilecoinWarmStorageServiceProviderManagementModuleHarness(address(proxy));
 
         vm.store(address(proxy), OWNABLE_STORAGE_LOCATION, bytes32(uint256(uint160(owner))));
     }

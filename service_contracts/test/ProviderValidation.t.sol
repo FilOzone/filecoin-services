@@ -93,7 +93,7 @@ contract ProviderValidationTest is MockFVMTest {
         usdfc.safeTransfer(client, 10000 * 10 ** 18);
     }
 
-    // Temporary migration helper: seed legacy FWSS storage directly until ProviderManagementModule
+    // Temporary migration helper: seed legacy FWSS storage directly until FilecoinWarmStorageServiceProviderManagementModule
     // and ViewModule are routed through the shared ERC-8167 proxy.
     function _seedApprovedProvider(uint256 providerId) internal {
         bytes32 approvedProviderSlot = keccak256(abi.encode(providerId, APPROVED_PROVIDERS_SLOT));

@@ -8,7 +8,6 @@ def type_shape($types; $id):
   ($types[$id] // {label: $id}) as $type
   | {
       label: (($type.label // $id) | stable_type_label),
-      label: (($type.label // $id) | stable_type_label),
       encoding: ($type.encoding // null),
       numberOfBytes: ($type.numberOfBytes // null)
     }
