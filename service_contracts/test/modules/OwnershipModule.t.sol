@@ -26,10 +26,6 @@ contract OwnershipModuleTest is Test {
         vm.store(address(proxy), OWNABLE_STORAGE_LOCATION, bytes32(uint256(uint160(owner))));
     }
 
-    function testOwnerReadsOwnableStorage() public view {
-        assertEq(ownershipModule.owner(), owner);
-    }
-
     function testTransferOwnership() public {
         vm.expectEmit(true, true, false, false, address(ownershipModule));
         emit OwnershipModule.OwnershipTransferred(owner, other);

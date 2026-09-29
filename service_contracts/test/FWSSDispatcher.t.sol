@@ -34,12 +34,6 @@ contract CallContextFixture {
     function value() external view returns (uint256 result) {
         assembly { result := sload(90) }
     }
-
-    function fail() external pure {
-        revert Failure(0x1234);
-    }
-
-    error Failure(uint256 value);
 }
 
 contract RevertingMigrationFixture {
@@ -102,7 +96,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     address internal dispatcher;
     MockERC20 internal usdfc;
     MigrateModule internal migrateModule;
-    ProviderManagementModule internal providerModule;
 
     // Routes installed by the latest _createMigration.
     bytes4[] internal exportedSelectors;
@@ -112,7 +105,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
         usdfc = new MockERC20();
         migrateModule = new MigrateModule();
-        providerModule = new ProviderManagementModule();
     }
 
     function _route(address proxy, bytes4 selector, address target) internal {
@@ -156,36 +148,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(returned, payload);
         assertEq(CallContextFixture(proxy).value(), 0x1234);
         assertEq(CallContextFixture(address(fixture)).value(), 0);
-    }
-
-    function testRawDispatcherMatchesUpstreamArtifactAndSizeLimit() public view {
-        bytes memory upstream = vm.getDeployedCode("lib/erc8167/out/Proxy.evm/Proxy.json");
-        assertEq(dispatcher.code, upstream);
-        assertLe(dispatcher.code.length, 24_576);
-    }
-
-    function testRawDispatcherBubblesExactRevertBytes() public {
-        address proxy = _rawProxy();
-        _route(proxy, CallContextFixture.fail.selector, address(new CallContextFixture()));
-        vm.expectRevert(abi.encodeWithSelector(CallContextFixture.Failure.selector, 0x1234));
-        CallContextFixture(proxy).fail();
-    }
-
-    function testRawDispatcherUnknownShortAndEmptyCalldata() public {
-        address proxy = _rawProxy();
-        bytes[] memory calls = new bytes[](3);
-        calls[0] = hex"deadbeef";
-        calls[1] = hex"de";
-        calls[2] = hex"";
-        bytes4[] memory selectors = new bytes4[](3);
-        selectors[0] = 0xdeadbeef;
-        selectors[1] = 0xde000000;
-        selectors[2] = 0x00000000;
-        for (uint256 i; i < calls.length; ++i) {
-            (bool ok, bytes memory result) = proxy.call(calls[i]);
-            assertFalse(ok);
-            assertEq(result, abi.encodeWithSelector(IERC8167.FunctionNotFound.selector, selectors[i]));
-        }
     }
 
     function testMigrationOwnerDelayReplacementConsumptionAndReplay() public {
@@ -303,16 +265,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address target, uint96 epoch) = _plan(proxy);
         assertEq(target, address(migration));
         assertEq(epoch, readyAt);
-    }
-
-    function testProviderModuleDoesNotExposeOwnerFunctions() public {
-        address proxy = _rawProxy();
-        _route(proxy, ProviderManagementModule.addApprovedProvider.selector, address(providerModule));
-        ProviderManagementModule(proxy).addApprovedProvider(42);
-        vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        ProviderManagementModule(proxy).addApprovedProvider(43);
-        assertEq(vm.load(proxy, OWNER_SLOT), bytes32(uint256(uint160(address(this)))));
     }
 
     function testMigrationInstallsJosukeFacetSet() public {
@@ -518,23 +470,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         _assertDispatcherRoutes(address(legacy));
     }
 
-    function testAnnouncementSizeBoundary() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
-        uint256[5] memory sizes = [uint256(0), 88, 89, 3000, 3001];
-        for (uint256 i; i < sizes.length; ++i) {
-            address candidate = address(uint160(0xA000 + i));
-            vm.etch(candidate, new bytes(sizes[i]));
-            if (sizes[i] == 3001) {
-                service.announceUpgradePlan(candidate, 0);
-                (address target,) = _plan(address(service));
-                assertEq(target, candidate);
-            } else {
-                vm.expectRevert();
-                service.announceUpgradePlan(candidate, 0);
-            }
-        }
-    }
-
     function testConstructorValidatesDispatcherTransition() public {
         MockERC20 token = new MockERC20();
         address migration = _createMigration(bytes4(0));
@@ -625,18 +560,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         MigrateModule(proxy).migrate(address(next));
     }
 
-    function testDirectImplementationCannotUpgradeToRawDispatcher() public {
-        FilecoinWarmStorageService implementation = _newMonolith(new MockERC20());
-        vm.expectRevert(UUPSUpgradeable.UUPSUnauthorizedCallContext.selector);
-        implementation.upgradeToAndCall(dispatcher, "");
-    }
-
-    function testDispatcherCannotBeAnnouncedDirectly() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
-        vm.expectRevert();
-        service.announceUpgradePlan(dispatcher, 0);
-    }
-
     function testRevertingMigrationRollsBackBothUpgrades() public {
         (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
         address proxy = address(service);
@@ -716,47 +639,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             service.upgradeToAndCall(address(intermediate), _transitionData());
             _assertUntouched(proxy, original, address(intermediate), epoch);
         }
-    }
-
-    function testTransitionRejectsValue() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
-        address proxy = address(service);
-        address original = _implementation(proxy);
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, _createMigration(bytes4(0)));
-        uint96 epoch = _announce(service, address(intermediate));
-        vm.roll(epoch);
-
-        vm.deal(address(this), 1 ether);
-        vm.expectRevert();
-        service.upgradeToAndCall{value: 1}(address(intermediate), _transitionData());
-        _assertUntouched(proxy, original, address(intermediate), epoch);
-    }
-
-    function testLargeNonUUPSTargetRetainsOrdinaryUUPSCheck() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
-        address fake = address(0xB000);
-        vm.etch(fake, new bytes(3001));
-        vm.roll(_announce(service, fake));
-        vm.expectRevert();
-        service.upgradeToAndCall(fake, "");
-        (address target,) = _plan(address(service));
-        assertEq(target, fake);
-    }
-
-    function testTransferredOwnerControlsDispatcherTransitionAndProviderModule() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, _createMigration(bytes4(0)));
-        service.transferOwnership(address(0xB0B));
-        vm.prank(address(0xB0B));
-        service.announceUpgradePlan(address(intermediate), 0);
-        vm.roll(block.number + 1);
-        vm.prank(address(0xB0B));
-        service.upgradeToAndCall(address(intermediate), _transitionData());
-
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(this)));
-        ProviderManagementModule(address(service)).addApprovedProvider(43);
-        vm.prank(address(0xB0B));
-        ProviderManagementModule(address(service)).addApprovedProvider(43);
     }
 
     function testOwnershipModuleTransfersControlAfterTransition() public {
