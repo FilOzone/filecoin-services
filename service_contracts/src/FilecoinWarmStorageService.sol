@@ -235,6 +235,9 @@ contract FilecoinWarmStorageService is
     // Runtime hash of Proxy.evm at the pinned ERC-8167 revision.
     bytes32 private constant DISPATCHER_CODE_HASH = 0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a;
 
+    // The delay reviews the migration's code, not just its address, which a redeployable contract could reuse.
+    bytes32 private immutable DISPATCHER_MIGRATION_CODE_HASH;
+
     error InvalidDispatcherTransition();
 
     event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
@@ -310,6 +313,7 @@ contract FilecoinWarmStorageService is
         }
         dispatcherAddress = _dispatcher;
         dispatcherMigrationAddress = _dispatcherMigration;
+        DISPATCHER_MIGRATION_CODE_HASH = _dispatcherMigration.codehash;
     }
 
     /**
@@ -380,7 +384,10 @@ contract FilecoinWarmStorageService is
      * transaction. The raw dispatcher has no proxiableUUID(), so it cannot be a UUPS upgrade target itself.
      */
     function completeDispatcherTransition() external onlyProxy onlyOwner {
-        require(dispatcherAddress != address(0), InvalidDispatcherTransition());
+        require(
+            dispatcherAddress != address(0) && dispatcherMigrationAddress.codehash == DISPATCHER_MIGRATION_CODE_HASH,
+            InvalidDispatcherTransition()
+        );
 
         // MigrateModule reuses this slot; an implementation plan must not become an announced migration.
         delete nextUpgrade;

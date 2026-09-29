@@ -656,6 +656,21 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         }
     }
 
+    function testChangedMigrationCodeRollsBackBothUpgrades() public {
+        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        address proxy = address(service);
+        address original = _implementation(proxy);
+        address migration = _createMigration(bytes4(0));
+        FilecoinWarmStorageService intermediate = _newIntermediate(token, migration);
+        uint96 epoch = _announce(service, address(intermediate));
+        vm.roll(epoch);
+
+        vm.etch(migration, address(new RevertingMigrationFixture()).code);
+        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
+        service.upgradeToAndCall(address(intermediate), _transitionData());
+        _assertUntouched(proxy, original, address(intermediate), epoch);
+    }
+
     function testMigrationCannotReenterTransition() public {
         (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
         address proxy = address(service);
