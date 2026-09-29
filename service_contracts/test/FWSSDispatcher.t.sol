@@ -115,13 +115,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         providerModule = new ProviderManagementModule();
     }
 
-    function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/UsdfcTokenModule.sol:UsdfcTokenModule")) {
-            return abi.encode(usdfc);
-        }
-        return "";
-    }
-
     function _route(address proxy, bytes4 selector, address target) internal {
         vm.store(proxy, keccak256(abi.encode(selector, DELEGATES_SLOT)), bytes32(uint256(uint160(target))));
     }
@@ -484,14 +477,17 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         ProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
 
-        // The existing StateView keeps working through ExtsloadModule and UsdfcTokenModule.
+        // The existing StateView reads storage through ExtsloadModule.
         (uint64 provingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
         assertEq(provingPeriod, 3000);
         assertEq(challengeWindow, 61);
         assertTrue(viewContract.isProviderApproved(42));
-        assertEq(address(viewContract.getPriceList().token), address(usdfc));
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
+
+        // The former immutable getters belong to the business modules that use them; none are routed yet.
+        vm.expectRevert(abi.encodeWithSelector(IERC8167.FunctionNotFound.selector, service.usdfcTokenAddress.selector));
+        viewContract.getPriceList();
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));

@@ -18,9 +18,6 @@
     "ExtsloadModule": {
       "artifact": "src/modules/ExtsloadModule.sol:ExtsloadModule"
     },
-    "UsdfcTokenModule": {
-      "artifact": "src/modules/UsdfcTokenModule.sol:UsdfcTokenModule"
-    },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
       "maximumConstructorArgsSize": 288
