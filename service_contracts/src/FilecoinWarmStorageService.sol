@@ -284,22 +284,19 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentsContractAddress = _paymentsContractAddress;
 
-        require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        require(address(_usdfc) != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
 
         require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
         filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
 
         require(
-            _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
+            address(_serviceProviderRegistry) != address(0),
             Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
         );
         serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistry);
 
-        require(
-            _sessionKeyRegistry != SessionKeyRegistry(address(0)),
-            Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
-        );
+        require(address(_sessionKeyRegistry) != address(0), Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry));
         sessionKeyRegistry = _sessionKeyRegistry;
 
         // Verify token decimals from the USDFC token contract

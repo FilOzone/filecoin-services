@@ -13,6 +13,8 @@ optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
+# Solidity 0.8.37 warns on dependency code; `forge lint --deny notes` fails on compiler warnings.
+ignored_warnings_from = ["lib/"]
 
 # Foundry's defaults, plus Solidity 0.8.37 warnings from fws-payments (9170),
 # OpenZeppelin/forge-std (6335), forge-std (8506), and the warning limit (4591).

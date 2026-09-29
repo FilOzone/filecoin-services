@@ -113,7 +113,7 @@ contract MockPDPVerifier {
         uint256 setId = nextDataSetId++;
 
         // Call the listener if specified
-        if (listenerAddr != PDPListener(address(0))) {
+        if (address(listenerAddr) != address(0)) {
             listenerAddr.dataSetCreated(setId, msg.sender, extraData);
         }
 
@@ -128,7 +128,7 @@ contract MockPDPVerifier {
     }
 
     function deleteDataSet(PDPListener listenerAddr, uint256 setId, bytes calldata extraData) public {
-        if (listenerAddr != PDPListener(address(0))) {
+        if (address(listenerAddr) != address(0)) {
             listenerAddr.dataSetDeleted(setId, 0, extraData);
         }
 
