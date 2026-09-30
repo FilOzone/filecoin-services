@@ -11,6 +11,18 @@ optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
 
+# Foundry's defaults, plus Solidity 0.8.37 deprecations raised by fws-payments (9170) and OpenZeppelin (6335).
+ignored_error_codes = [
+    "license",
+    "code-size",
+    "init-code-size",
+    "transient-storage",
+    "transfer-deprecated",
+    "natspec-memory-safe-assembly-deprecated",
+    9170,
+    6335,
+]
+
 # For dependencies
 remappings = [
     '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
