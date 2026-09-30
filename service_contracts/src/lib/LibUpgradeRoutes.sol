@@ -12,6 +12,7 @@ library LibUpgradeRoutes {
 
     /// @notice Reverts unless introspection and migration selectors route to deployed modules.
     /// @dev A migration that drops `migrate` or `announceMigration` would make FWSS permanently unupgradeable.
+    /// Checks that each route reaches code, not that the code implements the selector; josuke verifies the facets.
     /// @param dispatcher The ERC-8167 dispatcher, which must not route to itself
     function requireUpgradeRoutes(address dispatcher) internal view {
         bytes4[4] memory selectors = [
