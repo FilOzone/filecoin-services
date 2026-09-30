@@ -119,8 +119,6 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             payee, "Test SP", "Test storage provider", ServiceProviderRegistryStorage.ProductType.PDP, spKeys, spValues
         );
-        // TODO: Replace this with a FWSSProviderManagementModule call once FWSS proxy dispatch is available.
-        // fwss.addApprovedProvider(1);
 
         factory = new ExampleSponsoredDataSetFactory(fwss);
     }
