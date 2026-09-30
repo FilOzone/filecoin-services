@@ -4,7 +4,7 @@ pragma solidity ^0.8.13;
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
-import {LibAccessControl} from "../../src/lib/LibAccessControl.sol";
+import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {OwnershipModule} from "../../src/modules/OwnershipModule.sol";
 
 contract OwnershipModuleTest is Test {
@@ -33,7 +33,7 @@ contract OwnershipModuleTest is Test {
 
         assertEq(ownershipModule.owner(), other);
 
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, owner));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, owner));
         ownershipModule.transferOwnership(owner);
     }
 
@@ -49,15 +49,15 @@ contract OwnershipModuleTest is Test {
 
         assertEq(ownershipModule.owner(), address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, owner));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, owner));
         ownershipModule.transferOwnership(other);
     }
 
     function testOnlyOwnerCanChangeOwnership() public {
         vm.startPrank(other);
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, other));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, other));
         ownershipModule.transferOwnership(other);
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, other));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, other));
         ownershipModule.renounceOwnership();
         vm.stopPrank();
 

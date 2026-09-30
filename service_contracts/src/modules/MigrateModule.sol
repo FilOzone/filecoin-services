@@ -4,13 +4,13 @@ pragma solidity 0.8.37;
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IMigrateModule} from "../interfaces/IMigrateModule.sol";
-import {LibAccessControl} from "../lib/LibAccessControl.sol";
+import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {NEXT_UPGRADE_SLOT} from "../lib/FilecoinWarmStorageServiceLayout.sol";
 import {LibUpgradeRoutes} from "../lib/LibUpgradeRoutes.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @notice Executes owner-announced Josuke migrations through the ERC-8167 proxy.
-contract MigrateModule is IMigrateModule {
+contract MigrateModule is IMigrateModule, FWSSOwnable {
     event UpgradeAnnounced(FWSSStorage.PlannedUpgrade plannedUpgrade);
 
     error InvalidMigration(address migration);
@@ -18,8 +18,7 @@ contract MigrateModule is IMigrateModule {
     error MigrationNotReady(uint96 afterEpoch);
     error DispatcherChanged(address implementation);
 
-    function announceMigration(address migration, uint96 delayEpochs) external override {
-        LibAccessControl.requireOwner(msg.sender);
+    function announceMigration(address migration, uint96 delayEpochs) external override onlyOwner {
         if (migration.code.length == 0 || migration == address(this)) revert InvalidMigration(migration);
 
         uint96 delay = delayEpochs == 0 ? 1 : delayEpochs;
@@ -31,8 +30,7 @@ contract MigrateModule is IMigrateModule {
     }
 
     /// @dev Josuke calls this entry point with empty calldata to the migration itself.
-    function migrate(address migration) external override {
-        LibAccessControl.requireOwner(msg.sender);
+    function migrate(address migration) external override onlyOwner {
         FWSSStorage.PlannedUpgrade storage plan = _plan();
         if (migration != plan.nextImplementation || migration == address(0)) {
             revert MigrationNotAnnounced(migration);

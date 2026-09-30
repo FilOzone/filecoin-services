@@ -1,27 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {LibAccessControl} from "../lib/LibAccessControl.sol";
+import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 
 /// @title OwnershipModule
 /// @notice Exposes the FWSS owner with OpenZeppelin OwnableUpgradeable semantics.
-contract OwnershipModule {
+contract OwnershipModule is FWSSOwnable {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
     error OwnableInvalidOwner(address owner);
-
-    /// @notice Ensures the caller is the FWSS owner
-    modifier onlyOwner() {
-        LibAccessControl.requireOwner(msg.sender);
-        _;
-    }
 
     /**
      * @notice Returns the current owner
      * @return The owner address
      */
     function owner() external view returns (address) {
-        return LibAccessControl.owner();
+        return _owner();
     }
 
     /**
@@ -43,7 +37,7 @@ contract OwnershipModule {
     }
 
     function _transferOwnership(address newOwner) private {
-        address previousOwner = LibAccessControl.setOwner(newOwner);
+        address previousOwner = _setOwner(newOwner);
         emit OwnershipTransferred(previousOwner, newOwner);
     }
 }

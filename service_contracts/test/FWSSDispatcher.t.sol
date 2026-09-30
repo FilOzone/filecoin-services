@@ -19,7 +19,7 @@ import {
     FilecoinWarmStorageServiceProviderManagementModule
 } from "../src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol";
 import {ViewContractModule} from "../src/modules/ViewContractModule.sol";
-import {LibAccessControl} from "../src/lib/LibAccessControl.sol";
+import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
@@ -147,7 +147,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         address first = _createMigration(bytes4(0));
         address second = _createMigration(bytes4(0));
         vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         MigrateModule(proxy).announceMigration(address(first), 0);
         MigrateModule(proxy).announceMigration(address(first), 0);
         (address target, uint96 epoch) = _plan(proxy);
@@ -179,7 +179,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         MigrateModule(proxy).announceMigration(address(fixture), 1);
         vm.roll(block.number + 1);
         vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         MigrateModule(proxy).migrate(address(fixture));
         (address target,) = _plan(proxy);
         assertEq(target, address(fixture));
@@ -269,7 +269,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (, uint96 readyAt) = _plan(proxy);
         vm.roll(readyAt);
 
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, proxy));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, proxy));
         MigrateModule(proxy).migrate(address(migration));
         (address target, uint96 epoch) = _plan(proxy);
         assertEq(target, address(migration));
@@ -466,7 +466,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         viewContract.getPriceList();
 
         vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(43);
 
         // The intermediate's own entry points are gone with the monolith.
@@ -518,7 +518,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         service.upgradeToAndCall(address(intermediate), _transitionData());
         vm.roll(epoch);
         vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         service.upgradeToAndCall(address(intermediate), _transitionData());
         _assertUntouched(proxy, original, address(intermediate), epoch);
 
@@ -664,7 +664,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(OwnershipModule(proxy).owner(), address(0xB0B));
 
         address migration = _createMigration(bytes4(0));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(this)));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(this)));
         MigrateModule(proxy).announceMigration(migration, 0);
 
         vm.prank(address(0xB0B));

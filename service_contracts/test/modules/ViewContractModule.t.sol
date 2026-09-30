@@ -5,7 +5,7 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {Errors} from "../../src/Errors.sol";
-import {LibAccessControl} from "../../src/lib/LibAccessControl.sol";
+import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {VIEW_CONTRACT_ADDRESS_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {ViewContractModule} from "../../src/modules/ViewContractModule.sol";
 
@@ -41,7 +41,7 @@ contract ViewContractModuleTest is Test {
 
     function testOnlyOwnerCanSetViewContract() public {
         vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         viewContractModule.setViewContract(address(0x1234));
     }
 }

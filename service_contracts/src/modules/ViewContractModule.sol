@@ -3,20 +3,14 @@ pragma solidity 0.8.37;
 
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 import {Errors} from "../Errors.sol";
-import {LibAccessControl} from "../lib/LibAccessControl.sol";
+import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {VIEW_CONTRACT_ADDRESS_SLOT} from "../lib/FilecoinWarmStorageServiceLayout.sol";
 
 /// @title ViewContractModule
 /// @notice Manages the FWSS view contract address used for read-only integrations.
 /// @dev Reads the slot directly: inheriting FWSSStorage would clash with its internal viewContractAddress field.
-contract ViewContractModule {
+contract ViewContractModule is FWSSOwnable {
     event ViewContractSet(address indexed viewContract);
-
-    /// @notice Ensures the caller is the FWSS owner
-    modifier onlyOwner() {
-        LibAccessControl.requireOwner(msg.sender);
-        _;
-    }
 
     /**
      * @notice Returns the view contract address
