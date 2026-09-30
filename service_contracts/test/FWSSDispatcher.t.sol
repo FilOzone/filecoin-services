@@ -391,10 +391,19 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             assertEq(IERC8167(proxy).implementation(exportedSelectors[i]), routedTo[exportedSelectors[i]]);
         }
 
+        // Equal lengths plus unique, expected members make selectors() the installed set.
         bytes4[] memory exported = IERC8167(proxy).selectors();
         assertEq(exported.length, exportedSelectors.length);
         for (uint256 i; i < exported.length; ++i) {
+            assertEq(_count(exported, exported[i]), 1, "selectors() repeats a selector");
+            assertEq(_count(exportedSelectors, exported[i]), 1, "selectors() lists an uninstalled selector");
             assertEq(IERC8167(proxy).implementation(exported[i]), routedTo[exported[i]]);
+        }
+    }
+
+    function _count(bytes4[] memory selectors, bytes4 selector) internal pure returns (uint256 count) {
+        for (uint256 i; i < selectors.length; ++i) {
+            if (selectors[i] == selector) ++count;
         }
     }
 
