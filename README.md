@@ -30,6 +30,7 @@ FilecoinWarmStorageService implements `IFilecoinServiceMetadata`, exposing `name
 - [Foundry](https://getfoundry.sh/) - Ethereum development toolchain
 - [jq](https://jqlang.github.io/jq/) - Command-line JSON processor (v1.7+ recommended)
 - Git with submodule support
+- A C toolchain and make, to build the [evm](https://github.com/wjmelements/evm) assembler (Xcode Command Line Tools on macOS; `build-essential` and `libcurl4-openssl-dev` on Debian/Ubuntu)
 
 ### Installation
 
@@ -49,7 +50,12 @@ make install
 make build
 ```
 
-4. Run tests:
+4. Build the pinned evm assembler. `make test` uses it to assemble the ERC-8167 dispatcher. It is built once per revision under `~/.cache/wjmelements-evm/`; add that revision's `bin/` to `PATH` to run josuke or `tools/verify-deployments.sh`.
+```bash
+make install-evm
+```
+
+5. Run tests:
 ```bash
 make test
 ```

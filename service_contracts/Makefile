@@ -27,15 +27,32 @@ INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
 LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
+# wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
+EVM_REPO := https://github.com/wjmelements/evm.git
+EVM_REVISION := 4123f3a47e8032499fc0ddfe178f35c034ae77a7
+EVM_DIR ?= $(HOME)/.cache/wjmelements-evm/$(EVM_REVISION)
+export PATH := $(EVM_DIR)/bin:$(PATH)
+
 # Build target
 .PHONY: build
-build: erc8167
+build:
 	forge build --via-ir
 
+# Build the pinned evm assembler once per revision
+.PHONY: install-evm
+install-evm: $(EVM_DIR)/bin/evm
+
+$(EVM_DIR)/bin/evm:
+	git clone $(EVM_REPO) $(EVM_DIR)
+	git -C $(EVM_DIR) checkout $(EVM_REVISION)
+	git -C $(EVM_DIR) submodule update --init --recursive
+	$(MAKE) -C $(EVM_DIR) bin/evm
+
 # Compile the upstream dispatcher unchanged. No Solidity wrapper or bytecode padding.
+# Only tests and the dispatcher deployment use these artifacts; FWSS pins the dispatcher code hash.
 .PHONY: erc8167
 erc8167:
-	@command -v evm >/dev/null || (echo 'Install wjmelements/evm to build the ERC-8167 dispatcher'; exit 1)
+	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
 	FOUNDRY_SOLC_VERSION=$$(forge config --json | jq -r .solc) $(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
 
 # Storage layout generation
@@ -121,13 +138,13 @@ fmt-check:
 # Note: Using --ir-minimum due to "stack too deep" errors in FilecoinPayV1.sol
 # This may result in less accurate source mappings but is necessary for coverage to run
 .PHONY: coverage
-coverage:
+coverage: erc8167
 	@echo "Running coverage with --ir-minimum (required due to stack depth issues)..."
 	forge coverage --ir-minimum --report summary
 
 # Coverage with LCOV report (for CI)
 .PHONY: coverage-lcov
-coverage-lcov:
+coverage-lcov: erc8167
 	@echo "Generating LCOV coverage report with --ir-minimum..."
 	forge coverage --ir-minimum --report lcov
 
@@ -206,6 +223,7 @@ clean-abi:
 help:
 	@echo "Available targets:"
 	@echo "  install    - Install dependencies (forge and npm)"
+	@echo "  install-evm - Build the pinned evm assembler that test and josuke need"
 	@echo "  build      - Build contracts"
 	@echo "  test       - Run tests"
 	@echo "  clean      - Clean build artifacts"
