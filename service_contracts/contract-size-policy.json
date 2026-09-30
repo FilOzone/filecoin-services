@@ -12,6 +12,9 @@
     "OwnershipModule": {
       "artifact": "src/modules/OwnershipModule.sol:OwnershipModule"
     },
+    "FilecoinWarmStorageServiceProviderManagementModule": {
+      "artifact": "src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol:FilecoinWarmStorageServiceProviderManagementModule"
+    },
     "ViewContractModule": {
       "artifact": "src/modules/ViewContractModule.sol:ViewContractModule"
     },
