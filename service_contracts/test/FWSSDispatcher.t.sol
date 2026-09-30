@@ -13,7 +13,9 @@ import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol"
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {MigrateModule} from "../src/modules/MigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
-import {ProviderManagementModule} from "../src/modules/ProviderManagementModule.sol";
+import {
+    FilecoinWarmStorageServiceProviderManagementModule
+} from "../src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol";
 import {ViewContractModule} from "../src/modules/ViewContractModule.sol";
 import {LibAccessControl} from "../src/lib/LibAccessControl.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
@@ -377,7 +379,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         bytes32 periodBefore = vm.load(proxy, bytes32(uint256(0)));
         bytes32 windowBefore = vm.load(proxy, bytes32(uint256(1)));
         bytes32 viewBefore = vm.load(proxy, bytes32(uint256(17)));
-        ProviderManagementModule(proxy).addApprovedProvider(7);
+        FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(7);
 
         address migration = _createMigration(bytes4(0));
         FilecoinWarmStorageService intermediate = _newIntermediate(token, migration);
@@ -411,7 +413,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
         assertEq(OwnershipModule(proxy).owner(), address(this));
         assertEq(ViewContractModule(proxy).viewContractAddress(), address(viewContract));
-        ProviderManagementModule(proxy).addApprovedProvider(42);
+        FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
 
         // The existing StateView reads storage through ExtsloadModule.
@@ -429,7 +431,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(LibAccessControl.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        ProviderManagementModule(proxy).addApprovedProvider(43);
+        FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(43);
 
         // The intermediate's own entry points are gone with the monolith.
         vm.expectRevert(

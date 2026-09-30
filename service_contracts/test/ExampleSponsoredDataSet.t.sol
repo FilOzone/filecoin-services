@@ -87,7 +87,9 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
             address(0xfb),
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4
+            4,
+            address(0),
+            address(0)
         );
         fwss = FilecoinWarmStorageService(
             address(
