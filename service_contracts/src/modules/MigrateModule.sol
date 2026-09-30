@@ -16,6 +16,7 @@ contract MigrateModule is IMigrateModule {
     error InvalidMigration(address migration);
     error MigrationNotAnnounced(address migration);
     error MigrationNotReady(uint96 afterEpoch);
+    error DispatcherChanged(address implementation);
 
     function announceMigration(address migration, uint96 delayEpochs) external override {
         LibAccessControl.requireOwner(msg.sender);
@@ -42,11 +43,16 @@ contract MigrateModule is IMigrateModule {
         delete plan.nextImplementation;
         delete plan.afterEpoch;
 
+        // FWSS sits behind an ERC-1967 proxy whose implementation is the dispatcher.
+        address dispatcher = ERC1967Utils.getImplementation();
+
         emit DiamondDelegateCall(migration, "");
         Address.functionDelegateCall(migration, "");
 
-        // FWSS sits behind an ERC-1967 proxy whose implementation is the dispatcher.
-        LibUpgradeRoutes.requireUpgradeRoutes(ERC1967Utils.getImplementation());
+        // Migrations change routes; one that swaps the dispatcher would pass the route check below.
+        address implementation = ERC1967Utils.getImplementation();
+        if (implementation != dispatcher) revert DispatcherChanged(implementation);
+        LibUpgradeRoutes.requireUpgradeRoutes(dispatcher);
     }
 
     function _plan() private pure returns (FWSSStorage.PlannedUpgrade storage plan) {

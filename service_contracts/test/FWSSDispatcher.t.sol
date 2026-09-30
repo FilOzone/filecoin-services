@@ -7,6 +7,8 @@ import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
@@ -42,6 +44,13 @@ contract RevertingMigrationFixture {
     fallback() external {
         ProxyStorage.get().delegates[IERC8167.implementation.selector] = address(0xDEAD);
         revert MigrationFailed();
+    }
+}
+
+/// @dev Replaces the ERC-1967 implementation instead of changing routes.
+contract DispatcherSwapMigrationFixture {
+    fallback() external {
+        StorageSlot.getAddressSlot(ERC1967Utils.IMPLEMENTATION_SLOT).value = address(0xBEEF);
     }
 }
 
@@ -232,6 +241,24 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, MigrateModule.migrate.selector)
         );
         MigrateModule(proxy).migrate(migration);
+    }
+
+    function testMigrationCannotReplaceTheDispatcher() public {
+        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        address proxy = address(service);
+        _transition(service, token);
+
+        DispatcherSwapMigrationFixture migration = new DispatcherSwapMigrationFixture();
+        MigrateModule(proxy).announceMigration(address(migration), 0);
+        (, uint96 readyAt) = _plan(proxy);
+        vm.roll(readyAt);
+
+        vm.expectRevert(abi.encodeWithSelector(MigrateModule.DispatcherChanged.selector, address(0xBEEF)));
+        MigrateModule(proxy).migrate(address(migration));
+        assertEq(_implementation(proxy), dispatcher);
+        (address target, uint96 epoch) = _plan(proxy);
+        assertEq(target, address(migration));
+        assertEq(epoch, readyAt);
     }
 
     function testMigrationCannotReenterMigrate() public {
