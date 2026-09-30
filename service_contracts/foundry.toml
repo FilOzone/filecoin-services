@@ -6,8 +6,6 @@ out = 'out'
 libs = ['lib']
 cache_path = 'cache'
 solc = "0.8.37"
-# FEVM supports the Cancun opcodes used by Solidity and the migration library.
-evm_version = "cancun"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
