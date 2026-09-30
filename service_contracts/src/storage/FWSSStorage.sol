@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-pragma solidity 0.8.30;
+pragma solidity 0.8.37;
 
 /// @dev Legacy slots 0-23. Preserve field order, types and packing in every inheriting module.
 abstract contract FWSSStorage {
