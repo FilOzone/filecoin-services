@@ -41,7 +41,8 @@ remappings = [
     'solady/=lib/solady/src/',
 ]
 
-# Allow reading test data files
+# Allow reading test data files. JosukeFacetSet expands the ledgers' facetSrc globs from sources and artifacts,
+# as `josuke deploy` does.
 fs_permissions = [
     { access = "read", path = "./test" },
     { access = "read", path = "./out" },
