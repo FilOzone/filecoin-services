@@ -48,8 +48,7 @@ fs_permissions = [
     { access = "read", path = "./out" },
     { access = "read", path = "./src/modules" },
     { access = "read", path = "./lib/erc8167" },
-    { access = "read", path = "./josuke.mainnet.json" },
-    { access = "read", path = "./josuke.calibnet.json" },
+    { access = "read", path = "./josuke.json" },
 ]
 
 [lint]

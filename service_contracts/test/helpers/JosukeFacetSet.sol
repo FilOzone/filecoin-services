@@ -10,8 +10,9 @@ import {SetDelegateOperation} from "@erc8167/lib/Migration.sol";
 /// @dev Resolves a Josuke ledger's `facetSrc` from build artifacts, as `josuke deploy` does, without an RPC.
 /// Supported patterns: `<dir>/*.sol`, `<path>:<Contract>` and `<path>.evm`.
 abstract contract JosukeFacetSet is Test {
-    string internal constant MAINNET_LEDGER = "josuke.mainnet.json";
-    string internal constant CALIBNET_LEDGER = "josuke.calibnet.json";
+    string internal constant LEDGER = "josuke.json";
+    uint256 MAINNET_INDEX = 0;
+    uint256 CALIBNET_INDEX = 1;
 
     struct Facet {
         string sourceId;
@@ -22,12 +23,19 @@ abstract contract JosukeFacetSet is Test {
     error UnsupportedFacetSource(string pattern);
     error NoDeployableFacet(string pattern);
 
-    function _facetSources(string memory ledger) internal view returns (string[] memory) {
-        return vm.parseJsonStringArray(vm.readFile(ledger), ".[0].facetSrc");
+    function _proxyAddress(uint256 index) internal view returns (address) {
+        return
+            vm.parseAddress(
+                vm.parseJsonString(vm.readFile(LEDGER), string.concat(".[", vm.toString(index), "].address"))
+            );
     }
 
-    function _resolveFacets(string memory ledger) internal view returns (Facet[] memory) {
-        return _resolvePatterns(_facetSources(ledger));
+    function _facetSources(uint256 index) internal view returns (string[] memory) {
+        return vm.parseJsonStringArray(vm.readFile(LEDGER), string.concat(".[", vm.toString(index), "].facetSrc"));
+    }
+
+    function _resolveFacets(uint256 index) internal view returns (Facet[] memory) {
+        return _resolvePatterns(_facetSources(index));
     }
 
     /// @dev Like Josuke, keeps the first facet for each source ID when patterns overlap.

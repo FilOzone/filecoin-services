@@ -286,7 +286,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function _createMigration(bytes4 omittedSelector) internal returns (address) {
-        SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolveFacets(MAINNET_LEDGER));
+        SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolveFacets(MAINNET_INDEX));
         SetDelegateOperationLibrary.validate(routes);
 
         delete exportedSelectors;
