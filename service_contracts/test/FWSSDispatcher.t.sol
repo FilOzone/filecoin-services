@@ -666,7 +666,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         FWSSMigrateModule(proxy).announceMigration(migration, 0);
 
         vm.prank(address(0xB0B));
-        FWSSViewContractModule(proxy).setViewContract(address(0x1234));
-        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), address(0x1234));
+        FWSSMigrateModule(proxy).announceMigration(migration, 0);
+        (address target,) = _plan(proxy);
+        assertEq(target, migration);
     }
 }
