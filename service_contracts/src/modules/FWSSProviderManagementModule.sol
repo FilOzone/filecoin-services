@@ -5,9 +5,9 @@ import {Errors} from "../Errors.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
-/// @title FilecoinWarmStorageServiceProviderManagementModule
+/// @title FWSSProviderManagementModule
 /// @notice Manages the set of provider IDs approved to use FWSS.
-contract FilecoinWarmStorageServiceProviderManagementModule is FWSSStorage, FWSSOwnable {
+contract FWSSProviderManagementModule is FWSSStorage, FWSSOwnable {
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
 

@@ -163,12 +163,12 @@ check-layout:
 
 # Core contracts we publish ABIs for.
 ABI_CONTRACTS := \
-	MigrateModule \
+	FWSSMigrateModule \
 	IERC8167 \
 	FilecoinWarmStorageService \
 	OwnershipModule \
-	FilecoinWarmStorageServiceProviderManagementModule \
-	ViewContractModule \
+	FWSSProviderManagementModule \
+	FWSSViewContractModule \
 	ExtsloadModule \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \

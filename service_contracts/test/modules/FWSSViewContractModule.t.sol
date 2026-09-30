@@ -7,24 +7,24 @@ import {Test} from "forge-std/Test.sol";
 import {Errors} from "../../src/Errors.sol";
 import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {VIEW_CONTRACT_ADDRESS_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
-import {ViewContractModule} from "../../src/modules/ViewContractModule.sol";
+import {FWSSViewContractModule} from "../../src/modules/FWSSViewContractModule.sol";
 
-contract ViewContractModuleTest is Test {
+contract FWSSViewContractModuleTest is Test {
     bytes32 private constant OWNABLE_STORAGE_LOCATION =
         0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
 
-    ViewContractModule public viewContractModule;
+    FWSSViewContractModule public viewContractModule;
 
     function setUp() public {
-        MyERC1967Proxy proxy = new MyERC1967Proxy(address(new ViewContractModule()), "");
-        viewContractModule = ViewContractModule(address(proxy));
+        MyERC1967Proxy proxy = new MyERC1967Proxy(address(new FWSSViewContractModule()), "");
+        viewContractModule = FWSSViewContractModule(address(proxy));
 
         vm.store(address(proxy), OWNABLE_STORAGE_LOCATION, bytes32(uint256(uint160(address(this)))));
     }
 
     function testSetViewContractUsesLegacySlot() public {
         vm.expectEmit(true, false, false, false, address(viewContractModule));
-        emit ViewContractModule.ViewContractSet(address(0x1234));
+        emit FWSSViewContractModule.ViewContractSet(address(0x1234));
         viewContractModule.setViewContract(address(0x1234));
 
         assertEq(viewContractModule.viewContractAddress(), address(0x1234));

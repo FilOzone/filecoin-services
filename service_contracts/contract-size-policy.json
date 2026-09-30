@@ -6,17 +6,17 @@
     "maximumConstructorArgsSize": 256
   },
   "targets": {
-    "MigrateModule": {
-      "artifact": "src/modules/MigrateModule.sol:MigrateModule"
+    "FWSSMigrateModule": {
+      "artifact": "src/modules/FWSSMigrateModule.sol:FWSSMigrateModule"
     },
     "OwnershipModule": {
       "artifact": "src/modules/OwnershipModule.sol:OwnershipModule"
     },
-    "FilecoinWarmStorageServiceProviderManagementModule": {
-      "artifact": "src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol:FilecoinWarmStorageServiceProviderManagementModule"
+    "FWSSProviderManagementModule": {
+      "artifact": "src/modules/FWSSProviderManagementModule.sol:FWSSProviderManagementModule"
     },
-    "ViewContractModule": {
-      "artifact": "src/modules/ViewContractModule.sol:ViewContractModule"
+    "FWSSViewContractModule": {
+      "artifact": "src/modules/FWSSViewContractModule.sol:FWSSViewContractModule"
     },
     "ExtsloadModule": {
       "artifact": "src/modules/ExtsloadModule.sol:ExtsloadModule"

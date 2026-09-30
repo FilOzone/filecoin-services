@@ -10,7 +10,7 @@ import {LibUpgradeRoutes} from "../lib/LibUpgradeRoutes.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @notice Executes owner-announced Josuke migrations through the ERC-8167 proxy.
-contract MigrateModule is IMigrateModule, FWSSOwnable {
+contract FWSSMigrateModule is IMigrateModule, FWSSOwnable {
     event UpgradeAnnounced(FWSSStorage.PlannedUpgrade plannedUpgrade);
 
     error InvalidMigration(address migration);

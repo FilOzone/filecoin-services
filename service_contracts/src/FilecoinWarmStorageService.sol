@@ -389,7 +389,7 @@ contract FilecoinWarmStorageService is
             InvalidDispatcherTransition()
         );
 
-        // MigrateModule reuses this slot; an implementation plan must not become an announced migration.
+        // FWSSMigrateModule reuses this slot; an implementation plan must not become an announced migration.
         delete nextUpgrade;
 
         emit Migrate.DiamondDelegateCall(dispatcherMigrationAddress, "");

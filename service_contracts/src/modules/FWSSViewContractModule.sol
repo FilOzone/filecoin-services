@@ -6,10 +6,10 @@ import {Errors} from "../Errors.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {VIEW_CONTRACT_ADDRESS_SLOT} from "../lib/FilecoinWarmStorageServiceLayout.sol";
 
-/// @title ViewContractModule
+/// @title FWSSViewContractModule
 /// @notice Manages the FWSS view contract address used for read-only integrations.
 /// @dev Reads the slot directly: inheriting FWSSStorage would clash with its internal viewContractAddress field.
-contract ViewContractModule is FWSSOwnable {
+contract FWSSViewContractModule is FWSSOwnable {
     event ViewContractSet(address indexed viewContract);
 
     /**

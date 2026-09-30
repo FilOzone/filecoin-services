@@ -13,12 +13,10 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
-import {MigrateModule} from "../src/modules/MigrateModule.sol";
+import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
-import {
-    FilecoinWarmStorageServiceProviderManagementModule
-} from "../src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol";
-import {ViewContractModule} from "../src/modules/ViewContractModule.sol";
+import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
+import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
@@ -85,7 +83,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     address internal dispatcher;
     MockERC20 internal usdfc;
-    MigrateModule internal migrateModule;
+    FWSSMigrateModule internal migrateModule;
     uint256 private legacyProxies;
 
     // Routes installed by the latest _createMigration.
@@ -95,7 +93,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     function setUp() public {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
         usdfc = new MockERC20();
-        migrateModule = new MigrateModule();
+        migrateModule = new FWSSMigrateModule();
     }
 
     function _route(address proxy, bytes4 selector, address target) internal {
@@ -118,8 +116,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function _migration(address proxy) internal {
-        _route(proxy, MigrateModule.announceMigration.selector, address(migrateModule));
-        _route(proxy, MigrateModule.migrate.selector, address(migrateModule));
+        _route(proxy, FWSSMigrateModule.announceMigration.selector, address(migrateModule));
+        _route(proxy, FWSSMigrateModule.migrate.selector, address(migrateModule));
     }
 
     function testRawDispatcherPreservesFullCallContextAndStorage() public {
@@ -148,39 +146,39 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         address second = _createMigration(bytes4(0));
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        MigrateModule(proxy).announceMigration(address(first), 0);
-        MigrateModule(proxy).announceMigration(address(first), 0);
+        FWSSMigrateModule(proxy).announceMigration(address(first), 0);
+        FWSSMigrateModule(proxy).announceMigration(address(first), 0);
         (address target, uint96 epoch) = _plan(proxy);
         assertEq(target, address(first));
         assertEq(epoch, block.number + 1);
-        vm.expectRevert(abi.encodeWithSelector(MigrateModule.MigrationNotReady.selector, epoch));
-        MigrateModule(proxy).migrate(address(first));
-        vm.expectRevert(abi.encodeWithSelector(MigrateModule.MigrationNotAnnounced.selector, address(second)));
-        MigrateModule(proxy).migrate(address(second));
-        MigrateModule(proxy).announceMigration(address(second), 2);
+        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.MigrationNotReady.selector, epoch));
+        FWSSMigrateModule(proxy).migrate(address(first));
+        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.MigrationNotAnnounced.selector, address(second)));
+        FWSSMigrateModule(proxy).migrate(address(second));
+        FWSSMigrateModule(proxy).announceMigration(address(second), 2);
         vm.roll(block.number + 2);
-        MigrateModule(proxy).migrate(address(second));
+        FWSSMigrateModule(proxy).migrate(address(second));
         (target, epoch) = _plan(proxy);
         assertEq(target, address(0));
         assertEq(epoch, 0);
         assertEq(
             IERC8167(proxy).implementation(IERC8167.implementation.selector), routedTo[IERC8167.implementation.selector]
         );
-        vm.expectRevert(abi.encodeWithSelector(MigrateModule.MigrationNotAnnounced.selector, address(second)));
-        MigrateModule(proxy).migrate(address(second));
+        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.MigrationNotAnnounced.selector, address(second)));
+        FWSSMigrateModule(proxy).migrate(address(second));
     }
 
     function testMigrationRejectsInvalidTargetAndUnauthorizedExecution() public {
         address proxy = _rawProxy();
         _migration(proxy);
-        vm.expectRevert(abi.encodeWithSelector(MigrateModule.InvalidMigration.selector, address(0x1234)));
-        MigrateModule(proxy).announceMigration(address(0x1234), 1);
+        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.InvalidMigration.selector, address(0x1234)));
+        FWSSMigrateModule(proxy).announceMigration(address(0x1234), 1);
         address fixture = _createMigration(bytes4(0));
-        MigrateModule(proxy).announceMigration(address(fixture), 1);
+        FWSSMigrateModule(proxy).announceMigration(address(fixture), 1);
         vm.roll(block.number + 1);
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        MigrateModule(proxy).migrate(address(fixture));
+        FWSSMigrateModule(proxy).migrate(address(fixture));
         (address target,) = _plan(proxy);
         assertEq(target, address(fixture));
     }
@@ -189,10 +187,10 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         address proxy = _rawProxy();
         _migration(proxy);
         RevertingMigrationFixture fixture = new RevertingMigrationFixture();
-        MigrateModule(proxy).announceMigration(address(fixture), 1);
+        FWSSMigrateModule(proxy).announceMigration(address(fixture), 1);
         vm.roll(block.number + 1);
         vm.expectRevert(RevertingMigrationFixture.MigrationFailed.selector);
-        MigrateModule(proxy).migrate(address(fixture));
+        FWSSMigrateModule(proxy).migrate(address(fixture));
         (address target, uint96 epoch) = _plan(proxy);
         assertEq(target, address(fixture));
         assertEq(epoch, block.number);
@@ -203,24 +201,24 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         bytes4[4] memory critical = [
             IERC8167.implementation.selector,
             IERC8167.selectors.selector,
-            MigrateModule.announceMigration.selector,
-            MigrateModule.migrate.selector
+            FWSSMigrateModule.announceMigration.selector,
+            FWSSMigrateModule.migrate.selector
         ];
         for (uint256 i; i < critical.length; ++i) {
             address proxy = _rawProxy();
             _migration(proxy);
             address migration = _createMigration(critical[i]);
-            MigrateModule(proxy).announceMigration(migration, 0);
+            FWSSMigrateModule(proxy).announceMigration(migration, 0);
             (, uint96 readyAt) = _plan(proxy);
             vm.roll(readyAt);
 
             vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, critical[i]));
-            MigrateModule(proxy).migrate(migration);
+            FWSSMigrateModule(proxy).migrate(migration);
             (address target, uint96 epoch) = _plan(proxy);
             assertEq(target, migration);
             assertEq(epoch, readyAt);
             assertEq(
-                vm.load(proxy, keccak256(abi.encode(MigrateModule.migrate.selector, DELEGATES_SLOT))),
+                vm.load(proxy, keccak256(abi.encode(FWSSMigrateModule.migrate.selector, DELEGATES_SLOT))),
                 bytes32(uint256(uint160(address(migrateModule))))
             );
         }
@@ -232,15 +230,15 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         _transition(service, token);
 
         SetDelegateOperation[] memory routes = new SetDelegateOperation[](1);
-        routes[0] = SetDelegateOperation({selector: MigrateModule.migrate.selector, delegate: dispatcher});
+        routes[0] = SetDelegateOperation({selector: FWSSMigrateModule.migrate.selector, delegate: dispatcher});
         address migration = Migration.createMigration(routes);
-        MigrateModule(proxy).announceMigration(migration, 0);
+        FWSSMigrateModule(proxy).announceMigration(migration, 0);
         vm.roll(block.number + 1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, MigrateModule.migrate.selector)
+            abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, FWSSMigrateModule.migrate.selector)
         );
-        MigrateModule(proxy).migrate(migration);
+        FWSSMigrateModule(proxy).migrate(migration);
     }
 
     function testMigrationCannotReplaceTheDispatcher() public {
@@ -249,12 +247,12 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         _transition(service, token);
 
         DispatcherSwapMigrationFixture migration = new DispatcherSwapMigrationFixture();
-        MigrateModule(proxy).announceMigration(address(migration), 0);
+        FWSSMigrateModule(proxy).announceMigration(address(migration), 0);
         (, uint96 readyAt) = _plan(proxy);
         vm.roll(readyAt);
 
-        vm.expectRevert(abi.encodeWithSelector(MigrateModule.DispatcherChanged.selector, address(0xBEEF)));
-        MigrateModule(proxy).migrate(address(migration));
+        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.DispatcherChanged.selector, address(0xBEEF)));
+        FWSSMigrateModule(proxy).migrate(address(migration));
         assertEq(_implementation(proxy), dispatcher);
         (address target, uint96 epoch) = _plan(proxy);
         assertEq(target, address(migration));
@@ -265,12 +263,12 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         address proxy = _rawProxy();
         _migration(proxy);
         ReentrantMigrationFixture migration = new ReentrantMigrationFixture(Migrate.migrate.selector);
-        MigrateModule(proxy).announceMigration(address(migration), 0);
+        FWSSMigrateModule(proxy).announceMigration(address(migration), 0);
         (, uint96 readyAt) = _plan(proxy);
         vm.roll(readyAt);
 
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, proxy));
-        MigrateModule(proxy).migrate(address(migration));
+        FWSSMigrateModule(proxy).migrate(address(migration));
         (address target, uint96 epoch) = _plan(proxy);
         assertEq(target, address(migration));
         assertEq(epoch, readyAt);
@@ -280,9 +278,9 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         address proxy = _rawProxy();
         _migration(proxy);
         address migration = _createMigration(bytes4(0));
-        MigrateModule(proxy).announceMigration(migration, 0);
+        FWSSMigrateModule(proxy).announceMigration(migration, 0);
         vm.roll(block.number + 1);
-        MigrateModule(proxy).migrate(migration);
+        FWSSMigrateModule(proxy).migrate(migration);
 
         _assertFacetRoutes(proxy);
     }
@@ -415,7 +413,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         bytes32 periodBefore = vm.load(proxy, bytes32(uint256(0)));
         bytes32 windowBefore = vm.load(proxy, bytes32(uint256(1)));
         bytes32 viewBefore = vm.load(proxy, bytes32(uint256(17)));
-        FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(7);
+        FWSSProviderManagementModule(proxy).addApprovedProvider(7);
 
         address migration = _createMigration(bytes4(0));
         FilecoinWarmStorageService intermediate = _newIntermediate(token, migration);
@@ -448,8 +446,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(logs[logs.length - 1].topics[1], bytes32(uint256(uint160(dispatcher))));
 
         assertEq(OwnershipModule(proxy).owner(), address(this));
-        assertEq(ViewContractModule(proxy).viewContractAddress(), address(viewContract));
-        FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(42);
+        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), address(viewContract));
+        FWSSProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
 
         // The existing StateView reads storage through ExtsloadModule.
@@ -467,7 +465,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        FilecoinWarmStorageServiceProviderManagementModule(proxy).addApprovedProvider(43);
+        FWSSProviderManagementModule(proxy).addApprovedProvider(43);
 
         // The intermediate's own entry points are gone with the monolith.
         vm.expectRevert(
@@ -570,8 +568,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(pending, address(0));
         assertEq(readyAt, 0);
         vm.roll(block.number + 1);
-        vm.expectRevert(abi.encodeWithSelector(MigrateModule.MigrationNotAnnounced.selector, address(next)));
-        MigrateModule(proxy).migrate(address(next));
+        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.MigrationNotAnnounced.selector, address(next)));
+        FWSSMigrateModule(proxy).migrate(address(next));
     }
 
     function testRevertingMigrationRollsBackBothUpgrades() public {
@@ -638,8 +636,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         bytes4[4] memory critical = [
             IERC8167.implementation.selector,
             IERC8167.selectors.selector,
-            MigrateModule.announceMigration.selector,
-            MigrateModule.migrate.selector
+            FWSSMigrateModule.announceMigration.selector,
+            FWSSMigrateModule.migrate.selector
         ];
         for (uint256 i; i < critical.length; ++i) {
             (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
@@ -665,10 +663,10 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
         address migration = _createMigration(bytes4(0));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(this)));
-        MigrateModule(proxy).announceMigration(migration, 0);
+        FWSSMigrateModule(proxy).announceMigration(migration, 0);
 
         vm.prank(address(0xB0B));
-        ViewContractModule(proxy).setViewContract(address(0x1234));
-        assertEq(ViewContractModule(proxy).viewContractAddress(), address(0x1234));
+        FWSSViewContractModule(proxy).setViewContract(address(0x1234));
+        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), address(0x1234));
     }
 }
