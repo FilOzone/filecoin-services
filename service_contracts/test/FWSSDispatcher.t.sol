@@ -545,7 +545,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         intermediate.completeDispatcherTransition();
     }
 
-    function testEmptyUpgradeDataLeavesWorkingIntermediateThatOwnerCanComplete() public {
+    function testEmptyUpgradeDataLeavesIntermediateThatOwnerCanComplete() public {
         (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract, MockERC20 token) =
             _realLegacy();
         address proxy = address(service);
