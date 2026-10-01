@@ -17,10 +17,7 @@ import {IDataSetAuthorizer} from "../src/interfaces/IDataSetAuthorizer.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {
-    SCHEDULED_PIECE_METADATA_REMOVALS_SLOT,
-    VIEW_CONTRACT_ADDRESS_SLOT
-} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/Rails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
@@ -5785,11 +5782,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.setViewContract(address(viewContract));
 
         // Verify it was set
-        assertEq(
-            vm.load(address(warmStorageService), VIEW_CONTRACT_ADDRESS_SLOT),
-            bytes32(uint256(uint160(address(viewContract)))),
-            "View contract should be set"
-        );
+        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
 
         // Test that non-owner cannot set view contract
         vm.prank(address(0x123));
@@ -5818,11 +5811,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         warmStorageService.migrate(address(viewContract));
 
         // Verify view contract was set
-        assertEq(
-            vm.load(address(warmStorageService), VIEW_CONTRACT_ADDRESS_SLOT),
-            bytes32(uint256(uint160(address(viewContract)))),
-            "View contract should be set"
-        );
+        assertEq(warmStorageService.viewContractAddress(), address(viewContract), "View contract should be set");
 
         // Verify we can call PDP functions through view contract
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();

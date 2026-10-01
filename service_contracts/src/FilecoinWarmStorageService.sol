@@ -428,11 +428,19 @@ contract FilecoinWarmStorageService is
 
         // Set view contract if provided
         if (_viewContract != address(0)) {
-            viewContractAddress = _viewContract;
+            _viewContractAddress = _viewContract;
             emit ViewContractSet(_viewContract);
         }
 
         emit ContractUpgraded(VERSION, ERC1967Utils.getImplementation());
+    }
+
+    /**
+     * @notice Returns the view contract address
+     * @return The address of the view contract
+     */
+    function viewContractAddress() external view returns (address) {
+        return _viewContractAddress;
     }
 
     /**
@@ -452,9 +460,9 @@ contract FilecoinWarmStorageService is
         //       GH ISSUE: https://github.com/FilOzone/filecoin-services/issues/303
         //       This check needs to be re-enabled before mainnet deployment to prevent changing the view contract later.
 
-        // require(viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
+        // require(_viewContractAddress == address(0), Errors.AddressAlreadySet(Errors.AddressField.View));
 
-        viewContractAddress = _viewContract;
+        _viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
     }
 

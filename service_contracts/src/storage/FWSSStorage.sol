@@ -73,11 +73,12 @@ abstract contract FWSSStorage {
     mapping(uint256 providerId => bool) internal approvedProviders;
     uint256[] internal approvedProviderIds;
 
-    // View contract for read-only operations. Internal so that modules inheriting FWSSStorage do not all
-    // export viewContractAddress(); FWSSViewContractModule owns the getter.
+    // View contract for read-only operations. Internal and underscored so that modules inheriting FWSSStorage
+    // do not all export viewContractAddress(); the monolith and FWSSViewContractModule declare the getter.
+    // The layout tooling publishes it under its historical label, viewContractAddress.
     // @dev For smart contract integrations, consider using FilecoinWarmStorageServiceStateLibrary
     // directly instead of going through the view contract for more efficient gas usage.
-    address internal viewContractAddress;
+    address internal _viewContractAddress;
 
     // The address allowed to terminate CDN services
     address internal filBeamControllerAddress;
