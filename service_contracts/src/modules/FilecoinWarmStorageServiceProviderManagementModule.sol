@@ -2,14 +2,20 @@
 pragma solidity 0.8.37;
 
 import {Errors} from "../Errors.sol";
-import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
+import {LibAccessControl} from "../lib/LibAccessControl.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title FilecoinWarmStorageServiceProviderManagementModule
 /// @notice Manages the set of provider IDs approved to use FWSS.
-contract FilecoinWarmStorageServiceProviderManagementModule is FWSSStorage, FWSSOwnable {
+contract FilecoinWarmStorageServiceProviderManagementModule is FWSSStorage {
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
+
+    /// @notice Ensures the caller is the FWSS owner
+    modifier onlyOwner() {
+        LibAccessControl.requireOwner(msg.sender);
+        _;
+    }
 
     /**
      * @notice Adds a provider ID to the approved list
