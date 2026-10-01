@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-pragma solidity 0.8.30;
+pragma solidity 0.8.37;
 
 import {IFilecoinServiceMetadata} from "../IFilecoinServiceMetadata.sol";
 
-/// @title FilecoinWarmStorageServiceMetadataModule
+/// @title FWSSMetadataModule
 /// @notice Exposes static FWSS service metadata.
-contract FilecoinWarmStorageServiceMetadataModule is IFilecoinServiceMetadata {
+contract FWSSMetadataModule is IFilecoinServiceMetadata {
     // Version tracking
     string public constant VERSION = "1.4.0";
     string internal constant SERVICE_NAME = "Filecoin Warm Storage Service";

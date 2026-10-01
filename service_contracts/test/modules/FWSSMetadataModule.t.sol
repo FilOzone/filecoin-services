@@ -2,14 +2,14 @@
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
-import {FilecoinWarmStorageServiceMetadataModule} from "../../src/modules/FilecoinWarmStorageServiceMetadataModule.sol";
+import {FWSSMetadataModule} from "../../src/modules/FWSSMetadataModule.sol";
 import {IFilecoinServiceMetadata} from "../../src/IFilecoinServiceMetadata.sol";
 
-contract FilecoinWarmStorageServiceMetadataModuleTest is Test {
-    FilecoinWarmStorageServiceMetadataModule public metadataModule;
+contract FWSSMetadataModuleTest is Test {
+    FWSSMetadataModule public metadataModule;
 
     function setUp() public {
-        metadataModule = new FilecoinWarmStorageServiceMetadataModule();
+        metadataModule = new FWSSMetadataModule();
     }
 
     function testServiceMetadata() public view {

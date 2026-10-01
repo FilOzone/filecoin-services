@@ -141,7 +141,7 @@ check-layout:
 # Core contracts we publish ABIs for.
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
-	FilecoinWarmStorageServiceMetadataModule \
+	FWSSMetadataModule \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \
