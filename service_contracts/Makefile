@@ -142,7 +142,6 @@ check-layout:
 ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	FilecoinWarmStorageServiceMetadataModule \
-	FilecoinWarmStorageServiceProviderManagementModule \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinWarmStorageServiceStateView \

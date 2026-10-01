@@ -5,11 +5,24 @@ script = 'script'
 out = 'out'
 libs = ['lib']
 cache_path = 'cache'
-solc = "0.8.30"
+solc = "0.8.37"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
+
+ignored_error_codes = [
+    "license",
+    "code-size",
+    "init-code-size",
+    "transient-storage",
+    "transfer-deprecated",
+    "natspec-memory-safe-assembly-deprecated",
+    9170, # Solidity 0.8.37 warning from fws-payments
+    6335, # Solidity 0.8.37 warning from OpenZeppelin/forge-std
+    8506, # Solidity 0.8.37 warning from forge-std
+    4591, # Warning limit reached
+]
 
 # For dependencies
 remappings = [
