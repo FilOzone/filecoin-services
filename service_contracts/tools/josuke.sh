@@ -10,11 +10,15 @@
 
 JOSUKE_LEDGER="${JOSUKE_LEDGER:-$(dirname "${BASH_SOURCE[0]}")/../josuke.json}"
 
-# Prints the migration `josuke deploy` proposed for a proxy on a chain, or nothing if there is none
+# Prints the EIP-55 migration `josuke deploy` proposed for a proxy on a chain, or nothing if there is none
 # Args: $1=chain_id, $2=proxy_address
 josuke_proposed_migration() {
-    jq -r --arg chain "$1" --arg proxy "$2" \
+    local migration
+    migration=$(jq -r --arg chain "$1" --arg proxy "$2" \
         '.[] | select((.address | ascii_downcase) == ($proxy | ascii_downcase))
             | .deployments[$chain].proposed.migration.address // empty' \
-        "$JOSUKE_LEDGER"
+        "$JOSUKE_LEDGER")
+    if [ -n "$migration" ]; then
+        cast to-check-sum-address "$migration"
+    fi
 }

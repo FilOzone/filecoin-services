@@ -108,6 +108,12 @@ if TRANSITION_MIGRATION_CODE_HASH=$(cast call -f 0x00000000000000000000000000000
     echo "Error: the code at $TRANSITION_MIGRATION changed since the transition was deployed"
     exit 1
   fi
+  TRANSITION_PREVIOUS=$(cast call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "previousImplementation()(address)")
+  CURRENT_IMPL=$(cast parse-bytes32-address "$(cast storage "$FWSS_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc)")
+  if [ "$(echo "$TRANSITION_PREVIOUS" | tr '[:upper:]' '[:lower:]')" != "$(echo "$CURRENT_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
+    echo "Error: the transition would abort to $TRANSITION_PREVIOUS, but the proxy runs $CURRENT_IMPL"
+    exit 1
+  fi
 
   echo "Completing the ERC-8167 dispatcher transition (dispatcher $TRANSITION_DISPATCHER, migration $TRANSITION_MIGRATION)"
   MIGRATE_DATA=$(cast calldata "migrate(address)" "$TRANSITION_MIGRATION")

@@ -10,12 +10,14 @@
 # Assumption: forge, cast, jq are in the PATH, and `make erc8167` has built the dispatcher
 # Assumption: called from service_contracts directory so forge paths work out
 # Optional: FWSS_DISPATCHER_ADDRESS to reuse a deployed dispatcher; deployed and recorded otherwise
+# Optional: DRY_RUN=true to check inputs and artifacts without deploying or recording anything
 
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/josuke.sh"
 
 DISPATCHER_ARTIFACT="lib/erc8167/out/Proxy.evm/Proxy.json"
+IMPLEMENTATION_SLOT="0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
 # Runtime hash of Proxy.evm at the pinned ERC-8167 revision, as FWSSDispatcherTransition requires.
 DISPATCHER_CODE_HASH="0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a"
 
@@ -53,6 +55,10 @@ if [ -z "$MIGRATION_ADDRESS" ]; then
 fi
 echo "Josuke proposed migration: $MIGRATION_ADDRESS"
 
+# abortTransition restores this implementation if the proxy is ever left on the transition.
+PREVIOUS_IMPLEMENTATION=$(cast to-check-sum-address "$(cast parse-bytes32-address "$(cast storage "$FWSS_PROXY_ADDRESS" "$IMPLEMENTATION_SLOT")")")
+echo "Current FWSS implementation: $PREVIOUS_IMPLEMENTATION"
+
 ADDR=$(cast wallet address --password "$PASSWORD")
 echo "Deploying from address: $ADDR"
 NONCE="$(cast nonce "$ADDR")"
@@ -65,38 +71,54 @@ if [ -z "$FWSS_DISPATCHER_ADDRESS" ]; then
   fi
 
   echo "Deploying the ERC-8167 dispatcher"
-  FWSS_DISPATCHER_ADDRESS=$(cast send --password "$PASSWORD" --nonce "$NONCE" --json \
-    --create "$(jq -r '.bytecode.object' "$DISPATCHER_ARTIFACT")" | jq -r '.contractAddress // empty')
-  if [ -z "$FWSS_DISPATCHER_ADDRESS" ]; then
-    echo "Error: Failed to deploy the dispatcher"
-    exit 1
+  if [ "${DRY_RUN:-}" = "true" ]; then
+    FWSS_DISPATCHER_ADDRESS="0x$(printf '%s' FWSS_DISPATCHER_ADDRESS | sha256sum | cut -c1-40)"
+    echo "  Dry run (dummy: $FWSS_DISPATCHER_ADDRESS)"
+  else
+    FWSS_DISPATCHER_ADDRESS=$(cast send --password "$PASSWORD" --nonce "$NONCE" --json \
+      --create "$(jq -r '.bytecode.object' "$DISPATCHER_ARTIFACT")" | jq -r '.contractAddress // empty')
+    if [ -z "$FWSS_DISPATCHER_ADDRESS" ]; then
+      echo "Error: Failed to deploy the dispatcher"
+      exit 1
+    fi
+    # Receipts report lowercase addresses; deployments.json requires EIP-55.
+    FWSS_DISPATCHER_ADDRESS=$(cast to-check-sum-address "$FWSS_DISPATCHER_ADDRESS")
+    NONCE=$((NONCE + 1))
+    echo "  Deployed at: $FWSS_DISPATCHER_ADDRESS"
+    update_deployment_address "$CHAIN" "FWSS_DISPATCHER_ADDRESS" "$FWSS_DISPATCHER_ADDRESS"
   fi
-  NONCE=$((NONCE + 1))
-  echo "  Deployed at: $FWSS_DISPATCHER_ADDRESS"
-  update_deployment_address "$CHAIN" "FWSS_DISPATCHER_ADDRESS" "$FWSS_DISPATCHER_ADDRESS"
 fi
 
-DEPLOYED_CODE_HASH=$(cast keccak "$(cast code "$FWSS_DISPATCHER_ADDRESS")")
-if [ "$DEPLOYED_CODE_HASH" != "$DISPATCHER_CODE_HASH" ]; then
-  echo "Error: $FWSS_DISPATCHER_ADDRESS is not the pinned ERC-8167 dispatcher (code hash $DEPLOYED_CODE_HASH)"
-  exit 1
+if [ "${DRY_RUN:-}" != "true" ]; then
+  DEPLOYED_CODE_HASH=$(cast keccak "$(cast code "$FWSS_DISPATCHER_ADDRESS")")
+  if [ "$DEPLOYED_CODE_HASH" != "$DISPATCHER_CODE_HASH" ]; then
+    echo "Error: $FWSS_DISPATCHER_ADDRESS is not the pinned ERC-8167 dispatcher (code hash $DEPLOYED_CODE_HASH)"
+    exit 1
+  fi
 fi
 
 deploy_implementation_if_needed \
     "FWSS_DISPATCHER_TRANSITION_ADDRESS" \
     "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition" \
     "FWSSDispatcherTransition" \
+    "previous_implementation=$PREVIOUS_IMPLEMENTATION" \
     "dispatcher=$FWSS_DISPATCHER_ADDRESS" \
     "migration=$MIGRATION_ADDRESS"
 
 echo ""
 echo "# DEPLOYMENT COMPLETE"
+echo "Previous implementation: $PREVIOUS_IMPLEMENTATION"
 echo "ERC-8167 dispatcher: $FWSS_DISPATCHER_ADDRESS"
 echo "Josuke migration: $MIGRATION_ADDRESS"
 echo "FWSSDispatcherTransition: $FWSS_DISPATCHER_TRANSITION_ADDRESS"
 echo ""
 echo "Next: josuke verify, then announce with NEW_FWSS_IMPLEMENTATION_ADDRESS=$FWSS_DISPATCHER_TRANSITION_ADDRESS"
 echo ""
+
+if [ "${DRY_RUN:-}" = "true" ]; then
+  echo "Dry run: nothing deployed or recorded"
+  exit 0
+fi
 
 update_deployment_metadata "$CHAIN"
 
