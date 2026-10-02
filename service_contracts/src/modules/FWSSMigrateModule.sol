@@ -5,12 +5,11 @@ import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.s
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {IMigrateModule} from "../interfaces/IMigrateModule.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
-import {NEXT_UPGRADE_SLOT} from "../lib/FilecoinWarmStorageServiceLayout.sol";
 import {LibUpgradeRoutes} from "../lib/LibUpgradeRoutes.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @notice Executes owner-announced Josuke migrations through the ERC-8167 proxy.
-contract FWSSMigrateModule is IMigrateModule, FWSSOwnable {
+contract FWSSMigrateModule is IMigrateModule, FWSSStorage, FWSSOwnable {
     event UpgradeAnnounced(FWSSStorage.PlannedUpgrade plannedUpgrade);
 
     error InvalidMigration(address migration);
@@ -22,7 +21,7 @@ contract FWSSMigrateModule is IMigrateModule, FWSSOwnable {
         if (migration.code.length == 0 || migration == address(this)) revert InvalidMigration(migration);
 
         uint96 delay = delayEpochs == 0 ? 1 : delayEpochs;
-        FWSSStorage.PlannedUpgrade storage plan = _plan();
+        FWSSStorage.PlannedUpgrade storage plan = nextUpgrade;
         plan.nextImplementation = migration;
         plan.afterEpoch = uint96(block.number) + delay;
 
@@ -31,7 +30,7 @@ contract FWSSMigrateModule is IMigrateModule, FWSSOwnable {
 
     /// @dev Josuke calls this entry point with empty calldata to the migration itself.
     function migrate(address migration) external override onlyOwner {
-        FWSSStorage.PlannedUpgrade storage plan = _plan();
+        FWSSStorage.PlannedUpgrade storage plan = nextUpgrade;
         if (migration != plan.nextImplementation || migration == address(0)) {
             revert MigrationNotAnnounced(migration);
         }
@@ -51,13 +50,5 @@ contract FWSSMigrateModule is IMigrateModule, FWSSOwnable {
         address implementation = ERC1967Utils.getImplementation();
         if (implementation != dispatcher) revert DispatcherChanged(implementation);
         LibUpgradeRoutes.requireUpgradeRoutes(dispatcher);
-    }
-
-    function _plan() private pure returns (FWSSStorage.PlannedUpgrade storage plan) {
-        // Preserve StateView.nextUpgrade() and the legacy packed address/epoch slot.
-        bytes32 slot = NEXT_UPGRADE_SLOT;
-        assembly ("memory-safe") {
-            plan.slot := slot
-        }
     }
 }
