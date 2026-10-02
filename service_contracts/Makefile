@@ -29,9 +29,10 @@ LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageS
 
 # wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
 EVM_REPO := https://github.com/wjmelements/evm.git
-EVM_REVISION := 4123f3a47e8032499fc0ddfe178f35c034ae77a7
+EVM_REVISION := 6e23274c2709e7d05d5f3111555f2354ce61b872
 EVM_DIR ?= $(HOME)/.cache/wjmelements-evm/$(EVM_REVISION)
-export PATH := $(EVM_DIR)/bin:$(PATH)
+# Install beside forge, which is already on PATH
+EVM_INSTALL_DIR ?= $(patsubst %/,%,$(dir $(shell command -v forge)))
 
 # Build target
 .PHONY: build
@@ -41,11 +42,11 @@ build:
 # Build the pinned evm assembler once per revision
 .PHONY: install-evm
 install-evm: $(EVM_DIR)/bin/evm
+	@test -n "$(EVM_INSTALL_DIR)" || (echo 'forge is not on PATH; set EVM_INSTALL_DIR'; exit 1)
+	install $< $(EVM_INSTALL_DIR)/evm
 
 $(EVM_DIR)/bin/evm:
-	git clone $(EVM_REPO) $(EVM_DIR)
-	git -C $(EVM_DIR) checkout $(EVM_REVISION)
-	git -C $(EVM_DIR) submodule update --init --recursive
+	git clone --depth 1 --revision $(EVM_REVISION) --recurse-submodules --shallow-submodules --no-tags $(EVM_REPO) $(EVM_DIR)
 	$(MAKE) -C $(EVM_DIR) bin/evm
 
 # Compile the upstream dispatcher unchanged. No Solidity wrapper or bytecode padding.
@@ -217,7 +218,7 @@ clean-abi:
 help:
 	@echo "Available targets:"
 	@echo "  install    - Install dependencies (forge and npm)"
-	@echo "  install-evm - Build the pinned evm assembler that test and josuke need"
+	@echo "  install-evm - Build the pinned evm assembler and install it beside forge"
 	@echo "  build      - Build contracts"
 	@echo "  test       - Run tests"
 	@echo "  clean      - Clean build artifacts"
