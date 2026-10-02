@@ -7,6 +7,7 @@ import {FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 
 contract FWSSDispatcherTransitionTest is Test {
+    address internal previous;
     address internal dispatcher;
     address internal migration;
 
@@ -14,11 +15,14 @@ contract FWSSDispatcherTransitionTest is Test {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
         migration = address(0x5EED);
         vm.etch(migration, hex"00");
+        previous = address(0x01D);
+        vm.etch(previous, hex"00");
     }
 
     function testConstructorPinsDispatcherAndMigration() public {
-        FWSSDispatcherTransition transition = new FWSSDispatcherTransition(dispatcher, migration);
+        FWSSDispatcherTransition transition = new FWSSDispatcherTransition(previous, dispatcher, migration);
 
+        assertEq(transition.previousImplementation(), previous);
         assertEq(transition.dispatcher(), dispatcher);
         assertEq(transition.migration(), migration);
         assertEq(transition.migrationCodeHash(), migration.codehash);
@@ -29,15 +33,17 @@ contract FWSSDispatcherTransitionTest is Test {
         vm.etch(fake, new bytes(88));
 
         vm.expectRevert(ERC8167Transition.InvalidTransition.selector);
-        new FWSSDispatcherTransition(fake, migration);
+        new FWSSDispatcherTransition(previous, fake, migration);
         vm.expectRevert(ERC8167Transition.InvalidTransition.selector);
-        new FWSSDispatcherTransition(address(0), migration);
+        new FWSSDispatcherTransition(previous, address(0), migration);
         vm.expectRevert(ERC8167Transition.InvalidTransition.selector);
-        new FWSSDispatcherTransition(dispatcher, address(0x1234));
+        new FWSSDispatcherTransition(previous, dispatcher, address(0x1234));
+        vm.expectRevert(ERC8167Transition.InvalidTransition.selector);
+        new FWSSDispatcherTransition(address(0x1234), dispatcher, migration);
     }
 
     function testProxiableOnlyWhenCalledDirectly() public {
-        FWSSDispatcherTransition transition = new FWSSDispatcherTransition(dispatcher, migration);
+        FWSSDispatcherTransition transition = new FWSSDispatcherTransition(previous, dispatcher, migration);
         assertEq(transition.proxiableUUID(), ERC1967Utils.IMPLEMENTATION_SLOT);
 
         vm.expectRevert(ERC8167Transition.UnauthorizedCallContext.selector);
@@ -46,7 +52,7 @@ contract FWSSDispatcherTransitionTest is Test {
 
     /// @dev v1.4.0 announceUpgradePlan rejects implementations of 3000 bytes or less.
     function testCodeExceedsLegacyAnnouncementFloor() public {
-        FWSSDispatcherTransition transition = new FWSSDispatcherTransition(dispatcher, migration);
+        FWSSDispatcherTransition transition = new FWSSDispatcherTransition(previous, dispatcher, migration);
         assertGt(address(transition).code.length, 3000);
     }
 }

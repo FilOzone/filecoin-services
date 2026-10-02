@@ -25,10 +25,11 @@ contract FWSSDispatcherTransition is ERC8167Transition, FWSSOwnable {
         "FWSS 1.4.0 code size padding 026" "FWSS 1.4.0 code size padding 027" "FWSS 1.4.0 code size padding 028"
         "FWSS 1.4.0 code size padding 029" "FWSS 1.4.0 code size padding 030" "FWSS 1.4.0 code size padding 031"
         "FWSS 1.4.0 code size padding 032" "FWSS 1.4.0 code size padding 033" "FWSS 1.4.0 code size padding 034"
-        "FWSS 1.4.0 code size padding 035" "FWSS 1.4.0 code size padding 036" "FWSS 1.4.0 code size padding 037"
-        "FWSS 1.4.0 code size padding 038" "FWSS 1.4.0 code size padding 039" "FWSS 1.4.0 code size padding 040";
+        "FWSS 1.4.0 code size padding 035";
 
-    constructor(address dispatcher_, address migration_) ERC8167Transition(dispatcher_, migration_) {
+    constructor(address previousImplementation_, address dispatcher_, address migration_)
+        ERC8167Transition(previousImplementation_, dispatcher_, migration_)
+    {
         require(dispatcher_.codehash == DISPATCHER_CODE_HASH, InvalidTransition());
     }
 

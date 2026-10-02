@@ -79,6 +79,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
 
     address internal dispatcher;
+    address internal legacyImplementation;
     FWSSMigrateModule internal migrateModule;
     uint256 private legacyProxies;
 
@@ -304,6 +305,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         // Its UUPS onlyProxy check compares the implementation slot with its own mainnet address.
         address implementation = vm.parseJsonAddress(fixture, ".implementation.address");
         vm.etch(implementation, vm.parseJsonBytes(fixture, ".implementation.code"));
+        legacyImplementation = implementation;
 
         address proxy = address(uint160(uint256(keccak256(abi.encode(V1_4_0_MAINNET, ++legacyProxies)))));
         vm.etch(proxy, vm.parseJsonBytes(fixture, ".proxy.code"));
@@ -323,7 +325,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function _newTransition(address migration) internal returns (FWSSDispatcherTransition) {
-        return new FWSSDispatcherTransition(dispatcher, migration);
+        return new FWSSDispatcherTransition(legacyImplementation, dispatcher, migration);
     }
 
     function _migrateData(address migration) internal pure returns (bytes memory) {
@@ -495,6 +497,32 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address pending, uint96 readyAt) = _plan(proxy);
         assertEq(pending, address(0));
         assertEq(readyAt, 0);
+    }
+
+    /// @dev After an upgrade with empty data, a migration that cannot complete must not brick the proxy.
+    function testOwnerCanAbortStuckTransition() public {
+        (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract) = _realLegacy();
+        address proxy = address(service);
+        address migration = address(new RevertingMigrationFixture());
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        vm.roll(_announce(service, address(transition)));
+        service.upgradeToAndCall(address(transition), "");
+
+        vm.expectRevert(RevertingMigrationFixture.MigrationFailed.selector);
+        FWSSDispatcherTransition(proxy).migrate(migration);
+        vm.expectRevert(ERC8167Transition.UnauthorizedCallContext.selector);
+        FWSSDispatcherTransition(proxy).proxiableUUID();
+        vm.expectRevert(ERC8167Transition.UnauthorizedCallContext.selector);
+        transition.abortTransition();
+        vm.prank(address(0xB0B));
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        FWSSDispatcherTransition(proxy).abortTransition();
+
+        FWSSDispatcherTransition(proxy).abortTransition();
+        assertEq(_implementation(proxy), legacyImplementation);
+        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
+        assertEq(provingPeriod, 3000);
+        service.announceUpgradePlan(address(transition), 0);
     }
 
     function testRevertingMigrationRollsBackBothUpgrades() public {

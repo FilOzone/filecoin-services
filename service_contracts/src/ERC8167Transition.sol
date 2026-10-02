@@ -10,8 +10,11 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 /// @notice One-shot UUPS implementation that moves an ERC-1967 proxy to an ERC-8167 dispatcher.
 /// @dev Upgrade with `upgradeToAndCall(transition, abi.encodeCall(Migrate.migrate, (migration)))`. The call points the
 /// proxy at the dispatcher and runs the pinned migration in the proxy's storage, so the transition never stays
-/// installed. After an upgrade with empty data, an authorized caller can still finish through the proxy.
+/// installed. After an upgrade with empty data, an authorized caller can still finish or abort through the proxy.
 abstract contract ERC8167Transition is IERC1822Proxiable, Migrate {
+    /// @notice The implementation the proxy ran before the transition, restored by `abortTransition`
+    address public immutable previousImplementation;
+
     /// @notice The ERC-8167 dispatcher the proxy points at after the transition
     address public immutable dispatcher;
 
@@ -28,8 +31,12 @@ abstract contract ERC8167Transition is IERC1822Proxiable, Migrate {
     error UnexpectedMigration(address migration);
     error DispatcherChanged(address implementation);
 
-    constructor(address dispatcher_, address migration_) {
-        require(dispatcher_.code.length != 0 && migration_.code.length != 0, InvalidTransition());
+    constructor(address previousImplementation_, address dispatcher_, address migration_) {
+        require(
+            previousImplementation_.code.length != 0 && dispatcher_.code.length != 0 && migration_.code.length != 0,
+            InvalidTransition()
+        );
+        previousImplementation = previousImplementation_;
         dispatcher = dispatcher_;
         migration = migration_;
         migrationCodeHash = migration_.codehash;
@@ -45,7 +52,7 @@ abstract contract ERC8167Transition is IERC1822Proxiable, Migrate {
     /// @notice Points the proxy at the dispatcher and runs the pinned migration
     /// @param migration_ The pinned migration
     function migrate(address migration_) external {
-        require(address(this) != SELF && ERC1967Utils.getImplementation() == SELF, UnauthorizedCallContext());
+        _requireInstalled();
         _authorizeTransition();
         require(migration_ == migration && migration_.codehash == migrationCodeHash, UnexpectedMigration(migration_));
 
@@ -58,6 +65,18 @@ abstract contract ERC8167Transition is IERC1822Proxiable, Migrate {
         address implementation = ERC1967Utils.getImplementation();
         require(implementation == dispatcher, DispatcherChanged(implementation));
         _checkRoutes();
+    }
+
+    /// @notice Points the proxy back at `previousImplementation`. It is the only way to avoid bricking the proxy
+    /// when an upgrade installed this transition without running `migrate` and the pinned migration cannot complete.
+    function abortTransition() external {
+        _requireInstalled();
+        _authorizeTransition();
+        ERC1967Utils.upgradeToAndCall(previousImplementation, "");
+    }
+
+    function _requireInstalled() private view {
+        require(address(this) != SELF && ERC1967Utils.getImplementation() == SELF, UnauthorizedCallContext());
     }
 
     /// @notice Reverts unless the caller may run the transition
