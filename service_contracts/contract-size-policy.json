@@ -24,6 +24,9 @@
     "ExtsloadModule": {
       "artifact": "src/modules/ExtsloadModule.sol:ExtsloadModule"
     },
+    "FWSSDispatcherTransition": {
+      "artifact": "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition"
+    },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
       "maximumConstructorArgsSize": 288
