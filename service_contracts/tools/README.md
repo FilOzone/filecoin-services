@@ -17,8 +17,9 @@ Scripts are organized with prefixes for better discoverability:
 | `warm-storage-deploy-all.sh` | Plan and deploy every changed, unpinned Warm Storage component using reviewed deployment metadata; pinned components are preserved |
 | `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
 | `warm-storage-deploy-view.sh` | Deploy FilecoinWarmStorageServiceStateView |
+| `warm-storage-deploy-dispatcher-transition.sh` | Deploy the ERC-8167 dispatcher and `FWSSDispatcherTransition`, pinned to josuke's proposed migration |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
-| `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
+| `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade, including the ERC-8167 transition |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
 | `warm-storage-set-view.sh` | Set the StateView address on FWSS |
 
@@ -217,6 +218,20 @@ The delay is measured from the block in which the announcement executes, so Safe
 - Verification procedures
 
 See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
+
+### ERC-8167 Dispatcher Transition
+
+josuke deploys the FWSS modules and the migration that routes their selectors, and `josuke.json` records them per chain. The v1.4.0 monolith can only change its implementation through its own delayed UUPS upgrade, so `FWSSDispatcherTransition` carries josuke's migration through that upgrade. Run from `service_contracts/` with `ETH_RPC_URL` and a wallet set:
+
+1. `josuke deploy`, then `josuke verify`. This records the modules and migration under `proposed`.
+2. `tools/warm-storage-deploy-dispatcher-transition.sh` deploys the dispatcher if needed and the transition, pinned to the proposed migration and its code hash.
+3. Announce with `warm-storage-announce-upgrade.sh` and `NEW_FWSS_IMPLEMENTATION_ADDRESS` set to the transition. During the delay, reviewers run `josuke verify` and compare the transition's `migration()` and `migrationCodeHash()` with the ledger.
+4. Execute with `warm-storage-execute-upgrade.sh` and `NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS` set to the transition. It checks the transition against `josuke.json` and sends `upgradeToAndCall(transition, migrate(migration))`, which points the proxy at the dispatcher and runs the migration in one call.
+5. `josuke accept`, then commit `josuke.json`.
+
+After the transition, upgrades are josuke migrations: `josuke deploy`, then `announceMigration(migration, delay)` and `migrate(migration)` on the proxy, then `josuke accept`.
+
+`josuke deploy` cannot yet find the dispatcher's route slots behind the FWSS ERC-1967 proxy ([wjmelements/josuke#3](https://github.com/wjmelements/josuke/issues/3)). Do not run the transition on Calibration or Mainnet until that is fixed and the business modules are in.
 
 ## Ownership Transfer
 
