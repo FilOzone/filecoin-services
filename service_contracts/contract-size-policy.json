@@ -18,6 +18,9 @@
     "FWSSViewContractModule": {
       "artifact": "src/modules/FWSSViewContractModule.sol:FWSSViewContractModule"
     },
+    "FWSSMetadataModule": {
+      "artifact": "src/modules/FWSSMetadataModule.sol:FWSSMetadataModule"
+    },
     "ExtsloadModule": {
       "artifact": "src/modules/ExtsloadModule.sol:ExtsloadModule"
     },

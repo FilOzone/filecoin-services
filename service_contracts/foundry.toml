@@ -12,8 +12,6 @@ optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
 
-# Foundry's defaults, plus Solidity 0.8.37 warnings from fws-payments (9170),
-# OpenZeppelin/forge-std (6335), forge-std (8506), and the warning limit (4591).
 ignored_error_codes = [
     "license",
     "code-size",
@@ -21,10 +19,10 @@ ignored_error_codes = [
     "transient-storage",
     "transfer-deprecated",
     "natspec-memory-safe-assembly-deprecated",
-    9170,
-    6335,
-    8506,
-    4591,
+    9170, # Solidity 0.8.37 warning from fws-payments
+    6335, # Solidity 0.8.37 warning from OpenZeppelin/forge-std
+    8506, # Solidity 0.8.37 warning from forge-std
+    4591, # Warning limit reached
 ]
 
 # For dependencies
