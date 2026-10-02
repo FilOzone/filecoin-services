@@ -4,18 +4,23 @@
 # Required args: ETH_RPC_URL, FWSS_PROXY_ADDRESS, NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS
 # Required for direct send (not CALLDATA_ONLY): ETH_KEYSTORE, PASSWORD
 # Optional args: NEW_FWSS_VIEW_ADDRESS, CALLDATA_ONLY=true
+# ERC-8167 transition: when the new implementation is FWSSDispatcherTransition, sends migrate(migration) with
+#   the migration josuke.json proposes for this proxy and chain; NEW_FWSS_VIEW_ADDRESS does not apply.
+#   Run josuke accept afterwards.
 # Calculated if unset: CHAIN, FWSS_VIEW_ADDRESS
 
 # Get script directory and source deployments.sh
 SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
 source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
+source "$SCRIPT_DIR/josuke.sh"
+
+# cast unlocks ETH_KEYSTORE even for read-only calls, which prompts for a password or fails without a tty.
+cast_call() {
+  env -u ETH_KEYSTORE cast call "$@"
+}
 
 CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
-
-if [ -z "$NEW_FWSS_VIEW_ADDRESS" ]; then
-  echo "Warning: NEW_FWSS_VIEW_ADDRESS is not set. Keeping previous view contract."
-fi
 
 if [ -z "$ETH_RPC_URL" ]; then
   echo "Error: ETH_RPC_URL is not set"
@@ -57,7 +62,7 @@ if [ "$CALLDATA_ONLY" != "true" ]; then
   # Get current nonce
   NONCE=$(cast nonce "$ADDR")
 
-  PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+  PROXY_OWNER=$(cast_call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
   if [ "$PROXY_OWNER" != "$ADDR" ]; then
     echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
     exit 1
@@ -65,11 +70,11 @@ if [ "$CALLDATA_ONLY" != "true" ]; then
 fi
 
 if [ -z "$FWSS_VIEW_ADDRESS" ]; then
-  FWSS_VIEW_ADDRESS=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
+  FWSS_VIEW_ADDRESS=$(cast_call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
 fi
 
 # Get the upgrade plan
-UPGRADE_PLAN=($(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_VIEW_ADDRESS" "nextUpgrade()(address,uint96)" 2>/dev/null))
+UPGRADE_PLAN=($(cast_call -f 0x0000000000000000000000000000000000000000 "$FWSS_VIEW_ADDRESS" "nextUpgrade()(address,uint96)" 2>/dev/null))
 
 PLANNED_WARM_STORAGE_IMPLEMENTATION_ADDRESS=${UPGRADE_PLAN[0]}
 AFTER_EPOCH=${UPGRADE_PLAN[1]}
@@ -90,12 +95,42 @@ else
   echo "Upgrade ready ($CURRENT_EPOCH > $AFTER_EPOCH)"
 fi
 
-if [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
+# Only FWSSDispatcherTransition pins a migration code hash.
+if TRANSITION_MIGRATION_CODE_HASH=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migrationCodeHash()(bytes32)" 2>/dev/null); then
+  if [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
+    echo "Error: NEW_FWSS_VIEW_ADDRESS does not apply to the ERC-8167 transition"
+    exit 1
+  fi
+
+  TRANSITION_DISPATCHER=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "dispatcher()(address)")
+  TRANSITION_MIGRATION=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migration()(address)")
+  PROPOSED_MIGRATION=$(josuke_proposed_migration "$CHAIN" "$FWSS_PROXY_ADDRESS")
+  if [ "$(echo "$TRANSITION_MIGRATION" | tr '[:upper:]' '[:lower:]')" != "$(echo "$PROPOSED_MIGRATION" | tr '[:upper:]' '[:lower:]')" ]; then
+    echo "Error: the transition pins migration $TRANSITION_MIGRATION, but $JOSUKE_LEDGER proposes '$PROPOSED_MIGRATION'"
+    exit 1
+  fi
+  if [ "$(cast keccak "$(cast code "$TRANSITION_MIGRATION")")" != "$TRANSITION_MIGRATION_CODE_HASH" ]; then
+    echo "Error: the code at $TRANSITION_MIGRATION changed since the transition was deployed"
+    exit 1
+  fi
+  TRANSITION_PREVIOUS=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "previousImplementation()(address)")
+  CURRENT_IMPL=$(cast parse-bytes32-address "$(cast storage "$FWSS_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc)")
+  if [ "$(echo "$TRANSITION_PREVIOUS" | tr '[:upper:]' '[:lower:]')" != "$(echo "$CURRENT_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
+    echo "Error: the transition would abort to $TRANSITION_PREVIOUS, but the proxy runs $CURRENT_IMPL"
+    exit 1
+  fi
+
+  echo "Completing the ERC-8167 dispatcher transition (dispatcher $TRANSITION_DISPATCHER, migration $TRANSITION_MIGRATION)"
+  MIGRATE_DATA=$(cast calldata "migrate(address)" "$TRANSITION_MIGRATION")
+  MIGRATE_CALL="the josuke migration"
+elif [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
   echo "Using provided view contract address: $NEW_FWSS_VIEW_ADDRESS"
   MIGRATE_DATA=$(cast calldata "migrate(address)" "$NEW_FWSS_VIEW_ADDRESS")
+  MIGRATE_CALL="migrate"
 else
-  echo "Keeping previous view contract address ($FWSS_VIEW_ADDRESS)"
+  echo "Warning: NEW_FWSS_VIEW_ADDRESS is not set. Keeping previous view contract address ($FWSS_VIEW_ADDRESS)"
   MIGRATE_DATA=$(cast calldata "migrate(address)" "0x0000000000000000000000000000000000000000")
+  MIGRATE_CALL="migrate"
 fi
 
 if [ "$CALLDATA_ONLY" = "true" ]; then
@@ -104,8 +139,8 @@ if [ "$CALLDATA_ONLY" = "true" ]; then
   exit 0
 fi
 
-# Call upgradeToAndCall on the proxy with migrate function
-echo "Upgrading proxy and calling migrate..."
+# Call upgradeToAndCall on the proxy with the migration or transition call
+echo "Upgrading proxy and calling $MIGRATE_CALL..."
 TX_HASH=$(cast send "$FWSS_PROXY_ADDRESS" "upgradeToAndCall(address,bytes)" "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "$MIGRATE_DATA" \
   --password "$PASSWORD" \
   --nonce "$NONCE" \
@@ -133,7 +168,17 @@ NEW_IMPL=$(cast rpc eth_getStorageAt "$FWSS_PROXY_ADDRESS" 0x360894a13ba1a321066
 # Compare to lowercase
 export EXPECTED_IMPL=$(echo $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS | tr '[:upper:]' '[:lower:]')
 
-if [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
+if [ -n "$TRANSITION_DISPATCHER" ]; then
+    # The transition replaces itself with the dispatcher in the same transaction. josuke.json records
+    # the routes from here on; deployments.json tracks only UUPS implementations.
+    if [ "$NEW_IMPL" = "$(echo $TRANSITION_DISPATCHER | tr '[:upper:]' '[:lower:]')" ]; then
+        echo "Transition successful! Proxy now points to the dispatcher: $TRANSITION_DISPATCHER"
+        echo "Next: josuke accept, then commit josuke.json"
+    else
+        echo "Error: expected dispatcher $TRANSITION_DISPATCHER, got $NEW_IMPL"
+        exit 1
+    fi
+elif [ "$NEW_IMPL" = "$EXPECTED_IMPL" ]; then
     echo "Upgrade successful! Proxy now points to: $NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS"
 
     # Update deployments.json with new implementation address
