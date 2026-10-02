@@ -34,6 +34,10 @@ EVM_DIR ?= $(HOME)/.cache/wjmelements-evm/$(EVM_REVISION)
 # Install beside forge, which is already on PATH
 EVM_INSTALL_DIR ?= $(patsubst %/,%,$(dir $(shell command -v forge)))
 
+# josuke deploys the modules and migrations and keeps josuke.json; its ledger format still changes
+JOSUKE_REPO := https://github.com/wjmelements/josuke.git
+JOSUKE_REVISION := 5357de0db6e66954212f96becb3b0b7920194ea0
+
 # Build target
 .PHONY: build
 build:
@@ -48,6 +52,11 @@ install-evm: $(EVM_DIR)/bin/evm
 $(EVM_DIR)/bin/evm:
 	git clone --depth 1 --revision $(EVM_REVISION) --recurse-submodules --shallow-submodules --no-tags $(EVM_REPO) $(EVM_DIR)
 	$(MAKE) -C $(EVM_DIR) bin/evm
+
+# Install the pinned josuke CLI with uv
+.PHONY: install-josuke
+install-josuke:
+	uv tool install --force "josuke @ git+$(JOSUKE_REPO)@$(JOSUKE_REVISION)"
 
 # Compile the upstream dispatcher unchanged. No Solidity wrapper or bytecode padding.
 # Only tests and the dispatcher deployment use these artifacts; FWSS pins the dispatcher code hash.
@@ -219,6 +228,7 @@ help:
 	@echo "Available targets:"
 	@echo "  install    - Install dependencies (forge and npm)"
 	@echo "  install-evm - Build the pinned evm assembler and install it beside forge"
+	@echo "  install-josuke - Install the pinned josuke CLI with uv"
 	@echo "  build      - Build contracts"
 	@echo "  test       - Run tests"
 	@echo "  clean      - Clean build artifacts"

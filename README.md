@@ -50,9 +50,14 @@ make install
 make build
 ```
 
-4. Build the pinned evm assembler. `make test` uses it to assemble the ERC-8167 dispatcher. It is built once per revision under `~/.cache/wjmelements-evm/`; add that revision's `bin/` to `PATH` to run josuke or `tools/verify-deployments.sh`.
+4. Build the pinned evm assembler and install it beside `forge`. `make test` uses it to assemble the ERC-8167 dispatcher; josuke and `tools/verify-deployments.sh` also need it.
 ```bash
 make install-evm
+```
+
+   To deploy ERC-8167 modules, also install the pinned [josuke](https://github.com/wjmelements/josuke) CLI. It needs [uv](https://docs.astral.sh/uv/).
+```bash
+make install-josuke
 ```
 
 5. Run tests:
