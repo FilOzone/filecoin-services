@@ -9,14 +9,15 @@ import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
+import {ERC8167Transition} from "../src/lib/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
@@ -225,9 +226,9 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testMigrationCannotRouteUpgradesToTheDispatcher() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
-        _transition(service, token);
+        _transition(service);
 
         SetDelegateOperation[] memory routes = new SetDelegateOperation[](1);
         routes[0] = SetDelegateOperation({selector: FWSSMigrateModule.migrate.selector, delegate: dispatcher});
@@ -242,9 +243,9 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testMigrationCannotReplaceTheDispatcher() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
-        _transition(service, token);
+        _transition(service);
 
         DispatcherSwapMigrationFixture migration = new DispatcherSwapMigrationFixture();
         FWSSMigrateModule(proxy).announceMigration(address(migration), 0);
@@ -353,6 +354,14 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (, epoch) = _plan(address(service));
     }
 
+    function _newTransition(address migration) internal returns (FWSSDispatcherTransition) {
+        return new FWSSDispatcherTransition(dispatcher, migration);
+    }
+
+    function _migrateData(address migration) internal pure returns (bytes memory) {
+        return abi.encodeCall(Migrate.migrate, (migration));
+    }
+
     function _transitionData() internal pure returns (bytes memory) {
         return abi.encodeCall(FilecoinWarmStorageService.completeDispatcherTransition, ());
     }
@@ -361,13 +370,11 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         return address(uint160(uint256(vm.load(proxy, IMPLEMENTATION_SLOT))));
     }
 
-    function _transition(FilecoinWarmStorageService service, MockERC20 token)
-        internal
-        returns (FilecoinWarmStorageService intermediate)
-    {
-        intermediate = _newIntermediate(token, _createMigration(bytes4(0)));
-        vm.roll(_announce(service, address(intermediate)));
-        service.upgradeToAndCall(address(intermediate), _transitionData());
+    function _transition(FilecoinWarmStorageService service) internal returns (FWSSDispatcherTransition transition) {
+        address migration = _createMigration(bytes4(0));
+        transition = _newTransition(migration);
+        vm.roll(_announce(service, address(transition)));
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
     }
 
     /// @dev Asserts that a failed transition left the legacy implementation, its plan and empty routes.
@@ -406,8 +413,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testRealMonolithAtomicDispatcherTransition() public {
-        (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract, MockERC20 token) =
-            _realLegacy();
+        (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract,) = _realLegacy();
         address proxy = address(service);
         bytes32 ownerBefore = vm.load(proxy, OWNER_SLOT);
         bytes32 periodBefore = vm.load(proxy, bytes32(uint256(0)));
@@ -416,16 +422,15 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         FWSSProviderManagementModule(proxy).addApprovedProvider(7);
 
         address migration = _createMigration(bytes4(0));
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, migration);
-        assertGt(address(intermediate).code.length, 3000);
-        uint96 epoch = _announce(service, address(intermediate));
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        uint96 epoch = _announce(service, address(transition));
         (address announced, uint96 afterEpoch) = viewContract.nextUpgrade();
-        assertEq(announced, address(intermediate));
+        assertEq(announced, address(transition));
         assertEq(afterEpoch, epoch);
         vm.roll(epoch);
 
         vm.recordLogs();
-        service.upgradeToAndCall(address(intermediate), _transitionData());
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
         _assertDispatcherRoutes(proxy);
@@ -437,13 +442,13 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(pending, address(0));
         assertEq(readyAt, 0);
 
-        // Upgraded(intermediate), DiamondDelegateCall(migration), the migration's own logs, Upgraded(dispatcher).
+        // Upgraded(transition), Upgraded(dispatcher), DiamondDelegateCall(migration), then the migration's own logs.
         assertEq(logs[0].topics[0], IERC1967.Upgraded.selector);
-        assertEq(logs[0].topics[1], bytes32(uint256(uint160(address(intermediate)))));
-        assertEq(logs[1].topics[0], Migrate.DiamondDelegateCall.selector);
-        assertEq(logs[1].topics[1], bytes32(uint256(uint160(migration))));
-        assertEq(logs[logs.length - 1].topics[0], IERC1967.Upgraded.selector);
-        assertEq(logs[logs.length - 1].topics[1], bytes32(uint256(uint160(dispatcher))));
+        assertEq(logs[0].topics[1], bytes32(uint256(uint160(address(transition)))));
+        assertEq(logs[1].topics[0], IERC1967.Upgraded.selector);
+        assertEq(logs[1].topics[1], bytes32(uint256(uint160(dispatcher))));
+        assertEq(logs[2].topics[0], Migrate.DiamondDelegateCall.selector);
+        assertEq(logs[2].topics[1], bytes32(uint256(uint160(migration))));
 
         assertEq(OwnershipModule(proxy).owner(), address(this));
         assertEq(FWSSViewContractModule(proxy).viewContractAddress(), address(viewContract));
@@ -467,13 +472,13 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
         FWSSProviderManagementModule(proxy).addApprovedProvider(43);
 
-        // The intermediate's own entry points are gone with the monolith.
+        // The transition's own entry points are gone with it.
         vm.expectRevert(
             abi.encodeWithSelector(
-                IERC8167.FunctionNotFound.selector, FilecoinWarmStorageService.completeDispatcherTransition.selector
+                IERC8167.FunctionNotFound.selector, FWSSDispatcherTransition.legacyUpgradePadding.selector
             )
         );
-        service.completeDispatcherTransition();
+        FWSSDispatcherTransition(proxy).legacyUpgradePadding();
     }
 
     function testLegacyRejectsRawDispatcherAsUpgradeTarget() public {
@@ -504,23 +509,24 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testTransitionRequiresDelayAndOwner() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, _createMigration(bytes4(0)));
-        service.announceUpgradePlan(address(intermediate), 2);
+        address migration = _createMigration(bytes4(0));
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        service.announceUpgradePlan(address(transition), 2);
         (, uint96 epoch) = _plan(proxy);
 
         vm.roll(epoch - 1);
         vm.expectRevert();
-        service.upgradeToAndCall(address(intermediate), _transitionData());
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
         vm.roll(epoch);
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        service.upgradeToAndCall(address(intermediate), _transitionData());
-        _assertUntouched(proxy, original, address(intermediate), epoch);
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
+        _assertUntouched(proxy, original, address(transition), epoch);
 
-        service.upgradeToAndCall(address(intermediate), _transitionData());
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
         _assertDispatcherRoutes(proxy);
     }
 
@@ -543,93 +549,102 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         intermediate.completeDispatcherTransition();
     }
 
-    function testEmptyUpgradeDataLeavesIntermediateThatOwnerCanComplete() public {
-        (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract, MockERC20 token) =
-            _realLegacy();
+    function testEmptyUpgradeDataLeavesTransitionThatOwnerCanComplete() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, _createMigration(bytes4(0)));
-        vm.roll(_announce(service, address(intermediate)));
-        service.upgradeToAndCall(address(intermediate), "");
-        assertEq(_implementation(proxy), address(intermediate));
-        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
-        assertEq(provingPeriod, 3000);
+        address migration = _createMigration(bytes4(0));
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        vm.roll(_announce(service, address(transition)));
+        service.upgradeToAndCall(address(transition), "");
+        assertEq(_implementation(proxy), address(transition));
+
+        // Nothing but the transition is reachable, so no new plan can be announced meanwhile.
+        vm.expectRevert();
+        service.announceUpgradePlan(migration, 0);
 
         vm.prank(address(0xB0B));
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
-        service.completeDispatcherTransition();
+        vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
+        FWSSDispatcherTransition(proxy).migrate(migration);
 
-        // A plan announced while the intermediate is live must not survive as a migration.
-        FilecoinWarmStorageService next = _newMonolith(token);
-        service.announceUpgradePlan(address(next), 0);
-
-        service.completeDispatcherTransition();
+        FWSSDispatcherTransition(proxy).migrate(migration);
         _assertDispatcherRoutes(proxy);
         (address pending, uint96 readyAt) = _plan(proxy);
         assertEq(pending, address(0));
         assertEq(readyAt, 0);
-        vm.roll(block.number + 1);
-        vm.expectRevert(abi.encodeWithSelector(FWSSMigrateModule.MigrationNotAnnounced.selector, address(next)));
-        FWSSMigrateModule(proxy).migrate(address(next));
     }
 
     function testRevertingMigrationRollsBackBothUpgrades() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, address(new RevertingMigrationFixture()));
-        uint96 epoch = _announce(service, address(intermediate));
+        address migration = address(new RevertingMigrationFixture());
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        uint96 epoch = _announce(service, address(transition));
         vm.roll(epoch);
 
         for (uint256 i; i < 2; ++i) {
             vm.expectRevert(RevertingMigrationFixture.MigrationFailed.selector);
-            service.upgradeToAndCall(address(intermediate), _transitionData());
-            _assertUntouched(proxy, original, address(intermediate), epoch);
+            service.upgradeToAndCall(address(transition), _migrateData(migration));
+            _assertUntouched(proxy, original, address(transition), epoch);
         }
     }
 
     function testChangedMigrationCodeRollsBackBothUpgrades() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         address migration = _createMigration(bytes4(0));
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, migration);
-        uint96 epoch = _announce(service, address(intermediate));
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        uint96 epoch = _announce(service, address(transition));
         vm.roll(epoch);
 
         vm.etch(migration, address(new RevertingMigrationFixture()).code);
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        service.upgradeToAndCall(address(intermediate), _transitionData());
-        _assertUntouched(proxy, original, address(intermediate), epoch);
+        vm.expectRevert(abi.encodeWithSelector(ERC8167Transition.UnexpectedMigration.selector, migration));
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
+        _assertUntouched(proxy, original, address(transition), epoch);
     }
 
-    function testLegacyMigrateDataCannotLeaveIntermediateInstalled() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+    function testMigrationThatReplacesTheDispatcherRollsBackBothUpgrades() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, _createMigration(bytes4(0)));
-        uint96 epoch = _announce(service, address(intermediate));
+        address migration = address(new DispatcherSwapMigrationFixture());
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        uint96 epoch = _announce(service, address(transition));
         vm.roll(epoch);
 
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        service.upgradeToAndCall(
-            address(intermediate), abi.encodeCall(FilecoinWarmStorageService.migrate, (address(0)))
-        );
-        _assertUntouched(proxy, original, address(intermediate), epoch);
+        vm.expectRevert(abi.encodeWithSelector(ERC8167Transition.DispatcherChanged.selector, address(0xBEEF)));
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
+        _assertUntouched(proxy, original, address(transition), epoch);
     }
 
+    /// @dev The ordinary upgrade script sends migrate(view contract), which shares the selector.
+    function testLegacyMigrateDataCannotLeaveTransitionInstalled() public {
+        (FilecoinWarmStorageService service,,) = _realLegacy();
+        address proxy = address(service);
+        address original = _implementation(proxy);
+        FWSSDispatcherTransition transition = _newTransition(_createMigration(bytes4(0)));
+        uint96 epoch = _announce(service, address(transition));
+        vm.roll(epoch);
+
+        vm.expectRevert(abi.encodeWithSelector(ERC8167Transition.UnexpectedMigration.selector, address(0)));
+        service.upgradeToAndCall(address(transition), abi.encodeCall(FilecoinWarmStorageService.migrate, (address(0))));
+        _assertUntouched(proxy, original, address(transition), epoch);
+    }
+
+    /// @dev The transition uninstalls itself first, so the callback reaches the dispatcher, not the transition.
     function testMigrationCannotReenterTransition() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
-        ReentrantMigrationFixture migration =
-            new ReentrantMigrationFixture(FilecoinWarmStorageService.completeDispatcherTransition.selector);
-        FilecoinWarmStorageService intermediate = _newIntermediate(token, address(migration));
-        uint96 epoch = _announce(service, address(intermediate));
+        address migration = address(new ReentrantMigrationFixture(Migrate.migrate.selector));
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        uint96 epoch = _announce(service, address(transition));
         vm.roll(epoch);
 
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, proxy));
-        service.upgradeToAndCall(address(intermediate), _transitionData());
-        _assertUntouched(proxy, original, address(intermediate), epoch);
+        vm.expectRevert(abi.encodeWithSelector(IERC8167.FunctionNotFound.selector, Migrate.migrate.selector));
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
+        _assertUntouched(proxy, original, address(transition), epoch);
     }
 
     function testMissingUpgradeRouteRollsBackBothUpgrades() public {
@@ -640,23 +655,24 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             FWSSMigrateModule.migrate.selector
         ];
         for (uint256 i; i < critical.length; ++i) {
-            (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+            (FilecoinWarmStorageService service,,) = _realLegacy();
             address proxy = address(service);
             address original = _implementation(proxy);
-            FilecoinWarmStorageService intermediate = _newIntermediate(token, _createMigration(critical[i]));
-            uint96 epoch = _announce(service, address(intermediate));
+            address migration = _createMigration(critical[i]);
+            FWSSDispatcherTransition transition = _newTransition(migration);
+            uint96 epoch = _announce(service, address(transition));
             vm.roll(epoch);
 
             vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, critical[i]));
-            service.upgradeToAndCall(address(intermediate), _transitionData());
-            _assertUntouched(proxy, original, address(intermediate), epoch);
+            service.upgradeToAndCall(address(transition), _migrateData(migration));
+            _assertUntouched(proxy, original, address(transition), epoch);
         }
     }
 
     function testOwnershipModuleTransfersControlAfterTransition() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
+        (FilecoinWarmStorageService service,,) = _realLegacy();
         address proxy = address(service);
-        _transition(service, token);
+        _transition(service);
 
         OwnershipModule(proxy).transferOwnership(address(0xB0B));
         assertEq(OwnershipModule(proxy).owner(), address(0xB0B));
