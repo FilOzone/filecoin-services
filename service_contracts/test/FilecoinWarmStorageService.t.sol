@@ -50,15 +50,7 @@ contract FilecoinWarmStorageServiceHarness is FilecoinWarmStorageService {
         uint64 reinitializerVersion
     )
         FilecoinWarmStorageService(
-            pdpVerifier,
-            payments,
-            usdfc,
-            filBeamBeneficiary,
-            providerRegistry,
-            sessionKeyRegistry,
-            reinitializerVersion,
-            address(0),
-            address(0)
+            pdpVerifier, payments, usdfc, filBeamBeneficiary, providerRegistry, sessionKeyRegistry, reinitializerVersion
         )
     {}
 
@@ -461,6 +453,12 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
         pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
 
+        // Add providers to approved list
+        pdpServiceWithPayments.addApprovedProvider(1); // serviceProvider
+        pdpServiceWithPayments.addApprovedProvider(2); // sp1
+        pdpServiceWithPayments.addApprovedProvider(3); // sp2
+        pdpServiceWithPayments.addApprovedProvider(4); // sp3
+
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
         pdpServiceWithPayments.setViewContract(address(viewContract));
     }
@@ -546,9 +544,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
 
         bytes memory initData = abi.encodeWithSelector(
@@ -600,9 +596,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
 
         bytes memory initData = abi.encodeWithSelector(
@@ -632,9 +626,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
 
         // Another successful announcement
@@ -683,9 +675,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
 
         vm.prank(client);
@@ -5741,9 +5731,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
         bytes memory initData = abi.encodeWithSelector(
             FilecoinWarmStorageService.initialize.selector,

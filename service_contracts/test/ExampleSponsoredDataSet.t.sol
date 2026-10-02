@@ -87,9 +87,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
             address(0xfb),
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
         fwss = FilecoinWarmStorageService(
             address(
@@ -119,6 +117,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         serviceProviderRegistry.registerProvider{value: 5 ether}(
             payee, "Test SP", "Test storage provider", ServiceProviderRegistryStorage.ProductType.PDP, spKeys, spValues
         );
+        fwss.addApprovedProvider(1);
 
         factory = new ExampleSponsoredDataSetFactory(fwss);
     }

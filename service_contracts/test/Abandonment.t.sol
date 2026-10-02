@@ -105,9 +105,7 @@ contract AbandonmentTest is MockFVMTest {
             filBeamBeneficiary,
             serviceProviderRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
         MyERC1967Proxy fwssProxy = new MyERC1967Proxy(
             address(fwssImpl),
@@ -117,6 +115,8 @@ contract AbandonmentTest is MockFVMTest {
 
         viewContract = new FilecoinWarmStorageServiceStateView(fwss);
         fwss.setViewContract(address(viewContract));
+        fwss.addApprovedProvider(1); // SP registered as provider ID 1
+
         require(usdfc.transfer(client, 1000e18));
     }
 

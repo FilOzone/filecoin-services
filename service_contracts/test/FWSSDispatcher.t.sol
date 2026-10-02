@@ -9,7 +9,6 @@ import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc
 import {IERC1967} from "@openzeppelin/contracts/interfaces/IERC1967.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {StorageSlot} from "@openzeppelin/contracts/utils/StorageSlot.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
 import {FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
@@ -17,13 +16,10 @@ import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
-import {ERC8167Transition} from "../src/lib/ERC8167Transition.sol";
+import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
-import {MockERC20} from "./mocks/SharedMocks.sol";
-import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
-import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
 
 contract CallContextFixture {
@@ -83,7 +79,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
 
     address internal dispatcher;
-    MockERC20 internal usdfc;
     FWSSMigrateModule internal migrateModule;
     uint256 private legacyProxies;
 
@@ -93,7 +88,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     function setUp() public {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
-        usdfc = new MockERC20();
         migrateModule = new FWSSMigrateModule();
     }
 
@@ -226,7 +220,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testMigrationCannotRouteUpgradesToTheDispatcher() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         _transition(service);
 
@@ -243,7 +237,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testMigrationCannotReplaceTheDispatcher() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         _transition(service);
 
@@ -300,37 +294,11 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         return Migration.createMigration(routes);
     }
 
-    function _newMonolith(MockERC20 token) internal returns (FilecoinWarmStorageService) {
-        return _newImplementation(token, address(0), address(0));
-    }
-
-    function _newIntermediate(MockERC20 token, address migration) internal returns (FilecoinWarmStorageService) {
-        return _newImplementation(token, dispatcher, migration);
-    }
-
-    function _newImplementation(MockERC20 token, address dispatcher_, address migration)
-        internal
-        returns (FilecoinWarmStorageService)
-    {
-        return new FilecoinWarmStorageService(
-            address(0x11),
-            address(0x12),
-            token,
-            address(0x13),
-            ServiceProviderRegistry(address(0x14)),
-            SessionKeyRegistry(address(0x15)),
-            4,
-            dispatcher_,
-            migration
-        );
-    }
-
     /// @dev A proxy running the deployed mainnet v1.4.0 proxy and implementation bytecode, not a rebuild.
     function _realLegacy()
         internal
-        returns (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract, MockERC20 token)
+        returns (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract)
     {
-        token = usdfc;
         string memory fixture = vm.readFile(V1_4_0_MAINNET);
 
         // Its UUPS onlyProxy check compares the implementation slot with its own mainnet address.
@@ -360,10 +328,6 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     function _migrateData(address migration) internal pure returns (bytes memory) {
         return abi.encodeCall(Migrate.migrate, (migration));
-    }
-
-    function _transitionData() internal pure returns (bytes memory) {
-        return abi.encodeCall(FilecoinWarmStorageService.completeDispatcherTransition, ());
     }
 
     function _implementation(address proxy) internal view returns (address) {
@@ -413,7 +377,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testRealMonolithAtomicDispatcherTransition() public {
-        (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract,) = _realLegacy();
+        (FilecoinWarmStorageService service, FilecoinWarmStorageServiceStateView viewContract) = _realLegacy();
         address proxy = address(service);
         bytes32 ownerBefore = vm.load(proxy, OWNER_SLOT);
         bytes32 periodBefore = vm.load(proxy, bytes32(uint256(0)));
@@ -482,34 +446,13 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testLegacyRejectsRawDispatcherAsUpgradeTarget() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         vm.expectRevert();
         service.announceUpgradePlan(dispatcher, 0);
     }
 
-    function testConstructorValidatesDispatcherTransition() public {
-        MockERC20 token = new MockERC20();
-        address migration = _createMigration(bytes4(0));
-        address fake = address(0xF00D);
-        vm.etch(fake, new bytes(88));
-
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        _newImplementation(token, fake, migration);
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        _newImplementation(token, dispatcher, address(0x1234));
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        _newImplementation(token, dispatcher, address(0));
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        _newImplementation(token, address(0), migration);
-
-        _newImplementation(token, address(0), address(0));
-        FilecoinWarmStorageService intermediate = _newImplementation(token, dispatcher, migration);
-        assertEq(intermediate.dispatcherAddress(), dispatcher);
-        assertEq(intermediate.dispatcherMigrationAddress(), migration);
-    }
-
     function testTransitionRequiresDelayAndOwner() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         address migration = _createMigration(bytes4(0));
@@ -530,27 +473,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         _assertDispatcherRoutes(proxy);
     }
 
-    function testMonolithWithoutDispatcherCannotComplete() public {
-        (FilecoinWarmStorageService service,, MockERC20 token) = _realLegacy();
-        address proxy = address(service);
-        address original = _implementation(proxy);
-        FilecoinWarmStorageService next = _newMonolith(token);
-        uint96 epoch = _announce(service, address(next));
-        vm.roll(epoch);
-
-        vm.expectRevert(FilecoinWarmStorageService.InvalidDispatcherTransition.selector);
-        service.upgradeToAndCall(address(next), _transitionData());
-        _assertUntouched(proxy, original, address(next), epoch);
-    }
-
-    function testCompletionRequiresProxyContext() public {
-        FilecoinWarmStorageService intermediate = _newIntermediate(new MockERC20(), _createMigration(bytes4(0)));
-        vm.expectRevert(UUPSUpgradeable.UUPSUnauthorizedCallContext.selector);
-        intermediate.completeDispatcherTransition();
-    }
-
     function testEmptyUpgradeDataLeavesTransitionThatOwnerCanComplete() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address migration = _createMigration(bytes4(0));
         FWSSDispatcherTransition transition = _newTransition(migration);
@@ -574,7 +498,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testRevertingMigrationRollsBackBothUpgrades() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         address migration = address(new RevertingMigrationFixture());
@@ -590,7 +514,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testChangedMigrationCodeRollsBackBothUpgrades() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         address migration = _createMigration(bytes4(0));
@@ -605,7 +529,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testMigrationThatReplacesTheDispatcherRollsBackBothUpgrades() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         address migration = address(new DispatcherSwapMigrationFixture());
@@ -620,7 +544,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     /// @dev The ordinary upgrade script sends migrate(view contract), which shares the selector.
     function testLegacyMigrateDataCannotLeaveTransitionInstalled() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         FWSSDispatcherTransition transition = _newTransition(_createMigration(bytes4(0)));
@@ -634,7 +558,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     /// @dev The transition uninstalls itself first, so the callback reaches the dispatcher, not the transition.
     function testMigrationCannotReenterTransition() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         address original = _implementation(proxy);
         address migration = address(new ReentrantMigrationFixture(Migrate.migrate.selector));
@@ -655,7 +579,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
             FWSSMigrateModule.migrate.selector
         ];
         for (uint256 i; i < critical.length; ++i) {
-            (FilecoinWarmStorageService service,,) = _realLegacy();
+            (FilecoinWarmStorageService service,) = _realLegacy();
             address proxy = address(service);
             address original = _implementation(proxy);
             address migration = _createMigration(critical[i]);
@@ -670,7 +594,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     }
 
     function testOwnershipModuleTransfersControlAfterTransition() public {
-        (FilecoinWarmStorageService service,,) = _realLegacy();
+        (FilecoinWarmStorageService service,) = _realLegacy();
         address proxy = address(service);
         _transition(service);
 

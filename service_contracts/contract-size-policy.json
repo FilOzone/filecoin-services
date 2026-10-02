@@ -28,8 +28,7 @@
       "artifact": "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition"
     },
     "FilecoinWarmStorageService": {
-      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
-      "maximumConstructorArgsSize": 288
+      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
     },
     "FilecoinWarmStorageServiceStateView": {
       "artifact": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"

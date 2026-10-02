@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-pragma solidity 0.8.37;
+pragma solidity ^0.8.20;
 
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
@@ -12,9 +12,6 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
-import {Address} from "@openzeppelin/contracts/utils/Address.sol";
-import {Migrate} from "@erc8167/interfaces/Migrate.sol";
-import {LibUpgradeRoutes} from "./lib/LibUpgradeRoutes.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
 import {Errors} from "./Errors.sol";
@@ -143,6 +140,10 @@ contract FilecoinWarmStorageService is
 
     event ViewContractSet(address indexed viewContract);
 
+    // Events for provider management
+    event ProviderApproved(uint256 indexed providerId);
+    event ProviderUnapproved(uint256 indexed providerId);
+
     // =========================================================================
     // Structs
 
@@ -226,20 +227,6 @@ contract FilecoinWarmStorageService is
 
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
-    // One-time switch to the ERC-8167 dispatcher; both zero on implementations that stay monolithic.
-    // Immutable so the announced upgrade delay also covers the dispatcher and its Josuke migration;
-    // public so reviewers can read them from the announced implementation during the delay.
-    address public immutable dispatcherAddress;
-    address public immutable dispatcherMigrationAddress;
-
-    // Runtime hash of Proxy.evm at the pinned ERC-8167 revision.
-    bytes32 private constant DISPATCHER_CODE_HASH = 0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a;
-
-    // The delay reviews the migration's code, not just its address, which a redeployable contract could reuse.
-    bytes32 private immutable DISPATCHER_MIGRATION_CODE_HASH;
-
-    error InvalidDispatcherTransition();
-
     event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
 
     // =========================================================================
@@ -274,9 +261,7 @@ contract FilecoinWarmStorageService is
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry,
-        uint64 _reinitializer_version,
-        address _dispatcher,
-        address _dispatcherMigration
+        uint64 _reinitializer_version
     ) {
         _disableInitializers();
         REINITIALIZER_VERSION = _reinitializer_version;
@@ -287,33 +272,26 @@ contract FilecoinWarmStorageService is
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentsContractAddress = _paymentsContractAddress;
 
-        require(address(_usdfc) != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
 
         require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
         filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
 
         require(
-            address(_serviceProviderRegistry) != address(0),
+            _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
             Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
         );
         serviceProviderRegistry = ServiceProviderRegistry(_serviceProviderRegistry);
 
-        require(address(_sessionKeyRegistry) != address(0), Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry));
+        require(
+            _sessionKeyRegistry != SessionKeyRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
+        );
         sessionKeyRegistry = _sessionKeyRegistry;
 
         // Verify token decimals from the USDFC token contract
         require(TOKEN_DECIMALS == _usdfc.decimals());
-
-        if (_dispatcher != address(0) || _dispatcherMigration != address(0)) {
-            require(
-                _dispatcher.codehash == DISPATCHER_CODE_HASH && _dispatcherMigration.code.length != 0,
-                InvalidDispatcherTransition()
-            );
-        }
-        dispatcherAddress = _dispatcher;
-        dispatcherMigrationAddress = _dispatcherMigration;
-        DISPATCHER_MIGRATION_CODE_HASH = _dispatcherMigration.codehash;
     }
 
     /**
@@ -379,28 +357,6 @@ contract FilecoinWarmStorageService is
     }
 
     /**
-     * @notice Replaces this implementation with the ERC-8167 dispatcher after running the Josuke migration.
-     * @dev Pass as the data of the delayed upgrade to this implementation, so both switches happen in one
-     * transaction. The raw dispatcher has no proxiableUUID(), so it cannot be a UUPS upgrade target itself.
-     */
-    function completeDispatcherTransition() external onlyProxy onlyOwner {
-        require(
-            dispatcherAddress != address(0) && dispatcherMigrationAddress.codehash == DISPATCHER_MIGRATION_CODE_HASH,
-            InvalidDispatcherTransition()
-        );
-
-        // FWSSMigrateModule reuses this slot; an implementation plan must not become an announced migration.
-        delete nextUpgrade;
-
-        emit Migrate.DiamondDelegateCall(dispatcherMigrationAddress, "");
-        Address.functionDelegateCall(dispatcherMigrationAddress, "");
-
-        LibUpgradeRoutes.requireUpgradeRoutes(dispatcherAddress);
-
-        ERC1967Utils.upgradeToAndCall(dispatcherAddress, "");
-    }
-
-    /**
      * @notice Sets new proving period parameters
      * @param _maxProvingPeriod Maximum number of epochs between two consecutive proofs
      * @param _challengeWindowSize Number of epochs for the challenge window
@@ -423,9 +379,6 @@ contract FilecoinWarmStorageService is
      * @param _viewContract Address of the view contract (optional, can be address(0))
      */
     function migrate(address _viewContract) public onlyProxy onlyOwner reinitializer(REINITIALIZER_VERSION) {
-        // A transition implementation must not be left installed by the ordinary upgrade call.
-        require(dispatcherAddress == address(0), InvalidDispatcherTransition());
-
         // Set view contract if provided
         if (_viewContract != address(0)) {
             _viewContractAddress = _viewContract;
@@ -464,6 +417,45 @@ contract FilecoinWarmStorageService is
 
         _viewContractAddress = _viewContract;
         emit ViewContractSet(_viewContract);
+    }
+
+    /**
+     * @notice Adds a provider ID to the approved list
+     * @dev Only callable by the contract owner. Reverts if already approved.
+     * @param providerId The provider ID to approve
+     */
+    function addApprovedProvider(uint256 providerId) external onlyOwner {
+        if (approvedProviders[providerId]) {
+            revert Errors.ProviderAlreadyApproved(providerId);
+        }
+        approvedProviders[providerId] = true;
+        approvedProviderIds.push(providerId);
+        emit ProviderApproved(providerId);
+    }
+
+    /**
+     * @notice Removes a provider ID from the approved list
+     * @dev Only callable by the contract owner. Reverts if not in list.
+     * @param providerId The provider ID to remove
+     * @param index The index of the provider ID in the approvedProviderIds array
+     */
+    function removeApprovedProvider(uint256 providerId, uint256 index) external onlyOwner {
+        if (!approvedProviders[providerId]) {
+            revert Errors.ProviderNotInApprovedList(providerId);
+        }
+
+        require(approvedProviderIds[index] == providerId, Errors.ProviderIdMismatchAtIndex(index, providerId));
+
+        approvedProviders[providerId] = false;
+
+        // Remove from array using swap-and-pop pattern
+        uint256 length = approvedProviderIds.length;
+        if (index != length - 1) {
+            approvedProviderIds[index] = approvedProviderIds[length - 1];
+        }
+        approvedProviderIds.pop();
+
+        emit ProviderUnapproved(providerId);
     }
 
     // Listener interface methods

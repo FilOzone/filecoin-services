@@ -539,9 +539,7 @@ deploy_implementation_if_needed \
     "filbeam_beneficiary=$FILBEAM_BENEFICIARY_ADDRESS" \
     "service_provider_registry=$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "session_key_registry=$SESSION_KEY_REGISTRY_ADDRESS" \
-    "reinitializer=$FWSS_INIT_COUNTER" \
-    "dispatcher=${FWSS_DISPATCHER_ADDRESS:-0x0000000000000000000000000000000000000000}" \
-    "dispatcher_migration=${FWSS_DISPATCHER_MIGRATION_ADDRESS:-0x0000000000000000000000000000000000000000}"
+    "reinitializer=$FWSS_INIT_COUNTER"
 unset LIBRARIES
 
 # Step 9: Deploy or use existing FilecoinWarmStorageService proxy

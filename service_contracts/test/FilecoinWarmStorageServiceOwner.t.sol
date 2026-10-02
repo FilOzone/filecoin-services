@@ -100,9 +100,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
             filBeamBeneficiary,
             providerRegistry,
             sessionKeyRegistry,
-            4,
-            address(0),
-            address(0)
+            4
         );
 
         bytes memory serviceInitData = abi.encodeWithSelector(
@@ -114,6 +112,15 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         // Deploy view contract
         viewContract = new FilecoinWarmStorageServiceStateView(serviceContract);
         serviceContract.setViewContract(address(viewContract));
+
+        // Approve providers 1, 2, and 3 but not unauthorizedProvider
+        uint256 providerId1 = providerRegistry.getProviderIdByAddress(provider1);
+        uint256 providerId2 = providerRegistry.getProviderIdByAddress(provider2);
+        uint256 providerId3 = providerRegistry.getProviderIdByAddress(provider3);
+
+        serviceContract.addApprovedProvider(providerId1);
+        serviceContract.addApprovedProvider(providerId2);
+        serviceContract.addApprovedProvider(providerId3);
 
         // Setup USDFC tokens for client
         usdfcToken.safeTransfer(client, 10000e18);

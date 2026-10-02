@@ -36,16 +36,6 @@
         "name": "_reinitializer_version",
         "type": "uint64",
         "internalType": "uint64"
-      },
-      {
-        "name": "_dispatcher",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "_dispatcherMigration",
-        "type": "address",
-        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
@@ -78,6 +68,19 @@
   },
   {
     "type": "function",
+    "name": "addApprovedProvider",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "announceUpgradePlan",
     "inputs": [
       {
@@ -91,13 +94,6 @@
         "internalType": "uint96"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "completeDispatcherTransition",
-    "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -177,32 +173,6 @@
       }
     ],
     "stateMutability": "pure"
-  },
-  {
-    "type": "function",
-    "name": "dispatcherAddress",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "dispatcherMigrationAddress",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -634,6 +604,24 @@
       },
       {
         "name": "endEpoch",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "removeApprovedProvider",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "index",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1130,25 +1118,6 @@
   },
   {
     "type": "event",
-    "name": "DiamondDelegateCall",
-    "inputs": [
-      {
-        "name": "delegate",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "delegateCalldata",
-        "type": "bytes",
-        "indexed": false,
-        "internalType": "bytes"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
     "anonymous": false
@@ -1313,6 +1282,32 @@
         "type": "string[]",
         "indexed": false,
         "internalType": "string[]"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderApproved",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "ProviderUnapproved",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false
@@ -1763,11 +1758,6 @@
   },
   {
     "type": "error",
-    "name": "InvalidDispatcherTransition",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "InvalidEpochRange",
     "inputs": [
       {
@@ -1863,17 +1853,6 @@
         "name": "length",
         "type": "uint256",
         "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "MissingUpgradeRoute",
-    "inputs": [
-      {
-        "name": "selector",
-        "type": "bytes4",
-        "internalType": "bytes4"
       }
     ]
   },
@@ -2006,6 +1985,44 @@
     "inputs": [
       {
         "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderAlreadyApproved",
+    "inputs": [
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderIdMismatchAtIndex",
+    "inputs": [
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "providerId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ProviderNotInApprovedList",
+    "inputs": [
+      {
+        "name": "providerId",
         "type": "uint256",
         "internalType": "uint256"
       }

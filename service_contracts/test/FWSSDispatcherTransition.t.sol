@@ -4,7 +4,7 @@ pragma solidity 0.8.37;
 import {Test} from "forge-std/Test.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
-import {ERC8167Transition} from "../src/lib/ERC8167Transition.sol";
+import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 
 contract FWSSDispatcherTransitionTest is Test {
     address internal dispatcher;

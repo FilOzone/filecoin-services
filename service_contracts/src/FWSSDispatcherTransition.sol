@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {ERC8167Transition} from "./lib/ERC8167Transition.sol";
+import {ERC8167Transition} from "./ERC8167Transition.sol";
 import {FWSSOwnable} from "./lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "./lib/LibUpgradeRoutes.sol";
 
