@@ -15,6 +15,11 @@ source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
 source "$SCRIPT_DIR/josuke.sh"
 
+# cast unlocks ETH_KEYSTORE even for read-only calls, which prompts for a password or fails without a tty.
+cast_call() {
+  env -u ETH_KEYSTORE cast call "$@"
+}
+
 CALLDATA_ONLY="${CALLDATA_ONLY:-false}"
 
 if [ -z "$ETH_RPC_URL" ]; then
@@ -57,7 +62,7 @@ if [ "$CALLDATA_ONLY" != "true" ]; then
   # Get current nonce
   NONCE=$(cast nonce "$ADDR")
 
-  PROXY_OWNER=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
+  PROXY_OWNER=$(cast_call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null)
   if [ "$PROXY_OWNER" != "$ADDR" ]; then
     echo "Supplied ETH_KEYSTORE ($ADDR) is not the proxy owner ($PROXY_OWNER)."
     exit 1
@@ -65,11 +70,11 @@ if [ "$CALLDATA_ONLY" != "true" ]; then
 fi
 
 if [ -z "$FWSS_VIEW_ADDRESS" ]; then
-  FWSS_VIEW_ADDRESS=$(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
+  FWSS_VIEW_ADDRESS=$(cast_call -f 0x0000000000000000000000000000000000000000 "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
 fi
 
 # Get the upgrade plan
-UPGRADE_PLAN=($(cast call -f 0x0000000000000000000000000000000000000000 "$FWSS_VIEW_ADDRESS" "nextUpgrade()(address,uint96)" 2>/dev/null))
+UPGRADE_PLAN=($(cast_call -f 0x0000000000000000000000000000000000000000 "$FWSS_VIEW_ADDRESS" "nextUpgrade()(address,uint96)" 2>/dev/null))
 
 PLANNED_WARM_STORAGE_IMPLEMENTATION_ADDRESS=${UPGRADE_PLAN[0]}
 AFTER_EPOCH=${UPGRADE_PLAN[1]}
@@ -91,14 +96,14 @@ else
 fi
 
 # Only FWSSDispatcherTransition pins a migration code hash.
-if TRANSITION_MIGRATION_CODE_HASH=$(cast call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migrationCodeHash()(bytes32)" 2>/dev/null); then
+if TRANSITION_MIGRATION_CODE_HASH=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migrationCodeHash()(bytes32)" 2>/dev/null); then
   if [ -n "$NEW_FWSS_VIEW_ADDRESS" ]; then
     echo "Error: NEW_FWSS_VIEW_ADDRESS does not apply to the ERC-8167 transition"
     exit 1
   fi
 
-  TRANSITION_DISPATCHER=$(cast call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "dispatcher()(address)")
-  TRANSITION_MIGRATION=$(cast call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migration()(address)")
+  TRANSITION_DISPATCHER=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "dispatcher()(address)")
+  TRANSITION_MIGRATION=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migration()(address)")
   PROPOSED_MIGRATION=$(josuke_proposed_migration "$CHAIN" "$FWSS_PROXY_ADDRESS")
   if [ "$(echo "$TRANSITION_MIGRATION" | tr '[:upper:]' '[:lower:]')" != "$(echo "$PROPOSED_MIGRATION" | tr '[:upper:]' '[:lower:]')" ]; then
     echo "Error: the transition pins migration $TRANSITION_MIGRATION, but $JOSUKE_LEDGER proposes '$PROPOSED_MIGRATION'"
@@ -108,7 +113,7 @@ if TRANSITION_MIGRATION_CODE_HASH=$(cast call -f 0x00000000000000000000000000000
     echo "Error: the code at $TRANSITION_MIGRATION changed since the transition was deployed"
     exit 1
   fi
-  TRANSITION_PREVIOUS=$(cast call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "previousImplementation()(address)")
+  TRANSITION_PREVIOUS=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "previousImplementation()(address)")
   CURRENT_IMPL=$(cast parse-bytes32-address "$(cast storage "$FWSS_PROXY_ADDRESS" 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc)")
   if [ "$(echo "$TRANSITION_PREVIOUS" | tr '[:upper:]' '[:lower:]')" != "$(echo "$CURRENT_IMPL" | tr '[:upper:]' '[:lower:]')" ]; then
     echo "Error: the transition would abort to $TRANSITION_PREVIOUS, but the proxy runs $CURRENT_IMPL"
