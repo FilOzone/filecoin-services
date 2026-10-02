@@ -54,7 +54,7 @@ $(EVM_DIR)/bin/evm:
 .PHONY: erc8167
 erc8167:
 	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
-	FOUNDRY_SOLC_VERSION=$$(forge config --json | jq -r .solc) $(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
+	$(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
 
 # Storage layout generation
 $(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
