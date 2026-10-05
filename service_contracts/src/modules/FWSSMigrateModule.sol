@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+pragma solidity 0.8.37;
+
+import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {IMigrateModule} from "../interfaces/IMigrateModule.sol";
+import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
+import {LibUpgradeRoutes} from "../lib/LibUpgradeRoutes.sol";
+import {FWSSStorage} from "../storage/FWSSStorage.sol";
+
+/// @notice Executes owner-announced Josuke migrations through the ERC-8167 proxy.
+contract FWSSMigrateModule is IMigrateModule, FWSSStorage, FWSSOwnable {
+    event UpgradeAnnounced(FWSSStorage.PlannedUpgrade plannedUpgrade);
+
+    error InvalidMigration(address migration);
+    error MigrationNotAnnounced(address migration);
+    error MigrationNotReady(uint96 afterEpoch);
+    error DispatcherChanged(address implementation);
+
+    function announceMigration(address migration, uint96 delayEpochs) external override onlyOwner {
+        if (migration.code.length == 0 || migration == address(this)) revert InvalidMigration(migration);
+
+        uint96 delay = delayEpochs == 0 ? 1 : delayEpochs;
+        FWSSStorage.PlannedUpgrade storage plan = nextUpgrade;
+        plan.nextImplementation = migration;
+        plan.afterEpoch = uint96(block.number) + delay;
+
+        emit UpgradeAnnounced(plan);
+    }
+
+    /// @dev Josuke calls this entry point with empty calldata to the migration itself.
+    function migrate(address migration) external override onlyOwner {
+        FWSSStorage.PlannedUpgrade storage plan = nextUpgrade;
+        if (migration != plan.nextImplementation || migration == address(0)) {
+            revert MigrationNotAnnounced(migration);
+        }
+        if (block.number < plan.afterEpoch) revert MigrationNotReady(plan.afterEpoch);
+
+        // Consume the announcement before executing code in the proxy's storage context.
+        delete plan.nextImplementation;
+        delete plan.afterEpoch;
+
+        // FWSS sits behind an ERC-1967 proxy whose implementation is the dispatcher.
+        address dispatcher = ERC1967Utils.getImplementation();
+
+        emit DiamondDelegateCall(migration, "");
+        Address.functionDelegateCall(migration, "");
+
+        // Migrations change routes; one that swaps the dispatcher would pass the route check below.
+        address implementation = ERC1967Utils.getImplementation();
+        if (implementation != dispatcher) revert DispatcherChanged(implementation);
+        LibUpgradeRoutes.requireUpgradeRoutes(dispatcher);
+    }
+}

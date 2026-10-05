@@ -34,6 +34,8 @@ The snapshot normalizer maps only the declaring-contract names of `DataSetInfo` 
 member types remain part of the comparison. The ABI's `PlannedUpgrade.internalType`
 changes its declaring-contract name; tuple encoding is unchanged.
 
+Fields are internal so that modules inheriting `FWSSStorage` do not export getters.
+
 Layout checks do not execute a historical upgrade or prove migration behavior.
 This PR changes declarations and inheritance; dispatcher and module behavior belong
 to later changes with their own integration tests.

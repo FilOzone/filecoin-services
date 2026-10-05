@@ -30,11 +30,13 @@ def type_shape($types; $id):
       ]
     } else {} end;
 
+# Internal fields may take a leading underscore to avoid clashing with a same-named getter;
+# publish them under the unprefixed label so the layout check and slot constants stay stable.
 [
   .types as $types
   | .storage[]
   | {
-      label,
+      label: (.label | ltrimstr("_")),
       slot,
       offset,
       type: (($types[.type].label // .type) | stable_type_label),
