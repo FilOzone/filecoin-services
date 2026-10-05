@@ -104,7 +104,7 @@ if TRANSITION_MIGRATION_CODE_HASH=$(cast_call -f 0x00000000000000000000000000000
 
   TRANSITION_DISPATCHER=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "dispatcher()(address)")
   TRANSITION_MIGRATION=$(cast_call -f 0x0000000000000000000000000000000000000000 "$NEW_WARM_STORAGE_IMPLEMENTATION_ADDRESS" "migration()(address)")
-  PROPOSED_MIGRATION=$(josuke_proposed_migration "$CHAIN" "$FWSS_PROXY_ADDRESS")
+  PROPOSED_MIGRATION=$(josuke_proposed_migration "$FWSS_PROXY_ADDRESS")
   if [ "$(echo "$TRANSITION_MIGRATION" | tr '[:upper:]' '[:lower:]')" != "$(echo "$PROPOSED_MIGRATION" | tr '[:upper:]' '[:lower:]')" ]; then
     echo "Error: the transition pins migration $TRANSITION_MIGRATION, but $JOSUKE_LEDGER proposes '$PROPOSED_MIGRATION'"
     exit 1

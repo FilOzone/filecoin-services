@@ -48,7 +48,7 @@ if [ -z "$FWSS_PROXY_ADDRESS" ]; then
   exit 1
 fi
 
-MIGRATION_ADDRESS=$(josuke_proposed_migration "$CHAIN" "$FWSS_PROXY_ADDRESS")
+MIGRATION_ADDRESS=$(josuke_proposed_migration "$FWSS_PROXY_ADDRESS")
 if [ -z "$MIGRATION_ADDRESS" ]; then
   echo "Error: $JOSUKE_LEDGER has no proposed migration for $FWSS_PROXY_ADDRESS on chain $CHAIN; run josuke deploy"
   exit 1
