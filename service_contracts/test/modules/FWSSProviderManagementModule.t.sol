@@ -5,13 +5,9 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {Errors} from "../../src/Errors.sol";
-import {
-    FilecoinWarmStorageServiceProviderManagementModule
-} from "../../src/modules/FilecoinWarmStorageServiceProviderManagementModule.sol";
+import {FWSSProviderManagementModule} from "../../src/modules/FWSSProviderManagementModule.sol";
 
-contract FilecoinWarmStorageServiceProviderManagementModuleHarness is
-    FilecoinWarmStorageServiceProviderManagementModule
-{
+contract FWSSProviderManagementModuleHarness is FWSSProviderManagementModule {
     function isProviderApproved(uint256 providerId) external view returns (bool) {
         return approvedProviders[providerId];
     }
@@ -25,11 +21,11 @@ contract FilecoinWarmStorageServiceProviderManagementModuleHarness is
     }
 }
 
-contract FilecoinWarmStorageServiceProviderManagementModuleTest is Test {
+contract FWSSProviderManagementModuleTest is Test {
     bytes32 private constant OWNABLE_STORAGE_LOCATION =
         0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
 
-    FilecoinWarmStorageServiceProviderManagementModuleHarness public providerManagementModule;
+    FWSSProviderManagementModuleHarness public providerManagementModule;
 
     address public owner;
     address public provider1;
@@ -38,10 +34,9 @@ contract FilecoinWarmStorageServiceProviderManagementModuleTest is Test {
         owner = address(this);
         provider1 = address(0x1);
 
-        FilecoinWarmStorageServiceProviderManagementModuleHarness implementation =
-            new FilecoinWarmStorageServiceProviderManagementModuleHarness();
+        FWSSProviderManagementModuleHarness implementation = new FWSSProviderManagementModuleHarness();
         MyERC1967Proxy proxy = new MyERC1967Proxy(address(implementation), "");
-        providerManagementModule = FilecoinWarmStorageServiceProviderManagementModuleHarness(address(proxy));
+        providerManagementModule = FWSSProviderManagementModuleHarness(address(proxy));
 
         vm.store(address(proxy), OWNABLE_STORAGE_LOCATION, bytes32(uint256(uint160(owner))));
     }
