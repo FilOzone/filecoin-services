@@ -5,7 +5,7 @@ import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {FWSSEIP712} from "../lib/FWSSEIP712.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {ServiceProviderRegistry} from "../ServiceProviderRegistry.sol";
 import {Errors} from "../Errors.sol";
@@ -34,7 +34,7 @@ import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 
 /// @title FWSSDataSetModule
 /// @notice Manages dataset creation, deletion, pieces and client authorization.
-contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
+contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
     using LibRails for FilecoinPayV1;
 
     // Metadata size and count limits
