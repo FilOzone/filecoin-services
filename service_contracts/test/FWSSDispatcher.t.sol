@@ -18,6 +18,7 @@ import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagemen
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
+import {Errors} from "../src/Errors.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
@@ -80,6 +81,9 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     address internal dispatcher;
     address internal legacyImplementation;
+    // Synthetic dispatcher-only proxies have no existing rails.
+    address internal facetPaymentsContractAddress = address(0xF11E);
+    address internal facetPDPVerifierAddress = address(0xF11F);
     FWSSMigrateModule internal migrateModule;
     uint256 private legacyProxies;
 
@@ -90,6 +94,43 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     function setUp() public {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
         migrateModule = new FWSSMigrateModule();
+    }
+
+    function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+        }
+        return super._facetConstructorArgs(sourceId);
+    }
+
+    function testConfigConstructorArgsRejectZeroAddress() public {
+        facetPaymentsContractAddress = address(0);
+        string[] memory patterns = new string[](1);
+        patterns[0] = "src/modules/FWSSConfigModule.sol:FWSSConfigModule";
+        Facet[] memory facets = _resolvePatterns(patterns);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV1));
+        _deployFacetRoutes(facets);
+    }
+
+    function testConfigConstructorArgsRejectZeroVerifier() public {
+        facetPDPVerifierAddress = address(0);
+        string[] memory patterns = new string[](1);
+        patterns[0] = "src/modules/FWSSConfigModule.sol:FWSSConfigModule";
+        Facet[] memory facets = _resolvePatterns(patterns);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.PDPVerifier));
+        _deployFacetRoutes(facets);
+    }
+
+    function testConfigGettersThroughDispatcher() public {
+        string[] memory patterns = new string[](1);
+        patterns[0] = "src/modules/FWSSConfigModule.sol:FWSSConfigModule";
+        SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolvePatterns(patterns));
+        address proxy = _rawProxy();
+        for (uint256 i; i < routes.length; ++i) {
+            _route(proxy, routes[i].selector, routes[i].delegate);
+        }
+        assertEq(FilecoinWarmStorageService(proxy).paymentsContractAddress(), facetPaymentsContractAddress);
+        assertEq(FilecoinWarmStorageService(proxy).pdpVerifierAddress(), facetPDPVerifierAddress);
     }
 
     function _route(address proxy, bytes4 selector, address target) internal {
@@ -312,6 +353,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         vm.store(proxy, IMPLEMENTATION_SLOT, bytes32(uint256(uint160(implementation))));
 
         service = FilecoinWarmStorageService(proxy);
+        facetPaymentsContractAddress = service.paymentsContractAddress();
+        facetPDPVerifierAddress = service.pdpVerifierAddress();
         service.initialize(2880, 60, address(0x16));
         viewContract = new FilecoinWarmStorageServiceStateView(service);
         service.setViewContract(address(viewContract));
