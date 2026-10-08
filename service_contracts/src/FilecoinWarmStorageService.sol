@@ -40,6 +40,7 @@ import {Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
 import {StorageTerms, StorageTermsRecord} from "./lib/StorageTerms.sol";
 import {StoragePricing} from "./lib/StoragePricing.sol";
+import {FWSSStorageTerms} from "./storage/FWSSStorageTerms.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint64 constant CHALLENGES_PER_PROOF = 5;
@@ -82,7 +83,8 @@ contract FilecoinWarmStorageService is
     UUPSUpgradeable,
     OwnableUpgradeable,
     Extsload,
-    EIP712Upgradeable
+    EIP712Upgradeable,
+    FWSSStorageTerms
 {
     // Version tracking
     string public constant VERSION = "1.4.0";
@@ -323,8 +325,6 @@ contract FilecoinWarmStorageService is
     // Optional per-data-set authorizer (address(0) = default payer/session-key behavior).
     mapping(uint256 dataSetId => address authorizer) internal dataSetAuthorizer;
 
-    mapping(bytes32 storageTermsId => StorageTermsRecord) private storageTerms;
-
     event StorageTermsRegistered(
         bytes32 indexed storageTermsId, address token, uint8 tokenDecimals, uint256 pricePerTiBPerMonth, bytes32 salt
     );
@@ -458,7 +458,7 @@ contract FilecoinWarmStorageService is
         );
         storageTermsId = getStorageTermsId(terms);
         require(storageTermsId != bytes32(0), Errors.InvalidStorageTermsId(storageTermsId));
-        StorageTermsRecord storage record = storageTerms[storageTermsId];
+        StorageTermsRecord storage record = _getStorageTermsStorage().storageTerms[storageTermsId];
         if (record.version == 0) {
             record.token = terms.token;
             record.tokenDecimals = terms.tokenDecimals;
@@ -475,7 +475,7 @@ contract FilecoinWarmStorageService is
     /// @notice Stops new datasets selecting these terms; existing datasets are unaffected.
     function disableStorageTerms(bytes32 storageTermsId) external onlyOwner {
         require(storageTermsId != legacyStorageTermsId, Errors.LegacyStorageTermsCannotBeDisabled());
-        StorageTermsRecord storage record = storageTerms[storageTermsId];
+        StorageTermsRecord storage record = _getStorageTermsStorage().storageTerms[storageTermsId];
         require(record.version != 0, Errors.UnknownStorageTerms(storageTermsId));
         record.enabled = false;
         emit StorageTermsDisabled(storageTermsId);
@@ -483,7 +483,7 @@ contract FilecoinWarmStorageService is
 
     /// @notice Resolves immutable terms, including the code-defined legacy default.
     function getStorageTerms(bytes32 storageTermsId) public view returns (StorageTerms memory terms, bool enabled) {
-        StorageTermsRecord storage record = storageTerms[storageTermsId];
+        StorageTermsRecord storage record = _getStorageTermsStorage().storageTerms[storageTermsId];
         if (record.version != 0) {
             return (
                 StorageTerms(record.token, record.tokenDecimals, record.pricePerTiBPerMonth, record.salt),
