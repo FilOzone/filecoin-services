@@ -19,7 +19,7 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
 
     /// @notice Deploys what is missing and records it in deployments.json
     function run() external {
-        uint256 chain = _chainId();
+        uint256 chain = block.chainid;
         address proxy = _proxy();
         console.log("Chain:", chain);
         console.log("FWSS proxy:", proxy);

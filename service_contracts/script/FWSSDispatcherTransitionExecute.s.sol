@@ -21,7 +21,7 @@ interface IFWSSUpgradePlan {
 contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
     /// @notice Checks the plan and the transition's pins, then upgrades the proxy or prints the Safe transaction
     function run() external {
-        uint256 chain = _chainId();
+        uint256 chain = block.chainid;
         address proxy = _proxy();
         address transition = _envOrRecorded("FWSS_DISPATCHER_TRANSITION_ADDRESS");
         require(

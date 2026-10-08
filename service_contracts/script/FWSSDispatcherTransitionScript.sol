@@ -12,10 +12,6 @@ abstract contract FWSSDispatcherTransitionScript is Script {
     string internal constant FWSS_DISPATCHER_ARTIFACT = "lib/erc8167/out/Proxy.evm/Proxy.json";
     string internal constant FWSS_TRANSITION_ARTIFACT = "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition";
 
-    function _chainId() internal view returns (uint256) {
-        return block.chainid;
-    }
-
     function _proxy() internal view returns (address proxy) {
         proxy = _envOrRecorded("FWSS_PROXY_ADDRESS");
         require(
@@ -32,7 +28,7 @@ abstract contract FWSSDispatcherTransitionScript is Script {
     /// `load_deployment_addresses` does. An empty variable counts as unset; a malformed one reverts.
     function _envOrRecorded(string memory key) internal view returns (address value) {
         value = _envAddress(key);
-        if (value == address(0)) value = DeploymentsJson.getAddress(_chainId(), key);
+        if (value == address(0)) value = DeploymentsJson.getAddress(block.chainid, key);
     }
 
     /// @notice Reads an address from the environment, or zero when unset. An empty variable counts as unset; a
