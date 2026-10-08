@@ -21,6 +21,8 @@ import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {Errors} from "../src/Errors.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {MockERC20} from "./mocks/SharedMocks.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
 
 contract CallContextFixture {
@@ -84,6 +86,10 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     // Synthetic dispatcher-only proxies have no existing rails.
     address internal facetPaymentsContractAddress = address(0xF11E);
     address internal facetPDPVerifierAddress = address(0xF11F);
+    IERC20Metadata internal facetToken;
+    address internal facetBeneficiary = address(0xF120);
+    address internal facetProviderRegistry = address(0xF121);
+    address internal facetSessionKeyRegistry = address(0xF122);
     FWSSMigrateModule internal migrateModule;
     uint256 private legacyProxies;
 
@@ -94,11 +100,15 @@ contract FWSSDispatcherTest is JosukeFacetSet {
     function setUp() public {
         dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
         migrateModule = new FWSSMigrateModule();
+        facetToken = new MockERC20();
     }
 
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
             return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
+            return abi.encode(facetToken, facetBeneficiary, facetProviderRegistry, facetSessionKeyRegistry);
         }
         return super._facetConstructorArgs(sourceId);
     }
@@ -355,6 +365,11 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         service = FilecoinWarmStorageService(proxy);
         facetPaymentsContractAddress = service.paymentsContractAddress();
         facetPDPVerifierAddress = service.pdpVerifierAddress();
+        facetToken = service.usdfcTokenAddress();
+        facetBeneficiary = service.filBeamBeneficiaryAddress();
+        facetProviderRegistry = address(service.serviceProviderRegistry());
+        facetSessionKeyRegistry = address(service.sessionKeyRegistry());
+        vm.mockCall(address(facetToken), abi.encodeCall(IERC20Metadata.decimals, ()), abi.encode(uint8(18)));
         service.initialize(2880, 60, address(0x16));
         viewContract = new FilecoinWarmStorageServiceStateView(service);
         service.setViewContract(address(viewContract));
