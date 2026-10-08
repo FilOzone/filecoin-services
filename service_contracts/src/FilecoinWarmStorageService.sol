@@ -228,7 +228,7 @@ contract FilecoinWarmStorageService is
     // Constants
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
-    bytes32 private constant STORAGE_TERMS_V1_DOMAIN = keccak256("filecoin.StorageTerms.v1");
+    bytes32 private constant STORAGE_TERMS_V1_DOMAIN = keccak256("filecoin.FWSS.StorageTerms.v1");
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
