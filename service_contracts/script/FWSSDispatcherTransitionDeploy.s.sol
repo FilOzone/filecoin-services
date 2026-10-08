@@ -19,6 +19,14 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
 
     /// @notice Deploys what is missing and records it in deployments.json
     function run() external {
+        // forge deploys this script from its default sender at nonce 0, the address a walletless broadcast would record
+        // for the dispatcher, so every later run would find this script's code there instead of redeploying.
+        (, address sender,) = vm.readCallers();
+        require(
+            !vm.isContext(VmSafe.ForgeContext.ScriptBroadcast) || sender != DEFAULT_SENDER,
+            "--broadcast needs a wallet: pass --keystore, --account or --private-key"
+        );
+
         uint256 chain = block.chainid;
         address proxy = _proxy();
         console.log("Chain:", chain);
