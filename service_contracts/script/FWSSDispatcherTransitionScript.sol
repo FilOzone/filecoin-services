@@ -3,6 +3,7 @@ pragma solidity 0.8.37;
 
 import {Script} from "forge-std/Script.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSS_DISPATCHER_CODE_HASH} from "../src/FWSSDispatcherTransition.sol";
 import {DeploymentsJson} from "./lib/DeploymentsJson.sol";
 
@@ -39,6 +40,23 @@ abstract contract FWSSDispatcherTransitionScript is Script {
 
     function _envSet(string memory key) internal view returns (bool) {
         return vm.envExists(key) && bytes(vm.envString(key)).length != 0;
+    }
+
+    /// @notice Reverts when the proxy runs a transition: an upgrade with empty data installed it without `migrate`, so
+    /// only `migrate(migration)` or `abortTransition()` on the proxy can move it on. Neither script can help, and
+    /// a deploy would record a new transition pinned to this one as its rollback target.
+    function _requireNotOnTransition(address proxy, address implementation) internal view {
+        (bool success, bytes memory result) =
+            implementation.staticcall(abi.encodeCall(ERC8167Transition(implementation).migrationCodeHash, ()));
+        require(
+            !success || result.length != 32,
+            string.concat(
+                "the proxy runs the transition ",
+                vm.toString(implementation),
+                "; call migrate(migration) or abortTransition() on ",
+                vm.toString(proxy)
+            )
+        );
     }
 
     function _requirePinnedDispatcher(address dispatcher) internal view {

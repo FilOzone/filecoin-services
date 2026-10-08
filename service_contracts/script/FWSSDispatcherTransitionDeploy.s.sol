@@ -31,6 +31,7 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
         require(
             previous.code.length != 0, string.concat("the proxy implementation ", vm.toString(previous), " has no code")
         );
+        _requireNotOnTransition(proxy, previous);
         console.log("Current FWSS implementation:", previous);
 
         address migration = JosukeLedger.proposedMigration(proxy, chain);

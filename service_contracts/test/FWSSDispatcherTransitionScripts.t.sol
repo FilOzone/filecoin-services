@@ -111,6 +111,9 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         _deployRefusesAfterTransition();
 
         _reset(clean);
+        _scriptsRefuseProxyLeftOnTransition();
+
+        _reset(clean);
         _executeFallsBackToViewContractAddress();
 
         _reset(clean);
@@ -437,6 +440,43 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.expectRevert(bytes("the proxy already runs the ERC-8167 dispatcher"));
         deploy.run();
+    }
+
+    /// @dev An upgrade with empty data leaves the proxy on the transition. A deploy rerun would otherwise pin a new
+    /// transition to this one and overwrite the record; execute would revert without a reason inside the view read.
+    function _scriptsRefuseProxyLeftOnTransition() internal {
+        new FWSSDispatcherTransitionDeploy().run();
+        string memory recorded = vm.readFile(DEPLOYMENTS);
+        address transition = vm.parseJsonAddress(recorded, ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS");
+        vm.prank(DEFAULT_SENDER);
+        service.announceUpgradePlan(transition, 0);
+        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        vm.roll(afterEpoch);
+        vm.prank(DEFAULT_SENDER);
+        service.upgradeToAndCall(transition, "");
+        assertEq(_implementation(), transition);
+
+        bytes memory reason = bytes(
+            string.concat(
+                "the proxy runs the transition ",
+                vm.toString(transition),
+                "; call migrate(migration) or abortTransition() on ",
+                vm.toString(proxy)
+            )
+        );
+        FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
+        vm.expectRevert(reason);
+        deploy.run();
+        assertEq(vm.readFile(DEPLOYMENTS), recorded);
+
+        FWSSDispatcherTransitionExecute execute = new FWSSDispatcherTransitionExecute();
+        vm.expectRevert(reason);
+        execute.run();
+
+        // The owner finishes or aborts through the proxy.
+        vm.prank(DEFAULT_SENDER);
+        FWSSDispatcherTransition(proxy).abortTransition();
+        assertEq(_implementation(), legacyImplementation);
     }
 
     function _executeFallsBackToViewContractAddress() internal {

@@ -34,13 +34,17 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         console.log("FWSS proxy:", proxy);
         console.log("FWSSDispatcherTransition:", transition);
 
+        // Checked first: the view reads below revert without a reason through a transition.
+        _requireNotOnTransition(proxy, _implementation(proxy));
         _requireAnnounced(proxy, transition);
         (address dispatcher, address migration) = _requirePins(proxy, chain, ERC8167Transition(transition));
         console.log("ERC-8167 dispatcher:", dispatcher);
         console.log("Josuke migration:", migration);
 
         bytes memory data = abi.encodeCall(Migrate.migrate, (migration));
+        address owner = FilecoinWarmStorageService(proxy).owner();
         if (calldataOnly) {
+            _simulateAsOwner(proxy, owner, transition, data, dispatcher);
             _printSafeTransaction(
                 proxy, abi.encodeCall(FilecoinWarmStorageService(proxy).upgradeToAndCall, (transition, data))
             );
@@ -48,7 +52,6 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         }
 
         (, address sender,) = vm.readCallers();
-        address owner = FilecoinWarmStorageService(proxy).owner();
         require(
             sender == owner,
             string.concat(
@@ -64,11 +67,7 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         vm.broadcast();
         FilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
 
-        address implementation = _implementation(proxy);
-        require(
-            implementation == dispatcher,
-            string.concat("expected dispatcher ", vm.toString(dispatcher), ", got ", vm.toString(implementation))
-        );
+        _requireDispatcherInstalled(proxy, dispatcher);
         if (vm.isContext(VmSafe.ForgeContext.ScriptDryRun)) {
             console.log("Dry run: the upgrade was simulated only, nothing was sent");
             return;
@@ -79,6 +78,29 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         );
         console.log(string.concat("  cast implementation ", vm.toString(proxy)));
         console.log("Then: josuke accept, and commit josuke.json");
+    }
+
+    /// @notice Runs the upgrade as the owner in a discarded snapshot, so the Safe signs a transaction that passed
+    /// the migration's own checks, not only this script's
+    function _simulateAsOwner(address proxy, address owner, address transition, bytes memory data, address dispatcher)
+        internal
+    {
+        uint256 snapshot = vm.snapshotState();
+
+        vm.prank(owner);
+        FilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
+        _requireDispatcherInstalled(proxy, dispatcher);
+
+        vm.revertToState(snapshot);
+        console.log("Simulated the upgrade as the owner:", owner);
+    }
+
+    function _requireDispatcherInstalled(address proxy, address dispatcher) internal view {
+        address implementation = _implementation(proxy);
+        require(
+            implementation == dispatcher,
+            string.concat("expected dispatcher ", vm.toString(dispatcher), ", got ", vm.toString(implementation))
+        );
     }
 
     function _requireAnnounced(address proxy, address transition) internal view {
