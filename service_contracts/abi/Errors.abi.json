@@ -28,6 +28,17 @@
   },
   {
     "type": "error",
+    "name": "CDNUnsupportedCurrency",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "CacheMissPaymentAlreadyTerminated",
     "inputs": [
       {
@@ -552,6 +563,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidStorageTermsId",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidTopUpAmount",
     "inputs": [
       {
@@ -560,6 +582,11 @@
         "internalType": "uint256"
       }
     ]
+  },
+  {
+    "type": "error",
+    "name": "LegacyStorageTermsCannotBeDisabled",
+    "inputs": []
   },
   {
     "type": "error",
@@ -920,8 +947,56 @@
   },
   {
     "type": "error",
+    "name": "StoragePriceBelowDefault",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minimum",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "StorageProviderChangesNotSupported",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StorageTermsDisabled",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokenDecimalsMismatch",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "specified",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "actual",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
   },
   {
     "type": "error",
@@ -967,10 +1042,43 @@
   },
   {
     "type": "error",
+    "name": "UnknownStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedExtraDataVariant",
+    "inputs": [
+      {
+        "name": "keysOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "UnsupportedSignatureV",
     "inputs": [
       {
         "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedTokenDecimals",
+    "inputs": [
+      {
+        "name": "decimals",
         "type": "uint8",
         "internalType": "uint8"
       }

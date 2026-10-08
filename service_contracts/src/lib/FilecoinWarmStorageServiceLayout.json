@@ -143,7 +143,7 @@
       "value": {
         "label": "struct FilecoinWarmStorageService.DataSetInfo",
         "encoding": "inplace",
-        "numberOfBytes": "352",
+        "numberOfBytes": "384",
         "members": [
           {
             "label": "pdpRailId",
@@ -263,6 +263,16 @@
               "label": "uint96",
               "encoding": "inplace",
               "numberOfBytes": "12"
+            }
+          },
+          {
+            "label": "storageTermsId",
+            "slot": "11",
+            "offset": 0,
+            "type": {
+              "label": "bytes32",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
             }
           }
         ]
@@ -639,6 +649,89 @@
         "label": "address",
         "encoding": "inplace",
         "numberOfBytes": "20"
+      }
+    }
+  },
+  {
+    "label": "storageTerms",
+    "slot": "24",
+    "offset": 0,
+    "type": "mapping(bytes32 => struct StorageTermsRecord)",
+    "typeDetails": {
+      "label": "mapping(bytes32 => struct StorageTermsRecord)",
+      "encoding": "mapping",
+      "numberOfBytes": "32",
+      "key": {
+        "label": "bytes32",
+        "encoding": "inplace",
+        "numberOfBytes": "32"
+      },
+      "value": {
+        "label": "struct StorageTermsRecord",
+        "encoding": "inplace",
+        "numberOfBytes": "96",
+        "members": [
+          {
+            "label": "token",
+            "slot": "0",
+            "offset": 0,
+            "type": {
+              "label": "address",
+              "encoding": "inplace",
+              "numberOfBytes": "20"
+            }
+          },
+          {
+            "label": "tokenDecimals",
+            "slot": "0",
+            "offset": 20,
+            "type": {
+              "label": "uint8",
+              "encoding": "inplace",
+              "numberOfBytes": "1"
+            }
+          },
+          {
+            "label": "version",
+            "slot": "0",
+            "offset": 21,
+            "type": {
+              "label": "uint8",
+              "encoding": "inplace",
+              "numberOfBytes": "1"
+            }
+          },
+          {
+            "label": "enabled",
+            "slot": "0",
+            "offset": 22,
+            "type": {
+              "label": "bool",
+              "encoding": "inplace",
+              "numberOfBytes": "1"
+            }
+          },
+          {
+            "label": "pricePerTiBPerMonth",
+            "slot": "1",
+            "offset": 0,
+            "type": {
+              "label": "uint256",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          },
+          {
+            "label": "salt",
+            "slot": "2",
+            "offset": 0,
+            "type": {
+              "label": "bytes32",
+              "encoding": "inplace",
+              "numberOfBytes": "32"
+            }
+          }
+        ]
       }
     }
   }

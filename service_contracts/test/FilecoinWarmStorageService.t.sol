@@ -712,6 +712,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare ExtraData
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
@@ -838,6 +839,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory metadataValues = new string[](0);
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
@@ -957,6 +959,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with metadataKeys/metadataValues
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client, clientDataSetId: 0, metadataKeys: dsKeys, metadataValues: dsValues, signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData = abi.encode(
@@ -1166,6 +1169,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: insufficientClient,
             clientDataSetId: 999,
             metadataKeys: dsKeys,
@@ -1211,6 +1215,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Exact Minimum Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: exactClient,
             clientDataSetId: 1000,
             metadataKeys: dsKeys,
@@ -1252,6 +1257,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Above Minimum Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: aboveMinClient,
             clientDataSetId: 1001,
             metadataKeys: dsKeys,
@@ -1296,6 +1302,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset - should succeed with minimal funds
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Limited Funds Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: limitedClient,
             clientDataSetId: 1001,
             metadataKeys: dsKeys,
@@ -1349,6 +1356,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Rate Update Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: testClient,
             clientDataSetId: 1002,
             metadataKeys: dsKeys,
@@ -1520,6 +1528,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Not Approved Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: testClient,
             clientDataSetId: 2000,
             metadataKeys: dsKeys,
@@ -1572,6 +1581,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Rate Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: testClient,
             clientDataSetId: 2001,
             metadataKeys: dsKeys,
@@ -1631,6 +1641,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Lockup Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: testClient,
             clientDataSetId: 2002,
             metadataKeys: dsKeys,
@@ -1690,6 +1701,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Period Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: testClient,
             clientDataSetId: 2003,
             metadataKeys: dsKeys,
@@ -1745,6 +1757,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "All Sufficient Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: testClient,
             clientDataSetId: 2004,
             metadataKeys: dsKeys,
@@ -1780,6 +1793,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     ) internal returns (bytes memory) {
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             metadataKeys: metadataKeys,
             clientDataSetId: nextClientDataSetId++,
             metadataValues: metadataValues,
@@ -1974,6 +1988,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare extra data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: clientAddress,
             clientDataSetId: nextClientDataSetId++,
             metadataKeys: metadataKeys,
@@ -2118,6 +2133,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -2329,6 +2345,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -2447,6 +2464,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare data set creation data
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -3982,6 +4000,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
@@ -4035,6 +4054,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
@@ -4086,6 +4106,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory metadataValues = new string[](0);
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
@@ -5078,6 +5099,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Setup: Create a dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 100,
             metadataKeys: dsKeys,
@@ -5124,6 +5146,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Setup: Create a dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Independence");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 200,
             metadataKeys: dsKeys,
@@ -5175,6 +5198,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Dataset 1");
         FilecoinWarmStorageService.DataSetCreateData memory createData1 = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 300,
             metadataKeys: dsKeys,
@@ -5183,6 +5207,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         });
 
         FilecoinWarmStorageService.DataSetCreateData memory createData2 = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 301,
             metadataKeys: dsKeys,
@@ -5245,6 +5270,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Use nonce 777 to create a dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Isolation Test");
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             payer: client,
             clientDataSetId: 777, // This uses nonce 777 in the clientNonces mapping
             metadataKeys: dsKeys,

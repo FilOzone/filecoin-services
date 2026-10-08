@@ -38,6 +38,8 @@ import {
 } from "./lib/PriceListUSDFC.sol";
 import {Rails} from "./lib/Rails.sol";
 import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
+import {StorageTerms, StorageTermsRecord} from "./lib/StorageTerms.sol";
+import {StoragePricing} from "./lib/StoragePricing.sol";
 
 uint256 constant NO_PROVING_DEADLINE = 0;
 uint64 constant CHALLENGES_PER_PROOF = 5;
@@ -159,6 +161,7 @@ contract FilecoinWarmStorageService is
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
         uint96 pendingOneTimePayments; // fees accumulated since last flush via updateStorageRates
         uint96 lifecycleReserveBalance; // local mirror of rail's lockupFixed; decremented on flush
+        bytes32 storageTermsId; // zero for pre-upgrade datasets using the fixed legacy terms
     }
 
     // Storage for data set payment information with dataSetId
@@ -198,6 +201,8 @@ contract FilecoinWarmStorageService is
         string[] metadataValues;
         // The signature bytes (v, r, s)
         bytes signature;
+        // Zero denotes the legacy payload; explicit payloads must specify a non-zero ID.
+        bytes32 storageTermsId;
     }
 
     // Structure for service pricing information
@@ -221,6 +226,7 @@ contract FilecoinWarmStorageService is
     // Constants
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
+    bytes32 private constant STORAGE_TERMS_V1_DOMAIN = keccak256("filecoin.StorageTerms.v1");
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
@@ -246,6 +252,7 @@ contract FilecoinWarmStorageService is
     address public immutable filBeamBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry public immutable sessionKeyRegistry;
+    bytes32 public immutable legacyStorageTermsId;
 
     // =========================================================================
     // Storage variables
@@ -316,6 +323,14 @@ contract FilecoinWarmStorageService is
     // Optional per-data-set authorizer (address(0) = default payer/session-key behavior).
     mapping(uint256 dataSetId => address authorizer) internal dataSetAuthorizer;
 
+    mapping(bytes32 storageTermsId => StorageTermsRecord) private storageTerms;
+
+    event StorageTermsRegistered(
+        bytes32 indexed storageTermsId, address token, uint8 tokenDecimals, uint256 pricePerTiBPerMonth, bytes32 salt
+    );
+    event StorageTermsDisabled(bytes32 indexed storageTermsId);
+    event DataSetStorageTermsSelected(uint256 indexed dataSetId, bytes32 indexed storageTermsId);
+
     event UpgradeAnnounced(PlannedUpgrade plannedUpgrade);
 
     event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
@@ -365,6 +380,9 @@ contract FilecoinWarmStorageService is
 
         require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
+        legacyStorageTermsId = getStorageTermsId(
+            StorageTerms(address(_usdfc), uint8(TOKEN_DECIMALS), STORAGE_PRICE_PER_TIB_PER_MONTH, bytes32(0))
+        );
 
         require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
         filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
@@ -412,6 +430,83 @@ contract FilecoinWarmStorageService is
 
         maxProvingPeriod = _maxProvingPeriod;
         challengeWindowSize = _challengeWindowSize;
+    }
+
+    /// @notice Content identifier for a V1 definition; availability is not part of its identity.
+    function getStorageTermsId(StorageTerms memory terms) public pure returns (bytes32) {
+        return keccak256(
+            abi.encode(
+                STORAGE_TERMS_V1_DOMAIN, terms.token, terms.tokenDecimals, terms.pricePerTiBPerMonth, terms.salt
+            )
+        );
+    }
+
+    /// @notice Registers and enables immutable terms, or re-enables an identical definition.
+    function registerStorageTerms(StorageTerms calldata terms) external onlyOwner returns (bytes32 storageTermsId) {
+        require(terms.tokenDecimals <= TOKEN_DECIMALS, Errors.UnsupportedTokenDecimals(terms.tokenDecimals));
+        uint8 actualDecimals =
+            terms.token == address(0) ? uint8(TOKEN_DECIMALS) : IERC20Metadata(terms.token).decimals();
+        require(
+            actualDecimals == terms.tokenDecimals,
+            Errors.TokenDecimalsMismatch(terms.token, terms.tokenDecimals, actualDecimals)
+        );
+        uint256 scale = 10 ** (TOKEN_DECIMALS - terms.tokenDecimals);
+        uint256 minimum = (STORAGE_PRICE_PER_TIB_PER_MONTH + scale - 1) / scale;
+        require(
+            terms.pricePerTiBPerMonth >= minimum,
+            Errors.StoragePriceBelowDefault(terms.pricePerTiBPerMonth, minimum)
+        );
+        storageTermsId = getStorageTermsId(terms);
+        require(storageTermsId != bytes32(0), Errors.InvalidStorageTermsId(storageTermsId));
+        StorageTermsRecord storage record = storageTerms[storageTermsId];
+        if (record.version == 0) {
+            record.token = terms.token;
+            record.tokenDecimals = terms.tokenDecimals;
+            record.pricePerTiBPerMonth = terms.pricePerTiBPerMonth;
+            record.salt = terms.salt;
+            record.version = 1;
+        }
+        record.enabled = true;
+        emit StorageTermsRegistered(
+            storageTermsId, terms.token, terms.tokenDecimals, terms.pricePerTiBPerMonth, terms.salt
+        );
+    }
+
+    /// @notice Stops new datasets selecting these terms; existing datasets are unaffected.
+    function disableStorageTerms(bytes32 storageTermsId) external onlyOwner {
+        require(storageTermsId != legacyStorageTermsId, Errors.LegacyStorageTermsCannotBeDisabled());
+        StorageTermsRecord storage record = storageTerms[storageTermsId];
+        require(record.version != 0, Errors.UnknownStorageTerms(storageTermsId));
+        record.enabled = false;
+        emit StorageTermsDisabled(storageTermsId);
+    }
+
+    /// @notice Resolves immutable terms, including the code-defined legacy default.
+    function getStorageTerms(bytes32 storageTermsId) public view returns (StorageTerms memory terms, bool enabled) {
+        StorageTermsRecord storage record = storageTerms[storageTermsId];
+        if (record.version != 0) {
+            return (
+                StorageTerms(record.token, record.tokenDecimals, record.pricePerTiBPerMonth, record.salt),
+                record.enabled
+            );
+        }
+        require(storageTermsId == legacyStorageTermsId, Errors.UnknownStorageTerms(storageTermsId));
+        return (
+            StorageTerms(
+                address(usdfcTokenAddress), uint8(TOKEN_DECIMALS), STORAGE_PRICE_PER_TIB_PER_MONTH, bytes32(0)
+            ),
+            true
+        );
+    }
+
+    function getDataSetStorageTermsId(uint256 dataSetId) external view returns (bytes32) {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+        return info.storageTermsId == bytes32(0) ? legacyStorageTermsId : info.storageTermsId;
+    }
+
+    function _dataSetStorageTerms(DataSetInfo storage info) internal view returns (StorageTerms memory terms) {
+        (terms,) = getStorageTerms(info.storageTermsId == bytes32(0) ? legacyStorageTermsId : info.storageTermsId);
     }
 
     function name() external pure override returns (string memory) {
@@ -561,6 +656,10 @@ contract FilecoinWarmStorageService is
             Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
         );
         DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+        bytes32 selectedTermsId =
+            createData.storageTermsId == bytes32(0) ? legacyStorageTermsId : createData.storageTermsId;
+        (StorageTerms memory terms, bool enabled) = getStorageTerms(selectedTermsId);
+        require(enabled, Errors.StorageTermsDisabled(selectedTermsId));
 
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
@@ -590,6 +689,7 @@ contract FilecoinWarmStorageService is
         info.commissionBps = SERVICE_COMMISSION_BPS;
         info.clientDataSetId = createData.clientDataSetId;
         info.providerId = providerId;
+        info.storageTermsId = selectedTermsId;
 
         // Store each metadata key-value entry for this data set
         require(
@@ -622,22 +722,30 @@ contract FilecoinWarmStorageService is
             dataSetMetadata[dataSetId][key] = value;
         }
 
-        // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
+        // The payer must approve and fund the token selected by the signed storage terms.
 
         // Create the payment rails using the FilecoinPayV1 contract
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
         // Determine once whether CDN is enabled in metadata and reuse the result
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
+        require(
+            !hasCDN || terms.token == address(usdfcTokenAddress), Errors.CDNUnsupportedCurrency(terms.token)
+        );
 
         (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = payments.createRails(
-            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
+            dataSetId,
+            IERC20(terms.token),
+            createData.payer,
+            payee,
+            hasCDN ? filBeamBeneficiaryAddress : address(0),
+            terms.tokenDecimals
         );
 
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
-        info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
-        info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
+        info.lifecycleReserveBalance = uint96(StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, terms.tokenDecimals));
+        info.pendingOneTimePayments = uint96(StoragePricing.scaleAmount(CREATE_DATA_SET_FEE, terms.tokenDecimals));
         if (hasCDN) {
             info.cacheMissRailId = cacheMissRailId;
             info.cdnRailId = cdnRailId;
@@ -655,6 +763,7 @@ contract FilecoinWarmStorageService is
             createData.metadataKeys,
             createData.metadataValues
         );
+        emit DataSetStorageTermsSelected(dataSetId, selectedTermsId);
     }
 
     /**
@@ -820,8 +929,10 @@ contract FilecoinWarmStorageService is
             dataSetId, payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature
         );
 
-        uint96 pending =
-            info.pendingOneTimePayments + uint96(ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE);
+        uint8 tokenDecimals = _dataSetStorageTerms(info).tokenDecimals;
+        uint96 pending = info.pendingOneTimePayments
+            + uint96(StoragePricing.scaleAmount(ADD_PIECES_BASE_FEE, tokenDecimals))
+            + uint96(pieceData.length * StoragePricing.scaleAmount(ADD_PIECES_PER_PIECE_FEE, tokenDecimals));
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
@@ -897,9 +1008,13 @@ contract FilecoinWarmStorageService is
         // Verify the signature
         verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
-        uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
+        uint8 tokenDecimals = _dataSetStorageTerms(info).tokenDecimals;
+        uint96 newPending = info.pendingOneTimePayments
+            + uint96(StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, tokenDecimals));
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
-            .replenishReserveIfNeeded(info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending);
+            .replenishReserveIfNeeded(
+                info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, tokenDecimals
+            );
         info.pendingOneTimePayments = newPending;
 
         // Queue piece IDs for metadata cleanup at nextProvingPeriod
@@ -1098,7 +1213,8 @@ contract FilecoinWarmStorageService is
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = _verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             immediateTermination = true;
-            info.pendingOneTimePayments += uint96(TERMINATE_FEE);
+            info.pendingOneTimePayments +=
+                uint96(StoragePricing.scaleAmount(TERMINATE_FEE, _dataSetStorageTerms(info).tokenDecimals));
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,
@@ -1243,7 +1359,14 @@ contract FilecoinWarmStorageService is
 
         info.lifecycleReserveBalance = FilecoinPayV1(paymentsContractAddress)
             .updateStorageRates(
-                dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch, immediateTermination
+                dataSetId,
+                pdpRailId,
+                leafCount,
+                pending,
+                reserveBalance,
+                info.pdpEndEpoch,
+                immediateTermination,
+                _dataSetStorageTerms(info)
             );
         info.pendingOneTimePayments = 0;
     }
@@ -1327,17 +1450,29 @@ contract FilecoinWarmStorageService is
      * @param extraData The encoded extra data from PDPVerifier
      * @return decoded The decoded DataSetCreateData struct
      */
-    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (address payer, uint256 clientDataSetId, string[] memory keys, string[] memory values, bytes memory signature) =
-            abi.decode(extraData, (address, uint256, string[], string[], bytes));
-
-        return DataSetCreateData({
-            payer: payer,
-            clientDataSetId: clientDataSetId,
-            metadataKeys: keys,
-            metadataValues: values,
-            signature: signature
-        });
+    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory decoded)
+    {
+        require(extraData.length >= 160, Errors.ExtraDataRequired());
+        uint256 keysOffset;
+        assembly ("memory-safe") {
+            keysOffset := calldataload(add(extraData.offset, 64))
+        }
+        if (keysOffset == 0xa0) {
+            (decoded.payer, decoded.clientDataSetId, decoded.metadataKeys, decoded.metadataValues, decoded.signature) =
+                abi.decode(extraData, (address, uint256, string[], string[], bytes));
+        } else if (keysOffset == 0xc0) {
+            (
+                decoded.payer,
+                decoded.clientDataSetId,
+                decoded.metadataKeys,
+                decoded.metadataValues,
+                decoded.signature,
+                decoded.storageTermsId
+            ) = abi.decode(extraData, (address, uint256, string[], string[], bytes, bytes32));
+            require(decoded.storageTermsId != bytes32(0), Errors.InvalidStorageTermsId(decoded.storageTermsId));
+        } else {
+            revert Errors.UnsupportedExtraDataVariant(keysOffset);
+        }
     }
 
     /**
@@ -1449,16 +1584,25 @@ contract FilecoinWarmStorageService is
      * @param payee The service provider address
      */
     function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
-        // Compute the EIP-712 digest for the struct hash
-        bytes32 digest = _hashTypedDataV4(
-            SignatureVerificationLib.createDataSetStructHash(
+        bytes32 structHash;
+        bytes32 permission;
+        if (createData.storageTermsId == bytes32(0)) {
+            structHash = SignatureVerificationLib.createDataSetStructHash(
                 createData.clientDataSetId, payee, createData.metadataKeys, createData.metadataValues
-            )
-        );
-
-        // Delegate to library for verification
+            );
+            permission = SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH;
+        } else {
+            structHash = SignatureVerificationLib.createDataSetWithStorageTermsStructHash(
+                createData.clientDataSetId,
+                payee,
+                createData.metadataKeys,
+                createData.metadataValues,
+                createData.storageTermsId
+            );
+            permission = SignatureVerificationLib.CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH;
+        }
         SignatureVerificationLib.verifyCreateDataSetSignature(
-            createData.payer, createData.signature, digest, sessionKeyRegistry
+            createData.payer, createData.signature, _hashTypedDataV4(structHash), sessionKeyRegistry, permission
         );
     }
 

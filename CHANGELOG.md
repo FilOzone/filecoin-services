@@ -5,6 +5,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+
+- Prototyped immutable `StorageTerms` with owner registration, disable/re-register availability for non-legacy terms, versioned content IDs, and a terms ID appended to dataset storage. Added backwards-compatible signed dataset creation, a separate session-key permission, token-unit payment calculations, native-token definitions, and FWSS lookup getters without duplicating them on StateView. The legacy definition can be fully registered but cannot be disabled in this prototype. Non-default-currency CDN requests are rejected. Monetary rounding and production code-size optimization remain design considerations.
+
 ## [1.4.0] - FWSS Breaking Upgrade
 
 This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.4.0 and updates the PDPVerifier integration baseline to v3.5.0.

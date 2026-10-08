@@ -21,6 +21,10 @@ library SignatureVerificationLib {
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
     );
 
+    bytes32 internal constant CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH = keccak256(
+        "CreateDataSetWithStorageTerms(uint256 clientDataSetId,address payee,MetadataEntry[] metadata,bytes32 storageTermsId)MetadataEntry(string key,string value)"
+    );
+
     bytes32 internal constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
     bytes32 internal constant PIECE_METADATA_TYPEHASH =
@@ -75,6 +79,24 @@ library SignatureVerificationLib {
     ) public pure returns (bytes32 structHash) {
         return keccak256(
             abi.encode(CREATE_DATA_SET_TYPEHASH, clientDataSetId, payee, hashMetadataEntries(keys, values))
+        );
+    }
+
+    function createDataSetWithStorageTermsStructHash(
+        uint256 clientDataSetId,
+        address payee,
+        string[] calldata keys,
+        string[] calldata values,
+        bytes32 storageTermsId
+    ) public pure returns (bytes32 structHash) {
+        return keccak256(
+            abi.encode(
+                CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH,
+                clientDataSetId,
+                payee,
+                hashMetadataEntries(keys, values),
+                storageTermsId
+            )
         );
     }
 
@@ -187,12 +209,14 @@ library SignatureVerificationLib {
      * @param signature The signature bytes
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
+     * @param permission The operation permission required for session keys
      */
     function verifyCreateDataSetSignature(
         address payer,
         bytes calldata signature,
         bytes32 digest,
-        SessionKeyRegistry sessionKeyRegistry
+        SessionKeyRegistry sessionKeyRegistry,
+        bytes32 permission
     ) public view {
         // The digest is already computed by the calling contract
         // Just use it directly for signature verification
@@ -204,7 +228,7 @@ library SignatureVerificationLib {
             return;
         }
         require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, permission) >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
     }

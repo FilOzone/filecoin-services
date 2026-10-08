@@ -169,6 +169,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         metadataValues[0] = "Test Data Set";
 
         FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+            storageTermsId: bytes32(0),
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,

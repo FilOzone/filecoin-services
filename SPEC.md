@@ -4,11 +4,25 @@
 
 ### Pricing Model
 
-FilecoinWarmStorageService uses **static global pricing**. All payment rails use the same price regardless of which provider stores the data. The default storage price is 2.5 USDFC per TiB/month.
+**Storage terms** are reusable, immutable conditions selected by a client and accepted by a provider when establishing a dataset. The prototype represents them as `{token, tokenDecimals, pricePerTiBPerMonth, salt}` in [`StorageTerms.sol`](service_contracts/src/lib/StorageTerms.sol). Prices use the selected token's smallest units; `salt` distinguishes otherwise identical definitions without enforcing a region or service guarantee.
 
-All pricing constants (rates, fees, and lockup amounts) are defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). The on-chain entry point is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol) which assembles them into the `PriceList` struct.
+The owner calls `registerStorageTerms` to register and enable a definition, or to re-enable the same definition after `disableStorageTerms`. Every registration emits `StorageTermsRegistered`; disabling only prevents new datasets selecting those terms. Dataset terms cannot be changed through this API. Definitions and availability share one mapping record; the dataset's terms ID is appended to `DataSetInfo` at relative slot 11.
 
-Providers may advertise their own prices in the ServiceProviderRegistry, but these are informational for other services, and does not affect actual payments in FilecoinWarmStorageService.
+V1 IDs are `keccak256(abi.encode(keccak256("filecoin.StorageTerms.v1"), token, tokenDecimals, pricePerTiBPerMonth, salt))`. Availability is excluded from the hash. Future definition versions must preserve existing IDs and their interpretation.
+
+Registration verifies ERC-20 decimals against the token and supports 0–18 decimals. Address zero denotes FilecoinPay's native token with 18 decimals; existence is determined by the record's nonzero version, not its token address. Token suitability is the owner's responsibility. The minimum price is the decimal-normalized legacy baseline, with no owner bypass or market-price oracle. USD-stablecoin parity is the intended commercial assumption; native-token support is mechanical and does not establish a USD valuation.
+
+The fixed `legacyStorageTermsId` selects USDFC at 2.5 per TiB/month with zero salt. Explicit registration persists its complete definition like any other terms; before registration, resolution falls back to its code-defined value. Legacy terms cannot be disabled in this prototype. Pre-upgrade datasets with a zero stored ID resolve to these terms.
+
+#### Dataset creation
+
+The existing payload remains `(payer, clientDataSetId, keys, values, signature)` and selects the fixed legacy terms. The new payload appends `bytes32 storageTermsId`; zero, unknown, or disabled explicit IDs revert without fallback. The first dynamic-field offset distinguishes the legacy (`0xa0`) and explicit (`0xc0`) formats. The decoded `DataSetCreateData` includes the requested ID, with zero identifying the legacy format.
+
+The new EIP-712 type is `CreateDataSetWithStorageTerms(uint256 clientDataSetId,address payee,MetadataEntry[] metadata,bytes32 storageTermsId)MetadataEntry(string key,string value)`. Its type hash is a separate session-key permission; existing creation grants do not authorize the new operation. Provider submission is acceptance. `DataSetCreated` retains its existing ABI, followed by `DataSetStorageTermsSelected`; combining these into a V2 creation event remains a design decision.
+
+Requests with `withCDN` are rejected unless the storage currency is the default USDFC token. Provider advertising of accepted terms is not implemented.
+
+Default fees, lockups, and the legacy price catalogue remain defined in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). Registry-advertised provider prices do not override a dataset's selected terms.
 
 ### Rate Calculation
 
@@ -19,19 +33,20 @@ The payment rate per epoch is calculated from the total data size in bytes:
 EPOCHS_PER_MONTH              = 86400         # 2880 epochs/day × 30 days
 TiB                           = 1099511627776 # bytes
 
-# Default pricing (owner-adjustable)
-STORAGE_PRICE_PER_TIB_PER_MONTH = 2.5 USDFC
-DATASET_FEE_PER_MONTH           = 0.024 USDFC
+# Selected pricing
+pricePerTiBPerMonth = selected StorageTerms price, in token units
+scale              = 10 ** (18 - tokenDecimals)
+DATASET_FEE_PER_MONTH = 0.12 × 10**18
 
-# Per-epoch rate calculation
-sizeBasedRate         = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
-DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH
-finalRate             = sizeBasedRate + DATASET_FEE_PER_EPOCH
+# Per-epoch rate calculation; integer division rounds down
+sizeBasedRate       = totalBytes × pricePerTiBPerMonth ÷ (TiB × EPOCHS_PER_MONTH)
+datasetFeeRate      = (DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH) ÷ scale
+finalRate           = sizeBasedRate + datasetFeeRate
 ```
 
-Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. A 1 TiB dataset costs 2.524 USDFC/month. A dataset with no pieces is inactive: no proving is required and no payment accrues.
+A dataset with no pieces is inactive: no proving is required and no streaming payment accrues. Nonempty datasets also pay the fixed dataset fee. At the default 18-decimal price, the nominal monthly cost of 1 TiB is 2.62 USDFC before integer rounding.
 
-**Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+**Prototype rounding policy:** preserve the existing round-down calculation, scaling fixed fees and reserves from 18 decimals into the selected token's units. Six-decimal tokens have materially larger per-epoch rounding effects: the nominal 0.12-token monthly dataset fee becomes one base unit per epoch, or 0.0864 tokens over 86,400 epochs. Small storage components may round to zero. The final monetary rounding policy remains open.
 
 ### Operation Fees
 
@@ -40,19 +55,19 @@ In addition to the ongoing storage rate, FWSS charges one-time fees for specific
 | Operation | Fee | Trigger | Recipient |
 |---|---|---|---|
 | Create dataset | $0.025 | `dataSetCreated` callback | SP |
-| Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
-| Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
-| Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |
+| Add pieces | $0.008 + $0.003 × n | `piecesAdded` callback (n = piece count) | SP |
+| Schedule piece removals | $0.007 | `piecesScheduledRemove` callback | SP |
+| Terminate service (consent) | $0.006 | SP-initiated termination with payer EIP-712 signature | SP |
 
 The terminate fee applies only in the **consent case**: when the SP calls `terminateService` with a valid payer signature in `extraData`. Direct termination by the payer or unilateral SP termination does not incur this fee.
 
 #### Lifecycle Reserve
 
-The lifecycle reserve is seeded at **$0.10** when the dataset is created, stored as `lockupFixed` on the PDP rail.
+The lifecycle reserve is seeded at a nominal **$0.50** when the dataset is created, stored in the selected token's units as `lockupFixed` on the PDP rail.
 
 ```
-LIFECYCLE_RESERVE_TARGET = $0.10
-REPLENISH_THRESHOLD      = $0.005
+LIFECYCLE_RESERVE_TARGET = $0.50
+REPLENISH_THRESHOLD      = $0.025
 ```
 
 **Flush mechanism**: Operation fees are not paid immediately. Each triggering operation increments `pendingOneTimePayments` (a local field in `DataSetInfo`). The accumulated amount is flushed the next time `updateStorageRates` runs—once per `piecesAdded` and once per `nextProvingPeriod`:
@@ -73,7 +88,7 @@ This keeps the hot path at one external call per event.
 
 ### Price Discovery
 
-The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+The default-currency price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a nested `PriceList` struct grouping the deployment's default token, streaming rates, one-time operation fees, and lockup amounts/periods:
 
 ```solidity
 struct PriceList {
@@ -84,13 +99,13 @@ struct PriceList {
 }
 ```
 
-This is the canonical price discovery API for SDKs and dashboards. The struct is defined in [`service_contracts/src/lib/PriceList.sol`](service_contracts/src/lib/PriceList.sol) and populated from the constants in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol).
+For selectable storage pricing, call FWSS directly: `getStorageTerms(id)` returns the immutable definition and current availability, `getDataSetStorageTermsId(dataSetId)` resolves the legacy sentinel, and `legacyStorageTermsId()` returns the fixed default ID. StateView does not duplicate these getters. Index registration and disabling events to discover available IDs. `getPriceList()` remains the default-currency catalogue, defined in [`PriceList.sol`](service_contracts/src/lib/PriceList.sol).
 
 ### Pricing Updates
 
-Only the contract owner can update pricing, by upgrading the contract.
+Owners introduce new storage prices by registering new immutable terms; neither registration nor disabling changes an existing dataset's selection. Rate-touching operations recalculate the size-based payment using that dataset's selected price.
 
-**Effect on existing datasets**: Pricing changes do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
+Deployment-wide fees and lockup parameters remain code-defined. Contract upgrades must preserve the fixed legacy terms and the interpretation of registered definitions. This prototype has not been optimized to meet the production bytecode-size budget.
 
 ### Rate Update Timing
 

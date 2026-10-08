@@ -14,9 +14,10 @@ import {
     EPOCHS_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
     REPLENISH_THRESHOLD,
-    SERVICE_COMMISSION_BPS,
-    calculateStorageRate
+    SERVICE_COMMISSION_BPS
 } from "./PriceListUSDFC.sol";
+import {StoragePricing} from "./StoragePricing.sol";
+import {StorageTerms} from "./StorageTerms.sol";
 
 event CDNPaymentRailsToppedUp(
     uint256 indexed dataSetId,
@@ -40,21 +41,24 @@ library Rails {
     ///         consumed once pieces are added. Empty datasets leave it as approved headroom.
     ///         Required up front intentionally: creation assumes pieces will follow.
     /// @param payments The FilecoinPayV1 contract instance
-    /// @param usdfcTokenAddress The USDFC token used for deposits and operator approvals
+    /// @param token The token used for deposits and operator approvals
+    /// @param tokenDecimals The token's number of decimals
     /// @param payer The address of the payer
     /// @param includeCDN Whether to include fixed CDN/cache-miss lockups in the requirement checks
     function validatePayerOperatorApprovalAndFunds(
         FilecoinPayV1 payments,
-        IERC20 usdfcTokenAddress,
+        IERC20 token,
+        uint8 tokenDecimals,
         address payer,
         bool includeCDN
     ) internal view {
         // Required capacity: lifecycle reserve plus per-dataset fee lockup at the default period.
-        // Multiply-first preserves the exact monthly value for cleaner error messages; slightly
-        // more conservative than the actual rail lockup (truncated per-epoch), within 0.0001%
-        // and always in the user's favor.
-        uint256 requiredLockup =
-            (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
+        // Multiply-first preserves the nominal monthly requirement before decimal scaling.
+        // This is conservative relative to the truncated per-epoch rail rate.
+        uint256 requiredLockup = StoragePricing.scaleAmount(
+            (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET,
+            tokenDecimals
+        );
 
         // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
         if (includeCDN) {
@@ -62,7 +66,7 @@ library Rails {
         }
 
         // Check that payer has sufficient available funds
-        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(usdfcTokenAddress, payer);
+        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(token, payer);
         require(availableFunds >= requiredLockup, Errors.InsufficientLockupFunds(payer, requiredLockup, availableFunds));
 
         // Check operator approval settings
@@ -73,7 +77,7 @@ library Rails {
             uint256 rateUsage,
             uint256 lockupUsage,
             uint256 maxLockupPeriod
-        ) = payments.operatorApprovals(usdfcTokenAddress, payer, address(this));
+        ) = payments.operatorApprovals(token, payer, address(this));
 
         // Verify operator is approved
         require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
@@ -81,9 +85,10 @@ library Rails {
         // Rate-allowance headroom for the per-dataset fee rate: the floor of any non-empty
         // dataset's rate (size-proportional component sits on top). Empty datasets never consume
         // it; required up front for the dataset to be eligible to receive pieces.
+        uint256 datasetFeePerEpoch = StoragePricing.scaleAmount(DATASET_FEE_PER_EPOCH, tokenDecimals);
         require(
-            rateAllowance >= rateUsage + DATASET_FEE_PER_EPOCH,
-            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, DATASET_FEE_PER_EPOCH)
+            rateAllowance >= rateUsage + datasetFeePerEpoch,
+            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, datasetFeePerEpoch)
         );
 
         // Verify lockup allowance is sufficient
@@ -102,18 +107,19 @@ library Rails {
     function createRails(
         FilecoinPayV1 payments,
         uint256 dataSetId,
-        IERC20 usdfcTokenAddress,
+        IERC20 token,
         address payer,
         address payee,
-        address filBeamBeneficiaryAddress
+        address filBeamBeneficiaryAddress,
+        uint8 tokenDecimals
     ) public returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
         bool hasCDN = filBeamBeneficiaryAddress != address(0);
         // Validate payer has sufficient funds and operator approvals to cover the required lockup
         // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, usdfcTokenAddress, payer, hasCDN);
+        validatePayerOperatorApprovalAndFunds(payments, token, tokenDecimals, payer, hasCDN);
 
         pdpRailId = payments.createRail(
-            usdfcTokenAddress, // token address
+            token, // token address
             payer, // from (payer)
             payee, // payee address from registry
             address(this), // this contract acts as the validator
@@ -122,14 +128,16 @@ library Rails {
         );
 
         // Set lockup period and seed the lifecycle reserve
-        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, LIFECYCLE_RESERVE_TARGET);
+        payments.modifyRailLockup(
+            pdpRailId, DEFAULT_LOCKUP_PERIOD, StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals)
+        );
 
         cacheMissRailId = 0;
         cdnRailId = 0;
 
         if (hasCDN) {
             cacheMissRailId = payments.createRail(
-                usdfcTokenAddress, // token address
+                token, // token address
                 payer, // from (payer)
                 payee, // payee address from registry
                 address(0), // no validator
@@ -139,7 +147,7 @@ library Rails {
             payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, DEFAULT_CACHE_MISS_LOCKUP_AMOUNT);
 
             cdnRailId = payments.createRail(
-                usdfcTokenAddress, // token address
+                token, // token address
                 payer, // from (payer)
                 filBeamBeneficiaryAddress, // to FilBeam beneficiary
                 address(0), // no validator
@@ -276,10 +284,12 @@ library Rails {
         uint256 pdpRailId,
         uint256 pdpEndEpoch,
         uint96 reserveBalance,
-        uint96 pending
+        uint96 pending,
+        uint8 tokenDecimals
     ) internal returns (uint96) {
-        if (pdpEndEpoch == 0 && reserveBalance < pending + uint96(REPLENISH_THRESHOLD)) {
-            uint96 newLockup = uint96(LIFECYCLE_RESERVE_TARGET) + pending;
+        uint96 replenishThreshold = uint96(StoragePricing.scaleAmount(REPLENISH_THRESHOLD, tokenDecimals));
+        if (pdpEndEpoch == 0 && reserveBalance < pending + replenishThreshold) {
+            uint96 newLockup = uint96(StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals)) + pending;
             payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newLockup);
             return newLockup;
         }
@@ -294,15 +304,17 @@ library Rails {
         uint96 pending,
         uint96 reserveBalance,
         uint256 pdpEndEpoch,
-        bool immediateTermination
+        bool immediateTermination,
+        StorageTerms memory terms
     ) public returns (uint96 newReserveBalance) {
-        uint256 newStorageRatePerEpoch = calculateStorageRate(leafCount);
+        uint256 newStorageRatePerEpoch = StoragePricing.calculateStorageRate(leafCount, terms);
         if (immediateTermination) {
             // No try/catch: immediateTermination implies the payer consented and is solvent.
             payments.modifyRailLockup(pdpRailId, 0, pending);
             newReserveBalance = 0;
         } else {
-            uint96 replenished = replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending);
+            uint96 replenished =
+                replenishReserveIfNeeded(payments, pdpRailId, pdpEndEpoch, reserveBalance, pending, terms.tokenDecimals);
             if (replenished < pending) {
                 pending = replenished;
             }

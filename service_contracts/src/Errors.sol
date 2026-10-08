@@ -50,6 +50,16 @@ library Errors {
     /// @param field The specific address field that was zero (see enum {AddressField})
     error ZeroAddress(AddressField field);
 
+    error UnknownStorageTerms(bytes32 storageTermsId);
+    error StorageTermsDisabled(bytes32 storageTermsId);
+    error LegacyStorageTermsCannotBeDisabled();
+    error InvalidStorageTermsId(bytes32 storageTermsId);
+    error UnsupportedTokenDecimals(uint8 decimals);
+    error TokenDecimalsMismatch(address token, uint8 specified, uint8 actual);
+    error StoragePriceBelowDefault(uint256 price, uint256 minimum);
+    error UnsupportedExtraDataVariant(uint256 keysOffset);
+    error CDNUnsupportedCurrency(address token);
+
     /// @notice Tried to set an address that can only be set once
     /// @dev Used for parameter validation when a non-zero address is required
     /// @param field The specific address field already set (see enum {AddressField})
