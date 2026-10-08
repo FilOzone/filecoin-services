@@ -555,6 +555,14 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
     }
 
+    /// @dev The config facet pins the same payments and verifier addresses as the v1.4.0 monolith it replaces.
+    function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
+            return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
+        }
+        return super._facetConstructorArgs(sourceId);
+    }
+
     function _createMigration() internal returns (address) {
         SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolveFacets(MAINNET_INDEX));
         SetDelegateOperationLibrary.validate(routes);
