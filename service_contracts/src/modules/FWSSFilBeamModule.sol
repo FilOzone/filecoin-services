@@ -5,13 +5,13 @@ import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../Errors.sol";
 import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
-import {Rails} from "../lib/Rails.sol";
+import {LibRails} from "../lib/LibRails.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title FWSSFilBeamModule
 /// @notice Manages FWSS CDN payment rails and the FilBeam controller.
 contract FWSSFilBeamModule is FWSSStorage {
-    using Rails for FilecoinPayV1;
+    using LibRails for FilecoinPayV1;
 
     event FilBeamControllerChanged(address oldController, address newController);
 

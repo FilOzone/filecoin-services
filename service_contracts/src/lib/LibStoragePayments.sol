@@ -3,13 +3,13 @@ pragma solidity 0.8.37;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../Errors.sol";
-import {Rails} from "./Rails.sol";
+import {LibRails} from "./LibRails.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title LibStoragePayments
 /// @notice Shared payment operations for FWSS modules.
 library LibStoragePayments {
-    using Rails for FilecoinPayV1;
+    using LibRails for FilecoinPayV1;
 
     /// @notice Terminates CDN rails (cacheMiss + CDN), deletes withCDN metadata, and emits event.
     /// @dev Uses try/catch because CDN rails may have been terminated externally via FilecoinPay.
