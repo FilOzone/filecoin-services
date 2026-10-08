@@ -7,6 +7,7 @@ import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {SetDelegateOperation} from "@erc8167/lib/Migration.sol";
 import {FWSSFilBeamModule} from "../../src/modules/FWSSFilBeamModule.sol";
+import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 
 /// @dev Resolves a Josuke ledger's `facetSrc` from build artifacts, as `josuke deploy` does, without an RPC.
 /// Supported patterns: `<dir>/*.sol`, `<path>:<Contract>` and `<path>.evm`.
@@ -53,12 +54,15 @@ abstract contract JosukeFacetSet is Test {
     /// @dev ABI-encoded constructor arguments, which Josuke records per chain as `constructorArgs`.
     function _facetConstructorArgs(string memory sourceId) internal view virtual returns (bytes memory) {}
 
-    /// @dev Solidity creation lets Forge link Rails for FilBeam; other facets use their artifacts.
+    /// @dev Solidity creation lets Forge link Rails for payment facets; other facets use their artifacts.
     function _deployFacet(Facet memory facet) private returns (address) {
         bytes memory constructorArgs = _facetConstructorArgs(facet.sourceId);
         if (keccak256(bytes(facet.sourceId)) == keccak256(bytes("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")))
         {
             return address(new FWSSFilBeamModule());
+        }
+        if (keccak256(bytes(facet.sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
+            return address(new FWSSProvingModule());
         }
 
         return deployCode(facet.artifact, constructorArgs);
