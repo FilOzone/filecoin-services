@@ -6,8 +6,9 @@ import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {IMigrateModule} from "../src/interfaces/IMigrateModule.sol";
 import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
 
-/// @dev Offline checks that `josuke deploy` would otherwise report only against a live chain.
-contract JosukeFacetsTest is JosukeFacetSet {
+/// @dev FWSS policy for josuke.json: what the ledger must list and route for the dispatcher transition.
+/// Selector collisions, sizes and storage are `josuke check`'s job (`make check-josuke`).
+contract FWSSJosukeLedgerTest is JosukeFacetSet {
     function testLedgersShareFacetSources() public view {
         string[] memory mainnet = _facetSources(MAINNET_INDEX);
         string[] memory calibnet = _facetSources(CALIBNET_INDEX);
@@ -24,17 +25,6 @@ contract JosukeFacetsTest is JosukeFacetSet {
         // TODO: read these from deployments.json
         assertEq(mainnetAddress, 0x8408502033C418E1bbC97cE9ac48E5528F371A9f);
         assertEq(calibnetAddress, 0x02925630df557F957f70E112bA06e50965417CA0);
-    }
-
-    function testEachSelectorHasOneFacet() public view {
-        Facet[] memory facets = _resolveFacets(MAINNET_INDEX);
-
-        for (uint256 i; i < facets.length; ++i) {
-            for (uint256 j; j < facets[i].selectors.length; ++j) {
-                bytes4 selector = facets[i].selectors[j];
-                assertEq(_owners(facets, selector), 1, string.concat(facets[i].sourceId, " shares a selector"));
-            }
-        }
     }
 
     function testFacetsProvideDispatcherTransitionRoutes() public view {
