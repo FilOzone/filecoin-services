@@ -2,7 +2,6 @@
 pragma solidity 0.8.37;
 
 import {console} from "forge-std/Script.sol";
-import {VmSafe} from "forge-std/Vm.sol";
 import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSS_DISPATCHER_CODE_HASH, FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
@@ -23,7 +22,7 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
         // for the dispatcher, so every later run would find this script's code there instead of redeploying.
         (, address sender,) = vm.readCallers();
         require(
-            !vm.isContext(VmSafe.ForgeContext.ScriptBroadcast) || sender != DEFAULT_SENDER,
+            !_isBroadcast() || sender != DEFAULT_SENDER,
             "--broadcast needs a wallet: pass --keystore, --account or --private-key"
         );
 
@@ -67,7 +66,7 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
         );
         console.log("");
 
-        if (vm.isContext(VmSafe.ForgeContext.ScriptDryRun)) {
+        if (_isDryRun()) {
             console.log("Dry run: deployments.json not updated");
             return;
         }

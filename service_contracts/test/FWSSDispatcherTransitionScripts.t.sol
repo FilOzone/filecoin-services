@@ -90,6 +90,12 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         _deployRequiresGitCommit();
 
         _reset(clean);
+        _deployDryRunRecordsNothing();
+
+        _reset(clean);
+        _deployRefusesBroadcastWithoutWallet();
+
+        _reset(clean);
         _executeChecks();
 
         _reset(clean);
@@ -231,6 +237,25 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         deploy.run();
 
         // The commit is checked before anything is written.
+        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
+    }
+
+    function _deployDryRunRecordsNothing() internal {
+        // A dry run needs no commit, since it records nothing.
+        vm.setEnv("GIT_COMMIT", "");
+        new DryRunDeploy().run();
+
+        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
+    }
+
+    function _deployRefusesBroadcastWithoutWallet() internal {
+        FWSSDispatcherTransitionDeploy deploy = new BroadcastDeploy();
+        uint256 nonce = vm.getNonce(DEFAULT_SENDER);
+
+        vm.expectRevert(bytes("--broadcast needs a wallet: pass --keystore, --account or --private-key"));
+        deploy.run();
+
+        assertEq(vm.getNonce(DEFAULT_SENDER), nonce);
         assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
     }
 
@@ -684,5 +709,19 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         for (uint256 i; i < selectors.length; ++i) {
             if (selectors[i] == selector) ++count;
         }
+    }
+}
+
+/// @dev Runs the deploy script as `forge script` without `--broadcast` does
+contract DryRunDeploy is FWSSDispatcherTransitionDeploy {
+    function _isDryRun() internal pure override returns (bool) {
+        return true;
+    }
+}
+
+/// @dev Runs the deploy script as `forge script --broadcast` does
+contract BroadcastDeploy is FWSSDispatcherTransitionDeploy {
+    function _isBroadcast() internal pure override returns (bool) {
+        return true;
     }
 }

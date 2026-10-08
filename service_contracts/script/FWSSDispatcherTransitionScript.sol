@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {Script} from "forge-std/Script.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSS_DISPATCHER_CODE_HASH} from "../src/FWSSDispatcherTransition.sol";
@@ -12,6 +13,17 @@ import {DeploymentsJson} from "./lib/DeploymentsJson.sol";
 abstract contract FWSSDispatcherTransitionScript is Script {
     string internal constant FWSS_DISPATCHER_ARTIFACT = "lib/erc8167/out/Proxy.evm/Proxy.json";
     string internal constant FWSS_TRANSITION_ARTIFACT = "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition";
+
+    /// @notice Whether forge runs this script without `--broadcast`. Virtual because `forge test` runs in its own
+    /// context, so tests override it to cover the dry run.
+    function _isDryRun() internal view virtual returns (bool) {
+        return vm.isContext(VmSafe.ForgeContext.ScriptDryRun);
+    }
+
+    /// @notice Whether forge runs this script with `--broadcast`. Virtual for the same reason as `_isDryRun`.
+    function _isBroadcast() internal view virtual returns (bool) {
+        return vm.isContext(VmSafe.ForgeContext.ScriptBroadcast);
+    }
 
     function _proxy() internal view returns (address proxy) {
         proxy = _envOrRecorded("FWSS_PROXY_ADDRESS");

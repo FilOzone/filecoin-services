@@ -2,7 +2,6 @@
 pragma solidity 0.8.37;
 
 import {console} from "forge-std/Script.sol";
-import {VmSafe} from "forge-std/Vm.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
@@ -68,7 +67,7 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         FilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
 
         _requireDispatcherInstalled(proxy, dispatcher);
-        if (vm.isContext(VmSafe.ForgeContext.ScriptDryRun)) {
+        if (_isDryRun()) {
             console.log("Dry run: the upgrade was simulated only, nothing was sent");
             return;
         }
