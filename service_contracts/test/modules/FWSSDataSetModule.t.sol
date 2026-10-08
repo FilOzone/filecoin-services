@@ -15,10 +15,10 @@ import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
-import {SignatureVerificationLib} from "../../src/lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "../../src/lib/LibSignatureVerification.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
-import {CDNPaymentRailsToppedUp} from "../../src/lib/Rails.sol";
+import {CDNPaymentRailsToppedUp} from "../../src/lib/LibRails.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20} from "../mocks/SharedMocks.sol";
 import {Errors} from "../../src/Errors.sol";
@@ -2717,7 +2717,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         allValues[0] = emptyMeta;
 
         bytes32 digest = _eip712Digest(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 3, pieceData, allKeys, allValues)
+            LibSignatureVerification.addPiecesStructHash(clientDataSetId, 3, pieceData, allKeys, allValues)
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
 
@@ -2765,7 +2765,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         allKeys[0] = emptyMeta;
         allValues[0] = emptyMeta;
         bytes32 rejectedDigest = _eip712Digest(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 2, rejectedPieceData, allKeys, allValues)
+            LibSignatureVerification.addPiecesStructHash(clientDataSetId, 2, rejectedPieceData, allKeys, allValues)
         );
 
         makeSignaturePass(sessionKey2);
@@ -2837,7 +2837,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         addKeys[0] = pieceKeys;
         addValues[0] = pieceValues;
         bytes32 addDigest = _eip712Digest(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 99, pieceData, addKeys, addValues)
+            LibSignatureVerification.addPiecesStructHash(clientDataSetId, 99, pieceData, addKeys, addValues)
         );
 
         authorizer.expectAdd(dataSetId, clientDataSetId, 100, keccak256(pieceData[0].data));

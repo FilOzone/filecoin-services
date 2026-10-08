@@ -24,18 +24,18 @@ import {
     SERVICE_COMMISSION_BPS,
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
-import {Rails} from "../lib/Rails.sol";
+import {LibRails} from "../lib/LibRails.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
-import {SignatureVerificationLib} from "../lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 
 /// @title FWSSDataSetModule
 /// @notice Manages dataset creation, deletion, pieces and client authorization.
 contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
-    using Rails for FilecoinPayV1;
+    using LibRails for FilecoinPayV1;
 
     // Metadata size and count limits
     uint256 private constant MAX_KEY_LENGTH = 32;
@@ -568,13 +568,13 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
         // Compute the EIP-712 digest for the struct hash
         bytes32 digest = _hashTypedDataV4(
-            SignatureVerificationLib.createDataSetStructHash(
+            LibSignatureVerification.createDataSetStructHash(
                 createData.clientDataSetId, payee, createData.metadataKeys, createData.metadataValues
             )
         );
 
-        // Delegate to library for verification
-        SignatureVerificationLib.verifyCreateDataSetSignature(
+        // Verify using the inlined signature library
+        LibSignatureVerification.verifyCreateDataSetSignature(
             createData.payer, createData.signature, digest, sessionKeyRegistry
         );
     }
@@ -600,7 +600,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         string[][] memory allValues,
         bytes memory signature
     ) internal {
-        SignatureVerificationLib.verifyAddPiecesAuthorization(
+        LibSignatureVerification.verifyAddPiecesAuthorization(
             payer,
             dataSetId,
             dataSetAuthorizer[dataSetId],
@@ -630,7 +630,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         uint256[] memory pieceIds,
         bytes memory signature
     ) internal {
-        SignatureVerificationLib.verifySchedulePieceRemovalsAuthorization(
+        LibSignatureVerification.verifySchedulePieceRemovalsAuthorization(
             payer,
             dataSetId,
             dataSetAuthorizer[dataSetId],

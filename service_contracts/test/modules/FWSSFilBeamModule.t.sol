@@ -12,7 +12,7 @@ import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.s
 import {IFWSSConfig} from "../../src/interfaces/IFWSSConfig.sol";
 import {FWSSConfigModule} from "../../src/modules/FWSSConfigModule.sol";
 import {FWSSFilBeamModule} from "../../src/modules/FWSSFilBeamModule.sol";
-import {CDNPaymentRailsToppedUp, CDNServiceTerminated} from "../../src/lib/Rails.sol";
+import {CDNPaymentRailsToppedUp, CDNServiceTerminated} from "../../src/lib/LibRails.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
 
 abstract contract FWSSFilBeamModuleFixture is FilecoinWarmStorageServiceFixture {
