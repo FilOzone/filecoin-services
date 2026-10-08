@@ -169,6 +169,14 @@ check-layout:
 	@echo "Checking storage layout for destructive changes..."
 	@bash tools/check_storage_layout.sh
 
+# Offline josuke ledger check: schema, facetSrc resolution, selector collisions, EIP-170 sizes and facet storage
+# against every deployment josuke.json records. Pass JOSUKE_CHECK_ARGS="--format markdown" for $GITHUB_STEP_SUMMARY.
+.PHONY: check-josuke
+check-josuke:
+	@command -v josuke >/dev/null || (echo 'Missing josuke; run make install-josuke'; exit 1)
+	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
+	@josuke check $(JOSUKE_CHECK_ARGS)
+
 # ABI Management
 
 # Core contracts we publish ABIs for.
@@ -244,6 +252,7 @@ help:
 	@echo ""
 	@echo "Validation targets:"
 	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
+	@echo "  check-josuke - Check josuke.json and the facets it resolves offline (needs josuke and evm)"
 	@echo "  contract-size-check - Check deployable contracts against size and headroom policy"
 	@echo ""
 	@echo "  help       - Show this help message"
