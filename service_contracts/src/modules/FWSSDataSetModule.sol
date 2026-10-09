@@ -2,7 +2,6 @@
 pragma solidity 0.8.37;
 
 import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
-import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
@@ -13,14 +12,13 @@ import {FWSSPieceMetadataRemovals} from "../abstract/FWSSPieceMetadataRemovals.s
 import {
     PDP_INACTIVITY_WINDOW,
     MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
-    MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE
+    MAX_KEY_LENGTH,
+    MAX_KEYS_PER_DATASET,
+    MAX_VALUE_LENGTH
 } from "../FilecoinWarmStorageService.sol";
 import {
-    ADD_PIECES_BASE_FEE,
-    ADD_PIECES_PER_PIECE_FEE,
     CREATE_DATA_SET_FEE,
     LIFECYCLE_RESERVE_TARGET,
-    SCHEDULE_PIECE_REMOVALS_FEE,
     SERVICE_COMMISSION_BPS,
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
@@ -29,19 +27,12 @@ import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibProving} from "../lib/LibProving.sol";
-import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 
 /// @title FWSSDataSetModule
-/// @notice Manages dataset creation, deletion, pieces and client authorization.
+/// @notice Manages data set creation and deletion.
 contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
     using LibRails for FilecoinPayV1;
-
-    // Metadata size and count limits
-    uint256 private constant MAX_KEY_LENGTH = 32;
-    uint256 private constant MAX_VALUE_LENGTH = 96;
-    uint256 private constant MAX_KEYS_PER_DATASET = 10;
-    uint256 private constant MAX_KEYS_PER_PIECE = 3;
 
     // Metadata key constants
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
@@ -53,7 +44,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     SessionKeyRegistry private immutable sessionKeyRegistry;
 
     /// @notice Configures the immutable dependencies used by dataset operations.
-    /// @dev These retain the implementation-bound configuration of FWSS without adding storage or getters.
+    /// @dev These retain the implementation-bound configuration of FWSS without adding storage.
     constructor(
         IERC20Metadata _usdfc,
         address _filBeamBeneficiaryAddress,
@@ -98,12 +89,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         string[] metadataKeys,
         string[] metadataValues
     );
-
-    event PieceAdded(
-        uint256 indexed dataSetId, uint256 indexed pieceId, Cids.Cid pieceCid, string[] keys, string[] values
-    );
-
-    event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
 
     // Decode structure for data set creation extra data
     struct DataSetCreateData {
@@ -350,154 +335,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     }
 
     /**
-     * @notice Handles pieces being added to a data set and emits associated metadata
-     * @dev Called by the PDPVerifier contract when pieces are added to a data set.
-     * @param dataSetId The ID of the data set
-     * @param firstAdded The ID of the first piece added (from PDPVerifier, used for piece ID assignment)
-     * @param pieceData Array of piece data objects
-     * @param extraData Encoded (nonce, metadata keys, metadata values, signature). The metadata outer arrays may
-     *                  both be empty to indicate that no piece in the batch has metadata.
-     */
-    function piecesAdded(uint256 dataSetId, uint256 firstAdded, Cids.Cid[] memory pieceData, bytes calldata extraData)
-        external
-        onlyPDPVerifier
-    {
-        requirePaymentNotTerminated(dataSetId);
-        // Verify the data set exists in our mapping
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
-
-        // Get the payer address for this data set
-        address payer = info.payer;
-        uint256 len = extraData.length;
-        require(len > 0, Errors.ExtraDataRequired());
-        // Decode the extra data
-        (uint256 nonce, string[][] memory metadataKeys, string[][] memory metadataValues, bytes memory signature) =
-            abi.decode(extraData, (uint256, string[][], string[][], bytes));
-
-        // Validate nonce hasn't been used (replay protection)
-        require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
-        // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
-        clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
-
-        // Empty outer arrays compactly represent a batch with no metadata. Otherwise, require
-        // one metadata array per piece.
-        bool metadataOmitted = metadataKeys.length == 0 && metadataValues.length == 0;
-        if (!metadataOmitted) {
-            require(
-                metadataKeys.length == pieceData.length,
-                Errors.MetadataArrayCountMismatch(metadataKeys.length, pieceData.length)
-            );
-            require(
-                metadataValues.length == pieceData.length,
-                Errors.MetadataArrayCountMismatch(metadataValues.length, pieceData.length)
-            );
-        }
-
-        // Verify the signature
-        verifyAddPiecesSignature(
-            dataSetId, payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature
-        );
-
-        uint96 pending =
-            info.pendingOneTimePayments + uint96(ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE);
-        uint96 reserveBalance = info.lifecycleReserveBalance;
-
-        // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
-        uint256 currentLeafCount =
-            IPDPVerifier(IFWSSConfig(address(this)).pdpVerifierAddress()).getDataSetLeafCount(dataSetId);
-        LibStoragePayments.updatePaymentRates(
-            dataSetId,
-            info,
-            currentLeafCount,
-            pending,
-            reserveBalance,
-            false,
-            FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
-        );
-
-        if (metadataOmitted) {
-            string[] memory emptyMetadata = new string[](0);
-            for (uint256 i = 0; i < pieceData.length; i++) {
-                emit PieceAdded(dataSetId, firstAdded + i, pieceData[i], emptyMetadata, emptyMetadata);
-            }
-            return;
-        }
-
-        // Validate and emit metadata for each new piece. Metadata is indexed off-chain from this event.
-        for (uint256 i = 0; i < pieceData.length; i++) {
-            uint256 pieceId = firstAdded + i;
-            string[] memory pieceKeys = metadataKeys[i];
-            string[] memory pieceValues = metadataValues[i];
-
-            // Check that number of metadata keys and values are equal for this piece
-            require(
-                pieceKeys.length == pieceValues.length,
-                Errors.MetadataKeyAndValueLengthMismatch(pieceKeys.length, pieceValues.length)
-            );
-
-            require(
-                pieceKeys.length <= MAX_KEYS_PER_PIECE, Errors.TooManyMetadataKeys(MAX_KEYS_PER_PIECE, pieceKeys.length)
-            );
-
-            for (uint256 k = 0; k < pieceKeys.length; k++) {
-                string memory key = pieceKeys[k];
-                string memory value = pieceValues[k];
-
-                require(
-                    bytes(key).length <= MAX_KEY_LENGTH,
-                    Errors.MetadataKeyExceedsMaxLength(k, MAX_KEY_LENGTH, bytes(key).length)
-                );
-                bytes32 keyHash = keccak256(bytes(key));
-                for (uint256 j = 0; j < k; j++) {
-                    require(keyHash != keccak256(bytes(pieceKeys[j])), Errors.DuplicateMetadataKey(dataSetId, key));
-                }
-                require(
-                    bytes(value).length <= MAX_VALUE_LENGTH,
-                    Errors.MetadataValueExceedsMaxLength(k, MAX_VALUE_LENGTH, bytes(value).length)
-                );
-            }
-            emit PieceAdded(dataSetId, pieceId, pieceData[i], pieceKeys, pieceValues);
-        }
-    }
-
-    function piecesScheduledRemove(uint256 dataSetId, uint256[] memory pieceIds, bytes calldata extraData)
-        external
-        onlyPDPVerifier
-    {
-        LibServiceLifecycleGuards.requirePaymentNotBeyondEndEpoch(dataSetId, dataSetInfo[dataSetId].pdpEndEpoch);
-        // Verify the data set exists in our mapping
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
-
-        // Get the payer address for this data set
-        address payer = info.payer;
-
-        // Decode the signature from extraData
-        uint256 len = extraData.length;
-        require(len > 0, Errors.ExtraDataRequired());
-        require(
-            len <= MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE,
-            Errors.ExtraDataTooLarge(len, MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE)
-        );
-        bytes memory signature = abi.decode(extraData, (bytes));
-
-        // Verify the signature
-        verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
-
-        uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
-        info.lifecycleReserveBalance = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
-            .replenishReserveIfNeeded(info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending);
-        info.pendingOneTimePayments = newPending;
-
-        // Queue piece IDs for metadata cleanup at nextProvingPeriod
-        uint256[] storage scheduled = scheduledPieceMetadataRemovals[dataSetId];
-        for (uint256 i = 0; i < pieceIds.length; i++) {
-            scheduled.push(pieceIds[i]);
-        }
-    }
-
-    /**
      * @notice Handles data set service provider changes (currently disabled for GA)
      * @dev Storage provider changes are disabled for GA. This will be re-enabled post-GA
      * with proper client authorization. See: https://github.com/FilOzone/filecoin-services/issues/203
@@ -514,12 +351,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         onlyPDPVerifier
     {
         revert Errors.StorageProviderChangesNotSupported();
-    }
-
-    function requirePaymentNotTerminated(uint256 dataSetId) internal view {
-        DataSetInfo storage info = dataSetInfo[dataSetId];
-        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
     }
 
     /**
@@ -577,78 +408,5 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         LibSignatureVerification.verifyCreateDataSetSignature(
             createData.payer, createData.signature, digest, sessionKeyRegistry
         );
-    }
-
-    /**
-     * @notice Verifies a signature for the AddPieces operation
-     * @param dataSetId The data set being operated on
-     * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The ID of the data set
-     * @param pieceDataArray Array of piece CID structures
-     * @param nonce Client-chosen nonce for replay protection
-     * @param allKeys 2D array where allKeys[i] contains metadata keys for piece i
-     * @param allValues 2D array where allValues[i] contains metadata values for piece i
-     * @param signature The signature bytes (v, r, s)
-     */
-    function verifyAddPiecesSignature(
-        uint256 dataSetId,
-        address payer,
-        uint256 clientDataSetId,
-        Cids.Cid[] memory pieceDataArray,
-        uint256 nonce,
-        string[][] memory allKeys,
-        string[][] memory allValues,
-        bytes memory signature
-    ) internal {
-        LibSignatureVerification.verifyAddPiecesAuthorization(
-            payer,
-            dataSetId,
-            dataSetAuthorizer[dataSetId],
-            clientDataSetId,
-            pieceDataArray,
-            nonce,
-            allKeys,
-            allValues,
-            signature,
-            _domainSeparatorV4(),
-            sessionKeyRegistry
-        );
-    }
-
-    /**
-     * @notice Verifies a signature for the SchedulePieceRemovals operation
-     * @param dataSetId The data set being operated on
-     * @param payer The address of the payer who should have signed the message
-     * @param clientDataSetId The ID of the data set
-     * @param pieceIds Array of piece IDs to be removed
-     * @param signature The signature bytes (v, r, s)
-     */
-    function verifySchedulePieceRemovalsSignature(
-        uint256 dataSetId,
-        address payer,
-        uint256 clientDataSetId,
-        uint256[] memory pieceIds,
-        bytes memory signature
-    ) internal {
-        LibSignatureVerification.verifySchedulePieceRemovalsAuthorization(
-            payer,
-            dataSetId,
-            dataSetAuthorizer[dataSetId],
-            clientDataSetId,
-            pieceIds,
-            signature,
-            _domainSeparatorV4(),
-            sessionKeyRegistry
-        );
-    }
-
-    /**
-     * @notice Attach, rotate, or clear the optional authorizer for a data set.
-     */
-    function setDataSetAuthorizer(uint256 dataSetId, address authorizer) external {
-        require(dataSetInfo[dataSetId].payer == msg.sender, Errors.OnlyDataSetPayer(dataSetId, msg.sender));
-        require(authorizer == address(0) || authorizer.code.length > 0, Errors.InvalidDataSetAuthorizer(authorizer));
-        dataSetAuthorizer[dataSetId] = authorizer;
-        emit DataSetAuthorizerSet(dataSetId, authorizer);
     }
 }

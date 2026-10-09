@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.37;
 
+import {FWSSAuthorizationModule} from "../../src/modules/FWSSAuthorizationModule.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
 import {console, Vm} from "forge-std/Test.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -54,6 +55,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         );
         FWSSDataSetModule module =
             new FWSSDataSetModule(mockUSDFC, filBeamBeneficiary, serviceProviderRegistry, sessionKeyRegistry);
+        FWSSAuthorizationModule authorizationModule = new FWSSAuthorizationModule(sessionKeyRegistry);
         address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
 
         // Preserve legacy routes and route dataset operations and configuration to their modules.
@@ -66,6 +68,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         selectors = AbiCheats.getSelectors(vm, "out/FWSSDataSetModule.sol/FWSSDataSetModule.json");
         for (uint256 i; i < selectors.length; ++i) {
             _route(proxy, selectors[i], address(module));
+        }
+        selectors = AbiCheats.getSelectors(vm, "out/FWSSAuthorizationModule.sol/FWSSAuthorizationModule.json");
+        for (uint256 i; i < selectors.length; ++i) {
+            _route(proxy, selectors[i], address(authorizationModule));
         }
         selectors = AbiCheats.getSelectors(vm, "out/FWSSConfigModule.sol/FWSSConfigModule.json");
         for (uint256 i; i < selectors.length; ++i) {
@@ -1445,16 +1451,16 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             if (keyLength <= 32) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
-                emit FWSSDataSetModule.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
+                emit FWSSAuthorizationModule.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
 
                 vm.prank(address(mockPDPVerifier));
-                FWSSDataSetModule(address(pdpServiceWithPayments))
+                FWSSAuthorizationModule(address(pdpServiceWithPayments))
                     .piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
             } else {
                 // Should fail for exceeding max
                 vm.expectRevert(abi.encodeWithSelector(Errors.MetadataKeyExceedsMaxLength.selector, 0, 32, keyLength));
                 vm.prank(address(mockPDPVerifier));
-                FWSSDataSetModule(address(pdpServiceWithPayments))
+                FWSSAuthorizationModule(address(pdpServiceWithPayments))
                     .piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
             }
         }
@@ -1494,10 +1500,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             if (valueLength <= MAX_VALUE_LENGTH) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
-                emit FWSSDataSetModule.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
+                emit FWSSAuthorizationModule.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
 
                 vm.prank(address(mockPDPVerifier));
-                FWSSDataSetModule(address(pdpServiceWithPayments))
+                FWSSAuthorizationModule(address(pdpServiceWithPayments))
                     .piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
             } else {
                 // Should fail for exceeding max
@@ -1507,7 +1513,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                     )
                 );
                 vm.prank(address(mockPDPVerifier));
-                FWSSDataSetModule(address(pdpServiceWithPayments))
+                FWSSAuthorizationModule(address(pdpServiceWithPayments))
                     .piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
             }
         }
@@ -1550,10 +1556,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             if (keyCount <= MAX_KEYS_PER_PIECE) {
                 // Should succeed for valid counts
                 vm.expectEmit(true, false, false, true);
-                emit FWSSDataSetModule.PieceAdded(dataSetId, pieceId + testIdx, pieceData[0], keys, values);
+                emit FWSSAuthorizationModule.PieceAdded(dataSetId, pieceId + testIdx, pieceData[0], keys, values);
 
                 vm.prank(address(mockPDPVerifier));
-                FWSSDataSetModule(address(pdpServiceWithPayments))
+                FWSSAuthorizationModule(address(pdpServiceWithPayments))
                     .piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
             } else {
                 // Should fail for exceeding max
@@ -1561,7 +1567,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                     abi.encodeWithSelector(Errors.TooManyMetadataKeys.selector, MAX_KEYS_PER_PIECE, keyCount)
                 );
                 vm.prank(address(mockPDPVerifier));
-                FWSSDataSetModule(address(pdpServiceWithPayments))
+                FWSSAuthorizationModule(address(pdpServiceWithPayments))
                     .piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
             }
         }
@@ -1606,10 +1612,11 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
             // Expect success
             vm.expectEmit(true, false, false, true);
-            emit FWSSDataSetModule.PieceAdded(dataSetId, pieceId, pieceData[0], allKeys[0], allValues[0]);
+            emit FWSSAuthorizationModule.PieceAdded(dataSetId, pieceId, pieceData[0], allKeys[0], allValues[0]);
 
             vm.prank(address(mockPDPVerifier));
-            FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+            FWSSAuthorizationModule(address(pdpServiceWithPayments))
+                .piecesAdded(dataSetId, pieceId, pieceData, encodedData);
             console.log("encodedData length (within limits):", encodedData.length);
         }
 
@@ -1645,7 +1652,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             vm.expectRevert(
                 abi.encodeWithSelector(Errors.TooManyMetadataKeys.selector, MAX_KEYS_PER_PIECE, MAX_KEYS_PER_PIECE + 1)
             );
-            FWSSDataSetModule(address(pdpServiceWithPayments))
+            FWSSAuthorizationModule(address(pdpServiceWithPayments))
                 .piecesAdded(dataSetId, pieceId + totalPieces, pieceData, encodedData);
             console.log("encodedData length (exceeding limits):", encodedData.length);
         }
@@ -1689,7 +1696,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.DuplicateMetadataKey.selector, dataSetId, keys[1]));
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
     }
 
     function testPieceMetadataCannotBeCalledWithMoreValues() public {
@@ -1727,7 +1734,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             abi.encodeWithSelector(Errors.MetadataKeyAndValueLengthMismatch.selector, keys.length, values.length)
         );
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
     }
 
     function testPieceMetadataCannotBeCalledWithMoreKeys() public {
@@ -1765,7 +1772,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             abi.encodeWithSelector(Errors.MetadataKeyAndValueLengthMismatch.selector, keys.length, values.length)
         );
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData);
     }
 
     function testPieceMetadataPerPieceDifferentMetadata() public {
@@ -1816,14 +1823,15 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         // Expect events for each piece with their specific metadata
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId + 2, pieceData[2], allKeys[2], allValues[2]);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId + 2, pieceData[2], allKeys[2], allValues[2]);
 
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
 
         for (uint256 i = 0; i < numPieces; i++) {
             assertEq(
@@ -1922,7 +1930,8 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData1);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, pieceId, pieceData, encodedData1);
 
         // Test case 2: Wrong number of value arrays (only 1 for 2 pieces)
         string[][] memory correctKeys = new string[][](2);
@@ -1938,7 +1947,8 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 1, 2));
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, encodedData2);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, pieceId, pieceData, encodedData2);
     }
 
     function testPieceMetadataEmptyMetadataForAllPieces() public {
@@ -1963,12 +1973,13 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         // Expect events with empty metadata arrays
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
 
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
     }
 
     function testPieceMetadataCompactEmptyMetadataForAllPieces() public {
@@ -1989,12 +2000,13 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         bytes memory encodedData = abi.encode(firstPieceId + 8000, allKeys, allValues, FAKE_SIGNATURE);
 
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId, pieceData[0], emptyMetadata, emptyMetadata);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId, pieceData[0], emptyMetadata, emptyMetadata);
         vm.expectEmit(true, false, false, true);
-        emit FWSSDataSetModule.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], emptyMetadata, emptyMetadata);
+        emit FWSSAuthorizationModule.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], emptyMetadata, emptyMetadata);
 
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
 
         assertEq(
             _legacyPieceMetadataKeysLength(dataSetId, firstPieceId), 0, "Piece 0 metadata must not be stored on-chain"
@@ -2024,12 +2036,14 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         bytes memory encodedData = abi.encode(firstPieceId + 8000, emptyMetadata, perPieceMetadata, FAKE_SIGNATURE);
         vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 0, numPieces));
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
 
         encodedData = abi.encode(firstPieceId + 8001, perPieceMetadata, emptyMetadata, FAKE_SIGNATURE);
         vm.expectRevert(abi.encodeWithSelector(Errors.MetadataArrayCountMismatch.selector, 0, numPieces));
         vm.prank(address(mockPDPVerifier));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments))
+            .piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
     }
 
     function testCreateDataSetWithCDN_VerifyDefaultBehavior() public {
@@ -2665,20 +2679,20 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.OnlyDataSetPayer.selector, dataSetId, serviceProvider));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         vm.prank(client);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidDataSetAuthorizer.selector, sessionKey1));
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, sessionKey1);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, sessionKey1);
 
         vm.expectEmit(true, true, false, true);
-        emit FWSSDataSetModule.DataSetAuthorizerSet(dataSetId, address(authorizer));
+        emit FWSSAuthorizationModule.DataSetAuthorizerSet(dataSetId, address(authorizer));
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
         assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
 
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(0));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(0));
         assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0));
     }
 
@@ -2696,7 +2710,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         authorizer.allow(dataSetId, bob);
 
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         makeSignaturePass(bob);
         _addAuthorizerTestPiece(dataSetId, 2);
@@ -2742,7 +2756,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
         authorizer.allow(dataSetId, bob);
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = ADD_PIECES_TYPEHASH;
@@ -2787,7 +2801,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         authorizer.allow(dataSetId, client);
 
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         makeSignaturePass(client);
         _addAuthorizerTestPiece(dataSetId, 1);
@@ -2802,7 +2816,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         RevertingDataSetAuthorizer authorizer = new RevertingDataSetAuthorizer();
 
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         // A delegated signer is rejected: the authorizer is the sole gate and its revert bubbles up.
         makeSignaturePass(sessionKey1);
@@ -2824,7 +2838,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         OperationDataCheckingAuthorizer authorizer = new OperationDataCheckingAuthorizer(bob);
 
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         Cids.Cid[] memory pieceData = new Cids.Cid[](1);
         pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("acl_signed_data")));
@@ -2889,7 +2903,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         StatefulDataSetAuthorizer authorizer = new StatefulDataSetAuthorizer();
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
 
         // The authorizer writes to its own storage while deciding. This succeeds only because the
         // authorizer is invoked with a CALL, not a STATICCALL — the old `view` surface would revert.
@@ -2976,7 +2990,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         // Attach an authorizer so we can confirm it is cleared on deletion
         TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
         vm.prank(client);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
         assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
 
         // Start proving so we can settle with validated payments
@@ -3113,7 +3127,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         if (caller == address(mockPDPVerifier)) {
             vm.expectEmit(true, false, false, true);
-            emit FWSSDataSetModule.PieceAdded(dataSetId, pieceId, pieceData[0], keys, values);
+            emit FWSSAuthorizationModule.PieceAdded(dataSetId, pieceId, pieceData[0], keys, values);
         } else {
             // Handle case where caller is not the PDP verifier
             vm.expectRevert(
@@ -3121,7 +3135,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             );
         }
         vm.prank(caller);
-        FWSSDataSetModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, extraData);
+        FWSSAuthorizationModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, extraData);
 
         setup = PieceMetadataSetup({dataSetId: dataSetId, pieceId: pieceId, pieceData: pieceData, extraData: extraData});
     }
