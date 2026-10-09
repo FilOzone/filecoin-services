@@ -5,12 +5,12 @@ import {ERC8167Transition} from "./ERC8167Transition.sol";
 import {FWSSOwnable} from "./lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "./lib/LibUpgradeRoutes.sol";
 
+// Runtime hash of Proxy.evm at the pinned ERC-8167 revision.
+bytes32 constant FWSS_DISPATCHER_CODE_HASH = 0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a;
+
 /// @title FWSSDispatcherTransition
 /// @notice Moves the FWSS proxy from the v1.4.0 UUPS monolith to the ERC-8167 dispatcher in one upgrade call.
 contract FWSSDispatcherTransition is ERC8167Transition, FWSSOwnable {
-    // Runtime hash of Proxy.evm at the pinned ERC-8167 revision.
-    bytes32 private constant DISPATCHER_CODE_HASH = 0x108d179021d554c7ad078adb0e30b9afbe6e022acfcd59ac878b2b684f29550a;
-
     // v1.4.0 announceUpgradePlan only accepts implementations over 3000 bytes of code. Distinct 32-byte lines keep the
     // optimizer from folding the padding; the transition tests pin the resulting size.
     bytes private constant LEGACY_UPGRADE_PADDING = "FWSS 1.4.0 code size padding 001"
@@ -30,7 +30,7 @@ contract FWSSDispatcherTransition is ERC8167Transition, FWSSOwnable {
     constructor(address previousImplementation_, address dispatcher_, address migration_)
         ERC8167Transition(previousImplementation_, dispatcher_, migration_)
     {
-        require(dispatcher_.codehash == DISPATCHER_CODE_HASH, InvalidTransition());
+        require(dispatcher_.codehash == FWSS_DISPATCHER_CODE_HASH, InvalidTransition());
     }
 
     /// @notice Padding that lets v1.4.0 announce this contract as its next implementation
