@@ -636,6 +636,9 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
                 service.sessionKeyRegistry()
             );
         }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSPaymentModule.sol:FWSSPaymentModule")) {
+            return abi.encode(service.usdfcTokenAddress(), service.sessionKeyRegistry());
+        }
         return super._facetConstructorArgs(sourceId);
     }
 
