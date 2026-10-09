@@ -59,6 +59,9 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
             address(viewContract)
         );
 
+        // The dataset facet checks the token's decimals when it is constructed.
+        deployCodeTo("SharedMocks.sol:MockERC20", address(service.usdfcTokenAddress()));
+
         // The scripts broadcast as DEFAULT_SENDER under forge test, so it owns the proxy.
         vm.startPrank(DEFAULT_SENDER);
         service.initialize(2880, 60, address(0x16));
@@ -620,10 +623,22 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
     }
 
-    /// @dev The config facet pins the same payments and verifier addresses as the v1.4.0 monolith it replaces.
+    /// @dev The facets pin the same immutable addresses as the v1.4.0 monolith they replace.
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
             return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
+            return abi.encode(
+                service.usdfcTokenAddress(),
+                service.filBeamBeneficiaryAddress(),
+                service.serviceProviderRegistry(),
+                service.sessionKeyRegistry()
+            );
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
+        {
+            return abi.encode(service.sessionKeyRegistry());
         }
         return super._facetConstructorArgs(sourceId);
     }
