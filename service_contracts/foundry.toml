@@ -41,12 +41,14 @@ remappings = [
 
 # Allow reading test data files. JosukeFacetSet expands the ledgers' facetSrc globs from sources and artifacts,
 # as `josuke deploy` does.
+# The scripts in script/ record deployments in deployments.json; their tests write scratch copies under out/.
 fs_permissions = [
     { access = "read", path = "./test" },
-    { access = "read", path = "./out" },
+    { access = "read-write", path = "./out" },
     { access = "read", path = "./src/modules" },
     { access = "read", path = "./lib/erc8167" },
     { access = "read", path = "./josuke.json" },
+    { access = "read-write", path = "./deployments.json" },
 ]
 
 [lint]
