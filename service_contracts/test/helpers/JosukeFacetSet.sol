@@ -7,6 +7,7 @@ import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {SetDelegateOperation} from "@erc8167/lib/Migration.sol";
 import {FWSSFilBeamModule} from "../../src/modules/FWSSFilBeamModule.sol";
+import {FWSSPaymentModule} from "../../src/modules/FWSSPaymentModule.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
@@ -77,6 +78,12 @@ abstract contract JosukeFacetSet is Test {
                 SessionKeyRegistry keyRegistry
             ) = abi.decode(constructorArgs, (IERC20Metadata, address, ServiceProviderRegistry, SessionKeyRegistry));
             return address(new FWSSDataSetModule(token, beneficiary, providerRegistry, keyRegistry));
+        }
+
+        if (keccak256(bytes(facet.sourceId)) == keccak256("src/modules/FWSSPaymentModule.sol:FWSSPaymentModule")) {
+            (IERC20Metadata token, SessionKeyRegistry keyRegistry) =
+                abi.decode(constructorArgs, (IERC20Metadata, SessionKeyRegistry));
+            return address(new FWSSPaymentModule(token, keyRegistry));
         }
 
         return deployCode(facet.artifact, constructorArgs);

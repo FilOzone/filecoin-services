@@ -10,6 +10,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
 import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
+import {FWSSEIP712Module} from "../../src/modules/FWSSEIP712Module.sol";
 import {FWSSConfigModule} from "../../src/modules/FWSSConfigModule.sol";
 import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
@@ -54,6 +55,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         );
         FWSSDataSetModule module =
             new FWSSDataSetModule(mockUSDFC, filBeamBeneficiary, serviceProviderRegistry, sessionKeyRegistry);
+        FWSSEIP712Module eip712Module = new FWSSEIP712Module();
         address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
 
         // Preserve legacy routes and route dataset operations and configuration to their modules.
@@ -70,6 +72,11 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         selectors = AbiCheats.getSelectors(vm, "out/FWSSConfigModule.sol/FWSSConfigModule.json");
         for (uint256 i; i < selectors.length; ++i) {
             _route(proxy, selectors[i], address(configModule));
+        }
+
+        selectors = AbiCheats.getSelectors(vm, "out/FWSSEIP712Module.sol/FWSSEIP712Module.json");
+        for (uint256 i; i < selectors.length; ++i) {
+            _route(proxy, selectors[i], address(eip712Module));
         }
 
         vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(dispatcher))));
