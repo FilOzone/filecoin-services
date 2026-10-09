@@ -46,7 +46,7 @@ contract FWSSPaymentModuleTest is FilecoinWarmStorageServiceFixture {
         address proxy = address(pdpServiceWithPayments);
         address legacyImplementation = address(uint160(uint256(vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT))));
         FWSSConfigModule configModule = new FWSSConfigModule(
-            pdpServiceWithPayments.paymentsContractAddress(), pdpServiceWithPayments.pdpVerifierAddress()
+            pdpServiceWithPayments.paymentsContractAddress(), pdpServiceWithPayments.pdpVerifierAddress(), mockUSDFC
         );
         FWSSPaymentModule module = new FWSSPaymentModule(mockUSDFC, sessionKeyRegistry);
         FWSSEIP712Module eip712Module = new FWSSEIP712Module();

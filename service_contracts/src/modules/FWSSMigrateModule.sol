@@ -21,7 +21,7 @@ contract FWSSMigrateModule is IMigrateModule, FWSSStorage, FWSSOwnable {
         if (migration.code.length == 0 || migration == address(this)) revert InvalidMigration(migration);
 
         uint96 delay = delayEpochs == 0 ? 1 : delayEpochs;
-        FWSSStorage.PlannedUpgrade storage plan = nextUpgrade;
+        FWSSStorage.PlannedUpgrade storage plan = _nextUpgrade;
         plan.nextImplementation = migration;
         plan.afterEpoch = uint96(block.number) + delay;
 
@@ -30,7 +30,7 @@ contract FWSSMigrateModule is IMigrateModule, FWSSStorage, FWSSOwnable {
 
     /// @dev Josuke calls this entry point with empty calldata to the migration itself.
     function migrate(address migration) external override onlyOwner {
-        FWSSStorage.PlannedUpgrade storage plan = nextUpgrade;
+        FWSSStorage.PlannedUpgrade storage plan = _nextUpgrade;
         if (migration != plan.nextImplementation || migration == address(0)) {
             revert MigrationNotAnnounced(migration);
         }

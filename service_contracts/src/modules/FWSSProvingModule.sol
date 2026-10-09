@@ -48,7 +48,7 @@ contract FWSSProvingModule is FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVer
     {
         LibServiceLifecycleGuards.requirePaymentNotBeyondEndEpoch(dataSetId, dataSetInfo[dataSetId].pdpEndEpoch);
 
-        if (provenThisPeriod[dataSetId]) {
+        if (_provenThisPeriod[dataSetId]) {
             revert Errors.ProofAlreadySubmitted(dataSetId);
         }
 
@@ -70,9 +70,9 @@ contract FWSSProvingModule is FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVer
         if (windowStart > block.number) {
             revert Errors.ChallengeWindowTooEarly(dataSetId, windowStart, block.number);
         }
-        provenThisPeriod[dataSetId] = true;
+        _provenThisPeriod[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
+        _provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
     }
 
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
@@ -92,13 +92,13 @@ contract FWSSProvingModule is FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVer
         uint96 pending = info.pendingOneTimePayments;
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 activationEpoch = _provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline;
             if (activationEpoch == 0) {
                 // First activation establishes the lifetime proving-period origin.
                 activationEpoch = block.number;
-                provingActivationEpoch[dataSetId] = activationEpoch;
+                _provingActivationEpoch[dataSetId] = activationEpoch;
                 firstDeadline = activationEpoch + maxProvingPeriod;
             } else {
                 // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
@@ -166,7 +166,7 @@ contract FWSSProvingModule is FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVer
             }
         }
         uint256 faultPeriods = periodsSkipped;
-        if (!provenThisPeriod[dataSetId]) {
+        if (!_provenThisPeriod[dataSetId]) {
             // include previous unproven period
             faultPeriods += 1;
         }
@@ -175,7 +175,7 @@ contract FWSSProvingModule is FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVer
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
-        provenThisPeriod[dataSetId] = false;
+        _provenThisPeriod[dataSetId] = false;
 
         // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
         bool hadRemovals = _processScheduledPieceMetadataRemovals(dataSetId);
@@ -200,6 +200,6 @@ contract FWSSProvingModule is FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVer
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        return LibProving.provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch, maxProvingPeriod);
+        return LibProving.provingPeriodForEpoch(_provingActivationEpoch[dataSetId], epoch, maxProvingPeriod);
     }
 }

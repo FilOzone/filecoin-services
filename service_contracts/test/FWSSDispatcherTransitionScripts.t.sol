@@ -626,7 +626,8 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
     /// @dev The config and dataset facets pin the same immutables as the v1.4.0 monolith they replace.
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
-            return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
+            return
+                abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress(), service.usdfcTokenAddress());
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
             return abi.encode(

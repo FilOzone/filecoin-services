@@ -242,7 +242,7 @@ contract FWSSPaymentModule is IValidator, FWSSEIP712, FWSSStorage {
         // was abandoned and already torn down by dataSetDeleted -- the only way to release its
         // remaining lockup, since the data set no longer exists to arbitrate proving -- or the
         // rail was never one of ours to begin with. Either way, settle in the payer's favor.
-        uint256 dataSetId = railToDataSet[railId];
+        uint256 dataSetId = _railToDataSet[railId];
         if (dataSetId == 0) {
             return
                 ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Rail not associated with a data set"});
@@ -255,7 +255,7 @@ contract FWSSPaymentModule is IValidator, FWSSEIP712, FWSSStorage {
         // No active proving period covers epochs through the activation boundary. Advance
         // settlement with zero payment so FilecoinPay can discharge pre-activation rate
         // segments, including segments recorded before the first nextProvingPeriod call.
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 activationEpoch = _provingActivationEpoch[dataSetId];
         if (activationEpoch == 0 || toEpoch <= activationEpoch) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
@@ -333,7 +333,7 @@ contract FWSSPaymentModule is IValidator, FWSSEIP712, FWSSStorage {
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
-        uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
+        uint256 isProven = _provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
         return isProven != 0;
     }
 
@@ -345,7 +345,7 @@ contract FWSSPaymentModule is IValidator, FWSSEIP712, FWSSStorage {
             revert Errors.ServiceContractMustTerminateRail();
         }
 
-        uint256 dataSetId = railToDataSet[railId];
+        uint256 dataSetId = _railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
