@@ -17,6 +17,7 @@ import {
 import {
     ADD_PIECES_BASE_FEE,
     ADD_PIECES_PER_PIECE_FEE,
+    DEFAULT_LOCKUP_PERIOD,
     SCHEDULE_PIECE_REMOVALS_FEE,
     TERMINATE_FEE
 } from "../lib/PriceListUSDFC.sol";
@@ -29,8 +30,8 @@ import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 
 /// @title FWSSAuthorizationModule
-/// @notice Manages payer-authorized data set operations: adding and removing pieces, terminating service, and
-/// attaching the data set authorizer.
+/// @notice Manages payer-authorized data set operations: adding and removing pieces, terminating service, topping up
+/// the lifecycle reserve, and attaching the data set authorizer.
 contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
     using LibRails for FilecoinPayV1;
 
@@ -265,6 +266,27 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         payments.terminateRail(info.pdpRailId);
 
         emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
+    }
+
+    /**
+     * @notice Pre-funds the lifecycle reserve beyond the automatic target
+     * @dev Useful before scheduling many piece removals or before terminating.
+     *      Cannot be called after termination; FilecoinPay forbids raising lockupFixed on a terminated rail.
+     * @param dataSetId The ID of the data set
+     * @param amount Additional amount to add to the lifecycle reserve
+     */
+    function topUpLifecycleReserve(uint256 dataSetId, uint256 amount) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        address payer = info.payer;
+        require(payer != address(0), Errors.InvalidDataSetId(dataSetId));
+        require(msg.sender == payer, Errors.CallerNotPayer(dataSetId, payer, msg.sender));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+
+        uint256 pdpRailId = info.pdpRailId;
+        uint96 newBalance = info.lifecycleReserveBalance + uint96(amount);
+        FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
+            .modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newBalance);
+        info.lifecycleReserveBalance = newBalance;
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
