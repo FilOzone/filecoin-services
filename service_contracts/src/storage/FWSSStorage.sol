@@ -41,12 +41,12 @@ abstract contract FWSSStorage {
     uint256 internal deprecatedServiceCommissionBps;
 
     // Track which proving periods have valid proofs with bitmap
-    mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) internal provenPeriods;
+    mapping(uint256 dataSetId => mapping(uint256 periodId => uint256)) internal _provenPeriods;
     // Track when proving was first activated for each data set
-    mapping(uint256 dataSetId => uint256) internal provingActivationEpoch;
+    mapping(uint256 dataSetId => uint256) internal _provingActivationEpoch;
 
     mapping(uint256 dataSetId => uint256) internal provingDeadlines;
-    mapping(uint256 dataSetId => bool) internal provenThisPeriod;
+    mapping(uint256 dataSetId => bool) internal _provenThisPeriod;
 
     mapping(uint256 dataSetId => DataSetInfo) internal dataSetInfo;
 
@@ -54,10 +54,10 @@ abstract contract FWSSStorage {
     // Stores packed data: upper 128 bits = cumulative piece count after AddPieces or 0 for CreateDataSet,
     // lower 128 bits = dataSetId. For AddPieces, stores (firstAdded + pieceData.length) which is the
     // next piece ID that would be assigned, providing historical data about dataset state after the operation.
-    mapping(address payer => mapping(uint256 nonce => uint256)) internal clientNonces;
+    mapping(address payer => mapping(uint256 nonce => uint256)) internal _clientNonces;
 
-    mapping(address payer => uint256[]) internal clientDataSets;
-    mapping(uint256 pdpRailId => uint256) internal railToDataSet;
+    mapping(address payer => uint256[]) internal _clientDataSets;
+    mapping(uint256 pdpRailId => uint256) internal _railToDataSet;
 
     // dataSetId => (key => value)
     mapping(uint256 dataSetId => mapping(string key => string value)) internal dataSetMetadata;
@@ -81,10 +81,10 @@ abstract contract FWSSStorage {
     address internal _viewContractAddress;
 
     // The address allowed to terminate CDN services
-    address internal filBeamControllerAddress;
+    address internal _filBeamControllerAddress;
 
     // Pending upgrade announcement
-    PlannedUpgrade internal nextUpgrade;
+    PlannedUpgrade internal _nextUpgrade;
 
     // Pricing rates (mutable for future adjustments)
     uint256 internal deprecatedStoragePricePerTibPerMonth;

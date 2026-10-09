@@ -248,8 +248,8 @@ contract FilecoinWarmStorageService is
 
     function _onlyFilBeamController() internal view {
         require(
-            msg.sender == filBeamControllerAddress,
-            Errors.OnlyFilBeamControllerAllowed(filBeamControllerAddress, msg.sender)
+            msg.sender == _filBeamControllerAddress,
+            Errors.OnlyFilBeamControllerAllowed(_filBeamControllerAddress, msg.sender)
         );
     }
 
@@ -315,7 +315,7 @@ contract FilecoinWarmStorageService is
         );
 
         require(_filBeamControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
-        filBeamControllerAddress = _filBeamControllerAddress;
+        FWSSStorage._filBeamControllerAddress = _filBeamControllerAddress;
 
         emit FilecoinServiceDeployed(SERVICE_NAME, SERVICE_DESCRIPTION);
 
@@ -344,16 +344,16 @@ contract FilecoinWarmStorageService is
 
     function _announcePlannedUpgrade(address nextImplementation, uint96 afterEpoch) internal onlyOwner {
         require(nextImplementation.code.length > 3000);
-        nextUpgrade.nextImplementation = nextImplementation;
-        nextUpgrade.afterEpoch = afterEpoch;
-        emit UpgradeAnnounced(nextUpgrade);
+        _nextUpgrade.nextImplementation = nextImplementation;
+        _nextUpgrade.afterEpoch = afterEpoch;
+        emit UpgradeAnnounced(_nextUpgrade);
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {
         // zero address already checked by ERC1967Utils._setImplementation
-        require(newImplementation == nextUpgrade.nextImplementation);
-        require(block.number >= nextUpgrade.afterEpoch);
-        delete nextUpgrade;
+        require(newImplementation == _nextUpgrade.nextImplementation);
+        require(block.number >= _nextUpgrade.afterEpoch);
+        delete _nextUpgrade;
     }
 
     /**
@@ -490,11 +490,11 @@ contract FilecoinWarmStorageService is
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
-            clientNonces[createData.payer][createData.clientDataSetId] == 0,
+            _clientNonces[createData.payer][createData.clientDataSetId] == 0,
             Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
         );
-        clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
-        clientDataSets[createData.payer].push(dataSetId);
+        _clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
+        _clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
         verifyCreateDataSetSignature(payee, createData);
@@ -551,7 +551,7 @@ contract FilecoinWarmStorageService is
             dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
         );
 
-        railToDataSet[pdpRailId] = dataSetId;
+        _railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
         info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
         info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
@@ -596,7 +596,7 @@ contract FilecoinWarmStorageService is
         FilecoinPayV1 payments = FilecoinPayV1(paymentsContractAddress);
 
         // Cache before either branch clears it — needed to bound the provenPeriods loop below.
-        uint256 activation = provingActivationEpoch[dataSetId];
+        uint256 activation = _provingActivationEpoch[dataSetId];
 
         if (info.pdpEndEpoch == 0) {
             // Abandonment path: rail was never terminated via terminateService.
@@ -604,7 +604,7 @@ contract FilecoinWarmStorageService is
             _verifyInactivity(dataSetId);
             // abandonRails also terminates CDN rails and clears the proving activation epoch
             payments.abandonRails(
-                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+                _provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
             );
         } else {
             // Normal path: terminateService was already called.
@@ -622,13 +622,13 @@ contract FilecoinWarmStorageService is
             if (info.cdnRailId != 0) {
                 _terminateCDNRails(dataSetId, info, payments);
             }
-            delete provingActivationEpoch[dataSetId];
+            delete _provingActivationEpoch[dataSetId];
         }
 
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
-        uint256[] storage clientDataSetList = clientDataSets[payer];
+        uint256[] storage clientDataSetList = _clientDataSets[payer];
         for (uint256 i = 0; i < clientDataSetList.length; i++) {
             if (clientDataSetList[i] == dataSetId) {
                 // Remove this dataset from the array
@@ -640,17 +640,17 @@ contract FilecoinWarmStorageService is
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
-        delete provenThisPeriod[dataSetId];
+        delete _provenThisPeriod[dataSetId];
         if (activation != 0) {
             uint256 lastPeriod = _provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
             uint256 lastSlot = lastPeriod >> 8;
             for (uint256 slot = 0; slot <= lastSlot; slot++) {
-                delete provenPeriods[dataSetId][slot];
+                delete _provenPeriods[dataSetId][slot];
             }
         }
 
         // Clean up rail mappings
-        delete railToDataSet[info.pdpRailId];
+        delete _railToDataSet[info.pdpRailId];
 
         // Clean up metadata mappings
         string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
@@ -678,7 +678,7 @@ contract FilecoinWarmStorageService is
      *      since-activation gate.
      */
     function _verifyInactivity(uint256 dataSetId) internal view {
-        uint256 activation = provingActivationEpoch[dataSetId];
+        uint256 activation = _provingActivationEpoch[dataSetId];
         if (activation == 0) return;
 
         uint256 lastProvenEpoch = IPDPVerifier(pdpVerifierAddress).getDataSetLastProvenEpoch(dataSetId);
@@ -714,9 +714,9 @@ contract FilecoinWarmStorageService is
             abi.decode(extraData, (uint256, string[][], string[][], bytes));
 
         // Validate nonce hasn't been used (replay protection)
-        require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
+        require(_clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
         // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
-        clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
+        _clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
 
         // Empty outer arrays compactly represent a batch with no metadata. Otherwise, require
         // one metadata array per piece.
@@ -839,7 +839,7 @@ contract FilecoinWarmStorageService is
     {
         requirePaymentNotBeyondEndEpoch(dataSetId);
 
-        if (provenThisPeriod[dataSetId]) {
+        if (_provenThisPeriod[dataSetId]) {
             revert Errors.ProofAlreadySubmitted(dataSetId);
         }
 
@@ -861,9 +861,9 @@ contract FilecoinWarmStorageService is
         if (windowStart > block.number) {
             revert Errors.ChallengeWindowTooEarly(dataSetId, windowStart, block.number);
         }
-        provenThisPeriod[dataSetId] = true;
+        _provenThisPeriod[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
+        _provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
     }
 
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
@@ -883,13 +883,13 @@ contract FilecoinWarmStorageService is
         uint96 pending = info.pendingOneTimePayments;
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 activationEpoch = _provingActivationEpoch[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline;
             if (activationEpoch == 0) {
                 // First activation establishes the lifetime proving-period origin.
                 activationEpoch = block.number;
-                provingActivationEpoch[dataSetId] = activationEpoch;
+                _provingActivationEpoch[dataSetId] = activationEpoch;
                 firstDeadline = activationEpoch + maxProvingPeriod;
             } else {
                 // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
@@ -949,7 +949,7 @@ contract FilecoinWarmStorageService is
             }
         }
         uint256 faultPeriods = periodsSkipped;
-        if (!provenThisPeriod[dataSetId]) {
+        if (!_provenThisPeriod[dataSetId]) {
             // include previous unproven period
             faultPeriods += 1;
         }
@@ -958,7 +958,7 @@ contract FilecoinWarmStorageService is
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
-        provenThisPeriod[dataSetId] = false;
+        _provenThisPeriod[dataSetId] = false;
 
         // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
         bool hadRemovals = processScheduledPieceMetadataRemovals(dataSetId);
@@ -1116,8 +1116,8 @@ contract FilecoinWarmStorageService is
 
     function transferFilBeamController(address newController) external onlyFilBeamController {
         require(newController != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
-        address oldController = filBeamControllerAddress;
-        filBeamControllerAddress = newController;
+        address oldController = _filBeamControllerAddress;
+        _filBeamControllerAddress = newController;
         emit FilBeamControllerChanged(oldController, newController);
     }
 
@@ -1198,7 +1198,7 @@ contract FilecoinWarmStorageService is
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        return _provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch, maxProvingPeriod);
+        return _provingPeriodForEpoch(_provingActivationEpoch[dataSetId], epoch, maxProvingPeriod);
     }
 
     /// @dev Maps an epoch to its proving period ID using exclusive-inclusive ranges.
@@ -1487,7 +1487,7 @@ contract FilecoinWarmStorageService is
         // was abandoned and already torn down by dataSetDeleted -- the only way to release its
         // remaining lockup, since the data set no longer exists to arbitrate proving -- or the
         // rail was never one of ours to begin with. Either way, settle in the payer's favor.
-        uint256 dataSetId = railToDataSet[railId];
+        uint256 dataSetId = _railToDataSet[railId];
         if (dataSetId == 0) {
             return
                 ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Rail not associated with a data set"});
@@ -1500,7 +1500,7 @@ contract FilecoinWarmStorageService is
         // No active proving period covers epochs through the activation boundary. Advance
         // settlement with zero payment so FilecoinPay can discharge pre-activation rate
         // segments, including segments recorded before the first nextProvingPeriod call.
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 activationEpoch = _provingActivationEpoch[dataSetId];
         if (activationEpoch == 0 || toEpoch <= activationEpoch) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
@@ -1578,7 +1578,7 @@ contract FilecoinWarmStorageService is
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
-        uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
+        uint256 isProven = _provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
         return isProven != 0;
     }
 
@@ -1596,7 +1596,7 @@ contract FilecoinWarmStorageService is
             revert Errors.ServiceContractMustTerminateRail();
         }
 
-        uint256 dataSetId = railToDataSet[railId];
+        uint256 dataSetId = _railToDataSet[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {

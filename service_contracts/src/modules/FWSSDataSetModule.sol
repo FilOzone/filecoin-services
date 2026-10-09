@@ -151,11 +151,11 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
-            clientNonces[createData.payer][createData.clientDataSetId] == 0,
+            _clientNonces[createData.payer][createData.clientDataSetId] == 0,
             Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
         );
-        clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
-        clientDataSets[createData.payer].push(dataSetId);
+        _clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
+        _clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
         verifyCreateDataSetSignature(payee, createData);
@@ -212,7 +212,7 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
             dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
         );
 
-        railToDataSet[pdpRailId] = dataSetId;
+        _railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
         info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
         info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
@@ -257,7 +257,7 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
         FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
 
         // Cache before either branch clears it — needed to bound the provenPeriods loop below.
-        uint256 activation = provingActivationEpoch[dataSetId];
+        uint256 activation = _provingActivationEpoch[dataSetId];
 
         if (info.pdpEndEpoch == 0) {
             // Abandonment path: rail was never terminated via terminateService.
@@ -265,7 +265,7 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
             _verifyInactivity(dataSetId);
             // abandonRails also terminates CDN rails and clears the proving activation epoch
             payments.abandonRails(
-                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+                _provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
             );
         } else {
             // Normal path: terminateService was already called.
@@ -283,13 +283,13 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
             if (info.cdnRailId != 0) {
                 LibStoragePayments.terminateCDNRails(dataSetId, info, payments);
             }
-            delete provingActivationEpoch[dataSetId];
+            delete _provingActivationEpoch[dataSetId];
         }
 
         // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
-        uint256[] storage clientDataSetList = clientDataSets[payer];
+        uint256[] storage clientDataSetList = _clientDataSets[payer];
         for (uint256 i = 0; i < clientDataSetList.length; i++) {
             if (clientDataSetList[i] == dataSetId) {
                 // Remove this dataset from the array
@@ -301,17 +301,17 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
-        delete provenThisPeriod[dataSetId];
+        delete _provenThisPeriod[dataSetId];
         if (activation != 0) {
             uint256 lastPeriod = LibProving.provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
             uint256 lastSlot = lastPeriod >> 8;
             for (uint256 slot = 0; slot <= lastSlot; slot++) {
-                delete provenPeriods[dataSetId][slot];
+                delete _provenPeriods[dataSetId][slot];
             }
         }
 
         // Clean up rail mappings
-        delete railToDataSet[info.pdpRailId];
+        delete _railToDataSet[info.pdpRailId];
 
         // Clean up metadata mappings
         string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
@@ -339,7 +339,7 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
      *      since-activation gate.
      */
     function _verifyInactivity(uint256 dataSetId) internal view {
-        uint256 activation = provingActivationEpoch[dataSetId];
+        uint256 activation = _provingActivationEpoch[dataSetId];
         if (activation == 0) return;
 
         uint256 lastProvenEpoch =
@@ -376,9 +376,9 @@ contract FWSSDataSetModule is FWSSEIP712, FWSSPieceMetadataRemovals, FWSSPDPVeri
             abi.decode(extraData, (uint256, string[][], string[][], bytes));
 
         // Validate nonce hasn't been used (replay protection)
-        require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
+        require(_clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
         // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
-        clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
+        _clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
 
         // Empty outer arrays compactly represent a batch with no metadata. Otherwise, require
         // one metadata array per piece.
