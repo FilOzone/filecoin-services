@@ -38,9 +38,9 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
     bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
 
-    IERC20Metadata private immutable usdfcTokenAddress;
-    address private immutable filBeamBeneficiaryAddress;
-    ServiceProviderRegistry private immutable serviceProviderRegistry;
+    IERC20Metadata public immutable usdfcTokenAddress;
+    address public immutable filBeamBeneficiaryAddress;
+    ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry private immutable sessionKeyRegistry;
 
     /// @notice Configures the immutable dependencies used by dataset operations.

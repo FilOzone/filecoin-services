@@ -492,9 +492,12 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
 
-        // The former immutable getters belong to the business modules that use them; none are routed yet.
-        vm.expectRevert(abi.encodeWithSelector(IERC8167.FunctionNotFound.selector, service.usdfcTokenAddress.selector));
-        viewContract.getPriceList();
+        // The former immutable getters belong to the business modules that use them.
+        assertEq(address(service.usdfcTokenAddress()), address(facetToken));
+        assertEq(service.filBeamBeneficiaryAddress(), facetBeneficiary);
+        assertEq(address(service.serviceProviderRegistry()), facetProviderRegistry);
+        assertEq(address(service.sessionKeyRegistry()), facetSessionKeyRegistry);
+        assertEq(address(viewContract.getPriceList().token), address(facetToken));
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
