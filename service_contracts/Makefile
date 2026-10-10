@@ -27,18 +27,53 @@ INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
 LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
+# wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
+EVM_REPO := https://github.com/wjmelements/evm.git
+EVM_REVISION := 6e23274c2709e7d05d5f3111555f2354ce61b872
+EVM_DIR ?= $(HOME)/.cache/wjmelements-evm/$(EVM_REVISION)
+# Install beside forge, which is already on PATH
+EVM_INSTALL_DIR ?= $(patsubst %/,%,$(dir $(shell command -v forge)))
+
+# josuke deploys the modules and migrations and keeps josuke.json; its ledger format still changes
+JOSUKE_REPO := https://github.com/wjmelements/josuke.git
+JOSUKE_REVISION := b7366d31f35d36ec5992a7a654e7f817b33bef6f
+
 # Build target
 .PHONY: build
 build:
 	forge build --via-ir
 
+# Build the pinned evm assembler once per revision
+.PHONY: install-evm
+install-evm: $(EVM_DIR)/bin/evm
+	@test -n "$(EVM_INSTALL_DIR)" || (echo 'forge is not on PATH; set EVM_INSTALL_DIR'; exit 1)
+	install $< $(EVM_INSTALL_DIR)/evm
+
+$(EVM_DIR)/bin/evm:
+	git clone --depth 1 --revision $(EVM_REVISION) --recurse-submodules --shallow-submodules --no-tags $(EVM_REPO) $(EVM_DIR)
+	$(MAKE) -C $(EVM_DIR) bin/evm
+
+# Install the pinned josuke CLI with uv
+.PHONY: install-josuke
+install-josuke:
+	uv tool install --force "josuke @ git+$(JOSUKE_REPO)@$(JOSUKE_REVISION)"
+
+# Compile the upstream dispatcher unchanged. No Solidity wrapper or bytecode padding.
+# Only tests and the dispatcher deployment use these artifacts; FWSS pins the dispatcher code hash.
+.PHONY: erc8167
+erc8167:
+	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
+	$(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
+
 # Storage layout generation
-$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
-	$^ | forge fmt -r - > $@
+$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
+	bash -o pipefail -c 'bash tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol | forge fmt -r - > "$@.tmp"'
+	mv $@.tmp $@
 
 # Storage layout JSON (full metadata for upgrade safety checks)
-$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
-	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
+$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol $(LAYOUT_SNAPSHOT_JQ)
+	bash -o pipefail -c 'forge inspect --out out/storage-layout --cache-path cache/storage-layout --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > "$@.tmp"'
+	mv $@.tmp $@
 
 # The library imports the generated storage layout.
 $(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol $(LAYOUT)
@@ -85,7 +120,7 @@ check-tools:
 
 # Test target
 .PHONY: test
-test:
+test: erc8167
 	forge test --via-ir -vv
 
 # Clean build artifacts
@@ -113,13 +148,13 @@ fmt-check:
 # Note: Using --ir-minimum due to "stack too deep" errors in FilecoinPayV1.sol
 # This may result in less accurate source mappings but is necessary for coverage to run
 .PHONY: coverage
-coverage:
+coverage: erc8167
 	@echo "Running coverage with --ir-minimum (required due to stack depth issues)..."
 	forge coverage --ir-minimum --report summary
 
 # Coverage with LCOV report (for CI)
 .PHONY: coverage-lcov
-coverage-lcov:
+coverage-lcov: erc8167
 	@echo "Generating LCOV coverage report with --ir-minimum..."
 	forge coverage --ir-minimum --report lcov
 
@@ -192,6 +227,8 @@ clean-abi:
 help:
 	@echo "Available targets:"
 	@echo "  install    - Install dependencies (forge and npm)"
+	@echo "  install-evm - Build the pinned evm assembler and install it beside forge"
+	@echo "  install-josuke - Install the pinned josuke CLI with uv"
 	@echo "  build      - Build contracts"
 	@echo "  test       - Run tests"
 	@echo "  clean      - Clean build artifacts"

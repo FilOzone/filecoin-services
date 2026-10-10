@@ -1,0 +1,462 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+pragma solidity 0.8.37;
+
+import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
+import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {ServiceProviderRegistry} from "../ServiceProviderRegistry.sol";
+import {Errors} from "../Errors.sol";
+import {FWSSPieceMetadataRemovals} from "../abstract/FWSSPieceMetadataRemovals.sol";
+import {
+    COMMISSION_MAX_BPS,
+    PDP_INACTIVITY_WINDOW,
+    MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+    MAX_KEY_LENGTH,
+    MAX_KEYS_PER_DATASET,
+    MAX_VALUE_LENGTH
+} from "../FilecoinWarmStorageService.sol";
+import {
+    CACHE_MISS_EGRESS_PRICE_PER_TIB,
+    CDN_EGRESS_PRICE_PER_TIB,
+    CREATE_DATA_SET_FEE,
+    DATASET_FEE_PER_MONTH,
+    EPOCHS_PER_MONTH,
+    LIFECYCLE_RESERVE_TARGET,
+    SERVICE_COMMISSION_BPS,
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TOKEN_DECIMALS
+} from "../lib/PriceListUSDFC.sol";
+import {LibRails} from "../lib/LibRails.sol";
+import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
+import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
+import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
+import {LibProving} from "../lib/LibProving.sol";
+import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
+
+/// @title FWSSDataSetModule
+/// @notice Manages data set creation and deletion.
+contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
+    using LibRails for FilecoinPayV1;
+
+    // Metadata key constants
+    uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
+    bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
+
+    IERC20Metadata public immutable usdfcTokenAddress;
+    address public immutable filBeamBeneficiaryAddress;
+    ServiceProviderRegistry public immutable serviceProviderRegistry;
+    SessionKeyRegistry private immutable sessionKeyRegistry;
+
+    /// @notice Configures the immutable dependencies used by dataset operations.
+    /// @dev These retain the implementation-bound configuration of FWSS without adding storage.
+    constructor(
+        IERC20Metadata _usdfc,
+        address _filBeamBeneficiaryAddress,
+        ServiceProviderRegistry _serviceProviderRegistry,
+        SessionKeyRegistry _sessionKeyRegistry
+    ) {
+        require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfc;
+
+        require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
+        filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
+
+        require(
+            _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
+        );
+        serviceProviderRegistry = _serviceProviderRegistry;
+
+        require(
+            _sessionKeyRegistry != SessionKeyRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
+        );
+        sessionKeyRegistry = _sessionKeyRegistry;
+
+        // Verify token decimals from the USDFC token contract
+        require(TOKEN_DECIMALS == _usdfc.decimals());
+    }
+
+    event DataSetServiceProviderChanged(
+        uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
+    );
+
+    event DataSetCreated(
+        uint256 indexed dataSetId,
+        uint256 indexed providerId,
+        uint256 pdpRailId,
+        uint256 cacheMissRailId,
+        uint256 cdnRailId,
+        address payer,
+        address serviceProvider,
+        address payee,
+        string[] metadataKeys,
+        string[] metadataValues
+    );
+
+    // Decode structure for data set creation extra data
+    struct ServicePricing {
+        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
+        uint256 pricePerTiBCdnEgress; // CDN egress price per TiB (usage-based)
+        uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based)
+        IERC20 tokenAddress; // Address of the USDFC token
+        uint256 epochsPerMonth; // Number of epochs in a month
+        uint256 datasetFeePerMonth; // Per-dataset additive monthly fee (0.024 USDFC)
+    }
+
+    struct DataSetCreateData {
+        // The address of the payer who should have signed the message
+        address payer;
+        // the unique ID for the client's data set
+        uint256 clientDataSetId;
+        // Array of metadata keys
+        string[] metadataKeys;
+        // Array of metadata values
+        string[] metadataValues;
+        // The signature bytes (v, r, s)
+        bytes signature;
+    }
+
+    // Listener interface methods
+    /**
+     * @notice Handles data set creation by creating a payment rail
+     * @dev Called by the PDPVerifier contract when a new data set is created
+     * @param dataSetId The ID of the newly created data set
+     * @param serviceProvider The address that creates and owns the data set
+     * @param extraData Encoded data containing metadata, payer information, and signature
+     */
+    function dataSetCreated(uint256 dataSetId, address serviceProvider, bytes calldata extraData)
+        external
+        onlyPDPVerifier
+    {
+        // Decode the extra data to get the metadata, payer address, and signature
+        uint256 len = extraData.length;
+        require(len > 0, Errors.ExtraDataRequired());
+        require(
+            len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
+            Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
+        );
+        DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+
+        // Validate the addresses
+        require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
+        require(serviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
+
+        uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
+
+        require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
+
+        address payee = serviceProviderRegistry.getProviderPayee(providerId);
+
+        require(
+            clientNonces[createData.payer][createData.clientDataSetId] == 0,
+            Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
+        );
+        clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
+        clientDataSets[createData.payer].push(dataSetId);
+
+        // Verify the client's signature
+        verifyCreateDataSetSignature(payee, createData);
+
+        // Initialize the DataSetInfo struct
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        info.payer = createData.payer;
+        info.payee = payee; // Using payee address from registry
+        info.serviceProvider = serviceProvider; // Set the service provider
+        info.commissionBps = SERVICE_COMMISSION_BPS;
+        info.clientDataSetId = createData.clientDataSetId;
+        info.providerId = providerId;
+
+        // Store each metadata key-value entry for this data set
+        require(
+            createData.metadataKeys.length == createData.metadataValues.length,
+            Errors.MetadataKeyAndValueLengthMismatch(createData.metadataKeys.length, createData.metadataValues.length)
+        );
+        require(
+            createData.metadataKeys.length <= MAX_KEYS_PER_DATASET,
+            Errors.TooManyMetadataKeys(MAX_KEYS_PER_DATASET, createData.metadataKeys.length)
+        );
+
+        for (uint256 i = 0; i < createData.metadataKeys.length; i++) {
+            string memory key = createData.metadataKeys[i];
+            string memory value = createData.metadataValues[i];
+
+            require(bytes(dataSetMetadata[dataSetId][key]).length == 0, Errors.DuplicateMetadataKey(dataSetId, key));
+            require(
+                bytes(key).length <= MAX_KEY_LENGTH,
+                Errors.MetadataKeyExceedsMaxLength(i, MAX_KEY_LENGTH, bytes(key).length)
+            );
+            require(
+                bytes(value).length <= MAX_VALUE_LENGTH,
+                Errors.MetadataValueExceedsMaxLength(i, MAX_VALUE_LENGTH, bytes(value).length)
+            );
+
+            // Store the metadata key in the array for this data set
+            dataSetMetadataKeys[dataSetId].push(key);
+
+            // Store the metadata value directly
+            dataSetMetadata[dataSetId][key] = value;
+        }
+
+        // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
+
+        // Create the payment rails using the FilecoinPayV1 contract
+        FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
+
+        // Determine once whether CDN is enabled in metadata and reuse the result
+        bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
+
+        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = payments.createRails(
+            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
+        );
+
+        railToDataSet[pdpRailId] = dataSetId;
+        info.pdpRailId = pdpRailId;
+        info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
+        info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
+        if (hasCDN) {
+            info.cacheMissRailId = cacheMissRailId;
+            info.cdnRailId = cdnRailId;
+        }
+        // Emit event for tracking
+        emit DataSetCreated(
+            dataSetId,
+            providerId,
+            pdpRailId,
+            cacheMissRailId,
+            cdnRailId,
+            createData.payer,
+            serviceProvider,
+            payee,
+            createData.metadataKeys,
+            createData.metadataValues
+        );
+    }
+
+    /**
+     * @notice Handles data set deletion after voluntary termination or via the abandonment path.
+     * @dev Called by the PDPVerifier contract when a data set is deleted.
+     *      When pdpEndEpoch == 0 the rail was never terminated via terminateService; FWSS verifies
+     *      30-day inactivity and performs inline teardown so a keeper needs only one transaction.
+     * @param dataSetId The ID of the data set being deleted
+     */
+    function dataSetDeleted(
+        uint256 dataSetId,
+        uint256, // deletedLeafCount, - not used
+        bytes calldata // extraData, - not used
+    )
+        external
+        onlyPDPVerifier
+    {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
+
+        address payer = info.payer;
+        FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
+
+        // Cache before either branch clears it — needed to bound the provenPeriods loop below.
+        uint256 activation = provingActivationEpoch[dataSetId];
+
+        if (info.pdpEndEpoch == 0) {
+            // Abandonment path: rail was never terminated via terminateService.
+            // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
+            _verifyInactivity(dataSetId);
+            // abandonRails also terminates CDN rails and clears the proving activation epoch
+            payments.abandonRails(
+                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+            );
+        } else {
+            // Normal path: terminateService was already called.
+            // Verify the payment window has elapsed and the rail is fully settled.
+            require(block.number >= info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
+            try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
+                require(
+                    rail.settledUpTo >= rail.endEpoch,
+                    Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
+                );
+            } catch {
+                // Rail is finalized (zeroed out), meaning it was already fully settled
+            }
+            // Terminate CDN rails if configured, giving FilBeam a graceful settle window
+            if (info.cdnRailId != 0) {
+                LibStoragePayments.terminateCDNRails(dataSetId, info, payments);
+            }
+            delete provingActivationEpoch[dataSetId];
+        }
+
+        // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
+
+        // Remove from client's dataset list
+        uint256[] storage clientDataSetList = clientDataSets[payer];
+        for (uint256 i = 0; i < clientDataSetList.length; i++) {
+            if (clientDataSetList[i] == dataSetId) {
+                // Remove this dataset from the array
+                clientDataSetList[i] = clientDataSetList[clientDataSetList.length - 1];
+                clientDataSetList.pop();
+                break;
+            }
+        }
+
+        // Clean up proving-related state
+        delete provingDeadlines[dataSetId];
+        delete provenThisPeriod[dataSetId];
+        if (activation != 0) {
+            uint256 lastPeriod = LibProving.provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
+            uint256 lastSlot = lastPeriod >> 8;
+            for (uint256 slot = 0; slot <= lastSlot; slot++) {
+                delete provenPeriods[dataSetId][slot];
+            }
+        }
+
+        // Clean up rail mappings
+        delete railToDataSet[info.pdpRailId];
+
+        // Clean up metadata mappings
+        string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            delete dataSetMetadata[dataSetId][metadataKeys[i]];
+        }
+        delete dataSetMetadataKeys[dataSetId];
+
+        _processScheduledPieceMetadataRemovals(dataSetId);
+
+        // Complete cleanup
+        delete dataSetAuthorizer[dataSetId];
+        delete dataSetInfo[dataSetId];
+    }
+
+    /**
+     * @notice Verifies the data set has been inactive for INACTIVITY_WINDOW.
+     * @dev Layers on PDPVerifier.deleteDataSet's own gate, which restricts non-SP callers within
+     *      the window. This check stops the SP themselves from using deleteDataSet to skip
+     *      terminateService on an active data set.
+     *      Baseline: PDPVerifier's lastProvenEpoch (initialized at creation for current data
+     *      sets, updated on each proof). If 0, the data set is legacy and predates that
+     *      initialization; fall back to our local provingActivationEpoch.
+     *      Never-activated (activation == 0) is accepted unconditionally; PDPVerifier handles the
+     *      since-activation gate.
+     */
+    function _verifyInactivity(uint256 dataSetId) internal view {
+        uint256 activation = provingActivationEpoch[dataSetId];
+        if (activation == 0) return;
+
+        uint256 lastProvenEpoch =
+            IPDPVerifier(IFWSSConfig(address(this)).pdpVerifierAddress()).getDataSetLastProvenEpoch(dataSetId);
+        uint256 lastActivity = lastProvenEpoch == 0 ? activation : lastProvenEpoch;
+        uint256 requiredEpoch = lastActivity + PDP_INACTIVITY_WINDOW;
+        require(block.number > requiredEpoch, Errors.DataSetNotAbandoned(dataSetId, requiredEpoch, block.number));
+    }
+
+    /**
+     * @notice Handles data set service provider changes (currently disabled for GA)
+     * @dev Storage provider changes are disabled for GA. This will be re-enabled post-GA
+     * with proper client authorization. See: https://github.com/FilOzone/filecoin-services/issues/203
+     * Called by the PDPVerifier contract when data set service provider is transferred.
+     */
+    function storageProviderChanged(
+        uint256, // dataSetId
+        address, // oldServiceProvider
+        address, // newServiceProvider
+        bytes calldata // extraData - not used
+    )
+        external
+        view
+        onlyPDPVerifier
+    {
+        revert Errors.StorageProviderChangesNotSupported();
+    }
+
+    /**
+     * @notice Decode extra data for data set creation
+     * @param extraData The encoded extra data from PDPVerifier
+     * @return decoded The decoded DataSetCreateData struct
+     */
+    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
+        (address payer, uint256 clientDataSetId, string[] memory keys, string[] memory values, bytes memory signature) =
+            abi.decode(extraData, (address, uint256, string[], string[], bytes));
+
+        return DataSetCreateData({
+            payer: payer,
+            clientDataSetId: clientDataSetId,
+            metadataKeys: keys,
+            metadataValues: values,
+            signature: signature
+        });
+    }
+
+    /**
+     * @notice Returns true if key `withCDN` exists in `metadataKeys`.
+     * @param metadataKeys The array of metadata keys
+     * @return True if key exists; false otherwise.
+     */
+    function hasCDNMetadataKey(string[] memory metadataKeys) internal pure returns (bool) {
+        for (uint256 i = 0; i < metadataKeys.length; i++) {
+            bytes memory currentKeyBytes = bytes(metadataKeys[i]);
+            if (
+                currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
+                    && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
+            ) {
+                return true;
+            }
+        }
+
+        // Key absence means disabled
+        return false;
+    }
+
+    /**
+     * @notice Verifies a signature for the CreateDataSet operation
+     * @param createData The decoded DataSetCreateData used to build the signature
+     * @param payee The service provider address
+     */
+    function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
+        // Compute the EIP-712 digest for the struct hash
+        bytes32 digest = _hashTypedDataV4(
+            LibSignatureVerification.createDataSetStructHash(
+                createData.clientDataSetId, payee, createData.metadataKeys, createData.metadataValues
+            )
+        );
+
+        // Verify using the inlined signature library
+        LibSignatureVerification.verifyCreateDataSetSignature(
+            createData.payer, createData.signature, digest, sessionKeyRegistry
+        );
+    }
+
+    /**
+     * @notice Get the service pricing information
+     * @return pricing A struct containing pricing details for storage and CDN/cache miss egress
+     * @custom:deprecated Use `FilecoinWarmStorageServiceStateView.getPriceList()` instead, which
+     *                    returns the complete price catalogue (rates, fees, lockups) in one call.
+     */
+    function getServicePrice() external view returns (ServicePricing memory pricing) {
+        pricing = ServicePricing({
+            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
+            pricePerTiBCdnEgress: CDN_EGRESS_PRICE_PER_TIB,
+            pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
+            tokenAddress: usdfcTokenAddress,
+            epochsPerMonth: EPOCHS_PER_MONTH,
+            datasetFeePerMonth: DATASET_FEE_PER_MONTH
+        });
+    }
+
+    /**
+     * @notice Get the effective rates after commission for both service types
+     * @return serviceFee Service fee (per TiB per month)
+     * @return spPayment SP payment (per TiB per month)
+     * @custom:deprecated Service commission is fixed at zero; the SP receives the full storage
+     *                    rate. Use `FilecoinWarmStorageServiceStateView.getPriceList().rates`
+     *                    for the canonical pricing.
+     */
+    function getEffectiveRates() external pure returns (uint256 serviceFee, uint256 spPayment) {
+        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
+
+        serviceFee = (total * SERVICE_COMMISSION_BPS) / COMMISSION_MAX_BPS;
+        spPayment = total - serviceFee;
+
+        return (serviceFee, spPayment);
+    }
+}
