@@ -623,7 +623,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
     }
 
-    /// @dev The config and dataset facets pin the same immutables as the v1.4.0 monolith they replace.
+    /// @dev The config, dataset and authorization facets pin the same immutables as the v1.4.0 monolith they replace.
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
             return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
@@ -635,6 +635,10 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
                 service.serviceProviderRegistry(),
                 service.sessionKeyRegistry()
             );
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
+        {
+            return abi.encode(service.sessionKeyRegistry());
         }
         return super._facetConstructorArgs(sourceId);
     }

@@ -67,6 +67,12 @@ uint256 constant MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE = 1024; // 1KiB
 */
 uint256 constant MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE = 1024; // 1KiB
 
+// Metadata size and count limits
+uint256 constant MAX_KEY_LENGTH = 32;
+uint256 constant MAX_VALUE_LENGTH = 96;
+uint256 constant MAX_KEYS_PER_DATASET = 10;
+uint256 constant MAX_KEYS_PER_PIECE = 3;
+
 /// @title FilecoinWarmStorageService
 /// @notice An implementation of PDP Listener with payment integration.
 /// @dev This contract extends SimplePDPService by adding payment functionality
@@ -199,12 +205,6 @@ contract FilecoinWarmStorageService is
     // Constants
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
-
-    // Metadata size and count limits
-    uint256 private constant MAX_KEY_LENGTH = 32;
-    uint256 private constant MAX_VALUE_LENGTH = 96;
-    uint256 private constant MAX_KEYS_PER_DATASET = 10;
-    uint256 private constant MAX_KEYS_PER_PIECE = 3;
 
     // Metadata key constants
     string private constant METADATA_KEY_WITH_CDN = "withCDN";
