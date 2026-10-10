@@ -107,6 +107,10 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
             return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
         }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
+        {
+            return abi.encode(facetSessionKeyRegistry);
+        }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
             return abi.encode(facetToken, facetBeneficiary, facetProviderRegistry, facetSessionKeyRegistry);
         }
@@ -488,9 +492,12 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
 
-        // The former immutable getters belong to the business modules that use them; none are routed yet.
-        vm.expectRevert(abi.encodeWithSelector(IERC8167.FunctionNotFound.selector, service.usdfcTokenAddress.selector));
-        viewContract.getPriceList();
+        // The former immutable getters belong to the business modules that use them.
+        assertEq(address(service.usdfcTokenAddress()), address(facetToken));
+        assertEq(service.filBeamBeneficiaryAddress(), facetBeneficiary);
+        assertEq(address(service.serviceProviderRegistry()), facetProviderRegistry);
+        assertEq(address(service.sessionKeyRegistry()), facetSessionKeyRegistry);
+        assertEq(address(viewContract.getPriceList().token), address(facetToken));
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
