@@ -55,10 +55,11 @@ make build
 make install-evm
 ```
 
-   To deploy ERC-8167 modules, also install the pinned [josuke](https://github.com/wjmelements/josuke) CLI. It needs [uv](https://docs.astral.sh/uv/).
+   To deploy ERC-8167 modules or run `make check-josuke`, also install the pinned [josuke](https://github.com/wjmelements/josuke) CLI. It needs [uv](https://docs.astral.sh/uv/).
 ```bash
 make install-josuke
 ```
+   `make check-josuke` runs `josuke check` offline: it validates `josuke.json`, resolves `facetSrc`, and fails on selector collisions, EIP-170 sizes and storage that conflicts between facets or with a recorded deployment. The `josuke Check` workflow runs it on every pull request and writes the report to the job summary.
 
 5. Run tests:
 ```bash
