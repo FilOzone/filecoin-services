@@ -1,0 +1,63 @@
+name: josuke Check
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-ledger:
+    name: Check josuke.json offline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # josuke check reads the storage layout at every commit josuke.json records
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: v1.7.1
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.14"
+          enable-cache: false
+
+      - name: Cache the ERC-8167 assembler
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/wjmelements-evm
+          key: wjmelements-evm-${{ runner.os }}-${{ hashFiles('service_contracts/Makefile') }}
+
+      - name: Build ERC-8167 assembler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev
+          cd service_contracts
+          make install-evm
+
+      - name: Install josuke
+        run: |
+          cd service_contracts
+          make install-josuke
+
+      - name: Run josuke check
+        run: |
+          export PATH="$HOME/.local/bin:/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          set -o pipefail
+          make check-josuke JOSUKE_CHECK_ARGS="--format markdown" | tee -a "$GITHUB_STEP_SUMMARY"

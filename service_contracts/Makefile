@@ -29,14 +29,14 @@ LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageS
 
 # wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
 EVM_REPO := https://github.com/wjmelements/evm.git
-EVM_REVISION := 6e23274c2709e7d05d5f3111555f2354ce61b872
+EVM_REVISION := 98409233b4ed9fb79efa013fe17ad42b155adf03
 EVM_DIR ?= $(HOME)/.cache/wjmelements-evm/$(EVM_REVISION)
 # Install beside forge, which is already on PATH
 EVM_INSTALL_DIR ?= $(patsubst %/,%,$(dir $(shell command -v forge)))
 
 # josuke deploys the modules and migrations and keeps josuke.json; its ledger format still changes
 JOSUKE_REPO := https://github.com/wjmelements/josuke.git
-JOSUKE_REVISION := b7366d31f35d36ec5992a7a654e7f817b33bef6f
+JOSUKE_REVISION := 5554eeba86555809d35527bf020fd222fe3d4029
 
 # Build target
 .PHONY: build
@@ -169,6 +169,14 @@ check-layout:
 	@echo "Checking storage layout for destructive changes..."
 	@bash tools/check_storage_layout.sh
 
+# Offline josuke ledger check: schema, facetSrc resolution, selector collisions, EIP-170 sizes and facet storage
+# against every deployment josuke.json records. Pass JOSUKE_CHECK_ARGS="--format markdown" for $GITHUB_STEP_SUMMARY.
+.PHONY: check-josuke
+check-josuke:
+	@command -v josuke >/dev/null || (echo 'Missing josuke; run make install-josuke'; exit 1)
+	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
+	@josuke check $(JOSUKE_CHECK_ARGS)
+
 # ABI Management
 
 # Core contracts we publish ABIs for.
@@ -244,6 +252,7 @@ help:
 	@echo ""
 	@echo "Validation targets:"
 	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
+	@echo "  check-josuke - Check josuke.json and the facets it resolves offline (needs josuke and evm)"
 	@echo "  contract-size-check - Check deployable contracts against size and headroom policy"
 	@echo ""
 	@echo "  help       - Show this help message"
