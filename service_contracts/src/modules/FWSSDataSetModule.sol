@@ -3,32 +3,19 @@ pragma solidity 0.8.37;
 
 import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {ServiceProviderRegistry} from "../ServiceProviderRegistry.sol";
 import {Errors} from "../Errors.sol";
 import {FWSSPieceMetadataRemovals} from "../abstract/FWSSPieceMetadataRemovals.sol";
 import {
-    COMMISSION_MAX_BPS,
     PDP_INACTIVITY_WINDOW,
     MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
     MAX_KEY_LENGTH,
     MAX_KEYS_PER_DATASET,
     MAX_VALUE_LENGTH
-} from "../FilecoinWarmStorageService.sol";
-import {
-    CACHE_MISS_EGRESS_PRICE_PER_TIB,
-    CDN_EGRESS_PRICE_PER_TIB,
-    CREATE_DATA_SET_FEE,
-    DATASET_FEE_PER_MONTH,
-    EPOCHS_PER_MONTH,
-    LIFECYCLE_RESERVE_TARGET,
-    SERVICE_COMMISSION_BPS,
-    STORAGE_PRICE_PER_TIB_PER_MONTH,
-    TOKEN_DECIMALS
-} from "../lib/PriceListUSDFC.sol";
+} from "../lib/FWSSConstants.sol";
+import {CREATE_DATA_SET_FEE, LIFECYCLE_RESERVE_TARGET, SERVICE_COMMISSION_BPS} from "../lib/PriceListUSDFC.sol";
 import {LibRails} from "../lib/LibRails.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
@@ -45,22 +32,16 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
     bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
 
-    IERC20Metadata public immutable usdfcTokenAddress;
     address public immutable filBeamBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry private immutable sessionKeyRegistry;
 
     /// @notice Configures the immutable dependencies used by dataset operations.
-    /// @dev These retain the implementation-bound configuration of FWSS without adding storage.
     constructor(
-        IERC20Metadata _usdfc,
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
     ) {
-        require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
-        usdfcTokenAddress = _usdfc;
-
         require(_filBeamBeneficiaryAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamBeneficiary));
         filBeamBeneficiaryAddress = _filBeamBeneficiaryAddress;
 
@@ -75,9 +56,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
         );
         sessionKeyRegistry = _sessionKeyRegistry;
-
-        // Verify token decimals from the USDFC token contract
-        require(TOKEN_DECIMALS == _usdfc.decimals());
     }
 
     event DataSetServiceProviderChanged(
@@ -98,15 +76,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     );
 
     // Decode structure for data set creation extra data
-    struct ServicePricing {
-        uint256 pricePerTiBPerMonthNoCDN; // Price without CDN add-on (2.5 USDFC per TiB per month)
-        uint256 pricePerTiBCdnEgress; // CDN egress price per TiB (usage-based)
-        uint256 pricePerTiBCacheMissEgress; // Cache miss egress price per TiB (usage-based)
-        IERC20 tokenAddress; // Address of the USDFC token
-        uint256 epochsPerMonth; // Number of epochs in a month
-        uint256 datasetFeePerMonth; // Per-dataset additive monthly fee (0.024 USDFC)
-    }
-
     struct DataSetCreateData {
         // The address of the payer who should have signed the message
         address payer;
@@ -152,11 +121,11 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         address payee = serviceProviderRegistry.getProviderPayee(providerId);
 
         require(
-            clientNonces[createData.payer][createData.clientDataSetId] == 0,
+            clientNonces_[createData.payer][createData.clientDataSetId] == 0,
             Errors.ClientDataSetAlreadyRegistered(createData.clientDataSetId)
         );
-        clientNonces[createData.payer][createData.clientDataSetId] = dataSetId;
-        clientDataSets[createData.payer].push(dataSetId);
+        clientNonces_[createData.payer][createData.clientDataSetId] = dataSetId;
+        clientDataSets_[createData.payer].push(dataSetId);
 
         // Verify the client's signature
         verifyCreateDataSetSignature(payee, createData);
@@ -210,10 +179,14 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
 
         (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = payments.createRails(
-            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
+            dataSetId,
+            IFWSSConfig(address(this)).usdfcTokenAddress(),
+            createData.payer,
+            payee,
+            hasCDN ? filBeamBeneficiaryAddress : address(0)
         );
 
-        railToDataSet[pdpRailId] = dataSetId;
+        railToDataSet_[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
         info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
         info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
@@ -257,8 +230,8 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         address payer = info.payer;
         FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
 
-        // Cache before either branch clears it — needed to bound the provenPeriods loop below.
-        uint256 activation = provingActivationEpoch[dataSetId];
+        // Cache before either branch clears it — needed to bound the provenPeriods_ loop below.
+        uint256 activation = provingActivationEpoch_[dataSetId];
 
         if (info.pdpEndEpoch == 0) {
             // Abandonment path: rail was never terminated via terminateService.
@@ -266,7 +239,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             _verifyInactivity(dataSetId);
             // abandonRails also terminates CDN rails and clears the proving activation epoch
             payments.abandonRails(
-                provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
+                provingActivationEpoch_, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
             );
         } else {
             // Normal path: terminateService was already called.
@@ -284,13 +257,13 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             if (info.cdnRailId != 0) {
                 LibStoragePayments.terminateCDNRails(dataSetId, info, payments);
             }
-            delete provingActivationEpoch[dataSetId];
+            delete provingActivationEpoch_[dataSetId];
         }
 
-        // NOTE keep clientNonces[payer][clientDataSetId] to prevent replay
+        // NOTE keep clientNonces_[payer][clientDataSetId] to prevent replay
 
         // Remove from client's dataset list
-        uint256[] storage clientDataSetList = clientDataSets[payer];
+        uint256[] storage clientDataSetList = clientDataSets_[payer];
         for (uint256 i = 0; i < clientDataSetList.length; i++) {
             if (clientDataSetList[i] == dataSetId) {
                 // Remove this dataset from the array
@@ -302,17 +275,17 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
 
         // Clean up proving-related state
         delete provingDeadlines[dataSetId];
-        delete provenThisPeriod[dataSetId];
+        delete provenThisPeriod_[dataSetId];
         if (activation != 0) {
             uint256 lastPeriod = LibProving.provingPeriodForEpoch(activation, block.number, maxProvingPeriod);
             uint256 lastSlot = lastPeriod >> 8;
             for (uint256 slot = 0; slot <= lastSlot; slot++) {
-                delete provenPeriods[dataSetId][slot];
+                delete provenPeriods_[dataSetId][slot];
             }
         }
 
         // Clean up rail mappings
-        delete railToDataSet[info.pdpRailId];
+        delete railToDataSet_[info.pdpRailId];
 
         // Clean up metadata mappings
         string[] storage metadataKeys = dataSetMetadataKeys[dataSetId];
@@ -335,12 +308,12 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
      *      terminateService on an active data set.
      *      Baseline: PDPVerifier's lastProvenEpoch (initialized at creation for current data
      *      sets, updated on each proof). If 0, the data set is legacy and predates that
-     *      initialization; fall back to our local provingActivationEpoch.
+     *      initialization; fall back to our local provingActivationEpoch_.
      *      Never-activated (activation == 0) is accepted unconditionally; PDPVerifier handles the
      *      since-activation gate.
      */
     function _verifyInactivity(uint256 dataSetId) internal view {
-        uint256 activation = provingActivationEpoch[dataSetId];
+        uint256 activation = provingActivationEpoch_[dataSetId];
         if (activation == 0) return;
 
         uint256 lastProvenEpoch =
@@ -424,39 +397,5 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         LibSignatureVerification.verifyCreateDataSetSignature(
             createData.payer, createData.signature, digest, sessionKeyRegistry
         );
-    }
-
-    /**
-     * @notice Get the service pricing information
-     * @return pricing A struct containing pricing details for storage and CDN/cache miss egress
-     * @custom:deprecated Use `FilecoinWarmStorageServiceStateView.getPriceList()` instead, which
-     *                    returns the complete price catalogue (rates, fees, lockups) in one call.
-     */
-    function getServicePrice() external view returns (ServicePricing memory pricing) {
-        pricing = ServicePricing({
-            pricePerTiBPerMonthNoCDN: STORAGE_PRICE_PER_TIB_PER_MONTH,
-            pricePerTiBCdnEgress: CDN_EGRESS_PRICE_PER_TIB,
-            pricePerTiBCacheMissEgress: CACHE_MISS_EGRESS_PRICE_PER_TIB,
-            tokenAddress: usdfcTokenAddress,
-            epochsPerMonth: EPOCHS_PER_MONTH,
-            datasetFeePerMonth: DATASET_FEE_PER_MONTH
-        });
-    }
-
-    /**
-     * @notice Get the effective rates after commission for both service types
-     * @return serviceFee Service fee (per TiB per month)
-     * @return spPayment SP payment (per TiB per month)
-     * @custom:deprecated Service commission is fixed at zero; the SP receives the full storage
-     *                    rate. Use `FilecoinWarmStorageServiceStateView.getPriceList().rates`
-     *                    for the canonical pricing.
-     */
-    function getEffectiveRates() external pure returns (uint256 serviceFee, uint256 spPayment) {
-        uint256 total = STORAGE_PRICE_PER_TIB_PER_MONTH;
-
-        serviceFee = (total * SERVICE_COMMISSION_BPS) / COMMISSION_MAX_BPS;
-        spPayment = total - serviceFee;
-
-        return (serviceFee, spPayment);
     }
 }

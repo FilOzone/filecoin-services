@@ -26,7 +26,7 @@ abstract contract FWSSFilBeamModuleFixture is FilecoinWarmStorageServiceFixture 
         FWSSFilBeamModule implementation = new FWSSFilBeamModule();
 
         FWSSConfigModule configModule =
-            new FWSSConfigModule(legacyPayments, pdpServiceWithPayments.pdpVerifierAddress());
+            new FWSSConfigModule(legacyPayments, pdpServiceWithPayments.pdpVerifierAddress(), mockUSDFC);
 
         // Preserve legacy operations and route configuration and FilBeam to their modules.
         bytes4[] memory legacySelectors = AbiCheats.getSelectors(

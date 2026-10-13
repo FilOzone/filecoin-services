@@ -13,7 +13,7 @@ import {
     MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE,
     MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
     MAX_VALUE_LENGTH
-} from "../FilecoinWarmStorageService.sol";
+} from "../lib/FWSSConstants.sol";
 import {
     ADD_PIECES_BASE_FEE,
     ADD_PIECES_PER_PIECE_FEE,
@@ -94,9 +94,9 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             abi.decode(extraData, (uint256, string[][], string[][], bytes));
 
         // Validate nonce hasn't been used (replay protection)
-        require(clientNonces[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
+        require(clientNonces_[payer][nonce] == 0, Errors.ClientDataSetAlreadyRegistered(nonce));
         // Mark nonce as used, storing cumulative piece count (next piece ID) in upper bits
-        clientNonces[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
+        clientNonces_[payer][nonce] = ((firstAdded + pieceData.length) << 128) | dataSetId;
 
         // Empty outer arrays compactly represent a batch with no metadata. Otherwise, require
         // one metadata array per piece.

@@ -26,7 +26,7 @@ abstract contract FWSSProvingModuleFixture is FilecoinWarmStorageServiceFixture 
         address legacyPDPVerifier = pdpServiceWithPayments.pdpVerifierAddress();
         address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
         FWSSProvingModule implementation = new FWSSProvingModule();
-        FWSSConfigModule configModule = new FWSSConfigModule(legacyPayments, legacyPDPVerifier);
+        FWSSConfigModule configModule = new FWSSConfigModule(legacyPayments, legacyPDPVerifier, mockUSDFC);
 
         // Preserve legacy routes and route proving and configuration to their modules.
         bytes4[] memory selectors = AbiCheats.getSelectors(
@@ -93,7 +93,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
 
     function testVerifierAuthorizationFollowsConfigRoute() public {
         address newVerifier = address(0x1234);
-        FWSSConfigModule configModule = new FWSSConfigModule(address(payments), newVerifier);
+        FWSSConfigModule configModule = new FWSSConfigModule(address(payments), newVerifier, mockUSDFC);
         _route(address(provingModule), IFWSSConfig.pdpVerifierAddress.selector, address(configModule));
 
         vm.prank(address(mockPDPVerifier));

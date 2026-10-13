@@ -28,8 +28,8 @@ contract FWSSFilBeamModule is FWSSStorage {
 
     function _onlyFilBeamController() internal view {
         require(
-            msg.sender == filBeamControllerAddress,
-            Errors.OnlyFilBeamControllerAllowed(filBeamControllerAddress, msg.sender)
+            msg.sender == filBeamControllerAddress_,
+            Errors.OnlyFilBeamControllerAllowed(filBeamControllerAddress_, msg.sender)
         );
     }
 
@@ -92,8 +92,8 @@ contract FWSSFilBeamModule is FWSSStorage {
 
     function transferFilBeamController(address newController) external onlyFilBeamController {
         require(newController != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
-        address oldController = filBeamControllerAddress;
-        filBeamControllerAddress = newController;
+        address oldController = filBeamControllerAddress_;
+        filBeamControllerAddress_ = newController;
         emit FilBeamControllerChanged(oldController, newController);
     }
 

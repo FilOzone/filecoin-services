@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -51,7 +51,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
     {
         LibServiceLifecycleGuards.requirePaymentNotBeyondEndEpoch(dataSetId, dataSetInfo[dataSetId].pdpEndEpoch);
 
-        if (provenThisPeriod[dataSetId]) {
+        if (provenThisPeriod_[dataSetId]) {
             revert Errors.ProofAlreadySubmitted(dataSetId);
         }
 
@@ -73,9 +73,9 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         if (windowStart > block.number) {
             revert Errors.ChallengeWindowTooEarly(dataSetId, windowStart, block.number);
         }
-        provenThisPeriod[dataSetId] = true;
+        provenThisPeriod_[dataSetId] = true;
         uint256 currentPeriod = getProvingPeriodForEpoch(dataSetId, block.number);
-        provenPeriods[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
+        provenPeriods_[dataSetId][currentPeriod >> 8] |= 1 << (currentPeriod & 255);
     }
 
     // nextProvingPeriod checks for unsubmitted proof in which case it emits a fault event
@@ -95,13 +95,13 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         uint96 pending = info.pendingOneTimePayments;
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 activationEpoch = provingActivationEpoch_[dataSetId];
         if (provingDeadlines[dataSetId] == NO_PROVING_DEADLINE) {
             uint256 firstDeadline;
             if (activationEpoch == 0) {
                 // First activation establishes the lifetime proving-period origin.
                 activationEpoch = block.number;
-                provingActivationEpoch[dataSetId] = activationEpoch;
+                provingActivationEpoch_[dataSetId] = activationEpoch;
                 firstDeadline = activationEpoch + maxProvingPeriod;
             } else {
                 // Reactivation resumes the original timeline, pinned to the earliest deadline with a full
@@ -169,7 +169,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
             }
         }
         uint256 faultPeriods = periodsSkipped;
-        if (!provenThisPeriod[dataSetId]) {
+        if (!provenThisPeriod_[dataSetId]) {
             // include previous unproven period
             faultPeriods += 1;
         }
@@ -178,7 +178,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         }
 
         provingDeadlines[dataSetId] = nextDeadline;
-        provenThisPeriod[dataSetId] = false;
+        provenThisPeriod_[dataSetId] = false;
 
         // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
         bool hadRemovals = _processScheduledPieceMetadataRemovals(dataSetId);
@@ -203,7 +203,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
      * @return The period ID this epoch belongs to, or type(uint256).max if before activation
      */
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) public view returns (uint256) {
-        return LibProving.provingPeriodForEpoch(provingActivationEpoch[dataSetId], epoch, maxProvingPeriod);
+        return LibProving.provingPeriodForEpoch(provingActivationEpoch_[dataSetId], epoch, maxProvingPeriod);
     }
 
     /**
@@ -232,7 +232,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         // was abandoned and already torn down by dataSetDeleted -- the only way to release its
         // remaining lockup, since the data set no longer exists to arbitrate proving -- or the
         // rail was never one of ours to begin with. Either way, settle in the payer's favor.
-        uint256 dataSetId = railToDataSet[railId];
+        uint256 dataSetId = railToDataSet_[railId];
         if (dataSetId == 0) {
             return
                 ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "Rail not associated with a data set"});
@@ -245,7 +245,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         // No active proving period covers epochs through the activation boundary. Advance
         // settlement with zero payment so FilecoinPay can discharge pre-activation rate
         // segments, including segments recorded before the first nextProvingPeriod call.
-        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        uint256 activationEpoch = provingActivationEpoch_[dataSetId];
         if (activationEpoch == 0 || toEpoch <= activationEpoch) {
             return ValidationResult({modifiedAmount: 0, settleUpto: toEpoch, note: "No proving activity"});
         }
@@ -275,7 +275,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
             revert Errors.ServiceContractMustTerminateRail();
         }
 
-        uint256 dataSetId = railToDataSet[railId];
+        uint256 dataSetId = railToDataSet_[railId];
         require(dataSetId != 0, Errors.DataSetNotFoundForRail(railId));
         DataSetInfo storage info = dataSetInfo[dataSetId];
         if (info.pdpEndEpoch == 0 && railId == info.pdpRailId) {
@@ -341,7 +341,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
-        uint256 isProven = provenPeriods[dataSetId][periodId >> 8] & (1 << (periodId & 255));
+        uint256 isProven = provenPeriods_[dataSetId][periodId >> 8] & (1 << (periodId & 255));
         return isProven != 0;
     }
 }

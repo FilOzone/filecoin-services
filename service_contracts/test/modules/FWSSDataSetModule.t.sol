@@ -51,10 +51,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         address proxy = address(pdpServiceWithPayments);
         address legacyImplementation = address(uint160(uint256(vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT))));
         FWSSConfigModule configModule = new FWSSConfigModule(
-            pdpServiceWithPayments.paymentsContractAddress(), pdpServiceWithPayments.pdpVerifierAddress()
+            pdpServiceWithPayments.paymentsContractAddress(), pdpServiceWithPayments.pdpVerifierAddress(), mockUSDFC
         );
         FWSSDataSetModule module =
-            new FWSSDataSetModule(mockUSDFC, filBeamBeneficiary, serviceProviderRegistry, sessionKeyRegistry);
+            new FWSSDataSetModule(filBeamBeneficiary, serviceProviderRegistry, sessionKeyRegistry);
         FWSSAuthorizationModule authorizationModule = new FWSSAuthorizationModule(sessionKeyRegistry);
         address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
 

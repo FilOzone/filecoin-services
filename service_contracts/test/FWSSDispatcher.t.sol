@@ -15,6 +15,7 @@ import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageSer
 import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
+import {FWSSViewModule} from "../src/modules/FWSSViewModule.sol";
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
@@ -105,14 +106,14 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
-            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress, facetToken);
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
         {
             return abi.encode(facetSessionKeyRegistry);
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
-            return abi.encode(facetToken, facetBeneficiary, facetProviderRegistry, facetSessionKeyRegistry);
+            return abi.encode(facetBeneficiary, facetProviderRegistry, facetSessionKeyRegistry);
         }
         return super._facetConstructorArgs(sourceId);
     }
@@ -492,12 +493,13 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
 
-        // The former immutable getters belong to the business modules that use them.
+        // The view module owns token and pricing reads; other dependencies stay in their business modules.
         assertEq(address(service.usdfcTokenAddress()), address(facetToken));
         assertEq(service.filBeamBeneficiaryAddress(), facetBeneficiary);
         assertEq(address(service.serviceProviderRegistry()), facetProviderRegistry);
         assertEq(address(service.sessionKeyRegistry()), facetSessionKeyRegistry);
         assertEq(address(viewContract.getPriceList().token), address(facetToken));
+        assertEq(address(FWSSViewModule(proxy).getPriceList().token), address(facetToken));
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
