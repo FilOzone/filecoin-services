@@ -388,7 +388,7 @@
         "internalType": "uint256"
       },
       {
-        "name": "_filBeamControllerAddress",
+        "name": "filBeamControllerAddress_",
         "type": "address",
         "internalType": "address"
       }
