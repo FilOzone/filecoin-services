@@ -59,4 +59,5 @@ import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";' \
     -e 's/(FilecoinWarmStorageService)/()/g' \
     -e 's/(service, /(/g' \
     -e 's/(service)/()/g' \
-    -e '/@param service /d'
+    -e '/@param service /d' \
+    -e '/function _getDataSetMetadataValue(/,/returns/s/^        view$/        pure/'

@@ -43,7 +43,7 @@ contract FWSSStorageWriter is FWSSStorage {
 
     function setControllerAndUpgrade(address controller, address next, uint96 afterEpoch) external {
         filBeamControllerAddress = controller;
-        nextUpgrade = PlannedUpgrade(next, afterEpoch);
+        nextUpgrade = PlannedUpgrade({nextImplementation: next, afterEpoch: afterEpoch});
     }
 }
 

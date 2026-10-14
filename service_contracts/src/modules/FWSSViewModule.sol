@@ -376,7 +376,7 @@ contract FWSSViewModule is IPDPProvingSchedule {
      */
     function _getDataSetMetadataValue(uint256 dataSetId, string memory key)
         internal
-        view
+        pure
         returns (string memory value)
     {
         // For nested mapping with string key: mapping(uint256 => mapping(string => string))
