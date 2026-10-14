@@ -11,6 +11,6 @@ contract FWSSViewContractModule is FWSSStorage {
      * @return The address of the view contract
      */
     function viewContractAddress() external view returns (address) {
-        return _viewContractAddress;
+        return address(this);
     }
 }
