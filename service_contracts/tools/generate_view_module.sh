@@ -23,7 +23,7 @@ contract FWSSViewModule is IPDPProvingSchedule {
         }
     }
 
-    function getString(bytes32 loc) internal view returns (string memory) {
+    function getString(bytes32 loc) internal pure returns (string memory) {
         string storage str;
         assembly ("memory-safe") {
             str.slot := loc
