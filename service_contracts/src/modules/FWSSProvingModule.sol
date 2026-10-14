@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";

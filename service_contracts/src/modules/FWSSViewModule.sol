@@ -7,7 +7,8 @@ pragma solidity 0.8.37;
 
 import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
-import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE, FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,

@@ -17,7 +17,7 @@ import {
     MAX_KEY_LENGTH,
     MAX_KEYS_PER_DATASET,
     MAX_VALUE_LENGTH
-} from "../FilecoinWarmStorageService.sol";
+} from "../lib/FWSSConstants.sol";
 import {
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
     CDN_EGRESS_PRICE_PER_TIB,
