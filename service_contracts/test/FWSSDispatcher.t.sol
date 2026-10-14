@@ -480,7 +480,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(logs[2].topics[1], bytes32(uint256(uint160(migration))));
 
         assertEq(OwnershipModule(proxy).owner(), address(this));
-        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), address(viewContract));
+        // The proxy now serves the StateView reads itself; slot 17 keeps the legacy StateView.
+        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), proxy);
         FWSSProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
 

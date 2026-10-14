@@ -15,10 +15,11 @@ contract FWSSViewContractModuleTest is Test {
         viewContractModule = FWSSViewContractModule(address(proxy));
     }
 
-    function testViewContractAddressReadsLegacySlot() public {
-        assertEq(viewContractModule.viewContractAddress(), address(0));
+    function testViewContractAddressIsProxy() public {
+        assertEq(viewContractModule.viewContractAddress(), address(viewContractModule));
 
+        // The legacy StateView in slot 17 is ignored.
         vm.store(address(viewContractModule), VIEW_CONTRACT_ADDRESS_SLOT, bytes32(uint256(0x1234)));
-        assertEq(viewContractModule.viewContractAddress(), address(0x1234));
+        assertEq(viewContractModule.viewContractAddress(), address(viewContractModule));
     }
 }
