@@ -6,12 +6,6 @@ import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {SetDelegateOperation} from "@erc8167/lib/Migration.sol";
-import {FWSSFilBeamModule} from "../../src/modules/FWSSFilBeamModule.sol";
-import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
-import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
-import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 
 /// @dev Resolves a Josuke ledger's `facetSrc` from build artifacts, as `josuke deploy` does, without an RPC.
 /// Supported patterns: `<dir>/*.sol`, `<path>:<Contract>` and `<path>.evm`.
@@ -58,34 +52,8 @@ abstract contract JosukeFacetSet is Test {
     /// @dev ABI-encoded constructor arguments, which Josuke records per chain as `constructorArgs`.
     function _facetConstructorArgs(string memory sourceId) internal view virtual returns (bytes memory) {}
 
-    /// @dev Solidity creation lets Forge link libraries for payment and dataset facets; other facets use their artifacts.
     function _deployFacet(Facet memory facet) private returns (address) {
-        bytes memory constructorArgs = _facetConstructorArgs(facet.sourceId);
-        if (keccak256(bytes(facet.sourceId)) == keccak256(bytes("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")))
-        {
-            return address(new FWSSFilBeamModule(abi.decode(constructorArgs, (address))));
-        }
-        if (keccak256(bytes(facet.sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
-            (address payments, address verifier) = abi.decode(constructorArgs, (address, address));
-            return address(new FWSSProvingModule(payments, verifier));
-        }
-
-        if (keccak256(bytes(facet.sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
-            (
-                address payments,
-                address verifier,
-                IERC20Metadata token,
-                address beneficiary,
-                ServiceProviderRegistry providerRegistry,
-                SessionKeyRegistry keyRegistry
-            ) = abi.decode(
-                constructorArgs,
-                (address, address, IERC20Metadata, address, ServiceProviderRegistry, SessionKeyRegistry)
-            );
-            return address(new FWSSDataSetModule(payments, verifier, token, beneficiary, providerRegistry, keyRegistry));
-        }
-
-        return deployCode(facet.artifact, constructorArgs);
+        return deployCode(facet.artifact, _facetConstructorArgs(facet.sourceId));
     }
 
     /// @dev Deploys every facet and returns one route per exported selector, plus the generated `selectors()`.
