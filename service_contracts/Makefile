@@ -67,8 +67,8 @@ erc8167:
 	$(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
 
 # Storage layout generation
-$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol
-	bash -o pipefail -c 'bash tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol | forge fmt -r - > "$@.tmp"'
+$(LAYOUT): tools/generate_storage_layout.sh src/storage/FWSSStorage.sol
+	bash -o pipefail -c 'bash $^ | forge fmt -r - > "$@.tmp"'
 	mv $@.tmp $@
 
 # Storage layout JSON (full metadata for upgrade safety checks)
