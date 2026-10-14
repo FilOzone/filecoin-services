@@ -24,7 +24,6 @@ import {
 import {LibRails} from "../lib/LibRails.sol";
 import {FWSSEIP712} from "../lib/FWSSEIP712.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
-import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
@@ -35,10 +34,18 @@ import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
     using LibRails for FilecoinPayV1;
 
+    FilecoinPayV1 internal immutable paymentContract;
     SessionKeyRegistry public immutable sessionKeyRegistry;
 
-    /// @notice Configures the session key registry used to verify payer signatures.
-    constructor(SessionKeyRegistry _sessionKeyRegistry) {
+    /// @notice Configures the immutable dependencies used by payer-authorized operations.
+    /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
+    /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
+    /// @param _sessionKeyRegistry The registry used to verify payer signatures.
+    constructor(address _paymentsContractAddress, address _pdpVerifierAddress, SessionKeyRegistry _sessionKeyRegistry)
+        FWSSPDPVerifier(_pdpVerifierAddress)
+    {
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
+        paymentContract = FilecoinPayV1(_paymentsContractAddress);
         require(
             _sessionKeyRegistry != SessionKeyRegistry(address(0)),
             Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
@@ -122,16 +129,9 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
-        uint256 currentLeafCount =
-            IPDPVerifier(IFWSSConfig(address(this)).pdpVerifierAddress()).getDataSetLeafCount(dataSetId);
+        uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
         LibStoragePayments.updatePaymentRates(
-            dataSetId,
-            info,
-            currentLeafCount,
-            pending,
-            reserveBalance,
-            false,
-            FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
+            dataSetId, info, currentLeafCount, pending, reserveBalance, false, paymentContract
         );
 
         if (metadataOmitted) {
@@ -204,8 +204,9 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
-        info.lifecycleReserveBalance = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
-            .replenishReserveIfNeeded(info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending);
+        info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
+            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending
+        );
         info.pendingOneTimePayments = newPending;
 
         // Queue piece IDs for metadata cleanup at nextProvingPeriod
@@ -252,18 +253,15 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             approver = msg.sender;
         }
 
-        FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
-
         uint96 pending = info.pendingOneTimePayments;
         if (pending > 0) {
-            uint256 leafCount =
-                IPDPVerifier(IFWSSConfig(address(this)).pdpVerifierAddress()).getDataSetLeafCount(dataSetId);
+            uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
             LibStoragePayments.updatePaymentRates(
-                dataSetId, info, leafCount, pending, info.lifecycleReserveBalance, immediateTermination, payments
+                dataSetId, info, leafCount, pending, info.lifecycleReserveBalance, immediateTermination, paymentContract
             );
         }
 
-        payments.terminateRail(info.pdpRailId);
+        paymentContract.terminateRail(info.pdpRailId);
 
         emit ServiceTerminated(approver, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId);
     }
@@ -284,8 +282,7 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
 
         uint256 pdpRailId = info.pdpRailId;
         uint96 newBalance = info.lifecycleReserveBalance + uint96(amount);
-        FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
-            .modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newBalance);
+        paymentContract.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newBalance);
         info.lifecycleReserveBalance = newBalance;
     }
 

@@ -6,7 +6,6 @@ import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {FWSSPieceMetadataRemovals} from "../abstract/FWSSPieceMetadataRemovals.sol";
-import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {LibProving} from "../lib/LibProving.sol";
@@ -16,6 +15,16 @@ import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 /// @title FWSSProvingModule
 /// @notice Records PDP proofs, advances or configures proving periods, and arbitrates PDP rail payments from them.
 contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVerifier {
+    FilecoinPayV1 internal immutable paymentContract;
+
+    /// @notice Configures the immutable dependencies used by this module.
+    /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
+    /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
+    constructor(address _paymentsContractAddress, address _pdpVerifierAddress) FWSSPDPVerifier(_pdpVerifierAddress) {
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
+        paymentContract = FilecoinPayV1(_paymentsContractAddress);
+    }
+
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
@@ -126,13 +135,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (_processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
                 LibStoragePayments.updatePaymentRates(
-                    dataSetId,
-                    info,
-                    leafCount,
-                    pending,
-                    reserveBalance,
-                    false,
-                    FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
+                    dataSetId, info, leafCount, pending, reserveBalance, false, paymentContract
                 );
             }
 
@@ -184,13 +187,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         bool hadRemovals = _processScheduledPieceMetadataRemovals(dataSetId);
         if (hadRemovals || pending > 0) {
             LibStoragePayments.updatePaymentRates(
-                dataSetId,
-                info,
-                leafCount,
-                pending,
-                reserveBalance,
-                false,
-                FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
+                dataSetId, info, leafCount, pending, reserveBalance, false, paymentContract
             );
         }
     }
@@ -268,8 +265,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
     }
 
     function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
-        address paymentsContractAddress = IFWSSConfig(address(this)).paymentsContractAddress();
-        require(msg.sender == paymentsContractAddress, Errors.CallerNotPayments(paymentsContractAddress, msg.sender));
+        require(msg.sender == address(paymentContract), Errors.CallerNotPayments(address(paymentContract), msg.sender));
 
         if (terminator != address(this)) {
             revert Errors.ServiceContractMustTerminateRail();

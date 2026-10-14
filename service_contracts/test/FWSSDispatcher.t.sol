@@ -106,14 +106,27 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
-            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress, facetToken);
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
         {
-            return abi.encode(facetSessionKeyRegistry);
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress, facetSessionKeyRegistry);
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
-            return abi.encode(facetToken, facetBeneficiary, facetProviderRegistry, facetSessionKeyRegistry);
+            return abi.encode(
+                facetPaymentsContractAddress,
+                facetPDPVerifierAddress,
+                facetToken,
+                facetBeneficiary,
+                facetProviderRegistry,
+                facetSessionKeyRegistry
+            );
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")) {
+            return abi.encode(facetPaymentsContractAddress);
         }
         return super._facetConstructorArgs(sourceId);
     }
@@ -146,6 +159,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         }
         assertEq(FilecoinWarmStorageService(proxy).paymentsContractAddress(), facetPaymentsContractAddress);
         assertEq(FilecoinWarmStorageService(proxy).pdpVerifierAddress(), facetPDPVerifierAddress);
+        assertEq(address(FilecoinWarmStorageService(proxy).usdfcTokenAddress()), address(facetToken));
     }
 
     function _route(address proxy, bytes4 selector, address target) internal {
@@ -494,7 +508,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
 
-        // The former immutable getters belong to the business modules that use them.
+        // The config facet exposes USDFC; the other immutable getters remain in their business modules.
         assertEq(address(service.usdfcTokenAddress()), address(facetToken));
         assertEq(service.filBeamBeneficiaryAddress(), facetBeneficiary);
         assertEq(address(service.serviceProviderRegistry()), facetProviderRegistry);
