@@ -63,20 +63,26 @@ abstract contract JosukeFacetSet is Test {
         bytes memory constructorArgs = _facetConstructorArgs(facet.sourceId);
         if (keccak256(bytes(facet.sourceId)) == keccak256(bytes("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")))
         {
-            return address(new FWSSFilBeamModule());
+            return address(new FWSSFilBeamModule(abi.decode(constructorArgs, (address))));
         }
         if (keccak256(bytes(facet.sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
-            return address(new FWSSProvingModule());
+            (address payments, address verifier) = abi.decode(constructorArgs, (address, address));
+            return address(new FWSSProvingModule(payments, verifier));
         }
 
         if (keccak256(bytes(facet.sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
             (
+                address payments,
+                address verifier,
                 IERC20Metadata token,
                 address beneficiary,
                 ServiceProviderRegistry providerRegistry,
                 SessionKeyRegistry keyRegistry
-            ) = abi.decode(constructorArgs, (IERC20Metadata, address, ServiceProviderRegistry, SessionKeyRegistry));
-            return address(new FWSSDataSetModule(token, beneficiary, providerRegistry, keyRegistry));
+            ) = abi.decode(
+                constructorArgs,
+                (address, address, IERC20Metadata, address, ServiceProviderRegistry, SessionKeyRegistry)
+            );
+            return address(new FWSSDataSetModule(payments, verifier, token, beneficiary, providerRegistry, keyRegistry));
         }
 
         return deployCode(facet.artifact, constructorArgs);

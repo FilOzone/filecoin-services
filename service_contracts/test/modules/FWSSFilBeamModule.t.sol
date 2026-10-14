@@ -23,10 +23,10 @@ abstract contract FWSSFilBeamModuleFixture is FilecoinWarmStorageServiceFixture 
         address legacyImplementation = address(uint160(uint256(vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT))));
         address legacyPayments = pdpServiceWithPayments.paymentsContractAddress();
         address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
-        FWSSFilBeamModule implementation = new FWSSFilBeamModule();
+        FWSSFilBeamModule implementation = new FWSSFilBeamModule(legacyPayments);
 
         FWSSConfigModule configModule =
-            new FWSSConfigModule(legacyPayments, pdpServiceWithPayments.pdpVerifierAddress());
+            new FWSSConfigModule(legacyPayments, pdpServiceWithPayments.pdpVerifierAddress(), mockUSDFC);
 
         // Preserve legacy operations and route configuration and FilBeam to their modules.
         bytes4[] memory legacySelectors = AbiCheats.getSelectors(
@@ -66,6 +66,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         for (uint256 i; i < selectors.length; ++i) {
             assertTrue(selectors[i] != IFWSSConfig.paymentsContractAddress.selector);
             assertTrue(selectors[i] != IFWSSConfig.pdpVerifierAddress.selector);
+            assertTrue(selectors[i] != IFWSSConfig.usdfcTokenAddress.selector);
         }
     }
 

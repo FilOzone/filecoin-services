@@ -30,9 +30,8 @@ import {
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
 import {LibRails} from "../lib/LibRails.sol";
-import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
-import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
+import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 
@@ -45,19 +44,31 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
     bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
 
-    IERC20Metadata public immutable usdfcTokenAddress;
+    FilecoinPayV1 internal immutable paymentContract;
+    IERC20Metadata internal immutable usdfcTokenAddress;
     address public immutable filBeamBeneficiaryAddress;
     ServiceProviderRegistry public immutable serviceProviderRegistry;
     SessionKeyRegistry private immutable sessionKeyRegistry;
 
     /// @notice Configures the immutable dependencies used by dataset operations.
     /// @dev These retain the implementation-bound configuration of FWSS without adding storage.
+    /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
+    /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
+    /// @param _usdfc The USDFC token used for payment rails.
+    /// @param _filBeamBeneficiaryAddress The beneficiary of FilBeam payment rails.
+    /// @param _serviceProviderRegistry The registry of approved service providers.
+    /// @param _sessionKeyRegistry The registry used to verify payer signatures.
     constructor(
+        address _paymentsContractAddress,
+        address _pdpVerifierAddress,
         IERC20Metadata _usdfc,
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
         SessionKeyRegistry _sessionKeyRegistry
-    ) {
+    ) FWSSPDPVerifier(_pdpVerifierAddress) {
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
+        paymentContract = FilecoinPayV1(_paymentsContractAddress);
+
         require(_usdfc != IERC20Metadata(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
 
@@ -204,12 +215,11 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
 
         // Create the payment rails using the FilecoinPayV1 contract
-        FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
 
         // Determine once whether CDN is enabled in metadata and reuse the result
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
 
-        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = payments.createRails(
+        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = paymentContract.createRails(
             dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
         );
 
@@ -255,7 +265,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         require(info.pdpRailId != 0, Errors.DataSetNotRegistered(dataSetId));
 
         address payer = info.payer;
-        FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
 
         // Cache before either branch clears it — needed to bound the provenPeriods loop below.
         uint256 activation = provingActivationEpoch[dataSetId];
@@ -265,14 +274,14 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             // SP forfeits pending op-fees; lifecycle reserve returns to the payer.
             _verifyInactivity(dataSetId);
             // abandonRails also terminates CDN rails and clears the proving activation epoch
-            payments.abandonRails(
+            paymentContract.abandonRails(
                 provingActivationEpoch, dataSetId, info.pdpRailId, info.cacheMissRailId, info.cdnRailId
             );
         } else {
             // Normal path: terminateService was already called.
             // Verify the payment window has elapsed and the rail is fully settled.
             require(block.number >= info.pdpEndEpoch, Errors.PaymentRailsNotFinalized(dataSetId, info.pdpEndEpoch));
-            try payments.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
+            try paymentContract.getRail(info.pdpRailId) returns (FilecoinPayV1.RailView memory rail) {
                 require(
                     rail.settledUpTo >= rail.endEpoch,
                     Errors.RailNotFullySettled(info.pdpRailId, rail.settledUpTo, rail.endEpoch)
@@ -282,7 +291,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             }
             // Terminate CDN rails if configured, giving FilBeam a graceful settle window
             if (info.cdnRailId != 0) {
-                LibStoragePayments.terminateCDNRails(dataSetId, info, payments);
+                LibStoragePayments.terminateCDNRails(dataSetId, info, paymentContract);
             }
             delete provingActivationEpoch[dataSetId];
         }
@@ -343,8 +352,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         uint256 activation = provingActivationEpoch[dataSetId];
         if (activation == 0) return;
 
-        uint256 lastProvenEpoch =
-            IPDPVerifier(IFWSSConfig(address(this)).pdpVerifierAddress()).getDataSetLastProvenEpoch(dataSetId);
+        uint256 lastProvenEpoch = IPDPVerifier(pdpVerifierAddress).getDataSetLastProvenEpoch(dataSetId);
         uint256 lastActivity = lastProvenEpoch == 0 ? activation : lastProvenEpoch;
         uint256 requiredEpoch = lastActivity + PDP_INACTIVITY_WINDOW;
         require(block.number > requiredEpoch, Errors.DataSetNotAbandoned(dataSetId, requiredEpoch, block.number));
