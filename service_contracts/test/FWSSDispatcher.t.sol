@@ -16,6 +16,7 @@ import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
+import {FWSSViewModule} from "../src/modules/FWSSViewModule.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {Errors} from "../src/Errors.sol";
@@ -498,6 +499,18 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(address(service.serviceProviderRegistry()), facetProviderRegistry);
         assertEq(address(service.sessionKeyRegistry()), facetSessionKeyRegistry);
         assertEq(address(viewContract.getPriceList().token), address(facetToken));
+
+        // FWSSViewModule serves the StateView reads at the proxy itself.
+        FWSSViewModule viewModule = FWSSViewModule(proxy);
+        (provingPeriod, challengeWindow,,) = viewModule.getPDPConfig();
+        assertEq(provingPeriod, 3000);
+        assertEq(challengeWindow, 61);
+        assertTrue(viewModule.isProviderApproved(7));
+        assertTrue(viewModule.isProviderApproved(42));
+        assertEq(viewModule.getApprovedProviders(0, 0), viewContract.getApprovedProviders(0, 0));
+        (next,) = viewModule.nextUpgrade();
+        assertEq(next, address(0));
+        assertEq(address(viewModule.getPriceList().token), address(facetToken));
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));
