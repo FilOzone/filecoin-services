@@ -13,7 +13,7 @@ import {
     MAX_SCHEDULE_PIECE_REMOVALS_EXTRA_DATA_SIZE,
     MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
     MAX_VALUE_LENGTH
-} from "../FilecoinWarmStorageService.sol";
+} from "../lib/FWSSConstants.sol";
 import {
     ADD_PIECES_BASE_FEE,
     ADD_PIECES_PER_PIECE_FEE,
