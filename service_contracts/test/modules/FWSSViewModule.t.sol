@@ -160,6 +160,7 @@ contract FWSSViewModuleTest is Test {
     }
 
     function testProviderAndConfigReadsMatchStateView() public view {
+        assertEq(address(viewModule.service()), address(viewModule));
         assertTrue(viewModule.isProviderApproved(42));
         assertFalse(viewModule.isProviderApproved(43));
         assertEq(viewModule.getApprovedProvidersLength(), 2);

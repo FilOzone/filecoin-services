@@ -10,6 +10,11 @@ PRELUDE=$(
 /// @title FWSSViewModule
 /// @notice Exposes FilecoinWarmStorageServiceStateLibrary getters at the FWSS proxy.
 contract FWSSViewModule is IPDPProvingSchedule {
+    /// @notice Returns the FWSS proxy, matching FilecoinWarmStorageServiceStateView.service
+    function service() public view returns (FilecoinWarmStorageService) {
+        return FilecoinWarmStorageService(address(this));
+    }
+
     function sload(bytes32 slot) internal view returns (bytes32 value) {
         assembly ("memory-safe") {
             value := sload(slot)
@@ -33,11 +38,11 @@ contract FWSSViewModule is IPDPProvingSchedule {
 EOF
 )
 
-PRELUDE="$PRELUDE" awk '
+awk '
     # getString staticcalls extsloadStruct; the prelude replaces it with a storage pointer
     /^\/\/ bytes32\(bytes4\(keccak256\(abi.encodePacked\("extsloadStruct/ { next }
     /^bytes32 constant EXTSLOAD_STRUCT_SELECTOR/ { next }
-    /^library FilecoinWarmStorageServiceStateLibrary \{/ { print ENVIRON["PRELUDE"]; next }
+    /^library FilecoinWarmStorageServiceStateLibrary \{/ { print "LIBRARY"; next }
     /^    function getString\(/ { skip = 1 }
     skip { if ($0 == "    }") { skip = 0 } next }
     { print }
@@ -53,11 +58,13 @@ PRELUDE="$PRELUDE" awk '
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";' \
     -e 's/service\.extsloadStruct(/sloadStruct(/g' \
     -e 's/service\.extsload(/sload(/g' \
-    -e 's/service\./FilecoinWarmStorageService(address(this))./g' \
+    -e 's/service\./service()./g' \
     -e 's/(FilecoinWarmStorageService service, /(/g' \
     -e 's/(FilecoinWarmStorageService service)/()/g' \
     -e 's/(FilecoinWarmStorageService)/()/g' \
     -e 's/(service, /(/g' \
     -e 's/(service)/()/g' \
     -e '/@param service /d' \
-    -e '/function _getDataSetMetadataValue(/,/returns/s/^        view$/        pure/'
+    -e '/function _getDataSetMetadataValue(/,/returns/s/^        view$/        pure/' |
+    # The prelude is already in module form, so it skips the rewrites above
+    PRELUDE="$PRELUDE" awk '$0 == "LIBRARY" { print ENVIRON["PRELUDE"]; next } { print }'

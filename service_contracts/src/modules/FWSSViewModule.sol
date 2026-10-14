@@ -22,6 +22,11 @@ import "../lib/FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 /// @title FWSSViewModule
 /// @notice Exposes FilecoinWarmStorageServiceStateLibrary getters at the FWSS proxy.
 contract FWSSViewModule is IPDPProvingSchedule {
+    /// @notice Returns the FWSS proxy, matching FilecoinWarmStorageServiceStateView.service
+    function service() public view returns (FilecoinWarmStorageService) {
+        return FilecoinWarmStorageService(address(this));
+    }
+
     function sload(bytes32 slot) internal view returns (bytes32 value) {
         assembly ("memory-safe") {
             value := sload(slot)
@@ -525,6 +530,6 @@ contract FWSSViewModule is IPDPProvingSchedule {
      */
     function getPriceList() public view returns (PriceList memory list) {
         list = priceList();
-        list.token = IERC20(address(FilecoinWarmStorageService(address(this)).usdfcTokenAddress()));
+        list.token = IERC20(address(service().usdfcTokenAddress()));
     }
 }
