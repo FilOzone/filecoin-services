@@ -25,8 +25,8 @@ abstract contract FWSSProvingModuleFixture is FilecoinWarmStorageServiceFixture 
         address legacyPayments = pdpServiceWithPayments.paymentsContractAddress();
         address legacyPDPVerifier = pdpServiceWithPayments.pdpVerifierAddress();
         address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
-        FWSSProvingModule implementation = new FWSSProvingModule();
-        FWSSConfigModule configModule = new FWSSConfigModule(legacyPayments, legacyPDPVerifier);
+        FWSSProvingModule implementation = new FWSSProvingModule(legacyPayments, legacyPDPVerifier);
+        FWSSConfigModule configModule = new FWSSConfigModule(legacyPayments, legacyPDPVerifier, mockUSDFC);
 
         // Preserve legacy routes and route proving and configuration to their modules.
         bytes4[] memory selectors = AbiCheats.getSelectors(
@@ -68,6 +68,16 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         _installProvingModule();
     }
 
+    function testConstructorRejectsZeroPaymentsAddress() public {
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV1));
+        new FWSSProvingModule(address(0), address(mockPDPVerifier));
+    }
+
+    function testConstructorRejectsZeroPDPVerifierAddress() public {
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.PDPVerifier));
+        new FWSSProvingModule(address(payments), address(0));
+    }
+
     function testOnlyConfiguredPDPVerifierCanSubmitProof() public {
         vm.prank(client);
         vm.expectRevert(
@@ -88,27 +98,29 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         for (uint256 i; i < selectors.length; ++i) {
             assertTrue(selectors[i] != IFWSSConfig.paymentsContractAddress.selector);
             assertTrue(selectors[i] != IFWSSConfig.pdpVerifierAddress.selector);
+            assertTrue(selectors[i] != IFWSSConfig.usdfcTokenAddress.selector);
         }
     }
 
-    function testVerifierAuthorizationFollowsConfigRoute() public {
+    function testVerifierAuthorizationUsesImmutableAfterConfigRouteChanges() public {
         address newVerifier = address(0x1234);
-        FWSSConfigModule configModule = new FWSSConfigModule(address(payments), newVerifier);
+        FWSSConfigModule configModule = new FWSSConfigModule(address(payments), newVerifier, mockUSDFC);
         _route(address(provingModule), IFWSSConfig.pdpVerifierAddress.selector, address(configModule));
+        assertEq(IFWSSConfig(address(provingModule)).pdpVerifierAddress(), newVerifier);
 
-        vm.prank(address(mockPDPVerifier));
+        vm.prank(newVerifier);
         vm.expectRevert(
-            abi.encodeWithSelector(Errors.OnlyPDPVerifierAllowed.selector, newVerifier, address(mockPDPVerifier))
+            abi.encodeWithSelector(Errors.OnlyPDPVerifierAllowed.selector, address(mockPDPVerifier), newVerifier)
         );
         provingModule.possessionProven(1, 0, 0, CHALLENGES_PER_PROOF);
 
-        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Updated verifier");
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Immutable verifier");
         (uint64 maxPeriod, uint256 window,,) = viewContract.getPDPConfig();
         uint256 deadline = block.number + maxPeriod;
-        vm.prank(newVerifier);
+        vm.prank(address(mockPDPVerifier));
         provingModule.nextProvingPeriod(dataSetId, deadline, 100, "");
         vm.roll(deadline - window / 2);
-        vm.prank(newVerifier);
+        vm.prank(address(mockPDPVerifier));
         provingModule.possessionProven(dataSetId, 100, 0, CHALLENGES_PER_PROOF);
         assertTrue(viewContract.provenPeriods(dataSetId, 0));
     }
