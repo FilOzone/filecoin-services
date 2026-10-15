@@ -10,6 +10,7 @@ import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../../src/FilecoinWarmStorageServiceStateView.sol";
+import {calculateStorageSizeBasedRatePerEpoch, DATASET_FEE_PER_EPOCH} from "../../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../../src/Errors.sol";
 import {IFWSSConfig} from "../../src/interfaces/IFWSSConfig.sol";
 import {FWSSConfigModule} from "../../src/modules/FWSSConfigModule.sol";
@@ -363,6 +364,71 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
     }
 
+    function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
+        address payer = makeAddr("rawSizeRemovalClient");
+        require(mockUSDFC.transfer(payer, 100e18));
+        vm.startPrank(payer);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), 100e18);
+        payments.deposit(mockUSDFC, payer, 100e18);
+        vm.stopPrank();
+
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Removal Raw Size Test");
+        bytes memory createData = abi.encode(payer, uint256(7002), dsKeys, dsValues, FAKE_SIGNATURE);
+        makeSignaturePass(payer);
+        vm.prank(serviceProvider);
+        uint256 dataSetId = mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), createData);
+
+        // Two pieces; we'll remove one and verify nextProvingPeriod recomputes on the remaining.
+        Cids.Cid[] memory pieceData = new Cids.Cid[](2);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256("piece_a"));
+        pieceData[1] = Cids.CommPv2FromDigest(0, 35, keccak256("piece_b"));
+        uint256 perPieceLeaves = Cids.leafCount(0, 35);
+
+        makeSignaturePass(payer);
+        mockPDPVerifier.addPieces(
+            PDPListener(address(pdpServiceWithPayments)),
+            dataSetId,
+            0,
+            pieceData,
+            1,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+
+        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
+        uint256 firstDeadline = block.number + provingPeriod;
+        mockPDPVerifier.nextProvingPeriod(
+            PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline, 2 * perPieceLeaves, ""
+        );
+
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 1;
+        makeSignaturePass(payer);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+
+        // Advance past the deadline and call nextProvingPeriod with the post-removal leaf count.
+        vm.roll(firstDeadline + 1);
+        mockPDPVerifier.nextProvingPeriod(
+            PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline + provingPeriod, perPieceLeaves, ""
+        );
+
+        uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
+        uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
+        uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(perPieceLeaves * 32);
+        assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
+        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
+        assertApproxEqAbs(
+            actualRate - DATASET_FEE_PER_EPOCH,
+            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
+            1,
+            "post-removal ratio between raw and Fr32 rates is 127/128"
+        );
+    }
+
     function testRailTerminated_RevertsIfCallerNotPaymentsContract() public {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
@@ -632,7 +698,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 expectedAmount = (proposedAmount * provenEpochs) / totalEpochs;
 
         assertEq(result.modifiedAmount, expectedAmount, "Should pay for 2/3 of epochs");
-        assertTrue(result.settleUpto > fromEpoch, "Should settle past start");
+        assertEq(result.settleUpto, toEpoch, "Should settle to end epoch");
     }
 
     function testValidatePayment_FirstPeriodUnproven() public {
