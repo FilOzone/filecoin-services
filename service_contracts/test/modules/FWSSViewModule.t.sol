@@ -3,6 +3,8 @@ pragma solidity 0.8.37;
 
 import {Test} from "forge-std/Test.sol";
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Errors} from "../../src/Errors.sol";
 import {Extsload} from "../../src/Extsload.sol";
 import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateView} from "../../src/FilecoinWarmStorageServiceStateView.sol";
@@ -48,9 +50,12 @@ contract FWSSStorageWriter is FWSSStorage {
 }
 
 /// @dev Lets the StateView read the same storage through extsload.
-contract ViewModuleHarness is FWSSViewModule, Extsload {}
+contract ViewModuleHarness is FWSSViewModule, Extsload {
+    constructor(IERC20 usdfc) FWSSViewModule(usdfc) {}
+}
 
 contract FWSSViewModuleTest is Test {
+    IERC20 constant USDFC = IERC20(address(0xD0C));
     address constant PAYER = address(0xA11CE);
     string constant LONG_VALUE = "a metadata value that is longer than thirty-one bytes and spans storage slots";
 
@@ -87,7 +92,7 @@ contract FWSSViewModuleTest is Test {
         writer.approveProvider(42);
         writer.setControllerAndUpgrade(address(0xF11B), address(0x1E57), 1234);
 
-        vm.etch(address(writer), address(new ViewModuleHarness()).code);
+        vm.etch(address(writer), address(new ViewModuleHarness(USDFC)).code);
         viewModule = FWSSViewModule(address(writer));
         stateView = new FilecoinWarmStorageServiceStateView(FilecoinWarmStorageService(address(writer)));
         vm.roll(3000);
@@ -176,5 +181,11 @@ contract FWSSViewModuleTest is Test {
         assertEq(storagePrice, expectedStoragePrice);
         assertEq(datasetFee, expectedDatasetFee);
         assertEq(viewModule.getDataSetSizeInBytes(1 << 20), stateView.getDataSetSizeInBytes(1 << 20));
+        assertEq(address(viewModule.getPriceList().token), address(USDFC));
+    }
+
+    function testConstructorRejectsZeroUsdfc() public {
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.USDFC));
+        new FWSSViewModule(IERC20(address(0)));
     }
 }

@@ -2,6 +2,8 @@
 # Generates FWSSViewModule from FilecoinWarmStorageServiceStateLibrary.
 # The library reads FWSS storage through service.extsload; the module runs at the proxy,
 # so it reads the same slots with sload instead.
+# Calls through service are external calls to self; the module must not make them,
+# so dependencies come from immutables and any other service call fails generation.
 
 set -euo pipefail
 
@@ -10,6 +12,14 @@ PRELUDE=$(
 /// @title FWSSViewModule
 /// @notice Exposes FilecoinWarmStorageServiceStateLibrary getters at the FWSS proxy.
 contract FWSSViewModule is IPDPProvingSchedule {
+    IERC20 internal immutable usdfcTokenAddress;
+
+    /// @param _usdfc The USDFC token reported by getPriceList.
+    constructor(IERC20 _usdfc) {
+        require(_usdfc != IERC20(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
+        usdfcTokenAddress = _usdfc;
+    }
+
     /// @notice Returns the FWSS proxy, matching FilecoinWarmStorageServiceStateView.service
     function service() public view returns (FilecoinWarmStorageService) {
         return FilecoinWarmStorageService(address(this));
@@ -58,7 +68,7 @@ awk '
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";' \
     -e 's/service\.extsloadStruct(/sloadStruct(/g' \
     -e 's/service\.extsload(/sload(/g' \
-    -e 's/service\./service()./g' \
+    -e 's/IERC20(address(service\.usdfcTokenAddress()))/usdfcTokenAddress/g' \
     -e 's/(FilecoinWarmStorageService service, /(/g' \
     -e 's/(FilecoinWarmStorageService service)/()/g' \
     -e 's/(FilecoinWarmStorageService)/()/g' \
@@ -67,4 +77,9 @@ import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";' \
     -e '/@param service /d' \
     -e '/function _getDataSetMetadataValue(/,/returns/s/^        view$/        pure/' |
     # The prelude is already in module form, so it skips the rewrites above
-    PRELUDE="$PRELUDE" awk '$0 == "LIBRARY" { print ENVIRON["PRELUDE"]; next } { print }'
+    PRELUDE="$PRELUDE" awk -v source="$1" '
+        /service\./ { print source ": unhandled external call to self: " $0 > "/dev/stderr"; failed = 1 }
+        $0 == "LIBRARY" { print ENVIRON["PRELUDE"]; next }
+        { print }
+        END { exit failed }
+    '

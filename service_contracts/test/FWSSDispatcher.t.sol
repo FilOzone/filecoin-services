@@ -128,6 +128,9 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")) {
             return abi.encode(facetPaymentsContractAddress);
         }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSViewModule.sol:FWSSViewModule")) {
+            return abi.encode(facetToken);
+        }
         return super._facetConstructorArgs(sourceId);
     }
 
