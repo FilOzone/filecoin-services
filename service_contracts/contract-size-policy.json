@@ -15,6 +15,9 @@
     "FWSSProviderManagementModule": {
       "artifact": "src/modules/FWSSProviderManagementModule.sol:FWSSProviderManagementModule"
     },
+    "FWSSViewModule": {
+      "artifact": "src/modules/FWSSViewModule.sol:FWSSViewModule"
+    },
     "FWSSViewContractModule": {
       "artifact": "src/modules/FWSSViewContractModule.sol:FWSSViewContractModule"
     },

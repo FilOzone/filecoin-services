@@ -16,6 +16,7 @@ import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
+import {FWSSViewModule} from "../src/modules/FWSSViewModule.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {Errors} from "../src/Errors.sol";
@@ -105,14 +106,30 @@ contract FWSSDispatcherTest is JosukeFacetSet {
 
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
-            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress, facetToken);
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
         {
-            return abi.encode(facetSessionKeyRegistry);
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress, facetSessionKeyRegistry);
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
-            return abi.encode(facetToken, facetBeneficiary, facetProviderRegistry, facetSessionKeyRegistry);
+            return abi.encode(
+                facetPaymentsContractAddress,
+                facetPDPVerifierAddress,
+                facetToken,
+                facetBeneficiary,
+                facetProviderRegistry,
+                facetSessionKeyRegistry
+            );
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
+            return abi.encode(facetPaymentsContractAddress, facetPDPVerifierAddress);
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")) {
+            return abi.encode(facetPaymentsContractAddress);
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSViewModule.sol:FWSSViewModule")) {
+            return abi.encode(facetToken);
         }
         return super._facetConstructorArgs(sourceId);
     }
@@ -145,6 +162,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         }
         assertEq(FilecoinWarmStorageService(proxy).paymentsContractAddress(), facetPaymentsContractAddress);
         assertEq(FilecoinWarmStorageService(proxy).pdpVerifierAddress(), facetPDPVerifierAddress);
+        assertEq(address(FilecoinWarmStorageService(proxy).usdfcTokenAddress()), address(facetToken));
     }
 
     function _route(address proxy, bytes4 selector, address target) internal {
@@ -479,7 +497,8 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         assertEq(logs[2].topics[1], bytes32(uint256(uint160(migration))));
 
         assertEq(OwnershipModule(proxy).owner(), address(this));
-        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), address(viewContract));
+        // The proxy now serves the StateView reads itself; slot 17 keeps the legacy StateView.
+        assertEq(FWSSViewContractModule(proxy).viewContractAddress(), proxy);
         FWSSProviderManagementModule(proxy).addApprovedProvider(42);
         assertEq(uint256(vm.load(proxy, keccak256(abi.encode(uint256(42), uint256(15))))), 1);
 
@@ -492,12 +511,24 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         (address next,) = viewContract.nextUpgrade();
         assertEq(next, address(0));
 
-        // The former immutable getters belong to the business modules that use them.
+        // The config facet exposes USDFC; the other immutable getters remain in their business modules.
         assertEq(address(service.usdfcTokenAddress()), address(facetToken));
         assertEq(service.filBeamBeneficiaryAddress(), facetBeneficiary);
         assertEq(address(service.serviceProviderRegistry()), facetProviderRegistry);
         assertEq(address(service.sessionKeyRegistry()), facetSessionKeyRegistry);
         assertEq(address(viewContract.getPriceList().token), address(facetToken));
+
+        // FWSSViewModule serves the StateView reads at the proxy itself.
+        FWSSViewModule viewModule = FWSSViewModule(proxy);
+        (provingPeriod, challengeWindow,,) = viewModule.getPDPConfig();
+        assertEq(provingPeriod, 3000);
+        assertEq(challengeWindow, 61);
+        assertTrue(viewModule.isProviderApproved(7));
+        assertTrue(viewModule.isProviderApproved(42));
+        assertEq(viewModule.getApprovedProviders(0, 0), viewContract.getApprovedProviders(0, 0));
+        (next,) = viewModule.nextUpgrade();
+        assertEq(next, address(0));
+        assertEq(address(viewModule.getPriceList().token), address(facetToken));
 
         vm.prank(address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(FWSSOwnable.OwnableUnauthorizedAccount.selector, address(0xB0B)));

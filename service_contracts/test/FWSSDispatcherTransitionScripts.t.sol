@@ -59,7 +59,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
             address(viewContract)
         );
 
-        // The dataset facet's constructor checks USDFC decimals.
+        // The config facet's constructor checks USDFC decimals.
         deployCodeTo("SharedMocks.sol:MockERC20", address(service.usdfcTokenAddress()));
 
         // The scripts broadcast as DEFAULT_SENDER under forge test, so it owns the proxy.
@@ -623,13 +623,16 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
     }
 
-    /// @dev The config, dataset and authorization facets pin the same immutables as the v1.4.0 monolith they replace.
+    /// @dev The facets pin the same immutables as the v1.4.0 monolith they replace.
     function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
-            return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
+            return
+                abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress(), service.usdfcTokenAddress());
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
             return abi.encode(
+                service.paymentsContractAddress(),
+                service.pdpVerifierAddress(),
                 service.usdfcTokenAddress(),
                 service.filBeamBeneficiaryAddress(),
                 service.serviceProviderRegistry(),
@@ -638,7 +641,19 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         }
         if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
         {
-            return abi.encode(service.sessionKeyRegistry());
+            return
+                abi.encode(
+                    service.paymentsContractAddress(), service.pdpVerifierAddress(), service.sessionKeyRegistry()
+                );
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
+            return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")) {
+            return abi.encode(service.paymentsContractAddress());
+        }
+        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSViewModule.sol:FWSSViewModule")) {
+            return abi.encode(service.usdfcTokenAddress());
         }
         return super._facetConstructorArgs(sourceId);
     }

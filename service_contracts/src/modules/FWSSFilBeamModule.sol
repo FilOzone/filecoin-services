@@ -3,7 +3,6 @@ pragma solidity 0.8.37;
 
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../Errors.sol";
-import {IFWSSConfig} from "../interfaces/IFWSSConfig.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibRails} from "../lib/LibRails.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
@@ -12,6 +11,15 @@ import {FWSSStorage} from "../storage/FWSSStorage.sol";
 /// @notice Manages FWSS CDN payment rails and the FilBeam controller.
 contract FWSSFilBeamModule is FWSSStorage {
     using LibRails for FilecoinPayV1;
+
+    FilecoinPayV1 internal immutable paymentContract;
+
+    /// @notice Configures the immutable dependencies used by this module.
+    /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
+    constructor(address _paymentsContractAddress) {
+        require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
+        paymentContract = FilecoinPayV1(_paymentsContractAddress);
+    }
 
     event FilBeamControllerChanged(address oldController, address newController);
 
@@ -49,8 +57,7 @@ contract FWSSFilBeamModule is FWSSStorage {
         // Check if CDN rails are configured (presence of rails indicates CDN was set up)
         require(info.cdnRailId != 0 && info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
-            .settleCDNRails(info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount);
+        paymentContract.settleCDNRails(info.cdnRailId, info.cacheMissRailId, cdnAmount, cacheMissAmount);
     }
 
     /**
@@ -72,8 +79,9 @@ contract FWSSFilBeamModule is FWSSStorage {
         // Check if cache miss and CDN rails are configured
         require(info.cacheMissRailId != 0 && info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
 
-        FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress())
-            .topUpCDNRails(dataSetId, info.cacheMissRailId, info.cdnRailId, cacheMissAmountToAdd, cdnAmountToAdd);
+        paymentContract.topUpCDNRails(
+            dataSetId, info.cacheMissRailId, info.cdnRailId, cacheMissAmountToAdd, cdnAmountToAdd
+        );
     }
 
     function terminateCDNService(uint256 dataSetId) external onlyFilBeamController {
@@ -85,9 +93,8 @@ contract FWSSFilBeamModule is FWSSStorage {
         DataSetInfo storage info = dataSetInfo[dataSetId];
         require(info.cacheMissRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.cdnRailId != 0, Errors.InvalidDataSetId(dataSetId));
-        FilecoinPayV1 payments = FilecoinPayV1(IFWSSConfig(address(this)).paymentsContractAddress());
 
-        LibStoragePayments.terminateCDNRails(dataSetId, info, payments);
+        LibStoragePayments.terminateCDNRails(dataSetId, info, paymentContract);
     }
 
     function transferFilBeamController(address newController) external onlyFilBeamController {
