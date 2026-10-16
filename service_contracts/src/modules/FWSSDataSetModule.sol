@@ -437,7 +437,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
     /**
      * @notice Get the service pricing information
      * @return pricing A struct containing pricing details for storage and CDN/cache miss egress
-     * @custom:deprecated Use `FilecoinWarmStorageServiceStateView.getPriceList()` instead, which
+     * @custom:deprecated Use `getPriceList()` on the FWSS proxy (FWSSViewModule) instead, which
      *                    returns the complete price catalogue (rates, fees, lockups) in one call.
      */
     function getServicePrice() external view returns (ServicePricing memory pricing) {
@@ -456,7 +456,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
      * @return serviceFee Service fee (per TiB per month)
      * @return spPayment SP payment (per TiB per month)
      * @custom:deprecated Service commission is fixed at zero; the SP receives the full storage
-     *                    rate. Use `FilecoinWarmStorageServiceStateView.getPriceList().rates`
+     *                    rate. Use `getPriceList().rates` on the FWSS proxy (FWSSViewModule)
      *                    for the canonical pricing.
      */
     function getEffectiveRates() external pure returns (uint256 serviceFee, uint256 spPayment) {

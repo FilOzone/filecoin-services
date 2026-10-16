@@ -56,17 +56,10 @@ make gen
 # Or regenerate individual files:
 make src/lib/FilecoinWarmStorageServiceLayout.sol               # Storage layout
 make src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol # Internal library
-make src/FilecoinWarmStorageServiceStateView.sol                # View contract
 ```
 
 **Important Notes:**
-- `FilecoinWarmStorageServiceStateInternalLibrary` and `FilecoinWarmStorageServiceStateView` are auto-generated from `FilecoinWarmStorageServiceStateLibrary`
+- `FilecoinWarmStorageServiceStateInternalLibrary` and `FWSSViewModule` are auto-generated from `FilecoinWarmStorageServiceStateLibrary`
 - `FilecoinWarmStorageServiceLayout` is auto-generated from the storage layout of `FilecoinWarmStorageService`
 - Always run `make gen` after modifying storage variables or the state library
 - Use `make force-gen` if the generated files become corrupted
-
-### Deploy a new `FilecoinWarmStorageServiceStateView`
-```sh
-make src/FilecoinWarmStorageServiceStateView.sol
-tools/generate_view_contract.sh
-```

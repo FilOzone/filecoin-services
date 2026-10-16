@@ -18,21 +18,18 @@ Run from `service_contracts/`:
 
 ```sh
 make gen
-make check-layout
+make check-josuke
 forge test
 make update-abi
 ```
 
-Existing CI regenerates FWSS's compiler layout, verifies generated files are current,
-and compares the snapshot against the PR base. Inherited fields are included, so
-shifts caused by this extraction are checked by the same workflow. Local
-`make check-layout` compares against HEAD~1 when available; it is not a deployed
-implementation check. No new upgrade validator is required by this extraction.
-
-The snapshot normalizer maps only the declaring-contract names of `DataSetInfo` and
-`PlannedUpgrade` to their historical names. Slots, offsets, widths and recursive
-member types remain part of the comparison. The ABI's `PlannedUpgrade.internalType`
-changes its declaring-contract name; tuple encoding is unchanged.
+`make check-josuke` compares the storage every module declares with each deployment
+`josuke.json` records, including `legacy`: the v1.4.0 monolith at the commit both
+networks run. A variable that moves, changes type or shape, or is overlapped by a
+different declaration fails; a rename or a dropped variable warns. It also fails when
+two modules declare different variables over the same storage bytes. The ABI's
+`PlannedUpgrade.internalType` changes its declaring-contract name; tuple encoding is
+unchanged.
 
 Fields are internal so that modules inheriting `FWSSStorage` do not export getters.
 

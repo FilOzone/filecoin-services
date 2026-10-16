@@ -20,7 +20,7 @@ set -euo pipefail
 #   CHAIN          - Chain ID (auto-detected from RPC if not set)
 
 # Get script directory and source deployments.sh
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 source "$SCRIPT_DIR/deployments.sh"
 
 DRY_RUN="${DRY_RUN:-false}"

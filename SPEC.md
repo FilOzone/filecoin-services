@@ -73,7 +73,7 @@ This keeps the hot path at one external call per event.
 
 ### Price Discovery
 
-The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+The complete on-chain price catalogue is exposed via `getPriceList()` on the view contract that FWSS reports through `viewContractAddress()`: the StateView today, and the FWSS proxy itself after the ERC-8167 dispatcher transition. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
 
 ```solidity
 struct PriceList {
@@ -348,7 +348,7 @@ Solid arrows indicate call direction. Dashed arrows indicate token references. B
 | ServiceProviderRegistry | Yes | UUPS proxy | Registry of providers, their capabilities, and payee addresses |
 | FilecoinPayV1 | No | Immutable | Payment rails engine — deposits, lockups, streaming settlement, rate changes |
 | SessionKeyRegistry | No | Immutable | Session key authorization; maps (user, signer, permission) → expiry |
-| StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS |
+| StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS; after the dispatcher transition the FWSS proxy serves the same methods through `FWSSViewModule` |
 | SignatureVerificationLib | No | External library | EIP-712 signature recovery and session key validation |
 | [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
 
@@ -393,7 +393,7 @@ Because these are Solidity `immutable` variables, they live in the deployed byte
 
 References to non-proxy contracts (FilecoinPayV1, SessionKeyRegistry) are **rigid**: replacing them requires a new FWSS implementation carrying the new address, plus the two-step upgrade. State held in the old contract (rail balances, lockups, session key authorizations) is **orphaned** — it cannot be migrated automatically and must be handled explicitly.
 
-**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy.
+**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy. After the ERC-8167 dispatcher transition, `viewContractAddress()` returns the FWSS proxy itself, which serves the view methods; the storage slot keeps the last StateView address.
 
 ### Data Flows
 
@@ -541,6 +541,8 @@ SessionKeyRegistry is **not upgradeable**. It stores session key authorization m
 
 ### StateView (FilecoinWarmStorageServiceStateView)
 
+This section describes the v1.4.0 monolith. [After the dispatcher transition](#view-methods-after-the-dispatcher-transition), the FWSS proxy serves the view methods itself.
+
 StateView is an **immutable**, auto-generated, read-only contract that queries FWSS storage via `extsload`. It provides ~40 view methods for off-chain callers. FWSS holds a mutable reference to its current StateView in a storage variable (`viewContractAddress`), which the owner can update at any time via `setViewContract()` without an FWSS upgrade.
 
 StateView depends on FWSS's storage layout remaining stable — it reads specific storage slots via the auto-generated `FilecoinWarmStorageServiceStateInternalLibrary`. If FWSS storage layout changes, StateView (and the internal library) must be regenerated and redeployed to match.
@@ -549,7 +551,13 @@ Because StateView is a read-only contract that reads state from FWSS, **additive
 
 **Impact assessment.** A StateView bug affects only read-only queries — it cannot corrupt FWSS state or affect settlement, proving, or any on-chain operations. The blast radius is limited to off-chain consumers that route queries through StateView.
 
-**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. Alternatively, the new StateView address can be set during the next FWSS upgrade via `migrate()`.
+**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. The repository no longer generates StateView, so build a fix from the v1.4.0 release tag. After the dispatcher transition this is no longer needed, because the proxy serves the view methods itself.
+
+#### View Methods After the Dispatcher Transition
+
+After the transition, the FWSS proxy serves the view methods through `FWSSViewModule`, generated from `FilecoinWarmStorageServiceStateLibrary` by `tools/generate_view_module.sh`, and `FWSSViewContractModule` makes `viewContractAddress()` return the proxy, so callers that discover the view contract through FWSS move over without a change. The deployed StateView keeps working, because `ExtsloadModule` still serves the storage reads it makes, as long as the storage layout it reads is unchanged.
+
+A bug in a view method still affects only read-only queries. The fix is a josuke migration that routes the affected selectors to a corrected module, subject to the usual announce delay.
 
 ### Cross-Cutting Concerns
 
@@ -560,7 +568,7 @@ Several concerns apply to any multi-contract migration, regardless of which comp
 - **Multisig flow**: All upgrades require owner authorization. If the owner is a multisig, the announce and execute steps each require separate multisig transactions with their own signing rounds.
 - **Rollback constraints**: UUPS upgrades are not reversible without another upgrade cycle. If a new implementation introduces a regression, the fix requires deploying yet another implementation and waiting through the announcement delay.
 - **Pre-upgrade testing**: New implementations should be tested against a fork of the live chain state to verify storage compatibility, correct immutable values, and expected behavior with existing data.
-- **Storage layout violations**: Reordering, inserting, or removing storage variables in a new implementation shifts slot assignments, corrupting all persisted proxy state. The codebase mitigates this through an auto-generated [`FilecoinWarmStorageServiceLayout.sol`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.sol) that documents every storage slot position using `forge inspect`. CI ([`check-gen`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates this file on every run and fails if the output diverges from the checked-in version, making unintentional slot changes visible in review. Additionally, CI explicitly verifies that new versions contain no destructive changes by comparing the full `forge inspect ... storageLayout` JSON metadata — a committed [`FilecoinWarmStorageServiceLayout.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.json) snapshot captures each variable's label, slot number, byte offset, and type. This catches not only slot removals and reorderings but also type changes (e.g., `uint256` → `uint128`) and offset repacking within the same slot that would silently corrupt proxy state. The contract source also includes explicit comments tying each variable to its layout slot. However, these are **detection** mechanisms — they surface layout drift in CI and pull-request diffs but do not structurally prevent a developer from reordering variables. The codebase does not use OpenZeppelin storage gaps (`uint256[50] __gap`) or ERC-7201 namespaced storage.
+- **Storage layout violations**: Reordering, inserting, or removing storage variables in a new implementation shifts slot assignments, corrupting all persisted proxy state. The codebase mitigates this through an auto-generated [`FilecoinWarmStorageServiceLayout.sol`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.sol) that documents every storage slot position using `forge inspect`. CI ([`check-gen`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates this file on every run and fails if the output diverges from the checked-in version, making unintentional slot changes visible in review. Additionally, CI runs `josuke check`, which compares the storage every ERC-8167 module declares with each deployment `josuke.json` records, including the v1.4.0 monolith as `legacy`. This catches not only slot removals and reorderings but also type changes (e.g., `uint256` → `uint128`), offset repacking within the same slot that would silently corrupt proxy state, and two modules declaring different variables over the same storage. The contract source also includes explicit comments tying each variable to its layout slot. However, these are **detection** mechanisms — they surface layout drift in CI and pull-request diffs but do not structurally prevent a developer from reordering variables. The codebase does not use OpenZeppelin storage gaps (`uint256[50] __gap`) or ERC-7201 namespaced storage.
 - **Backwards incompatibility of implementation contracts**: Removing or changing the signature of a public/external function in a new implementation breaks callers that depend on the old ABI — most critically FilecoinPayV1, which is immutable and calls FWSS through the `IValidator` interface. The codebase checks in ABI JSON files under [`service_contracts/abi/`](https://github.com/FilOzone/filecoin-services/tree/main/service_contracts/abi) and CI ([`check-abi`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates them on every run, failing if any ABI has changed. This ensures that any function addition, removal, or signature change is surfaced as a diff during code review. As with storage layout, this is a **detection** mechanism — it flags changes but does not structurally prevent a breaking removal.
 
 **TODO:** Define concrete procedures for coordinated multi-contract upgrades. Document a pre-upgrade testing checklist. Specify rollback procedures and emergency response timelines. Evaluate adopting structural storage protections — such as OpenZeppelin storage gaps, [ERC-7201](https://eips.ethereum.org/EIPS/eip-7201) namespaced storage, [ERC-8042](https://eips.ethereum.org/EIPS/eip-8042), or the [Ithaca storage domain pattern](https://github.com/ithacaxyz/account/blob/ab0a493f04676abc71104623bcfcdede050da2ec/src/IthacaAccount.sol#L102) — for future contracts. Existing contracts will not be migrated to these patterns.

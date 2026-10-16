@@ -23,13 +23,15 @@
         "initcode_hash": "0xddcbe59b3ccf54d3f47c15dd4dda953aaf43d8b004811693aad2f1b3aaedffdc",
         "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "RAILS_LIB": {
         "initcode_hash": "0x67d94fb169bf3563a279a006eb936594c4bef7db610512fb05db306ecbc2b0f4",
         "artifact_contract": "src/lib/Rails.sol:Rails",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "FWSS_IMPLEMENTATION": {
         "initcode_hash": "0x0e6588ee8d338abe2d311709c7ebf75953d54e4f8cbb209d14692fbbe445fb92",
@@ -46,7 +48,8 @@
           "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
           "0x74FD50525A958aF5d484601E252271f9625231aB",
           "6"
-        ]
+        ],
+        "pinned": true
       },
       "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION": {
         "initcode_hash": "0xd0999d49e64712aa62f6139d4d98c4f1fab903734a713308bab3ef1a6397f542",
@@ -54,7 +57,8 @@
         "libraries": {},
         "constructor_args": [
           "3"
-        ]
+        ],
+        "pinned": true
       },
       "FWSS_PROXY": {
         "initcode_hash": "0x3e2779ec9d23761f6466083f8c4f938dc2479a0d48037c1803b7b3592c58bd11",
@@ -113,7 +117,8 @@
         "libraries": {},
         "constructor_args": [
           "0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
-        ]
+        ],
+        "pinned": true
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
         "initcode_hash": "0x43f5be1a5e546cfd7200624a02c53fdf46caa8150f16b0663a2e8c67d68e3dfe",
@@ -158,7 +163,8 @@
         "initcode_hash": "0xddcbe59b3ccf54d3f47c15dd4dda953aaf43d8b004811693aad2f1b3aaedffdc",
         "artifact_contract": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "SESSION_KEY_REGISTRY": {
         "initcode_hash": "0xe86bf04ac10383355fc49667813f42688ed68a92e1d3414773cf34b2a1fd471f",
@@ -178,7 +184,8 @@
         "initcode_hash": "0x67d94fb169bf3563a279a006eb936594c4bef7db610512fb05db306ecbc2b0f4",
         "artifact_contract": "src/lib/Rails.sol:Rails",
         "libraries": {},
-        "constructor_args": []
+        "constructor_args": [],
+        "pinned": true
       },
       "FWSS_VIEW": {
         "initcode_hash": "0x3daadee16ed5f238f76fd90c913a10c9bb6db2aa6d99e5c02ee29b727b31222c",
@@ -186,7 +193,8 @@
         "libraries": {},
         "constructor_args": [
           "0x02925630df557F957f70E112bA06e50965417CA0"
-        ]
+        ],
+        "pinned": true
       },
       "FWSS_IMPLEMENTATION": {
         "initcode_hash": "0x29ced5d5f582d5bac14ab7d090614adf1c0b67ead58f2aae585c73ffcff0846b",
@@ -203,7 +211,8 @@
           "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
           "0x518411c2062E119Aaf7A8B12A2eDf9a939347655",
           "10"
-        ]
+        ],
+        "pinned": true
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
         "initcode_hash": "0x2ae11470a908b1d8a1a90573d98918e83668b8d350c1d3e2f6bfd6599cfae697",
@@ -221,7 +230,8 @@
         "libraries": {},
         "constructor_args": [
           "3"
-        ]
+        ],
+        "pinned": true
       },
       "PDP_VERIFIER_PROXY": {
         "initcode_hash": "0x460ab109982867b4e11bd02e84d83dfaef4aad379625b07382854b7199beab09",

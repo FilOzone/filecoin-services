@@ -20,18 +20,22 @@ library JosukeLedger {
         return bytes(configured).length == 0 ? "josuke.json" : configured;
     }
 
-    /// @notice The migration `josuke deploy` proposed for a proxy on a chain
+    /// @notice The migration `josuke deploy` proposed for a proxy on a chain. Until the ERC-8167 transition, the ledger
+    /// may list the proxy under its dispatcher instead: `josuke deploy` and `josuke verify` rehearse the migration
+    /// against the code at the listed address, and the proxy still runs its previous implementation.
     /// @param proxy The proxy
+    /// @param dispatcher The dispatcher the ledger may list the proxy under, or zero
     /// @param chainId The chain
     /// @return The proposed migration
-    function proposedMigration(address proxy, uint256 chainId) internal view returns (address) {
+    function proposedMigration(address proxy, address dispatcher, uint256 chainId) internal view returns (address) {
         string memory json = VM.readFile(path());
         bool found;
         uint256 index;
         for (uint256 i; VM.keyExistsJson(json, _entry(i)); ++i) {
             string memory addressKey = string.concat(_entry(i), ".address");
             require(VM.keyExistsJson(json, addressKey), LedgerEntryWithoutAddress(i));
-            if (VM.parseJsonAddress(json, addressKey) != proxy) continue;
+            address listed = VM.parseJsonAddress(json, addressKey);
+            if (listed != proxy && (dispatcher == address(0) || listed != dispatcher)) continue;
 
             require(!found, ProxyListedTwice(proxy));
             found = true;
