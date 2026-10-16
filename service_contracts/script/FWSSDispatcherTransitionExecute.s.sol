@@ -5,19 +5,19 @@ import {console} from "forge-std/Script.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {
+    FilecoinWarmStorageServiceStateInternalLibrary
+} from "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {FWSSDispatcherTransitionScript} from "./FWSSDispatcherTransitionScript.sol";
 import {JosukeLedger} from "./lib/JosukeLedger.sol";
-
-/// @notice The upgrade plan getter of the FWSS view contract
-interface IFWSSUpgradePlan {
-    function nextUpgrade() external view returns (address nextImplementation, uint96 afterEpoch);
-}
 
 /// @title FWSSDispatcherTransitionExecute
 /// @notice Completes the announced FWSSDispatcherTransition with `upgradeToAndCall(transition, migrate(migration))`,
 /// or prints the Safe transaction when CALLDATA_ONLY=true. Run `josuke accept` afterwards.
 /// @dev Writes nothing to deployments.json, which tracks UUPS implementations; josuke.json records the routes.
 contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
+    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
+
     /// @notice Checks the plan and the transition's pins, then upgrades the proxy or prints the Safe transaction
     function run() external {
         uint256 chain = block.chainid;
@@ -103,10 +103,7 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
     }
 
     function _requireAnnounced(address proxy, address transition) internal view {
-        address viewContract = _envOrRecorded("FWSS_VIEW_ADDRESS");
-        if (viewContract == address(0)) viewContract = FilecoinWarmStorageService(proxy).viewContractAddress();
-
-        (address planned, uint96 afterEpoch) = IFWSSUpgradePlan(viewContract).nextUpgrade();
+        (address planned, uint96 afterEpoch) = FilecoinWarmStorageService(proxy).nextUpgrade();
         require(
             planned == transition,
             string.concat("the announced upgrade is ", vm.toString(planned), ", not ", vm.toString(transition))
@@ -123,8 +120,9 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         view
         returns (address dispatcher, address migration)
     {
+        dispatcher = transition.dispatcher();
         migration = transition.migration();
-        address proposed = JosukeLedger.proposedMigration(proxy, chain);
+        address proposed = JosukeLedger.proposedMigration(proxy, dispatcher, chain);
         require(
             migration == proposed,
             string.concat(
@@ -150,7 +148,6 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
             )
         );
 
-        dispatcher = transition.dispatcher();
         _requirePinnedDispatcher(dispatcher);
     }
 

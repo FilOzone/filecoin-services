@@ -175,7 +175,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.stopPrank();
 
         // Get data set info
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         uint256 pdpRailId = dataSet.pdpRailId;
         uint256 cacheMissRailId = dataSet.cacheMissRailId;
         uint256 cdnRailId = dataSet.cdnRailId;
@@ -190,19 +190,19 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         assertEq(dataSet.payee, serviceProvider, "Payee should be set to service provider");
 
         // Verify metadata was stored correctly
-        (bool exists, string memory metadata) = viewContract.getDataSetMetadata(newDataSetId, metadataKeys[0]);
+        (bool exists, string memory metadata) = pdpServiceWithPayments.getDataSetMetadata(newDataSetId, metadataKeys[0]);
         assertTrue(exists, "Metadata key should exist");
         assertEq(metadata, "true", "Metadata should be stored correctly");
 
         // Verify client data set ids
-        uint256[] memory clientDataSetIds = viewContract.clientDataSets(client);
+        uint256[] memory clientDataSetIds = pdpServiceWithPayments.clientDataSets(client);
         assertEq(clientDataSetIds.length, 1);
         assertEq(clientDataSetIds[0], newDataSetId);
 
-        assertEq(viewContract.railToDataSet(pdpRailId), newDataSetId);
+        assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), newDataSetId);
 
         // Verify data set info
-        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");
         assertNotEq(dataSetInfo.cacheMissRailId, 0, "Cache miss rail ID should be set");
         assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
@@ -294,7 +294,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.stopPrank();
 
         // Get data set info
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSet.payer, client);
         assertEq(dataSet.payee, serviceProvider);
         // Verify the commission rate was set correctly for basic service (no CDN)
@@ -316,7 +316,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.prank(serviceProvider);
         uint256 newDataSetId2 = mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), extraData);
 
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet2 = viewContract.getDataSet(newDataSetId2);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet2 = pdpServiceWithPayments.getDataSet(newDataSetId2);
         assertEq(dataSet2.payer, client);
         assertEq(dataSet2.payee, serviceProvider);
 
@@ -344,7 +344,8 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         vm.prank(client);
         pdpServiceWithPayments.terminateService(newDataSetId2);
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(newDataSetId2);
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo =
+            pdpServiceWithPayments.getDataSet(newDataSetId2);
         assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
         // Advance block number past end epoch to allow settlement and deletion
         vm.roll(terminatedInfo.pdpEndEpoch + 1);
@@ -721,7 +722,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
 
         // Get initial rail info (should be at minimum rate for empty dataset)
-        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 railId = dataSetInfo.pdpRailId;
 
         // Get initial rate
@@ -779,7 +780,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             new string[](0)
         );
 
-        uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
+        uint256 actualRate = payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(leafCount));
         uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(leafCount * 32);
 
@@ -1145,8 +1146,9 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // read metadata key and value from contract
-        (bool exists, string memory storedMetadata) = viewContract.getDataSetMetadata(dataSetId, metadataKeys[0]);
-        (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
+        (bool exists, string memory storedMetadata) =
+            pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
+        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
 
         // Verify the stored metadata matches what we set
         assertTrue(exists, "Metadata key should exist");
@@ -1161,7 +1163,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Verify no metadata is stored
-        (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
+        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
         assertEq(storedKeys.length, 0, "Should have no metadata keys");
     }
 
@@ -1183,7 +1185,8 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         // Verify all metadata keys and values
         for (uint256 i = 0; i < metadataKeys.length; i++) {
-            (bool exists, string memory storedMetadata) = viewContract.getDataSetMetadata(dataSetId, metadataKeys[i]);
+            (bool exists, string memory storedMetadata) =
+                pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
             assertTrue(exists, "Metadata key should exist");
             assertEq(
                 storedMetadata,
@@ -1191,7 +1194,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                 string(abi.encodePacked("Stored metadata for ", metadataKeys[i], " should match"))
             );
         }
-        (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
+        (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
         assertEq(storedKeys.length, metadataKeys.length, "Should have correct number of metadata keys");
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bool found = false;
@@ -1214,12 +1217,14 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 dataSetId2 = createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
 
         // Verify metadata for first data set
-        (bool exists1, string memory storedMetadata1) = viewContract.getDataSetMetadata(dataSetId1, metadataKeys1[0]);
+        (bool exists1, string memory storedMetadata1) =
+            pdpServiceWithPayments.getDataSetMetadata(dataSetId1, metadataKeys1[0]);
         assertTrue(exists1, "First dataset metadata key should exist");
         assertEq(storedMetadata1, string(metadataValues1[0]), "Stored metadata for first data set should match");
 
         // Verify metadata for second data set
-        (bool exists2, string memory storedMetadata2) = viewContract.getDataSetMetadata(dataSetId2, metadataKeys2[0]);
+        (bool exists2, string memory storedMetadata2) =
+            pdpServiceWithPayments.getDataSetMetadata(dataSetId2, metadataKeys2[0]);
         assertTrue(exists2, "Second dataset metadata key should exist");
         assertEq(storedMetadata2, string(metadataValues2[0]), "Stored metadata for second data set should match");
     }
@@ -1242,7 +1247,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
                 // Verify the metadata is stored correctly
                 (bool exists, string memory storedMetadata) =
-                    viewContract.getDataSetMetadata(dataSetId, metadataKeys[0]);
+                    pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
                 assertTrue(exists, "Metadata key should exist");
                 assertEq(
                     storedMetadata,
@@ -1251,7 +1256,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                 );
 
                 // Verify the metadata key is stored
-                (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
                 assertEq(storedKeys.length, 1, "Should have one metadata key");
                 assertEq(
                     storedKeys[0],
@@ -1288,7 +1293,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
                 // Verify the metadata is stored correctly
                 (bool exists, string memory storedMetadata) =
-                    viewContract.getDataSetMetadata(dataSetId, metadataKeys[0]);
+                    pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[0]);
                 assertTrue(exists, "Metadata key should exist");
                 assertEq(
                     storedMetadata,
@@ -1297,7 +1302,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                 );
 
                 // Verify the metadata key is stored
-                (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
                 assertEq(storedKeys.length, 1, "Should have one metadata key");
                 assertEq(
                     storedKeys[0],
@@ -1342,7 +1347,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                 // Verify all metadata keys and values
                 for (uint256 i = 0; i < metadataKeys.length; i++) {
                     (bool exists, string memory storedMetadata) =
-                        viewContract.getDataSetMetadata(dataSetId, metadataKeys[i]);
+                        pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
                     assertTrue(exists, string.concat("Key ", metadataKeys[i], " should exist"));
                     assertEq(
                         storedMetadata,
@@ -1351,7 +1356,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                     );
                 }
 
-                (string[] memory storedKeys,) = viewContract.getAllDataSetMetadata(dataSetId);
+                (string[] memory storedKeys,) = pdpServiceWithPayments.getAllDataSetMetadata(dataSetId);
                 assertEq(
                     storedKeys.length,
                     metadataKeys.length,
@@ -1408,7 +1413,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
                 // Verify all metadata keys and values
                 for (uint256 i = 0; i < metadataKeys.length; i++) {
                     (bool exists, string memory storedMetadata) =
-                        viewContract.getDataSetMetadata(dataSetId, metadataKeys[i]);
+                        pdpServiceWithPayments.getDataSetMetadata(dataSetId, metadataKeys[i]);
                     assertTrue(exists, string.concat("Key ", metadataKeys[i], " should exist"));
                     assertEq(
                         storedMetadata,
@@ -1874,13 +1879,13 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Test that empty string is stored and retrievable
-        (bool existsCDN, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool existsCDN, string memory withCDN) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertTrue(existsCDN, "withCDN key should exist");
         assertEq(withCDN, "", "Empty string should be stored and retrievable");
 
         // Test that non-existent key returns false
         (bool existsNonExistent, string memory nonExistent) =
-            viewContract.getDataSetMetadata(dataSetId, "nonExistentKey");
+            pdpServiceWithPayments.getDataSetMetadata(dataSetId, "nonExistentKey");
         assertFalse(existsNonExistent, "Non-existent key should not exist");
         assertEq(nonExistent, "", "Non-existent key returns empty string");
 
@@ -2096,7 +2101,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.stopPrank();
 
         // Verify CDN rails were created with default zero lockup
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
         assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
 
@@ -2155,7 +2160,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.stopPrank();
 
         // Verify the dataset was created with CDN rails
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
         assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
     }
@@ -2207,7 +2212,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         }
 
         // Verify the dataset was created without CDN rails
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = viewContract.getDataSet(newDataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSet.cacheMissRailId, 0, "Cache Miss Rail ID should be zero");
         assertEq(dataSet.cdnRailId, 0, "CDN Rail ID should be zero");
     }
@@ -2251,21 +2256,21 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Verify CDN rails were created
         assertTrue(info.cacheMissRailId != 0, "Cache miss rail should be created for CDN dataset");
         assertTrue(info.cdnRailId != 0, "CDN rail should be created for CDN dataset");
 
         // Verify rail mappings exist before deletion
-        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
 
         // Terminate the service
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get updated info after termination to get pdpEndEpoch
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Wait for payment end epoch to elapse
         vm.roll(info.pdpEndEpoch + 1);
@@ -2279,11 +2284,12 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         FWSSDataSetModule(address(pdpServiceWithPayments)).dataSetDeleted(dataSetId, 10, bytes(""));
 
         // Verify all rail mappings are cleaned up (this is the fix from issue #269)
-        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
         assertTrue(
-            viewContract.railToDataSet(info.cacheMissRailId) == 0, "Cache miss rail mapping should be cleaned up"
+            pdpServiceWithPayments.railToDataSet(info.cacheMissRailId) == 0,
+            "Cache miss rail mapping should be cleaned up"
         );
-        assertTrue(viewContract.railToDataSet(info.cdnRailId) == 0, "CDN rail mapping should be cleaned up");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.cdnRailId) == 0, "CDN rail mapping should be cleaned up");
     }
 
     function _testNonCDNDatasetRailMappingCleanup() internal {
@@ -2291,21 +2297,21 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Verify CDN rails were NOT created
         assertTrue(info.cacheMissRailId == 0, "Cache miss rail should NOT be created for non-CDN dataset");
         assertTrue(info.cdnRailId == 0, "CDN rail should NOT be created for non-CDN dataset");
 
         // Verify only PDP rail mapping exists before deletion
-        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
 
         // Terminate the service to set pdpEndEpoch
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get updated info after termination to get pdpEndEpoch
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Wait for payment end epoch to elapse
         vm.roll(info.pdpEndEpoch + 1);
@@ -2319,7 +2325,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         FWSSDataSetModule(address(pdpServiceWithPayments)).dataSetDeleted(dataSetId, 10, bytes(""));
 
         // Verify PDP rail mapping is cleaned up
-        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
     }
 
     function _testCompleteDataSetDeletedCleanup() internal {
@@ -2336,24 +2342,24 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
 
         // Get initial dataset info
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Verify initial state exists
         assertTrue(info.pdpRailId != 0, "PDP rail should exist");
 
         // Verify rail mappings exist
-        assertTrue(viewContract.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.pdpRailId) == dataSetId, "PDP rail mapping should exist");
 
         // Verify metadata exists
-        (bool withCDNExists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        (bool labelExists,) = viewContract.getDataSetMetadata(dataSetId, "label");
-        (bool descriptionExists,) = viewContract.getDataSetMetadata(dataSetId, "description");
+        (bool withCDNExists,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
+        (bool labelExists,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "label");
+        (bool descriptionExists,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "description");
         assertTrue(withCDNExists, "withCDN metadata should exist");
         assertTrue(labelExists, "label metadata should exist");
         assertTrue(descriptionExists, "description metadata should exist");
 
         // Verify dataset info exists
-        assertTrue(viewContract.getDataSet(dataSetId).pdpRailId != 0, "Dataset info should exist");
+        assertTrue(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId != 0, "Dataset info should exist");
 
         // Set up proving state to test cleanup by calling nextProvingPeriod via mock PDP verifier
         // From setUp(): maxProvingPeriod = 2880, challengeWindowSize = 60
@@ -2366,9 +2372,9 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         );
 
         // Verify proving-related fields have non-zero values before deletion
-        uint256 provingDeadlineBefore = viewContract.provingDeadline(dataSetId);
-        bool provenThisPeriodBefore = viewContract.provenThisPeriod(dataSetId);
-        uint256 provingActivationEpochBefore = viewContract.provingActivationEpoch(dataSetId);
+        uint256 provingDeadlineBefore = pdpServiceWithPayments.provingDeadline(dataSetId);
+        bool provenThisPeriodBefore = pdpServiceWithPayments.provenThisPeriod(dataSetId);
+        uint256 provingActivationEpochBefore = pdpServiceWithPayments.provingActivationEpoch(dataSetId);
 
         assertTrue(provingDeadlineBefore != 0, "provingDeadline should be non-zero after nextProvingPeriod");
         assertFalse(provenThisPeriodBefore, "provenThisPeriod should be false after nextProvingPeriod");
@@ -2377,7 +2383,8 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         );
 
         // Verify client dataset list includes this dataset
-        FilecoinWarmStorageService.DataSetInfoView[] memory clientDataSets = viewContract.getClientDataSets(client);
+        FilecoinWarmStorageService.DataSetInfoView[] memory clientDataSets =
+            pdpServiceWithPayments.getClientDataSets(client);
         bool foundInList = false;
         for (uint256 i = 0; i < clientDataSets.length; i++) {
             if (clientDataSets[i].dataSetId == dataSetId) {
@@ -2392,10 +2399,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get updated info after termination
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Wait for payment end epoch to elapse plus extra for proving deadline
-        (uint64 maxProvingPeriod,,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
 
         // Settle the rail before deletion
@@ -2409,12 +2416,12 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         // Verify ALL mappings are cleaned up
 
         // Rail mappings should be cleaned up
-        assertTrue(viewContract.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
+        assertTrue(pdpServiceWithPayments.railToDataSet(info.pdpRailId) == 0, "PDP rail mapping should be cleaned up");
 
         // Metadata mappings should be cleaned up
-        (bool withCDNExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
-        (bool labelExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "label");
-        (bool descriptionExistsAfter,) = viewContract.getDataSetMetadata(dataSetId, "description");
+        (bool withCDNExistsAfter,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
+        (bool labelExistsAfter,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "label");
+        (bool descriptionExistsAfter,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "description");
         assertFalse(withCDNExistsAfter, "withCDN metadata key should be cleaned up");
         assertFalse(labelExistsAfter, "label metadata key should be cleaned up");
         assertFalse(descriptionExistsAfter, "description metadata key should be cleaned up");
@@ -2428,12 +2435,14 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         assertEq(descriptionValueAfter, "", "description metadata value should be cleaned up from storage");
 
         // Proving-related fields should be cleaned up
-        assertTrue(viewContract.provingDeadline(dataSetId) == 0, "provingDeadline should be cleaned up");
-        assertFalse(viewContract.provenThisPeriod(dataSetId), "provenThisPeriod should be cleaned up");
-        assertTrue(viewContract.provingActivationEpoch(dataSetId) == 0, "provingActivationEpoch should be cleaned up");
+        assertTrue(pdpServiceWithPayments.provingDeadline(dataSetId) == 0, "provingDeadline should be cleaned up");
+        assertFalse(pdpServiceWithPayments.provenThisPeriod(dataSetId), "provenThisPeriod should be cleaned up");
+        assertTrue(
+            pdpServiceWithPayments.provingActivationEpoch(dataSetId) == 0, "provingActivationEpoch should be cleaned up"
+        );
 
         // Dataset info should be cleaned up
-        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(dataSetInfo.pdpRailId == 0, "pdpRailId should be cleaned up");
         assertTrue(dataSetInfo.cacheMissRailId == 0, "cacheMissRailId should be cleaned up in DataSetInfoView");
         assertTrue(dataSetInfo.cdnRailId == 0, "cdnRailId should be cleaned up in DataSetInfoView");
@@ -2447,7 +2456,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         assertTrue(dataSetInfo.dataSetId == dataSetId, "dataSetId should remain unchanged");
 
         // Client dataset list should not include this dataset
-        clientDataSets = viewContract.getClientDataSets(client);
+        clientDataSets = pdpServiceWithPayments.getClientDataSets(client);
         foundInList = false;
         for (uint256 i = 0; i < clientDataSets.length; i++) {
             if (clientDataSets[i].dataSetId == dataSetId) {
@@ -2700,11 +2709,11 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         emit FWSSAuthorizationModule.DataSetAuthorizerSet(dataSetId, address(authorizer));
         vm.prank(client);
         FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
-        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
+        assertEq(pdpServiceWithPayments.getDataSetAuthorizer(dataSetId), address(authorizer));
 
         vm.prank(client);
         FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(0));
-        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0));
+        assertEq(pdpServiceWithPayments.getDataSetAuthorizer(dataSetId), address(0));
     }
 
     function testDataSetAuthorizerIsOptionalAndAllowsDelegatedAddPieces() public {
@@ -2973,7 +2982,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get termination info
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "Dataset should be terminated");
 
         // Advance past the lockup period but DON'T settle the rail
@@ -3002,10 +3011,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         TestDataSetAuthorizer authorizer = new TestDataSetAuthorizer(sessionKeyRegistry);
         vm.prank(client);
         FWSSAuthorizationModule(address(pdpServiceWithPayments)).setDataSetAuthorizer(dataSetId, address(authorizer));
-        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(authorizer));
+        assertEq(pdpServiceWithPayments.getDataSetAuthorizer(dataSetId), address(authorizer));
 
         // Start proving so we can settle with validated payments
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -3022,7 +3031,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get termination info
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "Dataset should be terminated");
 
         // Advance past the lockup period AND past the last proving period deadline
@@ -3039,9 +3048,13 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         mockPDPVerifier.deleteDataSet(PDPListener(address(pdpServiceWithPayments)), dataSetId, bytes(""));
 
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
-        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
-        assertEq(viewContract.getDataSetAuthorizer(dataSetId), address(0), "Authorizer should be cleared on deletion");
+        assertEq(
+            pdpServiceWithPayments.getDataSetAuthorizer(dataSetId),
+            address(0),
+            "Authorizer should be cleared on deletion"
+        );
     }
 
     /**
@@ -3094,7 +3107,7 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         vm.roll(info.pdpEndEpoch + 1);
 
         FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);

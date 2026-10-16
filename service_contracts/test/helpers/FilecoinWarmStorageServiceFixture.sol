@@ -10,7 +10,6 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateView} from "../../src/FilecoinWarmStorageServiceStateView.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {MockERC20, MockPDPVerifier} from "../mocks/SharedMocks.sol";
 import {PDPOffering} from "../PDPOffering.sol";
@@ -71,7 +70,6 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
 
     // Contracts
     FilecoinWarmStorageService public pdpServiceWithPayments;
-    FilecoinWarmStorageServiceStateView public viewContract;
     MockPDPVerifier public mockPDPVerifier;
     FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
@@ -254,9 +252,6 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
         pdpServiceWithPayments.addApprovedProvider(2);
         pdpServiceWithPayments.addApprovedProvider(3);
         pdpServiceWithPayments.addApprovedProvider(4);
-
-        viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
-        pdpServiceWithPayments.setViewContract(address(viewContract));
     }
 
     function _seedLegacyPieceMetadata(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)

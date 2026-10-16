@@ -33,9 +33,6 @@
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
     },
-    "FilecoinWarmStorageServiceStateView": {
-      "artifact": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
-    },
     "ServiceProviderRegistry": {
       "artifact": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
     },

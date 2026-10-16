@@ -7,7 +7,7 @@
 # - Handle missing chains gracefully
 #
 # Usage:
-#   source "$(dirname "${BASH_SOURCE[0]}")/deployments.sh"
+#   source "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/deployments.sh"
 #   load_deployment_addresses "$CHAIN"
 #   update_deployment_address "$CHAIN" "CONTRACT_NAME" "$ADDRESS"
 #
@@ -17,7 +17,7 @@
 #   DEPLOYMENTS_JSON_PATH - Path to deployments.json (default: service_contracts/deployments.json)
 
 # Get the script directory to find deployments.json relative to tools/
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 DEPLOYMENTS_JSON_PATH="${DEPLOYMENTS_JSON_PATH:-$SCRIPT_DIR/../deployments.json}"
 
 # Ensure deployments.json exists with proper structure

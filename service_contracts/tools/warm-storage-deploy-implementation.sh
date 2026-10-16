@@ -5,7 +5,7 @@
 # Assumption: forge, cast are in the PATH
 # Assumption: called from service_contracts directory so forge paths work out
 
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 source $SCRIPT_DIR/deployments.sh
 
 echo "Deploying FilecoinWarmStorageService Implementation Only (no proxy)"

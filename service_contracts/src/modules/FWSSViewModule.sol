@@ -31,7 +31,7 @@ contract FWSSViewModule is IPDPProvingSchedule {
         usdfcTokenAddress = _usdfc;
     }
 
-    /// @notice Returns the FWSS proxy, matching FilecoinWarmStorageServiceStateView.service
+    /// @notice Returns the FWSS proxy
     function service() public view returns (FilecoinWarmStorageService) {
         return FilecoinWarmStorageService(address(this));
     }
