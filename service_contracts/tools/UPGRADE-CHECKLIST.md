@@ -52,7 +52,7 @@ The selector `migrate(address)` exists on both sides of the transition with diff
 | Pending plan | Storage slot 19 of the proxy: `(nextImplementation, afterEpoch)` | Same slot 19: `(migration, afterEpoch)` |
 | Execute | `upgradeToAndCall(transition, migrate(migration))` | `migrate(migration)` |
 | What `migrate(address)` does | Inside the upgrade call, the transition's `migrate` points the proxy at the dispatcher and delegatecalls the pinned migration, which writes every route. On the monolith itself, `migrate(address)` only ever set the legacy view contract address; it is not part of either flow and must never be signed as a standalone transaction. | Runs the announced migration in the proxy's storage after `afterEpoch`, consumes the plan, then reverts if the migration changed the proxy's implementation or removed the `implementation`, `selectors`, `announceMigration`, or `migrate` routes. |
-| What pins the code | The transition pins the migration's address **and code hash**, the dispatcher (whose code hash is pinned in source), and the rollback target | Only the migration's **address** is pinned. Reviewers must pin the code hash themselves (see [Procedure B](#procedure-b-josuke-migration)). |
+| What pins the code | The transition pins the migration's address **and code hash**, the dispatcher (whose code hash is pinned in source), and the rollback target | Only the migration's **address** is pinned. `josuke verify` checks the migration's code before the announcement, during the delay, and before execution (see [Procedure B](#procedure-b-josuke-migration)). |
 | Abort before execution | A later announcement replaces the pending plan | A later announcement replaces the pending plan |
 | Recovery after execution | `abortTransition()` on the proxy restores the monolith **only** if the transition was installed with empty upgrade data. A successful transition cannot be undone; fix forward with Path B. | Announce and run another migration that restores the previous routes, subject to the announce delay |
 | Ledger | `josuke deploy` stages the modules and migration under `proposed` in `josuke.json`; `josuke accept` promotes them to `current` | Same |
@@ -198,7 +198,7 @@ export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 
 - **Reproduce before you sign.** Every Safe signer regenerates the calldata from this checklist on their own machine, decodes it, and confirms it byte-for-byte against the Safe UI before signing. Never sign calldata you only received from someone else.
 - **Read state, not reports.** Confirm every announcement, execution, and post-check against chain state (implementation slot, slot 19, dispatcher routes, code hashes). A screenshot, a log line, or `deployments.json` is not evidence of live state.
-- **Pin code, not addresses.** Record the code hash of every announced contract at announce time and recheck it before execution. An address alone does not prove what will run.
+- **Verify code, not just addresses.** Before signing an announce or execute transaction, run `josuke verify`, and for Path A check the transition's pins. An address alone does not prove what will run.
 - **Treat surprises as incidents.** An announcement, route change, or implementation change that is not in this issue's Run Log is an incident: stop, notify the technical owner and signers, and do not execute anything until it is explained. A pending plan can be replaced by a new announcement.
 - Use the release issue as the rollout source of truth. Keep the schedule, Run Log, tx links, and post-upgrade evidence current.
 - Create the stack tag and GitHub Release before any live upgrade transaction. Mark the GitHub Release as a pre-release until Mainnet is complete and verified.
@@ -356,7 +356,7 @@ Deploy both networks from the frozen tag before any announce/execute. Deploying 
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./tools/service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Calibnet requested delay and update the schedule table
 - [ ] Run [Procedure A2](#a2-announce) or [Procedure B2](#b2-announce) in the Calibnet environment
-- [ ] Record the Calibnet announce tx, observed `afterEpoch`, and target code hash in the schedule and Run Log
+- [ ] Record the Calibnet announce tx and observed `afterEpoch` in the schedule and Run Log, plus the transition's code hash for Path A
 - [ ] Update the GitHub pre-release Calibnet rollout status with the announce tx and observed `afterEpoch`
 - [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) for the Calibration network before execution. Identify the network and scheduled date/window, link the GitHub pre-release, and keep the maintenance window open through expected post-upgrade validation. Follow the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md).
 
@@ -404,7 +404,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./tools/service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Mainnet requested delay and update the schedule table
 - [ ] Run [Procedure A2](#a2-announce) or [Procedure B2](#b2-announce) in the Mainnet environment
-- [ ] Record the Mainnet announce tx, observed `afterEpoch`, and target code hash in the schedule and Run Log
+- [ ] Record the Mainnet announce tx and observed `afterEpoch` in the schedule and Run Log, plus the transition's code hash for Path A
 - [ ] Update the GitHub pre-release Mainnet rollout status with the announce tx and observed `afterEpoch`
 
 **Review during the delay**
@@ -606,11 +606,10 @@ josuke deploy    # deploys changed modules and the migration, records them under
 josuke verify    # rebuilds every facet from its recorded commit and checks it, and that the migration installs exactly the proposed routes
 
 export MIGRATION=$(source tools/josuke.sh; josuke_proposed_migration "$FWSS_PROXY_ADDRESS")
-export MIGRATION_CODEHASH=$(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$MIGRATION")")
-echo "Migration $MIGRATION, code hash $MIGRATION_CODEHASH"
+echo "Migration $MIGRATION"
 ```
 
-- [ ] Record `MIGRATION` as the announced target and `MIGRATION_CODEHASH` in the Run Log
+- [ ] Record `MIGRATION` as the announced target in the Run Log
 - [ ] Commit `josuke.json` to the Phase 2 PR
 
 #### B2: Announce
@@ -627,10 +626,9 @@ echo "Data:   $CALLDATA"
 
 #### B3: Review During the Delay
 
-`migrate` on the dispatcher checks only the migration's address. The code hash recorded in B1 is the only pin on what will run, so these checks matter more than in Path A. Someone other than the announcing operator runs them, preferably more than once before `afterEpoch`:
+`migrate` on the dispatcher checks only the migration's address, so `josuke verify` is what confirms the code that will run. Someone other than the announcing operator runs them, preferably more than once before `afterEpoch`:
 
 - [ ] [Read the pending plan](#read-the-pending-plan): the target is still `$MIGRATION` and nobody announced anything else
-- [ ] The migration's code hash still equals `MIGRATION_CODEHASH` from the Run Log
 - [ ] `josuke verify` passes against the committed `josuke.json`
 - [ ] The proxy still points at the dispatcher (rerun [Choose the Upgrade Path](#choose-the-upgrade-path))
 
@@ -639,7 +637,7 @@ echo "Data:   $CALLDATA"
 ```bash
 read_plan
 [ "$PLANNED_TARGET" = "$(cast to-check-sum-address "$MIGRATION")" ] || echo "STOP: the pending plan is not the reviewed migration"
-[ "$(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$MIGRATION")")" = "$MIGRATION_CODEHASH" ] || echo "STOP: the migration code changed"
+josuke verify || echo "STOP: josuke verify failed"
 
 CALLDATA=$(cast calldata 'migrate(address)' "$MIGRATION")
 OWNER=$(cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" 'owner()(address)')
