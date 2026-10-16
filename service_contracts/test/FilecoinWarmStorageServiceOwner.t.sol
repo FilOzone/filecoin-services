@@ -111,7 +111,6 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
 
         // Deploy view contract
         viewContract = new FilecoinWarmStorageServiceStateView(serviceContract);
-        serviceContract.setViewContract(address(viewContract));
 
         // Approve providers 1, 2, and 3 but not unauthorizedProvider
         uint256 providerId1 = providerRegistry.getProviderIdByAddress(provider1);

@@ -169,7 +169,6 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
 
         // Deploy view contract and verify values through it
         FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
-        warmStorageService.setViewContract(address(viewContract));
 
         // Verify the values were set correctly through the view contract
         (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = viewContract.getPDPConfig();

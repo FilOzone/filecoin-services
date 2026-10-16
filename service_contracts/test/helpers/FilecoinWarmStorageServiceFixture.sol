@@ -256,7 +256,6 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
         pdpServiceWithPayments.addApprovedProvider(4);
 
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
-        pdpServiceWithPayments.setViewContract(address(viewContract));
     }
 
     function _seedLegacyPieceMetadata(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)

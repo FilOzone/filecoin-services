@@ -1115,6 +1115,9 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
 
 contract FWSSFilBeamModuleLegacyRailsTest is FWSSFilBeamModuleFixture {
     function testExistingRailsSurviveFilBeamExtraction() public {
+        // Stands in for the deployed StateView, which the module install must leave in place.
+        address legacyViewContract = address(0x5747E);
+        pdpServiceWithPayments.setViewContract(legacyViewContract);
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, keys, values);
         address legacyPayments = pdpServiceWithPayments.paymentsContractAddress();
@@ -1131,7 +1134,7 @@ contract FWSSFilBeamModuleLegacyRailsTest is FWSSFilBeamModuleFixture {
         assertEq(abi.encode(viewContract.getDataSet(dataSetId)), abi.encode(beforeInfo));
         assertEq(pdpServiceWithPayments.owner(), ownerBefore);
         assertEq(viewContract.filBeamControllerAddress(), filBeamController);
-        assertEq(pdpServiceWithPayments.viewContractAddress(), address(viewContract));
+        assertEq(pdpServiceWithPayments.viewContractAddress(), legacyViewContract);
         (uint64 periodAfter, uint256 windowAfter,,) = viewContract.getPDPConfig();
         assertEq(periodAfter, periodBefore);
         assertEq(windowAfter, windowBefore);

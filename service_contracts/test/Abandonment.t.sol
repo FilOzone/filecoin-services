@@ -114,7 +114,6 @@ contract AbandonmentTest is MockFVMTest {
         fwss = FilecoinWarmStorageService(address(fwssProxy));
 
         viewContract = new FilecoinWarmStorageServiceStateView(fwss);
-        fwss.setViewContract(address(viewContract));
         fwss.addApprovedProvider(1); // SP registered as provider ID 1
 
         require(usdfc.transfer(client, 1000e18));

@@ -460,7 +460,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.addApprovedProvider(4); // sp3
 
         viewContract = new FilecoinWarmStorageServiceStateView(pdpServiceWithPayments);
-        pdpServiceWithPayments.setViewContract(address(viewContract));
     }
 
     function _seedLegacyPieceMetadata(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)
@@ -5754,7 +5753,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
 
         // Deploy view contract and verify values through it
         FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
-        warmStorageService.setViewContract(address(viewContract));
 
         // Verify the values were set correctly through the view contract
         (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = viewContract.getPDPConfig();
@@ -5808,9 +5806,8 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
     }
 
     function testNextPDPChallengeWindowStartThroughView() public {
-        // Deploy and set view contract
+        // Deploy view contract
         FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
-        warmStorageService.setViewContract(address(viewContract));
 
         // This should revert since no data set exists with proving period initialized
         vm.expectRevert(abi.encodeWithSelector(Errors.ProvingPeriodNotInitialized.selector, 999));

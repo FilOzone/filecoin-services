@@ -99,7 +99,6 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
         );
 
         viewContract = new FilecoinWarmStorageServiceStateView(fwss);
-        fwss.setViewContract(address(viewContract));
 
         PDPOffering.Schema memory schema = PDPOffering.Schema({
             serviceURL: "https://sp.test",
