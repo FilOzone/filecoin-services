@@ -179,7 +179,6 @@ ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
-	FilecoinWarmStorageServiceStateView \
 	FilecoinPayV1 \
 	PDPVerifier \
 	ProviderIdSet \
@@ -241,7 +240,7 @@ help:
 	@echo "  coverage-lcov - Generate LCOV coverage report for CI"
 	@echo ""
 	@echo "Code generation targets:"
-	@echo "  gen        - Generate code (layout, internal lib, view contract, view module)"
+	@echo "  gen        - Generate code (layout, internal lib, view module)"
 	@echo "  force-gen  - Clean and regenerate all files (use when broken)"
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
