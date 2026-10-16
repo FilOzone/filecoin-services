@@ -4,13 +4,29 @@
         "facetSrc": [
             "src/modules/*.sol",
             "lib/erc8167/src/Implementation.evm"
-        ]
+        ],
+        "deployments": {
+            "314": {
+                "legacy": {
+                    "source": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+                    "gitCommit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec"
+                }
+            }
+        }
     },
     {
         "address": "0x02925630df557F957f70E112bA06e50965417CA0",
         "facetSrc": [
             "src/modules/*.sol",
             "lib/erc8167/src/Implementation.evm"
-        ]
+        ],
+        "deployments": {
+            "314159": {
+                "legacy": {
+                    "source": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+                    "gitCommit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec"
+                }
+            }
+        }
     }
 ]
