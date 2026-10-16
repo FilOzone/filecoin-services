@@ -113,7 +113,8 @@
         "libraries": {},
         "constructor_args": [
           "0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
-        ]
+        ],
+        "pinned": true
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
         "initcode_hash": "0x43f5be1a5e546cfd7200624a02c53fdf46caa8150f16b0663a2e8c67d68e3dfe",
@@ -186,7 +187,8 @@
         "libraries": {},
         "constructor_args": [
           "0x02925630df557F957f70E112bA06e50965417CA0"
-        ]
+        ],
+        "pinned": true
       },
       "FWSS_IMPLEMENTATION": {
         "initcode_hash": "0x29ced5d5f582d5bac14ab7d090614adf1c0b67ead58f2aae585c73ffcff0846b",
