@@ -25,10 +25,14 @@ import {MockERC20} from "../mocks/SharedMocks.sol";
 import {Errors} from "../../src/Errors.sol";
 import {
     calculateStorageSizeBasedRatePerEpoch,
+    CACHE_MISS_EGRESS_PRICE_PER_TIB,
+    CDN_EGRESS_PRICE_PER_TIB,
     DATASET_FEE_PER_EPOCH,
     DATASET_FEE_PER_MONTH,
     DEFAULT_LOCKUP_PERIOD,
-    LIFECYCLE_RESERVE_TARGET
+    EPOCHS_PER_MONTH,
+    LIFECYCLE_RESERVE_TARGET,
+    STORAGE_PRICE_PER_TIB_PER_MONTH
 } from "../../src/lib/PriceListUSDFC.sol";
 
 import {PDPOffering} from "../PDPOffering.sol";
@@ -3145,5 +3149,46 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         FWSSAuthorizationModule(address(pdpServiceWithPayments)).piecesAdded(dataSetId, pieceId, pieceData, extraData);
 
         setup = PieceMetadataSetup({dataSetId: dataSetId, pieceId: pieceId, pieceData: pieceData, extraData: extraData});
+    }
+
+    function testGetServicePriceValues() public view {
+        // Test the values returned by getServicePrice
+        FilecoinWarmStorageService.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
+
+        assertEq(pricing.pricePerTiBPerMonthNoCDN, STORAGE_PRICE_PER_TIB_PER_MONTH, "No CDN price should be 2.5 USDFC");
+        assertEq(pricing.pricePerTiBCdnEgress, CDN_EGRESS_PRICE_PER_TIB, "CDN egress price should be 7 USDFC per TiB");
+        assertEq(
+            pricing.pricePerTiBCacheMissEgress,
+            CACHE_MISS_EGRESS_PRICE_PER_TIB,
+            "Cache miss egress price should be 7 USDFC per TiB"
+        );
+        assertEq(address(pricing.tokenAddress), address(mockUSDFC), "Token address should match USDFC");
+        assertEq(pricing.epochsPerMonth, EPOCHS_PER_MONTH, "Epochs per month should be 86400");
+        assertEq(pricing.datasetFeePerMonth, DATASET_FEE_PER_MONTH, "Dataset fee should be 0.12 USDFC");
+
+        // Verify the values are in expected range
+        assert(pricing.pricePerTiBPerMonthNoCDN < 10 ** 20); // Less than 10^20
+        assert(pricing.pricePerTiBCdnEgress < 10 ** 20); // Less than 10^20
+        assert(pricing.pricePerTiBCacheMissEgress < 10 ** 20); // Less than 10^20
+    }
+
+    function testGetEffectiveRatesValues() public view {
+        // Test the values returned by getEffectiveRates
+        (uint256 serviceFee, uint256 spPayment) = pdpServiceWithPayments.getEffectiveRates();
+
+        uint256 decimals = 18; // MockUSDFC uses 18 decimals in tests
+        // Total is 2.5 USDFC with 18 decimals
+        uint256 expectedTotal = 25 * 10 ** (decimals - 1);
+
+        // Test setup uses 0% commission
+        uint256 expectedServiceFee = 0; // 0% commission
+        uint256 expectedSpPayment = expectedTotal; // 100% goes to SP
+
+        assertEq(serviceFee, expectedServiceFee, "Service fee should be 0 with 0% commission");
+        assertEq(spPayment, expectedSpPayment, "SP payment should be 2.5 * 10^18");
+        assertEq(serviceFee + spPayment, expectedTotal, "Total should equal 2.5 * 10^18");
+
+        // Verify the values are in expected range
+        assert(serviceFee + spPayment < 10 ** 20); // Less than 10^20
     }
 }
