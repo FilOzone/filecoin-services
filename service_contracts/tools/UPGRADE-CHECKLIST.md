@@ -368,6 +368,7 @@ Deploy both networks from the frozen tag before any announce/execute. Deploying 
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet execution with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" NEW_VERSION=<version> CALLDATA_ONLY=true ./tools/service-provider-registry-execute-upgrade.sh`, execute it in the approved transaction order, then verify and record its implementation slot, `VERSION()`, initializer counter, preserved registry state, and cleared `nextUpgrade()`
 - [ ] Run [Procedure A4](#a4-execute) or [Procedure B4](#b4-execute) in the Calibnet environment
 - [ ] Record the Calibnet execute tx link in the Run Log
+- [ ] For Path A, run [Procedure A5](#a5-list-the-proxy-in-the-ledger-again) in the Calibnet environment
 - [ ] Run [Post-Upgrade Checks](#post-upgrade-checks) in the Calibnet environment, then `josuke accept` and commit `josuke.json`; record the commit in the Run Log
 - [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
 - [ ] Run and record a Calibnet smoke/E2E test result
@@ -415,6 +416,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet execution with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" NEW_VERSION=<version> CALLDATA_ONLY=true ./tools/service-provider-registry-execute-upgrade.sh`, execute it in the approved transaction order, then verify and record its implementation slot, `VERSION()`, initializer counter, preserved registry state, and cleared `nextUpgrade()`
 - [ ] Run [Procedure A4](#a4-execute) or [Procedure B4](#b4-execute) in the Mainnet environment
 - [ ] Record the Mainnet execute tx link in the Run Log
+- [ ] For Path A, run [Procedure A5](#a5-list-the-proxy-in-the-ledger-again) in the Mainnet environment
 - [ ] Run [Post-Upgrade Checks](#post-upgrade-checks) in the Mainnet environment, then `josuke accept` and commit `josuke.json`; record the commit in the Run Log
 - [ ] Verify FWSS pricing output, such as `getPriceList()`, matches the intended release pricing and record the command/output in the Run Log
 - [ ] Run and record a Mainnet smoke/E2E test result
@@ -520,7 +522,14 @@ Prerequisite: [Choose the Upgrade Path](#choose-the-upgrade-path) reports Path A
 
 #### A1: Deploy
 
+`josuke deploy` and `josuke verify` rehearse the migration against the code at the address `josuke.json` lists. The proxy still runs the monolith, so until the transition the ledger lists the proxy under the dispatcher instead. The transition scripts find the migration under either address.
+
 ```bash
+GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherDeploy.s.sol \
+  --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast
+export DISPATCHER=$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_ADDRESS" deployments.json)
+(source tools/josuke.sh; josuke_move_entry "$FWSS_PROXY_ADDRESS" "$DISPATCHER")
+
 josuke deploy    # deploys changed modules and the migration, records them under `proposed`
 josuke verify    # rebuilds every facet from its recorded commit and checks it against the chain
 
@@ -529,7 +538,7 @@ GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherTransitionDep
   --broadcast --verify --verifier blockscout --verifier-url <blockscout api>
 ```
 
-The deploy script reads the proxy from `deployments.json`, the proposed migration from `josuke.json`, and the proxy's current implementation as the rollback target. It deploys the dispatcher (or reuses the recorded one after checking its code hash) and `FWSSDispatcherTransition`, then records them in `deployments.json`. See [`tools/README.md`](README.md#erc-8167-dispatcher-transition) for its full behavior and broadcast caveats.
+`FWSSDispatcherDeploy` deploys the dispatcher, or reuses the recorded one after checking its code hash, and records it in `deployments.json`. The transition deploy script reads the proxy and the dispatcher from `deployments.json`, the proposed migration from `josuke.json`, and the proxy's current implementation as the rollback target. It deploys `FWSSDispatcherTransition` and records it in `deployments.json`. See [`tools/README.md`](README.md#erc-8167-dispatcher-transition) for its full behavior and broadcast caveats.
 
 - [ ] Record the transition as the announced target (`TRANSITION`) and the dispatcher in the Run Log
 - [ ] Commit `josuke.json` and `deployments.json` to the Phase 2 PR
@@ -539,6 +548,7 @@ The deploy script reads the proxy from `deployments.json`, the proposed migratio
 Announce the transition through the monolith's `announceUpgradePlan`:
 
 ```bash
+export DISPATCHER=$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_ADDRESS" deployments.json)
 export TRANSITION=$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_TRANSITION_ADDRESS" deployments.json)
 export NEW_FWSS_IMPLEMENTATION_ADDRESS="$TRANSITION"
 export UPGRADE_DELAY_EPOCHS=2880 # per Notice Guidance
@@ -569,7 +579,8 @@ PINNED_MIGRATION=$(cast call --rpc-url "$ETH_RPC_URL" "$TRANSITION" 'migration()
 PINNED_DISPATCHER=$(cast call --rpc-url "$ETH_RPC_URL" "$TRANSITION" 'dispatcher()(address)')
 PINNED_DISPATCHER_CODEHASH=$(grep -o '0x[0-9a-f]\{64\}' <<< "$(grep 'FWSS_DISPATCHER_CODE_HASH =' src/FWSSDispatcherTransition.sol)")
 echo "previousImplementation: $(cast call --rpc-url "$ETH_RPC_URL" "$TRANSITION" 'previousImplementation()(address)') (expected $(cast implementation --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS"))"
-echo "migration:              $PINNED_MIGRATION (expected $(source tools/josuke.sh; josuke_proposed_migration "$FWSS_PROXY_ADDRESS"))"
+echo "migration:              $PINNED_MIGRATION (expected $(source tools/josuke.sh; josuke_proposed_migration "$DISPATCHER"))"
+echo "dispatcher:             $PINNED_DISPATCHER (expected $DISPATCHER)"
 echo "migrationCodeHash:      $(cast call --rpc-url "$ETH_RPC_URL" "$TRANSITION" 'migrationCodeHash()(bytes32)') (expected $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$PINNED_MIGRATION")"))"
 echo "dispatcher code hash:   $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$PINNED_DISPATCHER")") (expected $PINNED_DISPATCHER_CODEHASH)"
 echo "transition code hash:   $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$TRANSITION")")"
@@ -594,6 +605,16 @@ cast calldata-decode 'migrate(address)' "$INNER"
 ```
 
 - [ ] Never sign `upgradeToAndCall(transition, 0x)` with empty data. It installs the transition without migrating, and only `abortTransition()` or a separate `migrate(migration)` call on the proxy recovers from that state.
+
+#### A5: List the Proxy in the Ledger Again
+
+After the execute transaction, the proxy holds the routes the migration wrote, and `josuke accept` reads them from the address `josuke.json` lists:
+
+```bash
+(source tools/josuke.sh; josuke_move_entry "$DISPATCHER" "$FWSS_PROXY_ADDRESS")
+```
+
+- [ ] Commit the moved entry with the `josuke accept` result in the [Post-Upgrade Checks](#post-upgrade-checks)
 
 ### Procedure B: Josuke Migration
 

@@ -25,6 +25,7 @@ These live in `../script/` and run with `forge script` from `service_contracts/`
 
 | Script | Description |
 |--------|-------------|
+| `script/FWSSDispatcherDeploy.s.sol` | Deploy the ERC-8167 dispatcher if `deployments.json` has none and record it, before `josuke deploy` |
 | `script/FWSSDispatcherTransitionDeploy.s.sol` | Deploy the ERC-8167 dispatcher if `deployments.json` has none, then `FWSSDispatcherTransition` pinned to josuke's proposed migration and the proxy's current implementation; records both in `deployments.json` |
 | `script/FWSSDispatcherTransitionExecute.s.sol` | Check an announced transition against `josuke.json` and the proxy, then send `upgradeToAndCall(transition, migrate(migration))` or print Safe calldata |
 
@@ -227,7 +228,15 @@ See [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md).
 
 josuke deploys the FWSS modules and the migration that routes their selectors, and `josuke.json` records them per chain. The v1.4.0 monolith can only change its implementation through its own delayed UUPS upgrade, so `FWSSDispatcherTransition` carries josuke's migration through that upgrade. The transition scripts are forge scripts in `script/`; they read `josuke.json` and never write it. Run everything from `service_contracts/` with `ETH_RPC_URL` set and `make erc8167` done.
 
-1. `josuke deploy`, then `josuke verify`. This records the modules and the migration under `proposed` in `josuke.json`.
+1. Deploy the dispatcher, then list the proxy under it in `josuke.json`. `josuke deploy` and `josuke verify` rehearse the migration against the code at the listed address, and the proxy still runs the monolith:
+
+   ```bash
+   GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherDeploy.s.sol \
+     --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast
+   (source tools/josuke.sh; josuke_move_entry "$FWSS_PROXY_ADDRESS" "$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_ADDRESS" deployments.json)")
+   ```
+
+   `josuke deploy`, then `josuke verify`. This records the modules and the migration under `proposed` in `josuke.json`.
 2. Deploy the transition:
 
    ```bash
@@ -236,7 +245,7 @@ josuke deploys the FWSS modules and the migration that routes their selectors, a
      --broadcast --verify --verifier blockscout --verifier-url https://filecoin.blockscout.com/api/
    ```
 
-   The script reads `FWSS_PROXY_ADDRESS` for the connected chain from `deployments.json`, the proposed migration for that proxy from `josuke.json`, and the proxy's current ERC-1967 implementation as the rollback target. It deploys the dispatcher from `lib/erc8167/out/Proxy.evm/Proxy.json` unless `FWSS_DISPATCHER_ADDRESS` is set or recorded, checks the dispatcher code hash, and deploys `FWSSDispatcherTransition` unless the recorded one has the same initcode and constructor arguments and the contract at that address pins the same previous implementation, dispatcher and migration; a record whose address has no code or other code is redeployed, and `pinned: true` on the `contracts` entry makes a mismatch an error instead. It refuses to run once the proxy already points at the dispatcher, or at a transition installed with empty upgrade data: only `migrate(migration)` or `abortTransition()` on the proxy moves it on from there. With `--broadcast` it records `FWSS_DISPATCHER_ADDRESS`, `FWSS_DISPATCHER_TRANSITION_ADDRESS`, the `contracts.FWSS_DISPATCHER_TRANSITION` metadata and the chain `metadata` in `deployments.json`, in the format `deployments.sh` reads; `GIT_COMMIT` fills `metadata.commit`. Unlike `deployments.sh`, it keeps `metadata.fwss_version`: the proxy still runs that version until the execute step. Without `--broadcast` it simulates everything and writes nothing. Commit `deployments.json`.
+   The script reads `FWSS_PROXY_ADDRESS` for the connected chain from `deployments.json`, the proposed migration for that proxy from `josuke.json`, listed under the proxy or the recorded dispatcher, and the proxy's current ERC-1967 implementation as the rollback target. It deploys the dispatcher from `lib/erc8167/out/Proxy.evm/Proxy.json` unless `FWSS_DISPATCHER_ADDRESS` is set or recorded, checks the dispatcher code hash, and deploys `FWSSDispatcherTransition` unless the recorded one has the same initcode and constructor arguments and the contract at that address pins the same previous implementation, dispatcher and migration; a record whose address has no code or other code is redeployed, and `pinned: true` on the `contracts` entry makes a mismatch an error instead. It refuses to run once the proxy already points at the dispatcher, or at a transition installed with empty upgrade data: only `migrate(migration)` or `abortTransition()` on the proxy moves it on from there. With `--broadcast` it records `FWSS_DISPATCHER_ADDRESS`, `FWSS_DISPATCHER_TRANSITION_ADDRESS`, the `contracts.FWSS_DISPATCHER_TRANSITION` metadata and the chain `metadata` in `deployments.json`, in the format `deployments.sh` reads; `GIT_COMMIT` fills `metadata.commit`. Unlike `deployments.sh`, it keeps `metadata.fwss_version`: the proxy still runs that version until the execute step. Without `--broadcast` it simulates everything and writes nothing. Commit `deployments.json`.
 3. Announce with `warm-storage-announce-upgrade.sh` and `NEW_FWSS_IMPLEMENTATION_ADDRESS` set to the transition.
 4. During the delay, reviewers run `josuke verify` and compare the transition's `migration()`, `migrationCodeHash()`, `dispatcher()` and `previousImplementation()` with the ledger and the proxy. A dry run of the execute script does the same checks and reports that nothing was sent:
 
@@ -252,7 +261,7 @@ josuke deploys the FWSS modules and the migration that routes their selectors, a
    ```
 
    It checks that the announced plan is the transition and ready, that the transition pins the migration `josuke.json` proposes, that the migration code is unchanged since the transition was deployed, that the rollback target is the proxy's current implementation and that the dispatcher is the pinned one, then sends `upgradeToAndCall(transition, migrate(migration))`, which points the proxy at the dispatcher and runs the migration in one call. The script's post-check runs on the simulation, so confirm on chain with `cast implementation $FWSS_PROXY_ADDRESS` before `josuke accept`. With a Safe owner, `CALLDATA_ONLY=true` simulates the upgrade as the owner, then prints the transaction for the Safe UI instead of sending it. The script leaves `deployments.json` alone: it tracks UUPS implementations, and `josuke.json` records the routes from here on.
-6. `josuke accept`, then commit `josuke.json`.
+6. List the proxy in `josuke.json` again with `josuke_move_entry "$FWSS_DISPATCHER_ADDRESS" "$FWSS_PROXY_ADDRESS"`, then `josuke accept` and commit `josuke.json`.
 
 After the transition, upgrades are josuke migrations: `josuke deploy`, then `announceMigration(migration, delay)` and `migrate(migration)` on the proxy, then `josuke accept`.
 
