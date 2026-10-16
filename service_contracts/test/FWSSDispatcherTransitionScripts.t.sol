@@ -5,7 +5,7 @@ import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
+import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {FWSS_DISPATCHER_CODE_HASH, FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSDispatcherTransitionDeploy} from "../script/FWSSDispatcherTransitionDeploy.s.sol";
@@ -17,6 +17,8 @@ import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
 /// @dev Drives the transition scripts against the deployed mainnet v1.4.0 bytecode, at the mainnet proxy address
 /// that deployments.json and josuke.json record for chain 314.
 contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+
     uint256 private constant CHAIN = 314;
     string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
     string private constant SCRATCH = "out/FWSSDispatcherTransitionScripts";
@@ -30,7 +32,6 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
     FilecoinWarmStorageService internal service;
     address internal proxy;
     address internal legacyImplementation;
-    FilecoinWarmStorageServiceStateView internal viewContract;
     address internal migration;
 
     // Routes the migration installs.
@@ -49,23 +50,12 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(legacyImplementation))));
         service = FilecoinWarmStorageService(proxy);
 
-        // The execute script reads the plan from the view recorded in deployments.json.
-        viewContract = FilecoinWarmStorageServiceStateView(
-            vm.parseJsonAddress(vm.readFile("deployments.json"), ".314.FWSS_VIEW_ADDRESS")
-        );
-        deployCodeTo(
-            "FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView",
-            abi.encode(proxy),
-            address(viewContract)
-        );
-
         // The config facet's constructor checks USDFC decimals.
         deployCodeTo("SharedMocks.sol:MockERC20", address(service.usdfcTokenAddress()));
 
         // The scripts broadcast as DEFAULT_SENDER under forge test, so it owns the proxy.
         vm.startPrank(DEFAULT_SENDER);
         service.initialize(2880, 60, address(0x16));
-        service.setViewContract(address(viewContract));
         service.configureProvingPeriod(3000, 61);
         vm.stopPrank();
 
@@ -171,14 +161,14 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(address(transition), 0);
-        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        (, uint96 afterEpoch) = service.nextUpgrade();
         vm.roll(afterEpoch);
         new FWSSDispatcherTransitionExecute().run();
 
         assertEq(_implementation(), dispatcher);
         _assertFacetRoutes();
         assertEq(OwnershipModule(proxy).owner(), DEFAULT_SENDER);
-        (uint64 provingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 provingPeriod, uint256 challengeWindow,,) = service.getPDPConfig();
         assertEq(provingPeriod, 3000);
         assertEq(challengeWindow, 61);
         assertEq(vm.readFile(DEPLOYMENTS), json, "execute must not write deployments.json");
@@ -276,7 +266,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 2);
-        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        (, uint96 afterEpoch) = service.nextUpgrade();
         vm.expectRevert(
             bytes(string.concat("not time yet (", vm.toString(block.number), " < ", vm.toString(afterEpoch), ")"))
         );
@@ -365,7 +355,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address first = vm.parseJsonAddress(vm.readFile(DEPLOYMENTS), ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS");
 
         // Any contract passes the transition's code check.
-        address otherMigration = address(viewContract);
+        address otherMigration = address(this);
         _writeLedger(proxy, otherMigration);
         new FWSSDispatcherTransitionDeploy().run();
 
@@ -399,7 +389,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         vm.setEnv("FWSS_DISPATCHER_ADDRESS", vm.toString(dispatcher));
         FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
 
-        address otherMigration = address(viewContract);
+        address otherMigration = address(this);
         address other = address(new FWSSDispatcherTransition(legacyImplementation, dispatcher, otherMigration));
         vm.setEnv("FWSS_DISPATCHER_TRANSITION_ADDRESS", vm.toString(other));
         vm.expectRevert(
@@ -441,7 +431,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         vm.writeFile(DEPLOYMENTS, recorded);
 
         address dispatcher = vm.parseJsonAddress(recorded, ".314.FWSS_DISPATCHER_ADDRESS");
-        address otherMigration = address(viewContract);
+        address otherMigration = address(this);
         _writeLedger(proxy, otherMigration);
         FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
         vm.expectRevert(
@@ -478,7 +468,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address transition = vm.parseJsonAddress(recorded, ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS");
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 0);
-        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        (, uint96 afterEpoch) = service.nextUpgrade();
         vm.roll(afterEpoch);
         vm.prank(DEFAULT_SENDER);
         service.upgradeToAndCall(transition, "");
@@ -525,7 +515,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 0);
-        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        (, uint96 afterEpoch) = service.nextUpgrade();
         vm.roll(afterEpoch);
         new FWSSDispatcherTransitionExecute().run();
 
@@ -547,7 +537,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address transition = vm.parseJsonAddress(vm.readFile(DEPLOYMENTS), ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS");
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 0);
-        (, uint96 afterEpoch) = viewContract.nextUpgrade();
+        (, uint96 afterEpoch) = service.nextUpgrade();
         vm.roll(afterEpoch);
         FWSSDispatcherTransitionExecute execute = new FWSSDispatcherTransitionExecute();
 
@@ -596,7 +586,6 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         vm.setEnv("FWSS_PROXY_ADDRESS", "");
         vm.setEnv("FWSS_DISPATCHER_ADDRESS", "");
         vm.setEnv("FWSS_DISPATCHER_TRANSITION_ADDRESS", "");
-        vm.setEnv("FWSS_VIEW_ADDRESS", "");
         vm.setEnv("CALLDATA_ONLY", "");
     }
 
