@@ -21,8 +21,6 @@ install:
 
 # Generated files
 LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
-LAYOUT_JSON=src/lib/FilecoinWarmStorageServiceLayout.json
-LAYOUT_SNAPSHOT_JQ=tools/storage_layout_snapshot.jq
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_MODULE=src/modules/FWSSViewModule.sol
 
@@ -69,11 +67,6 @@ $(LAYOUT): tools/generate_storage_layout.sh src/storage/FWSSStorage.sol
 	bash -o pipefail -c 'bash $^ | forge fmt -r - > "$@.tmp"'
 	mv $@.tmp $@
 
-# Storage layout JSON (full metadata for upgrade safety checks)
-$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol $(LAYOUT_SNAPSHOT_JQ)
-	bash -o pipefail -c 'forge inspect --out out/storage-layout --cache-path cache/storage-layout --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > "$@.tmp"'
-	mv $@.tmp $@
-
 # View module generation (sload in place of the library's extsload)
 $(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageServiceStateLibrary.sol
 	bash -o pipefail -c '$^ | forge fmt -r - > "$@.tmp"'
@@ -85,7 +78,7 @@ $(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageService
 
 # Main code generation target with proper dependencies
 .PHONY: gen
-gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_MODULE)
+gen: check-tools $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE)
 	@echo "Code generation complete"
 
 # Force regeneration - useful when things are broken
@@ -98,7 +91,7 @@ force-gen: clean-gen
 .PHONY: clean-gen
 clean-gen:
 	@echo "Removing generated files..."
-	@rm -f $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_MODULE)
+	@rm -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE)
 	@echo "Generated files removed"
 
 # Check required tools
@@ -158,14 +151,8 @@ contract-size-check:
 	@echo "Checking deployable contract sizes..."
 	bash tools/check-contract-size.sh --check
 
-# Storage layout validation
-.PHONY: check-layout
-check-layout:
-	@echo "Checking storage layout for destructive changes..."
-	@bash tools/check_storage_layout.sh
-
 # Offline josuke ledger check: schema, facetSrc resolution, selector collisions, EIP-170 sizes and facet storage
-# against every deployment josuke.json records. Pass JOSUKE_CHECK_ARGS="--format markdown" for $GITHUB_STEP_SUMMARY.
+# against every deployment josuke.json records, including the legacy v1.4.0 monolith. Pass JOSUKE_CHECK_ARGS="--format markdown" for $GITHUB_STEP_SUMMARY.
 .PHONY: check-josuke
 check-josuke:
 	@command -v josuke >/dev/null || (echo 'Missing josuke; run make install-josuke'; exit 1)
@@ -245,7 +232,6 @@ help:
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
 	@echo "Validation targets:"
-	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
 	@echo "  check-josuke - Check josuke.json and the facets it resolves offline (needs josuke and evm)"
 	@echo "  contract-size-check - Check deployable contracts against size and headroom policy"
 	@echo ""

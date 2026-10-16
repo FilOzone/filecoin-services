@@ -269,8 +269,7 @@ For each network, record evidence that:
 
 ```bash
 cd service_contracts
-make check-josuke   # ledger schema, facet sources, selector collisions, sizes and facet storage, offline
-make check-layout   # no destructive storage layout change
+make check-josuke   # ledger schema, facet sources, selector collisions, sizes, and storage against every recorded deployment, offline
 forge test
 ```
 
