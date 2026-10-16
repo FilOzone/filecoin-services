@@ -16,11 +16,9 @@ Scripts are organized with prefixes for better discoverability:
 |--------|-------------|
 | `warm-storage-deploy-all.sh` | Plan and deploy every changed, unpinned Warm Storage component using reviewed deployment metadata; pinned components are preserved |
 | `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
-| `warm-storage-deploy-view.sh` | Deploy FilecoinWarmStorageServiceStateView |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
 | `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
-| `warm-storage-set-view.sh` | Set the StateView address on FWSS |
 
 ### ERC-8167 Transition Forge Scripts
 
@@ -300,7 +298,6 @@ The following scripts support `CALLDATA_ONLY=true`:
 - `warm-storage-manage-approved-provider.sh`
 - `service-provider-registry-announce-upgrade.sh`
 - `service-provider-registry-execute-upgrade.sh`
-- `warm-storage-set-view.sh`
 
 ### Example: Announce an upgrade via multisig
 

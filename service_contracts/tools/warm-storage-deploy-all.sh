@@ -113,14 +113,6 @@ echo "Detected Chain ID: $CHAIN ($NETWORK_NAME)"
 # Load deployment addresses from deployments.json
 load_deployment_addresses "$CHAIN"
 
-# Remember whether this is an upgrade of an existing FWSS proxy. A newly
-# deployed StateView may be set directly only for a fresh proxy owned by the
-# deployer; existing proxies require a separate owner/Safe action.
-FWSS_PROXY_WAS_EXISTING=false
-if [ -n "$FWSS_PROXY_ADDRESS" ]; then
-    FWSS_PROXY_WAS_EXISTING=true
-fi
-
 # Devnet requires USDFC_TOKEN_ADDRESS to be provided
 if [ "$CHAIN" = "31415926" ] && [ -z "$USDFC_TOKEN_ADDRESS" ]; then
   echo "Error: USDFC_TOKEN_ADDRESS is not set (required for devnet)"
@@ -355,7 +347,6 @@ if [ "$DEPLOYMENT_MODE" = "upgrade" ]; then
         RAILS_LIB_ADDRESS \
         FWSS_IMPLEMENTATION_ADDRESS \
         FWSS_PROXY_ADDRESS \
-        FWSS_VIEW_ADDRESS \
         ENDORSEMENT_SET_ADDRESS \
         USDFC_TOKEN_ADDRESS; do
         require_existing_contract "$required_contract"
@@ -383,19 +374,6 @@ if [ "$DEPLOYMENT_MODE" = "upgrade" ]; then
     require_fwss_dependency "FilBeam beneficiary" \
         "filBeamBeneficiaryAddress()(address)" "$FILBEAM_BENEFICIARY_ADDRESS"
     echo "✅ FWSS dependency getters match candidate constructor addresses"
-
-    if ! CURRENT_FWSS_VIEW_ADDRESS=$(cast_call_read_only --rpc-url "$ETH_RPC_URL" \
-        "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)"); then
-        echo "Error: Failed to read StateView from FWSS proxy $FWSS_PROXY_ADDRESS"
-        exit 1
-    fi
-    CURRENT_FWSS_VIEW_ADDRESS=${CURRENT_FWSS_VIEW_ADDRESS//\"/}
-    if [ "$(printf '%s' "$CURRENT_FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" != \
-         "$(printf '%s' "$FWSS_VIEW_ADDRESS" | tr '[:upper:]' '[:lower:]')" ]; then
-        echo "Error: FWSS proxy reports StateView $CURRENT_FWSS_VIEW_ADDRESS, but deployments.json records $FWSS_VIEW_ADDRESS"
-        exit 1
-    fi
-    echo "✅ FWSS proxy StateView matches deployments.json"
 fi
 
 PDP_INIT_COUNTER=0
@@ -551,74 +529,7 @@ deploy_proxy_if_needed \
     "$INIT_DATA" \
     "FilecoinWarmStorageService proxy"
 
-# Step 10: Deploy FilecoinWarmStorageServiceStateView
-echo -e "${BOLD}FilecoinWarmStorageServiceStateView${RESET}"
-FWSS_VIEW_DEPLOYED=false
-if deployment_is_pinned "$CHAIN" "FWSS_VIEW"; then
-    report_pinned_deployment_status \
-        "$CHAIN" \
-        "FWSS_VIEW" \
-        "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" \
-        "" \
-        "$FWSS_PROXY_ADDRESS"
-elif ! needs_deployment "$CHAIN" "FWSS_VIEW" "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView" "" "$FWSS_PROXY_ADDRESS"; then
-    echo "  ✅ Up to date at: $FWSS_VIEW_ADDRESS"
-elif [ "$DRY_RUN" = "true" ]; then
-    echo "  🔍 Would deploy (skipping in dry-run)"
-    FWSS_VIEW_ADDRESS="0x8901234567890123456789012345678901234567"  # Dummy address for dry-run
-    FWSS_VIEW_DEPLOYED=true
-    echo "  ✅ Deployment planned (dummy: $FWSS_VIEW_ADDRESS)"
-else
-    echo "  🔧 Using external deployment script..."
-    source "$SCRIPT_DIR/warm-storage-deploy-view.sh"
-    if [ -z "$FWSS_VIEW_ADDRESS" ]; then
-        echo "  ❌ StateView deployment did not return an address"
-        exit 1
-    fi
-    if ! FWSS_VIEW_CODE=$(cast code "$FWSS_VIEW_ADDRESS" 2>/dev/null) || \
-       [ -z "$FWSS_VIEW_CODE" ] || [ "$FWSS_VIEW_CODE" = "0x" ]; then
-        echo "  ❌ No contract code found at deployed StateView address $FWSS_VIEW_ADDRESS"
-        exit 1
-    fi
-    FWSS_VIEW_DEPLOYED=true
-    echo "  ✅ Deployed at: $FWSS_VIEW_ADDRESS"
-    NONCE=$(expr $NONCE + "1")
-
-    # Update deployments.json
-    update_deployment_address "$CHAIN" "FWSS_VIEW_ADDRESS" "$FWSS_VIEW_ADDRESS"
-fi
-echo
-
-# Step 11: Set the view contract address only for a fresh deployment. Existing
-# proxies are Safe-owned, so print the required follow-up instead of attempting
-# an owner transaction from the deployer key.
-echo -e "${BOLD}Setting view contract address${RESET}"
-if [ "$FWSS_VIEW_DEPLOYED" != "true" ]; then
-    echo "  ✅ No StateView deployment planned by metadata; review any pinned candidate drift above"
-elif [ "$FWSS_PROXY_WAS_EXISTING" = "true" ]; then
-    if [ "$DRY_RUN" = "true" ]; then
-        echo "  🔍 New StateView requires a separate Safe setViewContract transaction"
-    else
-        echo "  ℹ️  Existing FWSS proxy detected; no proxy change will be sent by the deployer"
-        echo "  Generate and execute the owner transaction with:"
-        echo "    CALLDATA_ONLY=true FWSS_PROXY_ADDRESS=$FWSS_PROXY_ADDRESS FWSS_VIEW_ADDRESS=$FWSS_VIEW_ADDRESS ./tools/warm-storage-set-view.sh"
-    fi
-elif [ "$DRY_RUN" = "true" ]; then
-    echo "  🔍 Would set the StateView on the newly deployed FWSS proxy"
-else
-    echo "  🔧 Setting view address on FilecoinWarmStorageService..."
-    unset CALLDATA_ONLY
-    if source "$SCRIPT_DIR/warm-storage-set-view.sh"; then
-        echo "  ✅ View address set"
-        NONCE=$(expr $NONCE + "1")
-    else
-        echo "  ❌ Failed to set StateView on newly deployed FWSS proxy"
-        exit 1
-    fi
-fi
-echo
-
-# Step 12: Deploy Endorsements ProviderIdSet
+# Step 10: Deploy Endorsements ProviderIdSet
 deploy_endorsements_if_needed
 
 if [ "$DRY_RUN" = "true" ]; then
@@ -645,7 +556,6 @@ echo "SignatureVerificationLib: $SIGNATURE_VERIFICATION_LIB_ADDRESS"
 echo "Rails: $RAILS_LIB_ADDRESS"
 echo "FilecoinWarmStorageService Implementation: $FWSS_IMPLEMENTATION_ADDRESS"
 echo "FilecoinWarmStorageService Proxy: $FWSS_PROXY_ADDRESS"
-echo "FilecoinWarmStorageServiceStateView: $FWSS_VIEW_ADDRESS"
 echo "Endorsements: $ENDORSEMENT_SET_ADDRESS"
 echo
 echo "Network Configuration ($NETWORK_NAME):"
@@ -674,8 +584,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$SIGNATURE_VERIFICATION_LIB_ADDRESS,src/lib/SignatureVerificationLib.sol:SignatureVerificationLib" \
         "$RAILS_LIB_ADDRESS,src/lib/Rails.sol:Rails" \
         "$FWSS_IMPLEMENTATION_ADDRESS,src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService" \
-        "$FWSS_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy" \
-        "$FWSS_VIEW_ADDRESS,src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
+        "$FWSS_PROXY_ADDRESS,lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy"
     
     popd >/dev/null
 fi
