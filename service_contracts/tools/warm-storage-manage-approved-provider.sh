@@ -164,11 +164,7 @@ if [ -z "${FWSS_PROXY_ADDRESS:-}" ]; then
 fi
 
 if [ -z "${FWSS_VIEW_ADDRESS:-}" ]; then
-  FWSS_VIEW_ADDRESS=$(cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" "viewContractAddress()(address)" 2>/dev/null)
-fi
-
-if [ -z "${FWSS_VIEW_ADDRESS:-}" ] || [ "$FWSS_VIEW_ADDRESS" = "$ZERO_ADDRESS" ]; then
-  echo "Error: FWSS_VIEW_ADDRESS is not set and proxy viewContractAddress() is empty"
+  echo "Error: FWSS_VIEW_ADDRESS is not set (not found in deployments.json or environment)"
   exit 1
 fi
 
