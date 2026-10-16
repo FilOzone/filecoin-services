@@ -33,7 +33,7 @@ EVM_INSTALL_DIR ?= $(patsubst %/,%,$(dir $(shell command -v forge)))
 
 # josuke deploys the modules and migrations and keeps josuke.json; its ledger format still changes
 JOSUKE_REPO := https://github.com/wjmelements/josuke.git
-JOSUKE_REVISION := 8b96779a706fa896d7fda798faec2ac38d70036f
+JOSUKE_REVISION := 7e59ebb8f24bd256dd89cefd0a3f686af49a491c
 
 # Build target
 .PHONY: build
