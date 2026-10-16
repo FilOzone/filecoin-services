@@ -113,7 +113,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         _scriptsRefuseProxyLeftOnTransition();
 
         _reset(clean);
-        _executeFallsBackToViewContractAddress();
+        _executeNeedsOnlyProxyAndTransitionRecords();
 
         _reset(clean);
         _malformedEnvReverts();
@@ -497,7 +497,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         assertEq(_implementation(), legacyImplementation);
     }
 
-    function _executeFallsBackToViewContractAddress() internal {
+    function _executeNeedsOnlyProxyAndTransitionRecords() internal {
         new FWSSDispatcherTransitionDeploy().run();
         string memory json = vm.readFile(DEPLOYMENTS);
         address dispatcher = vm.parseJsonAddress(json, ".314.FWSS_DISPATCHER_ADDRESS");

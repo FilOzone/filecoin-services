@@ -666,7 +666,7 @@ contract FWSSDispatcherTest is JosukeFacetSet {
         _assertUntouched(proxy, original, address(transition), epoch);
     }
 
-    /// @dev The ordinary upgrade script sends migrate(view contract), which shares the selector.
+    /// @dev v1.4.0 upgrades sent migrate(view contract), which shares the transition's migrate selector.
     function testLegacyMigrateDataCannotLeaveTransitionInstalled() public {
         FilecoinWarmStorageService service = _realLegacy();
         address proxy = address(service);
