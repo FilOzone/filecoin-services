@@ -621,7 +621,7 @@ echo "Target: $FWSS_PROXY_ADDRESS"
 echo "Data:   $CALLDATA"
 ```
 
-- [ ] Every signer [reproduces and decodes](#reproduce-and-decode-safe-calldata) `$CALLDATA`, confirms `$MIGRATION` matches the committed `josuke.json`, and that `josuke verify` passes, before signing
+- [ ] Every signer [reproduces and decodes](#reproduce-and-decode-safe-calldata) `$CALLDATA` and confirms `josuke verify` passes before signing
 - [ ] After the Safe transaction executes, [read the pending plan](#read-the-pending-plan) and confirm `PLANNED_TARGET` equals `$MIGRATION` and `PLANNED_AFTER_EPOCH` equals the announce block plus the requested delay (a delay of `0` becomes `1`)
 
 #### B3: Review During the Delay
