@@ -17,7 +17,6 @@ Scripts are organized with prefixes for better discoverability:
 | `warm-storage-deploy-all.sh` | Plan and deploy every changed, unpinned Warm Storage component using reviewed deployment metadata; pinned components are preserved |
 | `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
-| `warm-storage-execute-upgrade.sh` | Execute a previously announced FWSS upgrade |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
 
 ### ERC-8167 Transition Forge Scripts
@@ -83,7 +82,7 @@ DEPLOYMENT_MODE=upgrade DRY_RUN=false ./tools/warm-storage-deploy-all.sh
 
 # Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
-./tools/warm-storage-execute-upgrade.sh     # Step 2: Execute (after the observed afterEpoch)
+forge script script/FWSSDispatcherTransitionExecute.s.sol --rpc-url "$ETH_RPC_URL" --broadcast  # Step 2: Execute (after the observed afterEpoch)
 ```
 
 ## Deployment Parameters
@@ -293,7 +292,7 @@ After ownership is transferred to a multisig, the upgrade and management scripts
 
 The following scripts support `CALLDATA_ONLY=true`:
 - `warm-storage-announce-upgrade.sh`
-- `warm-storage-execute-upgrade.sh`
+- `script/FWSSDispatcherTransitionExecute.s.sol`
 - `warm-storage-manage-approved-provider.sh`
 - `service-provider-registry-announce-upgrade.sh`
 - `service-provider-registry-execute-upgrade.sh`
