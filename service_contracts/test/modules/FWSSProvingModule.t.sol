@@ -9,7 +9,7 @@ import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.s
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateView} from "../../src/FilecoinWarmStorageServiceStateView.sol";
+import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {calculateStorageSizeBasedRatePerEpoch, DATASET_FEE_PER_EPOCH} from "../../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../../src/Errors.sol";
 import {IFWSSConfig} from "../../src/interfaces/IFWSSConfig.sol";
@@ -65,6 +65,8 @@ abstract contract FWSSProvingModuleFixture is FilecoinWarmStorageServiceFixture 
 }
 
 contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+
     function setUp() public override {
         super.setUp();
         _installProvingModule();
@@ -117,31 +119,31 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         provingModule.possessionProven(1, 0, 0, CHALLENGES_PER_PROOF);
 
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Immutable verifier");
-        (uint64 maxPeriod, uint256 window,,) = viewContract.getPDPConfig();
+        (uint64 maxPeriod, uint256 window,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 deadline = block.number + maxPeriod;
         vm.prank(address(mockPDPVerifier));
         provingModule.nextProvingPeriod(dataSetId, deadline, 100, "");
         vm.roll(deadline - window / 2);
         vm.prank(address(mockPDPVerifier));
         provingModule.possessionProven(dataSetId, 100, 0, CHALLENGES_PER_PROOF);
-        assertTrue(viewContract.provenPeriods(dataSetId, 0));
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 0));
     }
 
     function testProvenPeriods() public {
         uint256 testDataSetId = createDataSetForServiceProviderTest(sp1, client, "Test Data Set");
         for (uint256 i = 0; i < 2049; i++) {
-            assertFalse(viewContract.provenPeriods(testDataSetId, i));
+            assertFalse(pdpServiceWithPayments.provenPeriods(testDataSetId, i));
         }
-        (uint64 maxProvingPeriod, uint256 challengeWindowSize,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindowSize,,) = pdpServiceWithPayments.getPDPConfig();
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), testDataSetId, vm.getBlockNumber() + maxProvingPeriod, 100, ""
         );
         vm.roll(vm.getBlockNumber() + maxProvingPeriod - challengeWindowSize);
         for (uint256 i = 0; i < 2049; i++) {
-            assertFalse(viewContract.provenPeriods(testDataSetId, i));
+            assertFalse(pdpServiceWithPayments.provenPeriods(testDataSetId, i));
             vm.prank(address(mockPDPVerifier));
             provingModule.possessionProven(testDataSetId, 100, 12345, CHALLENGES_PER_PROOF);
-            assertTrue(viewContract.provenPeriods(testDataSetId, i));
+            assertTrue(pdpServiceWithPayments.provenPeriods(testDataSetId, i));
 
             vm.roll(vm.getBlockNumber() + challengeWindowSize);
             mockPDPVerifier.nextProvingPeriod(
@@ -155,7 +157,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         }
 
         for (uint256 i = 0; i < 2049; i++) {
-            assertTrue(viewContract.provenPeriods(testDataSetId, i));
+            assertTrue(pdpServiceWithPayments.provenPeriods(testDataSetId, i));
         }
     }
 
@@ -167,11 +169,8 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         // The owner configures the existing proxy storage through the proving module.
         provingModule.configureProvingPeriod(newMaxProvingPeriod, newChallengeWindowSize);
 
-        // Deploy view contract and verify values through it
-        FilecoinWarmStorageServiceStateView viewContract = new FilecoinWarmStorageServiceStateView(warmStorageService);
-
-        // Verify the values were set correctly through the view contract
-        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = viewContract.getPDPConfig();
+        // Verify the values were set correctly
+        (uint64 updatedMaxProvingPeriod, uint256 updatedChallengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         assertEq(updatedMaxProvingPeriod, newMaxProvingPeriod, "Max proving period should be updated");
         assertEq(updatedChallengeWindow, newChallengeWindowSize, "Challenge window size should be updated");
     }
@@ -226,7 +225,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstDeadline = block.number + maxProvingPeriod;
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline, leafCount, ""
@@ -261,7 +260,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 firstAllowedDeadline = firstDeadline + maxProvingPeriod;
         uint256 firstAllowedWindowStart = firstAllowedDeadline - challengeWindow;
         assertEq(
-            viewContract.nextPDPChallengeWindowStart(dataSetId),
+            pdpServiceWithPayments.nextPDPChallengeWindowStart(dataSetId),
             firstAllowedWindowStart,
             "State view should skip the previously proven period"
         );
@@ -284,10 +283,10 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             PDPListener(address(pdpServiceWithPayments)), dataSetId, challengeEpoch, leafCount, ""
         );
 
-        assertTrue(viewContract.provenPeriods(dataSetId, 0), "Original period should remain proven");
-        assertFalse(viewContract.provenPeriods(dataSetId, 1), "Reactivated period should require a new proof");
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 0), "Original period should remain proven");
+        assertFalse(pdpServiceWithPayments.provenPeriods(dataSetId, 1), "Reactivated period should require a new proof");
         assertEq(
-            viewContract.provingDeadline(dataSetId),
+            pdpServiceWithPayments.provingDeadline(dataSetId),
             firstAllowedDeadline,
             "Reactivation should resume at the first safe deadline"
         );
@@ -311,7 +310,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstDeadline = block.number + maxProvingPeriod;
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline, leafCount, ""
@@ -396,7 +395,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        (uint64 provingPeriod,,,) = viewContract.getPDPConfig();
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstDeadline = block.number + provingPeriod;
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline, 2 * perPieceLeaves, ""
@@ -415,7 +414,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline + provingPeriod, perPieceLeaves, ""
         );
 
-        uint256 actualRate = payments.getRail(viewContract.getDataSet(dataSetId).pdpRailId).paymentRate;
+        uint256 actualRate = payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
         uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
         uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(perPieceLeaves * 32);
         assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
@@ -432,7 +431,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.CallerNotPayments.selector, address(payments), address(sp1)));
         vm.prank(sp1);
@@ -443,7 +442,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.ServiceContractMustTerminateRail.selector));
         vm.prank(address(payments));
@@ -459,14 +458,14 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
     function testRailTerminated_SetsPdpEndEpochAndEmitsEvent() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
         vm.prank(address(payments));
         pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
         // CDN rails don't track endEpoch in DataSetInfo
     }
@@ -474,20 +473,20 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
     function testRailTerminated_DoesNotOverwritePdpEndEpoch() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, true, true);
         emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
         vm.prank(address(payments));
         pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
 
         vm.prank(address(payments));
         pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 321);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pdpEndEpoch, 123);
     }
 
@@ -498,7 +497,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
 
         // Capture activation epoch BEFORE calling nextProvingPeriod
         uint256 _activationEpoch = vm.getBlockNumber();
@@ -545,7 +544,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         FWSSProvingModule(address(pdpServiceWithPayments)).possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
         // Now validate payment for epochs within these proven periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = _activationEpoch; // exclusive start
         uint256 toEpoch = _activationEpoch + (maxProvingPeriod * 3); // inclusive end, all 3 periods
         uint256 proposedAmount = 1000e6;
@@ -568,7 +567,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving but don't submit any proofs
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = vm.getBlockNumber() + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -581,7 +580,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.roll(activationEpoch + (maxProvingPeriod * 3));
 
         // Validate payment
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch; // exclusive
         uint256 toEpoch = vm.getBlockNumber() - 1;
         uint256 proposedAmount = 1000e6;
@@ -643,7 +642,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -680,7 +679,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         FWSSProvingModule(address(pdpServiceWithPayments)).possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
         // Validate payment for all 3 periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6;
@@ -704,7 +703,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -712,7 +711,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
 
         uint256 activationEpoch = vm.getBlockNumber();
-        assertEq(activationEpoch, viewContract.provingActivationEpoch(dataSetId));
+        assertEq(activationEpoch, pdpServiceWithPayments.provingActivationEpoch(dataSetId));
 
         // Skip proof for period 0
 
@@ -741,12 +740,12 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.prank(address(mockPDPVerifier));
         FWSSProvingModule(address(pdpServiceWithPayments)).possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
-        assertFalse(viewContract.provenPeriods(dataSetId, 0));
-        assertTrue(viewContract.provenPeriods(dataSetId, 1));
-        assertTrue(viewContract.provenPeriods(dataSetId, 2));
+        assertFalse(pdpServiceWithPayments.provenPeriods(dataSetId, 0));
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 1));
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 2));
 
         // Validate payment for all 3 periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6;
@@ -815,7 +814,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Don't start proving at all
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = block.number;
         uint256 toEpoch = block.number + 1000;
         uint256 proposedAmount = 1000e6;
@@ -837,7 +836,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty");
 
         // No pieces added — modifyRailPayment was never called, so the rail rate is 0
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
         assertEq(rail.paymentRate, 0, "Rail rate must be 0 for empty dataset");
 
@@ -880,7 +879,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
 
         // Start the first proving period
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstDeadline = block.number + maxProvingPeriod;
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline, leafCount, ""
@@ -914,7 +913,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
 
         // validatePayment for an epoch range that falls entirely in the empty period must
         // return 0 (the period is faulted — no proof was submitted before proving stopped).
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 emptyFrom = activationEpoch + maxProvingPeriod; // start of the now-empty period
         uint256 emptyTo = activationEpoch + maxProvingPeriod * 2; // one full period later
 
@@ -944,7 +943,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstDeadline = block.number + maxProvingPeriod;
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), dataSetId, firstDeadline, leafCount, ""
@@ -967,9 +966,9 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         mockPDPVerifier.nextProvingPeriod(PDPListener(address(pdpServiceWithPayments)), dataSetId, 0, 0, "");
         mockPDPVerifier.setDataSetLeafCount(dataSetId, 0);
 
-        assertEq(viewContract.provingDeadline(dataSetId), 0, "Empty dataset should suspend proving");
+        assertEq(pdpServiceWithPayments.provingDeadline(dataSetId), 0, "Empty dataset should suspend proving");
         assertEq(
-            viewContract.provingActivationEpoch(dataSetId),
+            pdpServiceWithPayments.provingActivationEpoch(dataSetId),
             activationEpoch,
             "Empty dataset should retain its activation epoch"
         );
@@ -989,7 +988,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
         uint256 additionEpoch = vm.getBlockNumber();
 
-        uint256 challengeWindowStart = viewContract.nextPDPChallengeWindowStart(dataSetId);
+        uint256 challengeWindowStart = pdpServiceWithPayments.nextPDPChallengeWindowStart(dataSetId);
         uint256 reactivationDeadline = challengeWindowStart + challengeWindow;
         uint256 challengeEpoch = challengeWindowStart + (challengeWindow / 2);
         assertEq(
@@ -1011,25 +1010,25 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
 
         assertEq(
-            viewContract.provingActivationEpoch(dataSetId),
+            pdpServiceWithPayments.provingActivationEpoch(dataSetId),
             activationEpoch,
             "Reactivation should preserve the original activation epoch"
         );
         assertEq(
-            viewContract.provingDeadline(dataSetId),
+            pdpServiceWithPayments.provingDeadline(dataSetId),
             reactivationDeadline,
             "Callback should accept the deadline returned by the state view"
         );
-        assertTrue(viewContract.provenPeriods(dataSetId, 0), "Original proven period should remain recorded");
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 0), "Original proven period should remain recorded");
 
         uint256 reactivationPeriod =
             FWSSProvingModule(address(pdpServiceWithPayments)).getProvingPeriodForEpoch(dataSetId, challengeEpoch);
         assertFalse(
-            viewContract.provenPeriods(dataSetId, reactivationPeriod),
+            pdpServiceWithPayments.provenPeriods(dataSetId, reactivationPeriod),
             "Reactivated period should not inherit an old proof bit"
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         (uint256 oldSettlementAmount,,,, uint256 oldSettlementEpoch,) =
             payments.settleRail(info.pdpRailId, firstDeadline);
         assertGt(oldSettlementAmount, 0, "Original proven period should remain payable");
@@ -1040,7 +1039,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         FWSSProvingModule(address(pdpServiceWithPayments))
             .possessionProven(dataSetId, leafCount, 67890, CHALLENGES_PER_PROOF);
         assertTrue(
-            viewContract.provenPeriods(dataSetId, reactivationPeriod),
+            pdpServiceWithPayments.provenPeriods(dataSetId, reactivationPeriod),
             "Reactivated proof should use its canonical period ID"
         );
 
@@ -1067,14 +1066,14 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
 
         vm.roll(vm.getBlockNumber() + 1000);
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
         mockPDPVerifier.nextProvingPeriod(
             PDPListener(address(pdpServiceWithPayments)), dataSetId, challengeEpoch, 100, ""
         );
 
         uint256 activationEpoch = vm.getBlockNumber();
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch - 500;
         uint256 toEpoch = activationEpoch - 100;
 
@@ -1089,7 +1088,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
     function testValidatePayment_ActivationBoundarySettlesWithZeroPayment() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1097,7 +1096,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
 
         uint256 activationEpoch = vm.getBlockNumber();
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 proposedAmount = 1000e6;
 
         vm.prank(address(payments));
@@ -1129,10 +1128,10 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory railBeforeActivation = payments.getRail(info.pdpRailId);
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(block.number + 3);
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
         mockPDPVerifier.nextProvingPeriod(
@@ -1140,7 +1139,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         );
 
         uint256 activationEpoch = vm.getBlockNumber();
-        assertEq(viewContract.provingActivationEpoch(dataSetId), activationEpoch, "Activation epoch mismatch");
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), activationEpoch, "Activation epoch mismatch");
         assertLt(railBeforeActivation.settledUpTo, activationEpoch, "Rail should need activation-boundary settlement");
 
         bytes memory sig = abi.encode(FAKE_SIGNATURE);
@@ -1148,7 +1147,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.prank(sp1);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory terminatedRail = payments.getRail(terminatedInfo.pdpRailId);
         assertEq(terminatedRail.lockupPeriod, 0, "Immediate termination should use zero lockup period");
         assertEq(terminatedRail.endEpoch, activationEpoch, "End epoch should equal activation epoch");
@@ -1162,7 +1161,9 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.roll(activationEpoch + 1);
         vm.prank(sp1);
         mockPDPVerifier.deleteDataSet(PDPListener(address(pdpServiceWithPayments)), dataSetId, "");
-        assertEq(viewContract.getDataSet(dataSetId).pdpRailId, 0, "Dataset should be deleted after finalization");
+        assertEq(
+            pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId, 0, "Dataset should be deleted after finalization"
+        );
     }
 
     function testSettleRail_MultiplePreActivationRateSegmentsSettleWithZeroPayment() public {
@@ -1198,13 +1199,13 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory railBeforeActivation = payments.getRail(info.pdpRailId);
         assertLt(
             railBeforeActivation.settledUpTo, block.number, "Second addition should leave a pre-activation rate segment"
         );
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(block.number + 3);
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
         mockPDPVerifier.nextProvingPeriod(
@@ -1230,7 +1231,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1245,7 +1246,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         FWSSProvingModule(address(pdpServiceWithPayments)).possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
         // Validate payment for middle portion of period 0
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch + 100; // Start 100 epochs into period
         uint256 toEpoch = activationEpoch + maxProvingPeriod - 100; // End 100 epochs before period ends
         uint256 proposedAmount = 1000e6;
@@ -1274,7 +1275,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
     function testValidatePayment_ToEpochExactlyOnDeadline() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1288,7 +1289,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.prank(address(mockPDPVerifier));
         FWSSProvingModule(address(pdpServiceWithPayments)).possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // fromEpoch mid-period, toEpoch exactly on the deadline, should only settle via
         // single-period logic
@@ -1326,7 +1327,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
      */
     function testValidatePayment_InvalidEpochRange() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // fromEpoch >= toEpoch
         vm.prank(address(payments));
@@ -1344,7 +1345,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1358,7 +1359,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.roll(activationEpoch + (maxProvingPeriod * 3) + 1);
 
         // Validate payment - should advance settleUpTo to cover all passed periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 1000e6;
@@ -1380,7 +1381,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1393,7 +1394,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.roll(activationEpoch + (maxProvingPeriod / 2));
 
         // Validate payment - should NOT advance because deadline hasn't passed
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod / 2);
         uint256 proposedAmount = 1000e6;
@@ -1414,7 +1415,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstChallengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1432,7 +1433,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         vm.roll(activationEpoch + (maxProvingPeriod * 3) + 1);
 
         // Validate payment
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6; // 1000 per period
@@ -1459,7 +1460,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Start proving
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(
@@ -1477,7 +1478,7 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get termination info
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Advance past the lockup period AND past the last proving period deadline
         // Settlement requires all period deadlines to have passed for unproven periods
@@ -1502,12 +1503,14 @@ contract FWSSProvingModuleTest is FWSSProvingModuleFixture {
         mockPDPVerifier.deleteDataSet(PDPListener(address(pdpServiceWithPayments)), dataSetId, bytes(""));
 
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
-        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
     }
 }
 
 contract FWSSProvingModuleLegacyStateTest is FWSSProvingModuleFixture {
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+
     function testExistingProofsAndPendingPaymentsSurviveExtraction() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Legacy");
         Cids.Cid[] memory pieces = new Cids.Cid[](1);
@@ -1525,7 +1528,7 @@ contract FWSSProvingModuleLegacyStateTest is FWSSProvingModuleFixture {
             new string[](0)
         );
 
-        (uint64 maxPeriod, uint256 window,,) = viewContract.getPDPConfig();
+        (uint64 maxPeriod, uint256 window,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 firstDeadline = block.number + maxPeriod;
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, leafCount, "");
         vm.roll(firstDeadline - window / 2);
@@ -1539,20 +1542,20 @@ contract FWSSProvingModuleLegacyStateTest is FWSSProvingModuleFixture {
         mockPDPVerifier.piecesScheduledRemove(
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
-        FilecoinWarmStorageService.DataSetInfoView memory beforeInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory beforeInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertGt(beforeInfo.pendingOneTimePayments, 0);
-        uint256 activation = viewContract.provingActivationEpoch(dataSetId);
+        uint256 activation = pdpServiceWithPayments.provingActivationEpoch(dataSetId);
 
         _installProvingModule();
 
-        assertEq(abi.encode(viewContract.getDataSet(dataSetId)), abi.encode(beforeInfo));
-        assertEq(viewContract.provingActivationEpoch(dataSetId), activation);
-        assertEq(viewContract.provingDeadline(dataSetId), firstDeadline);
-        assertTrue(viewContract.provenPeriods(dataSetId, 0));
+        assertEq(abi.encode(pdpServiceWithPayments.getDataSet(dataSetId)), abi.encode(beforeInfo));
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), activation);
+        assertEq(pdpServiceWithPayments.provingDeadline(dataSetId), firstDeadline);
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 0));
         assertEq(_legacyPieceMetadataValue(dataSetId, 0, "legacy"), "value");
 
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline + maxPeriod, leafCount, "");
-        FilecoinWarmStorageService.DataSetInfoView memory afterInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory afterInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(afterInfo.pdpRailId, beforeInfo.pdpRailId);
         assertEq(afterInfo.pendingOneTimePayments, 0);
         assertEq(
@@ -1561,7 +1564,7 @@ contract FWSSProvingModuleLegacyStateTest is FWSSProvingModuleFixture {
         assertEq(payments.getRail(afterInfo.pdpRailId).lockupFixed, afterInfo.lifecycleReserveBalance);
         assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 0);
         assertEq(_legacyPieceMetadataValue(dataSetId, 0, "legacy"), "");
-        assertTrue(viewContract.provenPeriods(dataSetId, 0));
-        assertEq(viewContract.provingActivationEpoch(dataSetId), activation);
+        assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 0));
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), activation);
     }
 }

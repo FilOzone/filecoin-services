@@ -9,6 +9,7 @@ import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.s
 
 import {Errors} from "../../src/Errors.sol";
 import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
+import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {IFWSSConfig} from "../../src/interfaces/IFWSSConfig.sol";
 import {FWSSConfigModule} from "../../src/modules/FWSSConfigModule.sol";
 import {FWSSFilBeamModule} from "../../src/modules/FWSSFilBeamModule.sol";
@@ -56,6 +57,8 @@ abstract contract FWSSFilBeamModuleFixture is FilecoinWarmStorageServiceFixture 
 }
 
 contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+
     function setUp() public override {
         super.setUp();
         _installFilBeamModule();
@@ -119,19 +122,19 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
-        assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
 
         // Warp to challenge window
-        uint256 provingDeadline = viewContract.provingDeadline(dataSetId);
+        uint256 provingDeadline = pdpServiceWithPayments.provingDeadline(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(
-            viewContract.provenPeriods(
+            pdpServiceWithPayments.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -140,7 +143,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         assertTrue(
-            viewContract.provenPeriods(
+            pdpServiceWithPayments.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -160,16 +163,16 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // 4. Try to terminate payment from FilBeam address
         console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
-        vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        vm.prank(pdpServiceWithPayments.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
         filBeamModule.terminateCDNService(dataSetId);
 
         // 5. Assertions
         // Check if CDN data is cleared
-        info = viewContract.getDataSet(dataSetId);
-        (bool exists, string memory withCDN) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
+        (bool exists, string memory withCDN) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN metadata should not exist after termination");
         assertEq(withCDN, "", "withCDN value should be cleared for dataset");
         console.log("CDN service termination successful. Flag `withCDN` is cleared");
@@ -237,19 +240,19 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
         // Start proving period
-        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 challengeEpoch = block.number + maxProvingPeriod - (challengeWindow / 2);
 
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
-        assertEq(viewContract.provingActivationEpoch(dataSetId), block.number);
+        assertEq(pdpServiceWithPayments.provingActivationEpoch(dataSetId), block.number);
 
         // Warp to challenge window
-        uint256 provingDeadline = viewContract.provingDeadline(dataSetId);
+        uint256 provingDeadline = pdpServiceWithPayments.provingDeadline(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(
-            viewContract.provenPeriods(
+            pdpServiceWithPayments.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -258,19 +261,19 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         assertTrue(
-            viewContract.provenPeriods(
+            pdpServiceWithPayments.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
         console.log("Proof submitted successfully");
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
 
         // 3. Try to terminate payment from FilBeam address
         console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
-        vm.prank(viewContract.filBeamControllerAddress()); // FilBeam terminates
+        vm.prank(pdpServiceWithPayments.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
         filBeamModule.terminateCDNService(dataSetId);
@@ -281,11 +284,11 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         // Warp to challenge window
-        provingDeadline = viewContract.provingDeadline(dataSetId);
+        provingDeadline = pdpServiceWithPayments.provingDeadline(dataSetId);
         vm.roll(provingDeadline - (challengeWindow / 2));
 
         assertFalse(
-            viewContract.provenPeriods(
+            pdpServiceWithPayments.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -294,7 +297,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, 5);
         assertTrue(
-            viewContract.provenPeriods(
+            pdpServiceWithPayments.provenPeriods(
                 dataSetId, pdpServiceWithPayments.getProvingPeriodForEpoch(dataSetId, block.number)
             )
         );
@@ -326,7 +329,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate only one CDN rail
         console.log("Externally terminating cacheMissRailId only...");
@@ -349,7 +352,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
 
         // 5. Verify CDN metadata is cleaned up
-        (bool exists2,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool exists2,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists2, "withCDN flag should be deleted");
 
         console.log("=== Test completed successfully! ===");
@@ -361,7 +364,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate only one CDN rail
         console.log("Externally terminating cacheMissRailId only...");
@@ -391,7 +394,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         assertTrue(cdnRail.endEpoch > 0, "CDN rail should be terminated");
 
         // 6. Verify CDN metadata is cleaned up
-        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool exists,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN flag should be deleted");
 
         console.log("=== Test completed successfully! ===");
@@ -401,7 +404,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         address newController = address(0xDEADBEEF);
         vm.prank(filBeamController);
         filBeamModule.transferFilBeamController(newController);
-        assertEq(viewContract.filBeamControllerAddress(), newController, "CDN controller should be updated");
+        assertEq(pdpServiceWithPayments.filBeamControllerAddress(), newController, "CDN controller should be updated");
 
         // Attempt transfer from old controller should revert
         vm.prank(filBeamController);
@@ -424,7 +427,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testSettleFilBeamPaymentRails_BothAmounts() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 50000;
         uint256 cacheMissAmount = 25000;
@@ -464,7 +467,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testSettleFilBeamPaymentRails_OnlyCdnAmount() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 75000;
         uint256 cacheMissAmount = 0;
@@ -497,7 +500,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testSettleFilBeamPaymentRails_OnlyCacheMissAmount() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 0;
         uint256 cacheMissAmount = 30000;
@@ -607,7 +610,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testSettleFilBeamPaymentRails_EmitsCorrectEvents() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 100000;
         uint256 cacheMissAmount = 50000;
@@ -664,7 +667,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testSettleFilBeamPaymentRails_ProcessesPaymentsCorrectly() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 75000;
         uint256 cacheMissAmount = 35000;
@@ -739,7 +742,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // Create dataset with CDN enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up CDN rails with sufficient funds
         vm.prank(client);
@@ -750,7 +753,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         filBeamModule.terminateCDNService(dataSetId);
 
         // Verify withCDN metadata is removed
-        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool exists,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(exists, "withCDN metadata should be removed after termination");
 
         // Should still be able to settle CDN payment rails after termination
@@ -781,7 +784,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // Create dataset with CDN enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up CDN rails with sufficient funds
         vm.prank(client);
@@ -792,7 +795,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // CDN service persists through lockup window — withCDN metadata still present
-        (bool exists,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool exists,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertTrue(exists, "withCDN metadata should still exist after service termination");
 
         // Should still be able to settle CDN payment rails after termination
@@ -822,7 +825,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testTopUpCDNPaymentRails_Success() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnTopUp = 100000;
         uint256 cacheMissTopUp = 50000;
@@ -894,7 +897,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testTopUpCDNPaymentRails_IncrementalTopUps() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // First top-up
         vm.expectEmit(true, false, false, true);
@@ -926,7 +929,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
     function testTopUpCDNPaymentRails_ZeroAmounts() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up with zero amounts (should revert with InvalidTopUpAmount error)
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidTopUpAmount.selector, dataSetId));
@@ -1013,7 +1016,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // Create dataset with CDN enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up initially (should succeed)
         uint256 cdnTopUp = 100000;
@@ -1055,7 +1058,7 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
         // Positive test to ensure normal functionality still works
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnTopUp = 100000;
         uint256 cacheMissTopUp = 50000;
@@ -1114,6 +1117,8 @@ contract FWSSFilBeamModuleTest is FWSSFilBeamModuleFixture {
 }
 
 contract FWSSFilBeamModuleLegacyRailsTest is FWSSFilBeamModuleFixture {
+    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
+
     function testExistingRailsSurviveFilBeamExtraction() public {
         // Stands in for the deployed StateView, which the module install must leave in place.
         address legacyViewContract = address(0x5747E);
@@ -1121,24 +1126,24 @@ contract FWSSFilBeamModuleLegacyRailsTest is FWSSFilBeamModuleFixture {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, keys, values);
         address legacyPayments = pdpServiceWithPayments.paymentsContractAddress();
-        FilecoinWarmStorageService.DataSetInfoView memory beforeInfo = viewContract.getDataSet(dataSetId);
+        FilecoinWarmStorageService.DataSetInfoView memory beforeInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory cdnBefore = payments.getRail(beforeInfo.cdnRailId);
         FilecoinPayV1.RailView memory cacheMissBefore = payments.getRail(beforeInfo.cacheMissRailId);
         address ownerBefore = pdpServiceWithPayments.owner();
-        (uint64 periodBefore, uint256 windowBefore,,) = viewContract.getPDPConfig();
+        (uint64 periodBefore, uint256 windowBefore,,) = pdpServiceWithPayments.getPDPConfig();
 
         _installFilBeamModule();
 
         assertEq(pdpServiceWithPayments.paymentsContractAddress(), legacyPayments);
         assertEq(legacyPayments, address(payments));
-        assertEq(abi.encode(viewContract.getDataSet(dataSetId)), abi.encode(beforeInfo));
+        assertEq(abi.encode(pdpServiceWithPayments.getDataSet(dataSetId)), abi.encode(beforeInfo));
         assertEq(pdpServiceWithPayments.owner(), ownerBefore);
-        assertEq(viewContract.filBeamControllerAddress(), filBeamController);
+        assertEq(pdpServiceWithPayments.filBeamControllerAddress(), filBeamController);
         assertEq(pdpServiceWithPayments.viewContractAddress(), legacyViewContract);
-        (uint64 periodAfter, uint256 windowAfter,,) = viewContract.getPDPConfig();
+        (uint64 periodAfter, uint256 windowAfter,,) = pdpServiceWithPayments.getPDPConfig();
         assertEq(periodAfter, periodBefore);
         assertEq(windowAfter, windowBefore);
-        (bool withCDN,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (bool withCDN,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertTrue(withCDN);
 
         vm.prank(client);
@@ -1156,7 +1161,7 @@ contract FWSSFilBeamModuleLegacyRailsTest is FWSSFilBeamModuleFixture {
         assertGt(payments.getRail(beforeInfo.cdnRailId).endEpoch, 0);
         assertGt(payments.getRail(beforeInfo.cacheMissRailId).endEpoch, 0);
         assertEq(payments.getRail(beforeInfo.pdpRailId).endEpoch, 0);
-        (withCDN,) = viewContract.getDataSetMetadata(dataSetId, "withCDN");
+        (withCDN,) = pdpServiceWithPayments.getDataSetMetadata(dataSetId, "withCDN");
         assertFalse(withCDN);
     }
 }
