@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {Script} from "forge-std/Script.sol";
+import {Script, console} from "forge-std/Script.sol";
 import {VmSafe} from "forge-std/Vm.sol";
+import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSS_DISPATCHER_CODE_HASH} from "../src/FWSSDispatcherTransition.sol";
@@ -23,6 +24,17 @@ abstract contract FWSSDispatcherTransitionScript is Script {
     /// @notice Whether forge runs this script with `--broadcast`. Virtual for the same reason as `_isDryRun`.
     function _isBroadcast() internal view virtual returns (bool) {
         return vm.isContext(VmSafe.ForgeContext.ScriptBroadcast);
+    }
+
+    /// @notice Reverts on `--broadcast` without a wallet. forge deploys the script from its default sender at nonce 0,
+    /// the address a walletless broadcast would record for the dispatcher, so every later run would find the script's
+    /// code there instead of redeploying.
+    function _requireWallet() internal view {
+        (, address sender,) = vm.readCallers();
+        require(
+            !_isBroadcast() || sender != DEFAULT_SENDER,
+            "--broadcast needs a wallet: pass --keystore, --account or --private-key"
+        );
     }
 
     function _proxy() internal view returns (address proxy) {
@@ -69,6 +81,36 @@ abstract contract FWSSDispatcherTransitionScript is Script {
                 vm.toString(proxy)
             )
         );
+    }
+
+    /// @notice Uses FWSS_DISPATCHER_ADDRESS from the environment, else the recorded dispatcher, else deploys one. A
+    /// recorded dispatcher without code is redeployed: the broadcast that should have created it did not land.
+    function _dispatcher(uint256 chain) internal returns (address dispatcher, bool deployed) {
+        dispatcher = _envAddress("FWSS_DISPATCHER_ADDRESS");
+        if (dispatcher != address(0)) {
+            console.log("Using the ERC-8167 dispatcher from FWSS_DISPATCHER_ADDRESS:", dispatcher);
+        } else {
+            dispatcher = DeploymentsJson.getAddress(chain, "FWSS_DISPATCHER_ADDRESS");
+            if (dispatcher != address(0) && dispatcher.code.length == 0) {
+                console.log(
+                    "The recorded ERC-8167 dispatcher has no code, a previous broadcast did not land:", dispatcher
+                );
+                dispatcher = address(0);
+            }
+
+            if (dispatcher == address(0)) {
+                bytes memory initcode = vm.getCode(FWSS_DISPATCHER_ARTIFACT);
+                vm.broadcast();
+                dispatcher = Constructor.create(initcode);
+                deployed = true;
+                console.log("Deployed the ERC-8167 dispatcher:", dispatcher);
+            } else {
+                console.log("Using the recorded ERC-8167 dispatcher:", dispatcher);
+            }
+        }
+
+        // Checked on every run: the simulation deploys for real, unlike the bash dry run.
+        _requirePinnedDispatcher(dispatcher);
     }
 
     function _requirePinnedDispatcher(address dispatcher) internal view {

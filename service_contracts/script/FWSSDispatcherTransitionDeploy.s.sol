@@ -2,7 +2,6 @@
 pragma solidity 0.8.37;
 
 import {console} from "forge-std/Script.sol";
-import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSS_DISPATCHER_CODE_HASH, FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {FWSSDispatcherTransitionScript} from "./FWSSDispatcherTransitionScript.sol";
@@ -11,20 +10,14 @@ import {JosukeLedger} from "./lib/JosukeLedger.sol";
 
 /// @title FWSSDispatcherTransitionDeploy
 /// @notice Deploys the ERC-8167 dispatcher, unless one is set or recorded, and the FWSSDispatcherTransition pinned to
-/// the proxy's current implementation and the migration `josuke deploy` proposed. Run `josuke deploy` first, then
-/// announce the transition and complete it with FWSSDispatcherTransitionExecute.
+/// the proxy's current implementation and the migration `josuke deploy` proposed. Run FWSSDispatcherDeploy and
+/// `josuke deploy` first, then announce the transition and complete it with FWSSDispatcherTransitionExecute.
 contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
     string internal constant TRANSITION_KEY = "FWSS_DISPATCHER_TRANSITION";
 
     /// @notice Deploys what is missing and records it in deployments.json
     function run() external {
-        // forge deploys this script from its default sender at nonce 0, the address a walletless broadcast would record
-        // for the dispatcher, so every later run would find this script's code there instead of redeploying.
-        (, address sender,) = vm.readCallers();
-        require(
-            !_isBroadcast() || sender != DEFAULT_SENDER,
-            "--broadcast needs a wallet: pass --keystore, --account or --private-key"
-        );
+        _requireWallet();
 
         uint256 chain = block.chainid;
         address proxy = _proxy();
@@ -41,7 +34,8 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
         _requireNotOnTransition(proxy, previous);
         console.log("Current FWSS implementation:", previous);
 
-        address migration = JosukeLedger.proposedMigration(proxy, chain);
+        // Before the transition the ledger may list the proxy under the dispatcher FWSSDispatcherDeploy recorded.
+        address migration = JosukeLedger.proposedMigration(proxy, _envOrRecorded("FWSS_DISPATCHER_ADDRESS"), chain);
         console.log("Josuke proposed migration:", migration);
 
         (address dispatcher, bool deployedDispatcher) = _dispatcher(chain);
@@ -89,36 +83,6 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
         }
         DeploymentsJson.setMetadata(chain, commit);
         console.log("Recorded in", DeploymentsJson.path());
-    }
-
-    /// @notice Uses FWSS_DISPATCHER_ADDRESS from the environment, else the recorded dispatcher, else deploys one. A
-    /// recorded dispatcher without code is redeployed: the broadcast that should have created it did not land.
-    function _dispatcher(uint256 chain) internal returns (address dispatcher, bool deployed) {
-        dispatcher = _envAddress("FWSS_DISPATCHER_ADDRESS");
-        if (dispatcher != address(0)) {
-            console.log("Using the ERC-8167 dispatcher from FWSS_DISPATCHER_ADDRESS:", dispatcher);
-        } else {
-            dispatcher = DeploymentsJson.getAddress(chain, "FWSS_DISPATCHER_ADDRESS");
-            if (dispatcher != address(0) && dispatcher.code.length == 0) {
-                console.log(
-                    "The recorded ERC-8167 dispatcher has no code, a previous broadcast did not land:", dispatcher
-                );
-                dispatcher = address(0);
-            }
-
-            if (dispatcher == address(0)) {
-                bytes memory initcode = vm.getCode(FWSS_DISPATCHER_ARTIFACT);
-                vm.broadcast();
-                dispatcher = Constructor.create(initcode);
-                deployed = true;
-                console.log("Deployed the ERC-8167 dispatcher:", dispatcher);
-            } else {
-                console.log("Using the recorded ERC-8167 dispatcher:", dispatcher);
-            }
-        }
-
-        // Checked on every run: the simulation deploys for real, unlike the bash dry run.
-        _requirePinnedDispatcher(dispatcher);
     }
 
     /// @notice Uses FWSS_DISPATCHER_TRANSITION_ADDRESS from the environment, which must pin the expected contracts.

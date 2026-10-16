@@ -120,8 +120,9 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         view
         returns (address dispatcher, address migration)
     {
+        dispatcher = transition.dispatcher();
         migration = transition.migration();
-        address proposed = JosukeLedger.proposedMigration(proxy, chain);
+        address proposed = JosukeLedger.proposedMigration(proxy, dispatcher, chain);
         require(
             migration == proposed,
             string.concat(
@@ -147,7 +148,6 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
             )
         );
 
-        dispatcher = transition.dispatcher();
         _requirePinnedDispatcher(dispatcher);
     }
 

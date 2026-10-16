@@ -8,6 +8,7 @@ import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol"
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {FWSS_DISPATCHER_CODE_HASH, FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
+import {FWSSDispatcherDeploy} from "../script/FWSSDispatcherDeploy.s.sol";
 import {FWSSDispatcherTransitionDeploy} from "../script/FWSSDispatcherTransitionDeploy.s.sol";
 import {FWSSDispatcherTransitionExecute} from "../script/FWSSDispatcherTransitionExecute.s.sol";
 import {DeploymentsJson} from "../script/lib/DeploymentsJson.sol";
@@ -120,6 +121,12 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         _reset(clean);
         _deployRejectsAmbiguousLedger();
+
+        _reset(clean);
+        _dispatcherDeployRecordsDispatcher();
+
+        _reset(clean);
+        _transitionWithProxyListedUnderDispatcher();
     }
 
     function testIsoTimestamp() public pure {
@@ -243,10 +250,13 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
     function _deployRefusesBroadcastWithoutWallet() internal {
         FWSSDispatcherTransitionDeploy deploy = new BroadcastDeploy();
+        FWSSDispatcherDeploy dispatcherDeploy = new BroadcastDispatcherDeploy();
         uint256 nonce = vm.getNonce(DEFAULT_SENDER);
 
         vm.expectRevert(bytes("--broadcast needs a wallet: pass --keystore, --account or --private-key"));
         deploy.run();
+        vm.expectRevert(bytes("--broadcast needs a wallet: pass --keystore, --account or --private-key"));
+        dispatcherDeploy.run();
 
         assertEq(vm.getNonce(DEFAULT_SENDER), nonce);
         assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
@@ -455,9 +465,12 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address dispatcher = deployCode(DISPATCHER_ARTIFACT);
         vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(dispatcher))));
         FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
+        FWSSDispatcherDeploy dispatcherDeploy = new FWSSDispatcherDeploy();
 
         vm.expectRevert(bytes("the proxy already runs the ERC-8167 dispatcher"));
         deploy.run();
+        vm.expectRevert(bytes("the proxy already runs the ERC-8167 dispatcher"));
+        dispatcherDeploy.run();
     }
 
     /// @dev An upgrade with empty data leaves the proxy on the transition. A deploy rerun would otherwise pin a new
@@ -568,6 +581,68 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.writeFile(SCRATCH_LEDGER, string.concat("[", entry, ",{\"deployments\":null}]"));
         vm.expectRevert(abi.encodeWithSelector(JosukeLedger.LedgerEntryWithoutAddress.selector, 1));
+        deploy.run();
+    }
+
+    /// @dev The dispatcher deploys before `josuke deploy`, so it needs no proposal in the ledger.
+    function _dispatcherDeployRecordsDispatcher() internal {
+        _writeLedger(proxy, address(0));
+        new FWSSDispatcherDeploy().run();
+
+        string memory json = vm.readFile(DEPLOYMENTS);
+        address dispatcher = vm.parseJsonAddress(json, ".314.FWSS_DISPATCHER_ADDRESS");
+        assertEq(dispatcher.codehash, FWSS_DISPATCHER_CODE_HASH);
+        _assertChecksummed(vm.parseJsonString(json, ".314.FWSS_DISPATCHER_ADDRESS"));
+        assertFalse(vm.keyExistsJson(json, ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS"));
+        assertEq(vm.parseJsonString(json, ".314.metadata.commit"), GIT_COMMIT);
+        assertEq(_implementation(), legacyImplementation);
+
+        uint256 nonce = vm.getNonce(DEFAULT_SENDER);
+        new FWSSDispatcherDeploy().run();
+        assertEq(vm.readFile(DEPLOYMENTS), json);
+        assertEq(vm.getNonce(DEFAULT_SENDER), nonce);
+    }
+
+    /// @dev `josuke deploy` and `josuke verify` rehearse the migration against the code at the ledger address, which
+    /// only routes before the transition when the ledger lists the proxy under the dispatcher.
+    function _transitionWithProxyListedUnderDispatcher() internal {
+        new FWSSDispatcherDeploy().run();
+        address dispatcher = vm.parseJsonAddress(vm.readFile(DEPLOYMENTS), ".314.FWSS_DISPATCHER_ADDRESS");
+        _writeLedger(dispatcher, migration);
+
+        uint256 nonce = vm.getNonce(DEFAULT_SENDER);
+        new FWSSDispatcherTransitionDeploy().run();
+        assertEq(vm.getNonce(DEFAULT_SENDER), nonce + 1, "the recorded dispatcher is reused");
+        string memory json = vm.readFile(DEPLOYMENTS);
+        FWSSDispatcherTransition transition =
+            FWSSDispatcherTransition(vm.parseJsonAddress(json, ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS"));
+        assertEq(transition.dispatcher(), dispatcher);
+        assertEq(transition.migration(), migration);
+
+        vm.prank(DEFAULT_SENDER);
+        service.announceUpgradePlan(address(transition), 0);
+        (, uint96 afterEpoch) = service.nextUpgrade();
+        vm.roll(afterEpoch);
+        new FWSSDispatcherTransitionExecute().run();
+
+        assertEq(_implementation(), dispatcher);
+        _assertFacetRoutes();
+
+        // Listing the proxy under both addresses leaves the migration ambiguous.
+        string memory entry = string.concat(
+            "\",\"deployments\":{\"314\":{\"proposed\":{\"migration\":{\"address\":\"",
+            vm.toString(migration),
+            "\"}}}}}"
+        );
+        vm.writeFile(
+            SCRATCH_LEDGER,
+            string.concat(
+                "[{\"address\":\"", vm.toString(proxy), entry, ",{\"address\":\"", vm.toString(dispatcher), entry, "]"
+            )
+        );
+        vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(legacyImplementation))));
+        FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
+        vm.expectRevert(abi.encodeWithSelector(JosukeLedger.ProxyListedTwice.selector, proxy));
         deploy.run();
     }
 
@@ -740,6 +815,13 @@ contract DryRunDeploy is FWSSDispatcherTransitionDeploy {
 
 /// @dev Runs the deploy script as `forge script --broadcast` does
 contract BroadcastDeploy is FWSSDispatcherTransitionDeploy {
+    function _isBroadcast() internal pure override returns (bool) {
+        return true;
+    }
+}
+
+/// @dev Runs the dispatcher deploy script as `forge script --broadcast` does
+contract BroadcastDispatcherDeploy is FWSSDispatcherDeploy {
     function _isBroadcast() internal pure override returns (bool) {
         return true;
     }
