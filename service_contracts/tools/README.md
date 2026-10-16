@@ -25,7 +25,7 @@ These live in `../script/` and run with `forge script` from `service_contracts/`
 
 | Script | Description |
 |--------|-------------|
-| `script/FWSSDispatcherDeploy.s.sol` | Deploy the ERC-8167 dispatcher if `deployments.json` has none and record it, before `josuke deploy` |
+| `script/FWSSDispatcherDeploy.s.sol` | Deploy the ERC-8167 dispatcher unless one is set or recorded, and record it in `deployments.json`, before `josuke deploy` |
 | `script/FWSSDispatcherTransitionDeploy.s.sol` | Deploy the ERC-8167 dispatcher if `deployments.json` has none, then `FWSSDispatcherTransition` pinned to josuke's proposed migration and the proxy's current implementation; records both in `deployments.json` |
 | `script/FWSSDispatcherTransitionExecute.s.sol` | Check an announced transition against `josuke.json` and the proxy, then send `upgradeToAndCall(transition, migrate(migration))` or print Safe calldata |
 
@@ -231,7 +231,7 @@ josuke deploys the FWSS modules and the migration that routes their selectors, a
 1. Deploy the dispatcher, then list the proxy under it in `josuke.json`. `josuke deploy` and `josuke verify` rehearse the migration against the code at the listed address, and the proxy still runs the monolith:
 
    ```bash
-   GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherDeploy.s.sol \
+   forge script script/FWSSDispatcherDeploy.s.sol \
      --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast
    (source tools/josuke.sh; josuke_move_entry "$FWSS_PROXY_ADDRESS" "$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_ADDRESS" deployments.json)")
    ```

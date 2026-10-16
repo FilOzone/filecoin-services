@@ -250,7 +250,8 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
     function _deployRefusesBroadcastWithoutWallet() internal {
         FWSSDispatcherTransitionDeploy deploy = new BroadcastDeploy();
-        FWSSDispatcherDeploy dispatcherDeploy = new BroadcastDispatcherDeploy();
+        FWSSDispatcherDeploy dispatcherDeploy =
+            FWSSDispatcherDeploy(deployCode("FWSSDispatcherTransitionScripts.t.sol:BroadcastDispatcherDeploy"));
         uint256 nonce = vm.getNonce(DEFAULT_SENDER);
 
         vm.expectRevert(bytes("--broadcast needs a wallet: pass --keystore, --account or --private-key"));
@@ -465,7 +466,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address dispatcher = deployCode(DISPATCHER_ARTIFACT);
         vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(dispatcher))));
         FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
-        FWSSDispatcherDeploy dispatcherDeploy = new FWSSDispatcherDeploy();
+        FWSSDispatcherDeploy dispatcherDeploy = _dispatcherDeploy();
 
         vm.expectRevert(bytes("the proxy already runs the ERC-8167 dispatcher"));
         deploy.run();
@@ -584,29 +585,39 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         deploy.run();
     }
 
-    /// @dev The dispatcher deploys before `josuke deploy`, so it needs no proposal in the ledger.
+    /// @dev The dispatcher deploys before `josuke deploy`, so it needs no proposal in the ledger. Its pinned code hash
+    /// identifies it, so it records no commit.
     function _dispatcherDeployRecordsDispatcher() internal {
         _writeLedger(proxy, address(0));
-        new FWSSDispatcherDeploy().run();
+        vm.setEnv("GIT_COMMIT", "");
+        string memory original = vm.readFile("deployments.json");
+        _dispatcherDeploy().run();
 
         string memory json = vm.readFile(DEPLOYMENTS);
         address dispatcher = vm.parseJsonAddress(json, ".314.FWSS_DISPATCHER_ADDRESS");
         assertEq(dispatcher.codehash, FWSS_DISPATCHER_CODE_HASH);
         _assertChecksummed(vm.parseJsonString(json, ".314.FWSS_DISPATCHER_ADDRESS"));
         assertFalse(vm.keyExistsJson(json, ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS"));
-        assertEq(vm.parseJsonString(json, ".314.metadata.commit"), GIT_COMMIT);
+        assertEq(vm.parseJsonString(json, ".314.metadata.commit"), vm.parseJsonString(original, ".314.metadata.commit"));
         assertEq(_implementation(), legacyImplementation);
 
         uint256 nonce = vm.getNonce(DEFAULT_SENDER);
-        new FWSSDispatcherDeploy().run();
+        _dispatcherDeploy().run();
         assertEq(vm.readFile(DEPLOYMENTS), json);
         assertEq(vm.getNonce(DEFAULT_SENDER), nonce);
+
+        // A dispatcher from FWSS_DISPATCHER_ADDRESS is recorded too, since the next steps read it from deployments.json.
+        address supplied = deployCode(DISPATCHER_ARTIFACT);
+        vm.setEnv("FWSS_DISPATCHER_ADDRESS", vm.toString(supplied));
+        _dispatcherDeploy().run();
+        assertEq(vm.parseJsonAddress(vm.readFile(DEPLOYMENTS), ".314.FWSS_DISPATCHER_ADDRESS"), supplied);
+        assertEq(vm.getNonce(DEFAULT_SENDER), nonce, "a supplied dispatcher is not redeployed");
     }
 
     /// @dev `josuke deploy` and `josuke verify` rehearse the migration against the code at the ledger address, which
     /// only routes before the transition when the ledger lists the proxy under the dispatcher.
     function _transitionWithProxyListedUnderDispatcher() internal {
-        new FWSSDispatcherDeploy().run();
+        _dispatcherDeploy().run();
         address dispatcher = vm.parseJsonAddress(vm.readFile(DEPLOYMENTS), ".314.FWSS_DISPATCHER_ADDRESS");
         _writeLedger(dispatcher, migration);
 
@@ -644,6 +655,11 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         FWSSDispatcherTransitionDeploy deploy = new FWSSDispatcherTransitionDeploy();
         vm.expectRevert(abi.encodeWithSelector(JosukeLedger.ProxyListedTwice.selector, proxy));
         deploy.run();
+    }
+
+    /// @dev Deployed from its artifact: `new` would embed its creation code and push this contract past solc's limit.
+    function _dispatcherDeploy() internal returns (FWSSDispatcherDeploy) {
+        return FWSSDispatcherDeploy(deployCode("FWSSDispatcherDeploy.s.sol:FWSSDispatcherDeploy"));
     }
 
     /// @dev Restores the setUp state, fresh scratch files and an environment with only the scratch inputs set. An

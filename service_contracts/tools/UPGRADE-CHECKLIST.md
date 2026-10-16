@@ -524,7 +524,7 @@ Prerequisite: [Choose the Upgrade Path](#choose-the-upgrade-path) reports Path A
 `josuke deploy` and `josuke verify` rehearse the migration against the code at the address `josuke.json` lists. The proxy still runs the monolith, so until the transition the ledger lists the proxy under the dispatcher instead. The transition scripts find the migration under either address.
 
 ```bash
-GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherDeploy.s.sol \
+forge script script/FWSSDispatcherDeploy.s.sol \
   --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast
 export DISPATCHER=$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_ADDRESS" deployments.json)
 (source tools/josuke.sh; josuke_move_entry "$FWSS_PROXY_ADDRESS" "$DISPATCHER")

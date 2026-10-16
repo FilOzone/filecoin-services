@@ -24,7 +24,7 @@ contract FWSSDispatcherDeploy is FWSSDispatcherTransitionScript {
             "the proxy already runs the ERC-8167 dispatcher"
         );
 
-        (address dispatcher, bool deployed) = _dispatcher(chain);
+        (address dispatcher,) = _dispatcher(chain);
 
         console.log("");
         console.log(
@@ -42,17 +42,15 @@ contract FWSSDispatcherDeploy is FWSSDispatcherTransitionScript {
             console.log("Dry run: deployments.json not updated");
             return;
         }
-        if (!deployed) {
-            console.log("Nothing deployed: deployments.json not updated");
+        // The next steps read the dispatcher from deployments.json, so one from FWSS_DISPATCHER_ADDRESS is recorded too.
+        if (DeploymentsJson.getAddress(chain, "FWSS_DISPATCHER_ADDRESS") == dispatcher) {
+            console.log("Already recorded: deployments.json not updated");
             return;
         }
 
-        string memory commit = vm.envOr("GIT_COMMIT", string(""));
-        require(bytes(commit).length != 0, "set GIT_COMMIT=$(git rev-parse HEAD) to record the deployment");
-
-        // Written during simulation, before forge sends; see FWSSDispatcherTransitionDeploy for --resume.
+        // Written during simulation, before forge sends; see FWSSDispatcherTransitionDeploy for --resume. No commit is
+        // recorded: the pinned code hash identifies the dispatcher.
         DeploymentsJson.setAddress(chain, "FWSS_DISPATCHER_ADDRESS", dispatcher);
-        DeploymentsJson.setMetadata(chain, commit);
         console.log("Recorded in", DeploymentsJson.path());
     }
 }
