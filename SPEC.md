@@ -73,7 +73,7 @@ This keeps the hot path at one external call per event.
 
 ### Price Discovery
 
-The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+The complete on-chain price catalogue is exposed via `getPriceList()` on the view contract that FWSS reports through `viewContractAddress()`: the StateView today, and the FWSS proxy itself after the ERC-8167 dispatcher transition. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
 
 ```solidity
 struct PriceList {
@@ -348,7 +348,7 @@ Solid arrows indicate call direction. Dashed arrows indicate token references. B
 | ServiceProviderRegistry | Yes | UUPS proxy | Registry of providers, their capabilities, and payee addresses |
 | FilecoinPayV1 | No | Immutable | Payment rails engine — deposits, lockups, streaming settlement, rate changes |
 | SessionKeyRegistry | No | Immutable | Session key authorization; maps (user, signer, permission) → expiry |
-| StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS |
+| StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS; after the dispatcher transition the FWSS proxy serves the same methods through `FWSSViewModule` |
 | SignatureVerificationLib | No | External library | EIP-712 signature recovery and session key validation |
 | [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
 
@@ -393,7 +393,7 @@ Because these are Solidity `immutable` variables, they live in the deployed byte
 
 References to non-proxy contracts (FilecoinPayV1, SessionKeyRegistry) are **rigid**: replacing them requires a new FWSS implementation carrying the new address, plus the two-step upgrade. State held in the old contract (rail balances, lockups, session key authorizations) is **orphaned** — it cannot be migrated automatically and must be handled explicitly.
 
-**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy.
+**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy. After the ERC-8167 dispatcher transition, `viewContractAddress()` returns the FWSS proxy itself, which serves the view methods; the storage slot keeps the last StateView address.
 
 ### Data Flows
 
@@ -541,6 +541,8 @@ SessionKeyRegistry is **not upgradeable**. It stores session key authorization m
 
 ### StateView (FilecoinWarmStorageServiceStateView)
 
+This section describes the v1.4.0 monolith. [After the dispatcher transition](#view-methods-after-the-dispatcher-transition), the FWSS proxy serves the view methods itself.
+
 StateView is an **immutable**, auto-generated, read-only contract that queries FWSS storage via `extsload`. It provides ~40 view methods for off-chain callers. FWSS holds a mutable reference to its current StateView in a storage variable (`viewContractAddress`), which the owner can update at any time via `setViewContract()` without an FWSS upgrade.
 
 StateView depends on FWSS's storage layout remaining stable — it reads specific storage slots via the auto-generated `FilecoinWarmStorageServiceStateInternalLibrary`. If FWSS storage layout changes, StateView (and the internal library) must be regenerated and redeployed to match.
@@ -549,7 +551,13 @@ Because StateView is a read-only contract that reads state from FWSS, **additive
 
 **Impact assessment.** A StateView bug affects only read-only queries — it cannot corrupt FWSS state or affect settlement, proving, or any on-chain operations. The blast radius is limited to off-chain consumers that route queries through StateView.
 
-**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. Alternatively, the new StateView address can be set during the next FWSS upgrade via `migrate()`.
+**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. The repository no longer generates StateView, so build a fix from the v1.4.0 release tag. After the dispatcher transition this is no longer needed, because the proxy serves the view methods itself.
+
+#### View Methods After the Dispatcher Transition
+
+After the transition, the FWSS proxy serves the view methods through `FWSSViewModule`, generated from `FilecoinWarmStorageServiceStateLibrary` by `tools/generate_view_module.sh`, and `FWSSViewContractModule` makes `viewContractAddress()` return the proxy, so callers that discover the view contract through FWSS move over without a change. The deployed StateView keeps working, because `ExtsloadModule` still serves the storage reads it makes, as long as the storage layout it reads is unchanged.
+
+A bug in a view method still affects only read-only queries. The fix is a josuke migration that routes the affected selectors to a corrected module, subject to the usual announce delay.
 
 ### Cross-Cutting Concerns
 
