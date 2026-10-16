@@ -19,3 +19,6 @@
 [submodule "service_contracts/lib/solady"]
 	path = service_contracts/lib/solady
 	url = https://github.com/vectorized/solady
+[submodule "service_contracts/lib/erc8167"]
+	path = service_contracts/lib/erc8167
+	url = https://github.com/wjmelements/erc8167

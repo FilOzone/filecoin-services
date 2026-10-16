@@ -21,32 +21,56 @@ install:
 
 # Generated files
 LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
-LAYOUT_JSON=src/lib/FilecoinWarmStorageServiceLayout.json
-LAYOUT_SNAPSHOT_JQ=tools/storage_layout_snapshot.jq
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
-VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
-LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
+VIEW_MODULE=src/modules/FWSSViewModule.sol
+
+# wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
+EVM_REPO := https://github.com/wjmelements/evm.git
+EVM_REVISION := 98409233b4ed9fb79efa013fe17ad42b155adf03
+EVM_DIR ?= $(HOME)/.cache/wjmelements-evm/$(EVM_REVISION)
+# Install beside forge, which is already on PATH
+EVM_INSTALL_DIR ?= $(patsubst %/,%,$(dir $(shell command -v forge)))
+
+# josuke deploys the modules and migrations and keeps josuke.json; its ledger format still changes
+JOSUKE_REPO := https://github.com/wjmelements/josuke.git
+JOSUKE_REVISION := 7e59ebb8f24bd256dd89cefd0a3f686af49a491c
 
 # Build target
 .PHONY: build
 build:
 	forge build --via-ir
 
+# Build the pinned evm assembler once per revision
+.PHONY: install-evm
+install-evm: $(EVM_DIR)/bin/evm
+	@test -n "$(EVM_INSTALL_DIR)" || (echo 'forge is not on PATH; set EVM_INSTALL_DIR'; exit 1)
+	install $< $(EVM_INSTALL_DIR)/evm
+
+$(EVM_DIR)/bin/evm:
+	git clone --depth 1 --revision $(EVM_REVISION) --recurse-submodules --shallow-submodules --no-tags $(EVM_REPO) $(EVM_DIR)
+	$(MAKE) -C $(EVM_DIR) bin/evm
+
+# Install the pinned josuke CLI with uv
+.PHONY: install-josuke
+install-josuke:
+	uv tool install --force "josuke @ git+$(JOSUKE_REPO)@$(JOSUKE_REVISION)"
+
+# Compile the upstream dispatcher unchanged. No Solidity wrapper or bytecode padding.
+# Only tests and the dispatcher deployment use these artifacts; FWSS pins the dispatcher code hash.
+.PHONY: erc8167
+erc8167:
+	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
+	$(MAKE) -C lib/erc8167 out/Proxy.evm/Proxy.json out/Implementation.evm/Implementation.json
+
 # Storage layout generation
-$(LAYOUT): tools/generate_storage_layout.sh src/FilecoinWarmStorageService.sol
-	$^ | forge fmt -r - > $@
+$(LAYOUT): tools/generate_storage_layout.sh src/storage/FWSSStorage.sol
+	bash -o pipefail -c 'bash $^ | forge fmt -r - > "$@.tmp"'
+	mv $@.tmp $@
 
-# Storage layout JSON (full metadata for upgrade safety checks)
-$(LAYOUT_JSON): src/FilecoinWarmStorageService.sol $(LAYOUT_SNAPSHOT_JQ)
-	forge inspect --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > $@
-
-# The library imports the generated storage layout.
-$(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol $(LAYOUT)
-	forge build --via-ir $<
-
-# View contract generation (depends on JSON)
-$(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
-	$^ | forge fmt -r - > $@
+# View module generation (sload in place of the library's extsload)
+$(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageServiceStateLibrary.sol
+	bash -o pipefail -c '$^ | forge fmt -r - > "$@.tmp"'
+	mv $@.tmp $@
 
 # Internal library generation (simple sed transform)
 %StateInternalLibrary.sol: %StateLibrary.sol
@@ -54,7 +78,7 @@ $(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
 
 # Main code generation target with proper dependencies
 .PHONY: gen
-gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
+gen: check-tools $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE)
 	@echo "Code generation complete"
 
 # Force regeneration - useful when things are broken
@@ -67,8 +91,7 @@ force-gen: clean-gen
 .PHONY: clean-gen
 clean-gen:
 	@echo "Removing generated files..."
-	@rm -f $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT)
-	@rm -rf out/FilecoinWarmStorageServiceStateLibrary.sol
+	@rm -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE)
 	@echo "Generated files removed"
 
 # Check required tools
@@ -85,7 +108,7 @@ check-tools:
 
 # Test target
 .PHONY: test
-test:
+test: erc8167
 	forge test --via-ir -vv
 
 # Clean build artifacts
@@ -113,13 +136,13 @@ fmt-check:
 # Note: Using --ir-minimum due to "stack too deep" errors in FilecoinPayV1.sol
 # This may result in less accurate source mappings but is necessary for coverage to run
 .PHONY: coverage
-coverage:
+coverage: erc8167
 	@echo "Running coverage with --ir-minimum (required due to stack depth issues)..."
 	forge coverage --ir-minimum --report summary
 
 # Coverage with LCOV report (for CI)
 .PHONY: coverage-lcov
-coverage-lcov:
+coverage-lcov: erc8167
 	@echo "Generating LCOV coverage report with --ir-minimum..."
 	forge coverage --ir-minimum --report lcov
 
@@ -128,11 +151,13 @@ contract-size-check:
 	@echo "Checking deployable contract sizes..."
 	bash tools/check-contract-size.sh --check
 
-# Storage layout validation
-.PHONY: check-layout
-check-layout:
-	@echo "Checking storage layout for destructive changes..."
-	@bash tools/check_storage_layout.sh
+# Offline josuke ledger check: schema, facetSrc resolution, selector collisions, EIP-170 sizes and facet storage
+# against every deployment josuke.json records, including the legacy v1.4.0 monolith. Pass JOSUKE_CHECK_ARGS="--format markdown" for $GITHUB_STEP_SUMMARY.
+.PHONY: check-josuke
+check-josuke:
+	@command -v josuke >/dev/null || (echo 'Missing josuke; run make install-josuke'; exit 1)
+	@command -v evm >/dev/null || (echo 'Missing the evm assembler; run make install-evm'; exit 1)
+	@josuke check $(JOSUKE_CHECK_ARGS)
 
 # ABI Management
 
@@ -141,7 +166,6 @@ ABI_CONTRACTS := \
 	FilecoinWarmStorageService \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
-	FilecoinWarmStorageServiceStateView \
 	FilecoinPayV1 \
 	PDPVerifier \
 	ProviderIdSet \
@@ -192,6 +216,8 @@ clean-abi:
 help:
 	@echo "Available targets:"
 	@echo "  install    - Install dependencies (forge and npm)"
+	@echo "  install-evm - Build the pinned evm assembler and install it beside forge"
+	@echo "  install-josuke - Install the pinned josuke CLI with uv"
 	@echo "  build      - Build contracts"
 	@echo "  test       - Run tests"
 	@echo "  clean      - Clean build artifacts"
@@ -201,12 +227,12 @@ help:
 	@echo "  coverage-lcov - Generate LCOV coverage report for CI"
 	@echo ""
 	@echo "Code generation targets:"
-	@echo "  gen        - Generate code (layout, internal lib, view contract)"
+	@echo "  gen        - Generate code (layout, internal lib, view module)"
 	@echo "  force-gen  - Clean and regenerate all files (use when broken)"
 	@echo "  clean-gen  - Remove all generated files"
 	@echo ""
 	@echo "Validation targets:"
-	@echo "  check-layout - Check storage layout for destructive changes (full metadata comparison)"
+	@echo "  check-josuke - Check josuke.json and the facets it resolves offline (needs josuke and evm)"
 	@echo "  contract-size-check - Check deployable contracts against size and headroom policy"
 	@echo ""
 	@echo "  help       - Show this help message"

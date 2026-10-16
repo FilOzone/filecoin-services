@@ -10,7 +10,6 @@ import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
 import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
@@ -40,7 +39,6 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
 
     PDPVerifier pdpVerifier;
     FilecoinWarmStorageService fwss;
-    FilecoinWarmStorageServiceStateView viewContract;
     FilecoinPayV1 payments;
     MockERC20 token;
     SessionKeyRegistry sessionKeyRegistry;
@@ -97,9 +95,6 @@ contract ExampleSponsoredDataSetTest is MockFVMTest {
                 )
             )
         );
-
-        viewContract = new FilecoinWarmStorageServiceStateView(fwss);
-        fwss.setViewContract(address(viewContract));
 
         PDPOffering.Schema memory schema = PDPOffering.Schema({
             serviceURL: "https://sp.test",

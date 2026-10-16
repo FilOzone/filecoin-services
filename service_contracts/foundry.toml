@@ -5,18 +5,32 @@ script = 'script'
 out = 'out'
 libs = ['lib']
 cache_path = 'cache'
-solc = "0.8.30"
+solc = "0.8.37"
 via_ir = true
 optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
 
+ignored_error_codes = [
+    "license",
+    "code-size",
+    "init-code-size",
+    "transient-storage",
+    "transfer-deprecated",
+    "natspec-memory-safe-assembly-deprecated",
+    9170, # Solidity 0.8.37 warning from fws-payments
+    6335, # Solidity 0.8.37 warning from OpenZeppelin/forge-std
+    8506, # Solidity 0.8.37 warning from forge-std
+    4591, # Warning limit reached
+]
+
 # For dependencies
 remappings = [
     '@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/',
     '@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/',
     'forge-std/=lib/forge-std/src/',
+    '@erc8167/=lib/erc8167/src/',
     '@fws-payments/=lib/fws-payments/src/',
     '@pdp/=lib/pdp/src/',
     '@session-key-registry/=lib/session-key-registry/src/',
@@ -25,8 +39,17 @@ remappings = [
     'solady/=lib/solady/src/',
 ]
 
-# Allow reading test data files
-fs_permissions = [{ access = "read", path = "./test" }]
+# Allow reading test data files. JosukeFacetSet expands the ledgers' facetSrc globs from sources and artifacts,
+# as `josuke deploy` does.
+# The scripts in script/ record deployments in deployments.json; their tests write scratch copies under out/.
+fs_permissions = [
+    { access = "read", path = "./test" },
+    { access = "read-write", path = "./out" },
+    { access = "read", path = "./src/modules" },
+    { access = "read", path = "./lib/erc8167" },
+    { access = "read", path = "./josuke.json" },
+    { access = "read-write", path = "./deployments.json" },
+]
 
 [lint]
 severity = ["high", "med", "low", "info", "gas", "code-size"]

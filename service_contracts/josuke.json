@@ -1,0 +1,48 @@
+[
+    {
+        "address": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
+        "facetSrc": [
+            "src/modules/*.sol",
+            "lib/erc8167/src/Implementation.evm"
+        ],
+        "deployments": {
+            "314": {
+                "constructorArgs": {
+                    "_paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+                    "_pdpVerifierAddress": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
+                    "_usdfc": "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+                    "_filBeamBeneficiaryAddress": "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
+                    "_serviceProviderRegistry": "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
+                    "_sessionKeyRegistry": "0x74FD50525A958aF5d484601E252271f9625231aB"
+                },
+                "legacy": {
+                    "source": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+                    "gitCommit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec"
+                }
+            }
+        }
+    },
+    {
+        "address": "0x02925630df557F957f70E112bA06e50965417CA0",
+        "facetSrc": [
+            "src/modules/*.sol",
+            "lib/erc8167/src/Implementation.evm"
+        ],
+        "deployments": {
+            "314159": {
+                "constructorArgs": {
+                    "_paymentsContractAddress": "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
+                    "_pdpVerifierAddress": "0x85e366Cf9DD2c0aE37E963d9556F5f4718d6417C",
+                    "_usdfc": "0xb3042734b608a1B16e9e86B374A3f3e389B4cDf0",
+                    "_filBeamBeneficiaryAddress": "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
+                    "_serviceProviderRegistry": "0x839e5c9988e4e9977d40708d0094103c0839Ac9D",
+                    "_sessionKeyRegistry": "0x518411c2062E119Aaf7A8B12A2eDf9a939347655"
+                },
+                "legacy": {
+                    "source": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
+                    "gitCommit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec"
+                }
+            }
+        }
+    }
+]
