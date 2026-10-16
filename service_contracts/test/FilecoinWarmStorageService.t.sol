@@ -1490,7 +1490,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
     }
 
-    function testGetDataSetSizeInBytes_ReturnsRawSize() public view {
+    function testGetDataSetSizeInBytes_ReturnsRawSize() public pure {
         // Deprecated helper now returns an upper-bound raw size (was previously Fr32-expanded size).
         assertEq(FilecoinWarmStorageServiceStateLibrary.getDataSetSizeInBytes(0), 0);
         assertEq(FilecoinWarmStorageServiceStateLibrary.getDataSetSizeInBytes(4), 127);
