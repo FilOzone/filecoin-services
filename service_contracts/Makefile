@@ -24,9 +24,7 @@ LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
 LAYOUT_JSON=src/lib/FilecoinWarmStorageServiceLayout.json
 LAYOUT_SNAPSHOT_JQ=tools/storage_layout_snapshot.jq
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
-VIEW_CONTRACT=src/FilecoinWarmStorageServiceStateView.sol
 VIEW_MODULE=src/modules/FWSSViewModule.sol
-LIBRARY_JSON=out/FilecoinWarmStorageServiceStateLibrary.sol/FilecoinWarmStorageServiceStateLibrary.json
 
 # wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
 EVM_REPO := https://github.com/wjmelements/evm.git
@@ -76,14 +74,6 @@ $(LAYOUT_JSON): src/FilecoinWarmStorageService.sol src/storage/FWSSStorage.sol $
 	bash -o pipefail -c 'forge inspect --out out/storage-layout --cache-path cache/storage-layout --json $< storageLayout | jq -f $(LAYOUT_SNAPSHOT_JQ) > "$@.tmp"'
 	mv $@.tmp $@
 
-# The library imports the generated storage layout.
-$(LIBRARY_JSON): src/lib/FilecoinWarmStorageServiceStateLibrary.sol $(LAYOUT)
-	forge build --via-ir $<
-
-# View contract generation (depends on JSON)
-$(VIEW_CONTRACT): tools/generate_view_contract.sh $(LIBRARY_JSON)
-	$^ | forge fmt -r - > $@
-
 # View module generation (sload in place of the library's extsload)
 $(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageServiceStateLibrary.sol
 	bash -o pipefail -c '$^ | forge fmt -r - > "$@.tmp"'
@@ -95,7 +85,7 @@ $(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageService
 
 # Main code generation target with proper dependencies
 .PHONY: gen
-gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT) $(VIEW_MODULE)
+gen: check-tools $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_MODULE)
 	@echo "Code generation complete"
 
 # Force regeneration - useful when things are broken
@@ -108,8 +98,7 @@ force-gen: clean-gen
 .PHONY: clean-gen
 clean-gen:
 	@echo "Removing generated files..."
-	@rm -f $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_CONTRACT) $(VIEW_MODULE)
-	@rm -rf out/FilecoinWarmStorageServiceStateLibrary.sol
+	@rm -f $(LAYOUT) $(LAYOUT_JSON) $(INTERNAL_LIB) $(VIEW_MODULE)
 	@echo "Generated files removed"
 
 # Check required tools
