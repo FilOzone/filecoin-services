@@ -105,10 +105,10 @@ The Run Log is this release issue's operator journal for rollout facts discovere
 
 Keep this table current as values become known.
 
-| Network | Path | Announced target (transition or migration) | Target code hash | Announce tx | Actual `afterEpoch` | Execute tx | `josuke accept` commit | Post-upgrade checks |
-|---|---|---|---|---|---:|---|---|---|
-| Calibnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
-| Mainnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Network | Path | Announced target (transition or migration) | Announce tx | Actual `afterEpoch` | Execute tx | `josuke accept` commit | Post-upgrade checks |
+|---|---|---|---|---:|---|---|---|
+| Calibnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
+| Mainnet | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | `TBD` | Pending |
 
 </details>
 
@@ -355,7 +355,7 @@ Deploy both networks from the frozen tag before any announce/execute. Deploying 
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Calibnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$CALI_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./tools/service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Calibnet requested delay and update the schedule table
 - [ ] Run [Procedure A2](#a2-announce) or [Procedure B2](#b2-announce) in the Calibnet environment
-- [ ] Record the Calibnet announce tx and observed `afterEpoch` in the schedule and Run Log, plus the transition's code hash for Path A
+- [ ] Record the Calibnet announce tx and observed `afterEpoch` in the schedule and Run Log
 - [ ] Update the GitHub pre-release Calibnet rollout status with the announce tx and observed `afterEpoch`
 - [ ] Create or update the public operational notice on [status.filecoin.cloud](https://status.filecoin.cloud/) for the Calibration network before execution. Identify the network and scheduled date/window, link the GitHub pre-release, and keep the maintenance window open through expected post-upgrade validation. Follow the [Operational Event Communications Runbook](https://github.com/FilOzone/filecoin-services/blob/main/docs/operational-events.md).
 
@@ -404,7 +404,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 - [ ] If this release has a ServiceProviderRegistry exception, generate its Mainnet announcement with `NEW_SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS="$MAIN_NEW_SPR_IMPL" UPGRADE_DELAY_EPOCHS=<delay> CALLDATA_ONLY=true ./tools/service-provider-registry-announce-upgrade.sh`, execute it through the owner Safe, then verify and record the exact implementation and observed `afterEpoch` returned by `nextUpgrade()` before any execute transaction.
 - [ ] Set the Mainnet requested delay and update the schedule table
 - [ ] Run [Procedure A2](#a2-announce) or [Procedure B2](#b2-announce) in the Mainnet environment
-- [ ] Record the Mainnet announce tx and observed `afterEpoch` in the schedule and Run Log, plus the transition's code hash for Path A
+- [ ] Record the Mainnet announce tx and observed `afterEpoch` in the schedule and Run Log
 - [ ] Update the GitHub pre-release Mainnet rollout status with the announce tx and observed `afterEpoch`
 
 **Review during the delay**
@@ -539,6 +539,12 @@ GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherTransitionDep
 
 `FWSSDispatcherDeploy` deploys the dispatcher, or reuses the recorded one after checking its code hash, and records it in `deployments.json`. The transition deploy script reads the proxy and the dispatcher from `deployments.json`, the proposed migration from `josuke.json`, and the proxy's current implementation as the rollback target. It deploys `FWSSDispatcherTransition` and records it in `deployments.json`. See [`tools/README.md`](README.md#erc-8167-dispatcher-transition) for its full behavior and broadcast caveats.
 
+- [ ] Check the deployed transition against source. The transition's getters cannot prove what its code does, and it runs in the proxy's storage, so its runtime bytecode must match the frozen tag's build:
+
+```bash
+./tools/verify-deployments.sh --chain "$CHAIN" --eth-call
+```
+
 - [ ] Record the transition as the announced target (`TRANSITION`) and the dispatcher in the Run Log
 - [ ] Commit `josuke.json` and `deployments.json` to the Phase 2 PR
 
@@ -557,17 +563,18 @@ CALLDATA=$(cast calldata 'announceUpgradePlan(address,uint96)' "$TRANSITION" "$U
 ```
 
 - [ ] Every signer [reproduces and decodes](#reproduce-and-decode-safe-calldata) `$CALLDATA` and [checks the transition's pins](#check-the-transitions-pins) before signing
-- [ ] After the Safe transaction executes, [read the pending plan](#read-the-pending-plan) and confirm `PLANNED_TARGET` equals `$TRANSITION` and `PLANNED_AFTER_EPOCH` equals the announce block plus the requested delay (a delay of `0` becomes `1`). Record the transition's code hash in the Run Log.
+- [ ] After the Safe transaction executes, [read the pending plan](#read-the-pending-plan) and confirm `PLANNED_TARGET` equals `$TRANSITION` and `PLANNED_AFTER_EPOCH` equals the announce block plus the requested delay (a delay of `0` becomes `1`).
 
 #### A3: Review During the Delay
 
 Someone other than the announcing operator runs these checks, preferably more than once before `afterEpoch`:
 
 - [ ] [Read the pending plan](#read-the-pending-plan): the target is still `$TRANSITION` and nobody announced anything else
-- [ ] [Check the transition's pins](#check-the-transitions-pins), and that its code hash still equals the one recorded at announce time
+- [ ] [Check the transition's pins](#check-the-transitions-pins)
+- [ ] From the frozen tag's build, `./tools/verify-deployments.sh --chain "$CHAIN" --eth-call` passes: the transition's code is the source's, so its getters report its real pins
 - [ ] `josuke verify` passes against the committed `josuke.json`
 
-The execute script repeats these checks, but it checks readiness first, so it only reaches the pins after `afterEpoch`; A4 runs it.
+The execute script repeats the plan and pin checks, but it checks readiness first, so it only reaches the pins after `afterEpoch`; A4 runs it. It does not run `verify-deployments.sh` or `josuke verify`.
 
 #### Check the Transition's Pins
 
@@ -582,7 +589,6 @@ echo "migration:              $PINNED_MIGRATION (expected $(source tools/josuke.
 echo "dispatcher:             $PINNED_DISPATCHER (expected $DISPATCHER)"
 echo "migrationCodeHash:      $(cast call --rpc-url "$ETH_RPC_URL" "$TRANSITION" 'migrationCodeHash()(bytes32)') (expected $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$PINNED_MIGRATION")"))"
 echo "dispatcher code hash:   $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$PINNED_DISPATCHER")") (expected $PINNED_DISPATCHER_CODEHASH)"
-echo "transition code hash:   $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$TRANSITION")")"
 ```
 
 #### A4: Execute
@@ -592,7 +598,7 @@ export FWSS_DISPATCHER_TRANSITION_ADDRESS="$TRANSITION"
 CALLDATA_ONLY=true forge script script/FWSSDispatcherTransitionExecute.s.sol --rpc-url "$ETH_RPC_URL"
 ```
 
-With `CALLDATA_ONLY=true` the script reruns every A3 check, simulates the upgrade as the proxy owner, and prints the Safe transaction: `upgradeToAndCall(transition, migrate(migration))` on the proxy. That one call points the proxy at the dispatcher and runs the migration; if any part reverts, nothing changes.
+With `CALLDATA_ONLY=true` the script checks that the plan is the transition and ready, that the transition pins the migration `josuke.json` proposes and that migration's unchanged code, the proxy's current implementation as the rollback target, and the pinned dispatcher. It then simulates the upgrade as the proxy owner and prints the Safe transaction: `upgradeToAndCall(transition, migrate(migration))` on the proxy. That one call points the proxy at the dispatcher and runs the migration; if any part reverts, nothing changes.
 
 - [ ] Every signer [reproduces and decodes](#reproduce-and-decode-safe-calldata) the printed calldata, and decodes the inner `migrate(address)` call to confirm it names the pinned migration:
 
