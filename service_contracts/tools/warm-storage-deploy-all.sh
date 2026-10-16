@@ -46,7 +46,7 @@ fi
 
 # Get this script's directory so we can reliably source other scripts
 # in the same directory, regardless of where this script is executed from
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 
 # Source the shared deployments script
 source "$SCRIPT_DIR/deployments.sh"

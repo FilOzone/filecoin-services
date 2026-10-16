@@ -2,7 +2,7 @@
 # josuke.sh - Reads the josuke ledger (josuke.json) for the ERC-8167 transition scripts
 #
 # Usage:
-#   source "$(dirname "${BASH_SOURCE[0]}")/josuke.sh"
+#   source "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/josuke.sh"
 #   josuke_proposed_migration "$FWSS_PROXY_ADDRESS"
 #   josuke_move_entry "$FROM_ADDRESS" "$TO_ADDRESS"
 #
@@ -10,7 +10,7 @@
 #   CHAIN - Chain ID of the deployment to read
 #   JOSUKE_LEDGER - Path to the ledger (default: service_contracts/josuke.json)
 
-JOSUKE_LEDGER="${JOSUKE_LEDGER:-$(dirname "${BASH_SOURCE[0]}")/../josuke.json}"
+JOSUKE_LEDGER="${JOSUKE_LEDGER:-$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/../josuke.json}"
 
 # Prints the EIP-55 migration `josuke deploy` proposed for a proxy on $CHAIN, or nothing if there is none
 # Args: $1=proxy_address

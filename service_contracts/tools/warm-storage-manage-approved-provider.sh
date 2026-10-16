@@ -37,7 +37,7 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
 

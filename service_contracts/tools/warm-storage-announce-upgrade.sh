@@ -9,7 +9,7 @@ set -o pipefail
 # Optional: CALLDATA_ONLY=true to generate calldata for Safe multisig instead of sending
 
 # Get script directory and source deployments.sh
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
 
