@@ -6,7 +6,7 @@ import {console} from "forge-std/Test.sol";
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
 import {FWSSDataSetModule} from "../src/modules/FWSSDataSetModule.sol";
 import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
-import {FWSSDeployer} from "./helpers/FWSSDeployer.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";

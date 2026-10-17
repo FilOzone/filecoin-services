@@ -37,7 +37,7 @@ import {
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {FilecoinWarmStorageServiceFixture} from "./helpers/FilecoinWarmStorageServiceFixture.sol";
-import {FWSSDeployer} from "./helpers/FWSSDeployer.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 
 contract TestDataSetAuthorizer is IDataSetAuthorizer {
     SessionKeyRegistry internal immutable sessionKeyRegistry;
@@ -5255,7 +5255,7 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 }
 
 // Test contract for upgrade scenarios
-contract FilecoinWarmStorageServiceUpgradeTest is FWSSDeployer {
+contract FilecoinWarmStorageServiceUpgradeTest is Test, FWSSDeployer {
     IFilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
     FilecoinPayV1 public payments;

@@ -30,6 +30,9 @@
     "FWSSDispatcherTransition": {
       "artifact": "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition"
     },
+    "FWSSInitializer": {
+      "artifact": "src/FWSSInitializer.sol:FWSSInitializer"
+    },
     "FilecoinWarmStorageService": {
       "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
     },

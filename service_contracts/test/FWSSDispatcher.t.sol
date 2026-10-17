@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {Vm} from "forge-std/Test.sol";
+import {Test, Vm} from "forge-std/Test.sol";
 import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
@@ -25,7 +25,7 @@ import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
 import {NEXT_UPGRADE_SLOT, VIEW_CONTRACT_ADDRESS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
+import {JosukeFacetSet} from "../script/lib/JosukeFacetSet.sol";
 
 contract CallContextFixture {
     function record(bytes calldata payload) external payable returns (address, uint256, bytes memory) {
@@ -77,7 +77,7 @@ contract ReentrantMigrationFixture {
     }
 }
 
-contract FWSSDispatcherTest is JosukeFacetSet {
+contract FWSSDispatcherTest is Test, JosukeFacetSet {
     bytes32 private constant DELEGATES_SLOT = 0xf27774d37a8b3bf2306f60b561e4e8ec22cfb23796f1f777608c0e466ef52600;
     bytes32 private constant OWNER_SLOT = 0x9016d09d72d40fdae2fd8ceac6b6234c7706214fd39c1cd1e609a0528c199300;
     bytes32 private constant IMPLEMENTATION_SLOT = 0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc;

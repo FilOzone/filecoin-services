@@ -50,7 +50,7 @@ make install
 make build
 ```
 
-4. Build the pinned evm assembler and install it beside `forge`. `make test` uses it to assemble the ERC-8167 dispatcher; josuke and `tools/verify-deployments.sh` also need it.
+4. Build the pinned evm assembler and install it beside `forge`. `make test` uses it to assemble the ERC-8167 dispatcher; josuke, `tools/verify-deployments.sh` and `tools/warm-storage-deploy-all.sh` also need it.
 ```bash
 make install-evm
 ```

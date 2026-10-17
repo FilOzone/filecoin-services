@@ -1,15 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {Test, Vm} from "forge-std/Test.sol";
+import {CommonBase} from "forge-std/Base.sol";
+import {Vm} from "forge-std/Vm.sol";
 import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
 import {Constructor} from "@erc8167/lib/Constructor.sol";
 import {SetDelegateOperation} from "@erc8167/lib/Migration.sol";
 
 /// @dev Resolves a Josuke ledger's `facetSrc` from build artifacts, as `josuke deploy` does, without an RPC.
-/// Supported patterns: `<dir>/*.sol`, `<path>:<Contract>` and `<path>.evm`.
-abstract contract JosukeFacetSet is Test {
+/// Supported patterns: `<dir>/*.sol`, `<path>:<Contract>` and `<path>.evm`. Deploys with CREATE from this contract, so
+/// scripts broadcast the deployments and tests run them in place.
+abstract contract JosukeFacetSet is CommonBase {
     string internal constant LEDGER = "josuke.json";
     uint256 MAINNET_INDEX = 0;
     uint256 CALIBNET_INDEX = 1;
@@ -92,7 +94,7 @@ abstract contract JosukeFacetSet is Test {
     }
 
     function _deployFacet(Facet memory facet) private returns (address) {
-        return deployCode(facet.artifact, _facetConstructorArgs(facet));
+        return Constructor.create(abi.encodePacked(vm.getCode(facet.artifact), _facetConstructorArgs(facet)));
     }
 
     /// @dev Deploys every facet and returns one route per exported selector, plus the generated `selectors()`.

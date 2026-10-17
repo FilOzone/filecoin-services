@@ -16,10 +16,9 @@ This directory contains the smart contracts for different Filecoin services usin
 - `test/` - Test files  
   - `FilecoinWarmStorageService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
-  - `warm-storage-deploy-all.sh` - Deployment script for all Warm Storage contracts
-  - Note: deployment scripts now deploy and link `SignatureVerificationLib` when deploying `FilecoinWarmStorageService`.
-    The scripts will deploy `src/lib/SignatureVerificationLib.sol` (or simulate it in dry-run) and pass the library address
-    to `forge create` via the `--libraries` flag so the service implementation is correctly linked.
+  - `warm-storage-deploy-all.sh` - Deploys a fresh Warm Storage stack, mainly for local devnets; FWSS deploys through
+    `script/FWSSDeploy.s.sol` on the ERC-8167 dispatcher
+  - `warm-storage-deploy-all-test.sh` - Runs `warm-storage-deploy-all.sh` against anvil and checks the stack, as CI does
 - `lib/` - Dependencies (git submodules)
   - `forge-std` - Foundry standard library
   - `openzeppelin-contracts` - OpenZeppelin contracts

@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
+import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -16,7 +17,7 @@ import {PDPOffering} from "../PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
-import {FWSSDeployer} from "./FWSSDeployer.sol";
+import {FWSSDeployer} from "../../script/lib/FWSSDeployer.sol";
 
 /// @dev Test-only facet for piece metadata that FWSS no longer writes but still cleans up.
 contract LegacyPieceMetadataFacet is FWSSStorage {
@@ -279,6 +280,11 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
     {
         return
             LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).legacyPieceMetadataValue(dataSetId, pieceId, key);
+    }
+
+    /// @dev Routes a selector without a migration, such as to a test-only facet.
+    function _route(address proxy, bytes4 selector, address delegate) internal {
+        vm.store(proxy, ProxyStorage.delegateStorageKey(selector), bytes32(uint256(uint160(delegate))));
     }
 
     function makeSignaturePass(address signer) public {

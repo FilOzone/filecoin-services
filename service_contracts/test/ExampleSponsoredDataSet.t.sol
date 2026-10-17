@@ -11,7 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
 import {PDP_INACTIVITY_WINDOW} from "../src/lib/FWSSConstants.sol";
-import {FWSSDeployer} from "./helpers/FWSSDeployer.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";

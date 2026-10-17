@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
+import {Test} from "forge-std/Test.sol";
 import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
@@ -13,11 +14,11 @@ import {FWSSDispatcherTransitionDeploy} from "../script/FWSSDispatcherTransition
 import {FWSSDispatcherTransitionExecute} from "../script/FWSSDispatcherTransitionExecute.s.sol";
 import {DeploymentsJson} from "../script/lib/DeploymentsJson.sol";
 import {JosukeLedger} from "../script/lib/JosukeLedger.sol";
-import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
+import {JosukeFacetSet} from "../script/lib/JosukeFacetSet.sol";
 
 /// @dev Drives the transition scripts against the deployed mainnet v1.4.0 bytecode, at the mainnet proxy address
 /// that deployments.json and josuke.json record for chain 314.
-contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
+contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
     uint256 private constant CHAIN = 314;
     string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
     string private constant SCRATCH = "out/FWSSDispatcherTransitionScripts";

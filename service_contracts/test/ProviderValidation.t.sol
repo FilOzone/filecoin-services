@@ -10,7 +10,7 @@ import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
-import {FWSSDeployer} from "./helpers/FWSSDeployer.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
