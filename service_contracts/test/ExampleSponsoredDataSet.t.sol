@@ -13,7 +13,7 @@ import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorag
 import {PDP_INACTIVITY_WINDOW} from "../src/lib/FWSSConstants.sol";
 import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
-import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
 import {Errors} from "../src/Errors.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
@@ -138,7 +138,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest, FWSSDeployer {
         for (uint256 i = 0; i < keys.length; i++) {
             entryHashes[i] = keccak256(
                 abi.encode(
-                    SignatureVerificationLib.METADATA_ENTRY_TYPEHASH,
+                    LibSignatureVerification.METADATA_ENTRY_TYPEHASH,
                     keccak256(bytes(keys[i])),
                     keccak256(bytes(values[i]))
                 )
@@ -154,7 +154,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest, FWSSDeployer {
     {
         return keccak256(
             abi.encode(
-                SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH,
+                LibSignatureVerification.CREATE_DATA_SET_TYPEHASH,
                 uint256(0),
                 _payee,
                 _hashMetadataEntries(keys, values)
@@ -180,13 +180,13 @@ contract ExampleSponsoredDataSetTest is MockFVMTest, FWSSDeployer {
         assertTrue(signer != address(0));
         assertEq(
             sessionKeyRegistry.authorizationExpiry(
-                address(dataSet), signer, SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH
+                address(dataSet), signer, LibSignatureVerification.CREATE_DATA_SET_TYPEHASH
             ),
             type(uint256).max
         );
         assertEq(
             sessionKeyRegistry.authorizationExpiry(
-                address(dataSet), address(0), SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH
+                address(dataSet), address(0), LibSignatureVerification.CREATE_DATA_SET_TYPEHASH
             ),
             0
         );

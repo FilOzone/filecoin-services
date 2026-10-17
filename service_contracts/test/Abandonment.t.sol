@@ -28,7 +28,7 @@ import {
 } from "../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
-import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/Rails.sol";
+import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/LibRails.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";

@@ -14,10 +14,10 @@ import {FWSSDataSetModule} from "../src/modules/FWSSDataSetModule.sol";
 import {DataSetInfoView, DataSetStatus} from "../src/lib/FWSSViewTypes.sol";
 import {IFilecoinServiceMetadata} from "../src/IFilecoinServiceMetadata.sol";
 import {IDataSetAuthorizer} from "../src/interfaces/IDataSetAuthorizer.sol";
-import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
-import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/Rails.sol";
+import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/LibRails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -63,7 +63,7 @@ contract TestDataSetAuthorizer is IDataSetAuthorizer {
         bytes calldata signature,
         bytes calldata // operationData
     ) external view returns (bool) {
-        address signer = SignatureVerificationLib.recoverSigner(digest, signature);
+        address signer = LibSignatureVerification.recoverSigner(digest, signature);
         if (allowed[dataSetId][signer]) {
             return true;
         }
@@ -140,7 +140,7 @@ contract OperationDataCheckingAuthorizer is IDataSetAuthorizer {
     ) external view returns (bool) {
         if (
             dataSetId != expectedDataSetId || operation != expectedOperation
-                || SignatureVerificationLib.recoverSigner(digest, signature) != signer
+                || LibSignatureVerification.recoverSigner(digest, signature) != signer
         ) {
             return false;
         }
@@ -181,13 +181,13 @@ contract StatefulDataSetAuthorizer is IDataSetAuthorizer {
     }
 }
 
-/// Calls the library exactly as FWSS does. A public library function is DELEGATECALL'd, so the
-/// transient reentrancy latch lives in this harness's context and spans the whole call frame.
+/// Calls the library exactly as FWSS does. The library is inlined, so the transient reentrancy latch
+/// lives in this harness's context and spans the whole call frame.
 contract VerifyAuthorizerHarness {
     address internal constant PAYER = address(0xBEEF);
 
     function callVerify(address authorizer, uint256 dataSetId) external returns (address) {
-        return SignatureVerificationLib.verifyTerminateServiceAuthorization(
+        return LibSignatureVerification.verifyTerminateServiceAuthorization(
             PAYER, dataSetId, authorizer, "", bytes32(0), SessionKeyRegistry(address(0))
         );
     }
@@ -4904,7 +4904,7 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         allValues[0] = emptyMeta;
 
         bytes32 digest = _eip712Digest(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 3, pieceData, allKeys, allValues)
+            LibSignatureVerification.addPiecesStructHash(clientDataSetId, 3, pieceData, allKeys, allValues)
         );
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
 
@@ -4945,7 +4945,7 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         allKeys[0] = emptyMeta;
         allValues[0] = emptyMeta;
         bytes32 rejectedDigest = _eip712Digest(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 2, rejectedPieceData, allKeys, allValues)
+            LibSignatureVerification.addPiecesStructHash(clientDataSetId, 2, rejectedPieceData, allKeys, allValues)
         );
 
         makeSignaturePass(sessionKey2);
@@ -5034,7 +5034,7 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         addKeys[0] = pieceKeys;
         addValues[0] = pieceValues;
         bytes32 addDigest = _eip712Digest(
-            SignatureVerificationLib.addPiecesStructHash(clientDataSetId, 99, pieceData, addKeys, addValues)
+            LibSignatureVerification.addPiecesStructHash(clientDataSetId, 99, pieceData, addKeys, addValues)
         );
 
         authorizer.expectAdd(dataSetId, clientDataSetId, 100, keccak256(pieceData[0].data));
@@ -5141,7 +5141,7 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
 
 contract SignatureCheckingService {
     function doRecoverSigner(bytes32 messageHash, bytes memory signature) public pure returns (address) {
-        return SignatureVerificationLib.recoverSigner(messageHash, signature);
+        return LibSignatureVerification.recoverSigner(messageHash, signature);
     }
 }
 

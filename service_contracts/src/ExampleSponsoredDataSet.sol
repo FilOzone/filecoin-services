@@ -7,7 +7,7 @@ import {DataSetInfoView} from "./lib/FWSSViewTypes.sol";
 import {FilecoinPayV1 as FilecoinPay} from "@fws-payments/FilecoinPayV1.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "./lib/LibSignatureVerification.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
@@ -59,7 +59,7 @@ contract ExampleSponsoredDataSetFactory {
         address beneficiary
     ) external returns (ExampleSponsoredDataSet) {
         bytes32 createDataSetStructHash =
-            SignatureVerificationLib.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
+            LibSignatureVerification.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
         bytes32 createDataSetHash = hashTypedDataV4(WARM_STORAGE_SERVICE, createDataSetStructHash);
         // Sign CreateDataSet using Nick's Method
         address createDataSetSigner = ecrecover(createDataSetHash, 27, bytes32(uint256(1)), bytes32(uint256(1)));
@@ -151,12 +151,12 @@ contract ExampleSponsoredDataSet {
         require(CURATOR == address(0), AlreadyInitialized());
 
         bytes32[] memory createPerms = new bytes32[](1);
-        createPerms[0] = SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH;
+        createPerms[0] = LibSignatureVerification.CREATE_DATA_SET_TYPEHASH;
         SESSION_KEY_REGISTRY.login(createDataSetSigner, type(uint256).max, createPerms, ORIGIN);
 
         bytes32[] memory curatorPerms = new bytes32[](2);
-        curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
-        curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        curatorPerms[0] = LibSignatureVerification.ADD_PIECES_TYPEHASH;
+        curatorPerms[1] = LibSignatureVerification.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
         SESSION_KEY_REGISTRY.login(curator, type(uint256).max, curatorPerms, ORIGIN);
         PAYMENTS.setOperatorApproval(
             TOKEN, address(WARM_STORAGE_SERVICE), true, type(uint256).max, type(uint256).max, type(uint256).max
@@ -178,15 +178,15 @@ contract ExampleSponsoredDataSet {
         require(msg.sender == CURATOR, NotCurator(CURATOR, msg.sender));
         require(finalizedEpoch == 0, AlreadyFinalized());
         bytes32[] memory curatorPerms = new bytes32[](2);
-        curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
-        curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        curatorPerms[0] = LibSignatureVerification.ADD_PIECES_TYPEHASH;
+        curatorPerms[1] = LibSignatureVerification.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
         SESSION_KEY_REGISTRY.revoke(CURATOR, curatorPerms, ORIGIN);
         finalizedEpoch = block.number;
     }
 
     function isFinalized() public view returns (bool) {
         return SESSION_KEY_REGISTRY.authorizationExpiry(
-            address(this), CURATOR, SignatureVerificationLib.ADD_PIECES_TYPEHASH
+            address(this), CURATOR, LibSignatureVerification.ADD_PIECES_TYPEHASH
         ) == 0;
     }
 

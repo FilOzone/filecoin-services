@@ -71,7 +71,7 @@ make test
 ```
 service_contracts/
 ├── src/                                 # Smart contract source files
-│   └── FilecoinWarmStorageService.sol   # Main service contract with PDP and payment integration
+│   └── modules/                         # FWSS facets behind the ERC-8167 dispatcher
 ├── test/                                # Test files
 │   └── FilecoinWarmStorageService.t.sol # Contract tests
 ├── tools/                               # Deployment and utility scripts

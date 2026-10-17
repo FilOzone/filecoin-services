@@ -54,7 +54,7 @@ These scripts are invoked by `make gen` (via `Makefile` rules) and should not no
 #### When to regenerate
 
 Run `make gen` (from the `service_contracts/` directory) and commit the results whenever you:
-- Add, remove, or reorder state variables in [`src/FilecoinWarmStorageService.sol`](../src/FilecoinWarmStorageService.sol) (affects [`src/lib/FilecoinWarmStorageServiceLayout.sol`](../src/lib/FilecoinWarmStorageServiceLayout.sol))
+- Add, remove, or reorder state variables in [`src/storage/FWSSStorage.sol`](../src/storage/FWSSStorage.sol) (affects [`src/lib/FilecoinWarmStorageServiceLayout.sol`](../src/lib/FilecoinWarmStorageServiceLayout.sol))
 - Add or modify public view functions in [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](../src/lib/FilecoinWarmStorageServiceStateLibrary.sol) (affects [`src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol`](../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol) and [`src/modules/FWSSViewModule.sol`](../src/modules/FWSSViewModule.sol))
 
 The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/check.yml)) runs on every pull request and push to `main`. It regenerates all files and fails the build if the output differs from what is committed.
@@ -273,7 +273,7 @@ Script inputs, all optional: `FWSS_PROXY_ADDRESS`, `FWSS_DISPATCHER_ADDRESS` and
 
 Broadcasting on Filecoin: `forge script` simulates against the latest state before sending, and the `fevm-foundry-kit` recommends `--skip-simulation` when that simulation misbehaves; receipts can arrive late on 30-second blocks, so add `--retries 10` and rerun with `--resume` when forge reports an empty receipt or a dropped transaction. The deploy script records `deployments.json` during the simulation, before forge sends anything, so a broadcast that fails (unfunded key, dropped transactions) leaves records whose addresses have no code. It refuses `--broadcast` without a wallet before recording anything: forge would sign as its default sender, whose addresses forge's own simulation occupies. `--resume` sends the saved transactions to exactly those addresses without rerunning the script; a plain rerun notices the missing code and deploys again, overwriting the records. Verification: `--verify --verifier blockscout --verifier-url <api>` runs with the broadcast (`https://filecoin-testnet.blockscout.com/api/` on Calibration); run `forge script ... --resume --verify --verifier sourcify` for Sourcify, and `tools/verify-contracts.sh`'s `filfox-verifier` for Filfox. The dispatcher is raw bytecode with no source to verify; forge skips it.
 
-`josuke check` runs offline against the working tree and reports what `josuke deploy` would do, including facets it cannot deploy. Today it fails on `FWSSFilBeamModule` and `FWSSProvingModule`, whose creation code links the public `Rails` library ([wjmelements/josuke#9](https://github.com/wjmelements/josuke/issues/9)). Do not run the transition on Calibration or Mainnet until `josuke check` passes and the business modules are in.
+`josuke check` runs offline against the working tree and reports what `josuke deploy` would do, including facets it cannot deploy. Do not run the transition on Calibration or Mainnet until `josuke check` passes.
 
 ## Ownership Transfer
 
@@ -347,5 +347,5 @@ forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 
 To verify storage layout compatibility:
 ```bash
-forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
+forge inspect src/storage/FWSSStorage.sol:FWSSStorage storageLayout
 ```
