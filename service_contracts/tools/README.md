@@ -14,8 +14,8 @@ Scripts are organized with prefixes for better discoverability:
 
 | Script | Description |
 |--------|-------------|
-| `warm-storage-deploy-all.sh` | Plan and deploy every changed, unpinned Warm Storage component using reviewed deployment metadata; pinned components are preserved |
-| `warm-storage-deploy-implementation.sh` | Deploy FWSS implementation only (for upgrades) |
+| `warm-storage-deploy-all.sh` | Deploy a fresh Warm Storage stack, mainly for local devnets; reuses any contract whose `<NAME>_ADDRESS` is set or recorded |
+| `warm-storage-deploy-all-test.sh` | Run `warm-storage-deploy-all.sh` against anvil and check the deployed stack (the `Deploy All` CI workflow) |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
 
@@ -25,6 +25,7 @@ These live in `../script/` and run with `forge script` from `service_contracts/`
 
 | Script | Description |
 |--------|-------------|
+| `script/FWSSDeploy.s.sol` | Deploy a fresh FWSS proxy on the ERC-8167 dispatcher with the facets `josuke.json` lists; `warm-storage-deploy-all.sh` runs it |
 | `script/FWSSDispatcherDeploy.s.sol` | Deploy the ERC-8167 dispatcher unless one is set or recorded, and record it in `deployments.json`, before `josuke deploy` |
 | `script/FWSSDispatcherTransitionDeploy.s.sol` | Deploy the ERC-8167 dispatcher if `deployments.json` has none, then `FWSSDispatcherTransition` pinned to josuke's proposed migration and the proxy's current implementation; records both in `deployments.json` |
 | `script/FWSSDispatcherTransitionExecute.s.sol` | Check an announced transition against `josuke.json` and the proxy, then send `upgradeToAndCall(transition, migrate(migration))` or print Safe calldata |
@@ -53,7 +54,7 @@ These scripts are invoked by `make gen` (via `Makefile` rules) and should not no
 #### When to regenerate
 
 Run `make gen` (from the `service_contracts/` directory) and commit the results whenever you:
-- Add, remove, or reorder state variables in [`src/FilecoinWarmStorageService.sol`](../src/FilecoinWarmStorageService.sol) (affects [`src/lib/FilecoinWarmStorageServiceLayout.sol`](../src/lib/FilecoinWarmStorageServiceLayout.sol))
+- Add, remove, or reorder state variables in [`src/storage/FWSSStorage.sol`](../src/storage/FWSSStorage.sol) (affects [`src/lib/FilecoinWarmStorageServiceLayout.sol`](../src/lib/FilecoinWarmStorageServiceLayout.sol))
 - Add or modify public view functions in [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](../src/lib/FilecoinWarmStorageServiceStateLibrary.sol) (affects [`src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol`](../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol) and [`src/modules/FWSSViewModule.sol`](../src/modules/FWSSViewModule.sol))
 
 The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/check.yml)) runs on every pull request and push to `main`. It regenerates all files and fails the build if the output differs from what is committed.
@@ -75,11 +76,9 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 ### Usage
 
 ```bash
-# Plan every changed, unpinned component for an existing deployment
-DEPLOYMENT_MODE=upgrade DRY_RUN=true ./tools/warm-storage-deploy-all.sh
-
-# After approving the exact inventory, deploy it without replacing proxies
-DEPLOYMENT_MODE=upgrade DRY_RUN=false ./tools/warm-storage-deploy-all.sh
+# Plan a fresh stack with dummy addresses, then deploy it
+DRY_RUN=true ./tools/warm-storage-deploy-all.sh
+DRY_RUN=false ./tools/warm-storage-deploy-all.sh
 
 # Upgrade existing deployment (see UPGRADE-CHECKLIST.md for the full runbook)
 ./tools/warm-storage-announce-upgrade.sh    # Step 1: Announce
@@ -179,7 +178,11 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 
 ### Required for specific scripts:
 - `warm-storage-deploy-all.sh` requires:
-  - Optional: `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier. Defaults to `10` on calibnet/devnet and `150` on mainnet.
+  - The [evm assembler](../../README.md) on `PATH`: FWSS runs on the ERC-8167 dispatcher, which `make erc8167` builds.
+  - `USDFC_TOKEN_ADDRESS` on devnet (chain `31415926`); calibnet and mainnet default to their USDFC.
+  - Optional: `CHALLENGE_FINALITY` - Challenge finality parameter for PDPVerifier. Defaults to `5` on devnet, `10` on calibnet and `150` on mainnet.
+  - Optional: `MAX_PROVING_PERIOD`, `CHALLENGE_WINDOW_SIZE`, `FILBEAM_CONTROLLER_ADDRESS`, `FILBEAM_BENEFICIARY_ADDRESS`.
+  - Optional: `<NAME>_ADDRESS` for any contract to use instead of deploying it, e.g. `PDP_VERIFIER_IMPLEMENTATION_ADDRESS`. Addresses recorded in `deployments.json` for the chain count too, so clear the chain's entry for a fresh devnet.
 
 - Upgrade scripts - see [UPGRADE-CHECKLIST.md](./UPGRADE-CHECKLIST.md) for the complete FWSS upgrade runbook
 
@@ -191,15 +194,16 @@ These scripts now follow forge/cast's environment variable conventions. Set the 
 
 export ETH_KEYSTORE="/path/to/keystore.json"
 export PASSWORD="your-password"
-export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
-export CHALLENGE_FINALITY="10"  # Use "150" for mainnet
+export ETH_RPC_URL="http://localhost:1234/rpc/v1"
+export USDFC_TOKEN_ADDRESS="0x..."     # a deployed MockUSDFC on devnet
+export DRY_RUN=false
 
 
 # Optional: Custom proving periods
-export MAX_PROVING_PERIOD="240"        # 240 epochs for calibnet, 2880 for mainnet
-export CHALLENGE_WINDOW_SIZE="20"      # 20 epochs for calibnet, 60 for mainnet
+export MAX_PROVING_PERIOD="120"        # 120 epochs for devnet, 240 for calibnet, 2880 for mainnet
+export CHALLENGE_WINDOW_SIZE="10"      # 10 epochs for devnet, 20 for calibnet, 60 for mainnet
 
-./warm-storage-deploy-all.sh
+./tools/warm-storage-deploy-all.sh
 ```
 
 ### Upgrade Existing Contract
@@ -269,7 +273,7 @@ Script inputs, all optional: `FWSS_PROXY_ADDRESS`, `FWSS_DISPATCHER_ADDRESS` and
 
 Broadcasting on Filecoin: `forge script` simulates against the latest state before sending, and the `fevm-foundry-kit` recommends `--skip-simulation` when that simulation misbehaves; receipts can arrive late on 30-second blocks, so add `--retries 10` and rerun with `--resume` when forge reports an empty receipt or a dropped transaction. The deploy script records `deployments.json` during the simulation, before forge sends anything, so a broadcast that fails (unfunded key, dropped transactions) leaves records whose addresses have no code. It refuses `--broadcast` without a wallet before recording anything: forge would sign as its default sender, whose addresses forge's own simulation occupies. `--resume` sends the saved transactions to exactly those addresses without rerunning the script; a plain rerun notices the missing code and deploys again, overwriting the records. Verification: `--verify --verifier blockscout --verifier-url <api>` runs with the broadcast (`https://filecoin-testnet.blockscout.com/api/` on Calibration); run `forge script ... --resume --verify --verifier sourcify` for Sourcify, and `tools/verify-contracts.sh`'s `filfox-verifier` for Filfox. The dispatcher is raw bytecode with no source to verify; forge skips it.
 
-`josuke check` runs offline against the working tree and reports what `josuke deploy` would do, including facets it cannot deploy. Today it fails on `FWSSFilBeamModule` and `FWSSProvingModule`, whose creation code links the public `Rails` library ([wjmelements/josuke#9](https://github.com/wjmelements/josuke/issues/9)). Do not run the transition on Calibration or Mainnet until `josuke check` passes and the business modules are in.
+`josuke check` runs offline against the working tree and reports what `josuke deploy` would do, including facets it cannot deploy. Do not run the transition on Calibration or Mainnet until `josuke check` passes.
 
 ## Ownership Transfer
 
@@ -343,5 +347,5 @@ forge test --match-contract FilecoinWarmStorageServiceUpgradeTest
 
 To verify storage layout compatibility:
 ```bash
-forge inspect src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService storageLayout
+forge inspect src/storage/FWSSStorage.sol:FWSSStorage storageLayout
 ```

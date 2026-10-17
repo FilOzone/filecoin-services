@@ -27,7 +27,7 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol";
 
 /**
  * @title EIP-712 Signature Fixture Generator
@@ -37,7 +37,7 @@ import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol"
  * (chainId, verifyingContract) pair so we can mirror an arbitrary deployed
  * domain (e.g. calibration FWSS) without redeploying at that address.
  *
- * Typehashes for all FWSS operations come from SignatureVerificationLib so any
+ * Typehashes for all FWSS operations come from LibSignatureVerification so any
  * rename in the library will surface here as a fixture mismatch (caught by
  * external_signatures.json + the SDK fixtures).
  */
@@ -124,7 +124,7 @@ contract MetadataSignatureTestContract {
         string[] memory metadataValues
     ) public view returns (bytes32) {
         return _hashTypedData(
-            SignatureVerificationLib.createDataSetStructHash(clientDataSetId, payee, metadataKeys, metadataValues)
+            LibSignatureVerification.createDataSetStructHash(clientDataSetId, payee, metadataKeys, metadataValues)
         );
     }
 
@@ -136,7 +136,7 @@ contract MetadataSignatureTestContract {
         string[][] memory metadataValues
     ) public view returns (bytes32) {
         return _hashTypedData(
-            SignatureVerificationLib.addPiecesStructHash(
+            LibSignatureVerification.addPiecesStructHash(
                 clientDataSetId, nonce, pieceCidsArray, metadataKeys, metadataValues
             )
         );
@@ -151,7 +151,7 @@ contract MetadataSignatureTestContract {
     {
         bytes32 structHash = keccak256(
             abi.encode(
-                SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
+                LibSignatureVerification.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
                 clientDataSetId,
                 keccak256(abi.encodePacked(pieceIds))
             )
@@ -160,7 +160,7 @@ contract MetadataSignatureTestContract {
     }
 
     function getTerminateServiceDigest(uint256 dataSetId) public view returns (bytes32) {
-        bytes32 structHash = keccak256(abi.encode(SignatureVerificationLib.TERMINATE_SERVICE_TYPEHASH, dataSetId));
+        bytes32 structHash = keccak256(abi.encode(LibSignatureVerification.TERMINATE_SERVICE_TYPEHASH, dataSetId));
         return _hashTypedData(structHash);
     }
 }

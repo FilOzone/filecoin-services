@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
+import {Test} from "forge-std/Test.sol";
 import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {IMigrateModule} from "../src/interfaces/IMigrateModule.sol";
-import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
+import {JosukeFacetSet} from "../script/lib/JosukeFacetSet.sol";
 
 /// @dev FWSS policy for josuke.json: what the ledger must list and route for the dispatcher transition.
 /// Selector collisions, sizes and storage are `josuke check`'s job (`make check-josuke`).
-contract FWSSJosukeLedgerTest is JosukeFacetSet {
+contract FWSSJosukeLedgerTest is Test, JosukeFacetSet {
     function testLedgersShareFacetSources() public view {
         string[] memory mainnet = _facetSources(MAINNET_INDEX);
         string[] memory calibnet = _facetSources(CALIBNET_INDEX);

@@ -86,8 +86,8 @@ contract FWSSDispatcherTransitionDeploy is FWSSDispatcherTransitionScript {
     }
 
     /// @notice Uses FWSS_DISPATCHER_TRANSITION_ADDRESS from the environment, which must pin the expected contracts.
-    /// Otherwise reuses the recorded transition when its record matches the artifact and arguments, as the legacy
-    /// `deploy_implementation_if_needed` does, and the contract on chain pins the expected contracts; else deploys.
+    /// Otherwise reuses the recorded transition when its record matches the artifact and arguments and the contract on
+    /// chain pins the expected contracts; else deploys.
     /// A `pinned` record is never redeployed.
     function _transition(uint256 chain, string[] memory args, address previous, address dispatcher, address migration)
         internal

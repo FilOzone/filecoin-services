@@ -5,32 +5,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
-      },
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "dataSetIds",
-        "type": "uint256[]",
-        "internalType": "uint256[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "clientDataSets",
-    "inputs": [
-      {
-        "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "payer",
@@ -59,12 +35,36 @@
   },
   {
     "type": "function",
+    "name": "clientDataSets",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
+      },
+      {
+        "name": "payer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "dataSetIds",
+        "type": "uint256[]",
+        "internalType": "uint256[]"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "clientNonces",
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "payer",
@@ -92,8 +92,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
@@ -111,8 +111,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -140,8 +140,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "offset",
@@ -169,8 +169,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
@@ -188,30 +188,20 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "client",
         "type": "address",
         "internalType": "address"
-      },
-      {
-        "name": "offset",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "limit",
-        "type": "uint256",
-        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "infos",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView[]",
+        "internalType": "struct DataSetInfoView[]",
         "components": [
           {
             "name": "pdpRailId",
@@ -289,20 +279,30 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "client",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
         "name": "infos",
         "type": "tuple[]",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView[]",
+        "internalType": "struct DataSetInfoView[]",
         "components": [
           {
             "name": "pdpRailId",
@@ -380,8 +380,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "payer",
@@ -404,8 +404,8 @@
     "inputs": [
       {
         "name": "",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
@@ -428,8 +428,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -441,7 +441,7 @@
       {
         "name": "info",
         "type": "tuple",
-        "internalType": "struct FilecoinWarmStorageService.DataSetInfoView",
+        "internalType": "struct DataSetInfoView",
         "components": [
           {
             "name": "pdpRailId",
@@ -519,8 +519,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -543,8 +543,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -577,8 +577,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -625,8 +625,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -637,8 +637,8 @@
     "outputs": [
       {
         "name": "status",
-        "type": "FilecoinWarmStorageService.DataSetStatus",
-        "internalType": "enum FilecoinWarmStorageService.DataSetStatus"
+        "type": "DataSetStatus",
+        "internalType": "enum DataSetStatus"
       }
     ],
     "stateMutability": "view"
@@ -649,8 +649,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
@@ -683,8 +683,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
@@ -805,8 +805,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -829,8 +829,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "providerId",
@@ -853,8 +853,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "setId",
@@ -877,8 +877,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
@@ -901,8 +901,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -930,8 +930,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -954,8 +954,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "dataSetId",
@@ -978,8 +978,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "setId",
@@ -1002,8 +1002,8 @@
     "inputs": [
       {
         "name": "service",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       },
       {
         "name": "railId",
@@ -1026,8 +1026,8 @@
     "inputs": [
       {
         "name": "",
-        "type": "FilecoinWarmStorageService",
-        "internalType": "contract FilecoinWarmStorageService"
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
       }
     ],
     "outputs": [
