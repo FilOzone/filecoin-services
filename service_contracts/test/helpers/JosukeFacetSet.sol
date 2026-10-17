@@ -20,8 +20,14 @@ abstract contract JosukeFacetSet is Test {
         bytes4[] selectors;
     }
 
+    // Constructor arguments by parameter name, as Josuke records them per chain in `constructorArgs`.
+    mapping(string name => address value) private constructorArgs;
+    mapping(string name => bool) private constructorArgSet;
+
     error UnsupportedFacetSource(string pattern);
     error NoDeployableFacet(string pattern);
+    error MissingConstructorArg(string sourceId, string name);
+    error UnsupportedConstructorArg(string sourceId, string name, string abiType);
 
     function _proxyAddress(uint256 index) internal view returns (address) {
         return
@@ -49,11 +55,44 @@ abstract contract JosukeFacetSet is Test {
         }
     }
 
-    /// @dev ABI-encoded constructor arguments, which Josuke records per chain as `constructorArgs`.
-    function _facetConstructorArgs(string memory sourceId) internal view virtual returns (bytes memory) {}
+    /// @dev Sets the value for every facet constructor parameter with this name.
+    function _setConstructorArg(string memory name, address value) internal {
+        constructorArgs[name] = value;
+        constructorArgSet[name] = true;
+    }
+
+    /// @dev ABI-encodes a facet's constructor arguments by parameter name, as Josuke does from `constructorArgs`.
+    function _facetConstructorArgs(Facet memory facet) internal view returns (bytes memory args) {
+        string memory json = vm.readFile(facet.artifact);
+        for (uint256 i; vm.keyExistsJson(json, _abiEntry(i)); ++i) {
+            if (
+                keccak256(bytes(vm.parseJsonString(json, string.concat(_abiEntry(i), ".type"))))
+                    != keccak256("constructor")
+            ) {
+                continue;
+            }
+
+            string memory inputs = string.concat(_abiEntry(i), ".inputs");
+            for (uint256 j; vm.keyExistsJson(json, string.concat(inputs, "[", vm.toString(j), "]")); ++j) {
+                string memory input = string.concat(inputs, "[", vm.toString(j), "]");
+                string memory name = vm.parseJsonString(json, string.concat(input, ".name"));
+                string memory abiType = vm.parseJsonString(json, string.concat(input, ".type"));
+                require(
+                    keccak256(bytes(abiType)) == keccak256("address"),
+                    UnsupportedConstructorArg(facet.sourceId, name, abiType)
+                );
+                require(constructorArgSet[name], MissingConstructorArg(facet.sourceId, name));
+                args = abi.encodePacked(args, abi.encode(constructorArgs[name]));
+            }
+        }
+    }
+
+    function _abiEntry(uint256 index) private pure returns (string memory) {
+        return string.concat(".abi[", vm.toString(index), "]");
+    }
 
     function _deployFacet(Facet memory facet) private returns (address) {
-        return deployCode(facet.artifact, _facetConstructorArgs(facet.sourceId));
+        return deployCode(facet.artifact, _facetConstructorArgs(facet));
     }
 
     /// @dev Deploys every facet and returns one route per exported selector, plus the generated `selectors()`.

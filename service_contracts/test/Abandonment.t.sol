@@ -8,8 +8,10 @@ import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
+import {PDP_INACTIVITY_WINDOW} from "../src/lib/FWSSConstants.sol";
+import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
+import {FWSSDeployer} from "./helpers/FWSSDeployer.sol";
 import {
     PROVEN_PERIODS_SLOT,
     PROVING_ACTIVATION_EPOCH_SLOT,
@@ -31,13 +33,11 @@ import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 
-contract AbandonmentTest is MockFVMTest {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
+contract AbandonmentTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
 
     PDPVerifier pdpVerifier;
-    FilecoinWarmStorageService fwss;
+    IFilecoinWarmStorageService fwss;
     FilecoinPayV1 payments;
     MockERC20 usdfc;
     ServiceProviderRegistry serviceProviderRegistry;
@@ -99,20 +99,19 @@ contract AbandonmentTest is MockFVMTest {
         );
 
         // Deploy FWSS pointing to the real PDPVerifier
-        FilecoinWarmStorageService fwssImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier),
-            address(payments),
-            usdfc,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
+        fwss = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(usdfc),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
         );
-        MyERC1967Proxy fwssProxy = new MyERC1967Proxy(
-            address(fwssImpl),
-            abi.encodeCall(FilecoinWarmStorageService.initialize, (uint64(2880), uint256(60), filBeamController))
-        );
-        fwss = FilecoinWarmStorageService(address(fwssProxy));
 
         fwss.addApprovedProvider(1); // SP registered as provider ID 1
 
@@ -134,7 +133,7 @@ contract AbandonmentTest is MockFVMTest {
         bytes32 provenPeriodsBitmap0 = keccak256(abi.encode(uint256(0), provenPeriodsInner));
         assertEq(uint256(vm.load(address(fwss), provenPeriodsBitmap0)), 0, "provenPeriods[0]");
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory info = fwss.getDataSet(dataSetId);
         assertEq(info.pdpRailId, 0, "pdpRailId");
         assertEq(info.cacheMissRailId, 0, "cacheMissRailId");
         assertEq(info.cdnRailId, 0, "cdnRailId");
@@ -227,7 +226,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClears() public {
         uint256 dataSetId = _createDataSet(false);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "dataset should exist before abandonment");
         assertEq(before.payer, client, "payer should be set before abandonment");
 
@@ -247,7 +246,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClearsCDN() public {
         uint256 dataSetId = _createDataSet(true);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "pdpRailId should be set");
         assertGt(before.cacheMissRailId, 0, "cacheMissRailId should be set");
         assertGt(before.cdnRailId, 0, "cdnRailId should be set");
@@ -273,7 +272,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClearsCDNPreTerminated() public {
         uint256 dataSetId = _createDataSet(true);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         // Payer terminates the CDN rails directly on FilecoinPay, bypassing FWSS.
         vm.prank(client);
@@ -315,7 +314,7 @@ contract AbandonmentTest is MockFVMTest {
         uint256 dataSetId = _createDataSet(false);
         _addSinglePiece(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         uint256 challengeEpoch = block.number + 2880 - 5;
         vm.prank(sp);
@@ -357,7 +356,7 @@ contract AbandonmentTest is MockFVMTest {
         uint256 dataSetId = _createDataSet(false);
         _addSinglePiece(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         uint256 payeeFundsBefore = _payeeFunds();
 
         uint256 challengeEpoch = block.number + 2880 - 5;
@@ -389,7 +388,7 @@ contract AbandonmentTest is MockFVMTest {
         uint256 dataSetId = _createDataSet(true);
         _addSinglePiece(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "pdpRailId should be set");
         assertGt(before.cacheMissRailId, 0, "cacheMissRailId should be set");
         assertGt(before.cdnRailId, 0, "cdnRailId should be set");
@@ -477,7 +476,7 @@ contract AbandonmentTest is MockFVMTest {
         address payer = address(0xdead1);
         uint256 dataSetId = _createUnderfundedDataSet(payer, 1);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         // allow abandonment
         vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW);
@@ -499,7 +498,7 @@ contract AbandonmentTest is MockFVMTest {
         address payer = address(0xdead3);
         uint256 dataSetId = _createUnderfundedDataSet(payer, 3);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         uint256 pdpRailId = before.pdpRailId;
 
         _topUpAndSettle(payer, pdpRailId, 1);
@@ -551,7 +550,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClearsCDNPreFinalized() public {
         uint256 dataSetId = _createDataSet(true);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = fwss.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         // Payer terminates the CDN rails directly on FilecoinPay, bypassing FWSS.
         vm.prank(client);

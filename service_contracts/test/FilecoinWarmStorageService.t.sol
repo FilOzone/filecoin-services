@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
-import {stdError} from "forge-std/StdError.sol";
 import {console, Test, Vm} from "forge-std/Test.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-import {CHALLENGES_PER_PROOF, FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
+import {CHALLENGES_PER_PROOF} from "../src/lib/FWSSConstants.sol";
+import {FWSSDataSetModule} from "../src/modules/FWSSDataSetModule.sol";
+import {DataSetInfoView, DataSetStatus} from "../src/lib/FWSSViewTypes.sol";
 import {IFilecoinServiceMetadata} from "../src/IFilecoinServiceMetadata.sol";
 import {IDataSetAuthorizer} from "../src/interfaces/IDataSetAuthorizer.sol";
 import {SignatureVerificationLib} from "../src/lib/SignatureVerificationLib.sol";
@@ -35,48 +35,9 @@ import {
 } from "../src/lib/PriceListUSDFC.sol";
 
 import {PDPOffering} from "./PDPOffering.sol";
-import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
-
-contract FilecoinWarmStorageServiceHarness is FilecoinWarmStorageService {
-    constructor(
-        address pdpVerifier,
-        address payments,
-        MockERC20 usdfc,
-        address filBeamBeneficiary,
-        ServiceProviderRegistry providerRegistry,
-        SessionKeyRegistry sessionKeyRegistry,
-        uint64 reinitializerVersion
-    )
-        FilecoinWarmStorageService(
-            pdpVerifier, payments, usdfc, filBeamBeneficiary, providerRegistry, sessionKeyRegistry, reinitializerVersion
-        )
-    {}
-
-    function seedLegacyPieceMetadata(
-        uint256 dataSetId,
-        uint256 pieceId,
-        string[] calldata keys,
-        string[] calldata values
-    ) external {
-        for (uint256 i = 0; i < keys.length; i++) {
-            dataSetPieceMetadata[dataSetId][pieceId][keys[i]] = values[i];
-            dataSetPieceMetadataKeys[dataSetId][pieceId].push(keys[i]);
-        }
-    }
-
-    function legacyPieceMetadataKeysLength(uint256 dataSetId, uint256 pieceId) external view returns (uint256) {
-        return dataSetPieceMetadataKeys[dataSetId][pieceId].length;
-    }
-
-    function legacyPieceMetadataValue(uint256 dataSetId, uint256 pieceId, string calldata key)
-        external
-        view
-        returns (string memory)
-    {
-        return dataSetPieceMetadata[dataSetId][pieceId][key];
-    }
-}
+import {FilecoinWarmStorageServiceFixture} from "./helpers/FilecoinWarmStorageServiceFixture.sol";
+import {FWSSDeployer} from "./helpers/FWSSDeployer.sol";
 
 contract TestDataSetAuthorizer is IDataSetAuthorizer {
     SessionKeyRegistry internal immutable sessionKeyRegistry;
@@ -252,256 +213,9 @@ contract ReenteringDataSetAuthorizer is IDataSetAuthorizer {
     }
 }
 
-contract FilecoinWarmStorageServiceTest is MockFVMTest {
+contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
     using SafeERC20 for MockERC20;
     using PDPOffering for PDPOffering.Schema;
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-    // Testing Constants
-
-    bytes constant FAKE_SIGNATURE = abi.encodePacked(
-        bytes32(0xc0ffee7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // r
-        bytes32(0x9999997890abcdef1234567890abcdef1234567890abcdef1234567890abcdef), // s
-        uint8(27) // v
-    );
-
-    // Contracts
-    FilecoinWarmStorageService public pdpServiceWithPayments;
-    MockPDPVerifier public mockPDPVerifier;
-    FilecoinPayV1 public payments;
-    MockERC20 public mockUSDFC;
-    ServiceProviderRegistry public serviceProviderRegistry;
-    SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
-
-    // Test accounts
-    address public deployer;
-    address public client;
-    address public serviceProvider;
-    address public filBeamController;
-    address public filBeamBeneficiary;
-    address public session;
-
-    address public sp1;
-    address public sp2;
-    address public sp3;
-
-    address public sessionKey1;
-    address public sessionKey2;
-
-    // Test parameters
-    bytes public extraData;
-
-    // Metadata size and count limits
-    uint256 private constant MAX_KEY_LENGTH = 32;
-    uint256 private constant MAX_VALUE_LENGTH = 96;
-    uint256 private constant MAX_KEYS_PER_DATASET = 10;
-    uint256 private constant MAX_KEYS_PER_PIECE = 3;
-
-    bytes32 private constant CREATE_DATA_SET_TYPEHASH = keccak256(
-        "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)"
-        "MetadataEntry(string key,string value)"
-    );
-    bytes32 private constant ADD_PIECES_TYPEHASH = keccak256(
-        "AddPieces(uint256 clientDataSetId,uint256 nonce,Cid[] pieceData,PieceMetadata[] pieceMetadata)"
-        "Cid(bytes data)" "MetadataEntry(string key,string value)"
-        "PieceMetadata(uint256 pieceIndex,MetadataEntry[] metadata)"
-    );
-    bytes32 private constant SCHEDULE_PIECE_REMOVALS_TYPEHASH =
-        keccak256("SchedulePieceRemovals(uint256 clientDataSetId,uint256[] pieceIds)");
-    bytes32 private constant TERMINATE_SERVICE_TYPEHASH = keccak256("TerminateService(uint256 dataSetId)");
-
-    // Expected lockup amounts for CDN rails
-    uint256 defaultCDNLockup;
-    uint256 defaultCacheMissLockup;
-    uint256 defaultTotalCDNLockup;
-
-    // Structs
-    struct PieceMetadataSetup {
-        uint256 dataSetId;
-        uint256 pieceId;
-        Cids.Cid[] pieceData;
-        bytes extraData;
-    }
-
-    function setUp() public override {
-        super.setUp();
-        // Setup test accounts
-        deployer = address(this);
-        client = address(0xf1);
-        serviceProvider = address(0xf2);
-        filBeamController = address(0xf3);
-        filBeamBeneficiary = address(0xf4);
-
-        // Additional accounts for serviceProviderRegistry tests
-        sp1 = address(0xf5);
-        sp2 = address(0xf6);
-        sp3 = address(0xf7);
-
-        // Session keys
-        sessionKey1 = address(0xa1);
-        sessionKey2 = address(0xa2);
-
-        // Fund test accounts
-        vm.deal(deployer, 100 ether);
-        vm.deal(client, 100 ether);
-        vm.deal(serviceProvider, 100 ether);
-        vm.deal(sp1, 100 ether);
-        vm.deal(sp2, 100 ether);
-        vm.deal(sp3, 100 ether);
-        vm.deal(address(0xf10), 100 ether);
-        vm.deal(address(0xf11), 100 ether);
-        vm.deal(address(0xf12), 100 ether);
-        vm.deal(address(0xf13), 100 ether);
-        vm.deal(address(0xf14), 100 ether);
-
-        // Deploy mock contracts
-        mockUSDFC = new MockERC20();
-        mockPDPVerifier = new MockPDPVerifier();
-
-        // Deploy actual ServiceProviderRegistry
-        ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(1);
-        bytes memory registryInitData = abi.encodeWithSelector(ServiceProviderRegistry.initialize.selector);
-        MyERC1967Proxy registryProxy = new MyERC1967Proxy(address(registryImpl), registryInitData);
-        serviceProviderRegistry = ServiceProviderRegistry(address(registryProxy));
-
-        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
-            serviceURL: "https://provider.com",
-            minPieceSizeInBytes: 1024,
-            maxPieceSizeInBytes: 1024 * 1024,
-            ipniPiece: true,
-            ipniIpfs: false,
-            storagePricePerTibPerDay: 1 ether,
-            minProvingPeriodInEpochs: 2880,
-            location: "US-Central",
-            paymentTokenAddress: IERC20(address(0)) // Payment in FIL
-        });
-        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
-
-        // Register service providers in the serviceProviderRegistry
-        vm.prank(serviceProvider);
-        serviceProviderRegistry.registerProvider{value: 5 ether}(
-            serviceProvider, // payee
-            "Service Provider",
-            "Service Provider Description",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            keys,
-            values
-        );
-
-        values[0] = bytes("https://sp1.com");
-        vm.prank(sp1);
-        serviceProviderRegistry.registerProvider{value: 5 ether}(
-            sp1, // payee
-            "SP1",
-            "Storage Provider 1",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            keys,
-            values
-        );
-
-        values[0] = bytes("https://sp2.com");
-        vm.prank(sp2);
-        serviceProviderRegistry.registerProvider{value: 5 ether}(
-            sp2, // payee
-            "SP2",
-            "Storage Provider 2",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            keys,
-            values
-        );
-
-        values[0] = bytes("https://sp3.com");
-        vm.prank(sp3);
-        serviceProviderRegistry.registerProvider{value: 5 ether}(
-            sp3, // payee
-            "SP3",
-            "Storage Provider 3",
-            ServiceProviderRegistryStorage.ProductType.PDP,
-            keys,
-            values
-        );
-
-        // Deploy FilecoinPayV1 contract (no longer upgradeable)
-        payments = new FilecoinPayV1();
-
-        // Transfer tokens to client for payment
-        mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
-
-        // Initialize expected lockup amounts
-        defaultCDNLockup = (7 * 10 ** mockUSDFC.decimals()) / 10; // 0.7 USDFC
-        defaultCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
-        defaultTotalCDNLockup = defaultCacheMissLockup + defaultCDNLockup;
-
-        // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl = new FilecoinWarmStorageServiceHarness(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-        bytes memory initializeData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
-            uint64(2880), // maxProvingPeriod
-            uint256(60), // challengeWindowSize
-            filBeamController // filBeamControllerAddress
-        );
-
-        MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
-        pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
-
-        // Add providers to approved list
-        pdpServiceWithPayments.addApprovedProvider(1); // serviceProvider
-        pdpServiceWithPayments.addApprovedProvider(2); // sp1
-        pdpServiceWithPayments.addApprovedProvider(3); // sp2
-        pdpServiceWithPayments.addApprovedProvider(4); // sp3
-    }
-
-    function _seedLegacyPieceMetadata(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)
-        internal
-    {
-        FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
-            .seedLegacyPieceMetadata(dataSetId, pieceId, keys, values);
-    }
-
-    function _legacyPieceMetadataKeysLength(uint256 dataSetId, uint256 pieceId) internal view returns (uint256) {
-        return FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
-            .legacyPieceMetadataKeysLength(dataSetId, pieceId);
-    }
-
-    function _legacyPieceMetadataValue(uint256 dataSetId, uint256 pieceId, string memory key)
-        internal
-        view
-        returns (string memory)
-    {
-        return FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
-            .legacyPieceMetadataValue(dataSetId, pieceId, key);
-    }
-
-    function makeSignaturePass(address signer) public {
-        vm.mockCall(
-            address(0x01), // ecrecover precompile address
-            bytes(hex""), // wildcard matching of all inputs requires precisely no bytes
-            abi.encode(signer)
-        );
-    }
-
-    function _generateKey(uint256 index) public pure returns (string memory) {
-        bytes32 hash = keccak256(abi.encodePacked("base_salt", index));
-
-        // Convert hash to hex string
-        string memory hexStr = Strings.toHexString(uint256(hash), 32); // 0x + 64 chars
-
-        // Remove the "0x" prefix and take only first 32 characters to make exactly 32 bytes
-        bytes memory keyBytes = bytes(hexStr);
-        bytes memory result = new bytes(32);
-        for (uint256 i = 0; i < 32; i++) {
-            result[i] = keyBytes[i + 2]; // skip '0x'
-        }
-
-        return string(result); // exactly 32-byte unique string
-    }
 
     function testInitialState() public view {
         assertEq(
@@ -537,23 +251,24 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     }
 
     function testFilecoinServiceDeployedEvent() public {
-        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-
-        bytes memory initData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60), filBeamController
-        );
-
         vm.recordLogs();
-        MyERC1967Proxy newServiceProxy = new MyERC1967Proxy(address(newServiceImpl), initData);
-        IFilecoinServiceMetadata metadata = IFilecoinServiceMetadata(address(newServiceProxy));
+        IFilecoinServiceMetadata metadata = IFilecoinServiceMetadata(
+            address(
+                _deployFWSS(
+                    FWSSDeployment({
+                        payments: address(payments),
+                        pdpVerifier: address(mockPDPVerifier),
+                        usdfc: address(mockUSDFC),
+                        filBeamBeneficiary: filBeamBeneficiary,
+                        serviceProviderRegistry: address(serviceProviderRegistry),
+                        sessionKeyRegistry: address(sessionKeyRegistry),
+                        maxProvingPeriod: 2880,
+                        challengeWindowSize: 60,
+                        filBeamController: filBeamController
+                    })
+                )
+            )
+        );
 
         Vm.Log[] memory entries = vm.getRecordedLogs();
         bytes32 eventSignature = keccak256("FilecoinServiceDeployed(string,string)");
@@ -588,108 +303,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertLe(bytes(serviceHomepage).length, 256, "Service homepage should not exceed 256 bytes");
     }
 
-    function testAnnounceUpgradePlan() public {
-        FilecoinWarmStorageService firstServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-
-        bytes memory initData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60), filBeamController
-        );
-
-        // Deploy the proxy which triggers the initialize function
-        MyERC1967Proxy proxy = new MyERC1967Proxy(address(firstServiceImpl), initData);
-        FilecoinWarmStorageService service = FilecoinWarmStorageService(address(proxy));
-
-        // Upgrade plan should be cleared
-        (address nextImplementation, uint96 afterEpoch) = service.nextUpgrade();
-        assertEq(nextImplementation, address(0));
-        assertEq(afterEpoch, uint96(0));
-
-        // Do not allow upgrade to zero address even if it's the nextImplementation
-        vm.expectRevert();
-        service.upgradeToAndCall(nextImplementation, "");
-
-        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-
-        // Another successful announcement
-        nextImplementation = address(newServiceImpl);
-        uint96 delay = 2000;
-        afterEpoch = uint96(vm.getBlockNumber()) + delay;
-        FilecoinWarmStorageService.PlannedUpgrade memory plan;
-
-        service.announceUpgradePlan(nextImplementation, delay);
-        (plan.nextImplementation, plan.afterEpoch) = service.nextUpgrade();
-        assertEq(nextImplementation, plan.nextImplementation);
-        assertEq(afterEpoch, plan.afterEpoch);
-
-        // Do not allow upgrade until afterEpoch
-        vm.expectRevert();
-        service.upgradeToAndCall(nextImplementation, "");
-        vm.roll(plan.afterEpoch - 1);
-        vm.expectRevert();
-        service.upgradeToAndCall(nextImplementation, "");
-
-        vm.roll(plan.afterEpoch);
-        service.upgradeToAndCall(nextImplementation, "");
-
-        // Plan should be cleared
-        (plan.nextImplementation, plan.afterEpoch) = service.nextUpgrade();
-        assertEq(address(0), plan.nextImplementation);
-        assertEq(0, plan.afterEpoch);
-
-        // Check overflow and minimum delay behavior
-        vm.expectRevert(stdError.arithmeticError);
-        service.announceUpgradePlan(nextImplementation, type(uint96).max);
-
-        service.announceUpgradePlan(nextImplementation, 0);
-        (plan.nextImplementation, plan.afterEpoch) = service.nextUpgrade();
-        assertEq(plan.nextImplementation, nextImplementation);
-        assertEq(plan.afterEpoch, vm.getBlockNumber() + 1);
-    }
-
-    function testAnnounceUpgradePlanOnlyOwner() public {
-        FilecoinWarmStorageService newServiceImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-
-        vm.prank(client);
-        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, client));
-        pdpServiceWithPayments.announceUpgradePlan(address(newServiceImpl), 2000);
-    }
-
-    function _getSingleMetadataKV(string memory key, string memory value)
-        internal
-        pure
-        returns (string[] memory, string[] memory)
-    {
-        string[] memory keys = new string[](1);
-        string[] memory values = new string[](1);
-        keys[0] = key;
-        values[0] = value;
-        return (keys, values);
-    }
-
     function _scheduledPieceMetadataRemovalsLength(uint256 dataSetId) internal view returns (uint256) {
         bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
         return uint256(vm.load(address(pdpServiceWithPayments), slot));
@@ -706,7 +319,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
         // Prepare ExtraData
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
@@ -750,7 +363,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Expect DataSetCreated event when creating the data set (with CDN rails)
         // Rail IDs: pdp=1, cacheMiss=2, cdn=3
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetCreated(
+        emit IFilecoinWarmStorageService.DataSetCreated(
             1, 1, 1, 2, 3, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
@@ -761,7 +374,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.stopPrank();
 
         // Get data set info
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         uint256 pdpRailId = dataSet.pdpRailId;
         uint256 cacheMissRailId = dataSet.cacheMissRailId;
         uint256 cdnRailId = dataSet.cdnRailId;
@@ -788,7 +401,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(pdpServiceWithPayments.railToDataSet(pdpRailId), newDataSetId);
 
         // Verify data set info
-        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
+        DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSetInfo.pdpRailId, pdpRailId, "PDP rail ID should match");
         assertNotEq(dataSetInfo.cacheMissRailId, 0, "Cache miss rail ID should be set");
         assertNotEq(dataSetInfo.cdnRailId, 0, "CDN rail ID should be set");
@@ -832,7 +445,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
 
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
@@ -869,7 +482,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect DataSetCreated event when creating the data set (no CDN rails)
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.DataSetCreated(
+        emit IFilecoinWarmStorageService.DataSetCreated(
             1, 1, 1, 0, 0, client, serviceProvider, serviceProvider, createData.metadataKeys, createData.metadataValues
         );
 
@@ -880,7 +493,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.stopPrank();
 
         // Get data set info
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSet.payer, client);
         assertEq(dataSet.payee, serviceProvider);
         // Verify the commission rate was set correctly for basic service (no CDN)
@@ -902,7 +515,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.prank(serviceProvider);
         uint256 newDataSetId2 = mockPDPVerifier.createDataSet(pdpServiceWithPayments, extraData);
 
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet2 = pdpServiceWithPayments.getDataSet(newDataSetId2);
+        DataSetInfoView memory dataSet2 = pdpServiceWithPayments.getDataSet(newDataSetId2);
         assertEq(dataSet2.payer, client);
         assertEq(dataSet2.payee, serviceProvider);
 
@@ -930,8 +543,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         vm.prank(client);
         pdpServiceWithPayments.terminateService(newDataSetId2);
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo =
-            pdpServiceWithPayments.getDataSet(newDataSetId2);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(newDataSetId2);
         assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
         // Advance block number past end epoch to allow settlement and deletion
         vm.roll(terminatedInfo.pdpEndEpoch + 1);
@@ -952,7 +564,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testCreateDataSetAddPieces() public {
         // Create dataset with metadataKeys/metadataValues
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Test Data Set");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: client, clientDataSetId: 0, metadataKeys: dsKeys, metadataValues: dsValues, signature: FAKE_SIGNATURE
         });
         bytes memory encodedCreateData = abi.encode(
@@ -1067,7 +679,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     function testGetServicePriceValues() public view {
         // Test the values returned by getServicePrice
-        FilecoinWarmStorageService.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
+        FWSSDataSetModule.ServicePricing memory pricing = pdpServiceWithPayments.getServicePrice();
 
         assertEq(pricing.pricePerTiBPerMonthNoCDN, STORAGE_PRICE_PER_TIB_PER_MONTH, "No CDN price should be 2.5 USDFC");
         assertEq(pricing.pricePerTiBCdnEgress, CDN_EGRESS_PRICE_PER_TIB, "CDN egress price should be 7 USDFC per TiB");
@@ -1162,7 +774,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: insufficientClient,
             clientDataSetId: 999,
             metadataKeys: dsKeys,
@@ -1207,7 +819,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Exact Minimum Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: exactClient,
             clientDataSetId: 1000,
             metadataKeys: dsKeys,
@@ -1248,7 +860,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Above Minimum Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: aboveMinClient,
             clientDataSetId: 1001,
             metadataKeys: dsKeys,
@@ -1292,7 +904,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Create dataset - should succeed with minimal funds
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Limited Funds Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: limitedClient,
             clientDataSetId: 1001,
             metadataKeys: dsKeys,
@@ -1345,7 +957,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Create dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Rate Update Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: testClient,
             clientDataSetId: 1002,
             metadataKeys: dsKeys,
@@ -1366,7 +978,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 dataSetId = mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedCreateData);
 
         // Get initial rail info (should be at minimum rate for empty dataset)
-        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 railId = dataSetInfo.pdpRailId;
 
         // Get initial rate
@@ -1519,7 +1131,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Not Approved Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: testClient,
             clientDataSetId: 2000,
             metadataKeys: dsKeys,
@@ -1571,7 +1183,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Rate Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: testClient,
             clientDataSetId: 2001,
             metadataKeys: dsKeys,
@@ -1630,7 +1242,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Lockup Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: testClient,
             clientDataSetId: 2002,
             metadataKeys: dsKeys,
@@ -1689,7 +1301,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Period Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: testClient,
             clientDataSetId: 2003,
             metadataKeys: dsKeys,
@@ -1744,7 +1356,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Prepare dataset creation data
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "All Sufficient Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: testClient,
             clientDataSetId: 2004,
             metadataKeys: dsKeys,
@@ -1769,56 +1381,6 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertEq(dataSetId, 1, "Dataset should be created with sufficient approvals");
     }
 
-    uint256 nextClientDataSetId = 0;
-
-    // Client-Data Set Tracking Tests
-    function prepareDataSetForClient(
-        address, /*provider*/
-        address clientAddress,
-        string[] memory metadataKeys,
-        string[] memory metadataValues
-    ) internal returns (bytes memory) {
-        // Prepare extra data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
-            metadataKeys: metadataKeys,
-            clientDataSetId: nextClientDataSetId++,
-            metadataValues: metadataValues,
-            payer: clientAddress,
-            signature: FAKE_SIGNATURE
-        });
-
-        bytes memory encodedData = abi.encode(
-            createData.payer,
-            createData.clientDataSetId,
-            createData.metadataKeys,
-            createData.metadataValues,
-            createData.signature
-        );
-
-        // Setup client payment approval if not already done
-        vm.startPrank(clientAddress);
-        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
-        mockUSDFC.approve(address(payments), 100e18);
-        payments.deposit(mockUSDFC, clientAddress, 100e18);
-        vm.stopPrank();
-
-        // Create data set as approved provider
-        makeSignaturePass(clientAddress);
-
-        return encodedData;
-    }
-
-    function createDataSetForClient(
-        address provider,
-        address clientAddress,
-        string[] memory metadataKeys,
-        string[] memory metadataValues
-    ) internal returns (uint256) {
-        bytes memory encodedData = prepareDataSetForClient(provider, clientAddress, metadataKeys, metadataValues);
-        vm.prank(provider);
-        return mockPDPVerifier.createDataSet(pdpServiceWithPayments, encodedData);
-    }
-
     function deleteDataSetForClient(
         address provider,
         address,
@@ -1834,7 +1396,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
     function testGetClientDataSets_EmptyClient() public view {
         // Test with a client that has no data sets
-        FilecoinWarmStorageService.DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
 
         assertEq(dataSets.length, 0, "Should return empty array for client with no data sets");
     }
@@ -1846,7 +1408,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         createDataSetForClient(sp1, client, metadataKeys, metadataValues);
 
         // Get data sets
-        FilecoinWarmStorageService.DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
 
         // Verify results
         assertEq(dataSets.length, 1, "Should return one data set");
@@ -1865,7 +1427,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         createDataSetForClient(sp2, client, metadataKeys2, metadataValues2);
 
         // Get data sets
-        FilecoinWarmStorageService.DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
 
         // Verify results
         assertEq(dataSets.length, 2, "Should return two data sets");
@@ -1892,7 +1454,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
 
         // Verify we have 3 datasets initially
-        FilecoinWarmStorageService.DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return three data sets initially");
 
         // Terminate the second dataset (dataSet2) - client terminates
@@ -1900,7 +1462,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.terminateService(dataSet2);
 
         // Verify the dataset is now terminated (paymentEndEpoch > 0)
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
         assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should have paymentEndEpoch set after termination");
 
         // Verify getClientDataSets still returns all 3 datasets (termination doesn't exclude from list)
@@ -1922,7 +1484,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         createDataSetForClient(sp1, client, metadataKeys3, metadataValues3);
 
         // Verify we have 3 datasets initially
-        FilecoinWarmStorageService.DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory dataSets = pdpServiceWithPayments.getClientDataSets(client);
         assertEq(dataSets.length, 3, "Should return three data sets initially");
 
         // Terminate the second dataset (dataSet2)
@@ -1930,7 +1492,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.terminateService(dataSet2);
 
         // Verify termination status
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSet2);
         assertTrue(terminatedInfo.pdpEndEpoch > 0, "Dataset 2 should be terminated");
 
         // Advance block number to be greater than the end epoch to allow deletion
@@ -1973,7 +1535,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Data Set");
 
         // Prepare extra data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: clientAddress,
             clientDataSetId: nextClientDataSetId++,
             metadataKeys: metadataKeys,
@@ -2108,8 +1670,8 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("=== Test: Data Set Payment Termination Lifecycle ===");
 
         // 0. Verify that DataSet with ID 1 is not found
-        FilecoinWarmStorageService.DataSetStatus status = pdpServiceWithPayments.getDataSetStatus(1);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive");
+        DataSetStatus status = pdpServiceWithPayments.getDataSetStatus(1);
+        assertEq(uint256(status), uint256(DataSetStatus.Inactive), "expected Inactive");
 
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
@@ -2117,7 +1679,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -2155,11 +1717,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Created data set with ID:", dataSetId);
 
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status),
-            uint256(FilecoinWarmStorageService.DataSetStatus.Inactive),
-            "expected Inactive (no pieces yet)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Inactive), "expected Inactive (no pieces yet)");
 
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
@@ -2192,7 +1750,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         console.log("Proof submitted successfully");
 
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active");
+        assertEq(uint256(status), uint256(DataSetStatus.Active), "expected Active");
 
         // 3. Terminate payment
         console.log("\n3. Terminating payment rails");
@@ -2202,7 +1760,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // 4. Assertions
         // Check pdpEndEpoch is set
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
         console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
         // CDN service persists through the lockup window — metadata and rails still active
@@ -2216,9 +1774,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // check status remains active (terminated datasets are still Active)
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Active), "expected Active (terminating)");
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -2247,9 +1803,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // check status is still Active as data set is not yet deleted from PDP
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Active), "expected Active (terminating)");
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -2301,9 +1855,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Inactive), "expected Inactive (deleted)");
 
         // CDN rails terminated in dataSetDeleted
         FilecoinPayV1.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
@@ -2328,7 +1880,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -2409,7 +1961,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 4. Try to terminate payment from FilBeam address
         console.log("\n4. Terminating CDN payment rails from FilBeam address -- should pass");
         console.log("Current block:", block.number);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         vm.prank(pdpServiceWithPayments.filBeamControllerAddress()); // FilBeam terminates
         vm.expectEmit(true, true, true, true);
         emit CDNServiceTerminated(filBeamController, dataSetId, info.cacheMissRailId, info.cdnRailId);
@@ -2446,7 +1998,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -2513,7 +2065,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
         console.log("Proof submitted successfully");
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory pdpRailPreTermination = payments.getRail(info.pdpRailId);
 
         // 3. Try to terminate payment from FilBeam address
@@ -2575,7 +2127,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate CDN rails (simulating payer calling FilecoinPayV1.terminateRail directly)
         console.log("Externally terminating CDN rails via FilecoinPayV1...");
@@ -2605,7 +2157,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertTrue(exists, "withCDN flag should still exist after terminateService");
 
         // 6. Complete deletion lifecycle and verify metadata is cleared
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         (uint64 maxProvingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
         FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
@@ -2624,7 +2176,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate only one CDN rail
         console.log("Externally terminating cacheMissRailId only...");
@@ -2659,7 +2211,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate CDN rails (simulating payer calling FilecoinPayV1.terminateRail directly)
         console.log("Externally terminating CDN rails via FilecoinPayV1...");
@@ -2701,7 +2253,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertTrue(exists, "withCDN flag should still exist after terminateService");
 
         // 7. Complete deletion lifecycle and verify metadata is cleared
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         (uint64 maxProvingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
         FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
@@ -2720,7 +2272,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate only one CDN rail
         console.log("Externally terminating cacheMissRailId only...");
@@ -2763,13 +2315,13 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTerminateService_signatureApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "sig test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         bytes memory sig = abi.encode(FAKE_SIGNATURE);
         makeSignaturePass(client);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
@@ -2800,10 +2352,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTerminateService_directPayer_emitsApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
     }
@@ -2811,10 +2363,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTerminateService_directSP_emitsApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId);
 
@@ -2829,7 +2381,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTerminateService_sessionKey() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "session key test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = TERMINATE_SERVICE_TYPEHASH;
@@ -2841,7 +2393,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // approver in event is the session key, not the payer
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(sessionKey1, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(sessionKey1, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
@@ -3296,7 +2848,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         if (caller == address(mockPDPVerifier)) {
             vm.expectEmit(true, false, false, true);
-            emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], keys, values);
+            emit IFilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], keys, values);
         } else {
             // Handle case where caller is not the PDP verifier
             vm.expectRevert(
@@ -3343,7 +2895,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             if (keyLength <= 32) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
-                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
+                emit IFilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
@@ -3390,7 +2942,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             if (valueLength <= MAX_VALUE_LENGTH) {
                 // Should succeed for valid lengths
                 vm.expectEmit(true, false, false, true);
-                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
+                emit IFilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + i, pieceData[0], keys, values);
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + i, pieceData, encodedData);
@@ -3444,7 +2996,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             if (keyCount <= MAX_KEYS_PER_PIECE) {
                 // Should succeed for valid counts
                 vm.expectEmit(true, false, false, true);
-                emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + testIdx, pieceData[0], keys, values);
+                emit IFilecoinWarmStorageService.PieceAdded(dataSetId, pieceId + testIdx, pieceData[0], keys, values);
 
                 vm.prank(address(mockPDPVerifier));
                 pdpServiceWithPayments.piecesAdded(dataSetId, pieceId + testIdx, pieceData, encodedData);
@@ -3498,7 +3050,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
             // Expect success
             vm.expectEmit(true, false, false, true);
-            emit FilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], allKeys[0], allValues[0]);
+            emit IFilecoinWarmStorageService.PieceAdded(dataSetId, pieceId, pieceData[0], allKeys[0], allValues[0]);
 
             vm.prank(address(mockPDPVerifier));
             pdpServiceWithPayments.piecesAdded(dataSetId, pieceId, pieceData, encodedData);
@@ -3707,11 +3259,11 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect events for each piece with their specific metadata
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
+        emit IFilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
+        emit IFilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 2, pieceData[2], allKeys[2], allValues[2]);
+        emit IFilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 2, pieceData[2], allKeys[2], allValues[2]);
 
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
@@ -3847,9 +3399,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Expect events with empty metadata arrays
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
+        emit IFilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], allKeys[0], allValues[0]);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
+        emit IFilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId + 1, pieceData[1], allKeys[1], allValues[1]);
 
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.piecesAdded(dataSetId, firstPieceId, pieceData, encodedData);
@@ -3873,9 +3425,9 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         bytes memory encodedData = abi.encode(firstPieceId + 8000, allKeys, allValues, FAKE_SIGNATURE);
 
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], emptyMetadata, emptyMetadata);
+        emit IFilecoinWarmStorageService.PieceAdded(dataSetId, firstPieceId, pieceData[0], emptyMetadata, emptyMetadata);
         vm.expectEmit(true, false, false, true);
-        emit FilecoinWarmStorageService.PieceAdded(
+        emit IFilecoinWarmStorageService.PieceAdded(
             dataSetId, firstPieceId + 1, pieceData[1], emptyMetadata, emptyMetadata
         );
 
@@ -3922,7 +3474,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.CallerNotPayments.selector, address(payments), address(sp1)));
         vm.prank(sp1);
@@ -3933,7 +3485,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.ServiceContractMustTerminateRail.selector));
         vm.prank(address(payments));
@@ -3949,10 +3501,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testRailTerminated_SetsPdpEndEpochAndEmitsEvent() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
+        emit IFilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
         vm.prank(address(payments));
         pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
 
@@ -3964,10 +3516,10 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testRailTerminated_DoesNotOverwritePdpEndEpoch() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, true, true);
-        emit FilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
+        emit IFilecoinWarmStorageService.PDPPaymentTerminated(dataSetId, 123, info.pdpRailId);
         vm.prank(address(payments));
         pdpServiceWithPayments.railTerminated(info.pdpRailId, address(pdpServiceWithPayments), 123);
 
@@ -3985,7 +3537,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test that CDN datasets now have lockup values: 0.7 USDFC for CDN, 0.3 USDFC for cache-miss
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
@@ -4020,7 +3572,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.stopPrank();
 
         // Verify CDN rails were created with default zero lockup
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
         assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
 
@@ -4038,7 +3590,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Test that creating a dataset with CDN enabled emits CDNPaymentRailsToppedUp event
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
 
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
@@ -4079,7 +3631,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.stopPrank();
 
         // Verify the dataset was created with CDN rails
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertTrue(dataSet.cacheMissRailId > 0, "Cache Miss Rail ID should be non-zero");
         assertTrue(dataSet.cdnRailId > 0, "CDN Rail ID should be non-zero");
     }
@@ -4089,7 +3641,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);
 
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             payer: client,
             metadataKeys: metadataKeys,
@@ -4131,7 +3683,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         }
 
         // Verify the dataset was created without CDN rails
-        FilecoinWarmStorageService.DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
+        DataSetInfoView memory dataSet = pdpServiceWithPayments.getDataSet(newDataSetId);
         assertEq(dataSet.cacheMissRailId, 0, "Cache Miss Rail ID should be zero");
         assertEq(dataSet.cdnRailId, 0, "CDN Rail ID should be zero");
     }
@@ -4140,7 +3692,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testSettleFilBeamPaymentRails_BothAmounts() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 50000;
         uint256 cacheMissAmount = 25000;
@@ -4180,7 +3732,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testSettleFilBeamPaymentRails_OnlyCdnAmount() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 75000;
         uint256 cacheMissAmount = 0;
@@ -4213,7 +3765,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testSettleFilBeamPaymentRails_OnlyCacheMissAmount() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 0;
         uint256 cacheMissAmount = 30000;
@@ -4323,7 +3875,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testSettleFilBeamPaymentRails_EmitsCorrectEvents() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 100000;
         uint256 cacheMissAmount = 50000;
@@ -4380,7 +3932,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testSettleFilBeamPaymentRails_ProcessesPaymentsCorrectly() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnAmount = 75000;
         uint256 cacheMissAmount = 35000;
@@ -4456,7 +4008,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with CDN enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up CDN rails with sufficient funds
         vm.prank(client);
@@ -4498,7 +4050,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with CDN enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up CDN rails with sufficient funds
         vm.prank(client);
@@ -4540,7 +4092,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTopUpCDNPaymentRails_Success() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnTopUp = 100000;
         uint256 cacheMissTopUp = 50000;
@@ -4612,7 +4164,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTopUpCDNPaymentRails_IncrementalTopUps() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // First top-up
         vm.expectEmit(true, false, false, true);
@@ -4644,7 +4196,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testTopUpCDNPaymentRails_ZeroAmounts() public {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up with zero amounts (should revert with InvalidTopUpAmount error)
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidTopUpAmount.selector, dataSetId));
@@ -4731,7 +4283,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Create dataset with CDN enabled
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Top up initially (should succeed)
         uint256 cdnTopUp = 100000;
@@ -4773,7 +4325,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         // Positive test to ensure normal functionality still works
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         uint256 cdnTopUp = 100000;
         uint256 cacheMissTopUp = 50000;
@@ -4869,7 +4421,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Verify CDN rails were created
         assertTrue(info.cacheMissRailId != 0, "Cache miss rail should be created for CDN dataset");
@@ -4910,7 +4462,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Verify CDN rails were NOT created
         assertTrue(info.cacheMissRailId == 0, "Cache miss rail should NOT be created for non-CDN dataset");
@@ -4955,7 +4507,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, metadataKeys, metadataValues);
 
         // Get initial dataset info
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Verify initial state exists
         assertTrue(info.pdpRailId != 0, "PDP rail should exist");
@@ -4994,8 +4546,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Verify client dataset list includes this dataset
-        FilecoinWarmStorageService.DataSetInfoView[] memory clientDataSets =
-            pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory clientDataSets = pdpServiceWithPayments.getClientDataSets(client);
         bool foundInList = false;
         for (uint256 i = 0; i < clientDataSets.length; i++) {
             if (clientDataSets[i].dataSetId == dataSetId) {
@@ -5038,9 +4589,14 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         assertFalse(descriptionExistsAfter, "description metadata key should be cleaned up");
 
         // Check that metadata values are also cleaned up from storage using internal function
-        string memory withCDNValueAfter = pdpServiceWithPayments._getDataSetMetadataValue(dataSetId, "withCDN");
-        string memory labelValueAfter = pdpServiceWithPayments._getDataSetMetadataValue(dataSetId, "label");
-        string memory descriptionValueAfter = pdpServiceWithPayments._getDataSetMetadataValue(dataSetId, "description");
+        string memory withCDNValueAfter = FilecoinWarmStorageServiceStateLibrary._getDataSetMetadataValue(
+            pdpServiceWithPayments, dataSetId, "withCDN"
+        );
+        string memory labelValueAfter =
+            FilecoinWarmStorageServiceStateLibrary._getDataSetMetadataValue(pdpServiceWithPayments, dataSetId, "label");
+        string memory descriptionValueAfter = FilecoinWarmStorageServiceStateLibrary._getDataSetMetadataValue(
+            pdpServiceWithPayments, dataSetId, "description"
+        );
         assertEq(withCDNValueAfter, "", "withCDN metadata value should be cleaned up from storage");
         assertEq(labelValueAfter, "", "label metadata value should be cleaned up from storage");
         assertEq(descriptionValueAfter, "", "description metadata value should be cleaned up from storage");
@@ -5053,7 +4609,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         );
 
         // Dataset info should be cleaned up
-        FilecoinWarmStorageService.DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory dataSetInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(dataSetInfo.pdpRailId == 0, "pdpRailId should be cleaned up");
         assertTrue(dataSetInfo.cacheMissRailId == 0, "cacheMissRailId should be cleaned up in DataSetInfoView");
         assertTrue(dataSetInfo.cdnRailId == 0, "cdnRailId should be cleaned up in DataSetInfoView");
@@ -5085,7 +4641,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testAddPiecesNonceReplayProtection() public {
         // Setup: Create a dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 100,
             metadataKeys: dsKeys,
@@ -5131,7 +4687,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
     function testAddPiecesNonceIndependentFromFirstAdded() public {
         // Setup: Create a dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Independence");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 200,
             metadataKeys: dsKeys,
@@ -5182,7 +4738,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         vm.stopPrank();
 
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Dataset 1");
-        FilecoinWarmStorageService.DataSetCreateData memory createData1 = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData1 = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 300,
             metadataKeys: dsKeys,
@@ -5190,7 +4746,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
             signature: FAKE_SIGNATURE
         });
 
-        FilecoinWarmStorageService.DataSetCreateData memory createData2 = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData2 = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 301,
             metadataKeys: dsKeys,
@@ -5252,7 +4808,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
 
         // Use nonce 777 to create a dataset
         (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Nonce Isolation Test");
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             payer: client,
             clientDataSetId: 777, // This uses nonce 777 in the clientNonces mapping
             metadataKeys: dsKeys,
@@ -5303,7 +4859,7 @@ contract FilecoinWarmStorageServiceTest is MockFVMTest {
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, sessionKey1);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.DataSetAuthorizerSet(dataSetId, address(authorizer));
+        emit IFilecoinWarmStorageService.DataSetAuthorizerSet(dataSetId, address(authorizer));
         vm.prank(client);
         pdpServiceWithPayments.setDataSetAuthorizer(dataSetId, address(authorizer));
         assertEq(pdpServiceWithPayments.getDataSetAuthorizer(dataSetId), address(authorizer));
@@ -5699,10 +5255,8 @@ contract FilecoinWarmStorageServiceSignatureTest is Test {
 }
 
 // Test contract for upgrade scenarios
-contract FilecoinWarmStorageServiceUpgradeTest is Test {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
-    FilecoinWarmStorageService public warmStorageService;
+contract FilecoinWarmStorageServiceUpgradeTest is FWSSDeployer {
+    IFilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
     FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
@@ -5732,26 +5286,19 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         // Deploy FilecoinPayV1 contract (no longer upgradeable)
         payments = new FilecoinPayV1();
 
-        // Deploy FilecoinWarmStorageService with original initialize (without proving period params)
-        // This simulates an existing deployed contract before the upgrade
-        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
+        warmStorageService = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                pdpVerifier: address(mockPDPVerifier),
+                usdfc: address(mockUSDFC),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
         );
-        bytes memory initData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
-            uint64(2880), // maxProvingPeriod
-            uint256(60), // challengeWindowSize
-            filBeamController // filBeamControllerAddress
-        );
-
-        MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), initData);
-        warmStorageService = FilecoinWarmStorageService(address(warmStorageProxy));
     }
 
     function testConfigureProvingPeriod() public {
@@ -5796,48 +5343,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidChallengeWindowSize.selector, 120, 150));
         warmStorageService.configureProvingPeriod(120, 150);
     }
-
-    function testMigrate() public {
-        // Test migrate function for versioning
-        // Note: This would typically be called during a proxy upgrade via upgradeToAndCall
-        // We're testing the function directly here for simplicity
-
-        // Start recording logs
-        vm.recordLogs();
-
-        // Simulate calling migrate during upgrade
-        vm.prank(warmStorageService.owner());
-        warmStorageService.migrate(address(0));
-
-        // Get recorded logs
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-
-        // Find the ContractUpgraded event (reinitializer also emits Initialized event)
-        bytes32 expectedTopic = keccak256("ContractUpgraded(string,address)");
-        bool foundEvent = false;
-
-        for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].topics[0] == expectedTopic) {
-                // Decode and verify the event data
-                (string memory version, address implementation) = abi.decode(logs[i].data, (string, address));
-                assertEq(version, "1.4.0", "Version should be 1.4.0");
-                assertTrue(implementation != address(0), "Implementation address should not be zero");
-                foundEvent = true;
-                break;
-            }
-        }
-
-        assertTrue(foundEvent, "Should emit ContractUpgraded event");
-    }
-
-    function testMigrateOnlyOnce() public {
-        // Test that migrate can only be called once per reinitializer version
-        warmStorageService.migrate(address(0));
-
-        // Second call should fail
-        vm.expectRevert(abi.encodeWithSignature("InvalidInitialization()"));
-        warmStorageService.migrate(address(0));
-    }
 }
 
 /**
@@ -5845,8 +5350,6 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test {
  * maintains same behavior as the original loop-based version
  */
 contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
     /**
      * @notice Test: All epochs proven - should pay full amount
      */
@@ -5895,7 +5398,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
         // Now validate payment for epochs within these proven periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = _activationEpoch; // exclusive start
         uint256 toEpoch = _activationEpoch + (maxProvingPeriod * 3); // inclusive end, all 3 periods
         uint256 proposedAmount = 1000e6;
@@ -5929,7 +5432,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.roll(activationEpoch + (maxProvingPeriod * 3));
 
         // Validate payment
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch; // exclusive
         uint256 toEpoch = vm.getBlockNumber() - 1;
         uint256 proposedAmount = 1000e6;
@@ -6022,7 +5525,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
         // Validate payment for all 3 periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6;
@@ -6082,7 +5585,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         assertTrue(pdpServiceWithPayments.provenPeriods(dataSetId, 2));
 
         // Validate payment for all 3 periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6;
@@ -6151,7 +5654,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         // Don't start proving at all
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = block.number;
         uint256 toEpoch = block.number + 1000;
         uint256 proposedAmount = 1000e6;
@@ -6173,7 +5676,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty");
 
         // No pieces added — modifyRailPayment was never called, so the rail rate is 0
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
         assertEq(rail.paymentRate, 0, "Rail rate must be 0 for empty dataset");
 
@@ -6260,7 +5763,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 
         // validatePayment for an epoch range that falls entirely in the empty period must
         // return 0 (the period is faulted — no proof was submitted before proving stopped).
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 emptyFrom = activationEpoch + maxProvingPeriod; // start of the now-empty period
         uint256 emptyTo = activationEpoch + maxProvingPeriod * 2; // one full period later
 
@@ -6369,7 +5872,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             "Reactivated period should not inherit an old proof bit"
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         (uint256 oldSettlementAmount,,,, uint256 oldSettlementEpoch,) =
             payments.settleRail(info.pdpRailId, firstDeadline);
         assertGt(oldSettlementAmount, 0, "Original proven period should remain payable");
@@ -6556,7 +6059,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch - 500;
         uint256 toEpoch = activationEpoch - 100;
 
@@ -6577,7 +6080,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, challengeEpoch, 100, "");
 
         uint256 activationEpoch = vm.getBlockNumber();
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 proposedAmount = 1000e6;
 
         vm.prank(address(payments));
@@ -6609,7 +6112,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             new string[](0)
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory railBeforeActivation = payments.getRail(info.pdpRailId);
 
         (uint64 maxProvingPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
@@ -6626,7 +6129,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(sp1);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory terminatedRail = payments.getRail(terminatedInfo.pdpRailId);
         assertEq(terminatedRail.lockupPeriod, 0, "Immediate termination should use zero lockup period");
         assertEq(terminatedRail.endEpoch, activationEpoch, "End epoch should equal activation epoch");
@@ -6678,7 +6181,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             new string[](0)
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         FilecoinPayV1.RailView memory railBeforeActivation = payments.getRail(info.pdpRailId);
         assertLt(
             railBeforeActivation.settledUpTo, block.number, "Second addition should leave a pre-activation rate segment"
@@ -6721,7 +6224,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
         // Validate payment for middle portion of period 0
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch + 100; // Start 100 epochs into period
         uint256 toEpoch = activationEpoch + maxProvingPeriod - 100; // End 100 epochs before period ends
         uint256 proposedAmount = 1000e6;
@@ -6762,7 +6265,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(address(mockPDPVerifier));
         pdpServiceWithPayments.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // fromEpoch mid-period, toEpoch exactly on the deadline, should only settle via
         // single-period logic
@@ -6800,7 +6303,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
      */
     function testValidatePayment_InvalidEpochRange() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // fromEpoch >= toEpoch
         vm.prank(address(payments));
@@ -6954,7 +6457,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.roll(activationEpoch + (maxProvingPeriod * 3) + 1);
 
         // Validate payment - should advance settleUpTo to cover all passed periods
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 1000e6;
@@ -6987,7 +6490,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.roll(activationEpoch + (maxProvingPeriod / 2));
 
         // Validate payment - should NOT advance because deadline hasn't passed
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod / 2);
         uint256 proposedAmount = 1000e6;
@@ -7024,7 +6527,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.roll(activationEpoch + (maxProvingPeriod * 3) + 1);
 
         // Validate payment
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 fromEpoch = activationEpoch;
         uint256 toEpoch = activationEpoch + (maxProvingPeriod * 3);
         uint256 proposedAmount = 3000e6; // 1000 per period
@@ -7057,7 +6560,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get termination info
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "Dataset should be terminated");
 
         // Advance past the lockup period but DON'T settle the rail
@@ -7104,7 +6607,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get termination info
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "Dataset should be terminated");
 
         // Advance past the lockup period AND past the last proving period deadline
@@ -7121,7 +6624,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
 
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
-        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
         assertEq(
             pdpServiceWithPayments.getDataSetAuthorizer(dataSetId),
@@ -7180,7 +6683,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         vm.roll(info.pdpEndEpoch + 1);
 
         FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);
@@ -7222,7 +6725,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(dataSetId);
 
         // Get termination info
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // Advance past the lockup period AND past the last proving period deadline
         // Settlement requires all period deadlines to have passed for unproven periods
@@ -7247,7 +6750,7 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
 
         // Verify dataset is deleted (pdpRailId == 0 indicates deleted/unregistered)
-        FilecoinWarmStorageService.DataSetInfoView memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory deletedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(deletedInfo.pdpRailId, 0, "Dataset should be deleted");
     }
 }
@@ -7255,8 +6758,6 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
 // ===== Client Data Set Pagination Tests =====
 
 contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
     // Helper to create N datasets for the default client, alternating between sp1 and sp2
     function _createNDataSets(uint256 n) internal returns (uint256[] memory dataSetIds) {
         dataSetIds = new uint256[](n);
@@ -7359,16 +6860,14 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
     // --- getClientDataSets (paginated, enriched) ---
 
     function testGetClientDataSetsPaginated_Empty() public view {
-        FilecoinWarmStorageService.DataSetInfoView[] memory infos =
-            pdpServiceWithPayments.getClientDataSets(client, 0, 10);
+        DataSetInfoView[] memory infos = pdpServiceWithPayments.getClientDataSets(client, 0, 10);
         assertEq(infos.length, 0, "Empty client should return empty array");
     }
 
     function testGetClientDataSetsPaginated_FullPage() public {
         _createNDataSets(5);
 
-        FilecoinWarmStorageService.DataSetInfoView[] memory page =
-            pdpServiceWithPayments.getClientDataSets(client, 0, 3);
+        DataSetInfoView[] memory page = pdpServiceWithPayments.getClientDataSets(client, 0, 3);
         assertEq(page.length, 3, "Should return 3 enriched data sets");
         assertEq(page[0].payer, client, "First data set payer should match");
         assertEq(page[1].payer, client, "Second data set payer should match");
@@ -7382,8 +6881,7 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
     function testGetClientDataSetsPaginated_SecondPage() public {
         _createNDataSets(5);
 
-        FilecoinWarmStorageService.DataSetInfoView[] memory page =
-            pdpServiceWithPayments.getClientDataSets(client, 3, 3);
+        DataSetInfoView[] memory page = pdpServiceWithPayments.getClientDataSets(client, 3, 3);
         assertEq(page.length, 2, "Should return remaining 2 enriched data sets");
         assertEq(page[0].payee, sp2, "Fourth data set payee should be sp2");
         assertEq(page[1].payee, sp1, "Fifth data set payee should be sp1");
@@ -7392,15 +6890,14 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
     function testGetClientDataSetsPaginated_OffsetBeyondLength() public {
         _createNDataSets(3);
 
-        FilecoinWarmStorageService.DataSetInfoView[] memory page =
-            pdpServiceWithPayments.getClientDataSets(client, 10, 5);
+        DataSetInfoView[] memory page = pdpServiceWithPayments.getClientDataSets(client, 10, 5);
         assertEq(page.length, 0, "Offset beyond length should return empty array");
     }
 
     function testGetClientDataSetsPaginated_LimitZeroReturnsAll() public {
         _createNDataSets(4);
 
-        FilecoinWarmStorageService.DataSetInfoView[] memory all = pdpServiceWithPayments.getClientDataSets(client, 0, 0);
+        DataSetInfoView[] memory all = pdpServiceWithPayments.getClientDataSets(client, 0, 0);
         assertEq(all.length, 4, "limit=0 should return all enriched data sets");
     }
 
@@ -7408,15 +6905,12 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
         _createNDataSets(6);
 
         // Get all using unpaginated
-        FilecoinWarmStorageService.DataSetInfoView[] memory all = pdpServiceWithPayments.getClientDataSets(client);
+        DataSetInfoView[] memory all = pdpServiceWithPayments.getClientDataSets(client);
 
         // Get all using paginated in chunks of 2
-        FilecoinWarmStorageService.DataSetInfoView[] memory page1 =
-            pdpServiceWithPayments.getClientDataSets(client, 0, 2);
-        FilecoinWarmStorageService.DataSetInfoView[] memory page2 =
-            pdpServiceWithPayments.getClientDataSets(client, 2, 2);
-        FilecoinWarmStorageService.DataSetInfoView[] memory page3 =
-            pdpServiceWithPayments.getClientDataSets(client, 4, 2);
+        DataSetInfoView[] memory page1 = pdpServiceWithPayments.getClientDataSets(client, 0, 2);
+        DataSetInfoView[] memory page2 = pdpServiceWithPayments.getClientDataSets(client, 2, 2);
+        DataSetInfoView[] memory page3 = pdpServiceWithPayments.getClientDataSets(client, 4, 2);
 
         assertEq(page1.length + page2.length + page3.length, all.length, "Total across pages should match");
 
@@ -7445,8 +6939,7 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.terminateService(ids[1]);
 
         // Paginated result should still include the terminated dataset
-        FilecoinWarmStorageService.DataSetInfoView[] memory page =
-            pdpServiceWithPayments.getClientDataSets(client, 0, 3);
+        DataSetInfoView[] memory page = pdpServiceWithPayments.getClientDataSets(client, 0, 3);
         assertEq(page.length, 3, "Terminated datasets should still appear in paginated results");
         assertTrue(page[1].pdpEndEpoch > 0, "Middle dataset should show as terminated");
     }
@@ -7458,7 +6951,7 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
         vm.prank(client);
         pdpServiceWithPayments.terminateService(ids[1]);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(ids[1]);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(ids[1]);
         vm.roll(info.pdpEndEpoch + 1);
 
         FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
@@ -7470,7 +6963,7 @@ contract ClientDataSetPaginationTest is FilecoinWarmStorageServiceTest {
         // After deletion, length should be 3 and pagination should reflect that
         assertEq(pdpServiceWithPayments.getClientDataSetsLength(client), 3, "Length should be 3 after deletion");
 
-        FilecoinWarmStorageService.DataSetInfoView[] memory all = pdpServiceWithPayments.getClientDataSets(client, 0, 0);
+        DataSetInfoView[] memory all = pdpServiceWithPayments.getClientDataSets(client, 0, 0);
         assertEq(all.length, 3, "Should return 3 data sets after deletion");
 
         // Verify the deleted dataset is not present

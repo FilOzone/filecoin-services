@@ -47,7 +47,7 @@ import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageS
 
 // Get status
 DataSetStatus status = FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
-bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
+bool isActive = (status == DataSetStatus.Active);
 ```
 
 **From Subgraph:**

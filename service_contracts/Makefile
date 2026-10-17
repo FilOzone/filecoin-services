@@ -23,6 +23,12 @@ install:
 LAYOUT=src/lib/FilecoinWarmStorageServiceLayout.sol
 INTERNAL_LIB=src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol
 VIEW_MODULE=src/modules/FWSSViewModule.sol
+FWSS_INTERFACE=src/interfaces/IFilecoinWarmStorageService.sol
+# FWSS runs facets behind the ERC-8167 dispatcher, so its ABI comes from josuke abi, not one contract's artifact
+FWSS_ABI=abi/FilecoinWarmStorageService.abi.json
+# Tests and scripts consume the FWSS interface. When it is stale they may not compile, which must not block
+# regenerating it, so builds toward it skip them.
+SKIP_INTERFACE_CONSUMERS := ["test/**","script/**"]
 
 # wjmelements/evm assembles the ERC-8167 dispatcher. CI, local tests and josuke should share this revision.
 EVM_REPO := https://github.com/wjmelements/evm.git
@@ -72,13 +78,20 @@ $(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageService
 	bash -o pipefail -c '$^ | forge fmt -r - > "$@.tmp"'
 	mv $@.tmp $@
 
+# FWSS interface generation from the FWSS ABI
+$(FWSS_INTERFACE): export FOUNDRY_SKIP = $(SKIP_INTERFACE_CONSUMERS)
+$(FWSS_INTERFACE): tools/generate_fwss_interface.sh $(FWSS_ABI)
+	@! grep -l IFilecoinWarmStorageService src/modules/*.sol || (echo 'Modules must not import the interface generated from their ABI'; exit 1)
+	bash -o pipefail -c '$^ | forge fmt -r - > "$@.tmp"'
+	mv $@.tmp $@
+
 # Internal library generation (simple sed transform)
 %StateInternalLibrary.sol: %StateLibrary.sol
 	sed -e 's/public/internal/g' -e 's/StateLibrary/StateInternalLibrary/g' $< | awk 'NR == 4 { print "// Code generated - DO NOT EDIT.\n// This file is a generated binding and any changes will be lost.\n// Generated with make $@\n"} {print}' | forge fmt -r - > $@
 
 # Main code generation target with proper dependencies
 .PHONY: gen
-gen: check-tools $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE)
+gen: check-tools $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE) $(FWSS_INTERFACE)
 	@echo "Code generation complete"
 
 # Force regeneration - useful when things are broken
@@ -91,7 +104,7 @@ force-gen: clean-gen
 .PHONY: clean-gen
 clean-gen:
 	@echo "Removing generated files..."
-	@rm -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE)
+	@rm -f $(LAYOUT) $(INTERNAL_LIB) $(VIEW_MODULE) $(FWSS_INTERFACE)
 	@echo "Generated files removed"
 
 # Check required tools
@@ -162,8 +175,8 @@ check-josuke:
 # ABI Management
 
 # Core contracts we publish ABIs for.
+# Contract ABIs extracted from build artifacts. update-abi gets FWSS's from josuke.
 ABI_CONTRACTS := \
-	FilecoinWarmStorageService \
 	IFilecoinServiceMetadata \
 	FilecoinWarmStorageServiceStateLibrary \
 	FilecoinPayV1 \
@@ -174,37 +187,24 @@ ABI_CONTRACTS := \
 	SessionKeyRegistry \
 	Errors
 
-# Contract ABIs that should include event fragments emitted from first-party
-# libraries. Library events are logged from the calling contract/proxy address.
-ABI_CONTRACTS_WITH_LIBRARY_EVENTS := FilecoinWarmStorageService
-ABI_CONTRACTS_SIMPLE := $(filter-out $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS),$(ABI_CONTRACTS))
-FIRST_PARTY_LIBRARY_SOURCE_PREFIX := src/lib/
-
 # Directory for ABIs
 abi:
 	@mkdir -p abi
 
-# Update ABIs
+# Update ABIs. FWSS runs facets behind the ERC-8167 dispatcher, so josuke merges its ABI from the facets josuke.json
+# lists. The FWSS interface is generated from that ABI and the other contracts compile against it, so it comes first.
 .PHONY: update-abi
 update-abi: | abi
+	@command -v josuke >/dev/null || (echo 'Missing josuke'; exit 1)
+	FOUNDRY_SKIP='$(SKIP_INTERFACE_CONSUMERS)' bash -o pipefail -c 'josuke abi $$(jq -r ".[0].address" josuke.json) | jq . > "$(FWSS_ABI).tmp"'
+	mv $(FWSS_ABI).tmp $(FWSS_ABI)
+	$(MAKE) $(FWSS_INTERFACE)
 	forge build --via-ir
-	@set -e; for contract in $(ABI_CONTRACTS_SIMPLE); do \
+	@set -e; for contract in $(ABI_CONTRACTS); do \
 		artifact="out/$$contract.sol/$$contract.json"; \
 		echo "Extracting ABI for $$contract..."; \
 		jq '.abi' "$$artifact" > "abi/$$contract.abi.json"; \
 	done
-	@jq -s --arg source_prefix "$(FIRST_PARTY_LIBRARY_SOURCE_PREFIX)" \
-		'def solc_metadata: if (.metadata | type) == "string" then (.metadata | try fromjson catch {}) else (.metadata // {}) end; def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); reduce ([.[] | select((((solc_metadata.settings.compilationTarget // {}) | to_entries[0]? | .key // "") | startswith($$source_prefix))) | (.abi // [])[] | select(.type == "event")][]) as $$event ([]; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
-		out/*.sol/*.json > abi/.library-events.abi.json
-	@set -e; for contract in $(ABI_CONTRACTS_WITH_LIBRARY_EVENTS); do \
-		artifact="out/$$contract.sol/$$contract.json"; \
-		echo "Extracting ABI for $$contract with first-party library events..."; \
-		jq -s \
-			'def abi_key: (.type // "") + ":" + (.name // "") + ":" + ([.inputs[]? | (.type // "")] | join(",")); .[0].abi as $$contract_abi | .[1] as $$library_events | reduce $$library_events[] as $$event ($$contract_abi; if any(.[]; abi_key == ($$event | abi_key)) then . else . + [$$event] end)' \
-			"$$artifact" abi/.library-events.abi.json > "abi/$$contract.abi.json.tmp"; \
-		mv "abi/$$contract.abi.json.tmp" "abi/$$contract.abi.json"; \
-	done
-	@rm -f abi/.library-events.abi.json
 
 # Clean just the ABIs
 .PHONY: clean-abi
