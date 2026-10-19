@@ -8,11 +8,11 @@ import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.s
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSS_DISPATCHER_CODE_HASH} from "../src/FWSSDispatcherTransition.sol";
 import {DeploymentsJson} from "./lib/DeploymentsJson.sol";
+import {FWSS_DISPATCHER_ARTIFACT} from "./lib/FWSSDeployer.sol";
 
 /// @title FWSSDispatcherTransitionScript
 /// @notice Inputs shared by the scripts that move the FWSS proxy to the ERC-8167 dispatcher
 abstract contract FWSSDispatcherTransitionScript is Script {
-    string internal constant FWSS_DISPATCHER_ARTIFACT = "lib/erc8167/out/Proxy.evm/Proxy.json";
     string internal constant FWSS_TRANSITION_ARTIFACT = "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition";
 
     /// @notice Whether forge runs this script without `--broadcast`. Virtual because `forge test` runs in its own

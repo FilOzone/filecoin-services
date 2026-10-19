@@ -61,3 +61,19 @@ jobs:
           cd service_contracts
           set -o pipefail
           make check-josuke JOSUKE_CHECK_ARGS="--format markdown" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Check ABIs
+        run: |
+          export PATH="$HOME/.local/bin:/home/runner/.config/.foundry/bin:$PATH"
+          cd service_contracts
+          make update-abi
+          if [ -n "$(git status --porcelain abi/ src/interfaces/)" ]; then
+            echo "Error: Contract ABIs have changed!"
+            git status --porcelain abi/ src/interfaces/
+            echo ""
+            git diff abi/ src/interfaces/
+            echo ""
+            echo "Please run 'make update-abi' in service_contracts/ and commit the changes."
+            exit 1
+          fi
+          echo "All ABIs are up to date ✓"

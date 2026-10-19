@@ -6,31 +6,21 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
+import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmStorageService.sol";
+import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
 import {MockERC20, MockPDPVerifier} from "../mocks/SharedMocks.sol";
 import {PDPOffering} from "../PDPOffering.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
+import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
+import {FWSSDeployer} from "../../script/lib/FWSSDeployer.sol";
 
-contract FilecoinWarmStorageServiceHarness is FilecoinWarmStorageService {
-    constructor(
-        address pdpVerifier,
-        address payments,
-        MockERC20 usdfc,
-        address filBeamBeneficiary,
-        ServiceProviderRegistry providerRegistry,
-        SessionKeyRegistry sessionKeyRegistry,
-        uint64 reinitializerVersion
-    )
-        FilecoinWarmStorageService(
-            pdpVerifier, payments, usdfc, filBeamBeneficiary, providerRegistry, sessionKeyRegistry, reinitializerVersion
-        )
-    {}
-
+/// @dev Test-only facet for piece metadata that FWSS no longer writes but still cleans up.
+contract LegacyPieceMetadataFacet is FWSSStorage {
     function seedLegacyPieceMetadata(
         uint256 dataSetId,
         uint256 pieceId,
@@ -56,10 +46,9 @@ contract FilecoinWarmStorageServiceHarness is FilecoinWarmStorageService {
     }
 }
 
-abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
+abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer {
     using SafeERC20 for MockERC20;
     using PDPOffering for PDPOffering.Schema;
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
     // Testing Constants
 
     bytes constant FAKE_SIGNATURE = abi.encodePacked(
@@ -69,7 +58,7 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
     );
 
     // Contracts
-    FilecoinWarmStorageService public pdpServiceWithPayments;
+    IFilecoinWarmStorageService public pdpServiceWithPayments;
     MockPDPVerifier public mockPDPVerifier;
     FilecoinPayV1 public payments;
     MockERC20 public mockUSDFC;
@@ -235,17 +224,35 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
         defaultCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
         defaultTotalCDNLockup = defaultCacheMissLockup + defaultCDNLockup;
 
-        // Deploy FilecoinWarmStorageService with proxy
-        FilecoinWarmStorageService pdpServiceImpl = _deployServiceImplementation();
-        bytes memory initializeData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector,
-            uint64(2880), // maxProvingPeriod
-            uint256(60), // challengeWindowSize
-            filBeamController // filBeamControllerAddress
+        pdpServiceWithPayments = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                pdpVerifier: address(mockPDPVerifier),
+                usdfc: address(mockUSDFC),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
         );
-
-        MyERC1967Proxy pdpServiceProxy = new MyERC1967Proxy(address(pdpServiceImpl), initializeData);
-        pdpServiceWithPayments = FilecoinWarmStorageService(address(pdpServiceProxy));
+        LegacyPieceMetadataFacet legacyPieceMetadata = new LegacyPieceMetadataFacet();
+        _route(
+            address(pdpServiceWithPayments),
+            LegacyPieceMetadataFacet.seedLegacyPieceMetadata.selector,
+            address(legacyPieceMetadata)
+        );
+        _route(
+            address(pdpServiceWithPayments),
+            LegacyPieceMetadataFacet.legacyPieceMetadataKeysLength.selector,
+            address(legacyPieceMetadata)
+        );
+        _route(
+            address(pdpServiceWithPayments),
+            LegacyPieceMetadataFacet.legacyPieceMetadataValue.selector,
+            address(legacyPieceMetadata)
+        );
 
         // Match the approved providers in the legacy FWSS test setup.
         pdpServiceWithPayments.addApprovedProvider(1);
@@ -257,13 +264,13 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
     function _seedLegacyPieceMetadata(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)
         internal
     {
-        FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
+        LegacyPieceMetadataFacet(address(pdpServiceWithPayments))
             .seedLegacyPieceMetadata(dataSetId, pieceId, keys, values);
     }
 
     function _legacyPieceMetadataKeysLength(uint256 dataSetId, uint256 pieceId) internal view returns (uint256) {
-        return FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
-            .legacyPieceMetadataKeysLength(dataSetId, pieceId);
+        return
+            LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).legacyPieceMetadataKeysLength(dataSetId, pieceId);
     }
 
     function _legacyPieceMetadataValue(uint256 dataSetId, uint256 pieceId, string memory key)
@@ -271,8 +278,13 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
         view
         returns (string memory)
     {
-        return FilecoinWarmStorageServiceHarness(address(pdpServiceWithPayments))
-            .legacyPieceMetadataValue(dataSetId, pieceId, key);
+        return
+            LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).legacyPieceMetadataValue(dataSetId, pieceId, key);
+    }
+
+    /// @dev Routes a selector without a migration, such as to a test-only facet.
+    function _route(address proxy, bytes4 selector, address delegate) internal {
+        vm.store(proxy, ProxyStorage.delegateStorageKey(selector), bytes32(uint256(uint160(delegate))));
     }
 
     function makeSignaturePass(address signer) public {
@@ -299,18 +311,6 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
         return string(result); // exactly 32-byte unique string
     }
 
-    function _deployServiceImplementation() internal virtual returns (FilecoinWarmStorageService) {
-        return new FilecoinWarmStorageServiceHarness(
-            address(mockPDPVerifier),
-            address(payments),
-            mockUSDFC,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
-        );
-    }
-
     uint256 nextClientDataSetId = 0;
 
     function _getSingleMetadataKV(string memory key, string memory value)
@@ -332,7 +332,7 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest {
         string[] memory metadataValues
     ) internal returns (bytes memory) {
         // Prepare extra data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             metadataKeys: metadataKeys,
             clientDataSetId: nextClientDataSetId++,
             metadataValues: metadataValues,

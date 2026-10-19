@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.30;
 
-import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "./FilecoinWarmStorageService.sol";
+import {IFilecoinWarmStorageService} from "./interfaces/IFilecoinWarmStorageService.sol";
+import {PDP_INACTIVITY_WINDOW} from "./lib/FWSSConstants.sol";
+import {DataSetInfoView} from "./lib/FWSSViewTypes.sol";
 import {FilecoinPayV1 as FilecoinPay} from "@fws-payments/FilecoinPayV1.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SignatureVerificationLib} from "./lib/SignatureVerificationLib.sol";
+import {LibSignatureVerification} from "./lib/LibSignatureVerification.sol";
 import {FilecoinWarmStorageServiceStateInternalLibrary} from "./lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
@@ -13,7 +15,7 @@ import {LibBytes} from "solady/utils/LibBytes.sol";
 import {LibClone} from "solady/utils/LibClone.sol";
 import {FVMPay} from "@fvm-solidity/FVMPay.sol";
 
-function hashTypedDataV4(FilecoinWarmStorageService fwss, bytes32 structHash) view returns (bytes32) {
+function hashTypedDataV4(IFilecoinWarmStorageService fwss, bytes32 structHash) view returns (bytes32) {
     (, string memory name, string memory version, uint256 chainId, address verifyingContract,,) = fwss.eip712Domain();
     bytes32 domainSeparator = keccak256(
         abi.encode(
@@ -32,13 +34,13 @@ contract ExampleSponsoredDataSetFactory {
         ExampleSponsoredDataSet indexed dataSet, address indexed curator, address indexed payee, address beneficiary
     );
 
-    FilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
+    IFilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
     FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     IERC20 public immutable TOKEN;
     ExampleSponsoredDataSet public immutable IMPLEMENTATION;
 
-    constructor(FilecoinWarmStorageService fwss) {
+    constructor(IFilecoinWarmStorageService fwss) {
         WARM_STORAGE_SERVICE = fwss;
         FilecoinPay filecoinPay = FilecoinPay(fwss.paymentsContractAddress());
         PAYMENTS = filecoinPay;
@@ -57,7 +59,7 @@ contract ExampleSponsoredDataSetFactory {
         address beneficiary
     ) external returns (ExampleSponsoredDataSet) {
         bytes32 createDataSetStructHash =
-            SignatureVerificationLib.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
+            LibSignatureVerification.createDataSetStructHash(0, payee, metadataKeys, metadataValues);
         bytes32 createDataSetHash = hashTypedDataV4(WARM_STORAGE_SERVICE, createDataSetStructHash);
         // Sign CreateDataSet using Nick's Method
         address createDataSetSigner = ecrecover(createDataSetHash, 27, bytes32(uint256(1)), bytes32(uint256(1)));
@@ -71,8 +73,6 @@ contract ExampleSponsoredDataSetFactory {
 /// @dev This is an example of how to implement a noncustodial data set.
 /// This contract pays for the data set and authorizes a key to perform its curation.
 contract ExampleSponsoredDataSet {
-    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
-
     error AlreadyInitialized();
     error NotPayer(address expected, address actual);
     error NotCurator(address expected, address actual);
@@ -116,7 +116,7 @@ contract ExampleSponsoredDataSet {
     uint256 public constant CHALLENGE_PERIOD = 2880;
     uint256 public constant MIGRATION_DEPOSIT = 1 ether;
 
-    FilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
+    IFilecoinWarmStorageService public immutable WARM_STORAGE_SERVICE;
     FilecoinPay public immutable PAYMENTS;
     SessionKeyRegistry public immutable SESSION_KEY_REGISTRY;
     IERC20 public immutable TOKEN;
@@ -135,7 +135,7 @@ contract ExampleSponsoredDataSet {
     uint256 public nextMigrationId;
 
     constructor(
-        FilecoinWarmStorageService fwss,
+        IFilecoinWarmStorageService fwss,
         FilecoinPay filecoinPay,
         SessionKeyRegistry sessionKeyRegistry,
         IERC20 token
@@ -151,12 +151,12 @@ contract ExampleSponsoredDataSet {
         require(CURATOR == address(0), AlreadyInitialized());
 
         bytes32[] memory createPerms = new bytes32[](1);
-        createPerms[0] = SignatureVerificationLib.CREATE_DATA_SET_TYPEHASH;
+        createPerms[0] = LibSignatureVerification.CREATE_DATA_SET_TYPEHASH;
         SESSION_KEY_REGISTRY.login(createDataSetSigner, type(uint256).max, createPerms, ORIGIN);
 
         bytes32[] memory curatorPerms = new bytes32[](2);
-        curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
-        curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        curatorPerms[0] = LibSignatureVerification.ADD_PIECES_TYPEHASH;
+        curatorPerms[1] = LibSignatureVerification.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
         SESSION_KEY_REGISTRY.login(curator, type(uint256).max, curatorPerms, ORIGIN);
         PAYMENTS.setOperatorApproval(
             TOKEN, address(WARM_STORAGE_SERVICE), true, type(uint256).max, type(uint256).max, type(uint256).max
@@ -167,7 +167,8 @@ contract ExampleSponsoredDataSet {
     }
 
     function bind(uint256 _dataSetId) external {
-        (address payer, uint256 pdpRailId) = WARM_STORAGE_SERVICE.getDataSetPayerAndRailId(_dataSetId);
+        (address payer, uint256 pdpRailId) =
+            FilecoinWarmStorageServiceStateInternalLibrary.getDataSetPayerAndRailId(WARM_STORAGE_SERVICE, _dataSetId);
         require(payer == address(this), NotPayer(address(this), payer));
         dataSetId = _dataSetId;
         railId = pdpRailId;
@@ -177,21 +178,22 @@ contract ExampleSponsoredDataSet {
         require(msg.sender == CURATOR, NotCurator(CURATOR, msg.sender));
         require(finalizedEpoch == 0, AlreadyFinalized());
         bytes32[] memory curatorPerms = new bytes32[](2);
-        curatorPerms[0] = SignatureVerificationLib.ADD_PIECES_TYPEHASH;
-        curatorPerms[1] = SignatureVerificationLib.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
+        curatorPerms[0] = LibSignatureVerification.ADD_PIECES_TYPEHASH;
+        curatorPerms[1] = LibSignatureVerification.SCHEDULE_PIECE_REMOVALS_TYPEHASH;
         SESSION_KEY_REGISTRY.revoke(CURATOR, curatorPerms, ORIGIN);
         finalizedEpoch = block.number;
     }
 
     function isFinalized() public view returns (bool) {
         return SESSION_KEY_REGISTRY.authorizationExpiry(
-            address(this), CURATOR, SignatureVerificationLib.ADD_PIECES_TYPEHASH
+            address(this), CURATOR, LibSignatureVerification.ADD_PIECES_TYPEHASH
         ) == 0;
     }
 
     function release(IERC20 token) external {
         require(dataSetId != 0, DataSetNotBound());
-        (address payer,) = WARM_STORAGE_SERVICE.getDataSetPayerAndRailId(dataSetId);
+        (address payer,) =
+            FilecoinWarmStorageServiceStateInternalLibrary.getDataSetPayerAndRailId(WARM_STORAGE_SERVICE, dataSetId);
         require(payer == address(0), DataSetNotDeleted());
         (,, uint256 available,) = PAYMENTS.getAccountInfoIfSettled(token, address(this));
         PAYMENTS.withdrawTo(token, BENEFICIARY, available);
@@ -224,7 +226,12 @@ contract ExampleSponsoredDataSet {
         require(successor.BENEFICIARY() == BENEFICIARY, SuccessorBeneficiaryMismatch());
         uint256 successorDataSetId = successor.dataSetId();
         require(successorDataSetId != 0, SuccessorNotBound());
-        require(WARM_STORAGE_SERVICE.hasBeenProvenRecently(successorDataSetId), SuccessorNotProven());
+        require(
+            FilecoinWarmStorageServiceStateInternalLibrary.hasBeenProvenRecently(
+                WARM_STORAGE_SERVICE, successorDataSetId
+            ),
+            SuccessorNotProven()
+        );
         _transferFunds(factory, successor);
         emit Migrated(address(successor));
     }
@@ -325,7 +332,8 @@ contract ExampleSponsoredDataSet {
         require(successor.BENEFICIARY() == BENEFICIARY, SuccessorBeneficiaryMismatch());
 
         require(dataSetId != 0, DataSetNotBound());
-        FilecoinWarmStorageService.DataSetInfoView memory info = WARM_STORAGE_SERVICE.getDataSet(dataSetId);
+        DataSetInfoView memory info =
+            FilecoinWarmStorageServiceStateInternalLibrary.getDataSet(WARM_STORAGE_SERVICE, dataSetId);
         require(info.payer != address(0), DataSetDeleted());
 
         // If not terminated, require the SP is in danger of abandonment (past half the inactivity window).

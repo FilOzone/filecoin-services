@@ -34,8 +34,9 @@ library DeploymentsJson {
         _write(_quote(VM.toString(value)), _key(chainId, key));
     }
 
-    /// @notice Records the build metadata of a deployed contract under `contracts.<contractKey>`, which the legacy
-    /// tools compare to decide whether to redeploy. Linked libraries are not supported: `libraries` is always empty.
+    /// @notice Records the build metadata of a deployed contract under `contracts.<contractKey>`, which
+    /// tools/verify-deployments.sh checks against the chain. Linked libraries are not supported: `libraries` is always
+    /// empty.
     /// @param chainId The chain
     /// @param contractKey The contract key, e.g. FWSS_DISPATCHER_TRANSITION
     /// @param artifactContract The artifact, e.g. src/Foo.sol:Foo
@@ -81,8 +82,8 @@ library DeploymentsJson {
         return true;
     }
 
-    /// @notice Whether the deployment policy pins a contract: never redeploy it, use the recorded address. Mirrors
-    /// `deployment_is_pinned` in tools/deployments.sh, except that a non-boolean `pinned` reverts.
+    /// @notice Whether the deployment policy pins a contract: never redeploy it, use the recorded address. A
+    /// non-boolean `pinned` reverts.
     /// @param chainId The chain
     /// @param contractKey The contract key, e.g. FWSS_DISPATCHER_TRANSITION
     /// @return False when `pinned` is absent

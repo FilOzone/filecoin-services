@@ -30,20 +30,14 @@
     "FWSSDispatcherTransition": {
       "artifact": "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition"
     },
-    "FilecoinWarmStorageService": {
-      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+    "FWSSInitializer": {
+      "artifact": "src/FWSSInitializer.sol:FWSSInitializer"
     },
     "ServiceProviderRegistry": {
       "artifact": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
     },
     "ProviderIdSet": {
       "artifact": "src/ProviderIdSet.sol:ProviderIdSet"
-    },
-    "SignatureVerificationLib": {
-      "artifact": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib"
-    },
-    "Rails": {
-      "artifact": "src/lib/Rails.sol:Rails"
     },
     "PDPVerifier": {
       "artifact": "lib/pdp/src/PDPVerifier.sol:PDPVerifier"

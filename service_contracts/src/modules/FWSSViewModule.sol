@@ -7,8 +7,8 @@ pragma solidity 0.8.37;
 
 import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
-import {FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
 import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
+import {DataSetInfoView, DataSetStatus} from "../lib/FWSSViewTypes.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
@@ -29,11 +29,6 @@ contract FWSSViewModule is IPDPProvingSchedule {
     constructor(IERC20 _usdfc) {
         require(_usdfc != IERC20(address(0)), Errors.ZeroAddress(Errors.AddressField.USDFC));
         usdfcTokenAddress = _usdfc;
-    }
-
-    /// @notice Returns the FWSS proxy
-    function service() public view returns (FilecoinWarmStorageService) {
-        return FilecoinWarmStorageService(address(this));
     }
 
     function sload(bytes32 slot) internal view returns (bytes32 value) {
@@ -112,11 +107,7 @@ contract FWSSViewModule is IPDPProvingSchedule {
      * @param dataSetId The ID of the data set
      * @return info The data set information struct
      */
-    function getDataSet(uint256 dataSetId)
-        public
-        view
-        returns (FilecoinWarmStorageService.DataSetInfoView memory info)
-    {
+    function getDataSet(uint256 dataSetId) public view returns (DataSetInfoView memory info) {
         bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
         bytes32[] memory info11 = sloadStruct(slot, 11);
         info.pdpRailId = uint256(info11[0]);
@@ -150,22 +141,22 @@ contract FWSSViewModule is IPDPProvingSchedule {
      * @param dataSetId The ID of the dataset
      * @return status The current status
      */
-    function getDataSetStatus(uint256 dataSetId) public view returns (FilecoinWarmStorageService.DataSetStatus status) {
-        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(dataSetId);
+    function getDataSetStatus(uint256 dataSetId) public view returns (DataSetStatus status) {
+        DataSetInfoView memory info = getDataSet(dataSetId);
 
         // Non-existent datasets are inactive
         if (info.pdpRailId == 0) {
-            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+            return DataSetStatus.Inactive;
         }
 
         // Check if proving is activated (has pieces)
         // Inactive only if no proving has started, everything else is Active
         uint256 activationEpoch = provingActivationEpoch(dataSetId);
         if (activationEpoch == 0) {
-            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+            return DataSetStatus.Inactive;
         }
 
-        return FilecoinWarmStorageService.DataSetStatus.Active;
+        return DataSetStatus.Active;
     }
 
     function clientDataSets(address payer) public view returns (uint256[] memory dataSetIds) {
@@ -346,14 +337,10 @@ contract FWSSViewModule is IPDPProvingSchedule {
      * @dev To determine deletion status: deleted datasets don't appear in
      * getClientDataSets() anymore - they are completely removed.
      */
-    function getClientDataSets(address client)
-        public
-        view
-        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
-    {
+    function getClientDataSets(address client) public view returns (DataSetInfoView[] memory infos) {
         uint256[] memory dataSetIds = clientDataSets(client);
 
-        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
+        infos = new DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(dataSetIds[i]);
         }
@@ -372,11 +359,11 @@ contract FWSSViewModule is IPDPProvingSchedule {
     function getClientDataSets(address client, uint256 offset, uint256 limit)
         public
         view
-        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
+        returns (DataSetInfoView[] memory infos)
     {
         uint256[] memory dataSetIds = clientDataSets(client, offset, limit);
 
-        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
+        infos = new DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(dataSetIds[i]);
         }

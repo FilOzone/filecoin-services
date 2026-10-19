@@ -4,7 +4,7 @@ pragma solidity 0.8.37;
 import {console} from "forge-std/Script.sol";
 import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {ERC8167Transition} from "../src/ERC8167Transition.sol";
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {ILegacyFilecoinWarmStorageService} from "../src/interfaces/ILegacyFilecoinWarmStorageService.sol";
 import {
     FilecoinWarmStorageServiceStateInternalLibrary
 } from "../src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol";
@@ -16,8 +16,6 @@ import {JosukeLedger} from "./lib/JosukeLedger.sol";
 /// or prints the Safe transaction when CALLDATA_ONLY=true. Run `josuke accept` afterwards.
 /// @dev Writes nothing to deployments.json, which tracks UUPS implementations; josuke.json records the routes.
 contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
-    using FilecoinWarmStorageServiceStateInternalLibrary for FilecoinWarmStorageService;
-
     /// @notice Checks the plan and the transition's pins, then upgrades the proxy or prints the Safe transaction
     function run() external {
         uint256 chain = block.chainid;
@@ -41,11 +39,11 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         console.log("Josuke migration:", migration);
 
         bytes memory data = abi.encodeCall(Migrate.migrate, (migration));
-        address owner = FilecoinWarmStorageService(proxy).owner();
+        address owner = ILegacyFilecoinWarmStorageService(proxy).owner();
         if (calldataOnly) {
             _simulateAsOwner(proxy, owner, transition, data, dispatcher);
             _printSafeTransaction(
-                proxy, abi.encodeCall(FilecoinWarmStorageService(proxy).upgradeToAndCall, (transition, data))
+                proxy, abi.encodeCall(ILegacyFilecoinWarmStorageService(proxy).upgradeToAndCall, (transition, data))
             );
             return;
         }
@@ -64,7 +62,7 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
 
         console.log("Completing the transition as:", sender);
         vm.broadcast();
-        FilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
+        ILegacyFilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
 
         _requireDispatcherInstalled(proxy, dispatcher);
         if (_isDryRun()) {
@@ -87,7 +85,7 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
         uint256 snapshot = vm.snapshotState();
 
         vm.prank(owner);
-        FilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
+        ILegacyFilecoinWarmStorageService(proxy).upgradeToAndCall(transition, data);
         _requireDispatcherInstalled(proxy, dispatcher);
 
         vm.revertToState(snapshot);
@@ -103,7 +101,8 @@ contract FWSSDispatcherTransitionExecute is FWSSDispatcherTransitionScript {
     }
 
     function _requireAnnounced(address proxy, address transition) internal view {
-        (address planned, uint96 afterEpoch) = FilecoinWarmStorageService(proxy).nextUpgrade();
+        (address planned, uint96 afterEpoch) =
+            FilecoinWarmStorageServiceStateInternalLibrary.nextUpgrade(ILegacyFilecoinWarmStorageService(proxy));
         require(
             planned == transition,
             string.concat("the announced upgrade is ", vm.toString(planned), ", not ", vm.toString(transition))
