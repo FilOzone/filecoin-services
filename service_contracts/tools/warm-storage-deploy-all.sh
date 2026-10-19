@@ -274,16 +274,10 @@ deploy_fwss_if_needed() {
             "$(_artifact_path src/FWSSInitializer.sol:FWSSInitializer)"
         FWSS_DISPATCHER_ADDRESS="${FWSS_DISPATCHER_ADDRESS:-0x$(printf '%s' FWSS_DISPATCHER_ADDRESS | sha256sum | cut -c1-40)}"
     else
-        # The script records into deployments.json, so honor SKIP_UPDATE_DEPLOYMENTS with a scratch copy
-        local deployments_json="$DEPLOYMENTS_JSON_PATH"
-        if [ "${SKIP_UPDATE_DEPLOYMENTS:-false}" = "true" ]; then
-            deployments_json=$(mktemp)
-            cp "$DEPLOYMENTS_JSON_PATH" "$deployments_json"
-        fi
-
         # --skip-simulation makes forge estimate each transaction's gas with the node, like forge create: FEVM gas
-        # differs from the local EVM's, and Foundry does not know it does.
-        if ! DEPLOYMENTS_JSON_PATH="$deployments_json" \
+        # differs from the local EVM's, and Foundry does not know it does. --json reports what run() returns.
+        local output
+        if ! output=$(SKIP_UPDATE_DEPLOYMENTS="${SKIP_UPDATE_DEPLOYMENTS:-}" \
             FILECOIN_PAY_ADDRESS="$FILECOIN_PAY_ADDRESS" \
             PDP_VERIFIER_PROXY_ADDRESS="$PDP_VERIFIER_PROXY_ADDRESS" \
             USDFC_TOKEN_ADDRESS="$USDFC_TOKEN_ADDRESS" \
@@ -295,18 +289,17 @@ deploy_fwss_if_needed() {
             FILBEAM_CONTROLLER_ADDRESS="$FILBEAM_CONTROLLER_ADDRESS" \
             forge script script/FWSSDeploy.s.sol \
                 --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password "$PASSWORD" --sender "$ADDR" \
-                --broadcast --skip-simulation; then
+                --broadcast --skip-simulation --json); then
+            echo "$output"
             echo "  ❌ FWSS deployment failed"
             exit 1
         fi
+        jq -rR 'fromjson? | .logs[]? | "  " + .' <<<"$output"
 
-        FWSS_PROXY_ADDRESS=$(jq -r --arg chain "$CHAIN" '.[$chain].FWSS_PROXY_ADDRESS // empty' "$deployments_json")
-        FWSS_DISPATCHER_ADDRESS=$(jq -r --arg chain "$CHAIN" '.[$chain].FWSS_DISPATCHER_ADDRESS // empty' "$deployments_json")
-        if [ "$deployments_json" != "$DEPLOYMENTS_JSON_PATH" ]; then
-            rm -f "$deployments_json"
-        fi
-        if [ -z "$FWSS_PROXY_ADDRESS" ]; then
-            echo "  ❌ Failed to read the FWSS proxy address"
+        FWSS_DISPATCHER_ADDRESS=$(jq -rR 'fromjson? | .returns.dispatcher.value // empty' <<<"$output")
+        FWSS_PROXY_ADDRESS=$(jq -rR 'fromjson? | .returns.proxy.value // empty' <<<"$output")
+        if [ -z "$FWSS_PROXY_ADDRESS" ] || [ -z "$FWSS_DISPATCHER_ADDRESS" ]; then
+            echo "  ❌ FWSSDeploy did not return the FWSS proxy and dispatcher"
             exit 1
         fi
         echo "  ✅ Deployed at: $FWSS_PROXY_ADDRESS"

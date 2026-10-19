@@ -98,6 +98,17 @@ nonce=$(cast nonce "$DEPLOYER")
 deploy_all "$SCRATCH/deployments.json" false > "$SCRATCH/rerun.log"
 [ "$(cast nonce "$DEPLOYER")" = "$nonce" ] || fail "the rerun sent transactions"
 
+echo "== SKIP_UPDATE_DEPLOYMENTS deploys without writing"
+jq --arg chain "$CHAIN" 'del(.[$chain].FWSS_PROXY_ADDRESS)' "$SCRATCH/deployments.json" > "$SCRATCH/skip.json"
+cp "$SCRATCH/skip.json" "$SCRATCH/skip.before.json"
+SKIP_UPDATE_DEPLOYMENTS=true deploy_all "$SCRATCH/skip.json" false > "$SCRATCH/skip.log"
+cmp -s "$SCRATCH/skip.json" "$SCRATCH/skip.before.json" || fail "SKIP_UPDATE_DEPLOYMENTS wrote deployments.json"
+skipped=$(grep -E "^FilecoinWarmStorageService Proxy: 0x[0-9a-fA-F]{40}$" "$SCRATCH/skip.log" | awk '{print $NF}')
+[ -n "$skipped" ] && [ "$skipped" != "$FWSS" ] || fail "SKIP_UPDATE_DEPLOYMENTS did not deploy a new FWSS proxy"
+[ "$(cast call "$skipped" "owner()(address)" | lower)" = "$(printf '%s' "$DEPLOYER" | lower)" ] ||
+    fail "the FWSS proxy deployed with SKIP_UPDATE_DEPLOYMENTS does not work"
+nonce=$(cast nonce "$DEPLOYER")
+
 echo "== Dry run plans without writing"
 jq --arg chain "$CHAIN" 'del(.[$chain])' deployments.json > "$SCRATCH/dry.json"
 cp "$SCRATCH/dry.json" "$SCRATCH/dry.before.json"
