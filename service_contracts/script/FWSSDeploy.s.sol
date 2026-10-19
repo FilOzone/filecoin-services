@@ -45,7 +45,7 @@ contract FWSSDeploy is FWSSDispatcherTransitionScript, FWSSDeployer {
         } else if (_envSet("SKIP_UPDATE_DEPLOYMENTS") && vm.envBool("SKIP_UPDATE_DEPLOYMENTS")) {
             console.log("SKIP_UPDATE_DEPLOYMENTS: deployments.json not updated");
         } else {
-            // Written during simulation, before forge sends.
+            // Written before forge broadcasts any of the transactions above.
             DeploymentsJson.setAddress(chain, "FWSS_DISPATCHER_ADDRESS", dispatcher);
             DeploymentsJson.setAddress(chain, "FWSS_PROXY_ADDRESS", proxy);
             console.log("Recorded in", DeploymentsJson.path());
