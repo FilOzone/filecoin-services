@@ -80,9 +80,9 @@ $(VIEW_MODULE): tools/generate_view_module.sh src/lib/FilecoinWarmStorageService
 
 # FWSS interface generation from the FWSS ABI
 $(FWSS_INTERFACE): export FOUNDRY_SKIP = $(SKIP_INTERFACE_CONSUMERS)
-$(FWSS_INTERFACE): tools/generate_fwss_interface.sh $(FWSS_ABI)
+$(FWSS_INTERFACE): tools/generate_fwss_interface.sh tools/generate_interface.jq $(FWSS_ABI)
 	@! grep -l IFilecoinWarmStorageService src/modules/*.sol || (echo 'Modules must not import the interface generated from their ABI'; exit 1)
-	bash -o pipefail -c '$^ | forge fmt -r - > "$@.tmp"'
+	bash -o pipefail -c '$< $(FWSS_ABI) | forge fmt -r - > "$@.tmp"'
 	mv $@.tmp $@
 
 # Internal library generation (simple sed transform)

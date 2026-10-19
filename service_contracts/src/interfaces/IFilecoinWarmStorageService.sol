@@ -20,7 +20,7 @@ import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 /// @title IFilecoinWarmStorageService
-/// @notice The functions, events and errors of the facets FWSS routes to, per josuke abi.
+/// @notice The functions, events and errors of the facets the proxy routes to, per josuke abi.
 interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSchedule, IValidator, PDPListener {
     event CDNPaymentRailsToppedUp(
         uint256 indexed dataSetId,
