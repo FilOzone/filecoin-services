@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../../src/Errors.sol";
 import {Extsload} from "../../src/Extsload.sol";
-import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
+import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {FWSSViewModule} from "../../src/modules/FWSSViewModule.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
@@ -55,14 +55,12 @@ contract ViewModuleHarness is FWSSViewModule, Extsload {
 }
 
 contract FWSSViewModuleTest is Test {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
     IERC20 constant USDFC = IERC20(address(0xD0C));
     address constant PAYER = address(0xA11CE);
     string constant LONG_VALUE = "a metadata value that is longer than thirty-one bytes and spans storage slots";
 
     FWSSViewModule internal viewModule;
-    FilecoinWarmStorageService internal service;
+    IFilecoinWarmStorageService internal service;
 
     function setUp() public {
         FWSSStorageWriter writer = new FWSSStorageWriter();
@@ -96,21 +94,37 @@ contract FWSSViewModuleTest is Test {
 
         vm.etch(address(writer), address(new ViewModuleHarness(USDFC)).code);
         viewModule = FWSSViewModule(address(writer));
-        service = FilecoinWarmStorageService(address(writer));
+        service = IFilecoinWarmStorageService(address(writer));
         vm.roll(3000);
     }
 
     function testDataSetReadsMatchStateLibrary() public view {
         for (uint256 id = 0; id <= 4; id++) {
-            assertEq(abi.encode(viewModule.getDataSet(id)), abi.encode(service.getDataSet(id)));
+            assertEq(
+                abi.encode(viewModule.getDataSet(id)),
+                abi.encode(FilecoinWarmStorageServiceStateLibrary.getDataSet(service, id))
+            );
             (address payer, uint256 railId) = viewModule.getDataSetPayerAndRailId(id);
-            (address expectedPayer, uint256 expectedRailId) = service.getDataSetPayerAndRailId(id);
+            (address expectedPayer, uint256 expectedRailId) =
+                FilecoinWarmStorageServiceStateLibrary.getDataSetPayerAndRailId(service, id);
             assertEq(payer, expectedPayer);
             assertEq(railId, expectedRailId);
-            assertEq(uint8(viewModule.getDataSetStatus(id)), uint8(service.getDataSetStatus(id)));
-            assertEq(viewModule.getDataSetAuthorizer(id), service.getDataSetAuthorizer(id));
-            assertEq(viewModule.railToDataSet(10 + id), service.railToDataSet(10 + id));
-            assertEq(viewModule.clientNonces(PAYER, 40 + id), service.clientNonces(PAYER, 40 + id));
+            assertEq(
+                uint8(viewModule.getDataSetStatus(id)),
+                uint8(FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, id))
+            );
+            assertEq(
+                viewModule.getDataSetAuthorizer(id),
+                FilecoinWarmStorageServiceStateLibrary.getDataSetAuthorizer(service, id)
+            );
+            assertEq(
+                viewModule.railToDataSet(10 + id),
+                FilecoinWarmStorageServiceStateLibrary.railToDataSet(service, 10 + id)
+            );
+            assertEq(
+                viewModule.clientNonces(PAYER, 40 + id),
+                FilecoinWarmStorageServiceStateLibrary.clientNonces(service, PAYER, 40 + id)
+            );
         }
         assertEq(viewModule.getDataSet(2).commissionBps, 200);
         assertEq(viewModule.getDataSet(3).lifecycleReserveBalance, 83);
@@ -118,14 +132,22 @@ contract FWSSViewModuleTest is Test {
 
     function testClientReadsMatchStateLibrary() public view {
         assertEq(viewModule.getClientDataSetsLength(PAYER), 3);
-        assertEq(viewModule.clientDataSets(PAYER), service.clientDataSets(PAYER));
-        assertEq(abi.encode(viewModule.getClientDataSets(PAYER)), abi.encode(service.getClientDataSets(PAYER)));
+        assertEq(
+            viewModule.clientDataSets(PAYER), FilecoinWarmStorageServiceStateLibrary.clientDataSets(service, PAYER)
+        );
+        assertEq(
+            abi.encode(viewModule.getClientDataSets(PAYER)),
+            abi.encode(FilecoinWarmStorageServiceStateLibrary.getClientDataSets(service, PAYER))
+        );
         for (uint256 offset = 0; offset <= 4; offset++) {
             for (uint256 limit = 0; limit <= 4; limit++) {
-                assertEq(viewModule.clientDataSets(PAYER, offset, limit), service.clientDataSets(PAYER, offset, limit));
+                assertEq(
+                    viewModule.clientDataSets(PAYER, offset, limit),
+                    FilecoinWarmStorageServiceStateLibrary.clientDataSets(service, PAYER, offset, limit)
+                );
                 assertEq(
                     abi.encode(viewModule.getClientDataSets(PAYER, offset, limit)),
-                    abi.encode(service.getClientDataSets(PAYER, offset, limit))
+                    abi.encode(FilecoinWarmStorageServiceStateLibrary.getClientDataSets(service, PAYER, offset, limit))
                 );
             }
         }
@@ -133,7 +155,8 @@ contract FWSSViewModuleTest is Test {
 
     function testMetadataReadsMatchStateLibrary() public view {
         (string[] memory keys, string[] memory values) = viewModule.getAllDataSetMetadata(1);
-        (string[] memory expectedKeys, string[] memory expectedValues) = service.getAllDataSetMetadata(1);
+        (string[] memory expectedKeys, string[] memory expectedValues) =
+            FilecoinWarmStorageServiceStateLibrary.getAllDataSetMetadata(service, 1);
         assertEq(keys, expectedKeys);
         assertEq(values, expectedValues);
         assertEq(values[1], LONG_VALUE);
@@ -150,34 +173,48 @@ contract FWSSViewModuleTest is Test {
     function testProvingReadsMatchStateLibrary() public view {
         (uint64 period, uint256 window, uint256 challenges, uint256 initStart) = viewModule.getPDPConfig();
         (uint64 expectedPeriod, uint256 expectedWindow, uint256 expectedChallenges, uint256 expectedInitStart) =
-            service.getPDPConfig();
+            FilecoinWarmStorageServiceStateLibrary.getPDPConfig(service);
         assertEq(period, expectedPeriod);
         assertEq(window, expectedWindow);
         assertEq(challenges, expectedChallenges);
         assertEq(initStart, expectedInitStart);
-        assertEq(viewModule.nextPDPChallengeWindowStart(1), service.nextPDPChallengeWindowStart(1));
+        assertEq(
+            viewModule.nextPDPChallengeWindowStart(1),
+            FilecoinWarmStorageServiceStateLibrary.nextPDPChallengeWindowStart(service, 1)
+        );
         assertEq(viewModule.provingActivationEpoch(1), 100);
-        assertEq(viewModule.provingDeadline(1), service.provingDeadline(1));
-        assertEq(viewModule.provenThisPeriod(1), service.provenThisPeriod(1));
-        assertEq(viewModule.hasBeenProvenRecently(1), service.hasBeenProvenRecently(1));
+        assertEq(viewModule.provingDeadline(1), FilecoinWarmStorageServiceStateLibrary.provingDeadline(service, 1));
+        assertEq(viewModule.provenThisPeriod(1), FilecoinWarmStorageServiceStateLibrary.provenThisPeriod(service, 1));
+        assertEq(
+            viewModule.hasBeenProvenRecently(1),
+            FilecoinWarmStorageServiceStateLibrary.hasBeenProvenRecently(service, 1)
+        );
         assertTrue(viewModule.provenPeriods(1, 0));
         assertFalse(viewModule.provenPeriods(1, 1));
     }
 
     function testProviderAndConfigReadsMatchStateLibrary() public view {
-        assertEq(address(viewModule.service()), address(viewModule));
         assertTrue(viewModule.isProviderApproved(42));
         assertFalse(viewModule.isProviderApproved(43));
         assertEq(viewModule.getApprovedProvidersLength(), 2);
-        assertEq(viewModule.getApprovedProviders(0, 0), service.getApprovedProviders(0, 0));
-        assertEq(viewModule.getApprovedProviders(1, 5), service.getApprovedProviders(1, 5));
+        assertEq(
+            viewModule.getApprovedProviders(0, 0),
+            FilecoinWarmStorageServiceStateLibrary.getApprovedProviders(service, 0, 0)
+        );
+        assertEq(
+            viewModule.getApprovedProviders(1, 5),
+            FilecoinWarmStorageServiceStateLibrary.getApprovedProviders(service, 1, 5)
+        );
         assertEq(viewModule.filBeamControllerAddress(), address(0xF11B));
         (address next, uint96 afterEpoch) = viewModule.nextUpgrade();
         assertEq(next, address(0x1E57));
         assertEq(afterEpoch, 1234);
-        assertEq(viewModule.serviceCommissionBps(), service.serviceCommissionBps());
+        assertEq(
+            viewModule.serviceCommissionBps(), FilecoinWarmStorageServiceStateLibrary.serviceCommissionBps(service)
+        );
         (uint256 storagePrice, uint256 datasetFee) = viewModule.getCurrentPricingRates();
-        (uint256 expectedStoragePrice, uint256 expectedDatasetFee) = service.getCurrentPricingRates();
+        (uint256 expectedStoragePrice, uint256 expectedDatasetFee) =
+            FilecoinWarmStorageServiceStateLibrary.getCurrentPricingRates(service);
         assertEq(storagePrice, expectedStoragePrice);
         assertEq(datasetFee, expectedDatasetFee);
         assertEq(

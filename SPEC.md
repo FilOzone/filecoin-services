@@ -266,7 +266,7 @@ For well-funded payers in the immediate termination case (`lockupPeriod = 0`, so
 
 **CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated as part of the `dataSetDeleted` callback itself.
 
-**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `Rails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve back to the payer, terminates the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away. For well-funded payers the lockup period is zeroed before termination, releasing the streaming buffer immediately. For underfunded payers the lockup period cannot be zeroed, so the PDP rail retains its default 30-day window and the streaming buffer is released only after that window elapses.
+**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `LibRails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve back to the payer, terminates the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away. For well-funded payers the lockup period is zeroed before termination, releasing the streaming buffer immediately. For underfunded payers the lockup period cannot be zeroed, so the PDP rail retains its default 30-day window and the streaming buffer is released only after that window elapses.
 
 ## CDN Payment Rails
 
@@ -322,7 +322,6 @@ flowchart TB
   FPV["FilecoinPayV1 (immutable)"]
   SPR["ServiceProviderRegistry (UUPS proxy)"]
   SKR["SessionKeyRegistry (immutable)"]
-  SVL["SignatureVerificationLib (library)"]
   SV["StateView (immutable)"]
   USDFC["USDFC Token (immutable ERC20)"]
 
@@ -330,8 +329,7 @@ flowchart TB
   FWSS -->|createRail, modifyRailPayment| FPV
   FPV -->|IValidator: validatePayment, railTerminated| FWSS
   FWSS -->|getProviderIdByAddress, getProviderPayee| SPR
-  FWSS -->|uses| SVL
-  SVL -->|authorizationExpiry| SKR
+  FWSS -->|authorizationExpiry| SKR
   SV -->|read-only queries| FWSS
   FWSS -.->|references| USDFC
   FPV -.->|references| USDFC
@@ -349,7 +347,6 @@ Solid arrows indicate call direction. Dashed arrows indicate token references. B
 | FilecoinPayV1 | No | Immutable | Payment rails engine — deposits, lockups, streaming settlement, rate changes |
 | SessionKeyRegistry | No | Immutable | Session key authorization; maps (user, signer, permission) → expiry |
 | StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS; after the dispatcher transition the FWSS proxy serves the same methods through `FWSSViewModule` |
-| SignatureVerificationLib | No | External library | EIP-712 signature recovery and session key validation |
 | [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
 
 ### Upgrade Mechanism
@@ -372,7 +369,7 @@ function _authorizeUpgrade(address newImplementation) internal override onlyOwne
     delete nextUpgrade;
 }
 ```
-_(This is from [`FilecoinWarmStorageService.sol:429-441`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/FilecoinWarmStorageService.sol#L429-L441).)_
+_(This is from the v1.4.0 [`FilecoinWarmStorageService.sol:429-448`](https://github.com/FilOzone/filecoin-services/blob/4cbbea4a4f7da51ad674a1d9d122c6e677acfbec/service_contracts/src/FilecoinWarmStorageService.sol#L429-L448).)_
 
 A successful `_authorizeUpgrade` call will enable the old implementation to set the `newImplementation` address on the proxy, effectively completing the upgrade.
 

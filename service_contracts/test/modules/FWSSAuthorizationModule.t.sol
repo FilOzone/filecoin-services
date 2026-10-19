@@ -5,15 +5,11 @@ import {stdError} from "forge-std/StdError.sol";
 import {console} from "forge-std/Test.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
-import {AbiCheats} from "@erc8167/lib/AbiCheats.sol";
-import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
-import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
-import {FilecoinWarmStorageService} from "../../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmStorageService.sol";
+import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
+import {DataSetInfoView, DataSetStatus} from "../../src/lib/FWSSViewTypes.sol";
 import {Errors} from "../../src/Errors.sol";
-import {FWSSAuthorizationModule} from "../../src/modules/FWSSAuthorizationModule.sol";
-import {FWSSConfigModule} from "../../src/modules/FWSSConfigModule.sol";
 import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 import {
     ADD_PIECES_BASE_FEE,
@@ -30,48 +26,6 @@ import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageS
 import {TestDataSetAuthorizer} from "../FilecoinWarmStorageService.t.sol";
 
 contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
-    function setUp() public override {
-        super.setUp();
-
-        address proxy = address(pdpServiceWithPayments);
-        address legacyImplementation = address(uint160(uint256(vm.load(proxy, ERC1967Utils.IMPLEMENTATION_SLOT))));
-        FWSSConfigModule configModule = new FWSSConfigModule(
-            pdpServiceWithPayments.paymentsContractAddress(), pdpServiceWithPayments.pdpVerifierAddress(), mockUSDFC
-        );
-        FWSSAuthorizationModule authorizationModule =
-            new FWSSAuthorizationModule(address(payments), address(mockPDPVerifier), sessionKeyRegistry);
-        FWSSProvingModule provingModule = new FWSSProvingModule(address(payments), address(mockPDPVerifier));
-        address dispatcher = deployCode("lib/erc8167/out/Proxy.evm/Proxy.json");
-
-        // Preserve legacy routes and route authorization, proving and configuration to their modules.
-        bytes4[] memory selectors = AbiCheats.getSelectors(
-            vm, "out/FilecoinWarmStorageServiceFixture.sol/FilecoinWarmStorageServiceHarness.json"
-        );
-        for (uint256 i; i < selectors.length; ++i) {
-            _route(proxy, selectors[i], legacyImplementation);
-        }
-        selectors = AbiCheats.getSelectors(vm, "out/FWSSAuthorizationModule.sol/FWSSAuthorizationModule.json");
-        for (uint256 i; i < selectors.length; ++i) {
-            _route(proxy, selectors[i], address(authorizationModule));
-        }
-        selectors = AbiCheats.getSelectors(vm, "out/FWSSProvingModule.sol/FWSSProvingModule.json");
-        for (uint256 i; i < selectors.length; ++i) {
-            _route(proxy, selectors[i], address(provingModule));
-        }
-        selectors = AbiCheats.getSelectors(vm, "out/FWSSConfigModule.sol/FWSSConfigModule.json");
-        for (uint256 i; i < selectors.length; ++i) {
-            _route(proxy, selectors[i], address(configModule));
-        }
-
-        vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(dispatcher))));
-    }
-
-    function _route(address proxy, bytes4 selector, address implementation) internal {
-        vm.store(proxy, ProxyStorage.delegateStorageKey(selector), bytes32(uint256(uint160(implementation))));
-    }
-
     function createDataSetForServiceProviderTest(address provider, address clientAddress, string memory label)
         internal
         returns (uint256)
@@ -102,8 +56,8 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         console.log("=== Test: Data Set Payment Termination Lifecycle ===");
 
         // 0. Verify that DataSet with ID 1 is not found
-        FilecoinWarmStorageService.DataSetStatus status = pdpServiceWithPayments.getDataSetStatus(1);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive");
+        DataSetStatus status = pdpServiceWithPayments.getDataSetStatus(1);
+        assertEq(uint256(status), uint256(DataSetStatus.Inactive), "expected Inactive");
 
         // 1. Setup: Create a dataset with CDN enabled.
         console.log("1. Setting up: Creating dataset with service provider");
@@ -111,7 +65,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "");
 
         // Prepare data set creation data
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -149,11 +103,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         console.log("Created data set with ID:", dataSetId);
 
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status),
-            uint256(FilecoinWarmStorageService.DataSetStatus.Inactive),
-            "expected Inactive (no pieces yet)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Inactive), "expected Inactive (no pieces yet)");
 
         // 2. Submit a valid proof.
         console.log("\n2. Starting proving period and submitting proof");
@@ -190,7 +140,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         console.log("Proof submitted successfully");
 
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active");
+        assertEq(uint256(status), uint256(DataSetStatus.Active), "expected Active");
 
         // 3. Terminate payment
         console.log("\n3. Terminating payment rails");
@@ -200,7 +150,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
 
         // 4. Assertions
         // Check pdpEndEpoch is set
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertTrue(info.pdpEndEpoch > 0, "pdpEndEpoch should be set after termination");
         console.log("PDP termination successful. PDP end epoch:", info.pdpEndEpoch);
         // CDN service persists through the lockup window — metadata and rails still active
@@ -214,9 +164,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
 
         // check status remains active (terminated datasets are still Active)
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Active), "expected Active (terminating)");
 
         // Ensure piecesAdded reverts
         console.log("\n4. Testing operations after termination");
@@ -245,9 +193,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
 
         // check status is still Active as data set is not yet deleted from PDP
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Active), "expected Active (terminating)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Active), "expected Active (terminating)");
 
         // Ensure other functions also revert now
         console.log("\n6. Testing operations after payment end epoch");
@@ -301,9 +247,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         pdpServiceWithPayments.dataSetDeleted(dataSetId, 10, bytes(""));
 
         status = pdpServiceWithPayments.getDataSetStatus(dataSetId);
-        assertEq(
-            uint256(status), uint256(FilecoinWarmStorageService.DataSetStatus.Inactive), "expected Inactive (deleted)"
-        );
+        assertEq(uint256(status), uint256(DataSetStatus.Inactive), "expected Inactive (deleted)");
 
         // CDN rails terminated in dataSetDeleted
         FilecoinPayV1.RailView memory cdnRailAfter = payments.getRail(info.cdnRailId);
@@ -324,7 +268,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate CDN rails (simulating payer calling FilecoinPayV1.terminateRail directly)
         console.log("Externally terminating CDN rails via FilecoinPayV1...");
@@ -354,7 +298,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         assertTrue(exists, "withCDN flag should still exist after terminateService");
 
         // 6. Complete deletion lifecycle and verify metadata is cleared
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         (uint64 maxProvingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
         FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
@@ -373,7 +317,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         // 1. Create dataset with CDN
         (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("withCDN", "true");
         uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         // 2. Externally terminate CDN rails (simulating payer calling FilecoinPayV1.terminateRail directly)
         console.log("Externally terminating CDN rails via FilecoinPayV1...");
@@ -415,7 +359,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         assertTrue(exists, "withCDN flag should still exist after terminateService");
 
         // 7. Complete deletion lifecycle and verify metadata is cleared
-        FilecoinWarmStorageService.DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory terminatedInfo = pdpServiceWithPayments.getDataSet(dataSetId);
         (uint64 maxProvingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
         vm.roll(terminatedInfo.pdpEndEpoch + maxProvingPeriod + 1);
         FilecoinPayV1.RailView memory settledPdpRail = payments.getRail(terminatedInfo.pdpRailId);
@@ -435,13 +379,13 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function testTerminateService_signatureApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "sig test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         bytes memory sig = abi.encode(FAKE_SIGNATURE);
         makeSignaturePass(client);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
@@ -472,10 +416,10 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function testTerminateService_directPayer_emitsApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(client, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
     }
@@ -483,10 +427,10 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function testTerminateService_directSP_emitsApprover() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(serviceProvider, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId);
 
@@ -501,7 +445,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function testTerminateService_sessionKey() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "session key test");
         uint256 dataSetId = createDataSetForClient(serviceProvider, client, keys, values);
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
 
         bytes32[] memory permissions = new bytes32[](1);
         permissions[0] = TERMINATE_SERVICE_TYPEHASH;
@@ -513,7 +457,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
 
         // approver in event is the session key, not the payer
         vm.expectEmit(true, true, false, true);
-        emit FilecoinWarmStorageService.ServiceTerminated(sessionKey1, dataSetId, info.pdpRailId, 0, 0);
+        emit IFilecoinWarmStorageService.ServiceTerminated(sessionKey1, dataSetId, info.pdpRailId, 0, 0);
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(dataSetId, sig);
 
@@ -640,7 +584,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
 
     function test_addPiecesFee_immediateFlush() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 pdpRailId = info.pdpRailId;
 
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
@@ -677,7 +621,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function test_scheduledRemovalFee_deferredThenFlushed() public {
         (uint256 dataSetId, uint256 pdpRailId,, uint256 firstDeadline, uint256 maxPeriod) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
 
         uint256[] memory pieceIds = new uint256[](1);
@@ -724,7 +668,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         );
         leafCount += PIECE_LEAVES;
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
 
         // Schedule two separate removal batches
@@ -786,7 +730,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
             new string[](0)
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "fees flushed");
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET, "reserve replenished to target");
 
@@ -975,7 +919,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         uint96 reserveBefore = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
         _advanceProvingPeriod(dataSetId, deadline, maxPeriod, added * PIECE_LEAVES);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "pending flushed");
         assertEq(info.lifecycleReserveBalance, reserveBefore - SCHEDULE_PIECE_REMOVALS_FEE, "fee paid in full");
         assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
@@ -984,7 +928,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function test_terminateFee_chargedOnConsentCase() public {
         (uint256 dataSetId, uint256 pdpRailId,,,) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
         assertEq(
             reserveBefore,
@@ -1015,7 +959,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function test_terminateFee_notChargedOnPayerDirectCall() public {
         (uint256 dataSetId,,,,) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
         (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
         assertEq(info.pendingOneTimePayments, 0);
@@ -1036,7 +980,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function test_terminateFee_notChargedOnSpInitiated() public {
         (uint256 dataSetId,,,,) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
         (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
         assertEq(info.pendingOneTimePayments, 0);
@@ -1058,7 +1002,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     function test_terminateFee_flushedWithoutRemovals() public {
         (uint256 dataSetId, uint256 pdpRailId,,,) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveAfterAdd = info.lifecycleReserveBalance;
         assertEq(
             reserveAfterAdd,
@@ -1091,7 +1035,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
         uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, CREATE_DATA_SET_FEE, "create fee pending before termination");
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
 
@@ -1190,7 +1134,7 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
     // only the lower 96 bits contribute to the balance increase.
     function test_topUpLifecycleReserve_bit97_truncated() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        FilecoinWarmStorageService.DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 pdpRailId = info.pdpRailId;
 
         uint256 topUp = 1e18;

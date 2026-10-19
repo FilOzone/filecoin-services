@@ -2,8 +2,6 @@
 pragma solidity ^0.8.20;
 
 import {FilecoinWarmStorageServiceTest} from "./FilecoinWarmStorageService.t.sol";
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {PriceList} from "../src/lib/PriceList.sol";
 import {
     ADD_PIECES_BASE_FEE,
@@ -27,8 +25,6 @@ import {
 /// @dev If this test fails, the assembler in PriceListUSDFC.sol drifted from the constants —
 ///      every constant should be wired through the struct exactly once.
 contract PriceListTest is FilecoinWarmStorageServiceTest {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
     function test_getPriceList_token() public view {
         PriceList memory list = pdpServiceWithPayments.getPriceList();
         assertEq(address(list.token), address(mockUSDFC), "token should equal FWSS usdfcTokenAddress");

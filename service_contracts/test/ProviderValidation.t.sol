@@ -9,21 +9,19 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract ProviderValidationTest is MockFVMTest {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
+contract ProviderValidationTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
-    FilecoinWarmStorageService public warmStorage;
+    IFilecoinWarmStorageService public warmStorage;
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry;
     MockPDPVerifier public pdpVerifier;
@@ -70,21 +68,20 @@ contract ProviderValidationTest is MockFVMTest {
         // Deploy FilecoinPayV1 (no longer upgradeable)
         payments = new FilecoinPayV1();
 
-        // Deploy FilecoinWarmStorageService
-        FilecoinWarmStorageService warmStorageImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier),
-            address(payments),
-            usdfc,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
+        // Deploy IFilecoinWarmStorageService
+        warmStorage = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(usdfc),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
         );
-        bytes memory warmStorageInitData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(60), filBeamController
-        );
-        MyERC1967Proxy warmStorageProxy = new MyERC1967Proxy(address(warmStorageImpl), warmStorageInitData);
-        warmStorage = FilecoinWarmStorageService(address(warmStorageProxy));
 
         // Transfer tokens to client
         usdfc.safeTransfer(client, 10000 * 10 ** 18);

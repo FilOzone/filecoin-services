@@ -20,11 +20,6 @@ contract FWSSViewModule is IPDPProvingSchedule {
         usdfcTokenAddress = _usdfc;
     }
 
-    /// @notice Returns the FWSS proxy
-    function service() public view returns (FilecoinWarmStorageService) {
-        return FilecoinWarmStorageService(address(this));
-    }
-
     function sload(bytes32 slot) internal view returns (bytes32 value) {
         assembly ("memory-safe") {
             value := sload(slot)
@@ -64,14 +59,15 @@ awk '
 \/\/ Generated with tools\/generate_view_module.sh/' \
     -e 's#from "\./#from "../lib/#' \
     -e 's#^import "\./#import "../lib/#' \
+    -e '/^import {IFilecoinWarmStorageService}/d' \
     -e '/^import {IERC20}/a\
 import {IPDPProvingSchedule} from "@pdp/IPDPProvingSchedule.sol";' \
     -e 's/service\.extsloadStruct(/sloadStruct(/g' \
     -e 's/service\.extsload(/sload(/g' \
     -e 's/IERC20(address(service\.usdfcTokenAddress()))/usdfcTokenAddress/g' \
-    -e 's/(FilecoinWarmStorageService service, /(/g' \
-    -e 's/(FilecoinWarmStorageService service)/()/g' \
-    -e 's/(FilecoinWarmStorageService)/()/g' \
+    -e 's/(IFilecoinWarmStorageService service, /(/g' \
+    -e 's/(IFilecoinWarmStorageService service)/()/g' \
+    -e 's/(IFilecoinWarmStorageService)/()/g' \
     -e 's/(service, /(/g' \
     -e 's/(service)/()/g' \
     -e '/@param service /d' \

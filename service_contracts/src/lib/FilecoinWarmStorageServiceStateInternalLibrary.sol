@@ -7,8 +7,9 @@ pragma solidity ^0.8.20;
 
 import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
-import {FilecoinWarmStorageService} from "../FilecoinWarmStorageService.sol";
+import {IFilecoinWarmStorageService} from "../interfaces/IFilecoinWarmStorageService.sol";
 import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "./FWSSConstants.sol";
+import {DataSetInfoView, DataSetStatus} from "./FWSSViewTypes.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
@@ -23,7 +24,7 @@ import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 bytes32 constant EXTSLOAD_STRUCT_SELECTOR = 0x5379a43500000000000000000000000000000000000000000000000000000000;
 
 library FilecoinWarmStorageServiceStateInternalLibrary {
-    function getString(FilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
+    function getString(IFilecoinWarmStorageService service, bytes32 loc) internal view returns (string memory str) {
         uint256 compressed = uint256(service.extsload(loc));
         if (compressed & 1 != 0) {
             uint256 length = compressed >> 1;
@@ -52,7 +53,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         }
     }
 
-    function getStringArray(FilecoinWarmStorageService service, bytes32 loc)
+    function getStringArray(IFilecoinWarmStorageService service, bytes32 loc)
         internal
         view
         returns (string[] memory strings)
@@ -84,7 +85,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return Cids.leafCountToRawSize(leafCount);
     }
 
-    function clientNonces(FilecoinWarmStorageService service, address payer, uint256 nonce)
+    function clientNonces(IFilecoinWarmStorageService service, address payer, uint256 nonce)
         internal
         view
         returns (uint256)
@@ -96,11 +97,15 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         );
     }
 
-    function provenThisPeriod(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
+    function provenThisPeriod(IFilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
         return service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.PROVEN_THIS_PERIOD_SLOT))) != bytes32(0);
     }
 
-    function hasBeenProvenRecently(FilecoinWarmStorageService service, uint256 dataSetId) internal view returns (bool) {
+    function hasBeenProvenRecently(IFilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (bool)
+    {
         uint256 activation = provingActivationEpoch(service, dataSetId);
         if (activation == 0 || block.number <= activation) {
             return false;
@@ -118,10 +123,10 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param dataSetId The ID of the data set
      * @return info The data set information struct
      */
-    function getDataSet(FilecoinWarmStorageService service, uint256 dataSetId)
+    function getDataSet(IFilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
-        returns (FilecoinWarmStorageService.DataSetInfoView memory info)
+        returns (DataSetInfoView memory info)
     {
         bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
         bytes32[] memory info11 = service.extsloadStruct(slot, 11);
@@ -142,7 +147,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
 
     // TODO: measure whether loading 4 slots in one extsloadStruct call is cheaper than two
     // separate extsload calls for slots 0 (pdpRailId) and 3 (payer) on Filecoin.
-    function getDataSetPayerAndRailId(FilecoinWarmStorageService service, uint256 dataSetId)
+    function getDataSetPayerAndRailId(IFilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
         returns (address payer, uint256 pdpRailId)
@@ -161,29 +166,29 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param dataSetId The ID of the dataset
      * @return status The current status
      */
-    function getDataSetStatus(FilecoinWarmStorageService service, uint256 dataSetId)
+    function getDataSetStatus(IFilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
-        returns (FilecoinWarmStorageService.DataSetStatus status)
+        returns (DataSetStatus status)
     {
-        FilecoinWarmStorageService.DataSetInfoView memory info = getDataSet(service, dataSetId);
+        DataSetInfoView memory info = getDataSet(service, dataSetId);
 
         // Non-existent datasets are inactive
         if (info.pdpRailId == 0) {
-            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+            return DataSetStatus.Inactive;
         }
 
         // Check if proving is activated (has pieces)
         // Inactive only if no proving has started, everything else is Active
         uint256 activationEpoch = provingActivationEpoch(service, dataSetId);
         if (activationEpoch == 0) {
-            return FilecoinWarmStorageService.DataSetStatus.Inactive;
+            return DataSetStatus.Inactive;
         }
 
-        return FilecoinWarmStorageService.DataSetStatus.Active;
+        return DataSetStatus.Active;
     }
 
-    function clientDataSets(FilecoinWarmStorageService service, address payer)
+    function clientDataSets(IFilecoinWarmStorageService service, address payer)
         internal
         view
         returns (uint256[] memory dataSetIds)
@@ -207,7 +212,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * returns all remaining data sets starting from offset. Example:
      * clientDataSets(service, payer, 0, 100) gets first 100 data set IDs.
      */
-    function clientDataSets(FilecoinWarmStorageService service, address payer, uint256 offset, uint256 limit)
+    function clientDataSets(IFilecoinWarmStorageService service, address payer, uint256 offset, uint256 limit)
         internal
         view
         returns (uint256[] memory dataSetIds)
@@ -237,7 +242,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param payer The client address
      * @return count Total number of data sets
      */
-    function getClientDataSetsLength(FilecoinWarmStorageService service, address payer)
+    function getClientDataSetsLength(IFilecoinWarmStorageService service, address payer)
         internal
         view
         returns (uint256)
@@ -246,11 +251,11 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(slot));
     }
 
-    function railToDataSet(FilecoinWarmStorageService service, uint256 railId) internal view returns (uint256) {
+    function railToDataSet(IFilecoinWarmStorageService service, uint256 railId) internal view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(railId, StorageLayout.RAIL_TO_DATA_SET_SLOT))));
     }
 
-    function getDataSetAuthorizer(FilecoinWarmStorageService service, uint256 dataSetId)
+    function getDataSetAuthorizer(IFilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
         returns (address)
@@ -260,7 +265,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         );
     }
 
-    function provenPeriods(FilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId)
+    function provenPeriods(IFilecoinWarmStorageService service, uint256 dataSetId, uint256 periodId)
         internal
         view
         returns (bool)
@@ -274,7 +279,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
             ) & (1 << (periodId & 255)) != 0;
     }
 
-    function provingActivationEpoch(FilecoinWarmStorageService service, uint256 dataSetId)
+    function provingActivationEpoch(IFilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
         returns (uint256)
@@ -282,17 +287,17 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         return uint256(service.extsload(keccak256(abi.encode(dataSetId, StorageLayout.PROVING_ACTIVATION_EPOCH_SLOT))));
     }
 
-    function provingDeadline(FilecoinWarmStorageService service, uint256 setId) internal view returns (uint256) {
+    function provingDeadline(IFilecoinWarmStorageService service, uint256 setId) internal view returns (uint256) {
         return uint256(service.extsload(keccak256(abi.encode(setId, StorageLayout.PROVING_DEADLINES_SLOT))));
     }
 
-    function getMaxProvingPeriod(FilecoinWarmStorageService service) internal view returns (uint64) {
+    function getMaxProvingPeriod(IFilecoinWarmStorageService service) internal view returns (uint64) {
         return uint64(uint256(service.extsload(StorageLayout.MAX_PROVING_PERIOD_SLOT)));
     }
 
     // Number of epochs at the end of a proving period during which a
     // proof of possession can be submitted
-    function challengeWindow(FilecoinWarmStorageService service) internal view returns (uint256) {
+    function challengeWindow(IFilecoinWarmStorageService service) internal view returns (uint256) {
         return uint256(service.extsload(StorageLayout.CHALLENGE_WINDOW_SIZE_SLOT));
     }
 
@@ -304,7 +309,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @return challengesPerProof Number of challenges required per proof
      * @return initChallengeWindowStart Initial challenge window start for new data sets assuming proving period starts now
      */
-    function getPDPConfig(FilecoinWarmStorageService service)
+    function getPDPConfig(IFilecoinWarmStorageService service)
         internal
         view
         returns (
@@ -320,7 +325,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
         initChallengeWindowStart = block.number + maxProvingPeriod - challengeWindowSize;
     }
 
-    function serviceCommissionBps(FilecoinWarmStorageService) internal pure returns (uint256) {
+    function serviceCommissionBps(IFilecoinWarmStorageService) internal pure returns (uint256) {
         return SERVICE_COMMISSION_BPS;
     }
 
@@ -330,7 +335,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param setId The ID of the data set
      * @return The block number when the next challenge window starts
      */
-    function nextPDPChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
+    function nextPDPChallengeWindowStart(IFilecoinWarmStorageService service, uint256 setId)
         internal
         view
         returns (uint256)
@@ -369,7 +374,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param setId The ID of the data set
      * @return The block number when the current challenge window starts
      */
-    function _thisChallengeWindowStart(FilecoinWarmStorageService service, uint256 setId)
+    function _thisChallengeWindowStart(IFilecoinWarmStorageService service, uint256 setId)
         internal
         view
         returns (uint256)
@@ -395,14 +400,14 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @dev To determine deletion status: deleted datasets don't appear in
      * getClientDataSets() anymore - they are completely removed.
      */
-    function getClientDataSets(FilecoinWarmStorageService service, address client)
+    function getClientDataSets(IFilecoinWarmStorageService service, address client)
         internal
         view
-        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
+        returns (DataSetInfoView[] memory infos)
     {
         uint256[] memory dataSetIds = clientDataSets(service, client);
 
-        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
+        infos = new DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
         }
@@ -419,14 +424,14 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * returns all remaining data sets starting from offset. Example:
      * getClientDataSets(service, client, 0, 50) gets the first 50 enriched data sets.
      */
-    function getClientDataSets(FilecoinWarmStorageService service, address client, uint256 offset, uint256 limit)
+    function getClientDataSets(IFilecoinWarmStorageService service, address client, uint256 offset, uint256 limit)
         internal
         view
-        returns (FilecoinWarmStorageService.DataSetInfoView[] memory infos)
+        returns (DataSetInfoView[] memory infos)
     {
         uint256[] memory dataSetIds = clientDataSets(service, client, offset, limit);
 
-        infos = new FilecoinWarmStorageService.DataSetInfoView[](dataSetIds.length);
+        infos = new DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
         }
@@ -439,7 +444,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param key The metadata key
      * @return value The metadata value
      */
-    function _getDataSetMetadataValue(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+    function _getDataSetMetadataValue(IFilecoinWarmStorageService service, uint256 dataSetId, string memory key)
         internal
         view
         returns (string memory value)
@@ -457,7 +462,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @return exists True if the key exists
      * @return value The metadata value
      */
-    function getDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId, string memory key)
+    function getDataSetMetadata(IFilecoinWarmStorageService service, uint256 dataSetId, string memory key)
         internal
         view
         returns (bool exists, string memory value)
@@ -486,7 +491,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @return keys Array of metadata keys
      * @return values Array of metadata values
      */
-    function getAllDataSetMetadata(FilecoinWarmStorageService service, uint256 dataSetId)
+    function getAllDataSetMetadata(IFilecoinWarmStorageService service, uint256 dataSetId)
         internal
         view
         returns (string[] memory keys, string[] memory values)
@@ -504,7 +509,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param providerId The ID of the provider to check
      * @return Whether the provider is approved
      */
-    function isProviderApproved(FilecoinWarmStorageService service, uint256 providerId) internal view returns (bool) {
+    function isProviderApproved(IFilecoinWarmStorageService service, uint256 providerId) internal view returns (bool) {
         return service.extsload(keccak256(abi.encode(providerId, StorageLayout.APPROVED_PROVIDERS_SLOT))) != bytes32(0);
     }
 
@@ -518,7 +523,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * returns all remaining providers starting from offset. Example:
      * getApprovedProviders(service, 0, 100) gets first 100 providers.
      */
-    function getApprovedProviders(FilecoinWarmStorageService service, uint256 offset, uint256 limit)
+    function getApprovedProviders(IFilecoinWarmStorageService service, uint256 offset, uint256 limit)
         internal
         view
         returns (uint256[] memory providerIds)
@@ -551,7 +556,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param service The service contract
      * @return count Total number of approved providers
      */
-    function getApprovedProvidersLength(FilecoinWarmStorageService service) internal view returns (uint256 count) {
+    function getApprovedProvidersLength(IFilecoinWarmStorageService service) internal view returns (uint256 count) {
         bytes32 slot = StorageLayout.APPROVED_PROVIDER_IDS_SLOT;
         return uint256(service.extsload(slot));
     }
@@ -561,7 +566,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @param service The service contract
      * @return The FilBeam Controller address
      */
-    function filBeamControllerAddress(FilecoinWarmStorageService service) internal view returns (address) {
+    function filBeamControllerAddress(IFilecoinWarmStorageService service) internal view returns (address) {
         return address(uint160(uint256(service.extsload(StorageLayout.FIL_BEAM_CONTROLLER_ADDRESS_SLOT))));
     }
 
@@ -571,7 +576,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      * @return nextImplementation The next code for the contract
      * @return afterEpoch The earliest the upgrade may complete
      */
-    function nextUpgrade(FilecoinWarmStorageService service)
+    function nextUpgrade(IFilecoinWarmStorageService service)
         internal
         view
         returns (address nextImplementation, uint96 afterEpoch)
@@ -589,7 +594,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      *                    as `getPriceList().rates.storagePerTibPerMonth` and
      *                    `getPriceList().rates.datasetFeePerMonth`.
      */
-    function getCurrentPricingRates(FilecoinWarmStorageService)
+    function getCurrentPricingRates(IFilecoinWarmStorageService)
         internal
         pure
         returns (uint256 storagePrice, uint256 datasetFee)
@@ -605,7 +610,7 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
      *      `getServicePrice`, `getCurrentPricingRates`, and `getEffectiveRates` for consumers
      *      that want the complete price picture.
      */
-    function getPriceList(FilecoinWarmStorageService service) internal view returns (PriceList memory list) {
+    function getPriceList(IFilecoinWarmStorageService service) internal view returns (PriceList memory list) {
         list = priceList();
         list.token = IERC20(address(service.usdfcTokenAddress()));
     }

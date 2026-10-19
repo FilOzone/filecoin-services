@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
+import {Test} from "forge-std/Test.sol";
 import {IERC8167} from "@erc8167/interfaces/IERC8167.sol";
 import {Migration, SetDelegateOperation, SetDelegateOperationLibrary} from "@erc8167/lib/Migration.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {ILegacyFilecoinWarmStorageService} from "../src/interfaces/ILegacyFilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {FWSS_DISPATCHER_CODE_HASH, FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
@@ -13,13 +14,11 @@ import {FWSSDispatcherTransitionDeploy} from "../script/FWSSDispatcherTransition
 import {FWSSDispatcherTransitionExecute} from "../script/FWSSDispatcherTransitionExecute.s.sol";
 import {DeploymentsJson} from "../script/lib/DeploymentsJson.sol";
 import {JosukeLedger} from "../script/lib/JosukeLedger.sol";
-import {JosukeFacetSet} from "./helpers/JosukeFacetSet.sol";
+import {JosukeFacetSet} from "../script/lib/JosukeFacetSet.sol";
 
 /// @dev Drives the transition scripts against the deployed mainnet v1.4.0 bytecode, at the mainnet proxy address
 /// that deployments.json and josuke.json record for chain 314.
-contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
-    using FilecoinWarmStorageServiceStateLibrary for FilecoinWarmStorageService;
-
+contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
     uint256 private constant CHAIN = 314;
     string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
     string private constant SCRATCH = "out/FWSSDispatcherTransitionScripts";
@@ -30,7 +29,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
     string private constant TRANSITION_ARTIFACT = "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition";
     string private constant TRANSITION_ENTRY = ".314.contracts.FWSS_DISPATCHER_TRANSITION";
 
-    FilecoinWarmStorageService internal service;
+    ILegacyFilecoinWarmStorageService internal service;
     address internal proxy;
     address internal legacyImplementation;
     address internal migration;
@@ -49,7 +48,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         proxy = vm.parseJsonAddress(fixture, ".proxy.address");
         vm.etch(proxy, vm.parseJsonBytes(fixture, ".proxy.code"));
         vm.store(proxy, ERC1967Utils.IMPLEMENTATION_SLOT, bytes32(uint256(uint160(legacyImplementation))));
-        service = FilecoinWarmStorageService(proxy);
+        service = ILegacyFilecoinWarmStorageService(proxy);
 
         // The config facet's constructor checks USDFC decimals.
         deployCodeTo("SharedMocks.sol:MockERC20", address(service.usdfcTokenAddress()));
@@ -168,14 +167,14 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(address(transition), 0);
-        (, uint96 afterEpoch) = service.nextUpgrade();
+        (, uint96 afterEpoch) = FilecoinWarmStorageServiceStateLibrary.nextUpgrade(service);
         vm.roll(afterEpoch);
         new FWSSDispatcherTransitionExecute().run();
 
         assertEq(_implementation(), dispatcher);
         _assertFacetRoutes();
         assertEq(OwnershipModule(proxy).owner(), DEFAULT_SENDER);
-        (uint64 provingPeriod, uint256 challengeWindow,,) = service.getPDPConfig();
+        (uint64 provingPeriod, uint256 challengeWindow,,) = FilecoinWarmStorageServiceStateLibrary.getPDPConfig(service);
         assertEq(provingPeriod, 3000);
         assertEq(challengeWindow, 61);
         assertEq(vm.readFile(DEPLOYMENTS), json, "execute must not write deployments.json");
@@ -277,7 +276,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 2);
-        (, uint96 afterEpoch) = service.nextUpgrade();
+        (, uint96 afterEpoch) = FilecoinWarmStorageServiceStateLibrary.nextUpgrade(service);
         vm.expectRevert(
             bytes(string.concat("not time yet (", vm.toString(block.number), " < ", vm.toString(afterEpoch), ")"))
         );
@@ -482,7 +481,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address transition = vm.parseJsonAddress(recorded, ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS");
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 0);
-        (, uint96 afterEpoch) = service.nextUpgrade();
+        (, uint96 afterEpoch) = FilecoinWarmStorageServiceStateLibrary.nextUpgrade(service);
         vm.roll(afterEpoch);
         vm.prank(DEFAULT_SENDER);
         service.upgradeToAndCall(transition, "");
@@ -529,7 +528,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 0);
-        (, uint96 afterEpoch) = service.nextUpgrade();
+        (, uint96 afterEpoch) = FilecoinWarmStorageServiceStateLibrary.nextUpgrade(service);
         vm.roll(afterEpoch);
         new FWSSDispatcherTransitionExecute().run();
 
@@ -551,7 +550,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         address transition = vm.parseJsonAddress(vm.readFile(DEPLOYMENTS), ".314.FWSS_DISPATCHER_TRANSITION_ADDRESS");
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(transition, 0);
-        (, uint96 afterEpoch) = service.nextUpgrade();
+        (, uint96 afterEpoch) = FilecoinWarmStorageServiceStateLibrary.nextUpgrade(service);
         vm.roll(afterEpoch);
         FWSSDispatcherTransitionExecute execute = new FWSSDispatcherTransitionExecute();
 
@@ -632,7 +631,7 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
 
         vm.prank(DEFAULT_SENDER);
         service.announceUpgradePlan(address(transition), 0);
-        (, uint96 afterEpoch) = service.nextUpgrade();
+        (, uint96 afterEpoch) = FilecoinWarmStorageServiceStateLibrary.nextUpgrade(service);
         vm.roll(afterEpoch);
         new FWSSDispatcherTransitionExecute().run();
 
@@ -703,42 +702,15 @@ contract FWSSDispatcherTransitionScriptsTest is JosukeFacetSet {
         );
     }
 
-    /// @dev The facets pin the same immutables as the v1.4.0 monolith they replace.
-    function _facetConstructorArgs(string memory sourceId) internal view override returns (bytes memory) {
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSConfigModule.sol:FWSSConfigModule")) {
-            return
-                abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress(), service.usdfcTokenAddress());
-        }
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSDataSetModule.sol:FWSSDataSetModule")) {
-            return abi.encode(
-                service.paymentsContractAddress(),
-                service.pdpVerifierAddress(),
-                service.usdfcTokenAddress(),
-                service.filBeamBeneficiaryAddress(),
-                service.serviceProviderRegistry(),
-                service.sessionKeyRegistry()
-            );
-        }
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule"))
-        {
-            return
-                abi.encode(
-                    service.paymentsContractAddress(), service.pdpVerifierAddress(), service.sessionKeyRegistry()
-                );
-        }
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSProvingModule.sol:FWSSProvingModule")) {
-            return abi.encode(service.paymentsContractAddress(), service.pdpVerifierAddress());
-        }
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule")) {
-            return abi.encode(service.paymentsContractAddress());
-        }
-        if (keccak256(bytes(sourceId)) == keccak256("src/modules/FWSSViewModule.sol:FWSSViewModule")) {
-            return abi.encode(service.usdfcTokenAddress());
-        }
-        return super._facetConstructorArgs(sourceId);
-    }
-
     function _createMigration() internal returns (address) {
+        // The facets pin the same immutables as the v1.4.0 monolith they replace.
+        _setConstructorArg("_paymentsContractAddress", service.paymentsContractAddress());
+        _setConstructorArg("_pdpVerifierAddress", service.pdpVerifierAddress());
+        _setConstructorArg("_usdfc", address(service.usdfcTokenAddress()));
+        _setConstructorArg("_filBeamBeneficiaryAddress", service.filBeamBeneficiaryAddress());
+        _setConstructorArg("_serviceProviderRegistry", address(service.serviceProviderRegistry()));
+        _setConstructorArg("_sessionKeyRegistry", address(service.sessionKeyRegistry()));
+
         SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolveFacets(MAINNET_INDEX));
         SetDelegateOperationLibrary.validate(routes);
 
