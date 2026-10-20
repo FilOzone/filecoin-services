@@ -784,6 +784,9 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
             assertEq(_count(exported, exported[i]), 1, "selectors() repeats a selector");
             assertEq(_count(exportedSelectors, exported[i]), 1, "selectors() lists an uninstalled selector");
             assertEq(IERC8167(proxy).implementation(exported[i]), routedTo[exported[i]]);
+            if (i != 0) {
+                assertLt(uint32(exported[i - 1]), uint32(exported[i]), "selectors() is not ascending");
+            }
         }
     }
 

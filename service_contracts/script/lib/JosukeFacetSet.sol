@@ -119,14 +119,33 @@ abstract contract JosukeFacetSet is CommonBase {
             SetDelegateOperation({selector: IERC8167.selectors.selector, delegate: _deploySelectors(exported)});
     }
 
-    /// @dev Stands in for the `selectors()` delegate Josuke generates when no facet implements it.
+    /// @dev Deploys the `selectors()` delegate Josuke generates. Sorts `exported` in place.
     function _deploySelectors(bytes4[] memory exported) internal returns (address) {
-        bytes memory result = abi.encode(exported);
-        require(result.length <= type(uint16).max);
+        for (uint256 i = 1; i < exported.length; ++i) {
+            bytes4 selector = exported[i];
+            uint256 j = i;
+            for (; j != 0 && exported[j - 1] > selector; --j) {
+                exported[j] = exported[j - 1];
+            }
+            exported[j] = selector;
+        }
 
-        // PUSH2 len PUSH1 12 PUSH0 CODECOPY PUSH2 len PUSH0 RETURN, followed by the ABI-encoded result.
-        bytes2 length = bytes2(uint16(result.length));
-        return Constructor.deploy(abi.encodePacked(hex"61", length, hex"600c5f39", hex"61", length, hex"5ff3", result));
+        // PUSH1 20 PUSH1 24, then PUSH4 <selector> DUP2 MSTORE for each selector, joined by DUP2 ADD
+        bytes memory runtime = hex"60206024";
+        for (uint256 i; i < exported.length; ++i) {
+            if (i != 0) {
+                runtime = abi.encodePacked(runtime, hex"8101");
+            }
+            runtime = abi.encodePacked(runtime, hex"63", exported[i], hex"8152");
+        }
+
+        // PUSH <count> DUP3 MSTORE SWAP1 PUSH0 MSTORE MSIZE PUSH0 RETURN
+        uint256 count = exported.length;
+        require(count != 0 && count <= type(uint16).max);
+        bytes memory pushCount = count <= type(uint8).max
+            ? abi.encodePacked(hex"60", uint8(count))
+            : abi.encodePacked(hex"61", uint16(count));
+        return Constructor.deploy(abi.encodePacked(runtime, pushCount, hex"8252905f52595ff3"));
     }
 
     function _resolve(string memory pattern) private view returns (Facet[] memory) {
