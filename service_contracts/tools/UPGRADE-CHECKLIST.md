@@ -270,7 +270,7 @@ For each network, record evidence that:
 ```bash
 cd service_contracts
 make check-josuke   # ledger schema, facet sources, selector collisions, sizes, and storage against every recorded deployment, offline
-forge test
+make test           # builds the ERC-8167 dispatcher artifacts the tests need (make erc8167), then runs forge test
 ```
 
 `josuke check` must list exactly the facets this release intends to change as `new`, `changed`, or `removed`, and nothing else. Stop if it reports a facet it cannot deploy.
@@ -534,7 +534,7 @@ josuke verify    # rebuilds every facet from its recorded commit and checks it a
 
 GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherTransitionDeploy.s.sol \
   --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" \
-  --broadcast --skip-simulation --verify --verifier blockscout --verifier-url <blockscout api>
+  --broadcast --skip-simulation --verify   # verifies on Sourcify, forge's default verifier
 ```
 
 Keep `--skip-simulation` on every `forge script --broadcast`. Without it forge sets each gas limit from its local EVM simulation, and FEVM gas is not EVM gas: Lotus rejects the two deploys (`'GasLimit' field cannot be less than the cost of storing a message on chain`), and a broadcast execute mines and reverts out of gas. With it, forge asks the node to estimate gas.
@@ -719,7 +719,6 @@ Every upgrade route must point at a deployed module; a zero address means FWSS c
 
 ## Notes From v1.3.0
 
-- Identify linked libraries and StateView changes before deploy. If the release needs new linked libraries, a new `FilecoinWarmStorageServiceStateView`, or a follow-up `setViewContract`, track those explicitly before deploying the FWSS implementation.
 - Rollback must be explicit before live announce. Record either an approved rollback procedure or a written technical-owner decision that rollback is unsafe or not available for this rollout.
 - Run Synapse updates from the intended deployment-address state. If the Synapse workflow or PR is run before `service_contracts/deployments.json` reflects live addresses, record the exception and owner.
 - Final changelog updates should not fold post-tag source changes into the released version section. Put post-tag source changes under `Unreleased` or the next release.
