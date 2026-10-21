@@ -17,10 +17,12 @@ import {JosukeLedger} from "../script/lib/JosukeLedger.sol";
 import {JosukeFacetSet} from "../script/lib/JosukeFacetSet.sol";
 
 /// @dev Drives the transition scripts against the deployed mainnet v1.4.0 bytecode, at the mainnet proxy address
-/// that deployments.json and josuke.json record for chain 314.
+/// that the v1.4.0 deployments.json fixture records for chain 314.
 contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
     uint256 private constant CHAIN = 314;
     string private constant V1_4_0_MAINNET = "test/fixtures/fwss-v1.4.0-mainnet.json";
+    // deployments.json before the transition: the committed file gains dispatcher records once A1 runs on Mainnet.
+    string private constant SEED = "test/fixtures/deployments-v1.4.0.json";
     string private constant SCRATCH = "out/FWSSDispatcherTransitionScripts";
     string private constant DEPLOYMENTS = "out/FWSSDispatcherTransitionScripts/deployments.json";
     string private constant SCRATCH_LEDGER = "out/FWSSDispatcherTransitionScripts/josuke.json";
@@ -152,7 +154,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         assertEq(vm.parseJsonString(json, ".314.metadata.commit"), GIT_COMMIT);
         _assertIsoTimestamp(vm.parseJsonString(json, ".314.metadata.deployed_at"));
         assertEq(vm.parseJsonString(json, ".314.metadata.fwss_version"), "1.4.0");
-        string memory original = vm.readFile("deployments.json");
+        string memory original = vm.readFile(SEED);
         assertEq(
             vm.parseJsonString(json, ".314.FWSS_PROXY_ADDRESS"), vm.parseJsonString(original, ".314.FWSS_PROXY_ADDRESS")
         );
@@ -236,7 +238,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         deploy.run();
 
         // The commit is checked before anything is written.
-        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
+        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile(SEED));
     }
 
     function _deployDryRunRecordsNothing() internal {
@@ -244,7 +246,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         vm.setEnv("GIT_COMMIT", "");
         new DryRunDeploy().run();
 
-        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
+        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile(SEED));
     }
 
     function _deployRefusesBroadcastWithoutWallet() internal {
@@ -259,7 +261,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         dispatcherDeploy.run();
 
         assertEq(vm.getNonce(DEFAULT_SENDER), nonce);
-        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
+        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile(SEED));
     }
 
     function _executeChecks() internal {
@@ -424,7 +426,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         deploy.run();
 
         assertEq(vm.getNonce(DEFAULT_SENDER), nonce);
-        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile("deployments.json"));
+        assertEq(vm.readFile(DEPLOYMENTS), vm.readFile(SEED));
     }
 
     function _deployHonoursPinned() internal {
@@ -589,7 +591,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
     function _dispatcherDeployRecordsDispatcher() internal {
         _writeLedger(proxy, address(0));
         vm.setEnv("GIT_COMMIT", "");
-        string memory original = vm.readFile("deployments.json");
+        string memory original = vm.readFile(SEED);
         _dispatcherDeploy().run();
 
         string memory json = vm.readFile(DEPLOYMENTS);
@@ -667,7 +669,7 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         vm.revertToState(clean);
 
         vm.createDir(SCRATCH, true);
-        vm.copyFile("deployments.json", DEPLOYMENTS);
+        vm.copyFile(SEED, DEPLOYMENTS);
         _writeLedger(proxy, migration);
 
         vm.setEnv("DEPLOYMENTS_JSON_PATH", DEPLOYMENTS);
