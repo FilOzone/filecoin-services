@@ -185,11 +185,13 @@ cd service_contracts
 export CHAIN=314159
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
+export BLOCKSCOUT_API_URL="https://filecoin-testnet.blockscout.com/api/"
 
 # Mainnet
 export CHAIN=314
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
+export BLOCKSCOUT_API_URL="https://filecoin.blockscout.com/api/"
 ```
 
 `cast` unlocks `ETH_KEYSTORE` even for read-only calls and then sends them from the keystore address (foundry-rs/foundry#17388, see #621). Keep `ETH_KEYSTORE` out of the environment for every read-only step; set it only for `josuke deploy` and the transition deploy script.
@@ -270,7 +272,7 @@ For each network, record evidence that:
 ```bash
 cd service_contracts
 make check-josuke   # ledger schema, facet sources, selector collisions, sizes, and storage against every recorded deployment, offline
-forge test
+make test           # builds the ERC-8167 dispatcher artifacts the tests need (make erc8167), then runs forge test
 ```
 
 `josuke check` must list exactly the facets this release intends to change as `new`, `changed`, or `removed`, and nothing else. Stop if it reports a facet it cannot deploy.
@@ -534,7 +536,7 @@ josuke verify    # rebuilds every facet from its recorded commit and checks it a
 
 GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherTransitionDeploy.s.sol \
   --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" \
-  --broadcast --verify --verifier blockscout --verifier-url <blockscout api>
+  --broadcast --verify --verifier blockscout --verifier-url "$BLOCKSCOUT_API_URL"
 ```
 
 `FWSSDispatcherDeploy` deploys the dispatcher, or reuses the recorded one after checking its code hash, and records it in `deployments.json`. The transition deploy script reads the proxy and the dispatcher from `deployments.json`, the proposed migration from `josuke.json`, and the proxy's current implementation as the rollback target. It deploys `FWSSDispatcherTransition` and records it in `deployments.json`. See [`tools/README.md`](README.md#erc-8167-dispatcher-transition) for its full behavior and broadcast caveats.
@@ -713,7 +715,6 @@ Every upgrade route must point at a deployed module; a zero address means FWSS c
 
 ## Notes From v1.3.0
 
-- Identify linked libraries and StateView changes before deploy. If the release needs new linked libraries, a new `FilecoinWarmStorageServiceStateView`, or a follow-up `setViewContract`, track those explicitly before deploying the FWSS implementation.
 - Rollback must be explicit before live announce. Record either an approved rollback procedure or a written technical-owner decision that rollback is unsafe or not available for this rollout.
 - Run Synapse updates from the intended deployment-address state. If the Synapse workflow or PR is run before `service_contracts/deployments.json` reflects live addresses, record the exception and owner.
 - Final changelog updates should not fold post-tag source changes into the released version section. Put post-tag source changes under `Unreleased` or the next release.
