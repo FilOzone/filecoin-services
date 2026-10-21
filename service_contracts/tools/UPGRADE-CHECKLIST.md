@@ -185,13 +185,11 @@ cd service_contracts
 export CHAIN=314159
 export ETH_RPC_URL="https://api.calibration.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x02925630df557F957f70E112bA06e50965417CA0"
-export BLOCKSCOUT_API_URL="https://filecoin-testnet.blockscout.com/api/"
 
 # Mainnet
 export CHAIN=314
 export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
-export BLOCKSCOUT_API_URL="https://filecoin.blockscout.com/api/"
 ```
 
 `cast` unlocks `ETH_KEYSTORE` even for read-only calls and then sends them from the keystore address (foundry-rs/foundry#17388, see #621). Keep `ETH_KEYSTORE` out of the environment for every read-only step; set it only for `josuke deploy` and the transition deploy script.
@@ -536,7 +534,7 @@ josuke verify    # rebuilds every facet from its recorded commit and checks it a
 
 GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherTransitionDeploy.s.sol \
   --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" \
-  --broadcast --verify --verifier blockscout --verifier-url "$BLOCKSCOUT_API_URL"
+  --broadcast --verify   # verifies on Sourcify, forge's default verifier
 ```
 
 `FWSSDispatcherDeploy` deploys the dispatcher, or reuses the recorded one after checking its code hash, and records it in `deployments.json`. The transition deploy script reads the proxy and the dispatcher from `deployments.json`, the proposed migration from `josuke.json`, and the proxy's current implementation as the rollback target. It deploys `FWSSDispatcherTransition` and records it in `deployments.json`. See [`tools/README.md`](README.md#erc-8167-dispatcher-transition) for its full behavior and broadcast caveats.
