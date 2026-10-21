@@ -5,6 +5,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.5.0] - FWSS ERC-8167 Dispatcher Transition
+
+This contract-stack release moves FilecoinWarmStorageService (FWSS) from the v1.4.0 UUPS monolith to the upstream ERC-8167 dispatcher, which routes each function selector to a module. The FWSS proxy addresses do not change.
+
+| Component | Version | Upgrade classification |
+|---|---|---|
+| Stack (`filecoin-services`) | `v1.5.0` | Routine |
+| `FilecoinWarmStorageService` | `1.5.0` | One-time dispatcher transition |
+| `PDPVerifier` | `3.5.0` | Unchanged |
+
+### Deployment / Rollout Status
+
+Rollout status, network-by-network addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.5.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.5.0). The FWSS proxy addresses remain unchanged.
+
+### Changed
+
+- The FWSS proxy now runs the unmodified upstream ERC-8167 dispatcher, pinned by code hash, instead of a UUPS implementation. Each FWSS method is served by a module, and josuke deploys the modules and the migration that installs their routes. The switch happens atomically in one delayed upgrade through `FWSSDispatcherTransition` ([#616](https://github.com/FilOzone/filecoin-services/pull/616), [#622](https://github.com/FilOzone/filecoin-services/pull/622)).
+- The proxy serves the same FWSS methods as v1.4.0, apart from the UUPS and initializer methods that the dispatcher drops ([#611](https://github.com/FilOzone/filecoin-services/pull/611), [#613](https://github.com/FilOzone/filecoin-services/pull/613), [#623](https://github.com/FilOzone/filecoin-services/pull/623), [#624](https://github.com/FilOzone/filecoin-services/pull/624), [#625](https://github.com/FilOzone/filecoin-services/pull/625), [#628](https://github.com/FilOzone/filecoin-services/pull/628)).
+- After the transition, FWSS upgrades are josuke migrations: `announceMigration(migration, delayEpochs)`, then `migrate(migration)`. `announceUpgradePlan` and `upgradeToAndCall` no longer apply ([#616](https://github.com/FilOzone/filecoin-services/pull/616)).
+- After the transition, the FWSS proxy itself serves the methods previously defined in `FilecoinWarmStorageServiceStateView`, through `FWSSViewModule`. Until the transition executes on a network, keep reading through the StateView already deployed there. The repository no longer builds or deploys StateView ([#635](https://github.com/FilOzone/filecoin-services/pull/635), [#638](https://github.com/FilOzone/filecoin-services/pull/638)).
+
+### Added
+
+- `ExampleSponsoredDataSet`, an example smart-contract payer for a single data set ([#540](https://github.com/FilOzone/filecoin-services/pull/540), [#605](https://github.com/FilOzone/filecoin-services/pull/605)).
+
+### Upgrade Notes
+
+- FWSS storage moved into the shared `FWSSStorage` contract without layout changes. Slot 17 is renamed from `viewContractAddress` to `_viewContractAddress`; its position is unchanged ([#608](https://github.com/FilOzone/filecoin-services/pull/608), [#638](https://github.com/FilOzone/filecoin-services/pull/638)).
+
 ## [1.4.0] - FWSS Breaking Upgrade
 
 This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.4.0 and updates the PDPVerifier integration baseline to v3.5.0.

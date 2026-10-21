@@ -7,7 +7,7 @@ import {IFilecoinServiceMetadata} from "../IFilecoinServiceMetadata.sol";
 /// @notice Exposes static FWSS service metadata.
 contract FWSSMetadataModule is IFilecoinServiceMetadata {
     // Version tracking
-    string public constant VERSION = "1.4.0";
+    string public constant VERSION = "1.5.0";
     string internal constant SERVICE_NAME = "Filecoin Warm Storage Service";
     string internal constant SERVICE_DESCRIPTION =
         "Warm storage service for the Filecoin Onchain Cloud. Manages PDP-backed datasets, Filecoin Pay storage rails, lifecycle fees, and optional CDN payment rails.";
