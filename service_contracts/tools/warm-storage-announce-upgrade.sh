@@ -78,8 +78,10 @@ if [ "$UPGRADE_DELAY_EPOCHS" = "0" ]; then
   echo "The contract will enforce a minimum delay of one epoch"
 fi
 
+# cast unlocks ETH_KEYSTORE even for `cast call`, prompting for a password and ignoring --from
+# (foundry-rs/foundry#17388), so the reads run without it.
 ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
-if ! PROXY_OWNER=$(cast call --rpc-url "$ETH_RPC_URL" --from "$ZERO_ADDRESS" \
+if ! PROXY_OWNER=$(env -u ETH_KEYSTORE cast call --rpc-url "$ETH_RPC_URL" --from "$ZERO_ADDRESS" \
   "$FWSS_PROXY_ADDRESS" "owner()(address)" 2>/dev/null); then
   echo "Error: Failed to read the FWSS proxy owner"
   exit 1
@@ -87,7 +89,7 @@ fi
 
 # Simulate from the owner before producing calldata. This catches invalid
 # implementation addresses and delay overflow.
-if ! cast call --rpc-url "$ETH_RPC_URL" --from "$PROXY_OWNER" \
+if ! env -u ETH_KEYSTORE cast call --rpc-url "$ETH_RPC_URL" --from "$PROXY_OWNER" \
   "$FWSS_PROXY_ADDRESS" "$CALL_SIGNATURE" "${CALL_ARGS[@]}" >/dev/null; then
   echo "Error: $CALL_SIGNATURE would revert against the current FWSS proxy"
   exit 1
