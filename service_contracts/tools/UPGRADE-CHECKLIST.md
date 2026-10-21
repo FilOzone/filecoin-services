@@ -525,7 +525,7 @@ Prerequisite: [Choose the Upgrade Path](#choose-the-upgrade-path) reports Path A
 
 ```bash
 forge script script/FWSSDispatcherDeploy.s.sol \
-  --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast
+  --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast --skip-simulation
 export DISPATCHER=$(jq -r ".\"$CHAIN\".FWSS_DISPATCHER_ADDRESS" deployments.json)
 (source tools/josuke.sh; josuke_move_entry "$FWSS_PROXY_ADDRESS" "$DISPATCHER")
 
@@ -534,8 +534,10 @@ josuke verify    # rebuilds every facet from its recorded commit and checks it a
 
 GIT_COMMIT=$(git rev-parse HEAD) forge script script/FWSSDispatcherTransitionDeploy.s.sol \
   --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" \
-  --broadcast --verify   # verifies on Sourcify, forge's default verifier
+  --broadcast --skip-simulation --verify   # verifies on Sourcify, forge's default verifier
 ```
+
+Keep `--skip-simulation` on every `forge script --broadcast`. Without it forge sets each gas limit from its local EVM simulation, and FEVM gas is not EVM gas: Lotus rejects the two deploys (`'GasLimit' field cannot be less than the cost of storing a message on chain`), and a broadcast execute mines and reverts out of gas. With it, forge asks the node to estimate gas.
 
 `FWSSDispatcherDeploy` deploys the dispatcher, or reuses the recorded one after checking its code hash, and records it in `deployments.json`. The transition deploy script reads the proxy and the dispatcher from `deployments.json`, the proposed migration from `josuke.json`, and the proxy's current implementation as the rollback target. It deploys `FWSSDispatcherTransition` and records it in `deployments.json`. See [`tools/README.md`](README.md#erc-8167-dispatcher-transition) for its full behavior and broadcast caveats.
 
@@ -599,6 +601,10 @@ CALLDATA_ONLY=true forge script script/FWSSDispatcherTransitionExecute.s.sol --r
 ```
 
 With `CALLDATA_ONLY=true` the script checks that the plan is the transition and ready, that the transition pins the migration `josuke.json` proposes and that migration's unchanged code, the proxy's current implementation as the rollback target, and the pinned dispatcher. It then simulates the upgrade as the proxy owner and prints the Safe transaction: `upgradeToAndCall(transition, migrate(migration))` on the proxy. That one call points the proxy at the dispatcher and runs the migration; if any part reverts, nothing changes.
+
+The upgrade call uses about 182M gas on FEVM. Leave the gas limit to the Safe's estimate; a signer must not cap it below that.
+
+An EOA owner broadcasts the same call instead: replace `CALLDATA_ONLY=true` with `--keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast --skip-simulation`.
 
 - [ ] Every signer [reproduces and decodes](#reproduce-and-decode-safe-calldata) the printed calldata, and decodes the inner `migrate(address)` call to confirm it names the pinned migration:
 

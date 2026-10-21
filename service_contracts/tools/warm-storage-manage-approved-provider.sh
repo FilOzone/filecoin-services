@@ -18,7 +18,7 @@
 # Optional:
 #   CHAIN
 #   FWSS_PROXY_ADDRESS
-#   FWSS_VIEW_ADDRESS
+#   FWSS_VIEW_ADDRESS            - Defaults to FWSS_PROXY_ADDRESS
 #   SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS
 #   CALLDATA_ONLY=true           - Print Safe calldata instead of sending/proposing
 #   PROPOSE_TO_SAFE=true         - Use Filecoin Safe Transaction Service instead of direct send
@@ -163,10 +163,8 @@ if [ -z "${FWSS_PROXY_ADDRESS:-}" ]; then
   exit 1
 fi
 
-if [ -z "${FWSS_VIEW_ADDRESS:-}" ]; then
-  echo "Error: FWSS_VIEW_ADDRESS is not set (not found in deployments.json or environment)"
-  exit 1
-fi
+# A modular FWSS records no view contract: the proxy serves the view methods itself.
+FWSS_VIEW_ADDRESS="${FWSS_VIEW_ADDRESS:-$FWSS_PROXY_ADDRESS}"
 
 fwss_owner() {
   cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" "owner()(address)"

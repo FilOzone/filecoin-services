@@ -21,11 +21,8 @@ contract FWSSJosukeLedgerTest is Test, JosukeFacetSet {
     }
 
     function testLedgerAddresses() public view {
-        address mainnetAddress = _proxyAddress(MAINNET_INDEX);
-        address calibnetAddress = _proxyAddress(CALIBNET_INDEX);
-        // TODO: read these from deployments.json
-        assertEq(mainnetAddress, 0x8408502033C418E1bbC97cE9ac48E5528F371A9f);
-        assertEq(calibnetAddress, 0x02925630df557F957f70E112bA06e50965417CA0);
+        _assertLedgerAddress(MAINNET_INDEX, "314");
+        _assertLedgerAddress(CALIBNET_INDEX, "314159");
     }
 
     function testFacetsProvideDispatcherTransitionRoutes() public view {
@@ -36,6 +33,17 @@ contract FWSSJosukeLedgerTest is Test, JosukeFacetSet {
         assertEq(_owners(facets, Migrate.migrate.selector), 1);
         // Josuke generates selectors() when no facet implements it.
         assertEq(_owners(facets, IERC8167.selectors.selector), 0);
+    }
+
+    /// @dev From the dispatcher deploy until the transition executes, the ledger lists the proxy under the dispatcher.
+    function _assertLedgerAddress(uint256 index, string memory chain) private view {
+        string memory deployments = vm.readFile("deployments.json");
+        address listed = _proxyAddress(index);
+        if (listed == vm.parseJsonAddress(deployments, string.concat(".", chain, ".FWSS_PROXY_ADDRESS"))) return;
+
+        string memory dispatcherKey = string.concat(".", chain, ".FWSS_DISPATCHER_ADDRESS");
+        assertTrue(vm.keyExistsJson(deployments, dispatcherKey), "ledger lists neither the proxy nor the dispatcher");
+        assertEq(listed, vm.parseJsonAddress(deployments, dispatcherKey));
     }
 
     function _owners(Facet[] memory facets, bytes4 selector) private pure returns (uint256 owners) {
