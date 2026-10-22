@@ -192,7 +192,7 @@ export ETH_RPC_URL="https://api.node.glif.io/rpc/v1"
 export FWSS_PROXY_ADDRESS="0x8408502033C418E1bbC97cE9ac48E5528F371A9f"
 ```
 
-`cast` unlocks `ETH_KEYSTORE` even for read-only calls and then sends them from the keystore address (foundry-rs/foundry#17388, see #621). Keep `ETH_KEYSTORE` out of the environment for every read-only step; set it only for `josuke deploy` and the transition deploy script.
+`cast` unlocks `ETH_KEYSTORE` even for read-only calls and then sends them from the keystore address (foundry-rs/foundry#17388, see #621). Keep `ETH_KEYSTORE` and `ETH_PASSWORD` out of the environment for every read-only step; set them only for `josuke deploy` and the transition deploy script. cast reads `ETH_PASSWORD` as `--password-file` and rejects it without `--keystore`.
 
 ### Operating Rules
 
