@@ -258,6 +258,8 @@ Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the
 
 **Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`: `endEpoch = block.number` and the payer's streaming buffer is released immediately, along with the lifecycle reserve. A payer signature implies consent to releasing the lifecycle reserve and paying the terminate fee from `pending` in one step, so for underfunded payers this reverts (FilecoinPay blocks the lockup-period change) rather than falling back to the standard 30-day window.
 
+The lockup reset and reserve release also run when the scaled termination fee and all pending earlier fees are zero.
+
 CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; for well-funded payers in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
 
 Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.

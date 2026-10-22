@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - New nonzero terms combine monthly storage and dataset charges before per-epoch rounding; fees and reserves use the selected currency's precision. Legacy billing remains unchanged, and FilBeam remains USDFC-only.
 - The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata.
 
+### Fixed
+
+- Payer-signed termination now ends the payment window and releases reserves even when the termination fee rounds to zero and no earlier fees remain pending.
+
 
 ## [1.5.0] - FWSS ERC-8167 Dispatcher Transition
 

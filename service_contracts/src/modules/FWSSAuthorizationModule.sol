@@ -264,7 +264,7 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         }
 
         uint96 pending = info.pendingOneTimePayments;
-        if (pending > 0) {
+        if (pending > 0 || immediateTermination) {
             uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
             LibStoragePayments.updatePaymentRates(
                 dataSetId, info, leafCount, pending, info.lifecycleReserveBalance, immediateTermination, paymentContract

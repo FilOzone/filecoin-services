@@ -23,6 +23,16 @@ contract CreationSixDecimalToken is ERC20 {
     }
 }
 
+contract CreationTwoDecimalToken is ERC20 {
+    constructor() ERC20("Low Precision USD", "LPUSD") {
+        _mint(msg.sender, 1_000_000e2);
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 2;
+    }
+}
+
 contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
     uint256 private constant PAYER_KEY = 0x627;
     uint256 private constant SESSION_KEY = 0x614;
@@ -170,6 +180,44 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
             / payments.NETWORK_FEE_DENOMINATOR();
         (, uint256 payeeAfter,,) = payments.getAccountInfoIfSettled(IERC20(address(token)), serviceProvider);
         assertEq(payeeAfter - payeeBefore, 31_000 - networkFee, "scaled create and termination fees paid");
+    }
+
+    function testZeroFeeSignedTerminationEndsImmediatelyAndReleasesLockup() public {
+        CreationTwoDecimalToken lowPrecisionToken = new CreationTwoDecimalToken();
+        IERC20 currency = IERC20(address(lowPrecisionToken));
+        bytes32 lowPrecisionTerms =
+            termsModule.registerStorageTerms(StorageTerms(address(currency), 2, bytes32(0), 1_000e2));
+        _fund(currency, 10_000e2);
+        uint256 id = _create(_payload(lowPrecisionTerms, 1, PAYER_KEY, true, false));
+        Cids.Cid[] memory pieces = new Cids.Cid[](1);
+        pieces[0] = Cids.CommPv2FromDigest(0, 35, keccak256("low-precision-piece"));
+        string[] memory empty = new string[](0);
+        makeSignaturePass(payer);
+        mockPDPVerifier.addPieces(
+            PDPListener(address(pdpServiceWithPayments)), id, 0, pieces, 2, FAKE_SIGNATURE, empty, empty
+        );
+
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(id);
+        FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+        assertEq(info.pendingOneTimePayments, 0, "earlier fees flushed");
+        assertEq(info.lifecycleReserveBalance, 47, "scaled create and add fees charged");
+        assertEq(rail.paymentRate, 1, "nonzero streaming lockup");
+        (, uint256 fundsBefore, uint256 availableBefore,) = payments.getAccountInfoIfSettled(currency, payer);
+
+        vm.prank(serviceProvider);
+        pdpServiceWithPayments.terminateService(id, abi.encode(FAKE_SIGNATURE));
+
+        rail = payments.getRail(info.pdpRailId);
+        info = pdpServiceWithPayments.getDataSet(id);
+        assertEq(rail.endEpoch, block.number, "consent must end payment immediately");
+        assertEq(info.pdpEndEpoch, block.number);
+        assertEq(rail.lockupPeriod, 0);
+        assertEq(rail.lockupFixed, 0);
+        assertEq(info.lifecycleReserveBalance, 0);
+        (, uint256 fundsAfter, uint256 availableAfter,) = payments.getAccountInfoIfSettled(currency, payer);
+        assertEq(fundsAfter, fundsBefore, "zero termination fee");
+        assertEq(availableAfter, fundsAfter, "all lockup released");
+        assertEq(availableAfter - availableBefore, 86_447, "streaming and fixed reserves released");
     }
 
     function testTermsIdIsBoundBySignature() public {
