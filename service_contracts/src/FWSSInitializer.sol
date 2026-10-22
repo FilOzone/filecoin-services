@@ -8,6 +8,7 @@ import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {Errors} from "./Errors.sol";
 import {FWSSOwnable} from "./lib/FWSSOwnable.sol";
 import {LibUpgradeRoutes} from "./lib/LibUpgradeRoutes.sol";
+import {LibStorageTerms} from "./lib/LibStorageTerms.sol";
 import {FWSSMetadataModule} from "./modules/FWSSMetadataModule.sol";
 import {FWSSStorage} from "./storage/FWSSStorage.sol";
 
@@ -25,12 +26,14 @@ contract FWSSInitializer is Initializable, EIP712Upgradeable, FWSSStorage, FWSSO
     /// @param _filBeamControllerAddress The address allowed to settle and terminate CDN services
     /// @param dispatcher The pinned ERC-8167 dispatcher
     /// @param migration The migration that routes the facets' selectors
+    /// @param _usdfc The same legacy currency supplied to the deployed facets.
     function initialize(
         uint64 _maxProvingPeriod,
         uint256 _challengeWindowSize,
         address _filBeamControllerAddress,
         address dispatcher,
-        address migration
+        address migration,
+        address _usdfc
     ) external initializer {
         _setOwner(msg.sender);
         emit OwnershipTransferred(address(0), msg.sender);
@@ -42,6 +45,7 @@ contract FWSSInitializer is Initializable, EIP712Upgradeable, FWSSStorage, FWSSO
             Errors.InvalidChallengeWindowSize(_challengeWindowSize, _maxProvingPeriod)
         );
         require(_filBeamControllerAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilBeamController));
+        require(_usdfc != address(0), Errors.ZeroAddress(Errors.AddressField.USDFC));
         filBeamControllerAddress = _filBeamControllerAddress;
 
         emit FilecoinServiceDeployed(SERVICE_NAME, SERVICE_DESCRIPTION);
@@ -52,5 +56,6 @@ contract FWSSInitializer is Initializable, EIP712Upgradeable, FWSSStorage, FWSSO
         ERC1967Utils.upgradeToAndCall(dispatcher, "");
         Address.functionDelegateCall(migration, "");
         LibUpgradeRoutes.requireUpgradeRoutes(dispatcher);
+        LibStorageTerms.initialize(_usdfc);
     }
 }

@@ -5,7 +5,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {Errors} from "../Errors.sol";
 import {IFilecoinWarmStorageService} from "../interfaces/IFilecoinWarmStorageService.sol";
 import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "./FWSSConstants.sol";
-import {DataSetInfoView, DataSetStatus} from "./FWSSViewTypes.sol";
+import {DataSetInfoView, DataSetInfoViewV2, DataSetStatus} from "./FWSSViewTypes.sol";
 import {
     DATASET_FEE_PER_MONTH,
     SERVICE_COMMISSION_BPS,
@@ -112,6 +112,7 @@ library FilecoinWarmStorageServiceStateLibrary {
 
     /**
      * @notice Get data set information by ID
+     * @dev Deprecated. Use getDataSetV2 for the storage terms ID.
      * @param dataSetId The ID of the data set
      * @return info The data set information struct
      */
@@ -135,6 +136,34 @@ library FilecoinWarmStorageServiceStateLibrary {
         info.pendingOneTimePayments = uint96(uint256(info11[10]));
         info.lifecycleReserveBalance = uint96(uint256(info11[10]) >> 96);
         info.dataSetId = dataSetId;
+    }
+
+    /**
+     * @notice Get data set information, including its storage terms ID, by ID
+     * @param dataSetId The ID of the data set
+     * @return info The data set information struct
+     */
+    function getDataSetV2(IFilecoinWarmStorageService service, uint256 dataSetId)
+        public
+        view
+        returns (DataSetInfoViewV2 memory info)
+    {
+        bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
+        bytes32[] memory info12 = service.extsloadStruct(slot, 12);
+        info.pdpRailId = uint256(info12[0]);
+        info.cacheMissRailId = uint256(info12[1]);
+        info.cdnRailId = uint256(info12[2]);
+        info.payer = address(uint160(uint256(info12[3])));
+        info.payee = address(uint160(uint256(info12[4])));
+        info.serviceProvider = address(uint160(uint256(info12[5])));
+        info.commissionBps = uint256(info12[6]);
+        info.clientDataSetId = uint256(info12[7]);
+        info.pdpEndEpoch = uint256(info12[8]);
+        info.providerId = uint256(info12[9]);
+        info.pendingOneTimePayments = uint96(uint256(info12[10]));
+        info.lifecycleReserveBalance = uint96(uint256(info12[10]) >> 96);
+        info.dataSetId = dataSetId;
+        info.storageTermsId = info12[11];
     }
 
     // TODO: measure whether loading 4 slots in one extsloadStruct call is cheaper than two
@@ -383,6 +412,7 @@ library FilecoinWarmStorageServiceStateLibrary {
     }
 
     /**
+     * @dev Deprecated. Use getClientDataSetsV2 for the storage terms ID.
      * @dev To determine termination status: check if paymentEndEpoch != 0.
      * If paymentEndEpoch > 0, the rails have already been terminated.
      * @dev To determine deletion status: deleted datasets don't appear in
@@ -403,6 +433,7 @@ library FilecoinWarmStorageServiceStateLibrary {
 
     /**
      * @notice Get enriched client data sets with optional pagination
+     * @dev Deprecated. Use getClientDataSetsV2 for the storage terms ID.
      * @param service The service contract
      * @param client The client address
      * @param offset Starting index (0-based). Use 0 to start from beginning
@@ -422,6 +453,29 @@ library FilecoinWarmStorageServiceStateLibrary {
         infos = new DataSetInfoView[](dataSetIds.length);
         for (uint256 i = 0; i < dataSetIds.length; i++) {
             infos[i] = getDataSet(service, dataSetIds[i]);
+        }
+    }
+
+    /**
+     * @notice Get enriched client data sets with storage terms IDs and optional pagination
+     * @param service The service contract
+     * @param client The client address
+     * @param offset Starting index (0-based). Use 0 to start from beginning
+     * @param limit Maximum number of data sets to return. Use 0 to get all remaining
+     * @return infos Array of enriched data set info structs
+     * @dev For large lists, use pagination to avoid gas limit issues. If limit=0,
+     * returns all remaining data sets starting from offset.
+     */
+    function getClientDataSetsV2(IFilecoinWarmStorageService service, address client, uint256 offset, uint256 limit)
+        public
+        view
+        returns (DataSetInfoViewV2[] memory infos)
+    {
+        uint256[] memory dataSetIds = clientDataSets(service, client, offset, limit);
+
+        infos = new DataSetInfoViewV2[](dataSetIds.length);
+        for (uint256 i = 0; i < dataSetIds.length; i++) {
+            infos[i] = getDataSetV2(service, dataSetIds[i]);
         }
     }
 

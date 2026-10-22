@@ -641,6 +641,36 @@ export MIGRATION=$(source tools/josuke.sh; josuke_proposed_migration "$FWSS_PROX
 echo "Migration $MIGRATION"
 ```
 
+**Storage-terms introduction only:** this feature upgrades an already-modular
+deployment (Path B). Before recording or announcing the target, wrap the raw
+Josuke migration so record zero is initialized in the same transaction as the
+route installation:
+
+```bash
+export RAW_MIGRATION="$MIGRATION"
+forge create src/FWSSStorageTermsMigration.sol:FWSSStorageTermsMigration \
+  --rpc-url "$ETH_RPC_URL" --keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" \
+  --broadcast --constructor-args "$RAW_MIGRATION"
+# Set MIGRATION to the wrapper's reported deployment address.
+export MIGRATION="<deployed FWSSStorageTermsMigration address>"
+cast call --rpc-url "$ETH_RPC_URL" "$MIGRATION" 'migration()(address)'
+```
+
+- [ ] Confirm the wrapper's `migration()` equals `RAW_MIGRATION`.
+- [ ] Independently verify the wrapper's deployed bytecode against the frozen
+  `FWSSStorageTermsMigration` source and constructor argument; record both
+  migration addresses and code hashes in the Run Log. `josuke verify` validates
+  the raw route migration and facets, not this wrapper.
+- [ ] Use the **wrapper** as `MIGRATION` for B2–B4. Do not announce or execute the
+  raw route migration for the introduction: existing modular migration code does
+  not initialize storage terms.
+
+The wrapper obtains USDFC from the installed configuration and initializes zero
+only if unregistered. Later upgrades must not re-enable a disabled zero record.
+Leave the raw proposal in `josuke.json`; `josuke accept` verifies the installed
+routes after execution. Fresh modular deployments initialize zero directly.
+
+
 - [ ] Record `MIGRATION` as the announced target in the Run Log
 - [ ] Commit `josuke.json` to the Phase 2 PR
 
@@ -707,6 +737,21 @@ git add josuke.json && git commit -m "chore(josuke): accept the $CHAIN migration
 ```
 
 Every upgrade route must point at a deployed module; a zero address means FWSS can no longer be upgraded. Stop and escalate if any check differs from its expected value.
+
+For the storage-terms introduction, additionally confirm:
+
+```bash
+cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" \
+  'getStorageTerms(bytes32)((address,uint8,bytes32,uint96),bool)' \
+  0x0000000000000000000000000000000000000000000000000000000000000000
+```
+
+The result must be the deployment's USDFC token, decimals `18`, zero salt,
+price `2500000000000000000`, and enabled `true`. Confirm existing datasets
+report zero through `getDataSetV2`, legacy getter arrays still decode correctly,
+and a six-decimal registered currency completes creation, piece addition, and
+termination with scaled fees.
+
 
 ---
 

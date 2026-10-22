@@ -34,11 +34,20 @@ import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
+import {StorageTermsRecord} from "../lib/StorageTerms.sol";
+import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
+import {StoragePricing} from "../lib/StoragePricing.sol";
 
 /// @title FWSSDataSetModule
 /// @notice Manages data set creation and deletion.
 contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
     using LibRails for FilecoinPayV1;
+
+    error UnsupportedExtraDataVariant(uint256 keysOffset);
+    error StorageTermsNotEnabled(bytes32 storageTermsId);
+    error CDNUnsupportedCurrency(address token);
+
+    event DataSetStorageTermsSelected(uint256 indexed dataSetId, bytes32 indexed storageTermsId);
 
     // Metadata key constants
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
@@ -150,7 +159,10 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             len <= MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE,
             Errors.ExtraDataTooLarge(len, MAX_CREATE_DATA_SET_EXTRA_DATA_SIZE)
         );
-        DataSetCreateData memory createData = decodeDataSetCreateData(extraData);
+        (DataSetCreateData memory createData, bytes32 storageTermsId, bool withStorageTerms) =
+            decodeDataSetCreateData(extraData);
+        StorageTermsRecord storage terms = LibStorageTerms.getRecord(storageTermsId);
+        require(terms.enabled, StorageTermsNotEnabled(storageTermsId));
 
         // Validate the addresses
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
@@ -170,7 +182,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         clientDataSets[createData.payer].push(dataSetId);
 
         // Verify the client's signature
-        verifyCreateDataSetSignature(payee, createData);
+        verifyCreateDataSetSignature(payee, createData, storageTermsId, withStorageTerms);
 
         // Initialize the DataSetInfo struct
         DataSetInfo storage info = dataSetInfo[dataSetId];
@@ -180,6 +192,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         info.commissionBps = SERVICE_COMMISSION_BPS;
         info.clientDataSetId = createData.clientDataSetId;
         info.providerId = providerId;
+        info.storageTermsId = storageTermsId;
 
         // Store each metadata key-value entry for this data set
         require(
@@ -212,21 +225,27 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             dataSetMetadata[dataSetId][key] = value;
         }
 
-        // Note: The payer must have pre-approved this contract to spend USDFC tokens before creating the data set
+        // The payer funds and approves the currency selected by the signed terms.
 
         // Create the payment rails using the FilecoinPayV1 contract
 
         // Determine once whether CDN is enabled in metadata and reuse the result
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
+        require(!hasCDN || terms.token == address(usdfcTokenAddress), CDNUnsupportedCurrency(terms.token));
 
         (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = paymentContract.createRails(
-            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
+            dataSetId,
+            IERC20(terms.token),
+            createData.payer,
+            payee,
+            hasCDN ? filBeamBeneficiaryAddress : address(0),
+            terms.tokenDecimals
         );
 
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
-        info.lifecycleReserveBalance = uint96(LIFECYCLE_RESERVE_TARGET);
-        info.pendingOneTimePayments = uint96(CREATE_DATA_SET_FEE);
+        info.lifecycleReserveBalance = uint96(StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, terms.tokenDecimals));
+        info.pendingOneTimePayments = uint96(StoragePricing.scaleAmount(CREATE_DATA_SET_FEE, terms.tokenDecimals));
         if (hasCDN) {
             info.cacheMissRailId = cacheMissRailId;
             info.cdnRailId = cdnRailId;
@@ -244,6 +263,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             createData.metadataKeys,
             createData.metadataValues
         );
+        emit DataSetStorageTermsSelected(dataSetId, storageTermsId);
     }
 
     /**
@@ -381,18 +401,29 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
      * @notice Decode extra data for data set creation
      * @param extraData The encoded extra data from PDPVerifier
      * @return decoded The decoded DataSetCreateData struct
+     * @return storageTermsId Selected terms; zero for the legacy format.
+     * @return withStorageTerms Whether to verify the terms-aware signed type.
      */
-    function decodeDataSetCreateData(bytes calldata extraData) internal pure returns (DataSetCreateData memory) {
-        (address payer, uint256 clientDataSetId, string[] memory keys, string[] memory values, bytes memory signature) =
+    function decodeDataSetCreateData(bytes calldata extraData)
+        internal
+        pure
+        returns (DataSetCreateData memory decoded, bytes32 storageTermsId, bool withStorageTerms)
+    {
+        require(extraData.length >= 160, Errors.ExtraDataRequired());
+        uint256 keysOffset;
+        assembly ("memory-safe") {
+            keysOffset := calldataload(add(extraData.offset, 64))
+        }
+        // Canonical ABI heads distinguish the five-field legacy and six-field terms payloads.
+        require(keysOffset == 160 || keysOffset == 192, UnsupportedExtraDataVariant(keysOffset));
+        (decoded.payer, decoded.clientDataSetId, decoded.metadataKeys, decoded.metadataValues, decoded.signature) =
             abi.decode(extraData, (address, uint256, string[], string[], bytes));
-
-        return DataSetCreateData({
-            payer: payer,
-            clientDataSetId: clientDataSetId,
-            metadataKeys: keys,
-            metadataValues: values,
-            signature: signature
-        });
+        withStorageTerms = keysOffset == 192;
+        if (withStorageTerms) {
+            assembly ("memory-safe") {
+                storageTermsId := calldataload(add(extraData.offset, 160))
+            }
+        }
     }
 
     /**
@@ -420,13 +451,23 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
      * @param createData The decoded DataSetCreateData used to build the signature
      * @param payee The service provider address
      */
-    function verifyCreateDataSetSignature(address payee, DataSetCreateData memory createData) internal view {
-        // Compute the EIP-712 digest for the struct hash
-        bytes32 digest = _hashTypedDataV4(
-            LibSignatureVerification.createDataSetStructHash(
+    function verifyCreateDataSetSignature(
+        address payee,
+        DataSetCreateData memory createData,
+        bytes32 storageTermsId,
+        bool withStorageTerms
+    ) internal view {
+        bytes32 structHash;
+        if (withStorageTerms) {
+            structHash = LibSignatureVerification.createDataSetWithStorageTermsStructHash(
+                createData.clientDataSetId, payee, createData.metadataKeys, createData.metadataValues, storageTermsId
+            );
+        } else {
+            structHash = LibSignatureVerification.createDataSetStructHash(
                 createData.clientDataSetId, payee, createData.metadataKeys, createData.metadataValues
-            )
-        );
+            );
+        }
+        bytes32 digest = _hashTypedDataV4(structHash);
 
         // Verify using the inlined signature library
         LibSignatureVerification.verifyCreateDataSetSignature(

@@ -18,6 +18,26 @@ struct DataSetInfoView {
     uint256 dataSetId; // DataSet ID
 }
 
+/// @dev Data set information returned by the V2 FWSS view getters.
+///      The DataSetInfoView fields are deliberately retained as a prefix for
+///      callers that need to decode both versions.
+struct DataSetInfoViewV2 {
+    uint256 pdpRailId; // ID of the PDP payment rail
+    uint256 cacheMissRailId; // For CDN add-on: ID of the cache miss payment rail, which rewards the SP for serving data to the CDN when it doesn't already have it cached
+    uint256 cdnRailId; // For CDN add-on: ID of the CDN payment rail, which rewards the CDN for serving data to clients
+    address payer; // Address paying for storage
+    address payee; // SP's beneficiary address
+    address serviceProvider; // Current service provider of the dataset
+    uint256 commissionBps; // Commission rate for this data set (dynamic based on whether the client purchases CDN add-on)
+    uint256 clientDataSetId; // ClientDataSetID
+    uint256 pdpEndEpoch; // 0 if PDP rail are not terminated
+    uint256 providerId; // Provider ID from the ServiceProviderRegistry
+    uint96 pendingOneTimePayments; // fees accumulated since last flush via updateStorageRates
+    uint96 lifecycleReserveBalance; // local mirror of rail's lockupFixed; decremented on flush
+    uint256 dataSetId; // DataSet ID
+    bytes32 storageTermsId; // Storage terms selected at data set creation
+}
+
 enum DataSetStatus {
     // Dataset is inactive: non-existent (pdpRailId==0) or no pieces added yet (rate==0, no proving)
     Inactive,

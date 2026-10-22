@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+
+- Added owner-registered, immutable storage terms selecting currency, decimals, price, and salt. Terms can be disabled for new datasets without affecting existing ones; legacy terms use reserved ID zero ([#627](https://github.com/FilOzone/filecoin-services/issues/627)).
+- Added terms-aware EIP-712 dataset creation using the existing creation scope, and V2 dataset getters exposing the selected terms while preserving deprecated getter ABIs. V2 listing uses `getClientDataSetsV2(client, offset, limit)`.
+
+### Changed
+
+- New nonzero terms combine monthly storage and dataset charges before per-epoch rounding; fees and reserves use the selected currency's precision. Legacy billing remains unchanged, and FilBeam remains USDFC-only.
+- The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata.
+
+
 ## [1.5.0] - FWSS ERC-8167 Dispatcher Transition
 
 This contract-stack release moves FilecoinWarmStorageService (FWSS) from the v1.4.0 UUPS monolith to the upstream ERC-8167 dispatcher, which routes each function selector to a module. The FWSS proxy addresses do not change.
@@ -33,7 +44,6 @@ Rollout status, network-by-network addresses, announcement and execution epochs,
 ### Upgrade Notes
 
 - FWSS storage moved into the shared `FWSSStorage` contract without layout changes. Slot 17 is renamed from `viewContractAddress` to `_viewContractAddress`; its position is unchanged ([#608](https://github.com/FilOzone/filecoin-services/pull/608), [#638](https://github.com/FilOzone/filecoin-services/pull/638)).
-
 ## [1.4.0] - FWSS Breaking Upgrade
 
 This contract-stack release upgrades FilecoinWarmStorageService (FWSS) to v1.4.0 and updates the PDPVerifier integration baseline to v3.5.0.

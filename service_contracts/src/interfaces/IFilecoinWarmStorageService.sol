@@ -8,8 +8,9 @@ pragma solidity ^0.8.20;
 import {Errors} from "../Errors.sol";
 import {IFilecoinServiceMetadata} from "../IFilecoinServiceMetadata.sol";
 import {ServiceProviderRegistry} from "../ServiceProviderRegistry.sol";
-import {DataSetInfoView, DataSetStatus} from "../lib/FWSSViewTypes.sol";
+import {DataSetInfoView, DataSetInfoViewV2, DataSetStatus} from "../lib/FWSSViewTypes.sol";
 import {PriceList} from "../lib/PriceList.sol";
+import {StorageTerms} from "../lib/StorageTerms.sol";
 import {FWSSDataSetModule} from "../modules/FWSSDataSetModule.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 import {IValidator} from "@fws-payments/FilecoinPayV1.sol";
@@ -49,6 +50,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     event DataSetServiceProviderChanged(
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
+    event DataSetStorageTermsSelected(uint256 indexed dataSetId, bytes32 indexed storageTermsId);
     event DiamondDelegateCall(address indexed delegate, bytes delegateCalldata);
     event EIP712DomainChanged();
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
@@ -69,11 +71,14 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
         uint256 cacheMissRailId,
         uint256 cdnRailId
     );
+    event StorageTermsDisabled(bytes32 indexed storageTermsId);
+    event StorageTermsRegistered(bytes32 indexed storageTermsId, StorageTerms terms);
     event UpgradeAnnounced(FWSSStorage.PlannedUpgrade plannedUpgrade);
 
     error AddressEmptyCode(address target);
     error AuthorizerReentrancy();
     error CDNPaymentAlreadyTerminated(uint256 dataSetId);
+    error CDNUnsupportedCurrency(address token);
     error CacheMissPaymentAlreadyTerminated(uint256 dataSetId);
     error CallerNotPayer(uint256 dataSetId, address expectedPayer, address caller);
     error CallerNotPayerOrPayee(uint256 dataSetId, address expectedPayer, address expectedPayee, address caller);
@@ -112,6 +117,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error InvalidMigration(address migration);
     error InvalidSignature(address expected, address actual);
     error InvalidSignatureLength(uint256 expectedLength, uint256 actualLength);
+    error InvalidTokenDecimals(uint8 tokenDecimals);
     error InvalidTopUpAmount(uint256 dataSetId);
     error MaxProvingPeriodZero();
     error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
@@ -131,6 +137,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error OwnableInvalidOwner(address owner);
     error OwnableUnauthorizedAccount(address account);
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);
+    error PriceBelowMinimum(uint96 pricePerTiBPerMonth, uint256 minimumPricePerTiBPerMonth);
     error ProofAlreadySubmitted(uint256 dataSetId);
     error ProviderAlreadyApproved(uint256 providerId);
     error ProviderIdMismatchAtIndex(uint256 index, uint256 providerId);
@@ -142,8 +149,11 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error RailNotFullySettled(uint256 railId, uint256 settledUpTo, uint256 endEpoch);
     error ServiceContractMustTerminateRail();
     error StorageProviderChangesNotSupported();
+    error StorageTermsNotEnabled(bytes32 storageTermsId);
     error TooManyMetadataKeys(uint256 maxAllowed, uint256 keysLength);
     error Unauthorized(address payer, bytes32 operation, bytes32 digest, bytes signature);
+    error UnknownStorageTerms(bytes32 id);
+    error UnsupportedExtraDataVariant(uint256 keysOffset);
     error UnsupportedSignatureV(uint8 v);
     error ZeroAddress(Errors.AddressField field);
 
@@ -157,6 +167,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
         returns (uint256[] memory dataSetIds);
     function clientNonces(address payer, uint256 nonce) external view returns (uint256);
     function configureProvingPeriod(uint64 _maxProvingPeriod, uint256 _challengeWindowSize) external;
+    function disableStorageTerms(bytes32 storageTermsId) external;
     function eip712Domain()
         external
         view
@@ -185,6 +196,10 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
         view
         returns (DataSetInfoView[] memory infos);
     function getClientDataSetsLength(address payer) external view returns (uint256);
+    function getClientDataSetsV2(address client, uint256 offset, uint256 limit)
+        external
+        view
+        returns (DataSetInfoViewV2[] memory infos);
     function getCurrentPricingRates() external pure returns (uint256 storagePrice, uint256 datasetFee);
     function getDataSet(uint256 dataSetId) external view returns (DataSetInfoView memory info);
     function getDataSetAuthorizer(uint256 dataSetId) external view returns (address);
@@ -195,10 +210,13 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     function getDataSetPayerAndRailId(uint256 dataSetId) external view returns (address payer, uint256 pdpRailId);
     function getDataSetSizeInBytes(uint256 leafCount) external pure returns (uint256);
     function getDataSetStatus(uint256 dataSetId) external view returns (DataSetStatus status);
+    function getDataSetV2(uint256 dataSetId) external view returns (DataSetInfoViewV2 memory info);
     function getEffectiveRates() external pure returns (uint256 serviceFee, uint256 spPayment);
     function getPriceList() external view returns (PriceList memory list);
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) external view returns (uint256);
     function getServicePrice() external view returns (FWSSDataSetModule.ServicePricing memory pricing);
+    function getStorageTerms(bytes32 storageTermsId) external view returns (StorageTerms memory terms, bool enabled);
+    function getStorageTermsId(StorageTerms calldata terms) external view returns (bytes32);
     function hasBeenProvenRecently(uint256 dataSetId) external view returns (bool);
     function implementation(bytes4 selector) external view returns (address delegate);
     function isProviderApproved(uint256 providerId) external view returns (bool);
@@ -212,6 +230,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     function provingActivationEpoch(uint256 dataSetId) external view returns (uint256);
     function provingDeadline(uint256 setId) external view returns (uint256);
     function railToDataSet(uint256 railId) external view returns (uint256);
+    function registerStorageTerms(StorageTerms calldata terms) external returns (bytes32 storageTermsId);
     function removeApprovedProvider(uint256 providerId, uint256 index) external;
     function renounceOwnership() external;
     function selectors() external view returns (bytes4[] memory);
