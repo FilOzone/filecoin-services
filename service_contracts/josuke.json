@@ -1,6 +1,6 @@
 [
     {
-        "address": "0x8408502033C418E1bbC97cE9ac48E5528F371A9f",
+        "address": "0x50d271127b3bEaeF4b72B5cDD329B2ba3E698df8",
         "facetSrc": [
             "src/modules/*.sol",
             "lib/erc8167/src/Implementation.evm"
@@ -18,6 +18,127 @@
                 "legacy": {
                     "source": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService",
                     "gitCommit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec"
+                },
+                "proposed": {
+                    "gitCommit": "649e23f3329abf6a24d01c30359958ee7d0e0948",
+                    "facets": {
+                        "src/modules/ExtsloadModule.sol:ExtsloadModule": {
+                            "address": "0x8B760EB8314A37343662181DaBb0F09Ef05F9a19",
+                            "codeHash": "0xb7fe1674d2ee34222651f7b1676390ce31866bafb74e00538ef1031fe7428b89",
+                            "initcodeHash": "0x5a16ce32defd7034a049e7fe79de864f7eba7af9f7eb12a7ac40ea51c5969df4",
+                            "createTxHash": "0xdf53991135dd3cc3df849ede5e9a3bc222433622b0528e531d29f56cfa1e422f"
+                        },
+                        "src/modules/FWSSAuthorizationModule.sol:FWSSAuthorizationModule": {
+                            "address": "0x5A56e54c3a21f91BC171e2ffc0150168676897A7",
+                            "codeHash": "0x4035edf28574b1f33c5a7f826b7534b3993156dbd69ebd83721368894d3e7b9b",
+                            "initcodeHash": "0x40e141b0b696cb1ddb62de3280defd9035657bfe6087bed79509ad293f8e65d6",
+                            "constructorArgs": {
+                                "_paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+                                "_pdpVerifierAddress": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
+                                "_sessionKeyRegistry": "0x74FD50525A958aF5d484601E252271f9625231aB"
+                            },
+                            "createTxHash": "0x5653164bb593c87cfddedd898663ea30527909325f8cad151e91b9193676a8ce"
+                        },
+                        "src/modules/FWSSConfigModule.sol:FWSSConfigModule": {
+                            "address": "0xa61Ea56403Ce48e8c8cDA4262D6a6f59765bb73F",
+                            "codeHash": "0xc63d0d44e93f3e2fa09047f5ffb575c43b1795b717fda6bfa5511abb9a463930",
+                            "initcodeHash": "0x15b914ebd81b479ec6d317d986835bdd18a1cf3301c661d2117ddd5adf61204d",
+                            "constructorArgs": {
+                                "_paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+                                "_pdpVerifierAddress": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
+                                "_usdfc": "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045"
+                            },
+                            "createTxHash": "0x13558a8056f2cd1b746f97902ebc78dd091360494db5c762aaf9cce159db54e9",
+                            "from": "0x3fBC8Bd9A00105E0674D438714033f56908Ca351",
+                            "nonce": 3
+                        },
+                        "src/modules/FWSSDataSetModule.sol:FWSSDataSetModule": {
+                            "address": "0x11CCE0Ef5c2fe347D7a6b29cd7D4B43C7cef6Df1",
+                            "codeHash": "0xf8eda3a832a482877dbc6f005949cc1b9034a85cbd77150b50c0cb4237ed5055",
+                            "initcodeHash": "0xef486292b28a7e1b007e15d924a901af464d09634d031c75111a576fb75b98f7",
+                            "constructorArgs": {
+                                "_paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+                                "_pdpVerifierAddress": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F",
+                                "_usdfc": "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045",
+                                "_filBeamBeneficiaryAddress": "0x1D60d2F5960Af6341e842C539985FA297E10d6eA",
+                                "_serviceProviderRegistry": "0xf55dDbf63F1b55c3F1D4FA7e339a68AB7b64A5eB",
+                                "_sessionKeyRegistry": "0x74FD50525A958aF5d484601E252271f9625231aB"
+                            },
+                            "createTxHash": "0x8b2f6fc6c45e38ed6345728e568ebeb53248c837eefdede9ee33bb5070abfd41",
+                            "from": "0x3fBC8Bd9A00105E0674D438714033f56908Ca351",
+                            "nonce": 4
+                        },
+                        "src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule": {
+                            "address": "0xE1bC0F3382e5e1a11dAa08c47b61e18E621752A4",
+                            "codeHash": "0x4e629aec1d626b974dfccee20a9834f0a2dcf8549366d9b2ee30fa73a287a6cd",
+                            "initcodeHash": "0x0466de7f1ca31e24bdcfb449704d74e06b0ed993211f4873020592f981bd24b3",
+                            "constructorArgs": {
+                                "_paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa"
+                            },
+                            "createTxHash": "0x7916347fd79e4e8fd279f517ce3b00c69fe7227a25b1f5dd017dd4ecb9be70fc"
+                        },
+                        "src/modules/FWSSMetadataModule.sol:FWSSMetadataModule": {
+                            "address": "0xd03BEEd75adc7fd1064FFEbc7bd11E9086b0A00C",
+                            "codeHash": "0xe826cf4eef9d4bfc1736831d2c88b926e2cdf9b7a4f4596de6a7dd0596fa273f",
+                            "initcodeHash": "0x322abbd8a982bc4708f529854b8625a6daabba491cb775c726b2d897124779a9",
+                            "createTxHash": "0xea195ada6b13f54120bfd8736053be3e29b89883d1572214750ff2ac5f98a2ca"
+                        },
+                        "src/modules/FWSSMigrateModule.sol:FWSSMigrateModule": {
+                            "address": "0x98Aa1637dc789FD30479185AC5B8D010b89303AC",
+                            "codeHash": "0xce965f2b04edf6966bfade6725a8c48ab6a82b31f1b8cd66226ab52f8645ee3d",
+                            "initcodeHash": "0xd20383134665a7ddfe56df32d915c8ec6b3f3c9a832321b7d6d0a1f18e2e2c8c",
+                            "createTxHash": "0x5a47308a8d3f56a0b43d272155a196fd8ae1c7fb587e30c020a11fed58dc0f36"
+                        },
+                        "src/modules/FWSSProviderManagementModule.sol:FWSSProviderManagementModule": {
+                            "address": "0xcE05f92C107D2D207dBAeB4c02eBF1442e131557",
+                            "codeHash": "0xdb8b79b391d4b6047c7831e9d10176a3471d12df3fdd6b76ca25d35fc61b50e7",
+                            "initcodeHash": "0x2b0a0ae9f510833955c78fc92be95b154bbcc2dcb5528dfc361fc107737c1c8d",
+                            "createTxHash": "0xb41a703b15fa4a09e165edc373665b7ebb6835ea39900a127e1afc12d3c961d6"
+                        },
+                        "src/modules/FWSSProvingModule.sol:FWSSProvingModule": {
+                            "address": "0x6F9526C1dddacdFa181f4BBcf0b11B81227802d2",
+                            "codeHash": "0xb77ea7a343fa009d8a94324964cb22a3942d3541a4ab11cc9de9800be4b2e9a5",
+                            "initcodeHash": "0x0ce49ccebe71290c81228c72a80d51a527368220a7a0986eb3f03994ab6ed8a6",
+                            "constructorArgs": {
+                                "_paymentsContractAddress": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
+                                "_pdpVerifierAddress": "0xBADd0B92C1c71d02E7d520f64c0876538fa2557F"
+                            },
+                            "createTxHash": "0xabe635644622626dc1371f0f7494c44ba5073d71d704539c4510fdd6d2def227"
+                        },
+                        "src/modules/FWSSViewContractModule.sol:FWSSViewContractModule": {
+                            "address": "0xf88bB481CB9aEc03D879Ce4C685e21416A5DFF2B",
+                            "codeHash": "0xcddd5ee83c9ebde9c5a8a4bf09ba69a03f9a9e014d48c4b4708f2197e6e8b41e",
+                            "initcodeHash": "0x5795e04a721409606a88f0e6e4517b4fe863f1ba45bf40f31565b0c1ea2e5b28",
+                            "createTxHash": "0x14e61f34fdb84b6f7b78cd0d8a22aac2c01063b7ea454c906a7465ca54e88c63"
+                        },
+                        "src/modules/FWSSViewModule.sol:FWSSViewModule": {
+                            "address": "0x129cC24160DBE808B867F5f06291BBF85EEFf7C3",
+                            "codeHash": "0xe09e49b55109c2d3e28ab0a7d2ddbfcd6b0ff70e0932fc50bfbce36d20d4424c",
+                            "initcodeHash": "0x794b898588dc10c4fa1890955987cbcaaec221078747aaf4820f9805b3d01eb8",
+                            "constructorArgs": {
+                                "_usdfc": "0x80B98d3aa09ffff255c3ba4A241111Ff1262F045"
+                            },
+                            "createTxHash": "0xc5b556b2017769099e7b1f76a8e254ae8a0e8b272a085f6b60459e255feb075b"
+                        },
+                        "src/modules/OwnershipModule.sol:OwnershipModule": {
+                            "address": "0xC89995181e165917de165827CC742fACF43E0Cad",
+                            "codeHash": "0xceb1cfba14091509fe66674130833d4ef86eb7013808286a21078422f051fbab",
+                            "initcodeHash": "0x287204ceb71c7b0c7f11fd699c601be7525c01116c503f6fce1d9ef4187f8735",
+                            "createTxHash": "0x2a81c6ec4d95fb4c6f20cc7d22371d8f940836a4ddae10cd783e9dba8511bef5"
+                        },
+                        "lib/erc8167/src/Implementation.evm": {
+                            "address": "0xFd0508a971CD7116091F00E24FC5Aa84B3F19276",
+                            "codeHash": "0x3439f309ca6be1708e22288122d506a67337e06a35ef9a79f0f193aaa9385ffb",
+                            "initcodeHash": "0x74468a400e16561347f4b6324c3e11df6606336673e0eba6aa52a036e94735a3",
+                            "createTxHash": "0xd6d403ad7a3824375722f423e40b5342e9be4bd31b5f44d188860d2cfd990c79"
+                        }
+                    },
+                    "selectors": {
+                        "address": "0xec384887a59E0706fc2017dF0Feb87301017d2d6"
+                    },
+                    "migration": {
+                        "address": "0x7E382064e9D0485c69A45ca28889bA71D1809c7B"
+                    }
                 }
             }
         }

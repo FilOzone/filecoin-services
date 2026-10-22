@@ -1,8 +1,8 @@
 {
   "314": {
     "metadata": {
-      "commit": "4cbbea4a4f7da51ad674a1d9d122c6e677acfbec",
-      "deployed_at": "2026-08-21T16:29:02Z",
+      "commit": "649e23f3329abf6a24d01c30359958ee7d0e0948",
+      "deployed_at": "2026-10-22T13:38:10Z",
       "fwss_version": "1.4.0",
       "pdp_version": "3.5.0"
     },
@@ -129,8 +129,20 @@
           "150"
         ],
         "pinned": true
+      },
+      "FWSS_DISPATCHER_TRANSITION": {
+        "initcode_hash": "0x8521ceb641c360da941b7e6e8ee7f4396caeaec443d393f6c2050e0b280b3cf2",
+        "artifact_contract": "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition",
+        "libraries": {},
+        "constructor_args": [
+          "0xa874C7333c8e1689C33155AD7bEE980926086e21",
+          "0x50d271127b3bEaeF4b72B5cDD329B2ba3E698df8",
+          "0x7E382064e9D0485c69A45ca28889bA71D1809c7B"
+        ]
       }
-    }
+    },
+    "FWSS_DISPATCHER_ADDRESS": "0x50d271127b3bEaeF4b72B5cDD329B2ba3E698df8",
+    "FWSS_DISPATCHER_TRANSITION_ADDRESS": "0x469957097A6322bEed2D85B6259Ab5A02454D3F4"
   },
   "314159": {
     "metadata": {
