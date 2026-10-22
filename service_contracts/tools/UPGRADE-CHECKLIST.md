@@ -602,7 +602,7 @@ CALLDATA_ONLY=true forge script script/FWSSDispatcherTransitionExecute.s.sol --r
 
 With `CALLDATA_ONLY=true` the script checks that the plan is the transition and ready, that the transition pins the migration `josuke.json` proposes and that migration's unchanged code, the proxy's current implementation as the rollback target, and the pinned dispatcher. It then simulates the upgrade as the proxy owner and prints the Safe transaction: `upgradeToAndCall(transition, migrate(migration))` on the proxy. That one call points the proxy at the dispatcher and runs the migration; if any part reverts, nothing changes.
 
-The upgrade call uses about 182M gas on FEVM. Leave the gas limit to the Safe's estimate; a signer must not cap it below that.
+The upgrade call used about 1.36B gas on Calibnet (v1.5.0, 73 routes). Leave the gas limit to the Safe's estimate; a signer must not cap it.
 
 An EOA owner broadcasts the same call instead: replace `CALLDATA_ONLY=true` with `--keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast --skip-simulation`.
 
