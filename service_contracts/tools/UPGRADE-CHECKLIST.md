@@ -390,6 +390,8 @@ filecoin-pin add "/tmp/$RUN_ID.txt" \
 
 The unique `smoke_run` metadata is required so this validates new Data Set creation rather than reusing an existing Data Set.
 
+Fund the wallet first. Each new Data Set needs the 30-day data-set fee lockup plus the lifecycle reserve available in Filecoin Pay (0.62 USDFC at v1.5.0 pricing; see `getPriceList()`), so two copies need about 1.3 USDFC. filecoin-pin also refuses to start below 0.1 FIL. Its own "required" estimate (filecoin-pin 2.2.1) leaves out the per-Data-Set lockup, and an underfunded copy fails with `InsufficientLockupFunds`.
+
 </details>
 
 - [ ] Verify the proxy on Blockscout
@@ -438,6 +440,8 @@ filecoin-pin add "/tmp/$RUN_ID.txt" \
 
 The unique `smoke_run` metadata is required so this validates new Data Set creation rather than reusing an existing Data Set.
 
+Fund the wallet first. Each new Data Set needs the 30-day data-set fee lockup plus the lifecycle reserve available in Filecoin Pay (0.62 USDFC at v1.5.0 pricing; see `getPriceList()`), so two copies need about 1.3 USDFC. filecoin-pin also refuses to start below 0.1 FIL. Its own "required" estimate (filecoin-pin 2.2.1) leaves out the per-Data-Set lockup, and an underfunded copy fails with `InsufficientLockupFunds`.
+
 </details>
 
 - [ ] Verify the proxy on Blockscout
@@ -445,7 +449,7 @@ The unique `smoke_run` metadata is required so this validates new Data Set creat
 
 ### Phase 5: Promote Release and Close Out
 - [ ] Confirm live Calibnet and Mainnet proxies point at the dispatcher, slot 19 is cleared, and `josuke accept` has been committed for both
-- [ ] Run `josuke audit` against each network and record the result
+- [ ] Run `josuke audit` against each network and record the result. On an RPC without historical state, such as Glif, pass `--from-block` with a block before the execute
 - [ ] Resolve or complete every public operational notice after the corresponding rollout and post-upgrade validation succeed. Publish a final status update and record each notice link and final state in Release Tracking.
 - [ ] Confirm cross-repo follow-ups are complete or tracked with owners
 - [ ] Merge the `josuke.json` / `deployments.json` PR(s) to `main` after live-state verification, and record the PR link(s) in Release Tracking
@@ -604,7 +608,7 @@ CALLDATA_ONLY=true forge script script/FWSSDispatcherTransitionExecute.s.sol --r
 
 With `CALLDATA_ONLY=true` the script checks that the plan is the transition and ready, that the transition pins the migration `josuke.json` proposes and that migration's unchanged code, the proxy's current implementation as the rollback target, and the pinned dispatcher. It then simulates the upgrade as the proxy owner and prints the Safe transaction: `upgradeToAndCall(transition, migrate(migration))` on the proxy. That one call points the proxy at the dispatcher and runs the migration; if any part reverts, nothing changes.
 
-The upgrade call used about 1.36B gas on Calibnet (v1.5.0, 73 routes). Leave the gas limit to the Safe's estimate; a signer must not cap it.
+The upgrade call used about 1.36B gas on Calibnet and 1.64B on Mainnet (v1.5.0, 73 routes). Leave the gas limit to the Safe's estimate; a signer must not cap it.
 
 An EOA owner broadcasts the same call instead: replace `CALLDATA_ONLY=true` with `--keystore "$ETH_KEYSTORE" --password-file "$ETH_PASSWORD" --broadcast --skip-simulation`.
 
