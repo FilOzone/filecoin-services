@@ -12,6 +12,32 @@ Future modules must inherit the shared declarations. Independently appending fie
 in different modules can make them write to the same proxy slots. Their actual
 compiled layouts and any new storage must be reviewed when modules are introduced.
 
+## Storage terms
+
+`DataSetInfo.storageTermsId` is appended at relative slot 11. Existing datasets
+read zero, the canonical legacy terms ID. No legacy root slot moves.
+
+The catalogue is a mapping from `bytes32` IDs to `StorageTermsRecord` in the
+ERC-7201 namespace `filecoin.FWSS.StorageTerms`, rooted at
+`0xffe2107a587f9a58b0aaa87110a43c1dc6de9e3d39b63f9be37b80538b60ff00`.
+Each mapping entry occupies three slots:
+
+| Relative slot | Contents (byte offsets from least-significant byte) |
+|---|---|
+| 0 | `address token` 0–19; `uint8 tokenDecimals` 20; `uint8 version` 21; `bool enabled` 22; unused 23–31 |
+| 1 | `bytes32 salt` |
+| 2 | `uint96 pricePerTiBPerMonth` 0–11; unused 12–31 |
+
+Unused bytes are not declared as reserved fields. Future fields may occupy them
+only if existing offsets and widths remain unchanged. Version zero means
+unregistered; current registered definitions have version one.
+
+Fresh proxy initialization writes record zero using the legacy currency passed in
+`initialize` calldata. An upgrade from the already-modular system uses
+`FWSSStorageTermsMigration` to install routes and initialize that record atomically.
+Initialization is idempotent and never re-enables a disabled record.
+
+
 ## Verification
 
 Run from `service_contracts/`:
@@ -33,6 +59,6 @@ unchanged.
 
 Fields are internal so that modules inheriting `FWSSStorage` do not export getters.
 
-Layout checks do not execute a historical upgrade or prove migration behavior.
-This PR changes declarations and inheritance; dispatcher and module behavior belong
-to later changes with their own integration tests.
+Layout checks do not execute an upgrade or prove migration behavior. The dispatcher
+tests exercise the storage-terms migration through the pre-feature modular upgrade
+entry point; view tests separately verify legacy array decoding and V2 term IDs.

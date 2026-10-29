@@ -400,6 +400,112 @@
   },
   {
     "type": "function",
+    "name": "getClientDataSetsV2",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
+      },
+      {
+        "name": "client",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "infos",
+        "type": "tuple[]",
+        "internalType": "struct DataSetInfoViewV2[]",
+        "components": [
+          {
+            "name": "pdpRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cacheMissRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cdnRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "payee",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "serviceProvider",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "commissionBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "clientDataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pdpEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "dataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "storageTermsId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getCurrentPricingRates",
     "inputs": [
       {
@@ -639,6 +745,102 @@
         "name": "status",
         "type": "DataSetStatus",
         "internalType": "enum DataSetStatus"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetV2",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
+      },
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "info",
+        "type": "tuple",
+        "internalType": "struct DataSetInfoViewV2",
+        "components": [
+          {
+            "name": "pdpRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cacheMissRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cdnRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "payee",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "serviceProvider",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "commissionBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "clientDataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pdpEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "dataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "storageTermsId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
       }
     ],
     "stateMutability": "view"

@@ -4,6 +4,8 @@ pragma solidity 0.8.37;
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../Errors.sol";
 import {LibRails} from "./LibRails.sol";
+import {LibStorageTerms} from "./LibStorageTerms.sol";
+import {StorageTermsRecord} from "./StorageTerms.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title LibStoragePayments
@@ -36,9 +38,17 @@ library LibStoragePayments {
     ) internal {
         uint256 pdpRailId = info.pdpRailId;
         require(pdpRailId != 0, Errors.NoPDPPaymentRail(dataSetId));
-
+        StorageTermsRecord storage terms = LibStorageTerms.getRecord(info.storageTermsId);
         info.lifecycleReserveBalance = payments.updateStorageRates(
-            dataSetId, pdpRailId, leafCount, pending, reserveBalance, info.pdpEndEpoch, immediateTermination
+            dataSetId,
+            pdpRailId,
+            leafCount,
+            pending,
+            reserveBalance,
+            info.pdpEndEpoch,
+            immediateTermination,
+            info.storageTermsId,
+            terms.tokenDecimals
         );
         info.pendingOneTimePayments = 0;
     }

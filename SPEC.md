@@ -4,34 +4,62 @@
 
 ### Pricing Model
 
-FilecoinWarmStorageService uses **static global pricing**. All payment rails use the same price regardless of which provider stores the data. The default storage price is 2.5 USDFC per TiB/month.
+FilecoinWarmStorageService uses **immutable, owner-registered storage terms**. Each dataset selects a payment currency and storage price at creation and cannot switch terms afterward. The legacy terms are USDFC, 18 decimals, and 2.5 USDFC per TiB/month.
 
-All pricing constants (rates, fees, and lockup amounts) are defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). The on-chain entry point is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol) which assembles them into the `PriceList` struct.
+Fixed fees, reserve amounts, and timing constants remain defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). Fees and reserve amounts are scaled from 18-decimal units to the selected currency's precision, rounding down. The design assumes USD-stablecoin economics, but currency selection is the owner's responsibility; no stablecoin classification or exchange-rate conversion is enforced.
 
-Providers may advertise their own prices in the ServiceProviderRegistry, but these are informational for other services, and does not affect actual payments in FilecoinWarmStorageService.
+Providers may advertise prices in the ServiceProviderRegistry, but those advertisements do not determine FWSS payments. A provider accepts a client's selected terms by creating the dataset.
+
+### Storage Terms
+
+```solidity
+struct StorageTerms {
+    address token;
+    uint8 tokenDecimals;
+    bytes32 salt;
+    uint96 pricePerTiBPerMonth;
+}
+```
+
+The owner calls `registerStorageTerms(terms)` to register or re-enable a definition, and `disableStorageTerms(id)` to stop new datasets selecting it. Definitions never change; disabling does not affect existing datasets, their payments, or lifecycle operations. Registration verifies token decimals and supports 0–18 decimals; the native currency uses address zero and 18 decimals. The minimum price is `ceil(2.5e18 / 10**(18 - tokenDecimals))`, so reducing the floor requires a contract change.
+
+The exact legacy definition `(USDFC, 18, bytes32(0), uint96(2.5e18))` has reserved ID zero. Every other definition is identified by:
+
+```solidity
+keccak256(abi.encode(
+    keccak256("filecoin.FWSS.StorageTerms.v1"),
+    terms.token,
+    terms.tokenDecimals,
+    terms.salt,
+    terms.pricePerTiBPerMonth
+))
+```
+
+Different salts distinguish otherwise identical terms. Record zero is initialized during fresh deployment or the atomic storage-terms upgrade migration. It can be disabled like any other record; registering the exact legacy definition re-enables zero rather than creating a duplicate hash-ID record.
+
+The legacy creation payload `abi.encode(payer, clientDataSetId, keys, values, signature)` selects zero. The terms-aware payload is `abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId)`, including an explicit zero if desired. Its EIP-712 type is:
+
+```text
+CreateDataSetWithStorageTerms(uint256 clientDataSetId,address payee,MetadataEntry[] metadata,bytes32 storageTermsId)MetadataEntry(string key,string value)
+```
+
+Both payloads use the existing `CreateDataSet` SessionKeyRegistry scope and share replay protection. The signature type follows the payload variant, not whether the terms ID is zero. FilBeam is permitted only when the selected currency is the deployment's USDFC token.
 
 ### Rate Calculation
 
-The payment rate per epoch is calculated from the total data size in bytes:
+For nonzero terms IDs, a nonempty dataset's payment rate is:
 
-```
-# Constants
-EPOCHS_PER_MONTH              = 86400         # 2880 epochs/day × 30 days
-TiB                           = 1099511627776 # bytes
-
-# Default pricing (owner-adjustable)
-STORAGE_PRICE_PER_TIB_PER_MONTH = 2.5 USDFC
-DATASET_FEE_PER_MONTH           = 0.024 USDFC
-
-# Per-epoch rate calculation
-sizeBasedRate         = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
-DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH
-finalRate             = sizeBasedRate + DATASET_FEE_PER_EPOCH
+```text
+EPOCHS_PER_MONTH = 86400
+TiB = 1099511627776
+monthlyStorage = floor(totalBytes * terms.pricePerTiBPerMonth / TiB)
+monthlyDatasetFee = floor(0.12e18 / 10**(18 - terms.tokenDecimals))
+finalRate = floor((monthlyStorage + monthlyDatasetFee) / EPOCHS_PER_MONTH)
 ```
 
-Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. A 1 TiB dataset costs 2.524 USDFC/month. A dataset with no pieces is inactive: no proving is required and no payment accrues.
+Combining monthly charges before per-epoch division avoids separately truncating each component. A dataset with no pieces has zero streaming rate. Terms zero retain the exact legacy calculation: `floor(totalBytes * 2.5e18 / (TiB * EPOCHS_PER_MONTH)) + floor(0.12e18 / EPOCHS_PER_MONTH)`.
 
-**Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+**Precision note:** FilecoinPay rates are integer smallest-token units per epoch. For nonzero terms, the loss is less than one smallest unit per epoch, or less than 0.0864 tokens over 30 days for a six-decimal token at constant size. A nominal 1 TiB dataset priced at 2.5 with a 0.12 dataset fee streams 30 base units per epoch, or 2.592 tokens per 30 days, at six decimals. There is no fractional carry or rounding up.
 
 ### Operation Fees
 
@@ -40,19 +68,19 @@ In addition to the ongoing storage rate, FWSS charges one-time fees for specific
 | Operation | Fee | Trigger | Recipient |
 |---|---|---|---|
 | Create dataset | $0.025 | `dataSetCreated` callback | SP |
-| Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
-| Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
-| Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |
+| Add pieces | $0.008 + $0.003 × n | `piecesAdded` callback (n = piece count) | SP |
+| Schedule piece removals | $0.007 | `piecesScheduledRemove` callback | SP |
+| Terminate service (consent) | $0.006 | SP-initiated termination with payer EIP-712 signature | SP |
 
 The terminate fee applies only in the **consent case**: when the SP calls `terminateService` with a valid payer signature in `extraData`. Direct termination by the payer or unilateral SP termination does not incur this fee.
 
 #### Lifecycle Reserve
 
-The lifecycle reserve is seeded at **$0.10** when the dataset is created, stored as `lockupFixed` on the PDP rail.
+The lifecycle reserve is seeded at **0.50 units of the selected currency**, scaled to its decimals, when the dataset is created and stored as `lockupFixed` on the PDP rail. Dollar amounts in the fee table describe the intended stablecoin economics, not an exchange-rate conversion.
 
 ```
-LIFECYCLE_RESERVE_TARGET = $0.10
-REPLENISH_THRESHOLD      = $0.005
+LIFECYCLE_RESERVE_TARGET = 0.50 tokens
+REPLENISH_THRESHOLD      = 0.025 tokens
 ```
 
 **Flush mechanism**: Operation fees are not paid immediately. Each triggering operation increments `pendingOneTimePayments` (a local field in `DataSetInfo`). The accumulated amount is flushed the next time `updateStorageRates` runs—once per `piecesAdded` and once per `nextProvingPeriod`:
@@ -73,7 +101,7 @@ This keeps the hot path at one external call per event.
 
 ### Price Discovery
 
-The complete on-chain price catalogue is exposed via `getPriceList()` on the view contract that FWSS reports through `viewContractAddress()`: the StateView today, and the FWSS proxy itself after the ERC-8167 dispatcher transition. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+`getPriceList()` on the FWSS proxy continues returning the **legacy USDFC** catalogue, preserving its existing ABI and meaning. It returns a nested `PriceList` struct grouping streaming rates, one-time fees, and lockup amounts/periods:
 
 ```solidity
 struct PriceList {
@@ -84,13 +112,11 @@ struct PriceList {
 }
 ```
 
-This is the canonical price discovery API for SDKs and dashboards. The struct is defined in [`service_contracts/src/lib/PriceList.sol`](service_contracts/src/lib/PriceList.sol) and populated from the constants in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol).
+For selected terms, call `getStorageTerms(storageTermsId)` to obtain the immutable definition and its current enabled status. Discover registrations and availability changes through `StorageTermsRegistered` and `StorageTermsDisabled` events; `DataSetStorageTermsSelected` identifies a dataset's selection. `getDataSetV2` and `getClientDataSetsV2(client, offset, limit)` return `DataSetInfoViewV2`, appending `storageTermsId` after the existing fields. V2 listing requires pagination arguments; use `(client, 0, 0)` to retrieve all datasets. The original getters are deprecated but preserve both overloads and their original return shapes, including array element widths.
 
 ### Pricing Updates
 
-Only the contract owner can update pricing, by upgrading the contract.
-
-**Effect on existing datasets**: Pricing changes do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
+Only the contract owner can register additional terms. Existing datasets keep their selected immutable definitions; new pricing applies only to datasets that select the new terms. Disabling zero blocks new legacy-format requests as well as explicit selection of zero, without interrupting existing legacy datasets.
 
 ### Rate Update Timing
 
@@ -124,7 +150,7 @@ This design ensures the provider receives payment at or above the rate establish
 
 ### Funding and Top-Up
 
-Clients pay for storage by depositing USDFC into the Filecoin Pay contract. These funds flow to providers over time based on the storage rate.
+Clients pay for storage by depositing the currency selected by their dataset's terms into FilecoinPay and granting FWSS operator approval for that currency. Funds flow to providers over time based on the storage rate.
 
 **Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.
 
@@ -132,9 +158,9 @@ Clients pay for storage by depositing USDFC into the Filecoin Pay contract. Thes
 lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-For an empty dataset this equals `DATASET_FEE_PER_MONTH` (0.024 USDFC). For datasets with data, the lockup equals one month's total cost (size-based rate plus dataset fee).
+An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve. Creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions. For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
 
-**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(DATASET_FEE_PER_MONTH × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
+**Pre-flight check precision:** Creation checks use the scaled monthly dataset fee directly, rather than reconstructing it from a truncated per-epoch rate. This is conservative, particularly for lower-decimal currencies.
 
 **Storage duration** extends as clients deposit additional funds:
 
@@ -231,6 +257,8 @@ Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the
 **Unilateral termination**: When the payer or SP terminates without a consent signature, `lockupPeriod` is left at its existing 30-day value and `endEpoch = block.number + lockupPeriod`. The payer's funds continue flowing to the provider during that window.
 
 **Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`: `endEpoch = block.number` and the payer's streaming buffer is released immediately, along with the lifecycle reserve. A payer signature implies consent to releasing the lifecycle reserve and paying the terminate fee from `pending` in one step, so for underfunded payers this reverts (FilecoinPay blocks the lockup-period change) rather than falling back to the standard 30-day window.
+
+The lockup reset and reserve release also run when the scaled termination fee and all pending earlier fees are zero.
 
 CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; for well-funded payers in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
 

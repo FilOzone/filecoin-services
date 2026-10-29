@@ -10,6 +10,7 @@ import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmSto
 import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {FWSSViewModule} from "../../src/modules/FWSSViewModule.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
+import {DataSetInfoView, DataSetInfoViewV2} from "../../src/lib/FWSSViewTypes.sol";
 
 /// @dev Populates FWSS storage before its code is replaced with ViewModuleHarness.
 contract FWSSStorageWriter is FWSSStorage {
@@ -81,7 +82,8 @@ contract FWSSViewModuleTest is Test {
                     pdpEndEpoch: 50 + id,
                     providerId: 60 + id,
                     pendingOneTimePayments: uint96(70 + id),
-                    lifecycleReserveBalance: uint96(80 + id)
+                    lifecycleReserveBalance: uint96(80 + id),
+                    storageTermsId: id == 1 ? bytes32(0) : bytes32(id)
                 })
             );
         }
@@ -130,6 +132,47 @@ contract FWSSViewModuleTest is Test {
         assertEq(viewModule.getDataSet(3).lifecycleReserveBalance, 83);
     }
 
+    function testLegacyClientDataSetsDecodeMultipleRecords() public view {
+        (bool success, bytes memory result) =
+            address(viewModule).staticcall(abi.encodeWithSignature("getClientDataSets(address)", PAYER));
+        assertTrue(success);
+
+        DataSetInfoView[] memory infos = abi.decode(result, (DataSetInfoView[]));
+        assertEq(infos.length, 3);
+        for (uint256 i = 0; i < infos.length; i++) {
+            uint256 id = i + 1;
+            assertEq(infos[i].pdpRailId, 10 + id);
+            assertEq(infos[i].payer, PAYER);
+            assertEq(infos[i].payee, address(uint160(0xB0B + id)));
+            assertEq(infos[i].clientDataSetId, 40 + id);
+            assertEq(infos[i].pendingOneTimePayments, 70 + id);
+            assertEq(infos[i].lifecycleReserveBalance, 80 + id);
+            assertEq(infos[i].dataSetId, id);
+        }
+    }
+
+    function testDataSetV2MapsStorageTermsAndLegacyFields() public view {
+        DataSetInfoViewV2 memory legacyTerms = viewModule.getDataSetV2(1);
+        DataSetInfoViewV2 memory selectedTerms = viewModule.getDataSetV2(2);
+
+        assertEq(legacyTerms.storageTermsId, bytes32(0));
+        assertEq(selectedTerms.storageTermsId, bytes32(uint256(2)));
+        assertEq(selectedTerms.pdpRailId, 12);
+        assertEq(selectedTerms.cacheMissRailId, 22);
+        assertEq(selectedTerms.cdnRailId, 32);
+        assertEq(selectedTerms.payer, PAYER);
+        assertEq(selectedTerms.payee, address(0xB0D));
+        assertEq(selectedTerms.serviceProvider, address(0xC0E));
+        assertEq(selectedTerms.commissionBps, 200);
+        assertEq(selectedTerms.clientDataSetId, 42);
+        assertEq(selectedTerms.pdpEndEpoch, 52);
+        assertEq(selectedTerms.providerId, 62);
+        assertEq(selectedTerms.pendingOneTimePayments, 72);
+        assertEq(selectedTerms.lifecycleReserveBalance, 82);
+        assertEq(selectedTerms.dataSetId, 2);
+        assertEq(abi.encode(selectedTerms), abi.encode(FilecoinWarmStorageServiceStateLibrary.getDataSetV2(service, 2)));
+    }
+
     function testClientReadsMatchStateLibrary() public view {
         assertEq(viewModule.getClientDataSetsLength(PAYER), 3);
         assertEq(
@@ -151,6 +194,28 @@ contract FWSSViewModuleTest is Test {
                 );
             }
         }
+    }
+
+    function testClientDataSetsV2PreservesPagination() public view {
+        DataSetInfoViewV2[] memory all = viewModule.getClientDataSetsV2(PAYER, 0, 0);
+        DataSetInfoViewV2[] memory page = viewModule.getClientDataSetsV2(PAYER, 1, 1);
+        DataSetInfoViewV2[] memory remaining = viewModule.getClientDataSetsV2(PAYER, 2, 0);
+        DataSetInfoViewV2[] memory pastEnd = viewModule.getClientDataSetsV2(PAYER, 3, 1);
+
+        assertEq(all.length, 3);
+        assertEq(all[0].storageTermsId, bytes32(0));
+        assertEq(all[1].storageTermsId, bytes32(uint256(2)));
+        assertEq(all[2].storageTermsId, bytes32(uint256(3)));
+        assertEq(page.length, 1);
+        assertEq(page[0].dataSetId, 2);
+        assertEq(page[0].storageTermsId, bytes32(uint256(2)));
+        assertEq(remaining.length, 1);
+        assertEq(remaining[0].dataSetId, 3);
+        assertEq(pastEnd.length, 0);
+        assertEq(
+            abi.encode(page),
+            abi.encode(FilecoinWarmStorageServiceStateLibrary.getClientDataSetsV2(service, PAYER, 1, 1))
+        );
     }
 
     function testMetadataReadsMatchStateLibrary() public view {

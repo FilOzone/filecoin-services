@@ -684,6 +684,17 @@
   },
   {
     "type": "error",
+    "name": "UnknownStorageTerms",
+    "inputs": [
+      {
+        "name": "id",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "UnsupportedSignatureV",
     "inputs": [
       {
@@ -1142,6 +1153,25 @@
   },
   {
     "type": "event",
+    "name": "DataSetStorageTermsSelected",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
     "anonymous": false
@@ -1158,6 +1188,17 @@
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "CDNUnsupportedCurrency",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   },
   {
     "type": "error",
@@ -1367,6 +1408,28 @@
     "type": "error",
     "name": "StorageProviderChangesNotSupported",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StorageTermsNotEnabled",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedExtraDataVariant",
+    "inputs": [
+      {
+        "name": "keysOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "function",
@@ -2264,6 +2327,228 @@
   },
   {
     "type": "function",
+    "name": "disableStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "getStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getStorageTermsId",
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "registerStorageTerms",
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "StorageTermsDisabled",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StorageTermsRegistered",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "terms",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "InvalidTokenDecimals",
+    "inputs": [
+      {
+        "name": "tokenDecimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "PriceBelowMinimum",
+    "inputs": [
+      {
+        "name": "pricePerTiBPerMonth",
+        "type": "uint96",
+        "internalType": "uint96"
+      },
+      {
+        "name": "minimumPricePerTiBPerMonth",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
     "name": "viewContractAddress",
     "inputs": [],
     "outputs": [
@@ -2624,6 +2909,107 @@
   },
   {
     "type": "function",
+    "name": "getClientDataSetsV2",
+    "inputs": [
+      {
+        "name": "client",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "infos",
+        "type": "tuple[]",
+        "internalType": "struct DataSetInfoViewV2[]",
+        "components": [
+          {
+            "name": "pdpRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cacheMissRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cdnRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "payee",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "serviceProvider",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "commissionBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "clientDataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pdpEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "dataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "storageTermsId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getCurrentPricingRates",
     "inputs": [],
     "outputs": [
@@ -2832,6 +3218,97 @@
         "name": "status",
         "type": "uint8",
         "internalType": "enum DataSetStatus"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getDataSetV2",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "info",
+        "type": "tuple",
+        "internalType": "struct DataSetInfoViewV2",
+        "components": [
+          {
+            "name": "pdpRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cacheMissRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "cdnRailId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "payer",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "payee",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "serviceProvider",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "commissionBps",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "clientDataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pdpEndEpoch",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "providerId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "pendingOneTimePayments",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "lifecycleReserveBalance",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "dataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "storageTermsId",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
       }
     ],
     "stateMutability": "view"
