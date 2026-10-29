@@ -12,6 +12,28 @@ Future modules must inherit the shared declarations. Independently appending fie
 in different modules can make them write to the same proxy slots. Their actual
 compiled layouts and any new storage must be reviewed when modules are introduced.
 
+`DataSetInfo` grows only at the end. Its relative slot 11, `storageTermsId`, was never
+written by any earlier layout, so data sets created before storage terms read zero, which
+means the legacy terms.
+
+## Storage terms
+
+`FWSSStorageTerms` declares the ERC-7201 namespace `filecoin.FWSS.StorageTerms`, rooted at
+`0xffe2107a587f9a58b0aaa87110a43c1dc6de9e3d39b63f9be37b80538b60ff00`. It maps a storage
+terms ID to a three-slot `StorageTermsRecord`:
+
+| Slot | Contents |
+|---|---|
+| 0 | `token` (bytes 0-19), `tokenDecimals` (20), `version` (21), `enabled` (22) |
+| 1 | `pricePerTiBPerMonth` (`uint96`) |
+| 2 | `salt` |
+
+`version` 0 means the ID was never registered; registration writes 1 and never rewrites the
+definition. The legacy terms are code-defined and have no record unless the owner registers
+them. The root is a file-level constant so that `FilecoinWarmStorageServiceStateLibrary` can
+read the record through `extsload`; a test pins it to the ERC-7201 formula, which josuke does
+not check.
+
 ## Verification
 
 Run from `service_contracts/`:

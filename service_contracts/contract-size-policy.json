@@ -18,6 +18,9 @@
     "FWSSViewModule": {
       "artifact": "src/modules/FWSSViewModule.sol:FWSSViewModule"
     },
+    "FWSSStorageTermsModule": {
+      "artifact": "src/modules/FWSSStorageTermsModule.sol:FWSSStorageTermsModule"
+    },
     "FWSSViewContractModule": {
       "artifact": "src/modules/FWSSViewContractModule.sol:FWSSViewContractModule"
     },
