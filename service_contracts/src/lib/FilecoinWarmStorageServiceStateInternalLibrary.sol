@@ -605,9 +605,9 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     }
 
     /**
-     * @notice Get the full price catalogue for this FWSS deployment.
-     * @dev Single discovery point: streaming rates, one-time fees, and lockup amounts/periods in
-     *      one struct. The `token` field is populated from the FWSS proxy's `usdfcTokenAddress`
+     * @notice Get the full price catalogue of the legacy storage terms for this FWSS deployment.
+     * @dev Single discovery point for the legacy storage terms; see `getStorageTerms` for other terms.
+     *      Streaming rates, one-time fees, and lockup amounts/periods in one struct. The `token` field is populated from the FWSS proxy's `usdfcTokenAddress`
      *      immutable; the rest comes from the on-chain price constants. Replaces the legacy
      *      `getServicePrice`, `getCurrentPricingRates`, and `getEffectiveRates` for consumers
      *      that want the complete price picture.

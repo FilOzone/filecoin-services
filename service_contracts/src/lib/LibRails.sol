@@ -56,7 +56,8 @@ library LibRails {
         // Required capacity: lifecycle reserve plus per-dataset fee lockup at the default period.
         // Multiply-first preserves the exact monthly value for cleaner error messages; slightly
         // more conservative than the actual rail lockup (truncated per-epoch), within 0.0001%
-        // and always in the user's favor.
+        // for 18-decimal tokens and always in the user's favor. For fewer decimals the untruncated
+        // monthly fee is scaled, so the check requires more than the rail locks.
         uint256 requiredLockup = StoragePricing.scaleAmount(
             (DATASET_FEE_PER_MONTH * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + LIFECYCLE_RESERVE_TARGET, tokenDecimals
         );

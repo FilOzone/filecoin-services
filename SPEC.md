@@ -6,7 +6,7 @@
 
 Each dataset is created under **storage terms**: immutable conditions that the client selects in its creation request and the provider accepts by submitting it. Terms are `{token, tokenDecimals, pricePerTiBPerMonth, salt}` ([`StorageTerms.sol`](service_contracts/src/lib/StorageTerms.sol)). The price is in the token's smallest units. `salt` distinguishes otherwise identical terms. A dataset's terms never change: its rails use the terms token for their whole life, and every rate update uses the terms price.
 
-The **legacy terms** are USDFC at 18 decimals, 2.5 USDFC per TiB/month and zero salt. They are defined in code, always selectable and cannot be disabled. Datasets created before storage terms, and every dataset created with the legacy extraData format, use them.
+The **legacy terms** are USDFC at 18 decimals, 2.5 USDFC per TiB/month and zero salt. They are defined in code, always selectable and cannot be disabled. Like all terms they are immutable: an upgrade must not change them. Datasets under the legacy terms store a zero ID and resolve to the constants `TOKEN_DECIMALS` and `STORAGE_PRICE_PER_TIB_PER_MONTH` at every rate update, so changing either constant would move every legacy dataset to a price and an ID that nobody selected. Datasets created before storage terms, and every dataset created with the legacy extraData format, use them.
 
 All fee and lockup constants are defined once, in 18-decimal USDFC units, in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). A dataset under terms with fewer decimals pays them converted to the token's units by truncation: `amount / 10**(18 - tokenDecimals)`. The fees are calibrated in USD, so terms are meant for USD stablecoins. The on-chain entry point for the legacy catalogue is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol), which assembles the constants into the `PriceList` struct.
 
@@ -18,13 +18,13 @@ The owner calls `registerStorageTerms(terms)` to register terms and enable them 
 
 Registration requires `tokenDecimals <= 18` and checks it against the token's `decimals()`; `token == address(0)` is FilecoinPay's native FIL with 18 decimals. The price may not be below the legacy price normalized to the token's decimals, `ceil(2.5e18 / 10**(18 - tokenDecimals))`.
 
-The storage terms ID is `keccak256(abi.encode(keccak256("filecoin.FWSS.StorageTerms.v1"), token, tokenDecimals, pricePerTiBPerMonth, salt))`. Availability is not part of the ID. Registering the legacy terms explicitly yields the legacy ID, `legacyStorageTermsId()`.
+The storage terms ID is `keccak256(abi.encode(keccak256("filecoin.FWSS.StorageTerms.v1"), token, tokenDecimals, pricePerTiBPerMonth, salt))`. Availability is not part of the ID. Registering the legacy terms explicitly yields the legacy ID, `legacyStorageTermsId()`. Future definition versions must preserve existing IDs and their interpretation.
 
-Registered terms live in the ERC-7201 namespace `filecoin.FWSS.StorageTerms` ([`FWSSStorageTerms.sol`](service_contracts/src/storage/FWSSStorageTerms.sol)), rooted at `keccak256(abi.encode(uint256(keccak256("filecoin.FWSS.StorageTerms")) - 1)) & ~bytes32(uint256(0xff))`. Each record takes three slots and carries a version, 1 once registered. A dataset's terms ID is `DataSetInfo.storageTermsId`, relative slot 11, where zero means the legacy terms.
+Registered terms live in the ERC-7201 namespace `filecoin.FWSS.StorageTerms` ([`FWSSStorageTerms.sol`](service_contracts/src/storage/FWSSStorageTerms.sol)), rooted at `keccak256(abi.encode(uint256(keccak256("filecoin.FWSS.StorageTerms")) - 1)) & ~bytes32(uint256(0xff))`. Each record takes three slots and carries a version, 1 once registered. A dataset's terms ID is `DataSetInfo.storageTermsId`, relative slot 11, where zero means the legacy terms. Fee and rate calculations also read a stored ID with no record (version 0) as the legacy terms.
 
 #### Selecting storage terms at dataset creation
 
-The legacy extraData `abi.encode(payer, clientDataSetId, keys, values, signature)` selects the legacy terms and is signed as `CreateDataSet`. The storage terms format appends a `bytes32 storageTermsId`: `abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId)`. The offset of the metadata keys, the third head word, tells the formats apart: `0xa0` for the legacy format and `0xc0` for the storage terms format. Any other encoding reverts with `UnsupportedExtraDataVariant`, and payloads shorter than 160 bytes revert with `ExtraDataRequired`.
+The legacy extraData `abi.encode(payer, clientDataSetId, keys, values, signature)` selects the legacy terms and is signed as `CreateDataSet`. The storage terms format appends a `bytes32 storageTermsId`: `abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId)`. The offset of the metadata keys, the third head word, tells the formats apart: `0xa0` for the legacy format and `0xc0` for the storage terms format. The decoder checks only this offset and the payload length: any other offset reverts with `UnsupportedExtraDataVariant`, and payloads shorter than 160 bytes revert with `ExtraDataRequired`.
 
 The storage terms format is signed as
 
@@ -67,7 +67,7 @@ datasetFeeRate = DATASET_FEE_PER_EPOCH ÷ 10**(18 - tokenDecimals)
 finalRate      = sizeBasedRate + datasetFeeRate
 ```
 
-For the legacy terms this is the calculation above, bit for bit. Every division rounds down, which matters for tokens with fewer decimals: at 6 decimals the dataset fee becomes one base unit per epoch, and the size-based rate of a small dataset rounds to zero.
+For the legacy terms this is the calculation above, bit for bit. Every division rounds down, which matters for tokens with fewer decimals: at 6 decimals the dataset fee becomes one base unit per epoch, and the size-based rate of a small dataset rounds to zero. The two parts round separately, so the charged rate can sit below the registration price floor: at 6 decimals and the floor price, a 32 GiB dataset pays 1 unit per epoch, 44% of the legacy rate in the token's units.
 
 ### Operation Fees
 
@@ -132,9 +132,9 @@ The catalogue of registered terms is discovered from `StorageTermsRegistered` an
 
 ### Pricing Updates
 
-The owner offers a new storage price by registering new storage terms. Registering or disabling terms never changes an existing dataset's terms; its rate is always recalculated at its own terms' price. Fees, lockups and the legacy terms change only by upgrading the contract.
+The owner offers a new storage price by registering new storage terms. Registering or disabling terms never changes an existing dataset's terms; its rate is always recalculated at its own terms' price. Fees and lockups change only by upgrading the contract. The legacy terms never change.
 
-**Effect on existing datasets**: Pricing changes made by upgrading the contract do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
+**Effect on existing datasets**: Fee and lockup changes made by upgrading the contract do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
 
 ### Rate Update Timing
 
@@ -178,7 +178,7 @@ lockupRequired = finalRate × EPOCHS_PER_MONTH
 
 For an empty dataset this equals `DATASET_FEE_PER_MONTH` (0.024 USDFC). For datasets with data, the lockup equals one month's total cost (size-based rate plus dataset fee).
 
-**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(DATASET_FEE_PER_MONTH × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
+**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(DATASET_FEE_PER_MONTH × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages and is slightly more conservative than the actual rail lockup. For 18-decimal tokens the difference is under 0.0001% and always in the user's favor—they are never required to have less than needed. For tokens with fewer decimals the check scales the untruncated monthly fee while the rail locks the truncated per-epoch fee, so the check requires more than the rail locks: at 6 decimals it requires 620,000 units and the rail locks 586,400.
 
 **Storage duration** extends as clients deposit additional funds:
 
@@ -393,7 +393,7 @@ Solid arrows indicate call direction. Dashed arrows indicate token references. B
 | FilecoinPayV1 | No | Immutable | Payment rails engine — deposits, lockups, streaming settlement, rate changes |
 | SessionKeyRegistry | No | Immutable | Session key authorization; maps (user, signer, permission) → expiry |
 | StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS; after the dispatcher transition the FWSS proxy serves the same methods through `FWSSViewModule` |
-| [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
+| [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token of the legacy storage terms and of all CDN settlements. Registered storage terms may name other tokens |
 
 ### Upgrade Mechanism
 

@@ -14,8 +14,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 
 - Every dataset creation emits `DataSetStorageTermsSelected(dataSetId, storageTermsId)` after `DataSetCreated`.
-- Dataset creation extraData shorter than 160 bytes reverts with `ExtraDataRequired`, and encodings of the legacy format other than the canonical `abi.encode` revert with `UnsupportedExtraDataVariant`.
+- Dataset creation extraData shorter than 160 bytes reverts with `ExtraDataRequired`. The decoder checks only the metadata-keys offset (the third head word): `0xa0` is the legacy format, `0xc0` the storage terms format, and any other offset reverts with `UnsupportedExtraDataVariant`.
 - FilBeam (`withCDN`) is refused for storage terms in any token other than the deployment's USDFC.
+- Storage: `DataSetInfo` gains `storageTermsId` at relative slot 11, zero for existing datasets, which means the legacy terms. Registered terms live in the new ERC-7201 namespace `filecoin.FWSS.StorageTerms`. The release adds the `FWSSStorageTermsModule` facet.
 
 ## [1.5.0] - FWSS ERC-8167 Dispatcher Transition
 
