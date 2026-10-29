@@ -205,7 +205,11 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
 
         uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
         info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
-            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending
+            info.pdpRailId,
+            info.pdpEndEpoch,
+            info.lifecycleReserveBalance,
+            newPending,
+            LibStoragePayments.tokenDecimals(info)
         );
         info.pendingOneTimePayments = newPending;
 

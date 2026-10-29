@@ -82,6 +82,24 @@ library LibSignatureVerification {
         );
     }
 
+    function createDataSetWithStorageTermsStructHash(
+        uint256 clientDataSetId,
+        address payee,
+        string[] memory keys,
+        string[] memory values,
+        bytes32 storageTermsId
+    ) internal pure returns (bytes32 structHash) {
+        return keccak256(
+            abi.encode(
+                CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH,
+                clientDataSetId,
+                payee,
+                hashMetadataEntries(keys, values),
+                storageTermsId
+            )
+        );
+    }
+
     function hashAllCids(Cids.Cid[] memory pieceDataArray) internal pure returns (bytes32 cidHashesHash) {
         bytes32[] memory cidHashes = new bytes32[](pieceDataArray.length);
         for (uint256 i = 0; i < pieceDataArray.length; i++) {
@@ -191,12 +209,14 @@ library LibSignatureVerification {
      * @param signature The signature bytes
      * @param digest The EIP-712 digest to verify
      * @param sessionKeyRegistry The session key registry contract
+     * @param permission The session-key permission the signer needs: the type hash of the signed struct
      */
     function verifyCreateDataSetSignature(
         address payer,
         bytes memory signature,
         bytes32 digest,
-        SessionKeyRegistry sessionKeyRegistry
+        SessionKeyRegistry sessionKeyRegistry,
+        bytes32 permission
     ) internal view {
         // The digest is already computed by the calling contract
         // Just use it directly for signature verification
@@ -208,7 +228,7 @@ library LibSignatureVerification {
             return;
         }
         require(
-            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, CREATE_DATA_SET_TYPEHASH) >= block.timestamp,
+            sessionKeyRegistry.authorizationExpiry(payer, recoveredSigner, permission) >= block.timestamp,
             Errors.InvalidSignature(payer, recoveredSigner)
         );
     }

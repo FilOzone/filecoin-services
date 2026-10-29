@@ -220,7 +220,12 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
 
         (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = paymentContract.createRails(
-            dataSetId, usdfcTokenAddress, createData.payer, payee, hasCDN ? filBeamBeneficiaryAddress : address(0)
+            dataSetId,
+            usdfcTokenAddress,
+            createData.payer,
+            payee,
+            hasCDN ? filBeamBeneficiaryAddress : address(0),
+            uint8(TOKEN_DECIMALS)
         );
 
         railToDataSet[pdpRailId] = dataSetId;
@@ -430,7 +435,11 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
 
         // Verify using the inlined signature library
         LibSignatureVerification.verifyCreateDataSetSignature(
-            createData.payer, createData.signature, digest, sessionKeyRegistry
+            createData.payer,
+            createData.signature,
+            digest,
+            sessionKeyRegistry,
+            LibSignatureVerification.CREATE_DATA_SET_TYPEHASH
         );
     }
 
