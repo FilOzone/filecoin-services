@@ -11,6 +11,18 @@
       }
     ]
   },
+  "createDataSetWithStorageTerms": {
+    "signature": "0x3721271f1a841d076aa33503a9d629ba62c44c23da5fb8d8e482028f22169df06dee10ae8a4ce1e6ca281ff4730d972bcf8ef9f563035fb429f629d7c06e05c41b",
+    "clientDataSetId": 12345,
+    "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "metadata": [
+      {
+        "key": "title",
+        "value": "TestDataSet"
+      }
+    ],
+    "storageTermsId": "0x7b8cc3a14b396073b9d9838872d1590e53e2153fa39ad88fe33610f4102f0e4d"
+  },
   "addPieces": {
     "signature": "0xe629320e4fed8eebdc015f875541230d1478aac9308117b66d4a165de54e28096439705e753274f445b4c62a5ccdf53761efaec6c8f235c3199326a5023daa481b",
     "clientDataSetId": 12345,
