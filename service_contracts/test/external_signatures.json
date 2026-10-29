@@ -11,6 +11,30 @@
       }
     ]
   },
+  "createDataSetWithStorageTerms": {
+    "signature": "0xa16508ebf0eea1dbecc554450abcb380087b3ecd9a525eb5d5ddabcadb419d5b36e82ba2ca0f0c6948bc23c241020c5bdaa41dd67f8b7063cb039813f135e9981b",
+    "clientDataSetId": 12345,
+    "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "metadata": [
+      {
+        "key": "title",
+        "value": "TestDataSet"
+      }
+    ],
+    "storageTermsId": "0xe083457d94f3702431d323a17eba2a2f71206b25ef35344010777a3dbe796b8e"
+  },
+  "createDataSetWithLegacyStorageTerms": {
+    "signature": "0x90fea4b66b87af4c985de093ef4f168067efe06efbe804014a5e2dc82b62464964e925a8423b171a4338df1b61449dfe56ceedff07ba2923b1ab4c6865df1beb1c",
+    "clientDataSetId": 12345,
+    "payee": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "metadata": [
+      {
+        "key": "title",
+        "value": "TestDataSet"
+      }
+    ],
+    "storageTermsId": "0x0000000000000000000000000000000000000000000000000000000000000000"
+  },
   "addPieces": {
     "signature": "0xe629320e4fed8eebdc015f875541230d1478aac9308117b66d4a165de54e28096439705e753274f445b4c62a5ccdf53761efaec6c8f235c3199326a5023daa481b",
     "clientDataSetId": 12345,
