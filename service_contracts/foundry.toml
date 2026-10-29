@@ -11,6 +11,9 @@ optimizer = true
 optimizer_runs = 200
 bytecode_hash = "none"
 cbor_metadata = false
+# FWSSDispatcher tests resolve the josuke facet set from the src/modules artifacts several times per test, and
+# test memory grows with each facet. 2^32 leaves room above forge's 2^30 default as modules are added.
+gas_limit = 4294967296
 
 ignored_error_codes = [
     "license",
