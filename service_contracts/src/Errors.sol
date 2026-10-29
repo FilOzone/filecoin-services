@@ -367,4 +367,43 @@ library Errors {
     /// @param requiredEpoch The first epoch at which abandonment is allowed
     /// @param currentBlock The current block number
     error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
+
+    /// @notice The storage terms ID is neither registered nor the legacy terms
+    /// @param storageTermsId The unknown storage terms ID
+    error UnknownStorageTerms(bytes32 storageTermsId);
+
+    /// @notice The storage terms are registered but disabled for new data sets
+    /// @param storageTermsId The disabled storage terms ID
+    error StorageTermsNotEnabled(bytes32 storageTermsId);
+
+    /// @notice The legacy storage terms remain available to every deployment and cannot be disabled
+    error LegacyStorageTermsCannotBeDisabled();
+
+    /// @notice The storage terms ID is not valid here
+    /// @dev Raised for a zero ID in the storage terms extraData format, and for terms that hash to zero
+    /// @param storageTermsId The rejected storage terms ID
+    error InvalidStorageTermsId(bytes32 storageTermsId);
+
+    /// @notice Storage terms support tokens with at most 18 decimals
+    /// @param decimals The declared token decimals
+    error UnsupportedTokenDecimals(uint8 decimals);
+
+    /// @notice The declared token decimals differ from the token's own
+    /// @param token The terms token, address(0) for native FIL
+    /// @param specified The decimals declared in the terms
+    /// @param actual The decimals reported by the token
+    error TokenDecimalsMismatch(address token, uint8 specified, uint8 actual);
+
+    /// @notice The storage price is below the legacy price normalized to the token's decimals
+    /// @param price The declared price per TiB per month
+    /// @param minimum The lowest accepted price per TiB per month
+    error StoragePriceBelowDefault(uint256 price, uint256 minimum);
+
+    /// @notice The data set creation extraData is not a supported encoding
+    /// @param keysOffset The ABI offset of the metadata keys, which identifies the encoding
+    error UnsupportedExtraDataVariant(uint256 keysOffset);
+
+    /// @notice FilBeam requires the deployment's USDFC token
+    /// @param token The requested storage terms token
+    error CDNUnsupportedCurrency(address token);
 }

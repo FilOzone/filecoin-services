@@ -16,6 +16,7 @@ abstract contract FWSSStorage {
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
         uint96 pendingOneTimePayments; // fees accumulated since last flush via updateStorageRates
         uint96 lifecycleReserveBalance; // local mirror of rail's lockupFixed; decremented on flush
+        bytes32 storageTermsId; // 0 = legacy terms (created before storage terms or with the legacy extraData format)
     }
 
     struct PlannedUpgrade {

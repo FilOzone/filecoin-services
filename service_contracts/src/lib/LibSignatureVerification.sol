@@ -20,6 +20,11 @@ library LibSignatureVerification {
         "CreateDataSet(uint256 clientDataSetId,address payee,MetadataEntry[] metadata)MetadataEntry(string key,string value)"
     );
 
+    bytes32 internal constant CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH = keccak256(
+        "CreateDataSetWithStorageTerms(uint256 clientDataSetId,address payee,MetadataEntry[] metadata,bytes32 storageTermsId)"
+        "MetadataEntry(string key,string value)"
+    );
+
     bytes32 internal constant CID_TYPEHASH = keccak256("Cid(bytes data)");
 
     bytes32 internal constant PIECE_METADATA_TYPEHASH =
