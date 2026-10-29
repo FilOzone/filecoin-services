@@ -12,7 +12,6 @@ import {FWSSViewModule} from "../../src/modules/FWSSViewModule.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
 import {StorageTerms, StorageTermsRecord} from "../../src/lib/StorageTerms.sol";
 import {FWSSStorageTerms} from "../../src/storage/FWSSStorageTerms.sol";
-import {IFWSSStorageTerms} from "../helpers/IFWSSStorageTerms.sol";
 
 /// @dev Populates FWSS storage before its code is replaced with ViewModuleHarness.
 contract FWSSStorageWriter is FWSSStorage {
@@ -280,7 +279,7 @@ contract FWSSViewModuleTest is Test {
         writer.setDataSetTerms(1, 11, enabledId);
         writer.setDataSetTerms(2, 12, bytes32(0));
         vm.etch(address(writer), address(new ViewModuleHarness(USDFC)).code);
-        IFWSSStorageTerms terms = IFWSSStorageTerms(address(writer));
+        FWSSViewModule terms = FWSSViewModule(address(writer));
 
         (StorageTerms memory read, bool enabled) = terms.getStorageTerms(enabledId);
         _assertTerms(
@@ -316,6 +315,47 @@ contract FWSSViewModuleTest is Test {
         assertEq(terms.getDataSetStorageTermsId(2), _legacyStorageTermsId(), "stored zero is the legacy terms");
         vm.expectRevert(abi.encodeWithSelector(Errors.DataSetNotRegistered.selector, uint256(3)));
         terms.getDataSetStorageTermsId(3);
+
+        // The state library reads the same storage through extsload; the module has no usdfcTokenAddress getter
+        IFilecoinWarmStorageService libraryService = IFilecoinWarmStorageService(address(writer));
+        vm.mockCall(address(writer), abi.encodeWithSignature("usdfcTokenAddress()"), abi.encode(USDFC));
+        bytes32[4] memory ids = [enabledId, disabledId, _legacyStorageTermsId(), bytes32(uint256(0xBAD))];
+        for (uint256 i = 0; i < ids.length; i++) {
+            (bool moduleOk, bytes memory moduleResult) =
+                address(writer).staticcall(abi.encodeCall(FWSSViewModule.getStorageTerms, (ids[i])));
+            (bool libraryOk, bytes memory libraryResult) =
+                address(this).staticcall(abi.encodeCall(this.libraryGetStorageTerms, (libraryService, ids[i])));
+            assertEq(moduleOk, libraryOk);
+            assertEq(moduleResult, libraryResult);
+        }
+        for (uint256 id = 1; id <= 3; id++) {
+            (bool moduleOk, bytes memory moduleResult) =
+                address(writer).staticcall(abi.encodeCall(FWSSViewModule.getDataSetStorageTermsId, (id)));
+            (bool libraryOk, bytes memory libraryResult) =
+                address(this).staticcall(abi.encodeCall(this.libraryGetDataSetStorageTermsId, (libraryService, id)));
+            assertEq(moduleOk, libraryOk);
+            assertEq(moduleResult, libraryResult);
+        }
+        assertEq(
+            terms.legacyStorageTermsId(), FilecoinWarmStorageServiceStateLibrary.legacyStorageTermsId(libraryService)
+        );
+        assertEq(terms.getStorageTermsId(legacy), FilecoinWarmStorageServiceStateLibrary.getStorageTermsId(legacy));
+    }
+
+    function libraryGetStorageTerms(IFilecoinWarmStorageService libraryService, bytes32 storageTermsId)
+        external
+        view
+        returns (StorageTerms memory, bool)
+    {
+        return FilecoinWarmStorageServiceStateLibrary.getStorageTerms(libraryService, storageTermsId);
+    }
+
+    function libraryGetDataSetStorageTermsId(IFilecoinWarmStorageService libraryService, uint256 dataSetId)
+        external
+        view
+        returns (bytes32)
+    {
+        return FilecoinWarmStorageServiceStateLibrary.getDataSetStorageTermsId(libraryService, dataSetId);
     }
 
     function testConstructorRejectsZeroUsdfc() public {

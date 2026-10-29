@@ -17,6 +17,8 @@ import {
     priceList
 } from "./PriceListUSDFC.sol";
 import {PriceList} from "./PriceList.sol";
+import {StorageTerms, computeStorageTermsId, legacyStorageTerms} from "./StorageTerms.sol";
+import {STORAGE_TERMS_STORAGE_LOCATION} from "../storage/FWSSStorageTerms.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./FilecoinWarmStorageServiceLayout.sol" as StorageLayout;
 
@@ -613,5 +615,77 @@ library FilecoinWarmStorageServiceStateInternalLibrary {
     function getPriceList(IFilecoinWarmStorageService service) internal view returns (PriceList memory list) {
         list = priceList();
         list.token = IERC20(address(service.usdfcTokenAddress()));
+    }
+
+    // --- Storage terms ---
+
+    /**
+     * @notice The ID of storage terms, whether or not they are registered.
+     * @param terms The storage terms
+     * @return The keccak256 of the V1 domain and the terms' fields
+     */
+    function getStorageTermsId(StorageTerms memory terms) internal pure returns (bytes32) {
+        return computeStorageTermsId(terms);
+    }
+
+    /**
+     * @notice The ID of the code-defined legacy storage terms: USDFC, 18 decimals, 2.5 per TiB per month, no salt.
+     * @dev Data sets created before storage terms or with the legacy extraData format use these terms.
+     */
+    function legacyStorageTermsId(IFilecoinWarmStorageService service) internal view returns (bytes32) {
+        return computeStorageTermsId(legacyStorageTerms(address(IERC20(address(service.usdfcTokenAddress())))));
+    }
+
+    /**
+     * @notice Get registered storage terms, or the legacy terms by their ID.
+     * @param storageTermsId The storage terms ID
+     * @return terms The storage terms
+     * @return enabled Whether new data sets may select the terms; always true for the legacy terms
+     */
+    function getStorageTerms(IFilecoinWarmStorageService service, bytes32 storageTermsId)
+        internal
+        view
+        returns (StorageTerms memory terms, bool enabled)
+    {
+        // Record slot 0 packs token, tokenDecimals, version and enabled; slot 1 is the price, slot 2 the salt
+        bytes32[] memory record =
+            service.extsloadStruct(keccak256(abi.encode(storageTermsId, STORAGE_TERMS_STORAGE_LOCATION)), 3);
+        uint256 head = uint256(record[0]);
+        if (uint8(head >> 168) != 0) {
+            terms = StorageTerms({
+                token: address(uint160(head)),
+                tokenDecimals: uint8(head >> 160),
+                pricePerTiBPerMonth: uint96(uint256(record[1])),
+                salt: record[2]
+            });
+            enabled = uint8(head >> 176) != 0;
+        } else if (storageTermsId == legacyStorageTermsId(service)) {
+            terms = legacyStorageTerms(address(IERC20(address(service.usdfcTokenAddress()))));
+            enabled = true;
+        } else {
+            revert Errors.UnknownStorageTerms(storageTermsId);
+        }
+    }
+
+    /**
+     * @notice Get the storage terms ID a data set was created under.
+     * @param dataSetId The ID of the data set
+     * @return storageTermsId The storage terms ID; the legacy ID for data sets that store zero
+     */
+    function getDataSetStorageTermsId(IFilecoinWarmStorageService service, uint256 dataSetId)
+        internal
+        view
+        returns (bytes32 storageTermsId)
+    {
+        bytes32 slot = keccak256(abi.encode(dataSetId, StorageLayout.DATA_SET_INFO_SLOT));
+        // DataSetInfo slot 0 is pdpRailId, nonzero for every registered data set
+        if (service.extsload(slot) == bytes32(0)) {
+            revert Errors.DataSetNotRegistered(dataSetId);
+        }
+        // DataSetInfo slot 11 is storageTermsId
+        storageTermsId = service.extsload(bytes32(uint256(slot) + 11));
+        if (storageTermsId == bytes32(0)) {
+            storageTermsId = legacyStorageTermsId(service);
+        }
     }
 }

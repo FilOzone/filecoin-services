@@ -645,6 +645,30 @@
   },
   {
     "type": "function",
+    "name": "getDataSetStorageTermsId",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
+      },
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getPDPConfig",
     "inputs": [
       {
@@ -801,6 +825,98 @@
   },
   {
     "type": "function",
+    "name": "getStorageTerms",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
+      },
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getStorageTermsId",
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "hasBeenProvenRecently",
     "inputs": [
       {
@@ -843,6 +959,25 @@
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "legacyStorageTermsId",
+    "inputs": [
+      {
+        "name": "service",
+        "type": "IFilecoinWarmStorageService",
+        "internalType": "contract IFilecoinWarmStorageService"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -1041,12 +1176,34 @@
   },
   {
     "type": "error",
+    "name": "DataSetNotRegistered",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "ProvingPeriodNotInitialized",
     "inputs": [
       {
         "name": "dataSetId",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ]
   }

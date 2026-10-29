@@ -5,6 +5,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
 import {Errors} from "../src/Errors.sol";
 import {CHALLENGES_PER_PROOF} from "../src/lib/FWSSConstants.sol";
 import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
@@ -15,7 +16,6 @@ import {calculateStorageRate} from "../src/lib/PriceListUSDFC.sol";
 import {StorageTerms} from "../src/lib/StorageTerms.sol";
 import {STORAGE_TERMS_STORAGE_LOCATION} from "../src/storage/FWSSStorageTerms.sol";
 import {FilecoinWarmStorageServiceFixture} from "./helpers/FilecoinWarmStorageServiceFixture.sol";
-import {IFWSSStorageTerms} from "./helpers/IFWSSStorageTerms.sol";
 import {SixDecimalToken} from "./mocks/SixDecimalToken.sol";
 
 /// @dev Storage terms through the dispatcher and every facet. Every creation signs for real over the proxy's
@@ -30,13 +30,11 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     );
     uint256 internal constant LEAVES_2_35 = 1 << 35;
 
-    IFWSSStorageTerms internal termsApi;
     SixDecimalToken internal six;
     address internal payer;
 
     function setUp() public override {
         super.setUp();
-        termsApi = IFWSSStorageTerms(address(pdpServiceWithPayments));
         payer = vm.addr(PAYER_KEY);
         six = new SixDecimalToken();
         IERC20(address(mockUSDFC)).safeTransfer(payer, 1000e18);
@@ -221,43 +219,43 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         StorageTerms memory terms = _saltedDefaultTerms(1);
         vm.prank(address(0xBAD));
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", address(0xBAD)));
-        termsApi.registerStorageTerms(terms);
-        bytes32 id = termsApi.registerStorageTerms(terms);
+        pdpServiceWithPayments.registerStorageTerms(terms);
+        bytes32 id = pdpServiceWithPayments.registerStorageTerms(terms);
         vm.prank(address(0xBAD));
         vm.expectRevert(abi.encodeWithSignature("OwnableUnauthorizedAccount(address)", address(0xBAD)));
-        termsApi.disableStorageTerms(id);
+        pdpServiceWithPayments.disableStorageTerms(id);
     }
 
     function testRegistrationRejectsBadMetadataAndPrice() public {
         StorageTerms memory terms = _defaultTerms();
         terms.tokenDecimals = 19;
         vm.expectRevert(abi.encodeWithSelector(Errors.UnsupportedTokenDecimals.selector, uint8(19)));
-        termsApi.registerStorageTerms(terms);
+        pdpServiceWithPayments.registerStorageTerms(terms);
 
         terms = _sixTerms();
         terms.pricePerTiBPerMonth = 2_499_999;
         vm.expectRevert(
             abi.encodeWithSelector(Errors.StoragePriceBelowDefault.selector, uint256(2_499_999), uint256(2_500_000))
         );
-        termsApi.registerStorageTerms(terms);
+        pdpServiceWithPayments.registerStorageTerms(terms);
 
         terms.pricePerTiBPerMonth = 2_500_000;
         terms.tokenDecimals = 18;
         vm.expectRevert(
             abi.encodeWithSelector(Errors.TokenDecimalsMismatch.selector, address(six), uint8(18), uint8(6))
         );
-        termsApi.registerStorageTerms(terms);
+        pdpServiceWithPayments.registerStorageTerms(terms);
     }
 
     function testSaltsSeparateTermsAndReregistrationEnables() public {
         StorageTerms memory a = _saltedDefaultTerms(1);
-        bytes32 aId = termsApi.registerStorageTerms(a);
-        bytes32 bId = termsApi.registerStorageTerms(_saltedDefaultTerms(2));
+        bytes32 aId = pdpServiceWithPayments.registerStorageTerms(a);
+        bytes32 bId = pdpServiceWithPayments.registerStorageTerms(_saltedDefaultTerms(2));
         assertTrue(aId != bId);
 
         uint256 dataSet = _create(0, aId);
-        termsApi.disableStorageTerms(aId);
-        (, bool enabled) = termsApi.getStorageTerms(aId);
+        pdpServiceWithPayments.disableStorageTerms(aId);
+        (, bool enabled) = pdpServiceWithPayments.getStorageTerms(aId);
         assertFalse(enabled);
 
         bytes memory payload = _payload(1, aId, false, PAYER_KEY);
@@ -266,21 +264,23 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, payload);
 
         vm.expectEmit(true, false, false, true, address(pdpServiceWithPayments));
-        emit IFWSSStorageTerms.StorageTermsRegistered(aId, a.token, a.tokenDecimals, a.pricePerTiBPerMonth, a.salt);
-        assertEq(termsApi.registerStorageTerms(a), aId);
-        (, enabled) = termsApi.getStorageTerms(aId);
+        emit IFilecoinWarmStorageService.StorageTermsRegistered(
+            aId, a.token, a.tokenDecimals, a.pricePerTiBPerMonth, a.salt
+        );
+        assertEq(pdpServiceWithPayments.registerStorageTerms(a), aId);
+        (, enabled) = pdpServiceWithPayments.getStorageTerms(aId);
         assertTrue(enabled);
 
         uint256 second = _create(1, aId);
-        assertEq(termsApi.getDataSetStorageTermsId(dataSet), aId);
-        assertEq(termsApi.getDataSetStorageTermsId(second), aId);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(dataSet), aId);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(second), aId);
     }
 
     function testNativeTokenUsesVersionSentinelAndCanBeReenabled() public {
         StorageTerms memory terms =
             StorageTerms({token: address(0), tokenDecimals: 18, pricePerTiBPerMonth: 5e18, salt: bytes32(uint256(7))});
-        bytes32 id = termsApi.registerStorageTerms(terms);
-        (StorageTerms memory registered, bool enabled) = termsApi.getStorageTerms(id);
+        bytes32 id = pdpServiceWithPayments.registerStorageTerms(terms);
+        (StorageTerms memory registered, bool enabled) = pdpServiceWithPayments.getStorageTerms(id);
         assertTrue(enabled);
         assertEq(registered.token, address(0));
         assertEq(registered.tokenDecimals, 18);
@@ -297,30 +297,30 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
         assertEq(address(payments.getRail(info.pdpRailId).token), address(0));
 
-        termsApi.disableStorageTerms(id);
-        (registered, enabled) = termsApi.getStorageTerms(id);
+        pdpServiceWithPayments.disableStorageTerms(id);
+        (registered, enabled) = pdpServiceWithPayments.getStorageTerms(id);
         assertFalse(enabled);
         assertEq(registered.pricePerTiBPerMonth, 5e18);
 
         vm.expectEmit(true, false, false, true, address(pdpServiceWithPayments));
-        emit IFWSSStorageTerms.StorageTermsRegistered(
+        emit IFilecoinWarmStorageService.StorageTermsRegistered(
             id, terms.token, terms.tokenDecimals, terms.pricePerTiBPerMonth, terms.salt
         );
-        assertEq(termsApi.registerStorageTerms(terms), id);
-        (, enabled) = termsApi.getStorageTerms(id);
+        assertEq(pdpServiceWithPayments.registerStorageTerms(terms), id);
+        (, enabled) = pdpServiceWithPayments.getStorageTerms(id);
         assertTrue(enabled);
-        assertEq(termsApi.getDataSetStorageTermsId(dataSet), id);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(dataSet), id);
     }
 
     function testDisableUnknownTermsReverts() public {
         bytes32 unknown = bytes32(uint256(0xDEAD));
         vm.expectRevert(abi.encodeWithSelector(Errors.UnknownStorageTerms.selector, unknown));
-        termsApi.disableStorageTerms(unknown);
+        pdpServiceWithPayments.disableStorageTerms(unknown);
     }
 
     function testGetDataSetStorageTermsIdUnknownDataSet() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.DataSetNotRegistered.selector, uint256(999)));
-        termsApi.getDataSetStorageTermsId(999);
+        pdpServiceWithPayments.getDataSetStorageTermsId(999);
     }
 
     // ------------------------------------------------------------------
@@ -328,8 +328,8 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     // ------------------------------------------------------------------
 
     function testSignatureRejectsSubstitutedTerms() public {
-        bytes32 aId = termsApi.registerStorageTerms(_saltedDefaultTerms(1));
-        bytes32 bId = termsApi.registerStorageTerms(_saltedDefaultTerms(2));
+        bytes32 aId = pdpServiceWithPayments.registerStorageTerms(_saltedDefaultTerms(1));
+        bytes32 bId = pdpServiceWithPayments.registerStorageTerms(_saltedDefaultTerms(2));
         bytes memory payload = _payload(0, aId, false, PAYER_KEY);
         // The terms ID is ABI head word 5 (payload byte 160), after the 32-byte length word in memory
         assembly ("memory-safe") {
@@ -345,7 +345,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         uint256 sessionKey = 0xB0B;
         address session = vm.addr(sessionKey);
         _login(sessionKey, _permissions(CREATE_DATA_SET_TYPEHASH));
-        bytes32 id = termsApi.legacyStorageTermsId();
+        bytes32 id = pdpServiceWithPayments.legacyStorageTermsId();
         bytes memory payload = _payload(0, id, false, sessionKey);
         vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.InvalidSignature.selector, payer, session));
@@ -353,7 +353,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
 
         _login(sessionKey, _permissions(CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH));
         uint256 dataSet = _submit(payload);
-        assertEq(termsApi.getDataSetStorageTermsId(dataSet), id);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(dataSet), id);
     }
 
     function testSignaturesDoNotVerifyAcrossShapes() public {
@@ -373,7 +373,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testSessionKeyScopesAreSeparate() public {
-        bytes32 aId = termsApi.registerStorageTerms(_saltedDefaultTerms(1));
+        bytes32 aId = pdpServiceWithPayments.registerStorageTerms(_saltedDefaultTerms(1));
 
         uint256 newOnly = 0xB0B1;
         _login(newOnly, _permissions(CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH));
@@ -396,8 +396,8 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         _login(both, permissions);
         uint256 legacyDataSet = _submit(_payload(0, bytes32(0), false, both));
         uint256 termsDataSet = _submit(_payload(1, aId, false, both));
-        assertEq(termsApi.getDataSetStorageTermsId(legacyDataSet), _expectedLegacyId());
-        assertEq(termsApi.getDataSetStorageTermsId(termsDataSet), aId);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(legacyDataSet), _expectedLegacyId());
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(termsDataSet), aId);
     }
 
     function testUnknownExplicitTermsAndZeroIdRejectWithoutFallback() public {
@@ -436,7 +436,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testNonDefaultCurrencyRejectsCDN() public {
-        bytes32 id = termsApi.registerStorageTerms(_sixTerms());
+        bytes32 id = pdpServiceWithPayments.registerStorageTerms(_sixTerms());
         bytes memory payload = _payload(0, id, true, PAYER_KEY);
         vm.prank(serviceProvider);
         vm.expectRevert(abi.encodeWithSelector(Errors.CDNUnsupportedCurrency.selector, address(six)));
@@ -448,34 +448,34 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     // ------------------------------------------------------------------
 
     function testLegacyCreationAndPreUpgradeSentinel() public {
-        bytes32 legacy = termsApi.legacyStorageTermsId();
+        bytes32 legacy = pdpServiceWithPayments.legacyStorageTermsId();
         uint256 dataSet = _create(0, bytes32(0));
         assertEq(_storedTermsId(dataSet), bytes32(0), "legacy terms are stored as zero");
-        assertEq(termsApi.getDataSetStorageTermsId(dataSet), legacy);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(dataSet), legacy);
 
         vm.expectRevert(Errors.LegacyStorageTermsCannotBeDisabled.selector);
-        termsApi.disableStorageTerms(legacy);
+        pdpServiceWithPayments.disableStorageTerms(legacy);
 
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSet, block.number + 2880, LEAVES_2_35, "");
         assertEq(
             address(payments.getRail(pdpServiceWithPayments.getDataSet(dataSet).pdpRailId).token), address(mockUSDFC)
         );
 
-        assertEq(termsApi.registerStorageTerms(_defaultTerms()), legacy);
+        assertEq(pdpServiceWithPayments.registerStorageTerms(_defaultTerms()), legacy);
         uint256 second = _create(1, bytes32(0));
         uint256 explicitLegacy = _create(2, legacy);
         assertEq(_storedTermsId(second), bytes32(0));
         assertEq(_storedTermsId(explicitLegacy), bytes32(0), "explicit legacy terms are stored as zero");
-        assertEq(termsApi.getDataSetStorageTermsId(second), legacy);
-        assertEq(termsApi.getDataSetStorageTermsId(explicitLegacy), legacy);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(second), legacy);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(explicitLegacy), legacy);
 
         vm.expectRevert(Errors.LegacyStorageTermsCannotBeDisabled.selector);
-        termsApi.disableStorageTerms(legacy);
+        pdpServiceWithPayments.disableStorageTerms(legacy);
     }
 
     function testLegacyRateAndFeesUnchanged() public {
         vm.expectEmit(true, true, false, false, address(pdpServiceWithPayments));
-        emit IFWSSStorageTerms.DataSetStorageTermsSelected(1, _expectedLegacyId());
+        emit IFilecoinWarmStorageService.DataSetStorageTermsSelected(1, _expectedLegacyId());
         uint256 dataSet = _create(0, bytes32(0));
 
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
@@ -499,7 +499,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     // ------------------------------------------------------------------
 
     function testSixDecimalPaymentsContinueAfterDisable() public {
-        bytes32 id = termsApi.registerStorageTerms(_sixTerms());
+        bytes32 id = pdpServiceWithPayments.registerStorageTerms(_sixTerms());
         uint256 dataSet = _create(0, id);
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
         FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
@@ -507,7 +507,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         assertEq(rail.lockupFixed, 500000);
         assertEq(info.pendingOneTimePayments, 25000);
 
-        termsApi.disableStorageTerms(id);
+        pdpServiceWithPayments.disableStorageTerms(id);
         mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSet, block.number + 2880, LEAVES_2_35, "");
         rail = payments.getRail(info.pdpRailId);
         assertEq(rail.paymentRate, 58); // floor(5e6 * 127/128 / 86400) + floor(0.12e6 / 86400)
@@ -515,14 +515,14 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         info = pdpServiceWithPayments.getDataSet(dataSet);
         assertEq(info.lifecycleReserveBalance, 475000);
         assertEq(info.pendingOneTimePayments, 0);
-        assertEq(termsApi.getDataSetStorageTermsId(dataSet), id);
-        (StorageTerms memory resolved, bool enabled) = termsApi.getStorageTerms(id);
+        assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(dataSet), id);
+        (StorageTerms memory resolved, bool enabled) = pdpServiceWithPayments.getStorageTerms(id);
         assertFalse(enabled);
         assertEq(resolved.pricePerTiBPerMonth, 5e6);
     }
 
     function testSixDecimalRemovalAndConsentTerminationFees() public {
-        uint256 dataSet = _create(0, termsApi.registerStorageTerms(_sixTerms()));
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
         uint256[] memory pieces = new uint256[](1);
         bytes32 removalHash = keccak256(
             abi.encode(
@@ -548,7 +548,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testSixDecimalAddPiecesChargesScaledFees() public {
-        uint256 dataSet = _create(0, termsApi.registerStorageTerms(_sixTerms()));
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
         _addPiece(dataSet, 0, 1, 0, 4);
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
         assertEq(info.pendingOneTimePayments, 0);
@@ -558,7 +558,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testSixDecimalRateUpdatesOnPiecesAdded() public {
-        uint256 dataSet = _create(0, termsApi.registerStorageTerms(_sixTerms()));
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
         uint256 railId = pdpServiceWithPayments.getDataSet(dataSet).pdpRailId;
 
         vm.expectEmit(true, false, false, true, address(pdpServiceWithPayments));
@@ -576,7 +576,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testSixDecimalSettlementPaysProvenEpochs() public {
-        uint256 dataSet = _create(0, termsApi.registerStorageTerms(_sixTerms()));
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
         uint256 railId = pdpServiceWithPayments.getDataSet(dataSet).pdpRailId;
         uint256 payerUsdfc = _funds(IERC20(address(mockUSDFC)), payer);
         uint256 payeeUsdfc = _funds(IERC20(address(mockUSDFC)), serviceProvider);
@@ -598,7 +598,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testSixDecimalPayerTerminationSettlesToEndEpoch() public {
-        uint256 dataSet = _create(0, termsApi.registerStorageTerms(_sixTerms()));
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
         uint256 railId = pdpServiceWithPayments.getDataSet(dataSet).pdpRailId;
         _addPiece(dataSet, 0, 1, 0, 35);
         uint256 deadline = _activate(dataSet, LEAVES_2_35);
@@ -625,7 +625,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testSixDecimalDeletionClearsTermsSlot() public {
-        bytes32 id = termsApi.registerStorageTerms(_sixTerms());
+        bytes32 id = pdpServiceWithPayments.registerStorageTerms(_sixTerms());
         uint256 dataSet = _create(0, id);
         assertEq(_storedTermsId(dataSet), id);
 
@@ -640,11 +640,11 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSet, "");
         assertEq(_storedTermsId(dataSet), bytes32(0));
         vm.expectRevert(abi.encodeWithSelector(Errors.DataSetNotRegistered.selector, dataSet));
-        termsApi.getDataSetStorageTermsId(dataSet);
+        pdpServiceWithPayments.getDataSetStorageTermsId(dataSet);
     }
 
     function testSixDecimalAbandonmentReturnsReserveInTermsToken() public {
-        uint256 dataSet = _create(0, termsApi.registerStorageTerms(_sixTerms()));
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
         uint256 payerUsdfc = _funds(IERC20(address(mockUSDFC)), payer);
         assertEq(_lockup(six, payer), 500000);
@@ -671,7 +671,7 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         assertEq(STORAGE_TERMS_STORAGE_LOCATION, 0xffe2107a587f9a58b0aaa87110a43c1dc6de9e3d39b63f9be37b80538b60ff00);
 
         StorageTerms memory terms = _sixTerms();
-        bytes32 id = termsApi.registerStorageTerms(terms);
+        bytes32 id = pdpServiceWithPayments.registerStorageTerms(terms);
         uint256 dataSet = _create(0, id);
         uint256 base = _dataSetSlot(dataSet);
         address proxy = address(pdpServiceWithPayments);
@@ -690,8 +690,8 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
     }
 
     function testIdFormulaAndTypehashPins() public view {
-        assertEq(termsApi.legacyStorageTermsId(), _expectedLegacyId());
-        assertEq(termsApi.getStorageTermsId(_defaultTerms()), _expectedLegacyId());
+        assertEq(pdpServiceWithPayments.legacyStorageTermsId(), _expectedLegacyId());
+        assertEq(pdpServiceWithPayments.getStorageTermsId(_defaultTerms()), _expectedLegacyId());
         assertEq(
             LibSignatureVerification.CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH,
             CREATE_DATA_SET_WITH_STORAGE_TERMS_TYPEHASH
