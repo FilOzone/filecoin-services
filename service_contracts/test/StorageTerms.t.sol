@@ -494,6 +494,21 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         assertEq(rail.lockupFixed, 0.464e18);
     }
 
+    function testUnregisteredStoredTermsIdChargesLegacyTerms() public {
+        // The legacy ID unregistered, as a layout that stored it would leave it, and an ID with no record
+        bytes32[2] memory stored = [pdpServiceWithPayments.legacyStorageTermsId(), bytes32(uint256(123))];
+        for (uint256 i = 0; i < stored.length; i++) {
+            uint256 dataSet = _create(i, bytes32(0));
+            vm.store(address(pdpServiceWithPayments), bytes32(_dataSetSlot(dataSet) + 11), stored[i]);
+            _addPiece(dataSet, i, 100 + i, 0, 35);
+            DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
+            FilecoinPayV1.RailView memory rail = payments.getRail(info.pdpRailId);
+            assertEq(rail.paymentRate, 30_098_017_939_813, "legacy rate");
+            assertEq(info.lifecycleReserveBalance, 0.5e18 - 0.025e18 - 0.008e18 - 0.003e18, "legacy fees");
+            assertEq(rail.lockupFixed, 0.464e18);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Six-decimal terms: fees, rates and payments
     // ------------------------------------------------------------------

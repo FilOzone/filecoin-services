@@ -12,9 +12,10 @@ Future modules must inherit the shared declarations. Independently appending fie
 in different modules can make them write to the same proxy slots. Their actual
 compiled layouts and any new storage must be reviewed when modules are introduced.
 
-`DataSetInfo` grows only at the end. Its relative slot 11, `storageTermsId`, was never
-written by any earlier layout, so data sets created before storage terms read zero, which
-means the legacy terms.
+`DataSetInfo` grows only at the end. Its relative slot 11, `storageTermsId`, lies past the
+end of every `DataSetInfo` layout released on main, so data sets created before storage terms
+read zero, which means the legacy terms. Fee and rate calculations also read a stored ID with
+no record as the legacy terms.
 
 ## Storage terms
 

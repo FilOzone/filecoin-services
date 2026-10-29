@@ -27,15 +27,19 @@ library LibStoragePayments {
     }
 
     /// @notice The token decimals of a data set's storage terms.
-    /// @dev A stored ID of zero is the legacy terms. Disabling terms never affects existing data sets, so
-    ///      `enabled` is not consulted.
+    /// @dev A stored ID of zero is the legacy terms. A stored ID with no record (`version == 0`) is also read as
+    ///      the legacy terms, so it can never price a data set at zero. Disabling terms never affects existing
+    ///      data sets, so `enabled` is not consulted.
     function tokenDecimals(FWSSStorage.DataSetInfo storage info) internal view returns (uint8) {
         bytes32 storageTermsId = info.storageTermsId;
         if (storageTermsId == bytes32(0)) return uint8(TOKEN_DECIMALS);
-        return FWSSStorageTerms.get().storageTerms[storageTermsId].tokenDecimals;
+        StorageTermsRecord storage record = FWSSStorageTerms.get().storageTerms[storageTermsId];
+        if (record.version == 0) return uint8(TOKEN_DECIMALS);
+        return record.tokenDecimals;
     }
 
     /// @notice The token decimals and storage price of a data set's storage terms.
+    /// @dev Zero and IDs with no record resolve to the legacy terms, as in `tokenDecimals`.
     function pricing(FWSSStorage.DataSetInfo storage info)
         internal
         view
@@ -46,6 +50,7 @@ library LibStoragePayments {
             return (uint8(TOKEN_DECIMALS), uint96(STORAGE_PRICE_PER_TIB_PER_MONTH));
         }
         StorageTermsRecord storage record = FWSSStorageTerms.get().storageTerms[storageTermsId];
+        if (record.version == 0) return (uint8(TOKEN_DECIMALS), uint96(STORAGE_PRICE_PER_TIB_PER_MONTH));
         return (record.tokenDecimals, record.pricePerTiBPerMonth);
     }
 
