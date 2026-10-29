@@ -5,6 +5,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+
+- Storage terms: immutable `{token, tokenDecimals, pricePerTiBPerMonth, salt}` conditions that a dataset is created under. The owner registers them with `registerStorageTerms` and stops new datasets selecting them with `disableStorageTerms`; the legacy USDFC terms at 2.5 per TiB/month stay selectable and cannot be disabled. A dataset's rails use its terms token, its storage rate uses its terms price, and its fees and lifecycle reserve are converted to the token's decimals ([#627](https://github.com/FilOzone/filecoin-services/issues/627)).
+- A dataset creation extraData format that appends a `bytes32 storageTermsId`, signed as the EIP-712 type `CreateDataSetWithStorageTerms(uint256 clientDataSetId,address payee,MetadataEntry[] metadata,bytes32 storageTermsId)`. Its type hash is a new session-key permission.
+- Getters `getStorageTerms`, `getStorageTermsId`, `getDataSetStorageTermsId` and `legacyStorageTermsId`, served by the FWSS proxy and `FilecoinWarmStorageServiceStateLibrary`.
+
+### Changed
+
+- Every dataset creation emits `DataSetStorageTermsSelected(dataSetId, storageTermsId)` after `DataSetCreated`.
+- Dataset creation extraData shorter than 160 bytes reverts with `ExtraDataRequired`. The decoder checks only the metadata-keys offset (the third head word): `0xa0` is the legacy format, `0xc0` the storage terms format, and any other offset reverts with `UnsupportedExtraDataVariant`.
+- FilBeam (`withCDN`) is refused for storage terms in any token other than the deployment's USDFC.
+- Storage: `DataSetInfo` gains `storageTermsId` at relative slot 11, zero for existing datasets, which means the legacy terms. Registered terms live in the new ERC-7201 namespace `filecoin.FWSS.StorageTerms`. The release adds the `FWSSStorageTermsModule` facet.
+
 ## [1.5.0] - FWSS ERC-8167 Dispatcher Transition
 
 This contract-stack release moves FilecoinWarmStorageService (FWSS) from the v1.4.0 UUPS monolith to the upstream ERC-8167 dispatcher, which routes each function selector to a module. The FWSS proxy addresses do not change.

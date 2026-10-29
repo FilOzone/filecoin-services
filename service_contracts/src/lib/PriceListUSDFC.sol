@@ -16,6 +16,8 @@ uint256 constant CDN_LOCKUP_PERIOD = EPOCHS_PER_DAY * 5; // shorter settle windo
 uint256 constant EPOCHS_PER_MONTH = EPOCHS_PER_DAY * 30;
 
 // USDFC has 18 decimals, so $1 = 10**18 (a.k.a. ether)
+// TOKEN_DECIMALS and STORAGE_PRICE_PER_TIB_PER_MONTH define the legacy storage terms, which are immutable:
+// data sets under them store a zero terms ID and resolve to these constants, so an upgrade must not change them.
 uint256 constant STORAGE_PRICE_PER_TIB_PER_MONTH = (5 * 10 ** TOKEN_DECIMALS) / 2; // 2.5 USDFC
 uint256 constant DATASET_FEE_PER_MONTH = (12 * 10 ** TOKEN_DECIMALS) / 100; // 0.12 USDFC
 uint256 constant DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH / EPOCHS_PER_MONTH;

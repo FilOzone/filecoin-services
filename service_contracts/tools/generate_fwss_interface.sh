@@ -27,7 +27,8 @@ SOURCES='{
     "IValidator": "@fws-payments/FilecoinPayV1.sol",
     "PriceList": "../lib/PriceList.sol",
     "ServiceProviderRegistry": "../ServiceProviderRegistry.sol",
-    "SessionKeyRegistry": "@session-key-registry/SessionKeyRegistry.sol"
+    "SessionKeyRegistry": "@session-key-registry/SessionKeyRegistry.sol",
+    "StorageTerms": "../lib/StorageTerms.sol"
 }'
 
 # Errors a facet declares but FWSS never raises, whose names clash with errors it does raise. One interface cannot

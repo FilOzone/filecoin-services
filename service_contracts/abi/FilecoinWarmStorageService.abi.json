@@ -1142,6 +1142,25 @@
   },
   {
     "type": "event",
+    "name": "DataSetStorageTermsSelected",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "EIP712DomainChanged",
     "inputs": [],
     "anonymous": false
@@ -1158,6 +1177,17 @@
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "CDNUnsupportedCurrency",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
   },
   {
     "type": "error",
@@ -1296,6 +1326,17 @@
   },
   {
     "type": "error",
+    "name": "InvalidStorageTermsId",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "NotInitializing",
     "inputs": []
   },
@@ -1367,6 +1408,39 @@
     "type": "error",
     "name": "StorageProviderChangesNotSupported",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StorageTermsNotEnabled",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedExtraDataVariant",
+    "inputs": [
+      {
+        "name": "keysOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "function",
@@ -2264,6 +2338,163 @@
   },
   {
     "type": "function",
+    "name": "disableStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "registerStorageTerms",
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "StorageTermsDisabled",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StorageTermsRegistered",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "token",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+      },
+      {
+        "name": "tokenDecimals",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
+      },
+      {
+        "name": "pricePerTiBPerMonth",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
+      },
+      {
+        "name": "salt",
+        "type": "bytes32",
+        "indexed": false,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "LegacyStorageTermsCannotBeDisabled",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "StoragePriceBelowDefault",
+    "inputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "minimum",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TokenDecimalsMismatch",
+    "inputs": [
+      {
+        "name": "token",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "specified",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "actual",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedTokenDecimals",
+    "inputs": [
+      {
+        "name": "decimals",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ]
+  },
+  {
+    "type": "function",
     "name": "viewContractAddress",
     "inputs": [],
     "outputs": [
@@ -2838,6 +3069,25 @@
   },
   {
     "type": "function",
+    "name": "getDataSetStorageTermsId",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getPDPConfig",
     "inputs": [],
     "outputs": [
@@ -2982,6 +3232,93 @@
   },
   {
     "type": "function",
+    "name": "getStorageTerms",
+    "inputs": [
+      {
+        "name": "storageTermsId",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getStorageTermsId",
+    "inputs": [
+      {
+        "name": "terms",
+        "type": "tuple",
+        "internalType": "struct StorageTerms",
+        "components": [
+          {
+            "name": "token",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "tokenDecimals",
+            "type": "uint8",
+            "internalType": "uint8"
+          },
+          {
+            "name": "pricePerTiBPerMonth",
+            "type": "uint96",
+            "internalType": "uint96"
+          },
+          {
+            "name": "salt",
+            "type": "bytes32",
+            "internalType": "bytes32"
+          }
+        ]
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "pure"
+  },
+  {
+    "type": "function",
     "name": "hasBeenProvenRecently",
     "inputs": [
       {
@@ -3014,6 +3351,19 @@
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "legacyStorageTermsId",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
