@@ -186,6 +186,37 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         );
     }
 
+    /// @dev Adds `count` pieces of 2^height leaves in one call, signed by the payer.
+    function _addPieces(uint256 dataSetId, uint256 clientDataSetId, uint256 nonce, uint256 count, uint8 height)
+        internal
+    {
+        Cids.Cid[] memory pieces = new Cids.Cid[](count);
+        string[][] memory keys = new string[][](count);
+        string[][] memory values = new string[][](count);
+        for (uint256 i = 0; i < count; i++) {
+            pieces[i] = Cids.CommPv2FromDigest(0, height, keccak256(abi.encode("storage-terms-pieces", nonce, i)));
+            keys[i] = new string[](0);
+            values[i] = new string[](0);
+        }
+        bytes memory signature = _sign(
+            PAYER_KEY, LibSignatureVerification.addPiecesStructHash(clientDataSetId, nonce, pieces, keys, values)
+        );
+        mockPDPVerifier.addPieces(pdpServiceWithPayments, dataSetId, 0, pieces, nonce, signature, keys[0], values[0]);
+    }
+
+    function _scheduleRemoval(uint256 dataSetId, uint256 clientDataSetId) internal {
+        uint256[] memory pieces = new uint256[](1);
+        bytes32 removalHash = keccak256(
+            abi.encode(
+                LibSignatureVerification.SCHEDULE_PIECE_REMOVALS_TYPEHASH,
+                clientDataSetId,
+                keccak256(abi.encodePacked(pieces))
+            )
+        );
+        vm.prank(address(mockPDPVerifier));
+        pdpServiceWithPayments.piecesScheduledRemove(dataSetId, pieces, abi.encode(_sign(PAYER_KEY, removalHash)));
+    }
+
     /// @dev Starts proving and returns the first deadline.
     function _activate(uint256 dataSetId, uint256 leafCount) internal returns (uint256 deadline) {
         (uint64 maxPeriod, uint256 window,,) = pdpServiceWithPayments.getPDPConfig();
@@ -443,11 +474,30 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         mockPDPVerifier.createDataSet(pdpServiceWithPayments, payload);
     }
 
+    function testUsdfcTermsAllowCDN() public {
+        bytes32 salted = pdpServiceWithPayments.registerStorageTerms(_saltedDefaultTerms(1));
+        bytes32[2] memory ids = [salted, pdpServiceWithPayments.legacyStorageTermsId()];
+        for (uint256 i = 0; i < ids.length; i++) {
+            uint256 dataSet = _submit(_payload(i, ids[i], true, PAYER_KEY));
+            DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
+            assertGt(info.cacheMissRailId, 0, "cache-miss rail");
+            assertGt(info.cdnRailId, 0, "CDN rail");
+            FilecoinPayV1.RailView memory cacheMiss = payments.getRail(info.cacheMissRailId);
+            FilecoinPayV1.RailView memory cdn = payments.getRail(info.cdnRailId);
+            assertEq(address(cacheMiss.token), address(mockUSDFC));
+            assertEq(address(cdn.token), address(mockUSDFC));
+            assertEq(cacheMiss.lockupFixed, 0.3e18);
+            assertEq(cdn.lockupFixed, 0.7e18);
+            assertEq(payments.getRail(info.pdpRailId).lockupFixed, 0.5e18);
+            assertEq(pdpServiceWithPayments.getDataSetStorageTermsId(dataSet), ids[i]);
+        }
+    }
+
     // ------------------------------------------------------------------
     // Legacy terms
     // ------------------------------------------------------------------
 
-    function testLegacyCreationAndPreUpgradeSentinel() public {
+    function testLegacyTermsStoreZero() public {
         bytes32 legacy = pdpServiceWithPayments.legacyStorageTermsId();
         uint256 dataSet = _create(0, bytes32(0));
         assertEq(_storedTermsId(dataSet), bytes32(0), "legacy terms are stored as zero");
@@ -623,8 +673,8 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         vm.prank(payer);
         pdpServiceWithPayments.terminateService(dataSet);
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
-        assertEq(info.pendingOneTimePayments, 0, "payer termination charges no terminate fee");
-        assertEq(info.lifecycleReserveBalance, 464000);
+        assertEq(info.pendingOneTimePayments, 0);
+        assertEq(info.lifecycleReserveBalance, 464000, "payer termination charges no terminate fee");
         FilecoinPayV1.RailView memory rail = payments.getRail(railId);
         assertGt(rail.endEpoch, 0);
         assertEq(info.pdpEndEpoch, rail.endEpoch);
@@ -637,6 +687,46 @@ contract StorageTermsTest is FilecoinWarmStorageServiceFixture {
         assertEq(settledEpoch, rail.endEpoch);
         assertEq(_funds(six, serviceProvider) - payeeBefore, _netOfNetworkFee(58 * 2880));
         assertEq(_lockup(six, payer), 0, "rail lockup, including the reserve, is released");
+    }
+
+    function testSixDecimalReserveReplenishesOnPiecesAdded() public {
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
+        // pending 25000 + 8000 + 150 * 3000 = 483000; the reserve of 500000 is under pending + 25000
+        _addPieces(dataSet, 0, 1, 150, 4);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
+        assertEq(info.pendingOneTimePayments, 0);
+        assertEq(info.lifecycleReserveBalance, 500000, "replenished to the scaled target");
+        assertEq(payments.getRail(info.pdpRailId).lockupFixed, 500000);
+        assertEq(_funds(six, serviceProvider), _netOfNetworkFee(483000));
+    }
+
+    function testSixDecimalReserveReplenishesOnRemoval() public {
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
+        // pending 25000 + 8000 + 147 * 3000 = 474000 stays within the threshold
+        _addPieces(dataSet, 0, 1, 147, 4);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
+        assertEq(info.lifecycleReserveBalance, 26000);
+        assertEq(payments.getRail(info.pdpRailId).lockupFixed, 26000);
+
+        // The removal fee of 7000 brings the reserve of 26000 under pending + 25000
+        _scheduleRemoval(dataSet, 0);
+        info = pdpServiceWithPayments.getDataSet(dataSet);
+        assertEq(info.pendingOneTimePayments, 7000);
+        assertEq(info.lifecycleReserveBalance, 507000, "replenished to the scaled target plus pending");
+        assertEq(payments.getRail(info.pdpRailId).lockupFixed, 507000);
+    }
+
+    function testSixDecimalPayerTerminationFlushesPendingFees() public {
+        uint256 dataSet = _create(0, pdpServiceWithPayments.registerStorageTerms(_sixTerms()));
+        _scheduleRemoval(dataSet, 0);
+        assertEq(pdpServiceWithPayments.getDataSet(dataSet).pendingOneTimePayments, 32000);
+
+        vm.prank(payer);
+        pdpServiceWithPayments.terminateService(dataSet);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSet);
+        assertEq(info.pendingOneTimePayments, 0);
+        assertEq(info.lifecycleReserveBalance, 468000, "only the creation and removal fees are charged");
+        assertEq(_funds(six, serviceProvider), _netOfNetworkFee(32000));
     }
 
     function testSixDecimalDeletionClearsTermsSlot() public {

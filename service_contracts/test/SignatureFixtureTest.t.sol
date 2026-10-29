@@ -247,7 +247,7 @@ contract MetadataSignatureFixturesTest is Test {
         // Compute SDK-format extraData (abi-encoded, matching synapse-core sign-* helpers)
         bytes memory createDataSetExtraData =
             encodeCreateDataSetExtraData(TEST_SIGNER, CLIENT_DATA_SET_ID, dataSetKeys, dataSetValues, createDataSetSig);
-        bytes memory createDataSetWithStorageTermsExtraData = abi.encode(
+        bytes memory createDataSetWithStorageTermsExtraData = encodeCreateDataSetWithStorageTermsExtraData(
             TEST_SIGNER,
             CLIENT_DATA_SET_ID,
             dataSetKeys,
@@ -552,6 +552,17 @@ contract MetadataSignatureFixturesTest is Test {
         bytes memory signature
     ) internal pure returns (bytes memory) {
         return abi.encode(payer, clientDataSetId, keys, values, signature);
+    }
+
+    function encodeCreateDataSetWithStorageTermsExtraData(
+        address payer,
+        uint256 clientDataSetId,
+        string[] memory keys,
+        string[] memory values,
+        bytes memory signature,
+        bytes32 storageTermsId
+    ) internal pure returns (bytes memory) {
+        return abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId);
     }
 
     function encodeAddPiecesExtraData(

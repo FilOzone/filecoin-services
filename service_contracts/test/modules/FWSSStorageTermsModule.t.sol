@@ -6,6 +6,7 @@ import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {Errors} from "../../src/Errors.sol";
+import {TOKEN_DECIMALS} from "../../src/lib/PriceListUSDFC.sol";
 import {StorageTerms} from "../../src/lib/StorageTerms.sol";
 import {FWSSStorageTermsModule} from "../../src/modules/FWSSStorageTermsModule.sol";
 import {STORAGE_TERMS_STORAGE_LOCATION} from "../../src/storage/FWSSStorageTerms.sol";
@@ -72,7 +73,7 @@ contract FWSSStorageTermsModuleTest is Test {
         assertEq(vm.load(address(module), bytes32(slot + 2)), terms.salt);
     }
 
-    function testReRegisterKeepsDefinitionAndReEnables() public {
+    function testReRegisterReEnables() public {
         StorageTerms memory terms = _sixTerms();
         bytes32 id = module.registerStorageTerms(terms);
         module.disableStorageTerms(id);
@@ -115,5 +116,13 @@ contract FWSSStorageTermsModuleTest is Test {
     function testConstructorRejectsZeroUsdfc() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.USDFC));
         new FWSSStorageTermsModule(IERC20Metadata(address(0)));
+    }
+
+    function testFuzzConstructorRejectsIncorrectTokenDecimals(uint8 decimals) public {
+        vm.assume(decimals != TOKEN_DECIMALS);
+        vm.mockCall(address(usdfc), abi.encodeCall(IERC20Metadata.decimals, ()), abi.encode(decimals));
+
+        vm.expectRevert();
+        new FWSSStorageTermsModule(usdfc);
     }
 }
