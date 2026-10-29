@@ -8,6 +8,7 @@ library LibStorageTerms {
     bytes32 internal constant STORAGE_LOCATION = 0xffe2107a587f9a58b0aaa87110a43c1dc6de9e3d39b63f9be37b80538b60ff00;
     bytes32 internal constant STORAGE_TERMS_TYPEHASH = keccak256("filecoin.FWSS.StorageTerms.v1");
 
+    /// @custom:storage-location erc7201:filecoin.FWSS.StorageTerms
     struct Storage {
         mapping(bytes32 id => StorageTermsRecord) records;
     }

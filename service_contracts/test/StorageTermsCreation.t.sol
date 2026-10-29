@@ -46,13 +46,15 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         payer = vm.addr(PAYER_KEY);
         termsModule = FWSSStorageTermsModule(address(pdpServiceWithPayments));
         token = new CreationSixDecimalToken();
-        termsId = termsModule.registerStorageTerms(StorageTerms(address(token), 6, bytes32(0), 2_500_000));
+        termsId = termsModule.registerStorageTerms(
+            StorageTerms({token: address(token), tokenDecimals: 6, salt: bytes32(0), pricePerTiBPerMonth: 2_500_000})
+        );
         _fund(IERC20(address(token)), 100e6);
         _fund(IERC20(address(mockUSDFC)), 100e18);
     }
 
     function _fund(IERC20 currency, uint256 amount) private {
-        currency.transfer(payer, amount);
+        require(currency.transfer(payer, amount));
         vm.startPrank(payer);
         currency.approve(address(payments), amount);
         payments.deposit(currency, payer, amount);
@@ -185,8 +187,9 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
     function testZeroFeeSignedTerminationEndsImmediatelyAndReleasesLockup() public {
         CreationTwoDecimalToken lowPrecisionToken = new CreationTwoDecimalToken();
         IERC20 currency = IERC20(address(lowPrecisionToken));
-        bytes32 lowPrecisionTerms =
-            termsModule.registerStorageTerms(StorageTerms(address(currency), 2, bytes32(0), 1_000e2));
+        bytes32 lowPrecisionTerms = termsModule.registerStorageTerms(
+            StorageTerms({token: address(currency), tokenDecimals: 2, salt: bytes32(0), pricePerTiBPerMonth: 1_000e2})
+        );
         _fund(currency, 10_000e2);
         uint256 id = _create(_payload(lowPrecisionTerms, 1, PAYER_KEY, true, false));
         Cids.Cid[] memory pieces = new Cids.Cid[](1);
@@ -263,7 +266,14 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
         vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, bytes32(0)));
         _create(_payload(bytes32(0), 1, PAYER_KEY, true, false));
-        assertEq(termsModule.registerStorageTerms(StorageTerms(address(mockUSDFC), 18, bytes32(0), 2.5e18)), bytes32(0));
+        assertEq(
+            termsModule.registerStorageTerms(
+                StorageTerms({
+                    token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5e18
+                })
+            ),
+            bytes32(0)
+        );
         uint256 id = _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
         assertEq(pdpServiceWithPayments.getDataSet(id).payer, payer);
     }
@@ -279,7 +289,9 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         bytes memory payload = _payload(termsId, 1, PAYER_KEY, true, false);
         vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, termsId));
         _create(payload);
-        termsModule.registerStorageTerms(StorageTerms(address(token), 6, bytes32(0), 2_500_000));
+        termsModule.registerStorageTerms(
+            StorageTerms({token: address(token), tokenDecimals: 6, salt: bytes32(0), pricePerTiBPerMonth: 2_500_000})
+        );
         uint256 id = _create(payload);
         assertEq(pdpServiceWithPayments.getDataSetV2(id).storageTermsId, termsId);
     }
@@ -312,8 +324,11 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
     function testFilBeamRejectsNonUSDFCAndAcceptsSaltedUSDFCTerms() public {
         vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.CDNUnsupportedCurrency.selector, address(token)));
         _create(_payload(termsId, 1, PAYER_KEY, true, true));
-        bytes32 usdfcTerms =
-            termsModule.registerStorageTerms(StorageTerms(address(mockUSDFC), 18, bytes32(uint256(1)), 3e18));
+        bytes32 usdfcTerms = termsModule.registerStorageTerms(
+            StorageTerms({
+                token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(uint256(1)), pricePerTiBPerMonth: 3e18
+            })
+        );
         uint256 id = _create(_payload(usdfcTerms, 1, PAYER_KEY, true, true));
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(id);
         assertEq(address(payments.getRail(info.cacheMissRailId).token), address(mockUSDFC));
