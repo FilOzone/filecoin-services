@@ -27,6 +27,7 @@ import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
+import {StoragePricing} from "../lib/StoragePricing.sol";
 
 /// @title FWSSAuthorizationModule
 /// @notice Manages payer-authorized data set operations: adding and removing pieces, terminating service, topping up
@@ -124,8 +125,13 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             dataSetId, payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature
         );
 
-        uint96 pending =
-            info.pendingOneTimePayments + uint96(ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE);
+        // Fees are charged in the storage terms token
+        uint8 tokenDecimals = LibStoragePayments.tokenDecimals(info);
+        uint96 pending = info.pendingOneTimePayments
+            + uint96(
+                StoragePricing.scaleAmount(ADD_PIECES_BASE_FEE, tokenDecimals) + pieceData.length
+                    * StoragePricing.scaleAmount(ADD_PIECES_PER_PIECE_FEE, tokenDecimals)
+            );
         uint96 reserveBalance = info.lifecycleReserveBalance;
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
@@ -203,13 +209,11 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         // Verify the signature
         verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
-        uint96 newPending = info.pendingOneTimePayments + uint96(SCHEDULE_PIECE_REMOVALS_FEE);
+        uint8 tokenDecimals = LibStoragePayments.tokenDecimals(info);
+        uint96 newPending = info.pendingOneTimePayments
+            + uint96(StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, tokenDecimals));
         info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
-            info.pdpRailId,
-            info.pdpEndEpoch,
-            info.lifecycleReserveBalance,
-            newPending,
-            LibStoragePayments.tokenDecimals(info)
+            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, tokenDecimals
         );
         info.pendingOneTimePayments = newPending;
 
@@ -248,7 +252,9 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             bytes memory signature = abi.decode(extraData, (bytes));
             approver = verifyTerminateServiceSignature(info.payer, dataSetId, signature);
             immediateTermination = true;
-            info.pendingOneTimePayments += uint96(TERMINATE_FEE);
+            info.pendingOneTimePayments += uint96(
+                StoragePricing.scaleAmount(TERMINATE_FEE, LibStoragePayments.tokenDecimals(info))
+            );
         } else {
             require(
                 msg.sender == info.payer || msg.sender == info.serviceProvider,
