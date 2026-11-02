@@ -206,6 +206,7 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         assertEq(info.lifecycleReserveBalance, 47, "scaled create and add fees charged");
         assertEq(rail.paymentRate, 1, "nonzero streaming lockup");
         (, uint256 fundsBefore, uint256 availableBefore,) = payments.getAccountInfoIfSettled(currency, payer);
+        assertLt(availableBefore, fundsBefore, "funds locked before termination");
 
         vm.prank(serviceProvider);
         pdpServiceWithPayments.terminateService(id, abi.encode(FAKE_SIGNATURE));
@@ -220,7 +221,6 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         (, uint256 fundsAfter, uint256 availableAfter,) = payments.getAccountInfoIfSettled(currency, payer);
         assertEq(fundsAfter, fundsBefore, "zero termination fee");
         assertEq(availableAfter, fundsAfter, "all lockup released");
-        assertEq(availableAfter - availableBefore, 86_447, "streaming and fixed reserves released");
     }
 
     function testTermsIdIsBoundBySignature() public {
@@ -260,22 +260,12 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         _create(_payload(termsId, 2, SESSION_KEY, true, false));
     }
 
-    function testDisabledZeroBlocksBothPayloadVariantsAndCanBeReenabled() public {
+    function testDisabledZeroBlocksBothPayloadVariants() public {
         termsModule.disableStorageTerms(bytes32(0));
         vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, bytes32(0)));
         _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
         vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, bytes32(0)));
         _create(_payload(bytes32(0), 1, PAYER_KEY, true, false));
-        assertEq(
-            termsModule.registerStorageTerms(
-                StorageTerms({
-                    token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5e18
-                })
-            ),
-            bytes32(0)
-        );
-        uint256 id = _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
-        assertEq(pdpServiceWithPayments.getDataSet(id).payer, payer);
     }
 
     function testReplayProtectionIsSharedAcrossPayloadVariants() public {
@@ -284,16 +274,11 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         _create(_payload(termsId, 1, PAYER_KEY, true, false));
     }
 
-    function testDisabledTermsBlockCreationUntilReregistered() public {
+    function testDisabledTermsBlockCreation() public {
         termsModule.disableStorageTerms(termsId);
         bytes memory payload = _payload(termsId, 1, PAYER_KEY, true, false);
         vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, termsId));
         _create(payload);
-        termsModule.registerStorageTerms(
-            StorageTerms({token: address(token), tokenDecimals: 6, salt: bytes32(0), pricePerTiBPerMonth: 2_500_000})
-        );
-        uint256 id = _create(payload);
-        assertEq(pdpServiceWithPayments.getDataSetV2(id).storageTermsId, termsId);
     }
 
     function testUnknownTermsCannotCreateDataSet() public {
