@@ -77,14 +77,48 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
         assertEq(storedSecond.pricePerTiBPerMonth, type(uint96).max);
     }
 
-    function testLegacyIdCanonicalizesToZeroAndCanBeDisabled() public {
+    function testLegacyDefinitionRegistersIndependentHashedRecord() public {
         StorageTerms memory legacy = StorageTerms({
             token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5 ether
         });
-        assertEq(_module().getStorageTermsId(legacy), bytes32(0));
+        bytes32 id = _module().registerStorageTerms(legacy);
+        assertEq(
+            id,
+            keccak256(
+                abi.encode(
+                    keccak256("filecoin.FWSS.StorageTerms.v1"),
+                    legacy.token,
+                    legacy.tokenDecimals,
+                    legacy.salt,
+                    legacy.pricePerTiBPerMonth
+                )
+            )
+        );
+        _module().disableStorageTerms(id);
+        (, bool hashedEnabled) = _module().getStorageTerms(id);
+        (, bool legacyEnabled) = _module().getStorageTerms(bytes32(0));
+        assertFalse(hashedEnabled);
+        assertTrue(legacyEnabled);
+    }
+
+    function testCannotDisableLegacyStorageTerms() public {
+        vm.expectRevert(LibStorageTerms.CannotDisableLegacyStorageTerms.selector);
         _module().disableStorageTerms(bytes32(0));
-        (, bool enabled) = _module().getStorageTerms(bytes32(0));
-        assertFalse(enabled);
+    }
+
+    function testFuzzStorageTermsIdMatchesAbiEncoding(
+        address token,
+        uint8 tokenDecimals,
+        bytes32 salt,
+        uint96 pricePerTiBPerMonth
+    ) public view {
+        StorageTerms memory terms = StorageTerms({
+            token: token, tokenDecimals: tokenDecimals, salt: salt, pricePerTiBPerMonth: pricePerTiBPerMonth
+        });
+        bytes32 expected = keccak256(
+            abi.encode(keccak256("filecoin.FWSS.StorageTerms.v1"), token, tokenDecimals, salt, pricePerTiBPerMonth)
+        );
+        assertEq(_module().getStorageTermsId(terms), expected);
     }
 
     function testOnlyOwnerMayRegisterOrDisable() public {

@@ -45,16 +45,17 @@ library LibRails {
     /// @param payer The address of the payer
     /// @param includeCDN Whether to include fixed CDN/cache-miss lockups in the requirement checks
     /// @param tokenDecimals The selected currency's precision
+    /// @param lifecycleReserve The scaled lifecycle reserve seeded into the PDP rail
     function validatePayerOperatorApprovalAndFunds(
         FilecoinPayV1 payments,
         IERC20 token,
         address payer,
         bool includeCDN,
-        uint8 tokenDecimals
+        uint8 tokenDecimals,
+        uint256 lifecycleReserve
     ) internal view {
         // Required capacity: lifecycle reserve plus per-dataset fee lockup at the default period.
         // Multiply-first avoids per-epoch truncation and is conservative versus the actual rail lockup.
-        uint256 lifecycleReserve = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals);
         uint256 datasetFeePerMonth = StoragePricing.scaleAmount(DATASET_FEE_PER_MONTH, tokenDecimals);
         uint256 requiredLockup = (datasetFeePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + lifecycleReserve;
 
@@ -114,9 +115,10 @@ library LibRails {
         uint8 tokenDecimals
     ) internal returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
         bool hasCDN = filBeamBeneficiaryAddress != address(0);
+        uint256 lifecycleReserve = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals);
         // Validate payer has sufficient funds and operator approvals to cover the required lockup
         // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, token, payer, hasCDN, tokenDecimals);
+        validatePayerOperatorApprovalAndFunds(payments, token, payer, hasCDN, tokenDecimals, lifecycleReserve);
 
         pdpRailId = payments.createRail(
             token, // token address
@@ -128,14 +130,14 @@ library LibRails {
         );
 
         // Set lockup period and seed the lifecycle reserve
-        payments.modifyRailLockup(
-            pdpRailId, DEFAULT_LOCKUP_PERIOD, StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals)
-        );
+        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, lifecycleReserve);
 
         cacheMissRailId = 0;
         cdnRailId = 0;
 
         if (hasCDN) {
+            uint256 cacheMissLockup = StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals);
+            uint256 cdnLockup = StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals);
             cacheMissRailId = payments.createRail(
                 token, // token address
                 payer, // from (payer)
@@ -144,11 +146,7 @@ library LibRails {
                 0, // no service commission
                 address(this) // controller
             );
-            payments.modifyRailLockup(
-                cacheMissRailId,
-                CDN_LOCKUP_PERIOD,
-                StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals)
-            );
+            payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, cacheMissLockup);
 
             cdnRailId = payments.createRail(
                 token, // token address
@@ -158,17 +156,9 @@ library LibRails {
                 0, // no service commission
                 address(this) // controller
             );
-            payments.modifyRailLockup(
-                cdnRailId, CDN_LOCKUP_PERIOD, StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals)
-            );
+            payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, cdnLockup);
 
-            emit CDNPaymentRailsToppedUp(
-                dataSetId,
-                StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals),
-                StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals),
-                StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals),
-                StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals)
-            );
+            emit CDNPaymentRailsToppedUp(dataSetId, cdnLockup, cdnLockup, cacheMissLockup, cacheMissLockup);
         }
     }
 

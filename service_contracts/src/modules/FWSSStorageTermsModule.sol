@@ -9,21 +9,15 @@ import {StorageTerms} from "../lib/StorageTerms.sol";
 
 /// @notice Owns the immutable storage-terms catalogue used by newly created data sets.
 contract FWSSStorageTermsModule is FWSSOwnable {
-    address private immutable usdfc;
-
     event StorageTermsRegistered(bytes32 indexed storageTermsId, StorageTerms terms);
     event StorageTermsDisabled(bytes32 indexed storageTermsId);
 
     error InvalidTokenDecimals(uint8 tokenDecimals);
     error PriceBelowMinimum(uint96 pricePerTiBPerMonth, uint256 minimumPricePerTiBPerMonth);
 
-    constructor(address _usdfc) {
-        usdfc = _usdfc;
-    }
-
     function registerStorageTerms(StorageTerms calldata terms) external onlyOwner returns (bytes32 storageTermsId) {
         _validate(terms);
-        storageTermsId = LibStorageTerms.register(terms, usdfc);
+        storageTermsId = LibStorageTerms.register(terms);
         emit StorageTermsRegistered(storageTermsId, terms);
     }
 
@@ -32,8 +26,8 @@ contract FWSSStorageTermsModule is FWSSOwnable {
         emit StorageTermsDisabled(storageTermsId);
     }
 
-    function getStorageTermsId(StorageTerms calldata terms) external view returns (bytes32) {
-        return LibStorageTerms.getStorageTermsId(terms, usdfc);
+    function getStorageTermsId(StorageTerms calldata terms) external pure returns (bytes32) {
+        return LibStorageTerms.getStorageTermsId(terms);
     }
 
     function getStorageTerms(bytes32 storageTermsId) external view returns (StorageTerms memory terms, bool enabled) {

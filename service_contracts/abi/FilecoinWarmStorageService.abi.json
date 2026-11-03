@@ -2423,7 +2423,7 @@
         "internalType": "bytes32"
       }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "function",
@@ -2519,6 +2519,11 @@
       }
     ],
     "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "CannotDisableLegacyStorageTerms",
+    "inputs": []
   },
   {
     "type": "error",

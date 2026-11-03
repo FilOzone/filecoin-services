@@ -15,7 +15,7 @@ compiled layouts and any new storage must be reviewed when modules are introduce
 ## Storage terms
 
 `DataSetInfo.storageTermsId` is appended at relative slot 11. Existing datasets
-read zero, the canonical legacy terms ID. No legacy root slot moves.
+read zero, the independent immutable legacy terms record. No legacy root slot moves.
 
 The catalogue is a mapping from `bytes32` IDs to `StorageTermsRecord` in the
 ERC-7201 namespace `filecoin.FWSS.StorageTerms`, rooted at
@@ -32,10 +32,15 @@ Unused bytes are not declared as reserved fields. Future fields may occupy them
 only if existing offsets and widths remain unchanged. Version zero means
 unregistered; current registered definitions have version one.
 
+Record zero is initialized from the deployment's legacy currency and is not an
+alias or pointer to an ordinary record. Every ordinary definition, including the
+exact legacy tuple, occupies its own normally hashed mapping entry. Management
+cannot disable record zero; a future explicit migration may write its enabled
+flag directly. Initialization is idempotent and never re-enables it afterward.
+
 Fresh proxy initialization writes record zero using the legacy currency passed in
 `initialize` calldata. An upgrade from the already-modular system uses
 `FWSSStorageTermsMigration` to install routes and initialize that record atomically.
-Initialization is idempotent and never re-enables a disabled record.
 
 
 ## Verification

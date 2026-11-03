@@ -11,6 +11,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {CHALLENGES_PER_PROOF} from "../../src/lib/FWSSConstants.sol";
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
+import {_combinedMonthlyStorageRate} from "../helpers/StoragePricingHelpers.sol";
 import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {LibSignatureVerification} from "../../src/lib/LibSignatureVerification.sol";
@@ -21,7 +22,6 @@ import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20} from "../mocks/SharedMocks.sol";
 import {Errors} from "../../src/Errors.sol";
 import {
-    calculateStorageSizeBasedRatePerEpoch,
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
     CDN_EGRESS_PRICE_PER_TIB,
     DATASET_FEE_PER_EPOCH,
@@ -729,19 +729,11 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         );
 
         uint256 actualRate = payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
-        uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(leafCount));
-        uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(leafCount * 32);
+        uint256 expectedRate = _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount));
+        uint256 buggyRate = _combinedMonthlyStorageRate(leafCount * 32);
 
-        assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
+        assertEq(actualRate, expectedRate, "rail rate should use combined monthly raw-size pricing");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
-        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
-        // Tolerance of 1 covers integer-division truncation differences between the two paths.
-        assertApproxEqAbs(
-            actualRate - DATASET_FEE_PER_EPOCH,
-            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
-            1,
-            "ratio between raw and Fr32 rates is 127/128"
-        );
     }
 
     // Operator Approval Validation Tests

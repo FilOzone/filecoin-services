@@ -21,9 +21,9 @@ struct StorageTerms {
 }
 ```
 
-The owner calls `registerStorageTerms(terms)` to register or re-enable a definition, and `disableStorageTerms(id)` to stop new datasets selecting it. Definitions never change; disabling does not affect existing datasets, their payments, or lifecycle operations. Registration verifies token decimals and supports 0–18 decimals; the native currency uses address zero and 18 decimals. The minimum price is `ceil(2.5e18 / 10**(18 - tokenDecimals))`, so reducing the floor requires a contract change.
+The owner calls `registerStorageTerms(terms)` to register or re-enable an ordinary definition, and `disableStorageTerms(id)` to stop new datasets selecting it. Definitions never change; disabling does not affect existing datasets, their payments, or lifecycle operations. Registration verifies token decimals and supports 0–18 decimals; the native currency uses address zero and 18 decimals. The minimum price is `ceil(2.5e18 / 10**(18 - tokenDecimals))`, so reducing the floor requires a contract change.
 
-The exact legacy definition `(USDFC, 18, bytes32(0), uint96(2.5e18))` has reserved ID zero. Every other definition is identified by:
+Record zero is an independent, immutable legacy definition `(USDFC, 18, bytes32(0), uint96(2.5e18))`, initialized during fresh deployment or the atomic storage-terms upgrade migration. It is not an alias or pointer to an ordinary record. Every ordinary definition, including the exact same legacy tuple, is identified by:
 
 ```solidity
 keccak256(abi.encode(
@@ -35,7 +35,7 @@ keccak256(abi.encode(
 ))
 ```
 
-Different salts distinguish otherwise identical terms. Record zero is initialized during fresh deployment or the atomic storage-terms upgrade migration. It can be disabled like any other record; registering the exact legacy definition re-enables zero rather than creating a duplicate hash-ID record.
+Different salts distinguish otherwise identical terms. Ordinary records can be disabled and re-enabled through management, but `disableStorageTerms(bytes32(0))` reverts: only a future explicit upgrade migration may write zero's enabled flag. Initialization is idempotent and never re-enables zero after such a migration.
 
 The legacy creation payload `abi.encode(payer, clientDataSetId, keys, values, signature)` selects zero. The terms-aware payload is `abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId)`, including an explicit zero if desired. Its EIP-712 type is:
 
@@ -47,7 +47,7 @@ Both payloads use the existing `CreateDataSet` SessionKeyRegistry scope and shar
 
 ### Rate Calculation
 
-For nonzero terms IDs, a nonempty dataset's payment rate is:
+For every terms ID, a nonempty dataset's payment rate is:
 
 ```text
 EPOCHS_PER_MONTH = 86400
@@ -57,9 +57,9 @@ monthlyDatasetFee = floor(0.12e18 / 10**(18 - terms.tokenDecimals))
 finalRate = floor((monthlyStorage + monthlyDatasetFee) / EPOCHS_PER_MONTH)
 ```
 
-Combining monthly charges before per-epoch division avoids separately truncating each component. A dataset with no pieces has zero streaming rate. Terms zero retain the exact legacy calculation: `floor(totalBytes * 2.5e18 / (TiB * EPOCHS_PER_MONTH)) + floor(0.12e18 / EPOCHS_PER_MONTH)`.
+Combining monthly charges before per-epoch division avoids separately truncating each component. A dataset with no pieces has zero streaming rate. This calculation applies uniformly to zero and nonzero terms IDs.
 
-**Precision note:** FilecoinPay rates are integer smallest-token units per epoch. For nonzero terms, the loss is less than one smallest unit per epoch, or less than 0.0864 tokens over 30 days for a six-decimal token at constant size. A nominal 1 TiB dataset priced at 2.5 with a 0.12 dataset fee streams 30 base units per epoch, or 2.592 tokens per 30 days, at six decimals. There is no fractional carry or rounding up.
+**Precision note:** FilecoinPay rates are integer smallest-token units per epoch. The loss is less than one smallest unit per epoch, or less than 0.0864 tokens over 30 days for a six-decimal token at constant size. A nominal 1 TiB dataset priced at 2.5 with a 0.12 dataset fee streams 30 base units per epoch, or 2.592 tokens per 30 days, at six decimals. There is no fractional carry or rounding up.
 
 ### Operation Fees
 
@@ -116,7 +116,7 @@ For selected terms, call `getStorageTerms(storageTermsId)` to obtain the immutab
 
 ### Pricing Updates
 
-Only the contract owner can register additional terms. Existing datasets keep their selected immutable definitions; new pricing applies only to datasets that select the new terms. Disabling zero blocks new legacy-format requests as well as explicit selection of zero, without interrupting existing legacy datasets.
+Only the contract owner can register additional ordinary terms. Existing datasets keep their selected immutable definitions; new pricing applies only to datasets that select the relevant record. Management cannot disable zero, so legacy-format requests and explicit selection of zero remain available unless a future explicit migration disables zero; either action does not interrupt existing legacy datasets.
 
 ### Rate Update Timing
 

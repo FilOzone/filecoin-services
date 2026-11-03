@@ -7,12 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 
-- Added owner-registered, immutable storage terms selecting currency, decimals, price, and salt. Terms can be disabled for new datasets without affecting existing ones; legacy terms use reserved ID zero ([#627](https://github.com/FilOzone/filecoin-services/issues/627)).
+- Added owner-registered, immutable storage terms selecting currency, decimals, price, and salt. The independent legacy definition uses record zero, while every ordinary definition—including the exact legacy tuple—uses its normal hash; ordinary terms can be disabled for new datasets without affecting existing ones ([#627](https://github.com/FilOzone/filecoin-services/issues/627)).
 - Added terms-aware EIP-712 dataset creation using the existing creation scope, and V2 dataset getters exposing the selected terms while preserving deprecated getter ABIs. V2 listing uses `getClientDataSetsV2(client, offset, limit)`.
 
 ### Changed
 
-- New nonzero terms combine monthly storage and dataset charges before per-epoch rounding; fees and reserves use the selected currency's precision. Legacy billing remains unchanged, and FilBeam remains USDFC-only.
+- Storage and dataset charges combine monthly before per-epoch rounding for every terms ID; fees and reserves use the selected currency's precision, and FilBeam remains USDFC-only.
 - The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata.
 
 ### Fixed

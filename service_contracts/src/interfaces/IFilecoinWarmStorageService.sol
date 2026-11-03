@@ -84,6 +84,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error CallerNotPayerOrPayee(uint256 dataSetId, address expectedPayer, address expectedPayee, address caller);
     error CallerNotPayments(address expected, address actual);
     error CallerNotServiceProvider(uint256 dataSetId, address expectedServiceProvider, address caller);
+    error CannotDisableLegacyStorageTerms();
     error ChallengeWindowTooEarly(uint256 dataSetId, uint256 windowStart, uint256 nowBlock);
     error ClientDataSetAlreadyRegistered(uint256 clientDataSetId);
     error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
@@ -216,7 +217,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     function getProvingPeriodForEpoch(uint256 dataSetId, uint256 epoch) external view returns (uint256);
     function getServicePrice() external view returns (FWSSDataSetModule.ServicePricing memory pricing);
     function getStorageTerms(bytes32 storageTermsId) external view returns (StorageTerms memory terms, bool enabled);
-    function getStorageTermsId(StorageTerms calldata terms) external view returns (bytes32);
+    function getStorageTermsId(StorageTerms calldata terms) external pure returns (bytes32);
     function hasBeenProvenRecently(uint256 dataSetId) external view returns (bool);
     function implementation(bytes4 selector) external view returns (address delegate);
     function isProviderApproved(uint256 providerId) external view returns (bool);

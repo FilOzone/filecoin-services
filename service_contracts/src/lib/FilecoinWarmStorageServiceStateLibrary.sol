@@ -112,7 +112,7 @@ library FilecoinWarmStorageServiceStateLibrary {
 
     /**
      * @notice Get data set information by ID
-     * @dev Deprecated. Use getDataSetV2 for the storage terms ID.
+     * @custom:deprecated Use getDataSetV2 for the storage terms ID.
      * @param dataSetId The ID of the data set
      * @return info The data set information struct
      */
@@ -412,7 +412,7 @@ library FilecoinWarmStorageServiceStateLibrary {
     }
 
     /**
-     * @dev Deprecated. Use getClientDataSetsV2 for the storage terms ID.
+     * @custom:deprecated Use getClientDataSetsV2 for the storage terms ID.
      * @dev To determine termination status: check if paymentEndEpoch != 0.
      * If paymentEndEpoch > 0, the rails have already been terminated.
      * @dev To determine deletion status: deleted datasets don't appear in
@@ -433,7 +433,7 @@ library FilecoinWarmStorageServiceStateLibrary {
 
     /**
      * @notice Get enriched client data sets with optional pagination
-     * @dev Deprecated. Use getClientDataSetsV2 for the storage terms ID.
+     * @custom:deprecated Use getClientDataSetsV2 for the storage terms ID.
      * @param service The service contract
      * @param client The client address
      * @param offset Starting index (0-based). Use 0 to start from beginning

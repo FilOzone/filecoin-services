@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
+import {Migrate} from "@erc8167/interfaces/Migrate.sol";
 import {LibStorageTerms} from "./lib/LibStorageTerms.sol";
 import {IFWSSConfig} from "./interfaces/IFWSSConfig.sol";
 
@@ -18,6 +19,7 @@ contract FWSSStorageTermsMigration {
     }
 
     fallback() external {
+        emit Migrate.DiamondDelegateCall(migration, "");
         Address.functionDelegateCall(migration, "");
         LibStorageTerms.initialize(address(IFWSSConfig(address(this)).usdfcTokenAddress()));
     }

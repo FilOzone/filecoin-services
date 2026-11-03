@@ -5,6 +5,8 @@ import {StorageTerms, StorageTermsRecord} from "./StorageTerms.sol";
 import {STORAGE_PRICE_PER_TIB_PER_MONTH, TOKEN_DECIMALS} from "./PriceListUSDFC.sol";
 
 library LibStorageTerms {
+    // ERC-7201 namespace: filecoin.FWSS.StorageTerms
+    // keccak256(abi.encode(uint256(keccak256("filecoin.FWSS.StorageTerms")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 internal constant STORAGE_LOCATION = 0xffe2107a587f9a58b0aaa87110a43c1dc6de9e3d39b63f9be37b80538b60ff00;
     bytes32 internal constant STORAGE_TERMS_TYPEHASH = keccak256("filecoin.FWSS.StorageTerms.v1");
 
@@ -14,6 +16,7 @@ library LibStorageTerms {
     }
 
     error UnknownStorageTerms(bytes32 id);
+    error CannotDisableLegacyStorageTerms();
 
     function initialize(address usdfc) internal {
         StorageTermsRecord storage record = _storage().records[bytes32(0)];
@@ -26,16 +29,18 @@ library LibStorageTerms {
         record.pricePerTiBPerMonth = uint96(STORAGE_PRICE_PER_TIB_PER_MONTH);
     }
 
-    function getStorageTermsId(StorageTerms calldata terms, address usdfc) internal pure returns (bytes32) {
-        if (
-            terms.token == usdfc && terms.tokenDecimals == TOKEN_DECIMALS && terms.salt == bytes32(0)
-                && terms.pricePerTiBPerMonth == STORAGE_PRICE_PER_TIB_PER_MONTH
-        ) return bytes32(0);
-        return keccak256(
-            abi.encode(
-                STORAGE_TERMS_TYPEHASH, terms.token, terms.tokenDecimals, terms.salt, uint96(terms.pricePerTiBPerMonth)
-            )
-        );
+    function getStorageTermsId(StorageTerms calldata terms) internal pure returns (bytes32 id) {
+        bytes32 typeHash = STORAGE_TERMS_TYPEHASH;
+        // Hash the same five ABI words without allocating an encoded bytes array.
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, typeHash)
+            mstore(add(ptr, 0x20), and(calldataload(terms), 0xffffffffffffffffffffffffffffffffffffffff))
+            mstore(add(ptr, 0x40), and(calldataload(add(terms, 0x20)), 0xff))
+            mstore(add(ptr, 0x60), calldataload(add(terms, 0x40)))
+            mstore(add(ptr, 0x80), and(calldataload(add(terms, 0x60)), 0xffffffffffffffffffffffff))
+            id := keccak256(ptr, 0xa0)
+        }
     }
 
     function get(bytes32 id) internal view returns (StorageTerms memory terms, bool enabled) {
@@ -54,8 +59,8 @@ library LibStorageTerms {
         if (record.version == 0) revert UnknownStorageTerms(id);
     }
 
-    function register(StorageTerms calldata terms, address usdfc) internal returns (bytes32 id) {
-        id = getStorageTermsId(terms, usdfc);
+    function register(StorageTerms calldata terms) internal returns (bytes32 id) {
+        id = getStorageTermsId(terms);
         StorageTermsRecord storage record = _storage().records[id];
         if (record.version == 0) {
             record.token = terms.token;
@@ -68,6 +73,8 @@ library LibStorageTerms {
     }
 
     function disable(bytes32 id) internal {
+        // A future upgrade migration can disable record zero by writing its enabled flag directly.
+        if (id == bytes32(0)) revert CannotDisableLegacyStorageTerms();
         StorageTermsRecord storage record = getRecord(id);
         record.enabled = false;
     }

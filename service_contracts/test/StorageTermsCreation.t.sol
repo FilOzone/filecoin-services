@@ -260,12 +260,21 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         _create(_payload(termsId, 2, SESSION_KEY, true, false));
     }
 
-    function testDisabledZeroBlocksBothPayloadVariants() public {
-        termsModule.disableStorageTerms(bytes32(0));
-        vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, bytes32(0)));
-        _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
-        vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, bytes32(0)));
-        _create(_payload(bytes32(0), 1, PAYER_KEY, true, false));
+    function testDisablingExactLegacyDefinitionLeavesBothZeroPayloadVariantsEnabled() public {
+        bytes32 hashedLegacyId = termsModule.registerStorageTerms(
+            StorageTerms({
+                token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5 ether
+            })
+        );
+        assertNotEq(hashedLegacyId, bytes32(0));
+        termsModule.disableStorageTerms(hashedLegacyId);
+        vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.StorageTermsNotEnabled.selector, hashedLegacyId));
+        _create(_payload(hashedLegacyId, 1, PAYER_KEY, true, false));
+
+        uint256 legacyId = _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
+        uint256 explicitZeroId = _create(_payload(bytes32(0), 2, PAYER_KEY, true, false));
+        assertEq(pdpServiceWithPayments.getDataSetV2(legacyId).storageTermsId, bytes32(0));
+        assertEq(pdpServiceWithPayments.getDataSetV2(explicitZeroId).storageTermsId, bytes32(0));
     }
 
     function testReplayProtectionIsSharedAcrossPayloadVariants() public {
