@@ -5,22 +5,22 @@ This directory contains the smart contracts for different Filecoin services usin
 ## Structure
 
 - `src/` - Contract source files
-  - `FilecoinWarmStorageService.sol` - A service contract with [PDP](https://github.com/FilOzone/pdp) (Proof of Data Possession) and payment integration
-  - `FilecoinWarmStorageServiceStateView.sol` - View contract for reading `FilecoinWarmStorageService` with `eth_call`.
+  - `FWSSInitializer.sol` - One-shot implementation that initializes a fresh FWSS proxy and moves it to the ERC-8167 dispatcher
+  - `interfaces/IFilecoinWarmStorageService.sol` - FWSS interface generated from the ABI `josuke abi` merges from the modules
+  - `src/modules` - ERC-8167 modules the dispatcher routes to; `FWSSViewModule.sol` serves the view methods at the FWSS proxy
   - `IFilecoinServiceMetadata.sol` - Minimal service identity interface (`name`, `description`, `homepage`)
   - `examples/MultiMethodAuthorizer.sol` - Reference P256 (machine key + passkey) authorizer for the optional per-data-set write ACL (PR #536); see `examples/MultiMethodAuthorizer.md`
   - `src/lib` - Library source files
     - `FilecoinWarmStorageServiceLayout.sol` - Constants conveying the storage layout of `FilecoinWarmStorageService`
     - `FilecoinWarmStorageServiceStateInternalLibrary.sol` - `internal` library for embedding logic to read `FilecoinWarmStorageService`
     - `FilecoinWarmStorageServiceStateLibrary.sol` - `public` library for using `delegatecall` to read `FilecoinWarmStorageService`
-    - `SignatureVerificationLib.sol` - external library with EIP-712 metadata hashing and signature verification
+    - `LibSignatureVerification.sol` - `internal` library with EIP-712 metadata hashing and signature verification
 - `test/` - Test files  
   - `FilecoinWarmStorageService.t.sol` - Tests for the service contract
 - `tools/` - Deployment and utility scripts
-  - `warm-storage-deploy-all.sh` - Deployment script for all Warm Storage contracts
-  - Note: deployment scripts now deploy and link `SignatureVerificationLib` when deploying `FilecoinWarmStorageService`.
-    The scripts will deploy `src/lib/SignatureVerificationLib.sol` (or simulate it in dry-run) and pass the library address
-    to `forge create` via the `--libraries` flag so the service implementation is correctly linked.
+  - `warm-storage-deploy-all.sh` - Deploys a fresh Warm Storage stack, mainly for local devnets; FWSS deploys through
+    `script/FWSSDeploy.s.sol` on the ERC-8167 dispatcher
+  - `warm-storage-deploy-all-test.sh` - Runs `warm-storage-deploy-all.sh` against anvil and checks the stack, as CI does
 - `lib/` - Dependencies (git submodules)
   - `forge-std` - Foundry standard library
   - `openzeppelin-contracts` - OpenZeppelin contracts
@@ -48,7 +48,7 @@ import {FilecoinWarmStorageServiceStateLibrary} from "./lib/FilecoinWarmStorageS
 
 // Get status
 DataSetStatus status = FilecoinWarmStorageServiceStateLibrary.getDataSetStatus(service, dataSetId);
-bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
+bool isActive = (status == DataSetStatus.Active);
 ```
 
 **From Subgraph:**
@@ -65,6 +65,7 @@ bool isActive = (status == FilecoinWarmStorageService.DataSetStatus.Active);
 
 **Via View Contract:**
 ```solidity
+// viewContract is FWSS.viewContractAddress(): the StateView, or the FWSS proxy after the dispatcher transition
 DataSetStatus status = viewContract.getDataSetStatus(dataSetId);
 // 0 = Inactive, 1 = Active
 ```
@@ -74,13 +75,15 @@ The allow for many view methods within the 24 KiB contract size constraint, view
 There are three recommended ways to access `view` methods.
 
 #### View Contract
-To call the view methods off-chain, for example with `eth_call`, use the `FilecoinWarmStorageServiceStateView`:
+To call the view methods off-chain, for example with `eth_call`, call the view contract that the FWSS proxy reports through `viewContractAddress()`. On the v1.4.0 monolith that is the deployed `FilecoinWarmStorageServiceStateView`, whose ABI is `abi/FilecoinWarmStorageServiceStateView.abi.json`. After the ERC-8167 dispatcher transition, `viewContractAddress()` returns the FWSS proxy itself, which serves the same methods through `FWSSViewModule`:
 ```sh
 forge build
-jq .abi out/FilecoinWarmStorageServiceStateView.sol/FilecoinWarmStorageServiceStateView.json
+jq .abi out/FWSSViewModule.sol/FWSSViewModule.json
 ```
 
-For example to call `paymentsContractAddress()` on `$WARM_STORAGE_VIEW_ADDRESS`:
+After the transition, `josuke abi $FWSS_PROXY_ADDRESS` prints the proxy's complete ABI, merged from every module it routes to.
+
+For example to call `getPriceList()` on `$WARM_STORAGE_VIEW_ADDRESS`, the address `viewContractAddress()` returned:
 ```json
 {
     "id": 1,
@@ -88,14 +91,14 @@ For example to call `paymentsContractAddress()` on `$WARM_STORAGE_VIEW_ADDRESS`:
     "params": [
         {
             "to": $WARM_STORAGE_VIEW_ADDRESS,
-            "data": "0xbc471469"
+            "data": "0xb7029144"
         },
         "latest"
     ]
 }
 ```
 
-`FilecoinWarmStorageServiceStateView` is best for off-chain queries but the following `library` approaches are better for smart contracts.
+Reading `viewContractAddress()` rather than hard-wiring an address keeps callers working across the transition. The view contract is best for off-chain queries but the following `library` approaches are better for smart contracts.
 
 #### Internal Library
 To embed the view methods you use into your smart contract, use the `FilecoinWarmStorageServiceStateInternalLibrary`:
@@ -135,14 +138,14 @@ make test
 
 The project includes several auto-generated files that must be kept in sync with the contract source. The generated files are:
 
-- [`src/lib/FilecoinWarmStorageServiceLayout.sol`](src/lib/FilecoinWarmStorageServiceLayout.sol) — storage slot constants generated from `FilecoinWarmStorageService` by [`tools/generate_storage_layout.sh`](tools/generate_storage_layout.sh). Each state variable is mapped to a `bytes32` constant holding its storage slot number (e.g. `MAX_PROVING_PERIOD_SLOT = bytes32(uint256(0))`). Used by `FilecoinWarmStorageServiceStateLibrary` to implement `extsload`-based view access without delegatecall overhead.
+- [`src/lib/FilecoinWarmStorageServiceLayout.sol`](src/lib/FilecoinWarmStorageServiceLayout.sol) — storage slot constants generated from [`src/storage/FWSSStorage.sol`](src/storage/FWSSStorage.sol) by [`tools/generate_storage_layout.sh`](tools/generate_storage_layout.sh). Each state variable is mapped to a `bytes32` constant holding its storage slot number (e.g. `MAX_PROVING_PERIOD_SLOT = bytes32(uint256(0))`). Used by `FilecoinWarmStorageServiceStateLibrary` to implement `extsload`-based view access without delegatecall overhead.
 - [`src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol`](src/lib/FilecoinWarmStorageServiceStateInternalLibrary.sol) — produced by replacing `public` with `internal` in [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](src/lib/FilecoinWarmStorageServiceStateLibrary.sol) via `sed`.
-- [`src/FilecoinWarmStorageServiceStateView.sol`](src/FilecoinWarmStorageServiceStateView.sol) — view contract generated from the compiled library ABI by [`tools/generate_view_contract.sh`](tools/generate_view_contract.sh).
+- [`src/modules/FWSSViewModule.sol`](src/modules/FWSSViewModule.sol) — view module generated from [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](src/lib/FilecoinWarmStorageServiceStateLibrary.sol) by [`tools/generate_view_module.sh`](tools/generate_view_module.sh), reading storage directly in place of `extsload`.
 
-To regenerate them after changing [`src/FilecoinWarmStorageService.sol`](src/FilecoinWarmStorageService.sol) or [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](src/lib/FilecoinWarmStorageServiceStateLibrary.sol):
+To regenerate them after changing [`src/storage/FWSSStorage.sol`](src/storage/FWSSStorage.sol) or [`src/lib/FilecoinWarmStorageServiceStateLibrary.sol`](src/lib/FilecoinWarmStorageServiceStateLibrary.sol):
 
 ```bash
-# Generate all files (layout, internal library, view contract)
+# Generate all files (layout, internal library, view module)
 make gen
 
 # Force regeneration if files are corrupted
@@ -168,7 +171,8 @@ make update-abi
 This extracts the checked-in ABIs, including:
 - `abi/FilecoinWarmStorageService.abi.json` - Main service contract ABI
 - `abi/FilecoinWarmStorageServiceStateLibrary.abi.json` - State library ABI used by generated view helpers
-- `abi/FilecoinWarmStorageServiceStateView.abi.json` - View contract ABI
+
+`abi/FilecoinWarmStorageServiceStateView.abi.json` is the frozen ABI of the legacy view contract still deployed for networks on the v1.4.0 monolith; `make update-abi` no longer regenerates it.
 
 These ABIs are used by the code generation scripts in the `gen` target and should be updated whenever contract interfaces change.
 `FilecoinWarmStorageService.abi.json` also includes first-party library event fragments emitted by the FWSS proxy at runtime.

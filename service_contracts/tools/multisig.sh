@@ -2,7 +2,7 @@
 # multisig.sh - Shared helpers for Safe multisig operations
 #
 # Usage:
-#   source "$(dirname "${BASH_SOURCE[0]}")/multisig.sh"
+#   source "$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")/multisig.sh"
 #   print_safe_transaction "$TARGET" "functionSig(...)" "$CALLDATA"
 
 # Print a formatted Safe multisig transaction block

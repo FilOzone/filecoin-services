@@ -183,7 +183,7 @@ function generateBody() {
     RELEASE_BRANCH: releaseBranch,
     RECOMMENDED_PR_TITLE: recommendedPrTitle,
     CHANGELOG_LINK: `${baseUrl}/blob/main/CHANGELOG.md`,
-    FWSS_CONTRACT_LINK: `${baseUrl}/blob/main/service_contracts/src/FilecoinWarmStorageService.sol`,
+    FWSS_CONTRACT_LINK: `${baseUrl}/tree/main/service_contracts/src/modules`,
     CHECKLIST_LINK: formatSourceLink(baseUrl, "service_contracts/tools/UPGRADE-CHECKLIST.md"),
     CHECKLIST_UPDATE_LINK: formatMainLink(baseUrl, "service_contracts/tools/UPGRADE-CHECKLIST.md"),
     DEPLOY_WORKFLOW_LINK: `${baseUrl}/actions/workflows/deploy-contract.yml`,

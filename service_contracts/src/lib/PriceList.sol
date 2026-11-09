@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @notice Comprehensive price catalogue for an FWSS deployment. Returned by
-///         `FilecoinWarmStorageServiceStateView.getPriceList()`. All amounts are denominated in
+///         `getPriceList()` on the FWSS proxy (FWSSViewModule). All amounts are denominated in
 ///         `token`'s smallest unit; rates are per-month (per-epoch values derived by dividing
 ///         by `EPOCHS_PER_MONTH = 86400`).
 struct PriceList {

@@ -6,23 +6,44 @@
     "maximumConstructorArgsSize": 256
   },
   "targets": {
-    "FilecoinWarmStorageService": {
-      "artifact": "src/FilecoinWarmStorageService.sol:FilecoinWarmStorageService"
+    "FWSSMigrateModule": {
+      "artifact": "src/modules/FWSSMigrateModule.sol:FWSSMigrateModule"
     },
-    "FilecoinWarmStorageServiceStateView": {
-      "artifact": "src/FilecoinWarmStorageServiceStateView.sol:FilecoinWarmStorageServiceStateView"
+    "OwnershipModule": {
+      "artifact": "src/modules/OwnershipModule.sol:OwnershipModule"
+    },
+    "FWSSProviderManagementModule": {
+      "artifact": "src/modules/FWSSProviderManagementModule.sol:FWSSProviderManagementModule"
+    },
+    "FWSSViewModule": {
+      "artifact": "src/modules/FWSSViewModule.sol:FWSSViewModule"
+    },
+    "FWSSViewContractModule": {
+      "artifact": "src/modules/FWSSViewContractModule.sol:FWSSViewContractModule"
+    },
+    "FWSSMetadataModule": {
+      "artifact": "src/modules/FWSSMetadataModule.sol:FWSSMetadataModule"
+    },
+    "ExtsloadModule": {
+      "artifact": "src/modules/ExtsloadModule.sol:ExtsloadModule"
+    },
+    "FWSSDispatcherTransition": {
+      "artifact": "src/FWSSDispatcherTransition.sol:FWSSDispatcherTransition"
+    },
+    "FWSSInitializer": {
+      "artifact": "src/FWSSInitializer.sol:FWSSInitializer"
+    },
+    "FWSSStorageTermsModule": {
+      "artifact": "src/modules/FWSSStorageTermsModule.sol:FWSSStorageTermsModule"
+    },
+    "FWSSStorageTermsMigration": {
+      "artifact": "src/FWSSStorageTermsMigration.sol:FWSSStorageTermsMigration"
     },
     "ServiceProviderRegistry": {
       "artifact": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
     },
     "ProviderIdSet": {
       "artifact": "src/ProviderIdSet.sol:ProviderIdSet"
-    },
-    "SignatureVerificationLib": {
-      "artifact": "src/lib/SignatureVerificationLib.sol:SignatureVerificationLib"
-    },
-    "Rails": {
-      "artifact": "src/lib/Rails.sol:Rails"
     },
     "PDPVerifier": {
       "artifact": "lib/pdp/src/PDPVerifier.sol:PDPVerifier"

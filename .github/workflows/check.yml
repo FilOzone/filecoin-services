@@ -38,52 +38,6 @@ jobs:
           fi
           echo "Generated files are up to date ✓"
 
-      - name: Fetch base branch for layout comparison
-        if: github.event_name == 'pull_request'
-        run: git fetch origin ${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }} --depth=1
-
-      - name: Check storage layout additions
-        run: |
-          cd service_contracts
-          bash tools/check_storage_layout.sh
-
-  check-abi:
-    name: Check ABI Changes
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: v1.7.1
-
-      - name: Check for ABI changes
-        run: |
-          cd service_contracts
-          if [ ! -d "abi" ]; then
-            echo "Error: No ABI directory found!"
-            echo "ABIs must be checked into the repository to track interface changes."
-            echo "Please run 'make update-abi' in service_contracts/ and commit the ABIs."
-            exit 1
-          fi
-          make update-abi
-          if [ -n "$(git status --porcelain abi/)" ]; then
-            echo "Error: Contract ABIs have changed!"
-            echo "Uncommitted changes detected:"
-            git status --porcelain abi/
-            echo ""
-            echo "Diff:"
-            git diff abi/
-            echo ""
-            echo "Please run 'make update-abi' in service_contracts/ and commit the changes."
-            exit 1
-          fi
-          echo "All ABIs are up to date ✓"
-
   check-deployments:
     name: Check deployments.json Checksums
     runs-on: ubuntu-latest

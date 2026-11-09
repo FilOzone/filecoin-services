@@ -10,7 +10,7 @@
 # - PATH has forge and cast
 
 # Get script directory and source deployments.sh
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 source "$SCRIPT_DIR/deployments.sh"
 
 if [ -z "$ETH_RPC_URL" ]; then

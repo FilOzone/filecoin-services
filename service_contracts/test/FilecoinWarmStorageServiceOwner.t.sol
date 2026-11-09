@@ -3,8 +3,10 @@ pragma solidity ^0.8.13;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {console} from "forge-std/Test.sol";
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
+import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
+import {FWSSDataSetModule} from "../src/modules/FWSSDataSetModule.sol";
+import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -17,7 +19,7 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
+contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
@@ -29,8 +31,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
     );
 
     // Contracts
-    FilecoinWarmStorageService public serviceContract;
-    FilecoinWarmStorageServiceStateView public viewContract;
+    IFilecoinWarmStorageService public serviceContract;
     ServiceProviderRegistry public providerRegistry;
     MockPDPVerifier public pdpVerifier;
     FilecoinPayV1 public payments;
@@ -93,25 +94,19 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         payments = new FilecoinPayV1();
 
         // Deploy service contract
-        FilecoinWarmStorageService serviceImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier),
-            address(payments),
-            usdfcToken,
-            filBeamBeneficiary,
-            providerRegistry,
-            sessionKeyRegistry,
-            4
+        serviceContract = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(usdfcToken),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(providerRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 1440,
+                filBeamController: filBeamController
+            })
         );
-
-        bytes memory serviceInitData = abi.encodeWithSelector(
-            FilecoinWarmStorageService.initialize.selector, uint64(2880), uint256(1440), filBeamController
-        );
-        MyERC1967Proxy serviceProxy = new MyERC1967Proxy(address(serviceImpl), serviceInitData);
-        serviceContract = FilecoinWarmStorageService(address(serviceProxy));
-
-        // Deploy view contract
-        viewContract = new FilecoinWarmStorageServiceStateView(serviceContract);
-        serviceContract.setViewContract(address(viewContract));
 
         // Approve providers 1, 2, and 3 but not unauthorizedProvider
         uint256 providerId1 = providerRegistry.getProviderIdByAddress(provider1);
@@ -168,7 +163,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         metadataKeys[0] = "label";
         metadataValues[0] = "Test Data Set";
 
-        FilecoinWarmStorageService.DataSetCreateData memory createData = FilecoinWarmStorageService.DataSetCreateData({
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
             clientDataSetId: 0,
             metadataKeys: metadataKeys,
             metadataValues: metadataValues,
@@ -203,7 +198,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest {
         uint256 dataSetId = createDataSet(provider1, client);
 
         // Check that owner is set to the creator (provider1)
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = serviceContract.getDataSet(dataSetId);
 
         assertEq(info.serviceProvider, provider1, "Service provider should be set to creator");
         assertEq(info.payer, client, "Payer should be set correctly");

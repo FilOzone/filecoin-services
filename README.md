@@ -17,7 +17,7 @@ Rail payment rates are calculated as a size-proportional component plus a flat p
 
 Storage providers submit on-chain transactions on behalf of clients (piece additions, removal scheduling, proving). To reimburse SPs for these gas costs, FWSS charges small one-time operation fees: $0.025 on dataset creation, $0.0005 + $0.0003/piece per add-pieces call, $0.002 per removal-scheduling call, and $0.00112 when an SP terminates service with payer consent. Fees are drawn from a $0.10 lifecycle reserve maintained as fixed lockup on the PDP rail.
 
-The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct covering token, streaming rates, one-time fees, and lockup amounts/periods. See [SPEC.md](SPEC.md) for details on rate calculation, operation fees, pricing updates, and top-up/renewal behavior.
+The complete on-chain price catalogue is exposed via `getPriceList()` on the view contract that FWSS reports through `viewContractAddress()`: the StateView today, and the FWSS proxy itself after the ERC-8167 dispatcher transition. It returns a single nested `PriceList` struct covering token, streaming rates, one-time fees, and lockup amounts/periods. See [SPEC.md](SPEC.md) for details on rate calculation, operation fees, pricing updates, and top-up/renewal behavior.
 
 ## Service metadata
 
@@ -30,6 +30,7 @@ FilecoinWarmStorageService implements `IFilecoinServiceMetadata`, exposing `name
 - [Foundry](https://getfoundry.sh/) - Ethereum development toolchain
 - [jq](https://jqlang.github.io/jq/) - Command-line JSON processor (v1.7+ recommended)
 - Git with submodule support
+- A C toolchain and make, to build the [evm](https://github.com/wjmelements/evm) assembler (Xcode Command Line Tools on macOS; `build-essential` and `libcurl4-openssl-dev` on Debian/Ubuntu)
 
 ### Installation
 
@@ -49,7 +50,18 @@ make install
 make build
 ```
 
-4. Run tests:
+4. Build the pinned evm assembler and install it beside `forge`. `make test` uses it to assemble the ERC-8167 dispatcher; josuke, `tools/verify-deployments.sh` and `tools/warm-storage-deploy-all.sh` also need it.
+```bash
+make install-evm
+```
+
+   To deploy ERC-8167 modules or run `make check-josuke`, also install the pinned [josuke](https://github.com/wjmelements/josuke) CLI. It needs [uv](https://docs.astral.sh/uv/).
+```bash
+make install-josuke
+```
+   `make check-josuke` runs `josuke check` offline: it validates `josuke.json`, resolves `facetSrc`, and fails on selector collisions, EIP-170 sizes and storage that conflicts between facets or with a recorded deployment. The `josuke Check` workflow runs it on every pull request and writes the report to the job summary.
+
+5. Run tests:
 ```bash
 make test
 ```
@@ -59,7 +71,7 @@ make test
 ```
 service_contracts/
 ├── src/                                 # Smart contract source files
-│   └── FilecoinWarmStorageService.sol   # Main service contract with PDP and payment integration
+│   └── modules/                         # FWSS facets behind the ERC-8167 dispatcher
 ├── test/                                # Test files
 │   └── FilecoinWarmStorageService.t.sol # Contract tests
 ├── tools/                               # Deployment and utility scripts

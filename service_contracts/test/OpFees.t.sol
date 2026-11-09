@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import {FilecoinWarmStorageServiceTest} from "./FilecoinWarmStorageService.t.sol";
 import {stdError} from "forge-std/StdError.sol";
 import {Cids} from "@pdp/Cids.sol";
-import {FilecoinWarmStorageService} from "../src/FilecoinWarmStorageService.sol";
+import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../src/Errors.sol";
 import {
@@ -57,7 +57,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         returns (uint256 dataSetId, uint256 pdpRailId, uint256 leafCount, uint256 firstDeadline, uint256 maxPeriod)
     {
         dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        pdpRailId = viewContract.getDataSet(dataSetId).pdpRailId;
+        pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
         leafCount = PIECE_LEAVES;
 
         Cids.Cid[] memory pieces = new Cids.Cid[](1);
@@ -70,7 +70,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         );
 
         uint256 challengeWindow;
-        (maxPeriod, challengeWindow,,) = viewContract.getPDPConfig();
+        (maxPeriod, challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         firstDeadline = block.number + maxPeriod;
         mockPDPVerifier.nextProvingPeriod(
             pdpServiceWithPayments, dataSetId, firstDeadline - challengeWindow / 2, leafCount, ""
@@ -84,17 +84,37 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     {
         vm.roll(currentDeadline + 1);
         newDeadline = currentDeadline + maxPeriod;
-        (, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         mockPDPVerifier.nextProvingPeriod(
             pdpServiceWithPayments, dataSetId, newDeadline - challengeWindow / 2, leafCount, ""
         );
+    }
+
+    // Runs `cycles` rounds of scheduling the removal of pieceIds and advancing the proving period; returns the last deadline.
+    function _removeAndAdvance(
+        address payer,
+        uint256 dataSetId,
+        uint256[] memory pieceIds,
+        uint256 deadline,
+        uint256 maxPeriod,
+        uint256 leafCount,
+        uint256 cycles
+    ) internal returns (uint256) {
+        for (uint256 i = 0; i < cycles; i++) {
+            makeSignaturePass(payer);
+            mockPDPVerifier.piecesScheduledRemove(
+                dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+            );
+            deadline = _advanceProvingPeriod(dataSetId, deadline, maxPeriod, leafCount);
+        }
+        return deadline;
     }
 
     // -------------------------------------------------------------------------
 
     function test_addPiecesFee_immediateFlush() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 pdpRailId = info.pdpRailId;
 
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
@@ -109,7 +129,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             pdpServiceWithPayments, dataSetId, 0, pieces, nextClientDataSetId++, FAKE_SIGNATURE, keys, values
         );
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "fees flushed immediately in piecesAdded");
         assertEq(
             info.lifecycleReserveBalance,
@@ -124,7 +144,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     function test_scheduledRemovalFee_deferredThenFlushed() public {
         (uint256 dataSetId, uint256 pdpRailId,, uint256 firstDeadline, uint256 maxPeriod) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
 
         uint256[] memory pieceIds = new uint256[](1);
@@ -134,14 +154,14 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, SCHEDULE_PIECE_REMOVALS_FEE, "fee pending, not yet flushed");
         assertEq(info.lifecycleReserveBalance, reserveBefore, "reserve unchanged before flush");
 
         // nextProvingPeriod processes the removal and flushes the fee
         _advanceProvingPeriod(dataSetId, firstDeadline, maxPeriod, 0);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "fee flushed");
         assertEq(info.lifecycleReserveBalance, reserveBefore - SCHEDULE_PIECE_REMOVALS_FEE, "reserve decreased by fee");
 
@@ -164,7 +184,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         );
         leafCount += PIECE_LEAVES;
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
 
         // Schedule two separate removal batches
@@ -182,12 +202,12 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             dataSetId, ids1, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
         );
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 2 * SCHEDULE_PIECE_REMOVALS_FEE, "both fees accumulated");
 
         _advanceProvingPeriod(dataSetId, firstDeadline, maxPeriod, 0);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0);
         assertEq(info.lifecycleReserveBalance, reserveBefore - 2 * SCHEDULE_PIECE_REMOVALS_FEE);
 
@@ -198,7 +218,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     function test_terminateFee_chargedOnConsentCase() public {
         (uint256 dataSetId, uint256 pdpRailId,,,) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveBefore = info.lifecycleReserveBalance;
         assertEq(
             reserveBefore,
@@ -213,7 +233,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         vm.prank(sp1);
         pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "fee flushed at termination");
         assertEq(info.lifecycleReserveBalance, 0, "reserve fully released on immediate termination");
         assertEq(payments.getRail(pdpRailId).lockupFixed, 0, "lockupFixed zeroed after fee deducted");
@@ -229,23 +249,27 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     function test_terminateFee_notChargedOnPayerDirectCall() public {
         (uint256 dataSetId,,,,) = _createDataSetWithPiece();
 
-        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0);
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0);
 
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on payer direct termination");
+        assertEq(
+            pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on payer direct termination"
+        );
     }
 
     function test_terminateFee_notChargedOnSpInitiated() public {
         (uint256 dataSetId,,,,) = _createDataSetWithPiece();
 
-        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0);
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0);
 
         vm.prank(sp1);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on SP-initiated termination");
+        assertEq(
+            pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on SP-initiated termination"
+        );
     }
 
     function test_addPiecesFee_largeBatch_triggersReplenishment() public {
@@ -279,7 +303,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             new string[](0)
         );
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "fees flushed");
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET, "reserve replenished to target");
 
@@ -341,7 +365,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     function test_terminateFee_flushedWithoutRemovals() public {
         (uint256 dataSetId, uint256 pdpRailId,,,) = _createDataSetWithPiece();
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint96 reserveAfterAdd = info.lifecycleReserveBalance;
         assertEq(
             reserveAfterAdd,
@@ -355,7 +379,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         vm.prank(sp1);
         pdpServiceWithPayments.terminateService(dataSetId, abi.encode(FAKE_SIGNATURE));
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "TERMINATE_FEE flushed at termination");
         assertEq(info.lifecycleReserveBalance, 0, "reserve fully released on immediate termination");
 
@@ -372,16 +396,16 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     // CREATE_DATA_SET_FEE must be collected even when the dataset is terminated before any proving.
     function test_createTerminate_createFeeFlushes() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        uint256 pdpRailId = viewContract.getDataSet(dataSetId).pdpRailId;
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, CREATE_DATA_SET_FEE, "create fee pending before termination");
         assertEq(info.lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
 
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "create fee flushed at termination");
         assertEq(
             info.lifecycleReserveBalance,
@@ -419,7 +443,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     // smaller than lifecycleReserveBalance.
     function test_topUpLifecycleReserve_overflow_reverts() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        uint96 currentBalance = viewContract.getDataSet(dataSetId).lifecycleReserveBalance;
+        uint96 currentBalance = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
         // amount chosen so uint96(amount) == amount (no truncation) yet currentBalance + amount overflows uint96
         uint256 amount = uint256(type(uint96).max) - currentBalance + 1;
         vm.prank(client);
@@ -462,7 +486,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         }
 
         assertLt(
-            viewContract.getDataSet(dataSetId).lifecycleReserveBalance,
+            pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance,
             REPLENISH_THRESHOLD + PER_CALL_DRAIN,
             "reserve is now below the replenishment trigger for one more batch"
         );
@@ -518,7 +542,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         }
 
         // Initialize proving (pending=0, no drain).
-        (uint256 maxPeriod, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (uint256 maxPeriod, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
         uint256 leafCount = added * PIECE_LEAVES;
         uint256 deadline = block.number + maxPeriod;
         mockPDPVerifier.nextProvingPeriod(
@@ -528,13 +552,9 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         // NUM_SAFE_REMOVAL_CYCLES - 1 complete removal+flush cycles each safely drain the fee.
         uint256[] memory pieceIds = new uint256[](1);
         pieceIds[0] = 0;
-        for (uint256 i = 0; i < NUM_SAFE_REMOVAL_CYCLES - 1; i++) {
-            makeSignaturePass(minClient);
-            mockPDPVerifier.piecesScheduledRemove(
-                dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
-            );
-            deadline = _advanceProvingPeriod(dataSetId, deadline, maxPeriod, leafCount);
-        }
+        deadline = _removeAndAdvance(
+            minClient, dataSetId, pieceIds, deadline, maxPeriod, leafCount, NUM_SAFE_REMOVAL_CYCLES - 1
+        );
 
         // One final removal succeeds — reserve still covers it without replenishment.
         makeSignaturePass(minClient);
@@ -545,7 +565,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         // With the unflushed fee in pending, the next removal would push accumulated pending
         // above the replenishment threshold and the payer cannot fund the top-up.
         assertLt(
-            viewContract.getDataSet(dataSetId).lifecycleReserveBalance,
+            pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance,
             2 * SCHEDULE_PIECE_REMOVALS_FEE + REPLENISH_THRESHOLD,
             "reserve below trigger for next removal given unflushed pending"
         );
@@ -556,11 +576,11 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         );
 
         // nextProvingPeriod still succeeds and pays the fee from the last successful removal.
-        uint256 pdpRailId = viewContract.getDataSet(dataSetId).pdpRailId;
-        uint96 reserveBefore = viewContract.getDataSet(dataSetId).lifecycleReserveBalance;
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
+        uint96 reserveBefore = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
         deadline = _advanceProvingPeriod(dataSetId, deadline, maxPeriod, leafCount);
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.pendingOneTimePayments, 0, "pending flushed");
         assertEq(info.lifecycleReserveBalance, reserveBefore - SCHEDULE_PIECE_REMOVALS_FEE, "fee paid in full");
         assertEq(payments.getRail(pdpRailId).lockupFixed, info.lifecycleReserveBalance, "lockupFixed mirrors reserve");
@@ -569,7 +589,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
     // Post-termination replenishment is disabled; try exhausting the lifecycleReserveBalance and verify that the one time payment succeeds.
     function test_nextProvingPeriod_postTermination_withExhaustedReserve() public {
         (uint256 dataSetId,, uint256 leafCount, uint256 firstDeadline, uint256 maxPeriod) = _createDataSetWithPiece();
-        (, uint256 challengeWindow,,) = viewContract.getPDPConfig();
+        (, uint256 challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
 
         // Roll 1 block so the next nextProvingPeriod call clears the "already called this period" guard.
         vm.roll(vm.getBlockNumber() + 1);
@@ -578,7 +598,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
 
-        uint96 reserveBalance = viewContract.getDataSet(dataSetId).lifecycleReserveBalance;
+        uint96 reserveBalance = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
         assertGt(reserveBalance, 0);
 
         // Schedule enough removals to push pending above the reserve.
@@ -592,7 +612,11 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
                 dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
             );
         }
-        assertGt(viewContract.getDataSet(dataSetId).pendingOneTimePayments, reserveBalance, "pending exceeds reserve");
+        assertGt(
+            pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments,
+            reserveBalance,
+            "pending exceeds reserve"
+        );
 
         // nextProvingPeriod should flush pending and clamp lifecycleReserveBalance to 0.
         uint256 nextDeadline = firstDeadline + maxPeriod;
@@ -600,15 +624,15 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
             pdpServiceWithPayments, dataSetId, nextDeadline - challengeWindow / 2, leafCount, ""
         );
 
-        assertEq(viewContract.getDataSet(dataSetId).pendingOneTimePayments, 0, "pending flushed");
-        assertEq(viewContract.getDataSet(dataSetId).lifecycleReserveBalance, 0, "reserve clamped to zero");
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "pending flushed");
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance, 0, "reserve clamped to zero");
     }
 
     // When amount has bits above the uint96 range set, uint96(amount) silently truncates them;
     // only the lower 96 bits contribute to the balance increase.
     function test_topUpLifecycleReserve_bit97_truncated() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "");
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         uint256 pdpRailId = info.pdpRailId;
 
         uint256 topUp = 1e18;
@@ -619,7 +643,7 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         vm.prank(client);
         pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, amount);
 
-        info = viewContract.getDataSet(dataSetId);
+        info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertEq(info.lifecycleReserveBalance, expectedBalance, "upper bits truncated, lower bits applied");
         assertEq(payments.getRail(pdpRailId).lockupFixed, expectedBalance, "lockupFixed mirrors reserve");
     }

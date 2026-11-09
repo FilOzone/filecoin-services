@@ -4,34 +4,62 @@
 
 ### Pricing Model
 
-FilecoinWarmStorageService uses **static global pricing**. All payment rails use the same price regardless of which provider stores the data. The default storage price is 2.5 USDFC per TiB/month.
+FilecoinWarmStorageService uses **immutable, owner-registered storage terms**. Each dataset selects a payment currency and storage price at creation and cannot switch terms afterward. The legacy terms are USDFC, 18 decimals, and 2.5 USDFC per TiB/month.
 
-All pricing constants (rates, fees, and lockup amounts) are defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). The on-chain entry point is [`getPriceList()`](service_contracts/src/lib/FilecoinWarmStorageServiceStateLibrary.sol) which assembles them into the `PriceList` struct.
+Fixed fees, reserve amounts, and timing constants remain defined in [`service_contracts/src/lib/PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol). Fees and reserve amounts are scaled from 18-decimal units to the selected currency's precision, rounding down. The design assumes USD-stablecoin economics, but currency selection is the owner's responsibility; no stablecoin classification or exchange-rate conversion is enforced.
 
-Providers may advertise their own prices in the ServiceProviderRegistry, but these are informational for other services, and does not affect actual payments in FilecoinWarmStorageService.
+Providers may advertise prices in the ServiceProviderRegistry, but those advertisements do not determine FWSS payments. A provider accepts a client's selected terms by creating the dataset.
+
+### Storage Terms
+
+```solidity
+struct StorageTerms {
+    address token;
+    uint8 tokenDecimals;
+    bytes32 salt;
+    uint96 pricePerTiBPerMonth;
+}
+```
+
+The owner calls `registerStorageTerms(terms)` to register or re-enable an ordinary definition, and `disableStorageTerms(id)` to stop new datasets selecting it. Definitions never change; disabling does not affect existing datasets, their payments, or lifecycle operations. Registration verifies token decimals and supports 0–18 decimals; the native currency uses address zero and 18 decimals. The minimum price is `ceil(2.5e18 / 10**(18 - tokenDecimals))`, so reducing the floor requires a contract change.
+
+Record zero is an independent, immutable legacy definition `(USDFC, 18, bytes32(0), uint96(2.5e18))`, initialized during fresh deployment or the atomic storage-terms upgrade migration. It is not an alias or pointer to an ordinary record. Every ordinary definition, including the exact same legacy tuple, is identified by:
+
+```solidity
+keccak256(abi.encode(
+    keccak256("filecoin.FWSS.StorageTerms.v1"),
+    terms.token,
+    terms.tokenDecimals,
+    terms.salt,
+    terms.pricePerTiBPerMonth
+))
+```
+
+Different salts distinguish otherwise identical terms. Ordinary records can be disabled and re-enabled through management, but `disableStorageTerms(bytes32(0))` reverts: only a future explicit upgrade migration may write zero's enabled flag. Initialization is idempotent and never re-enables zero after such a migration.
+
+The legacy creation payload `abi.encode(payer, clientDataSetId, keys, values, signature)` selects zero. The terms-aware payload is `abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId)`, including an explicit zero if desired. Its EIP-712 type is:
+
+```text
+CreateDataSetWithStorageTerms(uint256 clientDataSetId,address payee,MetadataEntry[] metadata,bytes32 storageTermsId)MetadataEntry(string key,string value)
+```
+
+Both payloads use the existing `CreateDataSet` SessionKeyRegistry scope and share replay protection. The signature type follows the payload variant, not whether the terms ID is zero. FilBeam is permitted only when the selected currency is the deployment's USDFC token.
 
 ### Rate Calculation
 
-The payment rate per epoch is calculated from the total data size in bytes:
+For every terms ID, a nonempty dataset's payment rate is:
 
-```
-# Constants
-EPOCHS_PER_MONTH              = 86400         # 2880 epochs/day × 30 days
-TiB                           = 1099511627776 # bytes
-
-# Default pricing (owner-adjustable)
-STORAGE_PRICE_PER_TIB_PER_MONTH = 2.5 USDFC
-DATASET_FEE_PER_MONTH           = 0.024 USDFC
-
-# Per-epoch rate calculation
-sizeBasedRate         = totalBytes × STORAGE_PRICE_PER_TIB_PER_MONTH ÷ TiB ÷ EPOCHS_PER_MONTH
-DATASET_FEE_PER_EPOCH = DATASET_FEE_PER_MONTH ÷ EPOCHS_PER_MONTH
-finalRate             = sizeBasedRate + DATASET_FEE_PER_EPOCH
+```text
+EPOCHS_PER_MONTH = 86400
+TiB = 1099511627776
+monthlyStorage = floor(totalBytes * terms.pricePerTiBPerMonth / TiB)
+monthlyDatasetFee = floor(0.12e18 / 10**(18 - terms.tokenDecimals))
+finalRate = floor((monthlyStorage + monthlyDatasetFee) / EPOCHS_PER_MONTH)
 ```
 
-Every dataset with stored data pays a flat 0.024 USDFC/month fee on top of the size-proportional rate. A 1 TiB dataset costs 2.524 USDFC/month. A dataset with no pieces is inactive: no proving is required and no payment accrues.
+Combining monthly charges before per-epoch division avoids separately truncating each component. A dataset with no pieces has zero streaming rate. This calculation applies uniformly to zero and nonzero terms IDs.
 
-**Precision note**: Integer division when computing `DATASET_FEE_PER_EPOCH` causes minor precision loss. The actual monthly payment (`DATASET_FEE_PER_EPOCH × EPOCHS_PER_MONTH`) is slightly less than `DATASET_FEE_PER_MONTH`—under 0.0001%. This is acceptable; see the lockup section below for how pre-flight checks handle this.
+**Precision note:** FilecoinPay rates are integer smallest-token units per epoch. The loss is less than one smallest unit per epoch, or less than 0.0864 tokens over 30 days for a six-decimal token at constant size. A nominal 1 TiB dataset priced at 2.5 with a 0.12 dataset fee streams 30 base units per epoch, or 2.592 tokens per 30 days, at six decimals. There is no fractional carry or rounding up.
 
 ### Operation Fees
 
@@ -40,19 +68,19 @@ In addition to the ongoing storage rate, FWSS charges one-time fees for specific
 | Operation | Fee | Trigger | Recipient |
 |---|---|---|---|
 | Create dataset | $0.025 | `dataSetCreated` callback | SP |
-| Add pieces | $0.0005 + $0.0003 × n | `piecesAdded` callback (n = piece count) | SP |
-| Schedule piece removals | $0.002 | `piecesScheduledRemove` callback | SP |
-| Terminate service (consent) | $0.00112 | SP-initiated termination with payer EIP-712 signature | SP |
+| Add pieces | $0.008 + $0.003 × n | `piecesAdded` callback (n = piece count) | SP |
+| Schedule piece removals | $0.007 | `piecesScheduledRemove` callback | SP |
+| Terminate service (consent) | $0.006 | SP-initiated termination with payer EIP-712 signature | SP |
 
 The terminate fee applies only in the **consent case**: when the SP calls `terminateService` with a valid payer signature in `extraData`. Direct termination by the payer or unilateral SP termination does not incur this fee.
 
 #### Lifecycle Reserve
 
-The lifecycle reserve is seeded at **$0.10** when the dataset is created, stored as `lockupFixed` on the PDP rail.
+The lifecycle reserve is seeded at **0.50 units of the selected currency**, scaled to its decimals, when the dataset is created and stored as `lockupFixed` on the PDP rail. Dollar amounts in the fee table describe the intended stablecoin economics, not an exchange-rate conversion.
 
 ```
-LIFECYCLE_RESERVE_TARGET = $0.10
-REPLENISH_THRESHOLD      = $0.005
+LIFECYCLE_RESERVE_TARGET = 0.50 tokens
+REPLENISH_THRESHOLD      = 0.025 tokens
 ```
 
 **Flush mechanism**: Operation fees are not paid immediately. Each triggering operation increments `pendingOneTimePayments` (a local field in `DataSetInfo`). The accumulated amount is flushed the next time `updateStorageRates` runs—once per `piecesAdded` and once per `nextProvingPeriod`:
@@ -73,7 +101,7 @@ This keeps the hot path at one external call per event.
 
 ### Price Discovery
 
-The complete on-chain price catalogue is exposed via `FilecoinWarmStorageServiceStateView.getPriceList()`. It returns a single nested `PriceList` struct grouping the deployment's token address, streaming rates, one-time operation fees, and lockup amounts/periods:
+`getPriceList()` on the FWSS proxy continues returning the **legacy USDFC** catalogue, preserving its existing ABI and meaning. It returns a nested `PriceList` struct grouping streaming rates, one-time fees, and lockup amounts/periods:
 
 ```solidity
 struct PriceList {
@@ -84,13 +112,11 @@ struct PriceList {
 }
 ```
 
-This is the canonical price discovery API for SDKs and dashboards. The struct is defined in [`service_contracts/src/lib/PriceList.sol`](service_contracts/src/lib/PriceList.sol) and populated from the constants in [`PriceListUSDFC.sol`](service_contracts/src/lib/PriceListUSDFC.sol).
+For selected terms, call `getStorageTerms(storageTermsId)` to obtain the immutable definition and its current enabled status. Discover registrations and availability changes through `StorageTermsRegistered` and `StorageTermsDisabled` events; `DataSetStorageTermsSelected` identifies a dataset's selection. `getDataSetV2` and `getClientDataSetsV2(client, offset, limit)` return `DataSetInfoViewV2`, appending `storageTermsId` after the existing fields. V2 listing requires pagination arguments; use `(client, 0, 0)` to retrieve all datasets. The original getters are deprecated but preserve both overloads and their original return shapes, including array element widths.
 
 ### Pricing Updates
 
-Only the contract owner can update pricing, by upgrading the contract.
-
-**Effect on existing datasets**: Pricing changes do not immediately update rates for existing datasets. New rates take effect when pieces are next added or removed. This avoids gas-expensive rate recalculations across all active datasets while ensuring new pricing applies to all future storage operations.
+Only the contract owner can register additional ordinary terms. Existing datasets keep their selected immutable definitions; new pricing applies only to datasets that select the relevant record. Management cannot disable zero, so legacy-format requests and explicit selection of zero remain available unless a future explicit migration disables zero; either action does not interrupt existing legacy datasets.
 
 ### Rate Update Timing
 
@@ -124,7 +150,7 @@ This design ensures the provider receives payment at or above the rate establish
 
 ### Funding and Top-Up
 
-Clients pay for storage by depositing USDFC into the Filecoin Pay contract. These funds flow to providers over time based on the storage rate.
+Clients pay for storage by depositing the currency selected by their dataset's terms into FilecoinPay and granting FWSS operator approval for that currency. Funds flow to providers over time based on the storage rate.
 
 **Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.
 
@@ -132,9 +158,9 @@ Clients pay for storage by depositing USDFC into the Filecoin Pay contract. Thes
 lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-For an empty dataset this equals `DATASET_FEE_PER_MONTH` (0.024 USDFC). For datasets with data, the lockup equals one month's total cost (size-based rate plus dataset fee).
+An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve. Creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions. For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
 
-**Pre-flight check precision**: The pre-flight validation uses a multiply-first formula `(DATASET_FEE_PER_MONTH × EPOCHS_PER_MONTH) ÷ EPOCHS_PER_MONTH` which preserves the exact monthly value. This produces cleaner error messages and is slightly more conservative than the actual rail lockup. The difference is under 0.0001% and always in the user's favor—they are never required to have less than needed.
+**Pre-flight check precision:** Creation checks use the scaled monthly dataset fee directly, rather than reconstructing it from a truncated per-epoch rate. This is conservative, particularly for lower-decimal currencies.
 
 **Storage duration** extends as clients deposit additional funds:
 
@@ -232,6 +258,8 @@ Service is terminated by calling `terminateService(dataSetId)` on FWSS. Only the
 
 **Immediate termination (consent case)**: When the SP calls `terminateService(dataSetId, extraData)` with a valid payer EIP-712 signature, FWSS sets `lockupPeriod = 0` before calling `terminateRail`: `endEpoch = block.number` and the payer's streaming buffer is released immediately, along with the lifecycle reserve. A payer signature implies consent to releasing the lifecycle reserve and paying the terminate fee from `pending` in one step, so for underfunded payers this reverts (FilecoinPay blocks the lockup-period change) rather than falling back to the standard 30-day window.
 
+The lockup reset and reserve release also run when the scaled termination fee and all pending earlier fees are zero.
+
 CDN rails are not touched by `terminateService`. In the standard case they remain active through the PDP rail's 30-day lockup window; for well-funded payers in the immediate case the lockup window is zero so CDN settlement can proceed right away. When the dataset is subsequently deleted (`dataSetDeleted` callback), FWSS performs best-effort termination of CDN rails, giving FilBeam a 5-day settle window from that point. Any unsettled fixed lockup returns to the payer after the window closes.
 
 Client-initiated termination of a zero-rate rail (a CDN rail called directly on FilecoinPay) is permitted because `isAccountLockupFullySettled` is trivially true when the payment rate is zero. For a non-zero-rate rail like the PDP rail, a client whose account has fallen behind on lockup settlement cannot call `FilecoinPay.terminateRail` directly. However, `terminateService` on FWSS still works for the payer, because FWSS is the caller of `terminateRail` in that path.
@@ -266,7 +294,7 @@ For well-funded payers in the immediate termination case (`lockupPeriod = 0`, so
 
 **CDN rails are not checked**: The settled-up-to requirement above and the `pdpEndEpoch` checks in the timing list both apply to the PDP rail only. FWSS does not verify CDN rail termination or settlement before allowing dataset deletion, because it does not track the CDN rails' `endEpoch` (there is no validator callback to set it). In the normal flow this is safe: CDN rails are terminated as part of the `dataSetDeleted` callback itself.
 
-**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `Rails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve back to the payer, terminates the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away. For well-funded payers the lockup period is zeroed before termination, releasing the streaming buffer immediately. For underfunded payers the lockup period cannot be zeroed, so the PDP rail retains its default 30-day window and the streaming buffer is released only after that window elapses.
+**Abandonment path**: When `pdpEndEpoch == 0` (the SP never called `terminateService`), the data set can still be deleted once inactive for `INACTIVITY_WINDOW` (30 days from `lastProvenEpoch`, or from `provingActivationEpoch` for activated-but-never-proven data sets). PDPVerifier gates this: SP-only within the window, permissionless after. FWSS layers its own `_verifyInactivity` check on top so the SP cannot use this path to skip `terminateService` on an active data set. Inline teardown via `LibRails.abandonRails` settles the PDP rail (advancing through unproven epochs via the pre-activation short-circuit), releases the lifecycle reserve back to the payer, terminates the rail, and best-efforts the CDN rails. The SP forfeits any pending one-time op-fees; this is intentional, since the SP walked away. For well-funded payers the lockup period is zeroed before termination, releasing the streaming buffer immediately. For underfunded payers the lockup period cannot be zeroed, so the PDP rail retains its default 30-day window and the streaming buffer is released only after that window elapses.
 
 ## CDN Payment Rails
 
@@ -322,7 +350,6 @@ flowchart TB
   FPV["FilecoinPayV1 (immutable)"]
   SPR["ServiceProviderRegistry (UUPS proxy)"]
   SKR["SessionKeyRegistry (immutable)"]
-  SVL["SignatureVerificationLib (library)"]
   SV["StateView (immutable)"]
   USDFC["USDFC Token (immutable ERC20)"]
 
@@ -330,8 +357,7 @@ flowchart TB
   FWSS -->|createRail, modifyRailPayment| FPV
   FPV -->|IValidator: validatePayment, railTerminated| FWSS
   FWSS -->|getProviderIdByAddress, getProviderPayee| SPR
-  FWSS -->|uses| SVL
-  SVL -->|authorizationExpiry| SKR
+  FWSS -->|authorizationExpiry| SKR
   SV -->|read-only queries| FWSS
   FWSS -.->|references| USDFC
   FPV -.->|references| USDFC
@@ -348,8 +374,7 @@ Solid arrows indicate call direction. Dashed arrows indicate token references. B
 | ServiceProviderRegistry | Yes | UUPS proxy | Registry of providers, their capabilities, and payee addresses |
 | FilecoinPayV1 | No | Immutable | Payment rails engine — deposits, lockups, streaming settlement, rate changes |
 | SessionKeyRegistry | No | Immutable | Session key authorization; maps (user, signer, permission) → expiry |
-| StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS |
-| SignatureVerificationLib | No | External library | EIP-712 signature recovery and session key validation |
+| StateView | No | Immutable | Read-only view contract for efficient external state queries against FWSS; after the dispatcher transition the FWSS proxy serves the same methods through `FWSSViewModule` |
 | [USDFC Token](https://docs.secured.finance/usdfc-stablecoin/overview) | No | Immutable ERC20 | External stablecoin; payment token for all storage and CDN settlements |
 
 ### Upgrade Mechanism
@@ -372,7 +397,7 @@ function _authorizeUpgrade(address newImplementation) internal override onlyOwne
     delete nextUpgrade;
 }
 ```
-_(This is from [`FilecoinWarmStorageService.sol:429-441`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/FilecoinWarmStorageService.sol#L429-L441).)_
+_(This is from the v1.4.0 [`FilecoinWarmStorageService.sol:429-448`](https://github.com/FilOzone/filecoin-services/blob/4cbbea4a4f7da51ad674a1d9d122c6e677acfbec/service_contracts/src/FilecoinWarmStorageService.sol#L429-L448).)_
 
 A successful `_authorizeUpgrade` call will enable the old implementation to set the `newImplementation` address on the proxy, effectively completing the upgrade.
 
@@ -393,7 +418,7 @@ Because these are Solidity `immutable` variables, they live in the deployed byte
 
 References to non-proxy contracts (FilecoinPayV1, SessionKeyRegistry) are **rigid**: replacing them requires a new FWSS implementation carrying the new address, plus the two-step upgrade. State held in the old contract (rail balances, lockups, session key authorizations) is **orphaned** — it cannot be migrated automatically and must be handled explicitly.
 
-**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy.
+**StateView reference.** Unlike the references above, FWSS holds its StateView address in a **storage variable** (`viewContractAddress`), not an immutable. The owner can update it at any time via `setViewContract()` without an FWSS upgrade. It can also be set during an upgrade via the `migrate()` function. External callers (e.g., Synapse) discover the current StateView by reading `viewContractAddress()` from the FWSS proxy. After the ERC-8167 dispatcher transition, `viewContractAddress()` returns the FWSS proxy itself, which serves the view methods; the storage slot keeps the last StateView address.
 
 ### Data Flows
 
@@ -541,6 +566,8 @@ SessionKeyRegistry is **not upgradeable**. It stores session key authorization m
 
 ### StateView (FilecoinWarmStorageServiceStateView)
 
+This section describes the v1.4.0 monolith. [After the dispatcher transition](#view-methods-after-the-dispatcher-transition), the FWSS proxy serves the view methods itself.
+
 StateView is an **immutable**, auto-generated, read-only contract that queries FWSS storage via `extsload`. It provides ~40 view methods for off-chain callers. FWSS holds a mutable reference to its current StateView in a storage variable (`viewContractAddress`), which the owner can update at any time via `setViewContract()` without an FWSS upgrade.
 
 StateView depends on FWSS's storage layout remaining stable — it reads specific storage slots via the auto-generated `FilecoinWarmStorageServiceStateInternalLibrary`. If FWSS storage layout changes, StateView (and the internal library) must be regenerated and redeployed to match.
@@ -549,7 +576,13 @@ Because StateView is a read-only contract that reads state from FWSS, **additive
 
 **Impact assessment.** A StateView bug affects only read-only queries — it cannot corrupt FWSS state or affect settlement, proving, or any on-chain operations. The blast radius is limited to off-chain consumers that route queries through StateView.
 
-**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. Alternatively, the new StateView address can be set during the next FWSS upgrade via `migrate()`.
+**Remediation.** Deploy a new StateView contract pointing at the same FWSS proxy, then call `setViewContract()` on FWSS to update the reference. This is an owner-only call on the existing proxy and does **not** require an FWSS implementation upgrade. The repository no longer generates StateView, so build a fix from the v1.4.0 release tag. After the dispatcher transition this is no longer needed, because the proxy serves the view methods itself.
+
+#### View Methods After the Dispatcher Transition
+
+After the transition, the FWSS proxy serves the view methods through `FWSSViewModule`, generated from `FilecoinWarmStorageServiceStateLibrary` by `tools/generate_view_module.sh`, and `FWSSViewContractModule` makes `viewContractAddress()` return the proxy, so callers that discover the view contract through FWSS move over without a change. The deployed StateView keeps working, because `ExtsloadModule` still serves the storage reads it makes, as long as the storage layout it reads is unchanged.
+
+A bug in a view method still affects only read-only queries. The fix is a josuke migration that routes the affected selectors to a corrected module, subject to the usual announce delay.
 
 ### Cross-Cutting Concerns
 
@@ -560,7 +593,7 @@ Several concerns apply to any multi-contract migration, regardless of which comp
 - **Multisig flow**: All upgrades require owner authorization. If the owner is a multisig, the announce and execute steps each require separate multisig transactions with their own signing rounds.
 - **Rollback constraints**: UUPS upgrades are not reversible without another upgrade cycle. If a new implementation introduces a regression, the fix requires deploying yet another implementation and waiting through the announcement delay.
 - **Pre-upgrade testing**: New implementations should be tested against a fork of the live chain state to verify storage compatibility, correct immutable values, and expected behavior with existing data.
-- **Storage layout violations**: Reordering, inserting, or removing storage variables in a new implementation shifts slot assignments, corrupting all persisted proxy state. The codebase mitigates this through an auto-generated [`FilecoinWarmStorageServiceLayout.sol`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.sol) that documents every storage slot position using `forge inspect`. CI ([`check-gen`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates this file on every run and fails if the output diverges from the checked-in version, making unintentional slot changes visible in review. Additionally, CI explicitly verifies that new versions contain no destructive changes by comparing the full `forge inspect ... storageLayout` JSON metadata — a committed [`FilecoinWarmStorageServiceLayout.json`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.json) snapshot captures each variable's label, slot number, byte offset, and type. This catches not only slot removals and reorderings but also type changes (e.g., `uint256` → `uint128`) and offset repacking within the same slot that would silently corrupt proxy state. The contract source also includes explicit comments tying each variable to its layout slot. However, these are **detection** mechanisms — they surface layout drift in CI and pull-request diffs but do not structurally prevent a developer from reordering variables. The codebase does not use OpenZeppelin storage gaps (`uint256[50] __gap`) or ERC-7201 namespaced storage.
+- **Storage layout violations**: Reordering, inserting, or removing storage variables in a new implementation shifts slot assignments, corrupting all persisted proxy state. The codebase mitigates this through an auto-generated [`FilecoinWarmStorageServiceLayout.sol`](https://github.com/FilOzone/filecoin-services/blob/main/service_contracts/src/lib/FilecoinWarmStorageServiceLayout.sol) that documents every storage slot position using `forge inspect`. CI ([`check-gen`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates this file on every run and fails if the output diverges from the checked-in version, making unintentional slot changes visible in review. Additionally, CI runs `josuke check`, which compares the storage every ERC-8167 module declares with each deployment `josuke.json` records, including the v1.4.0 monolith as `legacy`. This catches not only slot removals and reorderings but also type changes (e.g., `uint256` → `uint128`), offset repacking within the same slot that would silently corrupt proxy state, and two modules declaring different variables over the same storage. The contract source also includes explicit comments tying each variable to its layout slot. However, these are **detection** mechanisms — they surface layout drift in CI and pull-request diffs but do not structurally prevent a developer from reordering variables. The codebase does not use OpenZeppelin storage gaps (`uint256[50] __gap`) or ERC-7201 namespaced storage.
 - **Backwards incompatibility of implementation contracts**: Removing or changing the signature of a public/external function in a new implementation breaks callers that depend on the old ABI — most critically FilecoinPayV1, which is immutable and calls FWSS through the `IValidator` interface. The codebase checks in ABI JSON files under [`service_contracts/abi/`](https://github.com/FilOzone/filecoin-services/tree/main/service_contracts/abi) and CI ([`check-abi`](https://github.com/FilOzone/filecoin-services/blob/main/.github/workflows/check.yml)) regenerates them on every run, failing if any ABI has changed. This ensures that any function addition, removal, or signature change is surfaced as a diff during code review. As with storage layout, this is a **detection** mechanism — it flags changes but does not structurally prevent a breaking removal.
 
 **TODO:** Define concrete procedures for coordinated multi-contract upgrades. Document a pre-upgrade testing checklist. Specify rollback procedures and emergency response timelines. Evaluate adopting structural storage protections — such as OpenZeppelin storage gaps, [ERC-7201](https://eips.ethereum.org/EIPS/eip-7201) namespaced storage, [ERC-8042](https://eips.ethereum.org/EIPS/eip-8042), or the [Ithaca storage domain pattern](https://github.com/ithacaxyz/account/blob/ab0a493f04676abc71104623bcfcdede050da2ec/src/IthacaAccount.sol#L102) — for future contracts. Existing contracts will not be migrated to these patterns.

@@ -26,12 +26,12 @@ import {
 ///      every constant should be wired through the struct exactly once.
 contract PriceListTest is FilecoinWarmStorageServiceTest {
     function test_getPriceList_token() public view {
-        PriceList memory list = viewContract.getPriceList();
+        PriceList memory list = pdpServiceWithPayments.getPriceList();
         assertEq(address(list.token), address(mockUSDFC), "token should equal FWSS usdfcTokenAddress");
     }
 
     function test_getPriceList_rates() public view {
-        PriceList memory list = viewContract.getPriceList();
+        PriceList memory list = pdpServiceWithPayments.getPriceList();
         assertEq(list.rates.storagePerTibPerMonth, STORAGE_PRICE_PER_TIB_PER_MONTH, "storagePerTibPerMonth");
         assertEq(list.rates.datasetFeePerMonth, DATASET_FEE_PER_MONTH, "datasetFeePerMonth");
         assertEq(list.rates.cdnEgressPerTib, CDN_EGRESS_PRICE_PER_TIB, "cdnEgressPerTib");
@@ -39,7 +39,7 @@ contract PriceListTest is FilecoinWarmStorageServiceTest {
     }
 
     function test_getPriceList_fees() public view {
-        PriceList memory list = viewContract.getPriceList();
+        PriceList memory list = pdpServiceWithPayments.getPriceList();
         assertEq(list.fees.createDataSetFee, CREATE_DATA_SET_FEE, "createDataSetFee");
         assertEq(list.fees.addPiecesBaseFee, ADD_PIECES_BASE_FEE, "addPiecesBaseFee");
         assertEq(list.fees.addPiecesPerPieceFee, ADD_PIECES_PER_PIECE_FEE, "addPiecesPerPieceFee");
@@ -48,7 +48,7 @@ contract PriceListTest is FilecoinWarmStorageServiceTest {
     }
 
     function test_getPriceList_lockups() public view {
-        PriceList memory list = viewContract.getPriceList();
+        PriceList memory list = pdpServiceWithPayments.getPriceList();
         assertEq(list.lockups.lifecycleReserveTarget, LIFECYCLE_RESERVE_TARGET, "lifecycleReserveTarget");
         assertEq(list.lockups.replenishThreshold, REPLENISH_THRESHOLD, "replenishThreshold");
         assertEq(list.lockups.defaultLockupPeriod, DEFAULT_LOCKUP_PERIOD, "defaultLockupPeriod");

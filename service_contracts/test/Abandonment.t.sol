@@ -8,8 +8,10 @@ import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {FilecoinWarmStorageService, PDP_INACTIVITY_WINDOW} from "../src/FilecoinWarmStorageService.sol";
-import {FilecoinWarmStorageServiceStateView} from "../src/FilecoinWarmStorageServiceStateView.sol";
+import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
+import {PDP_INACTIVITY_WINDOW} from "../src/lib/FWSSConstants.sol";
+import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {
     PROVEN_PERIODS_SLOT,
     PROVING_ACTIVATION_EPOCH_SLOT,
@@ -18,25 +20,20 @@ import {
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors as PaymentsErrors} from "@fws-payments/Errors.sol";
-import {
-    calculateStorageRate,
-    DEFAULT_LOCKUP_PERIOD,
-    EPOCHS_PER_DAY,
-    LIFECYCLE_RESERVE_TARGET
-} from "../src/lib/PriceListUSDFC.sol";
+import {DEFAULT_LOCKUP_PERIOD, EPOCHS_PER_DAY, LIFECYCLE_RESERVE_TARGET} from "../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
-import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/Rails.sol";
+import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/LibRails.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {_combinedMonthlyStorageRate} from "./helpers/StoragePricingHelpers.sol";
 
-contract AbandonmentTest is MockFVMTest {
+contract AbandonmentTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
 
     PDPVerifier pdpVerifier;
-    FilecoinWarmStorageService fwss;
-    FilecoinWarmStorageServiceStateView viewContract;
+    IFilecoinWarmStorageService fwss;
     FilecoinPayV1 payments;
     MockERC20 usdfc;
     ServiceProviderRegistry serviceProviderRegistry;
@@ -98,23 +95,20 @@ contract AbandonmentTest is MockFVMTest {
         );
 
         // Deploy FWSS pointing to the real PDPVerifier
-        FilecoinWarmStorageService fwssImpl = new FilecoinWarmStorageService(
-            address(pdpVerifier),
-            address(payments),
-            usdfc,
-            filBeamBeneficiary,
-            serviceProviderRegistry,
-            sessionKeyRegistry,
-            4
+        fwss = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(usdfc),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
         );
-        MyERC1967Proxy fwssProxy = new MyERC1967Proxy(
-            address(fwssImpl),
-            abi.encodeCall(FilecoinWarmStorageService.initialize, (uint64(2880), uint256(60), filBeamController))
-        );
-        fwss = FilecoinWarmStorageService(address(fwssProxy));
 
-        viewContract = new FilecoinWarmStorageServiceStateView(fwss);
-        fwss.setViewContract(address(viewContract));
         fwss.addApprovedProvider(1); // SP registered as provider ID 1
 
         require(usdfc.transfer(client, 1000e18));
@@ -135,7 +129,7 @@ contract AbandonmentTest is MockFVMTest {
         bytes32 provenPeriodsBitmap0 = keccak256(abi.encode(uint256(0), provenPeriodsInner));
         assertEq(uint256(vm.load(address(fwss), provenPeriodsBitmap0)), 0, "provenPeriods[0]");
 
-        FilecoinWarmStorageService.DataSetInfoView memory info = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory info = fwss.getDataSet(dataSetId);
         assertEq(info.pdpRailId, 0, "pdpRailId");
         assertEq(info.cacheMissRailId, 0, "cacheMissRailId");
         assertEq(info.cdnRailId, 0, "cdnRailId");
@@ -149,7 +143,7 @@ contract AbandonmentTest is MockFVMTest {
         assertEq(info.pendingOneTimePayments, 0, "pendingOneTimePayments");
         assertEq(info.lifecycleReserveBalance, 0, "lifecycleReserveBalance");
 
-        (string[] memory keys,) = viewContract.getAllDataSetMetadata(dataSetId);
+        (string[] memory keys,) = fwss.getAllDataSetMetadata(dataSetId);
         assertEq(keys.length, 0, "metadata keys");
     }
 
@@ -220,7 +214,7 @@ contract AbandonmentTest is MockFVMTest {
         // terminateService is always available as the proper termination path.
         vm.prank(sp);
         fwss.terminateService(dataSetId, "");
-        assertGt(viewContract.getDataSet(dataSetId).pdpEndEpoch, 0, "pdpEndEpoch should be set after terminateService");
+        assertGt(fwss.getDataSet(dataSetId).pdpEndEpoch, 0, "pdpEndEpoch should be set after terminateService");
     }
 
     // After INACTIVITY_WINDOW blocks without activity, any caller can trigger abandonment.
@@ -228,7 +222,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClears() public {
         uint256 dataSetId = _createDataSet(false);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "dataset should exist before abandonment");
         assertEq(before.payer, client, "payer should be set before abandonment");
 
@@ -241,14 +235,14 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 
     // Same as testAbandonmentClears but with CDN rails enabled, exercising the CDN teardown branch.
     function testAbandonmentClearsCDN() public {
         uint256 dataSetId = _createDataSet(true);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "pdpRailId should be set");
         assertGt(before.cacheMissRailId, 0, "cacheMissRailId should be set");
         assertGt(before.cdnRailId, 0, "cdnRailId should be set");
@@ -266,7 +260,7 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 
     // CDN rails carry no validator callback, so the payer can terminate them directly via
@@ -274,7 +268,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClearsCDNPreTerminated() public {
         uint256 dataSetId = _createDataSet(true);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         // Payer terminates the CDN rails directly on FilecoinPay, bypassing FWSS.
         vm.prank(client);
@@ -291,7 +285,7 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 
     function _addSinglePiece(uint256 dataSetId) internal {
@@ -316,7 +310,7 @@ contract AbandonmentTest is MockFVMTest {
         uint256 dataSetId = _createDataSet(false);
         _addSinglePiece(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         uint256 challengeEpoch = block.number + 2880 - 5;
         vm.prank(sp);
@@ -332,7 +326,7 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
 
         vm.expectRevert();
         payments.getRail(before.pdpRailId);
@@ -358,7 +352,7 @@ contract AbandonmentTest is MockFVMTest {
         uint256 dataSetId = _createDataSet(false);
         _addSinglePiece(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         uint256 payeeFundsBefore = _payeeFunds();
 
         uint256 challengeEpoch = block.number + 2880 - 5;
@@ -377,7 +371,7 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
         assertGt(_payeeFunds(), payeeFundsBefore, "payee should have received payment for proven periods");
 
         vm.expectRevert();
@@ -390,7 +384,7 @@ contract AbandonmentTest is MockFVMTest {
         uint256 dataSetId = _createDataSet(true);
         _addSinglePiece(dataSetId);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         assertGt(before.pdpRailId, 0, "pdpRailId should be set");
         assertGt(before.cacheMissRailId, 0, "cacheMissRailId should be set");
         assertGt(before.cdnRailId, 0, "cdnRailId should be set");
@@ -412,7 +406,7 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
 
         vm.expectRevert();
         payments.getRail(before.pdpRailId);
@@ -427,7 +421,8 @@ contract AbandonmentTest is MockFVMTest {
     // becomes underfunded and settleAccountLockup can no longer advance lockupLastSettledAt.
     function _createUnderfundedDataSet(address payer, uint256 nonce) internal returns (uint256 dataSetId) {
         uint256 leafCount = 1 << 4;
-        uint256 tightDeposit = LIFECYCLE_RESERVE_TARGET + calculateStorageRate(leafCount) * DEFAULT_LOCKUP_PERIOD;
+        uint256 tightDeposit = LIFECYCLE_RESERVE_TARGET
+            + _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount)) * DEFAULT_LOCKUP_PERIOD;
 
         require(usdfc.transfer(payer, tightDeposit));
 
@@ -478,7 +473,7 @@ contract AbandonmentTest is MockFVMTest {
         address payer = address(0xdead1);
         uint256 dataSetId = _createUnderfundedDataSet(payer, 1);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         // allow abandonment
         vm.roll(vm.getBlockNumber() + PDP_INACTIVITY_WINDOW);
@@ -500,7 +495,7 @@ contract AbandonmentTest is MockFVMTest {
         address payer = address(0xdead3);
         uint256 dataSetId = _createUnderfundedDataSet(payer, 3);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
         uint256 pdpRailId = before.pdpRailId;
 
         _topUpAndSettle(payer, pdpRailId, 1);
@@ -552,7 +547,7 @@ contract AbandonmentTest is MockFVMTest {
     function testAbandonmentClearsCDNPreFinalized() public {
         uint256 dataSetId = _createDataSet(true);
 
-        FilecoinWarmStorageService.DataSetInfoView memory before = viewContract.getDataSet(dataSetId);
+        DataSetInfoView memory before = fwss.getDataSet(dataSetId);
 
         // Payer terminates the CDN rails directly on FilecoinPay, bypassing FWSS.
         vm.prank(client);
@@ -579,6 +574,6 @@ contract AbandonmentTest is MockFVMTest {
         pdpVerifier.deleteDataSet(dataSetId, "");
 
         _assertDataSetCleared(dataSetId);
-        assertEq(viewContract.clientDataSets(client).length, 0, "client dataset list should be empty");
+        assertEq(fwss.clientDataSets(client).length, 0, "client dataset list should be empty");
     }
 }

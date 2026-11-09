@@ -2,7 +2,7 @@
 
 The durable record of the FilecoinWarmStorageService pricing schedule: why each fee exists, how it was derived, and how to re-derive it. Resolves [#468](https://github.com/FilOzone/filecoin-services/issues/468); supersedes the pre-GA pricing drafts.
 
-The contract is the source of truth, not this document. List prices are `internal constant` literals in [`PriceListUSDFC.sol`](../service_contracts/src/lib/PriceListUSDFC.sol), and the live schedule is readable on-chain via `FilecoinWarmStorageServiceStateView.getPriceList()`. This doc explains those numbers, it does not define them.
+The contract is the source of truth, not this document. List prices are `internal constant` literals in [`PriceListUSDFC.sol`](../service_contracts/src/lib/PriceListUSDFC.sol), and the live schedule is readable on-chain via `getPriceList()` on the view contract that FWSS reports through `viewContractAddress()`. This doc explains those numbers, it does not define them.
 
 > **Calibration basis (read first).** An SP pays the *effective gas price* (base fee + priority tip) per gas, not the base fee alone. [FIP-0115](https://github.com/filecoin-project/FIPs/blob/master/FIPS/fip-0115.md) (NV28, mainnet June 2026) made the base fee responsive to congestion, so the effective price now swings widely (week-scale spikes reach several times the sustained level). The schedule is sized at the tx-weighted mean effective price over the post-FIP-0115 regime — 1.912M attoFIL/gas at the last derivation (2026-08) — with 10x headroom absorbing spikes, gas drift, and FIL:USDFC moves. The price level and the FIL = $1 assumption (section 3) are the two things to watch for recalibration (section 4).
 

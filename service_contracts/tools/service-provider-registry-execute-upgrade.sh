@@ -7,7 +7,7 @@
 # Calculated if unset: CHAIN
 
 # Get script directory and source deployments.sh
-SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-${(%):-%x}}")"
 source "$SCRIPT_DIR/deployments.sh"
 source "$SCRIPT_DIR/multisig.sh"
 
