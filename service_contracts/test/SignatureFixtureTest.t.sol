@@ -23,6 +23,11 @@ pragma solidity ^0.8.13;
  * address 0x02925630df557F957f70E112bA06e50965417CA0) so they match what the
  * SDK produces by default for that chain. Do not change without updating the
  * SDK fixtures in lockstep.
+ *
+ * Terms-aware vectors cover explicit legacy ID zero and a salted, nonlegacy
+ * USDFC example. Both sign CreateDataSetWithStorageTerms and encode six fields;
+ * ID zero does not select the legacy signature type. The reference JSON vectors
+ * were independently generated with cast wallet sign --data.
  */
 import {Test, console} from "forge-std/Test.sol";
 import {Cids} from "@pdp/Cids.sol";
@@ -81,6 +86,21 @@ contract MetadataSignatureTestContract {
         return signer == payer;
     }
 
+    function verifyCreateDataSetWithStorageTermsSignature(
+        address payer,
+        uint256 clientDataSetId,
+        address payee,
+        string[] memory metadataKeys,
+        string[] memory metadataValues,
+        bytes32 storageTermsId,
+        bytes memory signature
+    ) public view returns (bool) {
+        bytes32 digest = getCreateDataSetWithStorageTermsDigest(
+            clientDataSetId, payee, metadataKeys, metadataValues, storageTermsId
+        );
+        return ECDSA.recover(digest, signature) == payer;
+    }
+
     function verifyAddPiecesSignature(
         address payer,
         uint256 clientDataSetId,
@@ -125,6 +145,20 @@ contract MetadataSignatureTestContract {
     ) public view returns (bytes32) {
         return _hashTypedData(
             LibSignatureVerification.createDataSetStructHash(clientDataSetId, payee, metadataKeys, metadataValues)
+        );
+    }
+
+    function getCreateDataSetWithStorageTermsDigest(
+        uint256 clientDataSetId,
+        address payee,
+        string[] memory metadataKeys,
+        string[] memory metadataValues,
+        bytes32 storageTermsId
+    ) public view returns (bytes32) {
+        return _hashTypedData(
+            LibSignatureVerification.createDataSetWithStorageTermsStructHash(
+                clientDataSetId, payee, metadataKeys, metadataValues, storageTermsId
+            )
         );
     }
 
@@ -187,6 +221,9 @@ contract MetadataSignatureFixturesTest is Test {
     address constant PAYEE = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     uint256 constant FIRST_ADDED = 1;
 
+    // Example terms: calibration USDFC, 18 decimals, salt 1, price 3e18; salt precedes price in the ID preimage.
+    bytes32 constant EXAMPLE_STORAGE_TERMS_ID = 0xe083457d94f3702431d323a17eba2a2f71206b25ef35344010777a3dbe796b8e;
+
     function setUp() public {
         testContract = new MetadataSignatureTestContract(DOMAIN_CHAIN_ID, DOMAIN_VERIFYING_CONTRACT);
     }
@@ -207,6 +244,12 @@ contract MetadataSignatureFixturesTest is Test {
         bytes memory addPiecesSig = generateAddPiecesSignature(pieceKeys, pieceValues);
         bytes memory scheduleRemovalsSig = generateSchedulePieceRemovalsSignature(testPieceIds);
         bytes memory terminateServiceSig = generateTerminateServiceSignature(DATA_SET_ID);
+        bytes32[2] memory termsIds = [EXAMPLE_STORAGE_TERMS_ID, bytes32(0)];
+        string[2] memory termsNames = ["createDataSetWithStorageTerms", "createDataSetWithLegacyStorageTerms"];
+        bytes[2] memory termsSigs;
+        for (uint256 i = 0; i < termsIds.length; i++) {
+            termsSigs[i] = generateCreateDataSetWithStorageTermsSignature(dataSetKeys, dataSetValues, termsIds[i]);
+        }
 
         // Compute SDK-format extraData (abi-encoded, matching synapse-core sign-* helpers)
         bytes memory createDataSetExtraData =
@@ -230,6 +273,19 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      payee: '%s' as Address,", PAYEE);
         console.log("      metadata: [{ key: '%s', value: '%s' }],", dataSetKeys[0], dataSetValues[0]);
         console.log("    },");
+        for (uint256 i = 0; i < termsIds.length; i++) {
+            bytes memory extraData = encodeCreateDataSetWithStorageTermsExtraData(
+                TEST_SIGNER, CLIENT_DATA_SET_ID, dataSetKeys, dataSetValues, termsSigs[i], termsIds[i]
+            );
+            console.log("    %s: {", termsNames[i]);
+            console.log("      extraData:");
+            console.log("        '%s' as Hex,", vm.toString(extraData));
+            console.log("      clientDataSetId: %dn,", CLIENT_DATA_SET_ID);
+            console.log("      payee: '%s' as Address,", PAYEE);
+            console.log("      metadata: [{ key: '%s', value: '%s' }],", dataSetKeys[0], dataSetValues[0]);
+            console.log("      storageTermsId: '%s' as Hex,", vm.toString(termsIds[i]));
+            console.log("    },");
+        }
         console.log("    addPieces: {");
         console.log("      extraData:");
         console.log("        '%s' as Hex,", vm.toString(addPiecesExtraData));
@@ -266,6 +322,20 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("      }");
         console.log("    ]");
         console.log("  },");
+        for (uint256 i = 0; i < termsIds.length; i++) {
+            console.log("  \"%s\": {", termsNames[i]);
+            console.log("    \"signature\": \"%s\",", vm.toString(termsSigs[i]));
+            console.log("    \"clientDataSetId\": %d,", CLIENT_DATA_SET_ID);
+            console.log("    \"payee\": \"%s\",", PAYEE);
+            console.log("    \"metadata\": [");
+            console.log("      {");
+            console.log("        \"key\": \"%s\",", dataSetKeys[0]);
+            console.log("        \"value\": \"%s\"", dataSetValues[0]);
+            console.log("      }");
+            console.log("    ],");
+            console.log("    \"storageTermsId\": \"%s\"", vm.toString(termsIds[i]));
+            console.log("  },");
+        }
         console.log("  \"addPieces\": {");
         console.log("    \"signature\": \"%s\",", vm.toString(addPiecesSig));
         console.log("    \"clientDataSetId\": %d,", CLIENT_DATA_SET_ID);
@@ -302,6 +372,15 @@ contract MetadataSignatureFixturesTest is Test {
             "CreateDataSet signature verification failed"
         );
 
+        for (uint256 i = 0; i < termsIds.length; i++) {
+            assertTrue(
+                testContract.verifyCreateDataSetWithStorageTermsSignature(
+                    TEST_SIGNER, CLIENT_DATA_SET_ID, PAYEE, dataSetKeys, dataSetValues, termsIds[i], termsSigs[i]
+                ),
+                "CreateDataSetWithStorageTerms signature verification failed"
+            );
+        }
+
         assertTrue(
             testContract.verifyAddPiecesSignature(
                 TEST_SIGNER, CLIENT_DATA_SET_ID, pieceCidsArray, FIRST_ADDED, pieceKeys, pieceValues, addPiecesSig
@@ -332,6 +411,8 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("Testing external signatures for signer:", signer);
 
         testCreateDataSetSignature(json, signer);
+        testCreateDataSetWithStorageTermsSignature(json, signer, ".createDataSetWithStorageTerms");
+        testCreateDataSetWithStorageTermsSignature(json, signer, ".createDataSetWithLegacyStorageTerms");
         testAddPiecesSignature(json, signer);
         testSchedulePieceRemovalsSignature(json, signer);
         testTerminateServiceSignature(json, signer);
@@ -360,6 +441,12 @@ contract MetadataSignatureFixturesTest is Test {
         console.log("    { name: 'clientDataSetId', type: 'uint256' },");
         console.log("    { name: 'payee', type: 'address' },");
         console.log("    { name: 'metadata', type: 'MetadataEntry[]' }");
+        console.log("  ],");
+        console.log("  CreateDataSetWithStorageTerms: [");
+        console.log("    { name: 'clientDataSetId', type: 'uint256' },");
+        console.log("    { name: 'payee', type: 'address' },");
+        console.log("    { name: 'metadata', type: 'MetadataEntry[]' },");
+        console.log("    { name: 'storageTermsId', type: 'bytes32' }");
         console.log("  ],");
         console.log("  Cid: [");
         console.log("    { name: 'data', type: 'bytes' }");
@@ -423,6 +510,18 @@ contract MetadataSignatureFixturesTest is Test {
         return abi.encodePacked(r, s, v);
     }
 
+    function generateCreateDataSetWithStorageTermsSignature(
+        string[] memory keys,
+        string[] memory values,
+        bytes32 storageTermsId
+    ) internal view returns (bytes memory) {
+        bytes32 digest = testContract.getCreateDataSetWithStorageTermsDigest(
+            CLIENT_DATA_SET_ID, PAYEE, keys, values, storageTermsId
+        );
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(TEST_PRIVATE_KEY, digest);
+        return abi.encodePacked(r, s, v);
+    }
+
     function generateAddPiecesSignature(string[][] memory keys, string[][] memory values)
         internal
         view
@@ -458,6 +557,17 @@ contract MetadataSignatureFixturesTest is Test {
         return abi.encode(payer, clientDataSetId, keys, values, signature);
     }
 
+    function encodeCreateDataSetWithStorageTermsExtraData(
+        address payer,
+        uint256 clientDataSetId,
+        string[] memory keys,
+        string[] memory values,
+        bytes memory signature,
+        bytes32 storageTermsId
+    ) internal pure returns (bytes memory) {
+        return abi.encode(payer, clientDataSetId, keys, values, signature, storageTermsId);
+    }
+
     function encodeAddPiecesExtraData(
         uint256 nonce,
         string[][] memory keys,
@@ -489,6 +599,38 @@ contract MetadataSignatureFixturesTest is Test {
 
         assertTrue(isValid, "CreateDataSet signature verification failed");
         console.log("  CreateDataSet: PASSED");
+    }
+
+    function testCreateDataSetWithStorageTermsSignature(string memory json, address signer, string memory path)
+        internal
+        view
+    {
+        bytes memory signature = vm.parseBytes(vm.parseJsonString(json, string.concat(path, ".signature")));
+        uint256 clientDataSetId = vm.parseJsonUint(json, string.concat(path, ".clientDataSetId"));
+        address payee = vm.parseJsonAddress(json, string.concat(path, ".payee"));
+        bytes32 storageTermsId = vm.parseJsonBytes32(json, string.concat(path, ".storageTermsId"));
+        string[] memory keys = new string[](1);
+        string[] memory values = new string[](1);
+        keys[0] = vm.parseJsonString(json, string.concat(path, ".metadata[0].key"));
+        values[0] = vm.parseJsonString(json, string.concat(path, ".metadata[0].value"));
+
+        assertTrue(
+            testContract.verifyCreateDataSetWithStorageTermsSignature(
+                signer, clientDataSetId, payee, keys, values, storageTermsId, signature
+            ),
+            "CreateDataSetWithStorageTerms signature verification failed"
+        );
+        assertFalse(
+            testContract.verifyCreateDataSetWithStorageTermsSignature(
+                signer, clientDataSetId, payee, keys, values, bytes32(uint256(storageTermsId) ^ 1), signature
+            ),
+            "Changing storageTermsId must invalidate the signature"
+        );
+        assertFalse(
+            testContract.verifyCreateDataSetSignature(signer, clientDataSetId, payee, keys, values, signature),
+            "Terms-aware signatures must not authorize legacy-format creation"
+        );
+        console.log("  %s: PASSED", path);
     }
 
     function testAddPiecesSignature(string memory json, address signer) internal view {

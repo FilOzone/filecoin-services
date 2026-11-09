@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity ^0.8.20;
 
-import {Cids} from "@pdp/Cids.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {PriceList, PriceListRates, PriceListFees, PriceListLockups} from "./PriceList.sol";
 
@@ -45,32 +44,8 @@ uint256 constant LIFECYCLE_RESERVE_TARGET = (5 * 10 ** TOKEN_DECIMALS) / 10; // 
 uint256 constant REPLENISH_THRESHOLD = (25 * 10 ** TOKEN_DECIMALS) / 1000; // $0.025
 
 /**
- * @notice Calculate a per-epoch rate based on total storage size
- * @dev Adds a fixed per-dataset fee to the size-proportional rate.
- * @param totalBytes Total size of the stored data in bytes
- * @return ratePerEpoch The calculated rate per epoch in the token's smallest unit
- */
-function calculateStorageSizeBasedRatePerEpoch(uint256 totalBytes) pure returns (uint256 ratePerEpoch) {
-    uint256 numerator = totalBytes * STORAGE_PRICE_PER_TIB_PER_MONTH;
-    uint256 denominator = TIB_IN_BYTES * EPOCHS_PER_MONTH;
-
-    return numerator / denominator + DATASET_FEE_PER_EPOCH;
-}
-
-/**
- * @notice Calculate the storage rate per epoch (internal use)
- * @param leafCount the count of the 32b leaves in the FRC-0069 tree
- * @return storageRatePerEpoch The storage rate per epoch
- */
-function calculateStorageRate(uint256 leafCount) pure returns (uint256 storageRatePerEpoch) {
-    if (leafCount == 0) return 0;
-    return calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(leafCount));
-}
-
-/**
  * @notice Assemble the full PriceList from the USDFC constants.
- * @dev `token` returns as the zero address; the caller populates it with the deployment's
- *      USDFC instance address (FWSS holds it as an immutable).
+ * @dev `token` returns as the zero address; the caller populates it with the deployment token.
  */
 function priceList() pure returns (PriceList memory) {
     return PriceList({

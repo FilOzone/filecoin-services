@@ -20,18 +20,14 @@ import {
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors as PaymentsErrors} from "@fws-payments/Errors.sol";
-import {
-    calculateStorageRate,
-    DEFAULT_LOCKUP_PERIOD,
-    EPOCHS_PER_DAY,
-    LIFECYCLE_RESERVE_TARGET
-} from "../src/lib/PriceListUSDFC.sol";
+import {DEFAULT_LOCKUP_PERIOD, EPOCHS_PER_DAY, LIFECYCLE_RESERVE_TARGET} from "../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../src/Errors.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {CDNServiceTerminated, DataSetAbandoned} from "../src/lib/LibRails.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {_combinedMonthlyStorageRate} from "./helpers/StoragePricingHelpers.sol";
 
 contract AbandonmentTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
@@ -425,7 +421,8 @@ contract AbandonmentTest is MockFVMTest, FWSSDeployer {
     // becomes underfunded and settleAccountLockup can no longer advance lockupLastSettledAt.
     function _createUnderfundedDataSet(address payer, uint256 nonce) internal returns (uint256 dataSetId) {
         uint256 leafCount = 1 << 4;
-        uint256 tightDeposit = LIFECYCLE_RESERVE_TARGET + calculateStorageRate(leafCount) * DEFAULT_LOCKUP_PERIOD;
+        uint256 tightDeposit = LIFECYCLE_RESERVE_TARGET
+            + _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount)) * DEFAULT_LOCKUP_PERIOD;
 
         require(usdfc.transfer(payer, tightDeposit));
 

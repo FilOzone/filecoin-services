@@ -23,7 +23,6 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 import {
-    calculateStorageSizeBasedRatePerEpoch,
     DATASET_FEE_PER_EPOCH,
     DATASET_FEE_PER_MONTH,
     EPOCHS_PER_MONTH,
@@ -37,6 +36,7 @@ import {
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {FilecoinWarmStorageServiceFixture} from "./helpers/FilecoinWarmStorageServiceFixture.sol";
+import {_combinedMonthlyStorageRate} from "./helpers/StoragePricingHelpers.sol";
 import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 
 contract TestDataSetAuthorizer is IDataSetAuthorizer {
@@ -718,45 +718,6 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         assert(serviceFee + spPayment < 10 ** 20); // Less than 10^20
     }
 
-    // Per-Dataset Fee Tests
-    function testDatasetFee_AllSizesIncludeFee() public pure {
-        uint256 oneGiB = 1024 * 1024 * 1024;
-
-        // 0 bytes: only the dataset fee
-        uint256 rateZero = calculateStorageSizeBasedRatePerEpoch(0);
-        assertEq(rateZero, DATASET_FEE_PER_EPOCH, "0 bytes should return only the dataset fee");
-
-        // Positive sizes should exceed the fee alone
-        uint256 rateOneGiB = calculateStorageSizeBasedRatePerEpoch(oneGiB);
-        assert(rateOneGiB > DATASET_FEE_PER_EPOCH);
-
-        uint256 rateTenGiB = calculateStorageSizeBasedRatePerEpoch(10 * oneGiB);
-        assert(rateTenGiB > rateOneGiB);
-    }
-
-    function testDatasetFee_IsAdditive() public pure {
-        uint256 oneGiB = 1024 * 1024 * 1024;
-        uint256 oneTiB = oneGiB * 1024;
-
-        // For 1 TiB: size rate = STORAGE_PRICE_PER_TIB_PER_MONTH / EPOCHS_PER_MONTH
-        uint256 expectedSizeRatePerEpoch = STORAGE_PRICE_PER_TIB_PER_MONTH / EPOCHS_PER_MONTH;
-        uint256 rate1TiB = calculateStorageSizeBasedRatePerEpoch(oneTiB);
-        assertEq(
-            rate1TiB, expectedSizeRatePerEpoch + DATASET_FEE_PER_EPOCH, "1 TiB rate should be size rate + dataset fee"
-        );
-
-        // Rates still scale proportionally for the size component
-        uint256 rate48GiB = calculateStorageSizeBasedRatePerEpoch(48 * oneGiB);
-        uint256 rate100GiB = calculateStorageSizeBasedRatePerEpoch(100 * oneGiB);
-        assert(rate100GiB > rate48GiB);
-    }
-
-    function testDatasetFee_ExactlyPoint12USDFC() public pure {
-        uint256 ratePerEpoch = calculateStorageSizeBasedRatePerEpoch(0);
-
-        assertEq(ratePerEpoch, DATASET_FEE_PER_EPOCH, "Dataset fee per epoch should be exact");
-    }
-
     // Minimum Funds Validation Tests
     function testInsufficientFunds_BelowMinimum() public {
         // Setup: Client with insufficient funds (below 0.62 USDFC minimum = 0.12 dataset fee + 0.50 lifecycle reserve)
@@ -1031,19 +992,11 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         );
 
         uint256 actualRate = payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
-        uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(leafCount));
-        uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(leafCount * 32);
+        uint256 expectedRate = _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount));
+        uint256 buggyRate = _combinedMonthlyStorageRate(leafCount * 32);
 
-        assertEq(actualRate, expectedRate, "rail rate should price on raw bytes");
+        assertEq(actualRate, expectedRate, "rail rate should use combined monthly raw-size pricing");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
-        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
-        // Tolerance of 1 covers integer-division truncation differences between the two paths.
-        assertApproxEqAbs(
-            actualRate - DATASET_FEE_PER_EPOCH,
-            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
-            1,
-            "ratio between raw and Fr32 rates is 127/128"
-        );
     }
 
     function testUpdatePaymentRates_NextProvingPeriodAfterRemovalUsesRawSize() public {
@@ -1090,16 +1043,8 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         );
 
         uint256 actualRate = payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
-        uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
-        uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(perPieceLeaves * 32);
-        assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
-        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
-        assertApproxEqAbs(
-            actualRate - DATASET_FEE_PER_EPOCH,
-            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
-            1,
-            "post-removal ratio between raw and Fr32 rates is 127/128"
-        );
+        uint256 expectedRate = _combinedMonthlyStorageRate(Cids.leafCountToRawSize(perPieceLeaves));
+        assertEq(actualRate, expectedRate, "post-removal rate should use combined monthly raw-size pricing");
     }
 
     function testGetDataSetSizeInBytes_ReturnsRawSize() public pure {

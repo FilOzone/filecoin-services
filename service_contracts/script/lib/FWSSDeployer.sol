@@ -50,7 +50,8 @@ abstract contract FWSSDeployer is JosukeFacetSet {
                 deployment.challengeWindowSize,
                 deployment.filBeamController,
                 dispatcher,
-                _createFacetMigration()
+                _createFacetMigration(),
+                deployment.usdfc
             )
         );
         return IFilecoinWarmStorageService(address(new MyERC1967Proxy(address(new FWSSInitializer()), initializeData)));

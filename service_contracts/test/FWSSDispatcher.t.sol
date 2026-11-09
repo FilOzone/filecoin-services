@@ -14,6 +14,9 @@ import {ILegacyFilecoinWarmStorageService} from "../src/interfaces/ILegacyFileco
 import {FWSSDispatcherTransition} from "../src/FWSSDispatcherTransition.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {FWSSMigrateModule} from "../src/modules/FWSSMigrateModule.sol";
+import {FWSSStorageTermsModule} from "../src/modules/FWSSStorageTermsModule.sol";
+import {FWSSStorageTermsMigration} from "../src/FWSSStorageTermsMigration.sol";
+import {StorageTerms} from "../src/lib/StorageTerms.sol";
 import {OwnershipModule} from "../src/modules/OwnershipModule.sol";
 import {FWSSProviderManagementModule} from "../src/modules/FWSSProviderManagementModule.sol";
 import {FWSSViewContractModule} from "../src/modules/FWSSViewContractModule.sol";
@@ -22,6 +25,7 @@ import {ERC8167Transition} from "../src/ERC8167Transition.sol";
 import {FWSSOwnable} from "../src/lib/FWSSOwnable.sol";
 import {Errors} from "../src/Errors.sol";
 import {LibUpgradeRoutes} from "../src/lib/LibUpgradeRoutes.sol";
+import {LibStorageTerms} from "../src/lib/LibStorageTerms.sol";
 import {NEXT_UPGRADE_SLOT, VIEW_CONTRACT_ADDRESS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {MockERC20} from "./mocks/SharedMocks.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -74,6 +78,13 @@ contract ReentrantMigrationFixture {
                 revert(add(result, 0x20), mload(result))
             }
         }
+    }
+}
+
+/// @dev Simulates a future explicit migration that alone may disable the immutable legacy record.
+contract DisableLegacyStorageTermsMigrationFixture {
+    fallback() external {
+        LibStorageTerms.getRecord(bytes32(0)).enabled = false;
     }
 }
 
@@ -249,31 +260,39 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
         assertEq(vm.load(proxy, keccak256(abi.encode(IERC8167.implementation.selector, DELEGATES_SLOT))), bytes32(0));
     }
 
-    function testMigrationThatDropsUpgradeRouteReverts() public {
-        bytes4[4] memory critical = [
-            IERC8167.implementation.selector,
-            IERC8167.selectors.selector,
-            FWSSMigrateModule.announceMigration.selector,
-            FWSSMigrateModule.migrate.selector
-        ];
-        for (uint256 i; i < critical.length; ++i) {
-            address proxy = _rawProxy();
-            _migration(proxy);
-            address migration = _createMigration(critical[i]);
-            FWSSMigrateModule(proxy).announceMigration(migration, 0);
-            (, uint96 readyAt) = _plan(proxy);
-            vm.roll(readyAt);
+    function testMigrationDroppingImplementationRouteReverts() public {
+        _assertMigrationDroppingRouteReverts(IERC8167.implementation.selector);
+    }
 
-            vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, critical[i]));
-            FWSSMigrateModule(proxy).migrate(migration);
-            (address target, uint96 epoch) = _plan(proxy);
-            assertEq(target, migration);
-            assertEq(epoch, readyAt);
-            assertEq(
-                vm.load(proxy, keccak256(abi.encode(FWSSMigrateModule.migrate.selector, DELEGATES_SLOT))),
-                bytes32(uint256(uint160(address(migrateModule))))
-            );
-        }
+    function testMigrationDroppingSelectorsRouteReverts() public {
+        _assertMigrationDroppingRouteReverts(IERC8167.selectors.selector);
+    }
+
+    function testMigrationDroppingAnnouncementRouteReverts() public {
+        _assertMigrationDroppingRouteReverts(FWSSMigrateModule.announceMigration.selector);
+    }
+
+    function testMigrationDroppingExecutionRouteReverts() public {
+        _assertMigrationDroppingRouteReverts(FWSSMigrateModule.migrate.selector);
+    }
+
+    function _assertMigrationDroppingRouteReverts(bytes4 selector) private {
+        address proxy = _rawProxy();
+        _migration(proxy);
+        address migration = _createMigration(selector);
+        FWSSMigrateModule(proxy).announceMigration(migration, 0);
+        (, uint96 readyAt) = _plan(proxy);
+        vm.roll(readyAt);
+
+        vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, selector));
+        FWSSMigrateModule(proxy).migrate(migration);
+        (address target, uint96 epoch) = _plan(proxy);
+        assertEq(target, migration);
+        assertEq(epoch, readyAt);
+        assertEq(
+            vm.load(proxy, keccak256(abi.encode(FWSSMigrateModule.migrate.selector, DELEGATES_SLOT))),
+            bytes32(uint256(uint160(address(migrateModule))))
+        );
     }
 
     function testMigrationCannotRouteUpgradesToTheDispatcher() public {
@@ -335,6 +354,60 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
         FWSSMigrateModule(proxy).migrate(migration);
 
         _assertFacetRoutes(proxy);
+    }
+
+    function testStorageTermsWrapperInitializesLegacyTermsWithExistingMigrateModule() public {
+        address proxy = _rawProxy();
+        _migration(proxy);
+        address routes = _createMigration(bytes4(0));
+        address migration = address(new FWSSStorageTermsMigration(routes));
+
+        FWSSMigrateModule(proxy).announceMigration(migration, 0);
+        (, uint96 readyAt) = _plan(proxy);
+        vm.roll(readyAt);
+        vm.recordLogs();
+        FWSSMigrateModule(proxy).migrate(migration);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        assertEq(logs[0].emitter, proxy);
+        assertEq(logs[0].topics[0], Migrate.DiamondDelegateCall.selector);
+        assertEq(logs[0].topics[1], bytes32(uint256(uint160(migration))));
+        assertEq(logs[0].data, abi.encode(""));
+        assertEq(logs[1].emitter, proxy);
+        assertEq(logs[1].topics[0], Migrate.DiamondDelegateCall.selector);
+        assertEq(logs[1].topics[1], bytes32(uint256(uint160(routes))));
+        assertEq(logs[1].data, abi.encode(""));
+
+        (StorageTerms memory terms, bool enabled) = FWSSStorageTermsModule(proxy).getStorageTerms(bytes32(0));
+        assertEq(terms.token, address(facetToken));
+        assertEq(terms.tokenDecimals, 18);
+        assertEq(terms.salt, bytes32(0));
+        assertEq(terms.pricePerTiBPerMonth, 2.5 ether);
+        assertTrue(enabled);
+
+        address disableLegacy = address(new DisableLegacyStorageTermsMigrationFixture());
+        FWSSMigrateModule(proxy).announceMigration(disableLegacy, 0);
+        (, readyAt) = _plan(proxy);
+        vm.roll(readyAt);
+        FWSSMigrateModule(proxy).migrate(disableLegacy);
+        (, enabled) = FWSSStorageTermsModule(proxy).getStorageTerms(bytes32(0));
+        assertFalse(enabled);
+        FWSSStorageTermsModule(proxy)
+            .registerStorageTerms(
+                StorageTerms({
+                token: address(facetToken), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5 ether
+            })
+            );
+        (, enabled) = FWSSStorageTermsModule(proxy).getStorageTerms(bytes32(0));
+        assertFalse(enabled);
+
+        address laterMigration = address(new FWSSStorageTermsMigration(_createMigration(bytes4(0))));
+        FWSSMigrateModule(proxy).announceMigration(laterMigration, 0);
+        (, readyAt) = _plan(proxy);
+        vm.roll(readyAt);
+        FWSSMigrateModule(proxy).migrate(laterMigration);
+        (, enabled) = FWSSStorageTermsModule(proxy).getStorageTerms(bytes32(0));
+        assertFalse(enabled);
     }
 
     function _createMigration(bytes4 omittedSelector) internal returns (address) {
@@ -687,26 +760,34 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
         _assertUntouched(proxy, original, address(transition), epoch);
     }
 
-    function testMissingUpgradeRouteRollsBackBothUpgrades() public {
-        bytes4[4] memory critical = [
-            IERC8167.implementation.selector,
-            IERC8167.selectors.selector,
-            FWSSMigrateModule.announceMigration.selector,
-            FWSSMigrateModule.migrate.selector
-        ];
-        for (uint256 i; i < critical.length; ++i) {
-            ILegacyFilecoinWarmStorageService service = _realLegacy();
-            address proxy = address(service);
-            address original = _implementation(proxy);
-            address migration = _createMigration(critical[i]);
-            FWSSDispatcherTransition transition = _newTransition(migration);
-            uint96 epoch = _announce(service, address(transition));
-            vm.roll(epoch);
+    function testMissingImplementationRouteRollsBackBothUpgrades() public {
+        _assertMissingRouteRollsBackBothUpgrades(IERC8167.implementation.selector);
+    }
 
-            vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, critical[i]));
-            service.upgradeToAndCall(address(transition), _migrateData(migration));
-            _assertUntouched(proxy, original, address(transition), epoch);
-        }
+    function testMissingSelectorsRouteRollsBackBothUpgrades() public {
+        _assertMissingRouteRollsBackBothUpgrades(IERC8167.selectors.selector);
+    }
+
+    function testMissingAnnouncementRouteRollsBackBothUpgrades() public {
+        _assertMissingRouteRollsBackBothUpgrades(FWSSMigrateModule.announceMigration.selector);
+    }
+
+    function testMissingExecutionRouteRollsBackBothUpgrades() public {
+        _assertMissingRouteRollsBackBothUpgrades(FWSSMigrateModule.migrate.selector);
+    }
+
+    function _assertMissingRouteRollsBackBothUpgrades(bytes4 selector) private {
+        ILegacyFilecoinWarmStorageService service = _realLegacy();
+        address proxy = address(service);
+        address original = _implementation(proxy);
+        address migration = _createMigration(selector);
+        FWSSDispatcherTransition transition = _newTransition(migration);
+        uint96 epoch = _announce(service, address(transition));
+        vm.roll(epoch);
+
+        vm.expectRevert(abi.encodeWithSelector(LibUpgradeRoutes.MissingUpgradeRoute.selector, selector));
+        service.upgradeToAndCall(address(transition), _migrateData(migration));
+        _assertUntouched(proxy, original, address(transition), epoch);
     }
 
     function testOwnershipModuleTransfersControlAfterTransition() public {

@@ -33,6 +33,12 @@
     "FWSSInitializer": {
       "artifact": "src/FWSSInitializer.sol:FWSSInitializer"
     },
+    "FWSSStorageTermsModule": {
+      "artifact": "src/modules/FWSSStorageTermsModule.sol:FWSSStorageTermsModule"
+    },
+    "FWSSStorageTermsMigration": {
+      "artifact": "src/FWSSStorageTermsMigration.sol:FWSSStorageTermsMigration"
+    },
     "ServiceProviderRegistry": {
       "artifact": "src/ServiceProviderRegistry.sol:ServiceProviderRegistry"
     },

@@ -9,12 +9,12 @@ import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmStorageService.sol";
 import {CHALLENGES_PER_PROOF} from "../../src/lib/FWSSConstants.sol";
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
-import {calculateStorageSizeBasedRatePerEpoch, DATASET_FEE_PER_EPOCH} from "../../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../../src/Errors.sol";
 import {IFWSSConfig} from "../../src/interfaces/IFWSSConfig.sol";
 import {FWSSConfigModule} from "../../src/modules/FWSSConfigModule.sol";
 import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
+import {_combinedMonthlyStorageRate} from "../helpers/StoragePricingHelpers.sol";
 
 contract FWSSProvingModuleTest is FilecoinWarmStorageServiceFixture {
     FWSSProvingModule internal provingModule;
@@ -375,16 +375,10 @@ contract FWSSProvingModuleTest is FilecoinWarmStorageServiceFixture {
         );
 
         uint256 actualRate = payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
-        uint256 expectedRate = calculateStorageSizeBasedRatePerEpoch(Cids.leafCountToRawSize(perPieceLeaves));
-        uint256 buggyRate = calculateStorageSizeBasedRatePerEpoch(perPieceLeaves * 32);
-        assertEq(actualRate, expectedRate, "post-removal rate should price on raw bytes");
-        // 127/128 ratio applies only to the size-proportional component; strip the additive dataset fee before checking.
-        assertApproxEqAbs(
-            actualRate - DATASET_FEE_PER_EPOCH,
-            ((buggyRate - DATASET_FEE_PER_EPOCH) * 127) / 128,
-            1,
-            "post-removal ratio between raw and Fr32 rates is 127/128"
-        );
+        uint256 expectedRate = _combinedMonthlyStorageRate(Cids.leafCountToRawSize(perPieceLeaves));
+        uint256 buggyRate = _combinedMonthlyStorageRate(perPieceLeaves * 32);
+        assertEq(actualRate, expectedRate, "post-removal rate should use combined monthly raw-size pricing");
+        assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
     }
 
     function testRailTerminated_RevertsIfCallerNotPaymentsContract() public {
