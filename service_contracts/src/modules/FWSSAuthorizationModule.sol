@@ -274,7 +274,13 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             // Flushing fees must not reprice an unchanged dataset.
             uint256 currentRate = paymentContract.getRail(info.pdpRailId).paymentRate;
             LibStoragePayments.updatePaymentRates(
-                dataSetId, info, currentRate, pending, info.lifecycleReserveBalance, immediateTermination, paymentContract
+                dataSetId,
+                info,
+                currentRate,
+                pending,
+                info.lifecycleReserveBalance,
+                immediateTermination,
+                paymentContract
             );
         }
 

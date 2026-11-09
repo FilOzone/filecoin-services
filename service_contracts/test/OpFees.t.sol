@@ -312,9 +312,9 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         assertEq(info.pendingOneTimePayments, 0, "pending removal fee flushed");
         assertEq(info.lifecycleReserveBalance, reserveBefore - SCHEDULE_PIECE_REMOVALS_FEE);
         assertEq(rail.lockupFixed, info.lifecycleReserveBalance, "reserve mirror remains accurate");
-        uint256 networkFee = (
-            SCHEDULE_PIECE_REMOVALS_FEE * payments.NETWORK_FEE_NUMERATOR() + payments.NETWORK_FEE_DENOMINATOR() - 1
-        ) / payments.NETWORK_FEE_DENOMINATOR();
+        uint256 networkFee =
+            (SCHEDULE_PIECE_REMOVALS_FEE * payments.NETWORK_FEE_NUMERATOR() + payments.NETWORK_FEE_DENOMINATOR() - 1)
+                / payments.NETWORK_FEE_DENOMINATOR();
         (, uint256 spFundsAfter,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
         assertEq(spFundsAfter - spFundsBefore, SCHEDULE_PIECE_REMOVALS_FEE - networkFee);
     }
