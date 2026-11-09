@@ -30,7 +30,7 @@ library LibStoragePayments {
     function updatePaymentRates(
         uint256 dataSetId,
         FWSSStorage.DataSetInfo storage info,
-        uint256 leafCount,
+        uint256 storageRatePerEpoch,
         uint96 pending,
         uint96 reserveBalance,
         bool immediateTermination,
@@ -42,12 +42,11 @@ library LibStoragePayments {
         info.lifecycleReserveBalance = payments.updateStorageRates(
             dataSetId,
             pdpRailId,
-            leafCount,
+            storageRatePerEpoch,
             pending,
             reserveBalance,
             info.pdpEndEpoch,
             immediateTermination,
-            info.storageTermsId,
             terms.tokenDecimals
         );
         info.pendingOneTimePayments = 0;

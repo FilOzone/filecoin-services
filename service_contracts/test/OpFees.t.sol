@@ -12,9 +12,12 @@ import {
     ADD_PIECES_PER_PIECE_FEE,
     CREATE_DATA_SET_FEE,
     DATASET_FEE_PER_MONTH,
+    EPOCHS_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
     REPLENISH_THRESHOLD,
     SCHEDULE_PIECE_REMOVALS_FEE,
+    STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TIB_IN_BYTES,
     TERMINATE_FEE
 } from "../src/lib/PriceListUSDFC.sol";
 
@@ -270,6 +273,50 @@ contract OpFeesTest is FilecoinWarmStorageServiceTest {
         assertEq(
             pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "no fee on SP-initiated termination"
         );
+    }
+
+    function testFuzz_terminateLegacyRate_flushesPendingFees(bool payerInitiated, bool underfunded) public {
+        (uint256 dataSetId, uint256 pdpRailId, uint256 leafCount,,) = _createDataSetWithPiece();
+        uint256 monthlyStorage = Cids.leafCountToRawSize(leafCount) * STORAGE_PRICE_PER_TIB_PER_MONTH / TIB_IN_BYTES;
+        uint256 legacyRate = monthlyStorage / EPOCHS_PER_MONTH + DATASET_FEE_PER_MONTH / EPOCHS_PER_MONTH;
+        assertEq(payments.getRail(pdpRailId).paymentRate, legacyRate + 1, "fixture crosses legacy rounding boundary");
+
+        // Seed the pre-upgrade rate through FilecoinPay so account and allowance accounting stay consistent.
+        vm.prank(address(pdpServiceWithPayments));
+        payments.modifyRailPayment(pdpRailId, legacyRate, 0);
+
+        uint256[] memory pieceIds = new uint256[](1);
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+        uint96 reserveBefore = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
+        (, uint256 spFundsBefore,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
+
+        if (underfunded) {
+            (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(mockUSDFC, client);
+            vm.prank(client);
+            payments.withdraw(mockUSDFC, availableFunds);
+            vm.roll(block.number + 1);
+            (uint256 fundedUntilEpoch,,,) = payments.getAccountInfoIfSettled(mockUSDFC, client);
+            assertLt(fundedUntilEpoch, block.number, "payer is in arrears");
+        }
+
+        vm.prank(payerInitiated ? client : sp1);
+        pdpServiceWithPayments.terminateService(dataSetId);
+
+        FilecoinPayV1.RailView memory rail = payments.getRail(pdpRailId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        assertGt(rail.endEpoch, 0, "rail terminated");
+        assertEq(rail.paymentRate, legacyRate, "termination preserves the pre-upgrade rate");
+        assertEq(info.pendingOneTimePayments, 0, "pending removal fee flushed");
+        assertEq(info.lifecycleReserveBalance, reserveBefore - SCHEDULE_PIECE_REMOVALS_FEE);
+        assertEq(rail.lockupFixed, info.lifecycleReserveBalance, "reserve mirror remains accurate");
+        uint256 networkFee = (
+            SCHEDULE_PIECE_REMOVALS_FEE * payments.NETWORK_FEE_NUMERATOR() + payments.NETWORK_FEE_DENOMINATOR() - 1
+        ) / payments.NETWORK_FEE_DENOMINATOR();
+        (, uint256 spFundsAfter,,) = payments.getAccountInfoIfSettled(mockUSDFC, sp1);
+        assertEq(spFundsAfter - spFundsBefore, SCHEDULE_PIECE_REMOVALS_FEE - networkFee);
     }
 
     function test_addPiecesFee_largeBatch_triggersReplenishment() public {

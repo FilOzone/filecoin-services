@@ -297,15 +297,13 @@ library LibRails {
         FilecoinPayV1 payments,
         uint256 dataSetId,
         uint256 pdpRailId,
-        uint256 leafCount,
+        uint256 newStorageRatePerEpoch,
         uint96 pending,
         uint96 reserveBalance,
         uint256 pdpEndEpoch,
         bool immediateTermination,
-        bytes32 storageTermsId,
         uint8 tokenDecimals
     ) internal returns (uint96 newReserveBalance) {
-        uint256 newStorageRatePerEpoch = StoragePricing.calculateStorageRate(leafCount, storageTermsId);
         if (immediateTermination) {
             // No try/catch: the payer consented, and insufficient funds must revert.
             payments.modifyRailLockup(pdpRailId, 0, pending);

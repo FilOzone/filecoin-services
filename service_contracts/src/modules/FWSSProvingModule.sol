@@ -11,6 +11,7 @@ import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
+import {StoragePricing} from "../lib/StoragePricing.sol";
 
 /// @title FWSSProvingModule
 /// @notice Records PDP proofs, advances or configures proving periods, and arbitrates PDP rail payments from them.
@@ -135,7 +136,13 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
             if (_processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
                 LibStoragePayments.updatePaymentRates(
-                    dataSetId, info, leafCount, pending, reserveBalance, false, paymentContract
+                    dataSetId,
+                    info,
+                    StoragePricing.calculateStorageRate(leafCount, info.storageTermsId),
+                    pending,
+                    reserveBalance,
+                    false,
+                    paymentContract
                 );
             }
 
@@ -187,7 +194,13 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         bool hadRemovals = _processScheduledPieceMetadataRemovals(dataSetId);
         if (hadRemovals || pending > 0) {
             LibStoragePayments.updatePaymentRates(
-                dataSetId, info, leafCount, pending, reserveBalance, false, paymentContract
+                dataSetId,
+                info,
+                StoragePricing.calculateStorageRate(leafCount, info.storageTermsId),
+                pending,
+                reserveBalance,
+                false,
+                paymentContract
             );
         }
     }
