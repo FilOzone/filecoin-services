@@ -2939,6 +2939,11 @@
         "internalType": "struct DataSetInfoViewV2[]",
         "components": [
           {
+            "name": "dataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "pdpRailId",
             "type": "uint256",
             "internalType": "uint256"
@@ -2997,11 +3002,6 @@
             "name": "lifecycleReserveBalance",
             "type": "uint96",
             "internalType": "uint96"
-          },
-          {
-            "name": "dataSetId",
-            "type": "uint256",
-            "internalType": "uint256"
           },
           {
             "name": "storageTermsId",
@@ -3244,6 +3244,11 @@
         "internalType": "struct DataSetInfoViewV2",
         "components": [
           {
+            "name": "dataSetId",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
             "name": "pdpRailId",
             "type": "uint256",
             "internalType": "uint256"
@@ -3302,11 +3307,6 @@
             "name": "lifecycleReserveBalance",
             "type": "uint96",
             "internalType": "uint96"
-          },
-          {
-            "name": "dataSetId",
-            "type": "uint256",
-            "internalType": "uint256"
           },
           {
             "name": "storageTermsId",
