@@ -9,6 +9,7 @@ This directory contains the smart contracts for different Filecoin services usin
   - `interfaces/IFilecoinWarmStorageService.sol` - FWSS interface generated from the ABI `josuke abi` merges from the modules
   - `src/modules` - ERC-8167 modules the dispatcher routes to; `FWSSViewModule.sol` serves the view methods at the FWSS proxy
   - `IFilecoinServiceMetadata.sol` - Minimal service identity interface (`name`, `description`, `homepage`)
+  - `examples/MultiMethodAuthorizer.sol` - Reference P256 (machine key + passkey) authorizer for the optional per-data-set write ACL (PR #536); see `examples/MultiMethodAuthorizer.md`
   - `src/lib` - Library source files
     - `FilecoinWarmStorageServiceLayout.sol` - Constants conveying the storage layout of `FilecoinWarmStorageService`
     - `FilecoinWarmStorageServiceStateInternalLibrary.sol` - `internal` library for embedding logic to read `FilecoinWarmStorageService`
