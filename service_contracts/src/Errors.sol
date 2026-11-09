@@ -28,7 +28,9 @@ library Errors {
         /// FilBeam beneficiary address
         FilBeamBeneficiary,
         /// View contract address
-        View
+        View,
+        /// Provider payee address
+        Payee
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol

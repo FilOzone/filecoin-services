@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Storage and dataset charges combine monthly before per-epoch rounding for every terms ID; fees and reserves use the selected currency's precision, and FilBeam remains USDFC-only.
 - The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata.
+- **BREAKING**: ServiceProviderRegistry validation and piece-metadata array-length checks now revert with custom errors instead of reason strings. Integrations matching revert reasons must decode the corresponding custom errors from the published ABIs.
 
 ### Fixed
 

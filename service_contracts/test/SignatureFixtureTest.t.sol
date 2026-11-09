@@ -33,6 +33,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol";
+import {Errors} from "../src/Errors.sol";
 
 /**
  * @title EIP-712 Signature Fixture Generator
@@ -201,6 +202,15 @@ contract MetadataSignatureTestContract {
 
 contract MetadataSignatureFixturesTest is Test {
     MetadataSignatureTestContract public testContract;
+
+    function testMismatchedPieceMetadataArrays() public {
+        string[][] memory keys = new string[][](2);
+        string[][] memory values = new string[][](1);
+        Cids.Cid[] memory pieces = new Cids.Cid[](2);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.MetadataKeyAndValueLengthMismatch.selector, 2, 1));
+        testContract.getAddPiecesDigest(CLIENT_DATA_SET_ID, 0, pieces, keys, values);
+    }
 
     // Test private key (well-known test key, never use in production)
     uint256 constant TEST_PRIVATE_KEY = 0x1234567890123456789012345678901234567890123456789012345678901234;
