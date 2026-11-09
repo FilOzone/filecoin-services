@@ -9,6 +9,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
+import {Errors} from "../src/Errors.sol";
 
 contract ServiceProviderRegistryTest is MockFVMTest {
     ServiceProviderRegistry public implementation;
@@ -335,7 +336,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
         (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
         vm.prank(user1);
-        vm.expectRevert("Payee cannot be zero address");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.Payee));
         registry.registerProvider{value: 5 ether}(
             address(0), // zero beneficiary
             "Provider One",
@@ -452,11 +453,11 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     function testGetProviderPayeeRevertsForInvalidProviderId() public {
         // 0 is invalid provider ID; expect revert due to providerExists modifier
-        vm.expectRevert("Provider does not exist");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.InvalidProviderId.selector, 0));
         registry.getProviderPayee(0);
 
         // Non-existent but non-zero ID should also revert
-        vm.expectRevert("Provider does not exist");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.InvalidProviderId.selector, 1));
         registry.getProviderPayee(1);
     }
 
