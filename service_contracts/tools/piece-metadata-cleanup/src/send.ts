@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { BaseError, encodeFunctionData, formatEther, keccak256, parseAbi, type Address, type Hex, type PublicClient } from 'viem';
 import type { LocalAccount } from 'viem/accounts';
-import { batchCalldataOps, transaction, type BatchRow, type BatchStatus } from './db.ts';
+import { batchCalldataOps, markSendStarted, transaction, type BatchRow, type BatchStatus } from './db.ts';
 import { assertTarget } from './storage.ts';
 
 const cleanupAbi = parseAbi(['function cleanupLegacyPieceMetadata(bytes ops)']);
@@ -206,6 +206,7 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
     transaction(db, () => {
       insertTx.run(hash, batch.id, opts.from, nonce, gas.toString(), maxFeePerGas.toString(), Date.now());
       markSent.run(batch.id);
+      markSendStarted(db);
     });
     try {
       const returned = (await client.request({ method: 'eth_sendRawTransaction', params: [signed] })) as Hex;
@@ -239,7 +240,9 @@ async function gasPrice(client: PublicClient): Promise<{ baseFee: bigint; priori
 // Stores a receipt on its tx and batch; returns whether the batch succeeded.
 function receiptRecorder(db: DatabaseSync, summary: SendSummary, total: number, log: (line: string) => void) {
   const updateTx = db.prepare('UPDATE txs SET status = ?, block_number = ?, gas_used = ?, fee = ? WHERE hash = ?');
-  const updateBatch = db.prepare('UPDATE batches SET status = ? WHERE id = ?');
+  // A batch can have several messages (a resend after one looked dropped). Once one of them succeeded the batch is
+  // done, and a late reverted receipt of another must not undo that.
+  const updateBatch = db.prepare("UPDATE batches SET status = ? WHERE id = ? AND (? = 'done' OR status <> 'done')");
   return (batchId: number, hash: Hex, receipt: Receipt): boolean => {
     const ok = BigInt(receipt.status) === 1n;
     const gasUsed = BigInt(receipt.gasUsed);
@@ -247,7 +250,7 @@ function receiptRecorder(db: DatabaseSync, summary: SendSummary, total: number, 
     const status: BatchStatus = ok ? 'done' : 'reverted';
     transaction(db, () => {
       updateTx.run(ok ? 'success' : 'reverted', Number(BigInt(receipt.blockNumber)), gasUsed.toString(), fee.toString(), hash);
-      updateBatch.run(status, batchId);
+      updateBatch.run(status, batchId, status);
     });
     summary.gasUsed += gasUsed;
     summary.fee += fee;
