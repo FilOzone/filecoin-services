@@ -9,6 +9,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Added owner-registered, immutable storage terms selecting currency, decimals, price, and salt. The independent legacy definition uses record zero, while every ordinary definition—including the exact legacy tuple—uses its normal hash; ordinary terms can be disabled for new datasets without affecting existing ones ([#627](https://github.com/FilOzone/filecoin-services/issues/627)).
 - Added terms-aware EIP-712 dataset creation using the existing creation scope, and V2 dataset getters exposing the selected terms while preserving deprecated getter ABIs. V2 listing uses `getClientDataSetsV2(client, offset, limit)`.
+- Added `FWSSPieceMetadataCleanupModule`, a temporary facet whose permissionless `cleanupLegacyPieceMetadata(bytes)` zeroes the piece metadata values, key lists and removal-queue entries that earlier versions left in storage ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
+  It takes packed operations, so off-chain tooling can clear the slots in storage-key order.
+  Popping entries from a live data set's legacy queue sets `pieceRemovalsPending`, so the rate update the queue signalled still happens.
+  A later release removes the facet once the legacy state is gone, which also drops `cleanupLegacyPieceMetadata` and its errors from the published FWSS ABI.
 
 ### Changed
 
@@ -17,6 +21,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - `piecesScheduledRemove` no longer queues piece IDs for metadata cleanup; it sets `DataSetInfo.pieceRemovalsPending`, which the next `nextProvingPeriod` consumes to update the storage rate ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
   The field packs into unused bytes of `DataSetInfo` relative slot 10, so no slot moves.
   Piece metadata and removal-queue entries written by earlier versions stay in storage.
+  A data set with a non-empty legacy queue gets the rate update at every `nextProvingPeriod` until `cleanupLegacyPieceMetadata` pops the queue, so pop the queues of live data sets first.
 
 ### Fixed
 
