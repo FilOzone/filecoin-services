@@ -6,6 +6,10 @@ export type PieceStatus = 'unchecked' | 'match' | 'clean' | 'mismatch' | 'invali
 
 export type PieceRow = { data_set_id: number; piece_id: number; metadata: string; status: PieceStatus };
 
+// planned: never sent or sent and dropped; sent: a tx is recorded and its receipt not yet seen; done: a successful
+// receipt; reverted: the last tx reverted.
+export type BatchStatus = 'planned' | 'sent' | 'done' | 'reverted';
+
 export type BatchRow = {
   id: number;
   phase: number;
@@ -14,7 +18,7 @@ export type BatchRow = {
   op_count: number;
   weight: number;
   ops_bytes: number;
-  status: string;
+  status: BatchStatus;
 };
 
 // ops is clustered by sort_key (WITHOUT ROWID), so a batch is the range [first_key, last_key] and reading ops in send
@@ -42,6 +46,20 @@ CREATE TABLE IF NOT EXISTS batches (
   ops_bytes INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'planned'
 );
+CREATE TABLE IF NOT EXISTS txs (
+  hash TEXT PRIMARY KEY,
+  batch_id INTEGER NOT NULL,
+  sender TEXT NOT NULL,
+  nonce INTEGER NOT NULL,
+  gas_limit TEXT NOT NULL,
+  max_fee_per_gas TEXT NOT NULL,
+  sent_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'sent',
+  block_number INTEGER,
+  gas_used TEXT,
+  fee TEXT
+);
+CREATE INDEX IF NOT EXISTS txs_batch ON txs (batch_id, status);
 `;
 
 // Opens or creates the state file, and refuses one made for another network or FWSS proxy.

@@ -8,6 +8,7 @@
   "scripts": {
     "cli": "node --disable-warning=ExperimentalWarning src/cli.ts",
     "test": "node --disable-warning=ExperimentalWarning --test 'test/*.test.ts'",
+    "test:e2e": "node --disable-warning=ExperimentalWarning --test 'test/e2e/*.test.ts'",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

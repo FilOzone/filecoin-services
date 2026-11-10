@@ -40,7 +40,8 @@ export function buildPlan(db: DatabaseSync, limits: BatchLimits, opts: { force?:
     skipped: {},
   };
 
-  db.exec('DELETE FROM batches; DELETE FROM ops;');
+  // Tx records point at batch ids, which a new plan reuses for other ops.
+  db.exec('DELETE FROM batches; DELETE FROM ops; DELETE FROM txs;');
   const insert = opInserter(db);
   const count = (op: Uint8Array) => {
     const [decoded] = decodeOps(op);
