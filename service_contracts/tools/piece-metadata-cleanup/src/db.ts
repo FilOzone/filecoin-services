@@ -174,9 +174,12 @@ export function insertBatches(db: DatabaseSync, batches: Batch[]): void {
   const stmt = db.prepare(
     'INSERT INTO batches (id, phase, first_key, last_key, op_count, weight, ops_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)',
   );
-  transaction(db, () => {
-    batches.forEach((b, i) => stmt.run(i + 1, b.phase, b.firstKey, b.lastKey, b.opCount, b.weight, b.opsBytes));
-  });
+  batches.forEach((b, i) => stmt.run(i + 1, b.phase, b.firstKey, b.lastKey, b.opCount, b.weight, b.opsBytes));
+}
+
+// Batches that left the `planned` state: sending has started.
+export function batchesStarted(db: DatabaseSync): number {
+  return (db.prepare("SELECT count(*) AS n FROM batches WHERE status <> 'planned'").get() as { n: number }).n;
 }
 
 export function listBatches(db: DatabaseSync): BatchRow[] {

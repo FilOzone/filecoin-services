@@ -5,6 +5,15 @@ export interface StorageReader {
   read(slots: readonly bigint[]): Promise<bigint[]>;
 }
 
+// A node of another network, or a wrong address, answers every storage read with zero, which reads as "all clean".
+export async function assertTarget(client: PublicClient, chainId: number, address: Address): Promise<void> {
+  const served = await client.getChainId();
+  if (served !== chainId) throw new Error(`RPC serves chain ${served}, expected ${chainId}`);
+
+  const code = await client.getCode({ address });
+  if (!code || code === '0x') throw new Error(`no contract code at ${address} on chain ${chainId}; wrong node or address`);
+}
+
 export type RpcReaderOptions = {
   rpcUrl: string;
   chain: Chain;
@@ -50,7 +59,7 @@ async function postBatch(url: string, address: Address, slots: readonly bigint[]
 // eth_getStorageAt in JSON-RPC batches: one HTTP request per `batchSize` slots, at most `concurrency` in flight, a
 // failed batch retried with backoff. Glif answered batches of up to 2000 calls but ran fastest with small batches in
 // parallel; Multicall3 with extsload was slower per slot and ran out of gas at 1000 slots.
-export function rpcStorageReader(opts: RpcReaderOptions): StorageReader & { client: PublicClient } {
+export function rpcStorageReader(opts: RpcReaderOptions): StorageReader & { client: PublicClient; ready(): Promise<void> } {
   const client = publicClient(opts.rpcUrl, opts.chain);
   const interval = opts.requestsPerSecond > 0 ? 1000 / opts.requestsPerSecond : 0;
   const retries = opts.retries ?? 8;
@@ -64,6 +73,9 @@ export function rpcStorageReader(opts: RpcReaderOptions): StorageReader & { clie
     nextStart = start + interval;
     if (start > now) await new Promise((r) => setTimeout(r, start - now));
   }
+
+  let target: Promise<void> | undefined;
+  const ready = () => (target ??= assertTarget(client, opts.chain.id, opts.address));
 
   async function readChunk(slots: readonly bigint[]): Promise<bigint[]> {
     for (let attempt = 0; ; attempt++) {
@@ -81,15 +93,24 @@ export function rpcStorageReader(opts: RpcReaderOptions): StorageReader & { clie
 
   return {
     client,
+    ready,
     async read(slots) {
+      await ready();
+
       const chunks: (readonly bigint[])[] = [];
       for (let i = 0; i < slots.length; i += opts.batchSize) chunks.push(slots.slice(i, i + opts.batchSize));
       const results: bigint[][] = new Array(chunks.length);
       let next = 0;
+      let failed = false;
       const worker = async () => {
-        while (next < chunks.length) {
+        while (!failed && next < chunks.length) {
           const i = next++;
-          results[i] = await readChunk(chunks[i]!);
+          try {
+            results[i] = await readChunk(chunks[i]!);
+          } catch (err) {
+            failed = true;
+            throw err;
+          }
         }
       };
       await Promise.all(Array.from({ length: Math.min(opts.concurrency, chunks.length) }, worker));

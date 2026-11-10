@@ -2,6 +2,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import { BaseError, encodeFunctionData, formatEther, keccak256, parseAbi, type Address, type Hex, type PublicClient } from 'viem';
 import type { LocalAccount } from 'viem/accounts';
 import { batchCalldataOps, transaction, type BatchRow, type BatchStatus } from './db.ts';
+import { assertTarget } from './storage.ts';
 
 const cleanupAbi = parseAbi(['function cleanupLegacyPieceMetadata(bytes ops)']);
 
@@ -17,8 +18,9 @@ export type SendOptions = {
   dryRun?: boolean;
   gasMultiplier?: number;
   maxInflight?: number;
-  // attoFIL per gas unit; no message leaves while the latest block's base fee is above it.
-  maxBaseFee?: bigint;
+  // attoFIL per gas unit, required to send: no message leaves while the base fee plus the node's suggested priority
+  // fee is above it, and no message is signed with a higher fee cap, so a message pays at most this times its gas limit.
+  maxGasPrice?: bigint;
   maxBatches?: number;
   receiptTimeoutMs?: number;
   pollMs?: number;
@@ -91,15 +93,17 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
   const pollMs = opts.pollMs ?? 5000;
   const receiptTimeoutMs = opts.receiptTimeoutMs ?? 600_000;
   if (!opts.dryRun && !opts.account) throw new Error('sending needs a signing key');
+  if (!opts.dryRun && opts.maxGasPrice === undefined) throw new Error('sending needs a price ceiling (--max-gas-price)');
   if (opts.account && opts.account.address.toLowerCase() !== opts.from.toLowerCase()) {
     throw new Error(`signing key is for ${opts.account.address}, not ${opts.from}`);
   }
 
-  const chainId = await client.getChainId();
-  if (chainId !== opts.chainId) throw new Error(`RPC serves chain ${chainId}, expected ${opts.chainId}`);
+  const total = (db.prepare('SELECT count(*) AS n FROM batches').get() as { n: number }).n;
+  if (total === 0) throw new Error('the state file has no batches; run plan first');
+
+  await assertTarget(client, opts.chainId, opts.to);
 
   const summary: SendSummary = { done: 0, gasUsed: 0n, fee: 0n, estimated: 0, estimatedGas: 0n, remaining: 0 };
-  const total = (db.prepare('SELECT count(*) AS n FROM batches').get() as { n: number }).n;
   const record = receiptRecorder(db, summary, total, log);
 
   // `planned` and `reverted` batches are not done; `sent` ones are resolved first and become one of the others.
@@ -127,15 +131,19 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
   }
 
   const account = opts.account!;
+  const maxGasPrice = opts.maxGasPrice!;
   await resolveSent(db, client, opts.from, record, { pollMs, timeoutMs: receiptTimeoutMs, log });
 
   // resolveSent left nothing of ours pending, so the confirmed nonce is the next one; nothing else may use this key.
   let nonce = await client.getTransactionCount({ address: opts.from, blockTag: 'latest' });
   const inflight = new Map<Hex, { batchId: number; sentAt: number; gas: bigint }>();
   const markSent = db.prepare("UPDATE batches SET status = 'sent' WHERE id = ?");
-  const insertTx = db.prepare(
-    'INSERT INTO txs (hash, batch_id, sender, nonce, gas_limit, max_fee_per_gas, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-  );
+  // A batch sent again with the same nonce, gas and fees signs to the same hash as its earlier message.
+  const insertTx = db.prepare(`
+    INSERT INTO txs (hash, batch_id, sender, nonce, gas_limit, max_fee_per_gas, sent_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (hash) DO UPDATE SET
+      status = 'sent', sent_at = excluded.sent_at, block_number = NULL, gas_used = NULL, fee = NULL
+  `);
 
   // Polls the in-flight messages once; a reverted receipt or a timeout becomes the run's failure.
   const settle = async () => {
@@ -158,12 +166,12 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
     while (!summary.failure && inflight.size >= maxInflight) await settle();
     if (summary.failure) break;
 
-    let baseFee = await latestBaseFee(client);
-    if (opts.maxBaseFee !== undefined && baseFee > opts.maxBaseFee) {
-      log(`base fee ${baseFee} above ${opts.maxBaseFee}, waiting`);
-      while (!summary.failure && baseFee > opts.maxBaseFee) {
+    let price = await gasPrice(client);
+    if (price.baseFee + price.priority > maxGasPrice) {
+      log(`base fee ${price.baseFee} plus priority fee ${price.priority} above ${maxGasPrice}, waiting`);
+      while (!summary.failure && price.baseFee + price.priority > maxGasPrice) {
         await settle();
-        baseFee = await latestBaseFee(client);
+        price = await gasPrice(client);
       }
       if (summary.failure) break;
     }
@@ -178,8 +186,9 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
     }
 
     const gas = gasLimit(estimate, multiplier);
-    const priority = BigInt((await client.request({ method: 'eth_maxPriorityFeePerGas' })) as Hex);
-    const maxFeePerGas = baseFee * 2n + priority;
+    const min = (a: bigint, b: bigint) => (a < b ? a : b);
+    const maxFeePerGas = min(price.baseFee * 2n + price.priority, maxGasPrice);
+    const maxPriorityFeePerGas = min(price.priority, maxFeePerGas);
     const signed = await account.signTransaction({
       type: 'eip1559',
       chainId: opts.chainId,
@@ -189,7 +198,7 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
       value: 0n,
       gas,
       maxFeePerGas,
-      maxPriorityFeePerGas: priority,
+      maxPriorityFeePerGas,
     });
     const hash = keccak256(signed);
 
@@ -219,10 +228,12 @@ function countNotDone(db: DatabaseSync): number {
   return (db.prepare("SELECT count(*) AS n FROM batches WHERE status <> 'done'").get() as { n: number }).n;
 }
 
-async function latestBaseFee(client: PublicClient): Promise<bigint> {
+// The latest block's base fee and the priority fee the node suggests, in attoFIL per gas.
+async function gasPrice(client: PublicClient): Promise<{ baseFee: bigint; priority: bigint }> {
   const block = await client.getBlock({ blockTag: 'latest' });
   if (block.baseFeePerGas === null) throw new Error('latest block has no base fee');
-  return block.baseFeePerGas;
+  const priority = BigInt((await client.request({ method: 'eth_maxPriorityFeePerGas' })) as Hex);
+  return { baseFee: block.baseFeePerGas, priority };
 }
 
 // Stores a receipt on its tx and batch; returns whether the batch succeeded.
@@ -273,9 +284,11 @@ async function revertFailure(
   }
 }
 
-// Settles batches an earlier run left `sent`. A successful receipt makes a batch done. Without a receipt, the run
-// waits until no message from the sender is pending; a message still missing then was dropped or replaced, and its
-// batch goes back to `planned` to be sent again.
+// Settles the messages an earlier run left `sent`, whatever state their batch is in now (`verify --requeue` may have
+// put it back to `planned`). A successful receipt makes a batch done. Without a receipt, the run waits until no
+// message from the sender is pending; a message still missing then was dropped or replaced, and its batch goes back
+// to `planned` to be sent again. A `dropped` message can still land later, so while its batch is not done its
+// receipt is looked up as well.
 // Sending a batch again is always safe: every op zeroes a fixed slot or pops what is left of a queue, so a second
 // execution changes nothing. The only cost is the gas of the second message.
 async function resolveSent(
@@ -286,14 +299,16 @@ async function resolveSent(
   opts: { pollMs: number; timeoutMs: number; log: (line: string) => void },
 ): Promise<void> {
   const started = Date.now();
-  const sentTxs = db.prepare(
-    "SELECT txs.hash, txs.batch_id FROM txs JOIN batches ON batches.id = txs.batch_id WHERE batches.status = 'sent' AND txs.status = 'sent' ORDER BY txs.nonce",
+  const sentTxs = db.prepare("SELECT hash, batch_id FROM txs WHERE status = 'sent' ORDER BY nonce");
+  const droppedTxs = db.prepare(
+    "SELECT txs.hash, txs.batch_id FROM txs JOIN batches ON batches.id = txs.batch_id WHERE txs.status = 'dropped' AND batches.status <> 'done' ORDER BY txs.nonce",
   );
+  type TxRow = { hash: Hex; batch_id: number };
   for (;;) {
     // Nonces first: if nothing was pending before the receipt lookups, a missing receipt cannot still arrive.
     const latest = await client.getTransactionCount({ address: from, blockTag: 'latest' });
     const pending = await client.getTransactionCount({ address: from, blockTag: 'pending' });
-    for (const tx of sentTxs.all() as { hash: Hex; batch_id: number }[]) {
+    for (const tx of [...(sentTxs.all() as TxRow[]), ...(droppedTxs.all() as TxRow[])]) {
       const receipt = (await client.request({ method: 'eth_getTransactionReceipt', params: [tx.hash] })) as Receipt | null;
       if (receipt) record(tx.batch_id, tx.hash, receipt);
     }
@@ -305,11 +320,12 @@ async function resolveSent(
     await sleep(opts.pollMs);
   }
 
-  const dropped = sentTxs.all() as { hash: Hex; batch_id: number }[];
+  const dropped = sentTxs.all() as TxRow[];
   if (dropped.length === 0) return;
   transaction(db, () => {
     const markTx = db.prepare("UPDATE txs SET status = 'dropped' WHERE hash = ?");
-    const markBatch = db.prepare("UPDATE batches SET status = 'planned' WHERE id = ?");
+    // Only a batch still waiting for this message: an earlier message of it may have landed and made it done.
+    const markBatch = db.prepare("UPDATE batches SET status = 'planned' WHERE id = ? AND status = 'sent'");
     for (const tx of dropped) {
       markTx.run(tx.hash);
       markBatch.run(tx.batch_id);

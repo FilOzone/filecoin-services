@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { formatEther, getAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { calldataBytes, DEFAULT_LIMITS } from './batches.ts';
-import { checkPieces } from './check.ts';
+import { checkPieces, mismatchedPieces } from './check.ts';
 import { openDb } from './db.ts';
 import { fetchPieces } from './fetch.ts';
 import { DEFAULT_DEPLOYMENTS, loadNetwork } from './network.ts';
@@ -22,10 +22,10 @@ const USAGE = `usage: node src/cli.ts <command> --network mainnet|calibnet [opti
 commands:
   fetch    copy legacy pieces with metadata from the indexer (DATABASE_URL or PG* variables)
   queues   read every legacy removal queue length from chain
-  check    compare pieces with chain storage: --sample N | --all [--recheck]
-  plan     build sorted ops and batches from checked or unchecked pieces
+  check    compare pieces with chain storage, only before anything is sent: --sample N | --all [--recheck]
+  plan     build sorted ops and batches from the pieces that check found matching
   send     send the batches that are not done, resuming an earlier run (key in ${KEY_ENV})
-  verify   read the slots and queue lengths the plan zeroes, expect zero: --sample N | --all
+  verify   read the slots and queue lengths the plan zeroes, expect zero: --sample N | --all [--requeue]
 
 options:
   --db <file>                    state file (default cleanup-<network>.sqlite)
@@ -38,16 +38,21 @@ options:
   --limit <n>                    fetch: stop after n pieces
   --max-calldata-bytes <n>       plan: calldata limit per batch (default ${DEFAULT_LIMITS.maxCalldataBytes})
   --max-ops <n>                  plan: ops per batch, each queue pop counts as one (default ${DEFAULT_LIMITS.maxOps})
-  --report <file>                plan: write invalid and mismatch pieces as TSV; verify: write residue as TSV
-  --force                        plan: replan although batches left the planned state
+  --report <file>                check: write mismatch pieces as TSV; plan: write invalid and mismatch pieces;
+                                 verify: write residue
+  --allow-unchecked              plan: also plan pieces that check never read
+  --force                        plan: replan although batches left the planned state; sends everything again
+                                 and drops the spend records
+  --requeue                      verify: put batches that still have residue back to planned, for the next send
   --dry-run                      send: estimate gas only, send nothing (needs --from or ${KEY_ENV})
   --from <address>               send: sender for --dry-run without a key
   --gas-multiplier <x>           send: gas limit = estimate * x, at least 1 (default 1)
   --max-inflight <n>             send: unconfirmed messages at a time, 1..${MAX_INFLIGHT} (default ${MAX_INFLIGHT})
-  --max-base-fee <attoFIL>       send: wait while the base fee is above this
+  --max-gas-price <attoFIL>      send: ceiling per gas unit, required; waits while base fee plus priority fee is
+                                 above it and never signs a higher fee cap
   --max-batches <n>              send: stop after n batches
   --receipt-timeout <s>          send: give up on a receipt after s seconds (default 600)
-  --poll-interval <s>            send: receipt and base fee polling interval (default 5)
+  --poll-interval <s>            send: receipt and gas price polling interval (default 5)
 `;
 
 function positiveInt(value: string | undefined, name: string, fallback: number): number {
@@ -76,12 +81,14 @@ async function main(): Promise<void> {
       'max-calldata-bytes': { type: 'string' },
       'max-ops': { type: 'string' },
       report: { type: 'string' },
+      'allow-unchecked': { type: 'boolean' },
       force: { type: 'boolean' },
+      requeue: { type: 'boolean' },
       'dry-run': { type: 'boolean' },
       from: { type: 'string' },
       'gas-multiplier': { type: 'string' },
       'max-inflight': { type: 'string' },
-      'max-base-fee': { type: 'string' },
+      'max-gas-price': { type: 'string' },
       'max-batches': { type: 'string' },
       'receipt-timeout': { type: 'string' },
       'poll-interval': { type: 'string' },
@@ -120,6 +127,7 @@ async function main(): Promise<void> {
     }
     case 'queues': {
       const r = reader();
+      await r.ready();
       const block = await r.client.getBlockNumber();
       const next = await nextDataSetId(r.client, network.pdpVerifier);
       const queues = await refreshQueues(db, r, next, `data set ids 0..${next - 1} read near block ${block}`);
@@ -132,6 +140,15 @@ async function main(): Promise<void> {
       const sample = values.sample === undefined ? undefined : positiveInt(values.sample, 'sample', 0);
       const totals = await checkPieces(db, reader(), { sample, all: values.all, recheck: values.recheck, log });
       log(`check done: ${JSON.stringify(totals)}`);
+
+      const mismatches = mismatchedPieces(db);
+      for (const p of mismatches.slice(0, 20)) log(`mismatch ${p.data_set_id}/${p.piece_id}: ${p.detail ?? ''}`);
+      if (mismatches.length > 20) log(`... ${mismatches.length - 20} more mismatches`);
+      if (values.report) {
+        const lines = mismatches.map((p) => [p.data_set_id, p.piece_id, p.detail ?? ''].join('\t'));
+        writeFileSync(values.report, ['data_set_id\tpiece_id\tdetail', ...lines].join('\n') + '\n');
+        log(`wrote ${mismatches.length} mismatch pieces to ${values.report}`);
+      }
       break;
     }
     case 'plan': {
@@ -140,8 +157,8 @@ async function main(): Promise<void> {
         maxOps: positiveInt(values['max-ops'], 'max-ops', DEFAULT_LIMITS.maxOps),
       };
       if (calldataBytes(0) >= limits.maxCalldataBytes || limits.maxOps < 1) throw new Error('batch limits too small');
-      const t = buildPlan(db, limits, { force: values.force });
-      log(`pieces planned:  ${t.pieces}`);
+      const t = buildPlan(db, limits, { force: values.force, allowUnchecked: values['allow-unchecked'] });
+      log(`pieces planned:  ${t.pieces} (${t.unchecked} of them unchecked)`);
       log(`pieces skipped:  ${JSON.stringify(t.skipped)}`);
       log(`queues:          ${t.queues} (${t.queueEntries} entries)`);
       log(`ops:             ${t.ops} ${JSON.stringify(t.opsByKind)}`);
@@ -172,9 +189,10 @@ async function main(): Promise<void> {
       if (!(multiplier >= 1)) throw new Error('--gas-multiplier must be at least 1');
       const maxInflight = positiveInt(values['max-inflight'], 'max-inflight', MAX_INFLIGHT);
       if (maxInflight < 1 || maxInflight > MAX_INFLIGHT) throw new Error(`--max-inflight must be 1..${MAX_INFLIGHT}`);
-      const maxBaseFeeArg = values['max-base-fee'];
-      if (maxBaseFeeArg !== undefined && !/^\d+$/.test(maxBaseFeeArg)) throw new Error('--max-base-fee must be an integer in attoFIL');
-      const maxBaseFee = maxBaseFeeArg === undefined ? undefined : BigInt(maxBaseFeeArg);
+      const maxGasPriceArg = values['max-gas-price'];
+      if (maxGasPriceArg !== undefined && !/^\d+$/.test(maxGasPriceArg)) throw new Error('--max-gas-price must be an integer in attoFIL per gas');
+      if (!values['dry-run'] && maxGasPriceArg === undefined) throw new Error('send needs --max-gas-price <attoFIL per gas>');
+      const maxGasPrice = maxGasPriceArg === undefined ? undefined : BigInt(maxGasPriceArg);
       const maxBatches = values['max-batches'] === undefined ? undefined : positiveInt(values['max-batches'], 'max-batches', 0);
 
       log(`send: ${values['dry-run'] ? 'dry run' : 'sending'} from ${from} to ${network.fwss} on ${network.name}`);
@@ -186,7 +204,7 @@ async function main(): Promise<void> {
         dryRun: values['dry-run'],
         gasMultiplier: multiplier,
         maxInflight,
-        maxBaseFee,
+        maxGasPrice,
         maxBatches,
         receiptTimeoutMs: positiveInt(values['receipt-timeout'], 'receipt-timeout', 600) * 1000,
         pollMs: positiveInt(values['poll-interval'], 'poll-interval', 5) * 1000,
@@ -208,8 +226,9 @@ async function main(): Promise<void> {
     }
     case 'verify': {
       const sample = values.sample === undefined ? undefined : positiveInt(values.sample, 'sample', 0);
-      const r = await verifyPlan(db, reader(), { sample, all: values.all, log });
+      const r = await verifyPlan(db, reader(), { sample, all: values.all, requeue: values.requeue, log });
       log(`verify: ${r.queues} queues, ${r.ops} metadata ops, ${r.slots} slots read, ${r.residueCount} not zero`);
+      if (values.requeue) log(`verify: put ${r.requeued} batches back to planned; run send to send them again`);
       for (const x of r.residue.slice(0, 20)) {
         log(`residue ${x.dataSetId}/${x.pieceId ?? '-'} ${x.kind} slot ${hex32(x.slot)} holds ${hex32(x.value)}`);
       }

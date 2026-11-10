@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
+import { listBatches, transaction } from './db.ts';
 import { decodeOps, KIND_NAMES, opSlots, PHASE_METADATA, PHASE_QUEUE, POP_QUEUE } from './ops.ts';
 import { queueSlot } from './slots.ts';
 import type { StorageReader } from './storage.ts';
@@ -8,57 +9,95 @@ export type Residue = { dataSetId: number; pieceId: number | null; kind: string;
 export type VerifyOptions = {
   sample?: number;
   all?: boolean;
+  // Put every batch that still has residue back to `planned`, so the next `send` sends it again.
+  requeue?: boolean;
   pageSize?: number;
   // Residue entries kept in the result; all of them are counted.
   maxListed?: number;
   log?: (line: string) => void;
 };
 
-export type VerifyResult = { queues: number; ops: number; slots: number; residueCount: number; residue: Residue[] };
+export type VerifyResult = { queues: number; ops: number; slots: number; residueCount: number; residue: Residue[]; requeued: number };
+
+type OpRow = { sort_key: Uint8Array; op: Uint8Array };
 
 // Reads every slot the stored plan zeroes, or a random sample of its metadata ops, plus the length of every planned
 // queue, and reports each one that is not zero. It reads only what the plan knows: a slot the plan never had, from a
-// wrong key or value length, is invisible here, which is why `check` must run first.
+// wrong key or value length, is invisible here, which is why `check` must pass before `plan`.
 export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: VerifyOptions): Promise<VerifyResult> {
-  if (opts.sample === undefined && !opts.all) throw new Error('verify needs --sample N or --all');
+  if ((opts.sample !== undefined) === Boolean(opts.all)) throw new Error('verify needs exactly one of --sample N and --all');
+  // Without a plan there is nothing to read, and "0 residue" would look like a pass.
+  if ((db.prepare('SELECT count(*) AS n FROM batches').get() as { n: number }).n === 0) {
+    throw new Error('this state file has no plan; run plan first');
+  }
   const pageSize = opts.pageSize ?? 5000;
   const maxListed = opts.maxListed ?? 100_000;
   const log = opts.log ?? (() => {});
-  const result: VerifyResult = { queues: 0, ops: 0, slots: 0, residueCount: 0, residue: [] };
+  const result: VerifyResult = { queues: 0, ops: 0, slots: 0, residueCount: 0, residue: [], requeued: 0 };
   const found = (r: Residue) => {
     result.residueCount += 1;
     if (result.residue.length < maxListed) result.residue.push(r);
   };
 
+  // Batches are consecutive sort-key ranges in id order, so the batch of an op is the last one starting at or before it.
+  const batches = opts.requeue ? listBatches(db) : [];
+  const requeue = new Set<number>();
+  const markBatch = (sortKey: Uint8Array) => {
+    if (!opts.requeue) return;
+    let low = 0;
+    let high = batches.length - 1;
+    while (low < high) {
+      const mid = (low + high + 1) >> 1;
+      if (Buffer.compare(batches[mid]!.first_key, sortKey) <= 0) low = mid;
+      else high = mid - 1;
+    }
+    const batch = batches[low];
+    if (!batch || Buffer.compare(batch.first_key, sortKey) > 0 || Buffer.compare(sortKey, batch.last_key) > 0) {
+      throw new Error(`op ${Buffer.from(sortKey).toString('hex')} is in no batch`);
+    }
+    requeue.add(batch.id);
+  };
+
   const phaseStart = (phase: number) => Buffer.from([phase]);
-  const queueIds = new Set<number>();
-  const pops = db.prepare('SELECT op FROM ops WHERE sort_key >= ? AND sort_key < ?').all(phaseStart(PHASE_QUEUE), phaseStart(PHASE_METADATA)) as {
-    op: Uint8Array;
-  }[];
-  for (const { op } of pops) {
-    for (const decoded of decodeOps(op)) if (decoded.kind === POP_QUEUE) queueIds.add(decoded.dataSetId);
+  const popKeys = new Map<number, Uint8Array[]>();
+  const pops = db
+    .prepare('SELECT sort_key, op FROM ops WHERE sort_key >= ? AND sort_key < ?')
+    .all(phaseStart(PHASE_QUEUE), phaseStart(PHASE_METADATA)) as OpRow[];
+  for (const { sort_key, op } of pops) {
+    for (const decoded of decodeOps(op)) {
+      if (decoded.kind !== POP_QUEUE) continue;
+      const keys = popKeys.get(decoded.dataSetId) ?? [];
+      keys.push(sort_key);
+      popKeys.set(decoded.dataSetId, keys);
+    }
   }
-  const ids = [...queueIds].sort((a, b) => a - b);
+  const ids = [...popKeys.keys()].sort((a, b) => a - b);
   const lengths = await reader.read(ids.map(queueSlot));
   ids.forEach((dataSetId, i) => {
-    if (lengths[i] !== 0n) found({ dataSetId, pieceId: null, kind: 'QueueLength', slot: queueSlot(dataSetId), value: lengths[i]! });
+    if (lengths[i] === 0n) return;
+    found({ dataSetId, pieceId: null, kind: 'QueueLength', slot: queueSlot(dataSetId), value: lengths[i]! });
+
+    // Which pop left the entries behind is unknown, and a pop that already ran pops what is left when sent again.
+    popKeys.get(dataSetId)!.forEach(markBatch);
   });
   result.queues = ids.length;
   result.slots += ids.length;
 
-  const checkOps = async (rows: { op: Uint8Array }[]) => {
-    const targets: { dataSetId: number; pieceId: number; kind: string; slot: bigint }[] = [];
-    for (const { op } of rows) {
+  const checkOps = async (rows: OpRow[]) => {
+    const targets: { dataSetId: number; pieceId: number; kind: string; slot: bigint; sortKey: Uint8Array }[] = [];
+    for (const { sort_key, op } of rows) {
       for (const decoded of decodeOps(op)) {
         if (decoded.kind === POP_QUEUE) continue;
         for (const slot of opSlots(decoded)) {
-          targets.push({ dataSetId: decoded.dataSetId, pieceId: decoded.pieceId, kind: KIND_NAMES[decoded.kind], slot });
+          targets.push({ dataSetId: decoded.dataSetId, pieceId: decoded.pieceId, kind: KIND_NAMES[decoded.kind], slot, sortKey: sort_key });
         }
       }
     }
     const values = await reader.read(targets.map((t) => t.slot));
-    targets.forEach((t, i) => {
-      if (values[i] !== 0n) found({ ...t, value: values[i]! });
+    targets.forEach(({ sortKey, ...t }, i) => {
+      if (values[i] === 0n) return;
+      found({ ...t, value: values[i]! });
+      markBatch(sortKey);
     });
     result.ops += rows.length;
     result.slots += targets.length;
@@ -66,9 +105,7 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
 
   const metadataStart = phaseStart(PHASE_METADATA);
   if (opts.sample !== undefined) {
-    const rows = db.prepare('SELECT op FROM ops WHERE sort_key >= ? ORDER BY random() LIMIT ?').all(metadataStart, opts.sample) as {
-      op: Uint8Array;
-    }[];
+    const rows = db.prepare('SELECT sort_key, op FROM ops WHERE sort_key >= ? ORDER BY random() LIMIT ?').all(metadataStart, opts.sample) as OpRow[];
     for (let i = 0; i < rows.length; i += pageSize) await checkOps(rows.slice(i, i + pageSize));
   } else {
     const page = db.prepare('SELECT sort_key, op FROM ops WHERE sort_key > ? ORDER BY sort_key LIMIT ?');
@@ -76,7 +113,7 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
     let after: Uint8Array = metadataStart;
     const started = Date.now();
     for (;;) {
-      const rows = page.all(after, pageSize) as { sort_key: Uint8Array; op: Uint8Array }[];
+      const rows = page.all(after, pageSize) as OpRow[];
       if (rows.length === 0) break;
       await checkOps(rows);
       after = rows[rows.length - 1]!.sort_key;
@@ -84,5 +121,11 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
       log(`verified ${result.ops} ops, ${result.slots} slots in ${secs.toFixed(0)} s, residue ${result.residueCount}`);
     }
   }
+
+  // A message of a put-back batch may still be recorded as sent; the next `send` settles it before it sends anything.
+  const reset = db.prepare("UPDATE batches SET status = 'planned' WHERE id = ? AND status <> 'planned'");
+  transaction(db, () => {
+    for (const id of requeue) result.requeued += Number(reset.run(id).changes);
+  });
   return result;
 }
