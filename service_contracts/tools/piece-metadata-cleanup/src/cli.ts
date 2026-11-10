@@ -34,14 +34,11 @@ options:
   --read-batch-size <n>          storage reads per JSON-RPC batch request (default 50)
   --read-concurrency <n>         batch requests in flight (default 16)
   --requests-per-second <n>      cap on batch requests per second, 0 for none (default 0)
-  --stride <n>                   fetch: keep pieces with (data_set_id + piece_id) % n = 0
-  --limit <n>                    fetch: stop after n pieces
   --max-calldata-bytes <n>       plan: calldata limit per batch (default ${DEFAULT_LIMITS.maxCalldataBytes})
   --max-ops <n>                  plan: ops per batch, each queue pop counts as one (default ${DEFAULT_LIMITS.maxOps})
   --report <file>                check: write mismatch pieces as TSV; plan: write invalid and mismatch pieces;
                                  verify: write residue
   --allow-unchecked              plan: also plan pieces that check never read
-  --force                        plan: replan although batches left the planned state; sends everything again
                                  and drops the spend records
   --requeue                      verify: put batches that still have residue back to planned, for the next send
   --dry-run                      send: estimate gas only, send nothing (needs --from or ${KEY_ENV})
@@ -76,13 +73,10 @@ async function main(): Promise<void> {
       sample: { type: 'string' },
       all: { type: 'boolean' },
       recheck: { type: 'boolean' },
-      stride: { type: 'string' },
-      limit: { type: 'string' },
       'max-calldata-bytes': { type: 'string' },
       'max-ops': { type: 'string' },
       report: { type: 'string' },
       'allow-unchecked': { type: 'boolean' },
-      force: { type: 'boolean' },
       requeue: { type: 'boolean' },
       'dry-run': { type: 'boolean' },
       from: { type: 'string' },
@@ -119,9 +113,7 @@ async function main(): Promise<void> {
 
   switch (command) {
     case 'fetch': {
-      const stride = values.stride === undefined ? undefined : positiveInt(values.stride, 'stride', 1) || 1;
-      const limit = values.limit === undefined ? undefined : positiveInt(values.limit, 'limit', 0);
-      const { rows, invalid } = await fetchPieces(db, { legacyBeforeBlock: network.legacyBeforeBlock, stride, limit, log });
+      const { rows, invalid } = await fetchPieces(db, { legacyBeforeBlock: network.legacyBeforeBlock, log });
       log(`fetch done: ${rows} pieces, ${invalid} outside the facet's bounds`);
       break;
     }
@@ -157,7 +149,7 @@ async function main(): Promise<void> {
         maxOps: positiveInt(values['max-ops'], 'max-ops', DEFAULT_LIMITS.maxOps),
       };
       if (calldataBytes(0) >= limits.maxCalldataBytes || limits.maxOps < 1) throw new Error('batch limits too small');
-      const t = buildPlan(db, limits, { force: values.force, allowUnchecked: values['allow-unchecked'] });
+      const t = buildPlan(db, limits, { allowUnchecked: values['allow-unchecked'] });
       log(`pieces planned:  ${t.pieces} (${t.unchecked} of them unchecked)`);
       log(`pieces skipped:  ${JSON.stringify(t.skipped)}`);
       log(`queues:          ${t.queues} (${t.queueEntries} entries)`);
