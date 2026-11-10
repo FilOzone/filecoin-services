@@ -177,7 +177,17 @@ export function insertBatches(db: DatabaseSync, batches: Batch[]): void {
   batches.forEach((b, i) => stmt.run(i + 1, b.phase, b.firstKey, b.lastKey, b.opCount, b.weight, b.opsBytes));
 }
 
-// Batches that left the `planned` state: sending has started.
+// Whether a message was ever recorded in this state file. It outlives `plan --force`, which puts every batch back
+// to `planned`: storage keeps what the old plan already cleared, so `check` must stay off.
+export function sendStarted(db: DatabaseSync): boolean {
+  return getMeta(db, 'send_started') !== undefined || batchesStarted(db) > 0;
+}
+
+export function markSendStarted(db: DatabaseSync): void {
+  setMeta(db, 'send_started', '1');
+}
+
+// Batches that left the `planned` state.
 export function batchesStarted(db: DatabaseSync): number {
   return (db.prepare("SELECT count(*) AS n FROM batches WHERE status <> 'planned'").get() as { n: number }).n;
 }

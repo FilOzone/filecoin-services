@@ -44,7 +44,7 @@ A node of another network answers every storage read with zero, which would read
 `check` compares the key elements as a set with repeats, because the chain keeps keys in insertion order and the indexer does not record it.
 `check` runs only before anything is sent.
 After a partial send the ops of one piece are partly executed, so the piece would read as `mismatch` although the plan still holds the ops that finish it.
-`check` refuses to run as soon as one batch left the `planned` state.
+`check` refuses to run on a state file from which a message was ever sent, also after `plan --force`.
 `check` prints the first mismatches, and `check --report <file>` writes all of them as TSV (data set id, piece id, what differed).
 
 `plan` leaves out `clean` pieces (storage already empty), `mismatch` pieces and `invalid` pieces, and `plan --report <file>` writes the `mismatch` and `invalid` ones as TSV.

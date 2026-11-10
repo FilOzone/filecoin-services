@@ -398,6 +398,12 @@ test('after a partial send, check refuses and verify --requeue then send finishe
   assert.deepEqual([verified.residueCount, verified.requeued], [0, 0]);
   const info = await read<bigint>('dataSetInfoSlot', [BigInt(RAIL_DATA_SET)]);
   assert.deepEqual(hex(await storageDump(harness)), hex(new Map([[info, RAIL_ID], [info + 10n, 1n << 192n]])));
+
+  // A new plan puts every batch back to `planned`. check must still refuse: it would call partly cleaned pieces
+  // clean or mismatched, and the next plan would leave them out.
+  buildPlan(db, LIMITS, { force: true });
+  assert.ok(listBatches(db).every((b) => b.status === 'planned'));
+  await assert.rejects(checkPieces(db, reader, { all: true, recheck: true }), /sending has started/);
 });
 
 test('a message lost before broadcast is sent again under the same hash, and one that lands late is found', async () => {

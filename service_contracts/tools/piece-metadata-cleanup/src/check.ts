@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { batchesStarted, piecePage, setPieceStatus, statusCounts, transaction, type PieceRow, type PieceStatus } from './db.ts';
+import { piecePage, sendStarted, setPieceStatus, statusCounts, transaction, type PieceRow, type PieceStatus } from './db.ts';
 import { parsePiece, type Piece } from './ops.ts';
 import { addSlot, dataSlot, hex32, keysSlot, stringDataSlots, stringHead, valueSlots } from './slots.ts';
 import type { StorageReader } from './storage.ts';
@@ -72,10 +72,9 @@ export async function checkPieces(db: DatabaseSync, reader: StorageReader, opts:
 
   // Ops of one piece land in different batches, so a partly sent plan leaves pieces that read as clean or as a
   // mismatch here while the plan still holds the ops that finish them.
-  const left = batchesStarted(db);
-  if (left > 0) {
+  if (sendStarted(db)) {
     throw new Error(
-      `sending has started (${left} batches left the planned state), and check is only valid before that; to recover, run verify --requeue, then send`,
+      'sending has started on this state file, and check is only valid before that; to recover, run verify --requeue, then send',
     );
   }
 
