@@ -91,6 +91,10 @@ A reorg can remove that message afterwards, and the batch then stays recorded as
 Do not use `check` or `plan --force` to recover.
 `plan --force` after sending started builds a new plan from the check results taken before sending: it sends everything again and deletes the records of what was spent.
 
+Keep a copy of the state file from before the first `send`: it holds the check results.
+If the state file is lost during `send`, restore that copy and run `queues`, `plan` and `send` again; this sends everything again.
+Without a copy, a fresh `check` reads the partly cleaned pieces as `mismatch`, so the only way is `fetch`, `queues`, `plan --allow-unchecked`, `send`, without the proof that `check` gives.
+
 ## Sending and resume
 
 `send` estimates each batch with `eth_estimateGas` and sets the gas limit to the estimate times `--gas-multiplier`.
