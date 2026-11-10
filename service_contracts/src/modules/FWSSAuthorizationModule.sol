@@ -223,11 +223,9 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         );
         info.pendingOneTimePayments = newPending;
 
-        // Queue piece IDs for metadata cleanup at nextProvingPeriod
-        uint256[] storage scheduled = scheduledPieceMetadataRemovals[dataSetId];
-        for (uint256 i = 0; i < pieceIds.length; i++) {
-            scheduled.push(pieceIds[i]);
-        }
+        // piecesAdded may flush the fee before PDPVerifier drops these pieces, so pending alone cannot signal the
+        // smaller leaf count to nextProvingPeriod.
+        info.pieceRemovalsPending = true;
     }
 
     function terminateService(uint256 dataSetId, bytes calldata extraData) external {

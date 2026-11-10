@@ -381,6 +381,152 @@ contract FWSSProvingModuleTest is FilecoinWarmStorageServiceFixture {
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
     }
 
+    function _scheduleRemovalOfPieceOne(uint256 dataSetId) internal {
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 1;
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+    }
+
+    /// @dev Schedules removal of piece 1 of two, then adds a third piece. piecesAdded flushes the removal fee while
+    ///      PDPVerifier still counts the removed piece; the mock then drops it, as PDPVerifier does before calling
+    ///      nextProvingPeriod. Returns the leaf count after the removal.
+    function _scheduleRemovalThenAddPiece(uint256 dataSetId) internal returns (uint256 remainingLeaves) {
+        uint256 pieceLeaves = Cids.leafCount(0, 35);
+        _scheduleRemovalOfPieceOne(dataSetId);
+        _addPiece(dataSetId, 2, "piece-c");
+
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "piecesAdded flushed fees");
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(3 * pieceLeaves), "rate still counts the removed piece");
+
+        remainingLeaves = 2 * pieceLeaves;
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, remainingLeaves);
+    }
+
+    /// @dev Activates proving on two pieces, flushes a removal through piecesAdded, then advances one period.
+    function _advanceAfterFlushedRemoval() internal returns (uint256 dataSetId, uint256 leafCount, uint256 deadline) {
+        dataSetId = createDataSetForServiceProviderTest(sp1, client, "Removal flush");
+        _addPiece(dataSetId, 0, "piece-a");
+        _addPiece(dataSetId, 1, "piece-b");
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        deadline = block.number + provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, 2 * Cids.leafCount(0, 35));
+
+        leafCount = _scheduleRemovalThenAddPiece(dataSetId);
+
+        vm.roll(deadline + 1);
+        deadline += provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, leafCount);
+    }
+
+    function testNextProvingPeriod_FirstActivationAppliesRemovalFlushedByPiecesAdded() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Removal flush");
+        _addPiece(dataSetId, 0, "piece-a");
+        _addPiece(dataSetId, 1, "piece-b");
+        uint256 remainingLeaves = _scheduleRemovalThenAddPiece(dataSetId);
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        _nextProvingPeriod(dataSetId, block.number + provingPeriod, remainingLeaves);
+
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(remainingLeaves), "activation should price the removal");
+    }
+
+    function testNextProvingPeriod_AppliesRemovalFlushedByPiecesAdded() public {
+        (uint256 dataSetId, uint256 remainingLeaves,) = _advanceAfterFlushedRemoval();
+
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(remainingLeaves), "next period should price the removal");
+    }
+
+    function testNextProvingPeriod_ConsumesPieceRemovalsOnce() public {
+        (uint256 dataSetId, uint256 leafCount, uint256 deadline) = _advanceAfterFlushedRemoval();
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0);
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        vm.roll(deadline + 1);
+        vm.expectCall(address(payments), abi.encodeWithSelector(FilecoinPayV1.modifyRailPayment.selector), 0);
+        _nextProvingPeriod(dataSetId, deadline + provingPeriod, leafCount);
+    }
+
+    /// @dev The removal fee is still pending here, so the fee alone would trigger the update; the removal must be
+    ///      consumed in the same call or the next period refreshes the rate again.
+    function testNextProvingPeriod_ConsumesPieceRemovalsWhenFeesArePending() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Removal with fee");
+        _addPiece(dataSetId, 0, "piece-a");
+        _addPiece(dataSetId, 1, "piece-b");
+        uint256 pieceLeaves = Cids.leafCount(0, 35);
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        uint256 deadline = block.number + provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, 2 * pieceLeaves);
+
+        _scheduleRemovalOfPieceOne(dataSetId);
+        assertGt(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "removal fee is pending");
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, pieceLeaves);
+
+        vm.roll(deadline + 1);
+        deadline += provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, pieceLeaves);
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(pieceLeaves), "next period should price the removal");
+
+        vm.roll(deadline + 1);
+        vm.expectCall(address(payments), abi.encodeWithSelector(FilecoinPayV1.modifyRailPayment.selector), 0);
+        _nextProvingPeriod(dataSetId, deadline + provingPeriod, pieceLeaves);
+    }
+
+    function testNextProvingPeriod_FirstActivationConsumesPieceRemovalsWhenFeesArePending() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Removal with fee");
+        _addPiece(dataSetId, 0, "piece-a");
+        _addPiece(dataSetId, 1, "piece-b");
+        uint256 pieceLeaves = Cids.leafCount(0, 35);
+
+        _scheduleRemovalOfPieceOne(dataSetId);
+        assertGt(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "removal fee is pending");
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, pieceLeaves);
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        uint256 deadline = block.number + provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, pieceLeaves);
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(pieceLeaves), "activation should price the removal");
+
+        vm.roll(deadline + 1);
+        vm.expectCall(address(payments), abi.encodeWithSelector(FilecoinPayV1.modifyRailPayment.selector), 0);
+        _nextProvingPeriod(dataSetId, deadline + provingPeriod, pieceLeaves);
+    }
+
+    function testNextProvingPeriod_LegacyRemovalQueueRefreshesRateAndStaysUntouched() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Legacy queue");
+        _addPiece(dataSetId, 0, "piece-a");
+        _addPiece(dataSetId, 1, "piece-b");
+        uint256 pieceLeaves = Cids.leafCount(0, 35);
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        uint256 deadline = block.number + provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, 2 * pieceLeaves);
+
+        // Piece 1 was scheduled for removal by the pre-flag implementation, which queued it with its metadata.
+        uint256[] memory pieceIds = new uint256[](1);
+        pieceIds[0] = 1;
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("filename", "b.bin");
+        _seedLegacyPieceMetadataRemovals(dataSetId, pieceIds);
+        _seedLegacyPieceMetadata(dataSetId, 1, keys, values);
+        mockPDPVerifier.setDataSetLeafCount(dataSetId, pieceLeaves);
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0);
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(2 * pieceLeaves));
+
+        vm.roll(deadline + 1);
+        _nextProvingPeriod(dataSetId, deadline + provingPeriod, pieceLeaves);
+
+        assertEq(_pdpRate(dataSetId), _rateForLeaves(pieceLeaves), "legacy queue should trigger the rate refresh");
+        uint256[] memory queued = _legacyPieceMetadataRemovals(dataSetId);
+        assertEq(queued.length, 1, "legacy queue should stay for the cleanup");
+        assertEq(queued[0], 1);
+        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 1), 1, "legacy metadata keys should stay");
+        assertEq(_legacyPieceMetadataValue(dataSetId, 1, "filename"), "b.bin", "legacy metadata should stay");
+    }
+
     function testRailTerminated_RevertsIfCallerNotPaymentsContract() public {
         string[] memory metadataKeys = new string[](0);
         string[] memory metadataValues = new string[](0);

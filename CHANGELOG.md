@@ -14,10 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 - Storage and dataset charges combine monthly before per-epoch rounding for every terms ID; fees and reserves use the selected currency's precision, and FilBeam remains USDFC-only.
 - The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata.
+- `piecesScheduledRemove` no longer queues piece IDs for metadata cleanup; it sets `DataSetInfo.pieceRemovalsPending`, which the next `nextProvingPeriod` consumes to update the storage rate ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
+  The field packs into unused bytes of `DataSetInfo` relative slot 10, so no slot moves.
+  Piece metadata and removal-queue entries written by earlier versions stay in storage.
 
 ### Fixed
 
 - Payer-signed termination now ends the payment window and releases reserves even when the termination fee rounds to zero and no earlier fees remain pending.
+- `nextProvingPeriod` and `dataSetDeleted` no longer delete legacy piece metadata in a loop over the removal queue, so a long queue can no longer make them run out of gas ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
 
 
 ## [1.5.0] - FWSS ERC-8167 Dispatcher Transition

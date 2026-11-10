@@ -5,17 +5,17 @@ import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.so
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {FWSSPieceMetadataRemovals} from "../abstract/FWSSPieceMetadataRemovals.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
+import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title FWSSProvingModule
 /// @notice Records PDP proofs, advances or configures proving periods, and arbitrates PDP rail payments from them.
-contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable, FWSSPDPVerifier {
+contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerifier {
     FilecoinPayV1 internal immutable paymentContract;
 
     /// @notice Configures the immutable dependencies used by this module.
@@ -134,7 +134,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
             provingDeadlines[dataSetId] = firstDeadline;
 
             // Rate was already set in piecesAdded; only update if pieces were removed or fees are pending
-            if (_processScheduledPieceMetadataRemovals(dataSetId) || pending > 0) {
+            if (_consumePieceRemovals(dataSetId, info) || pending > 0) {
                 LibStoragePayments.updatePaymentRates(
                     dataSetId,
                     info,
@@ -191,7 +191,7 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
         provenThisPeriod[dataSetId] = false;
 
         // Additions update rate immediately in piecesAdded; update here if pieces were removed or fees are pending
-        bool hadRemovals = _processScheduledPieceMetadataRemovals(dataSetId);
+        bool hadRemovals = _consumePieceRemovals(dataSetId, info);
         if (hadRemovals || pending > 0) {
             LibStoragePayments.updatePaymentRates(
                 dataSetId,
@@ -203,6 +203,20 @@ contract FWSSProvingModule is IValidator, FWSSPieceMetadataRemovals, FWSSOwnable
                 paymentContract
             );
         }
+    }
+
+    /// @notice Reports whether pieces were scheduled for removal since the last proving period, and clears the flag.
+    /// @param dataSetId The data set advancing to its next proving period.
+    /// @param info The data set's stored info.
+    /// @return Whether nextProvingPeriod must refresh the rate for the leaf count after the removals.
+    function _consumePieceRemovals(uint256 dataSetId, DataSetInfo storage info) private returns (bool) {
+        if (info.pieceRemovalsPending) {
+            info.pieceRemovalsPending = false;
+            return true;
+        }
+
+        // Removals scheduled before the flag existed sit in the legacy queue until the cleanup pops them.
+        return scheduledPieceMetadataRemovals[dataSetId].length > 0;
     }
 
     /**
