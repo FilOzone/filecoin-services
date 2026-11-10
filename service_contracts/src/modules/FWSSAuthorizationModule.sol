@@ -137,7 +137,13 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
         uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
         LibStoragePayments.updatePaymentRates(
-            dataSetId, info, currentLeafCount, pending, reserveBalance, false, paymentContract
+            dataSetId,
+            info,
+            StoragePricing.calculateStorageRate(currentLeafCount, info.storageTermsId),
+            pending,
+            reserveBalance,
+            false,
+            paymentContract
         );
 
         if (metadataOmitted) {
@@ -265,9 +271,16 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
 
         uint96 pending = info.pendingOneTimePayments;
         if (pending > 0 || immediateTermination) {
-            uint256 leafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
+            // Flushing fees must not reprice an unchanged dataset.
+            uint256 currentRate = paymentContract.getRail(info.pdpRailId).paymentRate;
             LibStoragePayments.updatePaymentRates(
-                dataSetId, info, leafCount, pending, info.lifecycleReserveBalance, immediateTermination, paymentContract
+                dataSetId,
+                info,
+                currentRate,
+                pending,
+                info.lifecycleReserveBalance,
+                immediateTermination,
+                paymentContract
             );
         }
 

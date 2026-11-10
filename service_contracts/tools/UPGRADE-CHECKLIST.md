@@ -663,10 +663,39 @@ cast call --rpc-url "$ETH_RPC_URL" "$MIGRATION" 'migration()(address)'
 ```
 
 - [ ] Confirm the wrapper's `migration()` equals `RAW_MIGRATION`.
-- [ ] Independently verify the wrapper's deployed bytecode against the frozen
-  `FWSSStorageTermsMigration` source and constructor argument; record both
-  migration addresses and code hashes in the Run Log. `josuke verify` validates
-  the raw route migration and facets, not this wrapper.
+- [ ] From a clean checkout of the frozen deploy commit, with the reviewed,
+  committed `josuke.json`, run the following bytecode check. Record both migration
+  addresses and code hashes in the Run Log. `josuke verify` validates the raw
+  route migration and facets, not this wrapper.
+
+```bash
+verify_storage_terms_wrapper() (
+  set -euo pipefail
+  RAW_MIGRATION=$(source tools/josuke.sh; josuke_proposed_migration "$FWSS_PROXY_ADDRESS")
+  forge build src/FWSSStorageTermsMigration.sol
+  ARTIFACT=out/FWSSStorageTermsMigration.sol/FWSSStorageTermsMigration.json
+  REFS=$(jq -c '.deployedBytecode.immutableReferences' "$ARTIFACT")
+  VALUES=$(jq -cn --argjson refs "$REFS" \
+    --arg value "$(cast abi-encode 'f(address)' "$RAW_MIGRATION")" \
+    '$refs | with_entries(.value = $value)')
+  EXPECTED=$(python3 tools/bytecode.py fill-imm \
+    "$(jq -r '.deployedBytecode.object | ltrimstr("0x")' "$ARTIFACT")" \
+    "$REFS" "$VALUES")
+  ACTUAL=$(cast code --rpc-url "$ETH_RPC_URL" "$1")
+  if [ "${ACTUAL,,}" != "0x${EXPECTED,,}" ]; then
+    echo "STOP: storage-terms wrapper bytecode mismatch" >&2
+    return 1
+  fi
+  echo "Wrapper: $1 $(cast keccak "$ACTUAL")"
+  echo "Raw migration: $RAW_MIGRATION $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$RAW_MIGRATION")")"
+)
+verify_storage_terms_wrapper "$MIGRATION"
+```
+
+The wrapper's sole immutable is the raw migration address. The check fills it
+from the reviewed ledger, not from the deployed code or its `migration()` getter,
+then compares the complete runtime bytecode.
+
 - [ ] Use the **wrapper** as `MIGRATION` for B2–B4. Do not announce or execute the
   raw route migration for the introduction: existing modular migration code does
   not initialize storage terms.
@@ -694,10 +723,11 @@ echo "Data:   $CALLDATA"
 
 #### B3: Review During the Delay
 
-`migrate` on the dispatcher checks only the migration's address, so `josuke verify` is what confirms the code that will run. Someone other than the announcing operator runs them, preferably more than once before `afterEpoch`:
+`migrate` on the dispatcher checks only the migration's address. `josuke verify` confirms the raw migration and facets; the storage-terms wrapper requires the additional B1 bytecode check. Someone other than the announcing operator performs these checks, preferably more than once before `afterEpoch`:
 
 - [ ] [Read the pending plan](#read-the-pending-plan): the target is still `$MIGRATION` and nobody announced anything else
 - [ ] `josuke verify` passes against the committed `josuke.json`
+- [ ] For the storage-terms introduction, define `verify_storage_terms_wrapper` from B1 in the independent reviewer's frozen checkout, then run `verify_storage_terms_wrapper "$PLANNED_TARGET"` against the target read from the pending plan. Record the reviewer and output in the Run Log; stop on any failure.
 - [ ] The proxy still points at the dispatcher (rerun [Choose the Upgrade Path](#choose-the-upgrade-path))
 
 #### B4: Execute
@@ -715,6 +745,7 @@ echo "Data:   $CALLDATA"
 ```
 
 - [ ] Every signer reruns the two `STOP` checks and the simulation, and [reproduces and decodes](#reproduce-and-decode-safe-calldata) `$CALLDATA` before signing
+- [ ] For the storage-terms introduction, every signer also runs the B1 `verify_storage_terms_wrapper "$PLANNED_TARGET"` check from the frozen checkout against the freshly read pending target before signing. Stop on any failure; the target must match the independently reviewed wrapper address and code hash.
 
 ### Post-Upgrade Checks
 
