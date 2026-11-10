@@ -4,6 +4,8 @@ import { calldataBytes, cutBatches } from '../src/batches.ts';
 import { batchCalldataOps, iterateOps, listBatches, openDb, opInserter, pieceUpserter, replaceQueues, setPieceStatus } from '../src/db.ts';
 import { decodeOps, encodeOp, parsePiece, pieceOps, sortKey, type Op, type Piece, type PlannedOp } from '../src/ops.ts';
 import { buildPlan } from '../src/plan.ts';
+import { sendBatches } from '../src/send.ts';
+import type { PublicClient } from 'viem';
 
 const NETWORK = { name: 'test', fwss: '0x0000000000000000000000000000000000000001' };
 
@@ -110,6 +112,7 @@ test('plans queues first, skips clean and mismatched pieces, and covers every op
     upsert({ dataSetId, pieceId, metadata: JSON.stringify(m), removed: false });
   }
   upsert({ dataSetId: 3, pieceId: 0, metadata: JSON.stringify({ ['k'.repeat(40)]: 'v' }), removed: false, invalid: 'key too long' });
+  for (const id of ['1/0', '1/1', '2/0']) setPieceStatus(db)(...(id.split('/').map(Number) as [number, number]), 'match', null);
   setPieceStatus(db)(2, 1, 'clean', null);
   setPieceStatus(db)(2, 2, 'mismatch', 'keys length 2, expected 1');
 
@@ -128,7 +131,49 @@ test('plans queues first, skips clean and mismatched pieces, and covers every op
   assert.equal(sent.length - pops.length, expected.length);
   const key = (o: Op) => Buffer.from(encodeOp(o)).toString('hex');
   assert.deepEqual(sent.filter((o) => o.kind !== 4).map(key).sort(), expected.map(key).sort());
-  assert.equal(totals.pieces, 3);
+  assert.deepEqual([totals.pieces, totals.unchecked], [3, 0]);
   assert.deepEqual(totals.skipped, { clean: 1, invalid: 1, mismatch: 1 });
   for (const b of batches) assert.ok(calldataBytes(b.ops_bytes) <= 200 && b.weight <= 4);
+});
+
+test('plans only checked pieces unless told otherwise', () => {
+  const db = openDb(':memory:', NETWORK);
+  const upsert = pieceUpserter(db);
+  upsert({ dataSetId: 1, pieceId: 0, metadata: JSON.stringify({ name: 'a.bin' }), removed: false });
+  upsert({ dataSetId: 1, pieceId: 1, metadata: JSON.stringify({ name: 'b.bin' }), removed: false });
+  setPieceStatus(db)(1, 0, 'match', null);
+  replaceQueues(db, [], 'test');
+  const limits = { maxCalldataBytes: 60_000, maxOps: 1500 };
+
+  assert.throws(() => buildPlan(db, limits), /1 pieces are unchecked/);
+  assert.equal(listBatches(db).length, 0);
+
+  const allowed = buildPlan(db, limits, { allowUnchecked: true });
+  assert.deepEqual([allowed.pieces, allowed.unchecked], [2, 1]);
+
+  setPieceStatus(db)(1, 1, 'mismatch', 'wrong key');
+  const checked = buildPlan(db, limits);
+  assert.deepEqual([checked.pieces, checked.unchecked, checked.ops], [1, 0, 3]);
+});
+
+test('a plan that fails keeps the earlier plan, and send refuses a state file without batches', async () => {
+  const db = openDb(':memory:', NETWORK);
+  const noClient = {} as PublicClient;
+  const address = NETWORK.fwss as `0x${string}`;
+  const opts = { to: address, from: address, chainId: 1, dryRun: true };
+  await assert.rejects(sendBatches(db, noClient, opts), /no batches; run plan first/);
+
+  pieceUpserter(db)({ dataSetId: 1, pieceId: 0, metadata: JSON.stringify({ name: 'a.bin' }), removed: false });
+  setPieceStatus(db)(1, 0, 'match', null);
+  replaceQueues(db, [{ dataSetId: 1, length: 2 }], 'test');
+  const limits = { maxCalldataBytes: 60_000, maxOps: 1500 };
+  buildPlan(db, limits);
+  const before = listBatches(db);
+  assert.equal(before.length, 2);
+
+  // The stored row no longer parses, so the rebuild throws after it deleted the old plan.
+  db.prepare("UPDATE pieces SET metadata = '{}'").run();
+  assert.throws(() => buildPlan(db, limits, { force: true }), /became invalid/);
+  assert.deepEqual(listBatches(db), before);
+  assert.equal([...iterateOps(db)].length, 4);
 });
