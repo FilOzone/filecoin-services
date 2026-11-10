@@ -8,7 +8,7 @@ import { queueSlot } from '../src/slots.ts';
 import { rpcStorageReader } from '../src/storage.ts';
 
 type Call = { id: number; method: string; params: unknown[] };
-type Mode = 'ok' | 'http500' | 'error-item' | 'empty-word' | 'missing-item' | 'first-fails';
+type Mode = 'ok' | 'http500' | 'error-item' | 'empty-word' | 'missing-item' | 'shifted-ids' | 'first-fails';
 
 // A JSON-RPC node that answers the chain guard, and storage batches as the mode says: slot n holds n + 1.
 let server: Server;
@@ -39,7 +39,8 @@ before(async () => {
         if (i === 1 && mode === 'empty-word') return { jsonrpc: '2.0', id: call.id, result: '0x' };
         return { jsonrpc: '2.0', id: call.id, result: '0x' + (BigInt(call.params[1] as string) + 1n).toString(16) };
       });
-      reply(200, mode === 'missing-item' ? items.slice(1) : items, mode === 'first-fails' ? 20 : 0);
+      const shifted = items.map((item) => ({ ...item, id: (item.id as number) + 1 }));
+      reply(200, mode === 'missing-item' ? items.slice(1) : mode === 'shifted-ids' ? shifted : items, mode === 'first-fails' ? 20 : 0);
     });
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -71,6 +72,7 @@ test('a storage read that fails is an error, never a zero', async () => {
     ['error-item', /1 of 3 reads failed, first: .*rate limit/],
     ['empty-word', /1 of 3 reads failed/],
     ['missing-item', /./],
+    ['shifted-ids', /1 of 3 reads failed/],
   ] as const) {
     mode = failing;
     await assert.rejects(reader(3, 2).read(slots), message, failing);

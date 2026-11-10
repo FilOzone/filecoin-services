@@ -35,8 +35,6 @@ function fakeChain(): StorageReader & { reads: number } {
   piece(13, 2, ['kept', 'hidden'], [['kept', short('x')], ['hidden', short('legacy')]]);
   // Piece 14 is partly cleaned: its length and value head are zero, its key element is not.
   piece(14, 0, ['name'], []);
-  // Piece 15 has only a value data slot left: someone zeroed its length, element and head, but not the data.
-  storage.set(dataSlot(valueSlots(5, 15)(utf8('note'))), 1n);
 
   const fake = {
     reads: 0,
@@ -61,9 +59,8 @@ test('classifies pieces as match, clean or mismatch against storage', async () =
     [12, { note: 'ż'.repeat(41), empty: '' }], // wrong length of a long value
     [13, { kept: 'x', phantom: '' }], // same key count, and the value slot of the absent key reads zero as expected
     [14, { name: 'index.ts' }],
-    [15, { note: 'ż'.repeat(40) }],
   ];
-  for (const [pieceId, m] of indexer) upsert({ dataSetId: 5, pieceId, metadata: JSON.stringify(m), removed: false });
+  for (const [pieceId, m] of indexer) upsert({ dataSetId: 5, pieceId, metadata: JSON.stringify(m) });
 
   const chain = fakeChain();
   await checkPieces(db, chain, { all: true, pageSize: 3 });
@@ -85,7 +82,6 @@ test('classifies pieces as match, clean or mismatch against storage', async () =
       [12, 'mismatch'],
       [13, 'mismatch'],
       [14, 'mismatch'],
-      [15, 'mismatch'],
     ],
   );
   const detail = (pieceId: number) => rows.find((r) => r.piece_id === pieceId)!.detail!;
@@ -93,12 +89,10 @@ test('classifies pieces as match, clean or mismatch against storage', async () =
   assert.match(detail(13), /^key elements lack "phantom" and hold 0x68696464656e0{50}0c instead$/);
   assert.match(detail(14), /^keys length 0, expected 1; value "name" at 0x[0-9a-f]{64} holds 0x0{64}, expected 0x696e/);
 
-  assert.match(detail(15), /^keys and value heads are zero, but 1 value data slots are set$/);
-
   const before = chain.reads;
   await checkPieces(db, chain, { all: true });
   assert.equal(chain.reads, before, 'a second run resumes past checked pieces');
-  assert.deepEqual(statusCounts(db), { match: 2, mismatch: 7, clean: 1 });
+  assert.deepEqual(statusCounts(db), { match: 2, mismatch: 6, clean: 1 });
 });
 
 test('check and verify take exactly one of sample and all', async () => {
@@ -115,16 +109,16 @@ test('a fetch rerun keeps a check result while the metadata is unchanged', () =>
   const db = openDb(':memory:', NETWORK);
   const upsert = pieceUpserter(db);
   const row = (pieceId: number) =>
-    db.prepare('SELECT status, detail, removed FROM pieces WHERE piece_id = ?').get(pieceId) as { status: string; detail: string | null; removed: number };
+    db.prepare('SELECT status, detail FROM pieces WHERE piece_id = ?').get(pieceId) as { status: string; detail: string | null };
   const first = JSON.stringify({ name: 'a.bin' });
-  upsert({ dataSetId: 1, pieceId: 1, metadata: first, removed: false });
-  upsert({ dataSetId: 1, pieceId: 2, metadata: first, removed: false });
+  upsert({ dataSetId: 1, pieceId: 1, metadata: first });
+  upsert({ dataSetId: 1, pieceId: 2, metadata: first });
   setPieceStatus(db)(1, 1, 'match', null);
   setPieceStatus(db)(1, 2, 'mismatch', 'keys length 2, expected 1');
 
-  upsert({ dataSetId: 1, pieceId: 1, metadata: first, removed: true });
-  upsert({ dataSetId: 1, pieceId: 2, metadata: JSON.stringify({ name: 'a.bin', more: 'x' }), removed: false });
+  upsert({ dataSetId: 1, pieceId: 1, metadata: first });
+  upsert({ dataSetId: 1, pieceId: 2, metadata: JSON.stringify({ name: 'a.bin', more: 'x' }) });
 
-  assert.deepEqual({ ...row(1) }, { status: 'match', detail: null, removed: 1 });
-  assert.deepEqual({ ...row(2) }, { status: 'unchecked', detail: null, removed: 0 }, 'new metadata needs a new check');
+  assert.deepEqual({ ...row(1) }, { status: 'match', detail: null });
+  assert.deepEqual({ ...row(2) }, { status: 'unchecked', detail: null }, 'new metadata needs a new check');
 });

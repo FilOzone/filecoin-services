@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { calldataBytes, cutBatches, type Batch, type BatchLimits } from './batches.ts';
-import { batchesStarted, getMeta, insertBatches, iterateOps, opInserter, piecePage, readQueues, transaction } from './db.ts';
+import { getMeta, insertBatches, iterateOps, opInserter, piecePage, readQueues, sendStarted, transaction } from './db.ts';
 import { KIND_NAMES, decodeOps, parsePiece, plannedPieceOps, plannedQueueOps, POP_QUEUE, VALUE_DATA } from './ops.ts';
 
 export type PlanTotals = {
@@ -19,16 +19,12 @@ export type PlanTotals = {
   skipped: Record<string, number>;
 };
 
-// Rebuilds ops and batches from the pieces and queues tables. Only pieces checked `match` are planned, and with
-// `allowUnchecked` also the ones never checked. Pieces checked `clean` need nothing; `mismatch` and `invalid` pieces
-// are left out, because ops built from wrong metadata leave residue the facet cannot notice.
-export function buildPlan(db: DatabaseSync, limits: BatchLimits, opts: { force?: boolean; allowUnchecked?: boolean } = {}): PlanTotals {
-  const started = batchesStarted(db);
-  if (started > 0 && !opts.force) {
-    throw new Error(
-      `${started} batches already left the planned state; to finish the cleanup run verify --requeue, then send. ` +
-        'A new plan sends everything again and drops the spend records (--force)',
-    );
+// Rebuilds ops and batches from the pieces and queues tables. Pieces checked `match` or `clean` are planned, and with
+// `allowUnchecked` also the ones never checked. `mismatch` and `invalid` pieces are left out, because ops built from
+// wrong metadata leave residue the facet cannot notice.
+export function buildPlan(db: DatabaseSync, limits: BatchLimits, opts: { allowUnchecked?: boolean } = {}): PlanTotals {
+  if (sendStarted(db)) {
+    throw new Error('a message was already sent from this state file; to finish the cleanup run verify --requeue, then send');
   }
   if (getMeta(db, 'queues') === undefined) throw new Error('no queue lengths stored; run `queues` first');
 
@@ -60,10 +56,9 @@ export function buildPlan(db: DatabaseSync, limits: BatchLimits, opts: { force?:
     else totals.metadataSlots += decoded!.kind === VALUE_DATA ? decoded!.count : 1;
   };
 
-  // One transaction: a crash keeps the old plan and its send records instead of leaving a state file without batches.
+  // One transaction: a crash keeps the old plan instead of leaving a state file without batches.
   transaction(db, () => {
-    // Tx records point at batch ids, which a new plan reuses for other ops.
-    db.exec('DELETE FROM batches; DELETE FROM ops; DELETE FROM txs;');
+    db.exec('DELETE FROM batches; DELETE FROM ops;');
 
     for (const q of readQueues(db)) {
       for (const op of plannedQueueOps(q.dataSetId, q.length, limits.maxOps)) {
@@ -73,7 +68,7 @@ export function buildPlan(db: DatabaseSync, limits: BatchLimits, opts: { force?:
       totals.queues += 1;
     }
 
-    const page = piecePage(db, ['unchecked', 'match']);
+    const page = piecePage(db, ['unchecked', 'match', 'clean']);
     let after: [number, number] = [-1, -1];
     for (;;) {
       const rows = page(after, 20_000);
@@ -102,7 +97,7 @@ export function buildPlan(db: DatabaseSync, limits: BatchLimits, opts: { force?:
   });
 
   const skipped = db
-    .prepare("SELECT status, count(*) AS n FROM pieces WHERE status NOT IN ('unchecked', 'match') GROUP BY status")
+    .prepare("SELECT status, count(*) AS n FROM pieces WHERE status NOT IN ('unchecked', 'match', 'clean') GROUP BY status")
     .all() as { status: string; n: number }[];
   totals.skipped = Object.fromEntries(skipped.map((r) => [r.status, r.n]));
   return totals;

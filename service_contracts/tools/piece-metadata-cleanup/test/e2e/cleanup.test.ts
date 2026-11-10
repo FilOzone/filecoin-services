@@ -137,7 +137,7 @@ async function setup(pieces: Seed[], queues: [number, number][]) {
   const upsert = pieceUpserter(db);
   for (const [dataSetId, pieceId, onChain, table] of pieces) {
     const metadata = Object.fromEntries(Object.entries((table ?? onChain)!).reverse());
-    upsert({ dataSetId, pieceId, metadata: JSON.stringify(metadata), removed: false });
+    upsert({ dataSetId, pieceId, metadata: JSON.stringify(metadata) });
   }
 
   const reader = rpcStorageReader({ rpcUrl: url, chain: foundry, address: harness, batchSize: 7, concurrency: 3, requestsPerSecond: 0 });
@@ -232,11 +232,11 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   assert.ok(batches.length >= 10, `${batches.length} batches`);
 
   // Before sending, verify reads every planned slot and queue and finds each one set, except the head of the wrong
-  // key, which never existed.
+  // key, which never existed, and the three slots (element, head, length) of the piece that was clean already.
   const unsent = await verifyPlan(db, reader, { all: true, pageSize: 5 });
   assert.equal(unsent.queues, QUEUES.length);
   assert.equal(unsent.slots, plan.metadataSlots + QUEUES.length);
-  assert.equal(unsent.residueCount, unsent.slots - 1);
+  assert.equal(unsent.residueCount, unsent.slots - 1 - 3);
   const sampled = await verifyPlan(db, reader, { sample: 1_000_000 });
   assert.deepEqual([sampled.slots, sampled.residueCount], [unsent.slots, unsent.residueCount], 'a sample covering every op reads the same');
 
@@ -399,11 +399,11 @@ test('after a partial send, check refuses and verify --requeue then send finishe
   const info = await read<bigint>('dataSetInfoSlot', [BigInt(RAIL_DATA_SET)]);
   assert.deepEqual(hex(await storageDump(harness)), hex(new Map([[info, RAIL_ID], [info + 10n, 1n << 192n]])));
 
-  // A new plan puts every batch back to `planned`. check must still refuse: it would call partly cleaned pieces
-  // clean or mismatched, and the next plan would leave them out.
-  buildPlan(db, LIMITS, { force: true });
-  assert.ok(listBatches(db).every((b) => b.status === 'planned'));
+  // Even with every batch back to `planned` (requeued, or its message dropped), the state file remembers that it
+  // sent: check would misread partly cleaned pieces, and a new plan would reuse batch ids that messages point at.
+  db.exec("UPDATE batches SET status = 'planned'");
   await assert.rejects(checkPieces(db, reader, { all: true, recheck: true }), /sending has started/);
+  assert.throws(() => buildPlan(db, LIMITS), /already sent from this state file/);
 });
 
 test('a message lost before broadcast is sent again under the same hash, and one that lands late is found', async () => {

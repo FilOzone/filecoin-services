@@ -1,7 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 import { piecePage, sendStarted, setPieceStatus, statusCounts, transaction, type PieceRow, type PieceStatus } from './db.ts';
 import { parsePiece, type Piece } from './ops.ts';
-import { addSlot, dataSlot, hex32, keysSlot, stringDataSlots, stringHead, valueSlots } from './slots.ts';
+import { addSlot, dataSlot, hex32, keysSlot, stringHead, valueSlots } from './slots.ts';
 import type { StorageReader } from './storage.ts';
 
 // Slots that prove the tool knows a piece: the key count, the key array elements, and each value head, which holds
@@ -17,18 +17,9 @@ export function checkSlots(piece: Piece): { slots: bigint[]; keyHeads: bigint[];
   };
 }
 
-// The slots of a piece that checkSlots leaves out: the data slots of values of 32 bytes or more.
-function valueDataSlots(piece: Piece): bigint[] {
-  const valueSlot = valueSlots(piece.dataSetId, piece.pieceId);
-  return piece.entries.flatMap(({ key, value }) => {
-    const first = dataSlot(valueSlot(key));
-    return Array.from({ length: stringDataSlots(value.length) }, (_, i) => addSlot(first, i));
-  });
-}
-
-// `clean`: storage holds nothing of the piece (the old removal queue deleted it). `match`: storage holds exactly the
-// keys and value heads the indexer says. Anything else is `mismatch`, and the piece must not be planned from this
-// metadata.
+// `clean`: every slot read is zero (the old removal queue deleted the piece). `match`: storage holds exactly the keys
+// and value heads the indexer says. Both are planned: a `clean` reading can be undone by a reorg, and zeroing a zero
+// slot is harmless. Anything else is `mismatch`, and the piece must not be planned from this metadata.
 export function classify(piece: Piece, actual: readonly bigint[]): { status: PieceStatus; detail: string | null } {
   if (actual.every((v) => v === 0n)) return { status: 'clean', detail: null };
 
@@ -93,18 +84,6 @@ export async function checkPieces(db: DatabaseSync, reader: StorageReader, opts:
       const actual = values.slice(at, at + plans[i]!.slots.length);
       at += plans[i]!.slots.length;
       return classify(piece, actual);
-    });
-
-    // Zero heads do not prove zero data slots: a plan sent partly from another state file clears them separately.
-    // `clean` takes a piece out of the plan for good, so it has to mean that nothing is left.
-    const clean = results.flatMap((r, i) => (r.status === 'clean' ? [i] : []));
-    const dataSlots = clean.map((i) => valueDataSlots(pieces[i]!));
-    const dataValues = await reader.read(dataSlots.flat());
-    let from = 0;
-    clean.forEach((i, n) => {
-      const set = dataValues.slice(from, from + dataSlots[n]!.length).filter((v) => v !== 0n).length;
-      from += dataSlots[n]!.length;
-      if (set > 0) results[i] = { status: 'mismatch', detail: `keys and value heads are zero, but ${set} value data slots are set` };
     });
     transaction(db, () => {
       results.forEach((r, i) => {

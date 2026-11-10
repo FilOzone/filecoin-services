@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS pieces (
   data_set_id INTEGER NOT NULL,
   piece_id INTEGER NOT NULL,
   metadata TEXT NOT NULL,
-  removed INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'unchecked',
   detail TEXT,
   PRIMARY KEY (data_set_id, piece_id)
@@ -102,15 +101,14 @@ export function transaction<T>(db: DatabaseSync, fn: () => T): T {
 // Keeps a stored check result only while the indexer still reports the same metadata.
 export function pieceUpserter(db: DatabaseSync) {
   const stmt = db.prepare(`
-    INSERT INTO pieces (data_set_id, piece_id, metadata, removed, status, detail) VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO pieces (data_set_id, piece_id, metadata, status, detail) VALUES (?, ?, ?, ?, ?)
     ON CONFLICT (data_set_id, piece_id) DO UPDATE SET
-      removed = excluded.removed,
       status = CASE WHEN pieces.metadata = excluded.metadata THEN pieces.status ELSE excluded.status END,
       detail = CASE WHEN pieces.metadata = excluded.metadata THEN pieces.detail ELSE excluded.detail END,
       metadata = excluded.metadata
   `);
-  return (row: { dataSetId: number; pieceId: number; metadata: string; removed: boolean; invalid?: string }) =>
-    stmt.run(row.dataSetId, row.pieceId, row.metadata, row.removed ? 1 : 0, row.invalid ? 'invalid' : 'unchecked', row.invalid ?? null);
+  return (row: { dataSetId: number; pieceId: number; metadata: string; invalid?: string }) =>
+    stmt.run(row.dataSetId, row.pieceId, row.metadata, row.invalid ? 'invalid' : 'unchecked', row.invalid ?? null);
 }
 
 export function setPieceStatus(db: DatabaseSync) {
@@ -177,8 +175,8 @@ export function insertBatches(db: DatabaseSync, batches: Batch[]): void {
   batches.forEach((b, i) => stmt.run(i + 1, b.phase, b.firstKey, b.lastKey, b.opCount, b.weight, b.opsBytes));
 }
 
-// Whether a message was ever recorded in this state file. It outlives `plan --force`, which puts every batch back
-// to `planned`: storage keeps what the old plan already cleared, so `check` must stay off.
+// Whether a message was ever recorded in this state file. Batch states alone do not say it: `verify --requeue` and a
+// dropped message put batches back to `planned` while storage keeps what earlier messages cleared.
 export function sendStarted(db: DatabaseSync): boolean {
   return getMeta(db, 'send_started') !== undefined || batchesStarted(db) > 0;
 }

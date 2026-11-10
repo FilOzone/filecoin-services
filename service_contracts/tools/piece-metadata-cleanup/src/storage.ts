@@ -48,7 +48,9 @@ async function postBatch(url: string, address: Address, slots: readonly bigint[]
   const words: (bigint | undefined)[] = new Array(slots.length);
   let firstError: unknown;
   for (const r of json as { id?: unknown; result?: unknown; error?: unknown }[]) {
-    if (typeof r?.id === 'number' && typeof r.result === 'string' && WORD_HEX.test(r.result)) words[r.id] = BigInt(r.result);
+    const id = r?.id;
+    const known = typeof id === 'number' && Number.isInteger(id) && id >= 0 && id < slots.length && words[id] === undefined;
+    if (known && typeof r.result === 'string' && WORD_HEX.test(r.result)) words[id] = BigInt(r.result);
     else firstError ??= r?.error ?? r;
   }
   const missing = slots.length - words.filter((w) => w !== undefined).length;

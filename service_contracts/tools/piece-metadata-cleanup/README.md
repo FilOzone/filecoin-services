@@ -35,7 +35,7 @@ A node of another network answers every storage read with zero, which would read
 | Command | Does | Proves | Does not prove |
 |---|---|---|---|
 | `fetch` | Copies legacy pieces with metadata from the indexer; rerunning upserts and keeps a check result while the metadata is unchanged | Nothing about chain state | That the indexer is right |
-| `check --sample N \| --all` | Reads each piece's keys length slot, key element slots and value head slots and compares them with the indexer row | A `match` piece has exactly the stored key count, keys and value lengths, so its plan clears all of it; a `clean` piece has no slot set, value data slots included | The value data of a `match` piece; the plan takes their count from the value length in the head |
+| `check --sample N \| --all` | Reads each piece's keys length slot, key element slots and value head slots and compares them with the indexer row | A `match` piece has exactly the stored key count, keys and value lengths, so its plan clears all of it; a `clean` piece had none of those slots set when it was read | The value data slots, which it does not read; the plan takes their count from the value length |
 | `queues` | Reads the legacy queue length of every data set id below PDPVerifier's next id | Which queues are non-empty at that moment | Their lengths later: the deployed FWSS keeps popping them until the upgrade |
 | `plan` | Builds ops for `match` pieces and every stored queue, sorts them by slot, cuts batches | Bounds: a piece the facet cannot clear is listed as `invalid` and never planned | Anything about storage |
 | `send` | Sends the batches that are not done, in order, under a price ceiling | Each batch succeeded on chain when its receipt was read | That anything was cleared: the facet zeroes whatever slots it is given |
@@ -44,10 +44,11 @@ A node of another network answers every storage read with zero, which would read
 `check` compares the key elements as a set with repeats, because the chain keeps keys in insertion order and the indexer does not record it.
 `check` runs only before anything is sent.
 After a partial send the ops of one piece are partly executed, so the piece would read as `mismatch` although the plan still holds the ops that finish it.
-`check` refuses to run on a state file from which a message was ever sent, also after `plan --force`.
+`check` and `plan` refuse to run on a state file from which a message was ever sent.
 `check` prints the first mismatches, and `check --report <file>` writes all of them as TSV (data set id, piece id, what differed).
 
-`plan` leaves out `clean` pieces (storage already empty), `mismatch` pieces and `invalid` pieces, and `plan --report <file>` writes the `mismatch` and `invalid` ones as TSV.
+`plan` leaves out `mismatch` and `invalid` pieces, and `plan --report <file>` writes them as TSV.
+`plan` includes `clean` pieces: zeroing a zero slot is harmless, and it means `verify` reads their slots too, in case a reorg undid what `check` saw.
 `plan` refuses to run while a piece is `unchecked` and prints how many there are.
 `plan --allow-unchecked` plans them anyway and prints how many it planned without a check.
 `plan` builds the new plan in one SQLite transaction, so a crash keeps the earlier plan.
@@ -88,12 +89,11 @@ Repeat the two until `verify --all` exits 0.
 A reorg can remove that message afterwards, and the batch then stays recorded as done without having run.
 `verify --requeue` after finality finds its slots and puts the batch back, and `send` sends it again.
 
-Do not use `check` or `plan --force` to recover.
-`plan --force` after sending started builds a new plan from the check results taken before sending: it sends everything again and deletes the records of what was spent.
+`check` and `plan` are not part of recovery, and both refuse once a message was sent.
 
 Keep a copy of the state file from before the first `send`: it holds the check results.
 If the state file is lost during `send`, restore that copy and run `queues`, `plan` and `send` again; this sends everything again.
-Without a copy, a fresh `check` reads the partly cleaned pieces as `mismatch`, so the only way is `fetch`, `queues`, `plan --allow-unchecked`, `send`, without the proof that `check` gives.
+Without a copy, a fresh `check` reads the partly cleaned pieces as `mismatch`, so the only way is a new state file with `fetch`, `queues`, `plan --allow-unchecked`, `send`, without the proof that `check` gives.
 
 ## Sending and resume
 
