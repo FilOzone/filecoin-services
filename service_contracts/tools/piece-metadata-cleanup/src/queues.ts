@@ -1,4 +1,6 @@
+import type { DatabaseSync } from 'node:sqlite';
 import { parseAbi, type Address, type PublicClient } from 'viem';
+import { replaceQueues } from './db.ts';
 import { queueSlot } from './slots.ts';
 import type { StorageReader } from './storage.ts';
 
@@ -23,4 +25,16 @@ export async function readQueueLengths(
       return { dataSetId, length: Number(length) };
     })
     .filter((q) => q.length > 0);
+}
+
+// Replaces the stored queues with the non-empty ones among data set ids 0..dataSetIds-1.
+export async function refreshQueues(
+  db: DatabaseSync,
+  reader: StorageReader,
+  dataSetIds: number,
+  note: string,
+): Promise<{ dataSetId: number; length: number }[]> {
+  const queues = await readQueueLengths(reader, dataSetIds);
+  replaceQueues(db, queues, note);
+  return queues;
 }
