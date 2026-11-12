@@ -6,7 +6,7 @@ The tool is deleted together with that facet once the state is gone.
 
 The facet cannot detect residue.
 If the tool has a wrong key, value length or key count for a piece, the slots it does not know stay behind and every transaction still succeeds.
-So `check` compares each piece with chain storage, and `plan` plans only the pieces that `check` found matching.
+So `check` compares each piece with chain storage, and `plan` plans only the pieces that `check` found matching or already clean.
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ A node of another network answers every storage read with zero, which would read
 | `fetch` | Copies legacy pieces with metadata from the indexer; rerunning upserts and keeps a check result while the metadata is unchanged | Nothing about chain state | That the indexer is right |
 | `check --sample N \| --all` | Reads each piece's keys length slot, key element slots and value head slots and compares them with the indexer row | A `match` piece has exactly the stored key count, keys and value lengths, so its plan clears all of it; a `clean` piece had none of those slots set when it was read | The value data slots, which it does not read; the plan takes their count from the value length |
 | `queues` | Reads the legacy queue length of every data set id below PDPVerifier's next id | Which queues are non-empty at that moment | Their lengths later: the deployed FWSS keeps popping them until the upgrade |
-| `plan` | Builds ops for `match` pieces and every stored queue, sorts them by slot, cuts batches | Bounds: a piece the facet cannot clear is listed as `invalid` and never planned | Anything about storage |
+| `plan` | Builds ops for `match` and `clean` pieces and every stored queue, sorts them by slot, cuts batches | Bounds: a piece the facet cannot clear is listed as `invalid` and never planned | Anything about storage |
 | `send` | Sends the batches that are not done, in order, under a price ceiling | Each batch succeeded on chain when its receipt was read | That anything was cleared: the facet zeroes whatever slots it is given |
 | `verify --sample N \| --all` | Reads every slot the plan zeroes and every planned queue length; exits 1 if one is not zero | The planned slots are zero | Slots the plan never had; `check` covers those |
 
@@ -98,7 +98,9 @@ Without a copy, a fresh `check` reads the partly cleaned pieces as `mismatch`, s
 ## Sending and resume
 
 `send` estimates each batch with `eth_estimateGas` and sets the gas limit to the estimate times `--gas-multiplier`.
-At most `--max-inflight` messages (at most 4, the Filecoin mempool's nonce gap) are unconfirmed at a time, with nonces the tool assigns.
+Lotus's estimate is already about 1.25 times the gas a batch uses, so the default multiplier of 1 is enough.
+At most `--max-inflight` messages (at most 4) are unconfirmed at a time, with nonces the tool assigns.
+On the devnet four batches of the default size landed in one block and used about 3B gas, under the block gas target of 5B, above which the base fee rises.
 
 `--max-gas-price <attoFIL per gas>` is the price ceiling, and `send` requires it unless `--dry-run` is set.
 No message leaves while the latest base fee plus the priority fee the node suggests (`eth_maxPriorityFeePerGas`) is above the ceiling; `send` waits and asks again.
@@ -129,8 +131,9 @@ The summary shows the batches done, the gas used and the FIL spent, from the rec
 
 ## Tuning
 
-- `plan --max-calldata-bytes` (default 60000): Filecoin rejects messages over about 64 KiB, and the envelope overhead is not measured.
-- `plan --max-ops` (default 1500, about 0.9B gas): each queue pop counts as one op.
+- `plan --max-calldata-bytes` (default 60000): Lotus rejects messages over 65,536 bytes; on the devnet it accepted 65,348 bytes of calldata and rejected 65,412.
+- `plan --max-ops` (default 1500): each queue pop counts as one op.
+  On the devnet a batch of 1500 ops used about 0.76B gas; mainnet has a much larger storage tree, so expect more there.
 - `--read-batch-size`, `--read-concurrency`, `--requests-per-second`: storage reads, as `eth_getStorageAt` in JSON-RPC batches.
 - `send --gas-multiplier`, `--max-inflight`, `--poll-interval`, `--receipt-timeout`.
 
@@ -148,13 +151,29 @@ Estimates for mainnet (4,533,224 pieces, about 22.7M slots), from those rates:
 - `verify --all`: about 22.7M slots, about 16 hours; it does not resume, so use `--sample` for interim looks.
 - `send`: about 12,100 batches at the default limits; at 4 messages per one or two 30-second epochs, about 25 to 50 hours.
 
+## Devnet rehearsal
+
+On 12.11.2026 the tool's library code ran the whole procedure against a local Lotus 1.38.3 devnet (network version 29, 4-second epochs), on the test harness with 5,539 seeded pieces and three queues: 19 batches, 23,480 ops, 29,290 slots.
+`verify` found no residue, and a read of the value slots through the harness's own views found none either.
+
+- Gas per batch of 1500 metadata ops: 757M median, 773M max; about 505k gas per op and 405k per zeroed slot.
+- Queue pops: about 404k gas per popped entry.
+- A batch sent again as a no-op used about 472M gas, against 760M the first time.
+- The gas limit was 1.25 to 1.27 times the gas used in every batch.
+- Every receipt was found by the hash recorded before the broadcast, also for the two messages in flight when `send` was killed.
+- The price ceiling held the run while the base fee plus the priority fee was above it.
+- Lotus accepted 12 consecutive nonces from one sender, so 4 in flight is a choice, not the node's limit.
+
+The devnet contract held about 32,000 slots and mainnet holds about 24M, so these gas numbers are a lower bound for mainnet.
+
 ## Not verified
 
-The facet is not deployed on any network, so nothing here has run against a real Filecoin node.
-Unchecked on a real node: the message size limit, nonce gaps and mempool replacement, fee estimation and the price ceiling against Lotus's priority fee, FVM gas per batch, and finding transactions and receipts by the Ethereum hash the tool computes.
-The calibnet rehearsal must cover these before mainnet.
+- Gas per batch on a storage tree of mainnet's size: the pilot `send --max-batches 10` on mainnet measures it.
+- A dropped message, a reverted batch, a receipt timeout and a reorg on a real node; the anvil tests cover these paths.
+- The mempool rules and rate limits of the public RPC nodes for sending.
+- `verify --all` after finality on a real network.
 
-## Tests
+The calibnet rehearsal covers the last three before mainnet.## Tests
 
 - `npm test`: unit tests; no network.
 - `npm run typecheck`.
