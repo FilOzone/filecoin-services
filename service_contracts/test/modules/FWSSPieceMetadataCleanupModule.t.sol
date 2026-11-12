@@ -54,25 +54,32 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         return abi.encodePacked(uint8(4), uint40(dataSetId), uint16(count));
     }
 
+    function _keyDataOp(uint256 dataSetId, uint256 pieceId, uint256 index) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(5), uint40(dataSetId), uint40(pieceId), uint8(index));
+    }
+
     /// @dev Ops that clear one piece: per key its value head, the data slots of a value of 32 bytes or more, and
-    ///      its key slot (legacy keys are under 32 bytes, so the head holds the whole key); then the key list length.
+    ///      its key head and the data slot of a 32-byte key; then the key list length.
     function _pieceOps(uint256 dataSetId, uint256 pieceId, string[] memory keys, string[] memory values)
         internal
         pure
         returns (bytes[] memory ops)
     {
-        ops = new bytes[](3 * keys.length + 1);
+        ops = new bytes[](4 * keys.length + 1);
         uint256 next = 0;
         for (uint256 i = 0; i < keys.length; i++) {
             ops[next++] = _valueHeadOp(dataSetId, pieceId, bytes(keys[i]));
             ops[next++] = _keyHeadOp(dataSetId, pieceId, i);
+            if (bytes(keys[i]).length == 32) {
+                ops[next++] = _keyDataOp(dataSetId, pieceId, i);
+            }
             if (bytes(values[i]).length >= 32) {
                 ops[next++] = _valueDataOp(dataSetId, pieceId, (bytes(values[i]).length + 31) / 32, bytes(keys[i]));
             }
         }
         ops[next++] = _keysLengthOp(dataSetId, pieceId);
 
-        // Drop the unused tail left by values without data slots.
+        // Drop the unused tail left by keys and values without data slots.
         assembly ("memory-safe") {
             mstore(ops, next)
         }
@@ -149,16 +156,20 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         (keys[3], values[3]) = ("x32", _repeat("b", 32));
         (keys[4], values[4]) = ("x-trace-id-01234567", _repeat("c", 128));
         _seedLegacyPieceMetadata(dataSetId, 8, keys, values);
+        (string[] memory longKeys, string[] memory longValues) = _getSingleMetadataKV(_repeat("k", 32), "long-key");
 
-        // Solidity's own writes are the oracle for what piece 7 occupies.
+        // Solidity's own writes are the oracle for what pieces 7 and 9 occupy.
         vm.record();
         _seedLegacyPieceMetadata(dataSetId, 7, keys, values);
+        _seedLegacyPieceMetadata(dataSetId, 9, longKeys, longValues);
         (, bytes32[] memory seeded) = vm.accesses(proxy);
-        assertGe(seeded.length, 16, "5 value heads, 5 data slots, 5 keys and the key count");
+        assertGe(seeded.length, 20, "6 value heads, 5 value data slots, 6 key heads, 1 key data slot and 2 key counts");
 
         bytes[] memory ops = _pieceOps(dataSetId, 7, keys, values);
         _shuffle(ops, shuffleSeed);
-        bytes memory batch = _concat(ops);
+        bytes[] memory longKeyOps = _pieceOps(dataSetId, 9, longKeys, longValues);
+        _shuffle(longKeyOps, shuffleSeed);
+        bytes memory batch = bytes.concat(_concat(ops), _concat(longKeyOps));
 
         vm.record();
         cleanup.cleanupLegacyPieceMetadata(batch);
@@ -213,7 +224,7 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
             uint256 r = uint256(keccak256(abi.encode(seed, i)));
             uint256 dataSetId = r % 4 == 3 ? uint256(uint40(r >> 8)) : dataSetIds[r % 3];
             uint256 pieceId = (r >> 48) % 3 == 0 ? type(uint40).max : uint40(r >> 56);
-            uint256 kind = (r >> 96) % 5;
+            uint256 kind = (r >> 96) % 6;
             uint256 small = (r >> 104) % 5;
 
             if (kind == 4) {
@@ -225,6 +236,9 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
             } else if (kind == 3) {
                 batch = bytes.concat(batch, _keyHeadOp(dataSetId, pieceId, small));
                 allowed[allowedLength++] = _element(_keysSlot(dataSetId, pieceId), small);
+            } else if (kind == 5) {
+                batch = bytes.concat(batch, _keyDataOp(dataSetId, pieceId, small));
+                allowed[allowedLength++] = keccak256(abi.encode(_element(_keysSlot(dataSetId, pieceId), small)));
             } else {
                 bytes memory key = abi.encodePacked(keccak256(abi.encode(r, "key")), keccak256(abi.encode(r)));
                 uint256 keyLength = [uint256(0), 1, 19, 32, 64][(r >> 128) % 5];
@@ -283,12 +297,13 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         uint256 at = valid.length;
         bytes4 truncated = FWSSPieceMetadataCleanupModule.TruncatedCleanupOp.selector;
 
-        bytes[5] memory full = [
+        bytes[6] memory full = [
             _valueHeadOp(1, 2, "key"),
             _valueDataOp(1, 2, 4, "key"),
             _keysLengthOp(1, 2),
             _keyHeadOp(1, 2, 4),
-            _popQueueOp(1, 3)
+            _popQueueOp(1, 3),
+            _keyDataOp(1, 2, 4)
         ];
         for (uint256 k = 0; k < full.length; k++) {
             for (uint256 length = 1; length < full[k].length; length++) {
@@ -302,8 +317,8 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         }
 
         _expectRejected(
-            bytes.concat(valid, hex"05"),
-            abi.encodeWithSelector(FWSSPieceMetadataCleanupModule.UnknownCleanupOp.selector, at, 5)
+            bytes.concat(valid, hex"06"),
+            abi.encodeWithSelector(FWSSPieceMetadataCleanupModule.UnknownCleanupOp.selector, at, 6)
         );
         _expectRejected(
             bytes.concat(valid, hex"ff0000000001"),
@@ -315,6 +330,10 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         );
         _expectRejected(
             bytes.concat(valid, _keyHeadOp(1, 2, 5)),
+            abi.encodeWithSelector(FWSSPieceMetadataCleanupModule.KeyIndexOutOfRange.selector, at, 5)
+        );
+        _expectRejected(
+            bytes.concat(valid, _keyDataOp(1, 2, 5)),
             abi.encodeWithSelector(FWSSPieceMetadataCleanupModule.KeyIndexOutOfRange.selector, at, 5)
         );
 

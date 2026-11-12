@@ -17,6 +17,7 @@ contract FWSSPieceMetadataCleanupModule is FWSSStorage {
     uint256 private constant KEYS_LENGTH = 2;
     uint256 private constant KEY_HEAD = 3;
     uint256 private constant POP_QUEUE = 4;
+    uint256 private constant KEY_DATA = 5;
 
     // Bounds of the legacy data (5 keys per piece, 128-byte values), above today's limits in FWSSConstants.
     // The 1-byte field plus this bound stops `keccak256(slot) + offset` from addressing an arbitrary slot.
@@ -40,6 +41,8 @@ contract FWSSPieceMetadataCleanupModule is FWSSStorage {
     /// - 4 PopQueue: `count` (2). Pops up to `count` entries from the end of
     ///   `scheduledPieceMetadataRemovals[dataSetId]`, and marks a live data set's next proving period to refresh its
     ///   rate if it popped any.
+    /// - 5 KeyData: `pieceId` (5), `index` (1, at most 4). Zeroes the single out-of-line data slot of a
+    ///   32-byte key at that index. Separate from KeyHead so operations can follow storage-key order.
     /// Operations never check what they zero, so a batch with already-cleaned or deleted entries still succeeds.
     /// @param ops The packed operations; empty is a no-op.
     function cleanupLegacyPieceMetadata(bytes calldata ops) external {
@@ -51,7 +54,7 @@ contract FWSSPieceMetadataCleanupModule is FWSSStorage {
 
     function _apply(bytes calldata ops, uint256 start) private returns (uint256 next) {
         uint256 kind = _read(ops, start, start, 1);
-        require(kind <= POP_QUEUE, UnknownCleanupOp(start, kind));
+        require(kind <= KEY_DATA, UnknownCleanupOp(start, kind));
         uint256 dataSetId = _read(ops, start, start + 1, 5);
 
         if (kind == POP_QUEUE) {
@@ -71,6 +74,15 @@ contract FWSSPieceMetadataCleanupModule is FWSSStorage {
             uint256 index = _read(ops, start, next, 1);
             require(index < LEGACY_MAX_KEYS_PER_PIECE, KeyIndexOutOfRange(start, index));
             _zero(uint256(keccak256(abi.encode(_slot(dataSetPieceMetadataKeys[dataSetId][pieceId])))) + index);
+            return next + 1;
+        }
+
+        if (kind == KEY_DATA) {
+            uint256 index = _read(ops, start, next, 1);
+            require(index < LEGACY_MAX_KEYS_PER_PIECE, KeyIndexOutOfRange(start, index));
+            uint256 elementSlot =
+                uint256(keccak256(abi.encode(_slot(dataSetPieceMetadataKeys[dataSetId][pieceId])))) + index;
+            _zero(uint256(keccak256(abi.encode(elementSlot))));
             return next + 1;
         }
 
