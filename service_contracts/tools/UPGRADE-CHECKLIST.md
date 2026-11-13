@@ -282,11 +282,14 @@ make test           # builds the ERC-8167 dispatcher artifacts the tests need (m
 - [ ] Name the technical owner, update the Overview, and confirm they own the written upgrade plan and go/no-go decision
 - [ ] Obtain technical-owner approval of the two-network deployment inventory:
   - Run `josuke check --chain 314159` and `josuke check --chain 314` and record the listed facets.
+  - For every `CHANGED` or `NEW` facet, changed constructor argument, layout change, and warning in that output, name the merged PR that intends it. `josuke check` passes on any internally consistent value (a constructor argument changed from 150 to 10 is reported, not failed), so this review is the only gate on what the values should be. A change nobody can attribute blocks the release.
   - **Path A only:** record each network's current implementation (`cast implementation --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS"`). It is the transition's rollback target, and Procedure A2 checks the transition pins it.
   - Populate Dependency Targets and Compatibility. Stop, correct the release ref, and rerun for any unapproved difference.
+  - Check every dependency record that `verify-deployments.sh` skips as pinned, PDPVerifier included, against an independent source: the creation transaction's constructor arguments, or the dependency's release build with the pin ignored (as #606 did for PDPVerifier). Record the result. No tool checks these records otherwise.
 - [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
 - [ ] Fill Rollback Plan from the [function table](#how-the-upgrade-functions-differ)
 - [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
+- [ ] Rehearse the upgrade on a local fork of each network with real data sets: announce, execute, and run the post-upgrade checks against the frozen candidate. For the storage-terms introduction, cover data sets with a pending fee, piece additions, piece removals, and termination with an underfunded payer, and confirm the wrapper (not the raw migration) is the rehearsed target. Record the fork block and results.
 - [ ] Freeze the deploy commit and record it in Release Tracking
 - [ ] Create and push the stack tag from the frozen deploy commit before any live upgrade transaction:
 
@@ -348,7 +351,8 @@ Deploy both networks from the frozen tag before any announce/execute. Deploying 
 - [ ] **Calibnet:** run [Procedure A1](#a1-deploy) (Path A) or [Procedure B1](#b1-deploy) (Path B) in the Calibnet environment
 - [ ] **Mainnet:** run [Procedure A1](#a1-deploy) (Path A) or [Procedure B1](#b1-deploy) (Path B) in the Mainnet environment
 - [ ] Open a PR with the updated `josuke.json` (and, for Path A, `deployments.json`) and record it in Release Tracking. Reviewers verify against this exact ledger.
-- [ ] A second engineer runs `josuke verify` in each environment from the PR's commit and records the result in the Run Log
+- [ ] On the PR's commit, `josuke check --strict` passes: after `josuke deploy`, the staged `proposed` deployment must match the frozen source exactly. Paste its `--format markdown` report into the PR.
+- [ ] A second engineer runs `josuke verify` in each environment from the PR's commit and records the result in the Run Log. `josuke verify` proves the chain matches the ledger, not that the ledger is right, so the same engineer checks the recorded constructor arguments of each new facet against the Phase 1 attribution.
 - [ ] Add the announced target for each network to the GitHub pre-release rollout status
 
 ### Phase 3: Calibnet Announce + Execute
@@ -664,37 +668,19 @@ cast call --rpc-url "$ETH_RPC_URL" "$MIGRATION" 'migration()(address)'
 
 - [ ] Confirm the wrapper's `migration()` equals `RAW_MIGRATION`.
 - [ ] From a clean checkout of the frozen deploy commit, with the reviewed,
-  committed `josuke.json`, run the following bytecode check. Record both migration
-  addresses and code hashes in the Run Log. `josuke verify` validates the raw
-  route migration and facets, not this wrapper.
+  committed `josuke.json`, run the wrapper bytecode check. Record both migration
+  addresses and code hashes it prints in the Run Log. `josuke verify` validates
+  the raw route migration and facets, not this wrapper.
 
 ```bash
-verify_storage_terms_wrapper() (
-  set -euo pipefail
-  RAW_MIGRATION=$(source tools/josuke.sh; josuke_proposed_migration "$FWSS_PROXY_ADDRESS")
-  forge build src/FWSSStorageTermsMigration.sol
-  ARTIFACT=out/FWSSStorageTermsMigration.sol/FWSSStorageTermsMigration.json
-  REFS=$(jq -c '.deployedBytecode.immutableReferences' "$ARTIFACT")
-  VALUES=$(jq -cn --argjson refs "$REFS" \
-    --arg value "$(cast abi-encode 'f(address)' "$RAW_MIGRATION")" \
-    '$refs | with_entries(.value = $value)')
-  EXPECTED=$(python3 tools/bytecode.py fill-imm \
-    "$(jq -r '.deployedBytecode.object | ltrimstr("0x")' "$ARTIFACT")" \
-    "$REFS" "$VALUES")
-  ACTUAL=$(cast code --rpc-url "$ETH_RPC_URL" "$1")
-  if [ "${ACTUAL,,}" != "0x${EXPECTED,,}" ]; then
-    echo "STOP: storage-terms wrapper bytecode mismatch" >&2
-    return 1
-  fi
-  echo "Wrapper: $1 $(cast keccak "$ACTUAL")"
-  echo "Raw migration: $RAW_MIGRATION $(cast keccak "$(cast code --rpc-url "$ETH_RPC_URL" "$RAW_MIGRATION")")"
-)
-verify_storage_terms_wrapper "$MIGRATION"
+unset ETH_KEYSTORE ETH_PASSWORD
+./tools/verify-storage-terms-wrapper.sh "$MIGRATION"
 ```
 
-The wrapper's sole immutable is the raw migration address. The check fills it
+The wrapper's sole immutable is the raw migration address. The script fills it
 from the reviewed ledger, not from the deployed code or its `migration()` getter,
-then compares the complete runtime bytecode.
+then compares the complete runtime bytecode. It prints `STOP` and exits non-zero
+for anything else, the raw migration included.
 
 - [ ] Use the **wrapper** as `MIGRATION` for B2–B4. Do not announce or execute the
   raw route migration for the introduction: existing modular migration code does
@@ -727,7 +713,7 @@ echo "Data:   $CALLDATA"
 
 - [ ] [Read the pending plan](#read-the-pending-plan): the target is still `$MIGRATION` and nobody announced anything else
 - [ ] `josuke verify` passes against the committed `josuke.json`
-- [ ] For the storage-terms introduction, define `verify_storage_terms_wrapper` from B1 in the independent reviewer's frozen checkout, then run `verify_storage_terms_wrapper "$PLANNED_TARGET"` against the target read from the pending plan. Record the reviewer and output in the Run Log; stop on any failure.
+- [ ] For the storage-terms introduction, run `./tools/verify-storage-terms-wrapper.sh "$PLANNED_TARGET"` from the independent reviewer's frozen checkout against the target read from the pending plan. Record the reviewer and output in the Run Log; stop on any failure.
 - [ ] The proxy still points at the dispatcher (rerun [Choose the Upgrade Path](#choose-the-upgrade-path))
 
 #### B4: Execute
@@ -736,6 +722,8 @@ echo "Data:   $CALLDATA"
 read_plan
 [ "$PLANNED_TARGET" = "$(cast to-check-sum-address "$MIGRATION")" ] || echo "STOP: the pending plan is not the reviewed migration"
 josuke verify || echo "STOP: josuke verify failed"
+# Storage-terms introduction only: the target must be the reviewed wrapper, never the raw migration
+./tools/verify-storage-terms-wrapper.sh "$PLANNED_TARGET" || echo "STOP: the pending plan is not the reviewed storage-terms wrapper"
 
 CALLDATA=$(cast calldata 'migrate(address)' "$MIGRATION")
 OWNER=$(cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" 'owner()(address)')
@@ -744,8 +732,8 @@ echo "Target: $FWSS_PROXY_ADDRESS"
 echo "Data:   $CALLDATA"
 ```
 
-- [ ] Every signer reruns the two `STOP` checks and the simulation, and [reproduces and decodes](#reproduce-and-decode-safe-calldata) `$CALLDATA` before signing
-- [ ] For the storage-terms introduction, every signer also runs the B1 `verify_storage_terms_wrapper "$PLANNED_TARGET"` check from the frozen checkout against the freshly read pending target before signing. Stop on any failure; the target must match the independently reviewed wrapper address and code hash.
+- [ ] Every signer reruns the `STOP` checks and the simulation, and [reproduces and decodes](#reproduce-and-decode-safe-calldata) `$CALLDATA` before signing
+- [ ] For the storage-terms introduction, every signer runs the wrapper check above from their own frozen checkout against the freshly read pending target. Stop on any failure; the target must match the independently reviewed wrapper address and code hash.
 
 ### Post-Upgrade Checks
 
@@ -770,7 +758,10 @@ for sig in 'announceMigration(address,uint96)' 'migrate(address)' 'implementatio
 done
 
 josuke accept
-git add josuke.json && git commit -m "chore(josuke): accept the $CHAIN migration"
+# deployments.json keeps the previous fwss_version until the execute; record the live one now
+jq --indent 2 --arg chain "$CHAIN" --arg v "$(cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" 'VERSION()(string)' | tr -d '"')" \
+  '.[$chain].metadata.fwss_version = $v' deployments.json > deployments.json.tmp && mv deployments.json.tmp deployments.json
+git add josuke.json deployments.json && git commit -m "chore(josuke): accept the $CHAIN migration"
 ```
 
 Every upgrade route must point at a deployed module; a zero address means FWSS can no longer be upgraded. Stop and escalate if any check differs from its expected value.

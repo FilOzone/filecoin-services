@@ -17,6 +17,7 @@ Scripts are organized with prefixes for better discoverability:
 | `warm-storage-deploy-all.sh` | Deploy a fresh Warm Storage stack, mainly for local devnets; reuses any contract whose `<NAME>_ADDRESS` is set or recorded |
 | `warm-storage-deploy-all-test.sh` | Run `warm-storage-deploy-all.sh` against anvil and check the deployed stack (the `Deploy All` CI workflow) |
 | `warm-storage-announce-upgrade.sh` | Announce a planned FWSS upgrade |
+| `verify-storage-terms-wrapper.sh` | Check a deployed `FWSSStorageTermsMigration` against source, wrapping the migration `josuke.json` proposes; used before announcing and executing the storage-terms introduction |
 | `warm-storage-manage-approved-provider.sh` | Inspect approved SPs, generate Safe calldata, or propose add/remove transactions through Filecoin Safe tx-service |
 
 ### ERC-8167 Transition Forge Scripts
