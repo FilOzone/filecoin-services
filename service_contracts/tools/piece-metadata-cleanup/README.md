@@ -191,12 +191,18 @@ Measured on 10.11.2026 against the public Glif RPCs, with the default read setti
 - calibnet: `check` of 3,000 pieces in 17 s, about 170 pieces/s;
 - mainnet, plain storage reads: 8,992 in 23 s, about 390 reads/s.
 
+Measured on 13.11.2026, the same way:
+
+- mainnet: `discover` read 1,181,002 candidates in 1,240 s, about 950 reads/s, and found 40 pieces, all in one data set;
+- calibnet: `discover --tail 16` read 1,106,016 candidates in 1,271 s and found none;
+- mainnet: `plan` of 4,533,264 unchecked pieces and 136 queues built 18,153,648 ops for 22,666,125 slots in 12,135 batches, 32 of them queue batches, in 438 s.
+  The state file grew from 0.5 GB to 1.5 GB, and the largest batch held 21,178 bytes of ops.
+
 Estimates for mainnet (4,533,224 pieces, about 22.7M slots), from those rates:
 
 - `check --all`: about 13 hours at 95 pieces/s.
 - `verify --all`: about 22.7M slots, about 16 hours; it does not resume, so use `--sample` for interim looks.
-- `send`: about 12,100 batches at the default limits; at 4 messages per one or two 30-second epochs, about 25 to 50 hours.
-- `discover`: about 1.06M candidates without the tail; at 390 reads/s, about 45 minutes.
+- `send`: 12,135 batches at the default limits; at 4 messages per one or two 30-second epochs, about 25 to 50 hours.
 
 An independent full run of this cleanup on a local node with mainnet state (`Kubuxu/fvm-anvil`, `benchmarks/fwss/metadata-cleanup.md`), with an older facet and messages of up to 1,024 ops, used about 478k gas per zeroed slot and about 598k gas per op.
 That is the author's measurement, not ours; it suggests about 0.9B gas for a batch of 1500 ops on mainnet.
@@ -221,7 +227,6 @@ The devnet contract held about 32,000 slots and mainnet holds about 24M, so thes
 
 ## Not verified
 
-- `discover` on a real network: it has run only on anvil.
 - Gas per batch on a storage tree of mainnet's size: the pilot on mainnet measures it.
 - A dropped message, a reverted batch, a receipt timeout and a reorg on a real node; the anvil tests cover these paths.
 - The mempool rules and rate limits of the public RPC nodes for sending.
