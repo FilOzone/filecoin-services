@@ -20,14 +20,14 @@ function invalid(dataSetId: number, pieceId: number, metadata: unknown): boolean
 }
 
 test('rejects pieces the facet cannot fully clear, measuring UTF-8 bytes', () => {
-  assert.ok(!invalid(2 ** 40 - 1, 2 ** 40 - 1, { k: 'v' }));
-  assert.ok(invalid(2 ** 40, 0, { k: 'v' }));
-  assert.ok(invalid(0, 2 ** 40, { k: 'v' }));
+  assert.ok(!invalid(2 ** 24 - 1, 2 ** 24 - 1, { k: 'v' }));
+  assert.ok(invalid(2 ** 24, 0, { k: 'v' }));
+  assert.ok(invalid(0, 2 ** 24, { k: 'v' }));
 
-  assert.ok(!invalid(1, 1, { ['k'.repeat(31)]: 'v' }));
-  assert.ok(invalid(1, 1, { ['k'.repeat(32)]: 'v' }), 'a 32-byte key has data slots the facet cannot clear');
-  assert.ok(!invalid(1, 1, { ['ą'.repeat(15)]: 'v' }));
-  assert.ok(invalid(1, 1, { ['ą'.repeat(16)]: 'v' }), '16 characters, 32 bytes');
+  assert.ok(!invalid(1, 1, { ['k'.repeat(32)]: 'v' }));
+  assert.ok(invalid(1, 1, { ['k'.repeat(33)]: 'v' }), 'a 33-byte key has a second data slot the facet cannot clear');
+  assert.ok(!invalid(1, 1, { ['ą'.repeat(16)]: 'v' }));
+  assert.ok(invalid(1, 1, { ['ą'.repeat(16) + 'k']: 'v' }), '17 characters, 33 bytes');
   assert.ok(invalid(1, 1, { '': 'v' }));
 
   assert.ok(!invalid(1, 1, { k: 'v'.repeat(128) }));
@@ -57,8 +57,14 @@ test('emits the ops a piece needs for each value length', () => {
   assert.equal(summary(ops.get('65')!), '0,1x3,2,3');
   assert.equal(summary(ops.get('128')!), '0,1x4,2,3');
 
+  const indexes = (list: Op[], kind: 3 | 5) => list.flatMap((o) => (o.kind === kind ? [o.index] : []));
   const five = pieceOps(piece({ a: '', b: 'x', c: 'y', d: 'z', e: 'w' }));
-  assert.deepEqual(five.filter((o) => o.kind === 3).map((o) => (o.kind === 3 ? o.index : -1)), [0, 1, 2, 3, 4]);
+  assert.deepEqual(indexes(five, 3), [0, 1, 2, 3, 4]);
+  assert.deepEqual(indexes(five, 5), [], 'short keys have no key data slot');
+
+  // The key order on chain is unknown, so a 32-byte key gets a KeyData op at every index of its piece.
+  const long = pieceOps(piece({ a: 'x', ['k'.repeat(32)]: 'y', c: '' }));
+  assert.deepEqual(indexes(long, 5), [0, 1, 2]);
 });
 
 test('stores and reads ops in numeric slot order, queue pops first', () => {
@@ -77,7 +83,7 @@ test('stores and reads ops in numeric slot order, queue pops first', () => {
 function plannedOps(sizes: number[]): PlannedOp[] {
   return sizes.map((size, i) => ({
     sortKey: sortKey(1, BigInt(i)),
-    op: encodeOp({ kind: 0, dataSetId: 1, pieceId: i, key: new Uint8Array(size - 12).fill(0x61) }),
+    op: encodeOp({ kind: 0, dataSetId: 1, pieceId: i, key: new Uint8Array(size - 8).fill(0x61) }),
   }));
 }
 
@@ -102,7 +108,7 @@ test('plans queues first, plans clean pieces too, skips mismatched pieces, and c
   const upsert = pieceUpserter(db);
   const metadata: Record<string, Record<string, string>> = {
     '1/0': { name: 'a.bin', trace: 'x'.repeat(100) },
-    '1/1': { name: 'b.bin' },
+    '1/1': { name: 'b.bin', ['k'.repeat(32)]: '' },
     '2/0': { a: '', b: 'y'.repeat(32), c: 'z', d: 'w', e: 'v' },
     '2/1': { name: 'clean' },
     '2/2': { name: 'mismatch' },

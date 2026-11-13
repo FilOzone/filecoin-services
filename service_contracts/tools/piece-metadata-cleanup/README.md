@@ -35,13 +35,15 @@ A node of another network answers every storage read with zero, which would read
 | Command | Does | Proves | Does not prove |
 |---|---|---|---|
 | `fetch` | Copies legacy pieces with metadata from the indexer; rerunning upserts and keeps a check result while the metadata is unchanged | Nothing about chain state | That the indexer is right |
-| `check --sample N \| --all` | Reads each piece's keys length slot, key element slots and value head slots and compares them with the indexer row | A `match` piece has exactly the stored key count, keys and value lengths, so its plan clears all of it; a `clean` piece had none of those slots set when it was read | The value data slots, which it does not read; the plan takes their count from the value length |
+| `check --sample N \| --all` | Reads each piece's keys length slot, key element slots and value head slots and compares them with the indexer row | A `match` piece has exactly the stored key count, keys and value lengths, so its plan clears all of it; a `clean` piece had none of those slots set when it was read | The value data slots and the data slot of a 32-byte key, which it does not read; the plan takes their count from the value length and the key length |
 | `queues` | Reads the legacy queue length of every data set id below PDPVerifier's next id | Which queues are non-empty at that moment | Their lengths later: the deployed FWSS keeps popping them until the upgrade |
 | `plan` | Builds ops for `match` and `clean` pieces and every stored queue, sorts them by slot, cuts batches | Bounds: a piece the facet cannot clear is listed as `invalid` and never planned | Anything about storage |
 | `send` | Sends the batches that are not done, in order, under a price ceiling | Each batch succeeded on chain when its receipt was read | That anything was cleared: the facet zeroes whatever slots it is given |
 | `verify --sample N \| --all` | Reads every slot the plan zeroes and every planned queue length; exits 1 if one is not zero | The planned slots are zero | Slots the plan never had; `check` covers those |
 
 `check` compares the key elements as a set with repeats, because the chain keeps keys in insertion order and the indexer does not record it.
+The element of a 32-byte key holds only its length, so the key's bytes are proven by its value head.
+A wrong 32-byte key with an empty value therefore reads as `match`, and the value of the real key stays behind.
 `check` runs only before anything is sent.
 After a partial send the ops of one piece are partly executed, so the piece would read as `mismatch` although the plan still holds the ops that finish it.
 `check` and `plan` refuse to run on a state file from which a message was ever sent.
@@ -52,6 +54,24 @@ After a partial send the ops of one piece are partly executed, so the piece woul
 `plan` refuses to run while a piece is `unchecked` and prints how many there are.
 `plan --allow-unchecked` plans them anyway and prints how many it planned without a check.
 `plan` builds the new plan in one SQLite transaction, so a crash keeps the earlier plan.
+
+## Ops
+
+`plan` encodes ops in the facet's packed format; the natspec of `cleanupLegacyPieceMetadata` is the reference.
+Every op starts with a 1-byte kind and a 3-byte data set id.
+Metadata ops follow with a 3-byte piece id: KeysLength is 7 bytes, KeyHead and KeyData 8, ValueHead 8 plus the key, ValueData 9 plus the key.
+PopQueue follows with a 2-byte count and is 6 bytes.
+
+Data set and piece ids must fit in 24 bits.
+`fetch` stores a piece with a larger id as `invalid`, and `plan` fails on a queue of a data set with a larger id; the tool never truncates an id.
+
+Keys of 1 to 32 UTF-8 bytes are planned.
+A 32-byte key is a long Solidity string: its key element holds the length, and its bytes sit in one data slot that a KeyData op zeroes.
+The indexer does not record the key order, so a piece with a 32-byte key gets a KeyData op at every index of its key array.
+Zeroing the unused data slot of a short key is harmless.
+
+A PopQueue op zeroes up to `count` entries at the end of a queue and then writes the queue length once, so N entries cost N + 1 slot writes.
+`plan` pops at most `--max-ops` entries per op, and each popped entry counts as one op of the batch budget.
 
 `verify --requeue` puts every batch that still has a non-zero slot back to `planned`.
 For a queue that is not empty it puts back every batch that pops that queue.
@@ -132,7 +152,7 @@ The summary shows the batches done, the gas used and the FIL spent, from the rec
 ## Tuning
 
 - `plan --max-calldata-bytes` (default 60000): Lotus rejects messages over 65,536 bytes; on the devnet it accepted 65,348 bytes of calldata and rejected 65,412.
-- `plan --max-ops` (default 1500): each queue pop counts as one op.
+- `plan --max-ops` (default 1500): each popped queue entry counts as one op.
   On the devnet a batch of 1500 ops used about 0.76B gas; mainnet has a much larger storage tree, so expect more there.
 - `--read-batch-size`, `--read-concurrency`, `--requests-per-second`: storage reads, as `eth_getStorageAt` in JSON-RPC batches.
 - `send --gas-multiplier`, `--max-inflight`, `--poll-interval`, `--receipt-timeout`.
@@ -155,6 +175,9 @@ Estimates for mainnet (4,533,224 pieces, about 22.7M slots), from those rates:
 
 On 12.11.2026 the tool's library code ran the whole procedure against a local Lotus 1.38.3 devnet (network version 29, 4-second epochs), on the test harness with 5,539 seeded pieces and three queues: 19 batches, 23,480 ops, 29,290 slots.
 `verify` found no residue, and a read of the value slots through the harness's own views found none either.
+The rehearsal ran on the earlier op format and facet (base commit `2081265`), and the numbers below were not measured again.
+That facet took 5-byte ids and called `queue.pop()` once per popped entry, which wrote the queue length each time.
+An op is now 4 bytes shorter (PopQueue 2 bytes shorter), and a PopQueue op writes the queue length once.
 
 - Gas per batch of 1500 metadata ops: 757M median, 773M max; about 505k gas per op and 405k per zeroed slot.
 - Queue pops: about 404k gas per popped entry.
@@ -173,7 +196,9 @@ The devnet contract held about 32,000 slots and mainnet holds about 24M, so thes
 - The mempool rules and rate limits of the public RPC nodes for sending.
 - `verify --all` after finality on a real network.
 
-The calibnet rehearsal covers the last three before mainnet.## Tests
+The calibnet rehearsal covers the last three before mainnet.
+
+## Tests
 
 - `npm test`: unit tests; no network.
 - `npm run typecheck`.
