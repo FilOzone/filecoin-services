@@ -5,7 +5,8 @@ import { addSlot, dataSlot, hex32, keysSlot, stringHead, valueSlots } from './sl
 import type { StorageReader } from './storage.ts';
 
 // Slots that prove the tool knows a piece: the key count, the key array elements, and each value head, which holds
-// the length and, for a short value, the bytes themselves. A wrong key reads as an empty head and a foreign element.
+// the length and, for a short value, the bytes themselves. A wrong key reads as an empty head and a foreign element,
+// except a wrong 32-byte key: its element holds only the length, so with an empty value nothing here tells it apart.
 export function checkSlots(piece: Piece): { slots: bigint[]; keyHeads: bigint[]; valueHeads: bigint[] } {
   const keys = keysSlot(piece.dataSetId, piece.pieceId);
   const elements = dataSlot(keys);

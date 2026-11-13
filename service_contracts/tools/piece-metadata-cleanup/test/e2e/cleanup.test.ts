@@ -31,7 +31,7 @@ import { publicClient, rpcStorageReader } from '../../src/storage.ts';
 import { verifyPlan } from '../../src/verify.ts';
 
 const ARTIFACT = new URL('../../../../out/FWSSPieceMetadataCleanupHarness.sol/FWSSPieceMetadataCleanupHarness.json', import.meta.url);
-const MAX_ID = 2 ** 40 - 1;
+const MAX_ID = 2 ** 24 - 1;
 const RAIL_DATA_SET = 1;
 const RAIL_ID = 42n;
 const NO_RAIL_DATA_SET = 7;
@@ -39,6 +39,8 @@ const GWEI = 1_000_000_000n;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const repeat = (s: string, n: number) => s.repeat(n);
+// A long Solidity string: its element holds the length and its bytes sit in a data slot that only KeyData clears.
+const LONG_KEY = repeat('k', 32);
 
 // [dataSetId, pieceId, metadata on chain (keys pushed in this order), metadata in the tool's table or null to copy]
 type Seed = [number, number, Record<string, string> | null, Record<string, string> | null];
@@ -50,6 +52,7 @@ const MATCHING: Seed[] = [
   [RAIL_DATA_SET, 4, { k1: repeat('a', 128), k2: repeat('b', 100), k3: repeat('c', 65), k4: repeat('d', 96) }, null],
   [NO_RAIL_DATA_SET, 5, { name: repeat('x', 31), size: '1' }, null],
   [MAX_ID, MAX_ID, { [repeat('k', 31)]: repeat('v', 128) }, null],
+  [RAIL_DATA_SET, 10, { name: 'long-key.bin', [LONG_KEY]: repeat('v', 40) }, null],
 ];
 const PIECES: Seed[] = [
   ...MATCHING,
@@ -211,11 +214,12 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   const { harness, db, reader, sender, opts, read } = await setup(PIECES, QUEUES);
   const before = await storageDump(harness);
   assert.ok(before.size > 80, `seeded storage visible in the dump (${before.size} slots)`);
+  assert.ok([...before.values()].includes(BigInt('0x' + Buffer.from(LONG_KEY).toString('hex'))), 'the 32-byte key has its data slot');
 
   await checkPieces(db, reader, { all: true, pageSize: 4 });
   const status = (dataSetId: number, pieceId: number) =>
     (db.prepare('SELECT status FROM pieces WHERE data_set_id = ? AND piece_id = ?').get(dataSetId, pieceId) as { status: string }).status;
-  assert.deepEqual(statusCounts(db), { match: 7, clean: 1, mismatch: 2 });
+  assert.deepEqual(statusCounts(db), { match: 8, clean: 1, mismatch: 2 });
   assert.equal(status(NO_RAIL_DATA_SET, 6), 'clean');
   assert.equal(status(NO_RAIL_DATA_SET, 8), 'mismatch', 'wrong value length');
   assert.equal(status(NO_RAIL_DATA_SET, 9), 'mismatch', 'wrong key');
@@ -232,11 +236,12 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   assert.ok(batches.length >= 10, `${batches.length} batches`);
 
   // Before sending, verify reads every planned slot and queue and finds each one set, except the head of the wrong
-  // key, which never existed, and the three slots (element, head, length) of the piece that was clean already.
+  // key, which never existed, the three slots (element, head, length) of the piece that was clean already, and the
+  // KeyData slot at the index of the short key next to the 32-byte one.
   const unsent = await verifyPlan(db, reader, { all: true, pageSize: 5 });
   assert.equal(unsent.queues, QUEUES.length);
   assert.equal(unsent.slots, plan.metadataSlots + QUEUES.length);
-  assert.equal(unsent.residueCount, unsent.slots - 1 - 3);
+  assert.equal(unsent.residueCount, unsent.slots - 1 - 3 - 1);
   const sampled = await verifyPlan(db, reader, { sample: 1_000_000 });
   assert.deepEqual([sampled.slots, sampled.residueCount], [unsent.slots, unsent.residueCount], 'a sample covering every op reads the same');
 
@@ -509,8 +514,8 @@ test('a batch that reverts stops the run with its id and revert data', async () 
   };
 
   // A KeysLength op of an unknown kind 9; then a valid batch that must not go out.
-  addBatch(1, Buffer.from('090000000001000000000a', 'hex'));
-  addBatch(2, Buffer.from('020000000001000000000a', 'hex'));
+  addBatch(1, Buffer.from('0900000100000a', 'hex'));
+  addBatch(2, Buffer.from('0200000100000a', 'hex'));
   const estimateRevert = await sendBatches(db, client, opts);
   assert.match(estimateRevert.failure ?? '', /^batch 1: estimate failed: revert data 0x/);
   assert.ok(estimateRevert.failure!.includes(toFunctionSelector('UnknownCleanupOp(uint256,uint256)')));
@@ -518,8 +523,8 @@ test('a batch that reverts stops the run with its id and revert data', async () 
 
   // Out of gas on chain: the receipt reverts and the run names the batch.
   db.exec('DELETE FROM ops; DELETE FROM batches;');
-  addBatch(1, Buffer.from('020000000001000000000a', 'hex'));
-  addBatch(2, Buffer.from('020000000001000000000b', 'hex'));
+  addBatch(1, Buffer.from('0200000100000a', 'hex'));
+  addBatch(2, Buffer.from('0200000100000b', 'hex'));
   const outOfGas = await sendBatches(db, client, { ...opts, gasMultiplier: 0.9, maxInflight: 1 });
   assert.match(outOfGas.failure ?? '', /^batch 1: reverted in 0x[0-9a-f]{64} \(gas used \d+ of \d+\); replay: /);
   assert.deepEqual(statuses(db), ['reverted', 'planned']);

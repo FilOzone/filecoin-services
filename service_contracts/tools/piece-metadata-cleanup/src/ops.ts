@@ -6,12 +6,13 @@ export const VALUE_DATA = 1;
 export const KEYS_LENGTH = 2;
 export const KEY_HEAD = 3;
 export const POP_QUEUE = 4;
-export const KIND_NAMES = ['ValueHead', 'ValueData', 'KeysLength', 'KeyHead', 'PopQueue'] as const;
+export const KEY_DATA = 5;
+export const KIND_NAMES = ['ValueHead', 'ValueData', 'KeysLength', 'KeyHead', 'PopQueue', 'KeyData'] as const;
 
 // Bounds of the legacy data the facet can clear; see the module's LEGACY_MAX_* constants.
-export const MAX_ID = 2 ** 40 - 1;
+export const MAX_ID = 2 ** 24 - 1;
 export const MAX_KEYS = 5;
-export const MAX_KEY_BYTES = 31;
+export const MAX_KEY_BYTES = 32;
 export const MAX_VALUE_BYTES = 128;
 export const MAX_POP_COUNT = 0xffff;
 
@@ -20,7 +21,8 @@ export type Op =
   | { kind: typeof VALUE_DATA; dataSetId: number; pieceId: number; count: number; key: Uint8Array }
   | { kind: typeof KEYS_LENGTH; dataSetId: number; pieceId: number }
   | { kind: typeof KEY_HEAD; dataSetId: number; pieceId: number; index: number }
-  | { kind: typeof POP_QUEUE; dataSetId: number; count: number };
+  | { kind: typeof POP_QUEUE; dataSetId: number; count: number }
+  | { kind: typeof KEY_DATA; dataSetId: number; pieceId: number; index: number };
 
 export type Entry = { key: Uint8Array; value: Uint8Array };
 export type Piece = { dataSetId: number; pieceId: number; entries: Entry[] };
@@ -34,7 +36,7 @@ function validId(id: number): boolean {
 // Turns an indexer row into a piece, or says why the facet cannot clear it. Never truncates: lengths are UTF-8 bytes,
 // which is what Solidity hashed and stored.
 export function parsePiece(dataSetId: number, pieceId: number, metadata: unknown): { piece: Piece } | { invalid: string } {
-  if (!validId(dataSetId) || !validId(pieceId)) return { invalid: 'id does not fit in 40 bits' };
+  if (!validId(dataSetId) || !validId(pieceId)) return { invalid: 'id does not fit in 24 bits' };
   if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) {
     return { invalid: 'metadata is not an object' };
   }
@@ -70,6 +72,12 @@ export function pieceOps(piece: Piece): Op[] {
     const count = stringDataSlots(value.length);
     if (count > 0) ops.push({ kind: VALUE_DATA, dataSetId, pieceId, count, key });
   });
+
+  // A 32-byte key keeps its bytes in a data slot of its element, and the indexer does not record at which index the
+  // key sits, so every index gets a KeyData op; zeroing the unused data slot of a short key is harmless.
+  if (piece.entries.some(({ key }) => key.length === MAX_KEY_BYTES)) {
+    piece.entries.forEach((_, index) => ops.push({ kind: KEY_DATA, dataSetId, pieceId, index }));
+  }
   ops.push({ kind: KEYS_LENGTH, dataSetId, pieceId });
   return ops;
 }
@@ -89,15 +97,16 @@ export function popQueueOps(dataSetId: number, length: number, maxCount: number)
 function opLength(op: Op): number {
   switch (op.kind) {
     case VALUE_HEAD:
-      return 12 + op.key.length;
+      return 8 + op.key.length;
     case VALUE_DATA:
-      return 13 + op.key.length;
+      return 9 + op.key.length;
     case KEYS_LENGTH:
-      return 11;
+      return 7;
     case KEY_HEAD:
-      return 12;
-    case POP_QUEUE:
+    case KEY_DATA:
       return 8;
+    case POP_QUEUE:
+      return 6;
   }
 }
 
@@ -119,23 +128,23 @@ export function encodeOp(op: Op): Uint8Array {
   if (!validId(op.dataSetId)) throw new Error(`data set id out of range: ${op.dataSetId}`);
   const buf = new Uint8Array(opLength(op));
   buf[0] = op.kind;
-  writeUint(buf, 1, 5, op.dataSetId);
+  writeUint(buf, 1, 3, op.dataSetId);
   if (op.kind === POP_QUEUE) {
     if (op.count < 0 || op.count > MAX_POP_COUNT) throw new Error(`pop count out of range: ${op.count}`);
-    writeUint(buf, 6, 2, op.count);
+    writeUint(buf, 4, 2, op.count);
     return buf;
   }
 
   if (!validId(op.pieceId)) throw new Error(`piece id out of range: ${op.pieceId}`);
-  writeUint(buf, 6, 5, op.pieceId);
+  writeUint(buf, 4, 3, op.pieceId);
   if (op.kind === KEYS_LENGTH) return buf;
-  if (op.kind === KEY_HEAD) {
+  if (op.kind === KEY_HEAD || op.kind === KEY_DATA) {
     if (op.index < 0 || op.index >= MAX_KEYS) throw new Error(`key index out of range: ${op.index}`);
-    buf[11] = op.index;
+    buf[7] = op.index;
     return buf;
   }
 
-  let offset = 11;
+  let offset = 7;
   if (op.kind === VALUE_DATA) {
     if (op.count < 1 || op.count > 4) throw new Error(`value data count out of range: ${op.count}`);
     buf[offset++] = op.count;
@@ -151,18 +160,18 @@ export function decodeOps(bytes: Uint8Array): Op[] {
   let at = 0;
   while (at < bytes.length) {
     const kind = readUint(bytes, at, 1);
-    const dataSetId = readUint(bytes, at + 1, 5);
+    const dataSetId = readUint(bytes, at + 1, 3);
     if (kind === POP_QUEUE) {
-      ops.push({ kind, dataSetId, count: readUint(bytes, at + 6, 2) });
-      at += 8;
+      ops.push({ kind, dataSetId, count: readUint(bytes, at + 4, 2) });
+      at += 6;
       continue;
     }
 
-    const pieceId = readUint(bytes, at + 6, 5);
-    let next = at + 11;
+    const pieceId = readUint(bytes, at + 4, 3);
+    let next = at + 7;
     if (kind === KEYS_LENGTH) {
       ops.push({ kind, dataSetId, pieceId });
-    } else if (kind === KEY_HEAD) {
+    } else if (kind === KEY_HEAD || kind === KEY_DATA) {
       ops.push({ kind, dataSetId, pieceId, index: readUint(bytes, next++, 1) });
     } else if (kind === VALUE_HEAD || kind === VALUE_DATA) {
       const count = kind === VALUE_DATA ? readUint(bytes, next++, 1) : 0;
@@ -192,6 +201,8 @@ export function opSlots(op: Op): bigint[] {
       return [keysSlot(op.dataSetId, op.pieceId)];
     case KEY_HEAD:
       return [addSlot(dataSlot(keysSlot(op.dataSetId, op.pieceId)), op.index)];
+    case KEY_DATA:
+      return [dataSlot(addSlot(dataSlot(keysSlot(op.dataSetId, op.pieceId)), op.index))];
     case POP_QUEUE:
       return [];
   }
@@ -226,7 +237,7 @@ export function plannedQueueOps(dataSetId: number, length: number, maxCount: num
 }
 
 // How much of a batch's op budget an op takes: 1 per metadata op, as in the gas measurement behind the default, and
-// 1 per popped entry, because one PopQueue op can clear thousands of slots.
+// 1 per popped entry, because one PopQueue op zeroes that many entries and then writes the queue length once.
 export function opWeight(op: Uint8Array): number {
-  return op[0] === POP_QUEUE ? op[6]! * 256 + op[7]! : 1;
+  return op[0] === POP_QUEUE ? op[4]! * 256 + op[5]! : 1;
 }
