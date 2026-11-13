@@ -3,7 +3,7 @@
     "metadata": {
       "commit": "649e23f3329abf6a24d01c30359958ee7d0e0948",
       "deployed_at": "2026-10-22T13:38:10Z",
-      "fwss_version": "1.4.0",
+      "fwss_version": "1.5.0",
       "pdp_version": "3.5.0"
     },
     "FILECOIN_PAY_ADDRESS": "0x23b1e018F08BB982348b15a86ee926eEBf7F4DAa",
@@ -148,7 +148,7 @@
     "metadata": {
       "commit": "649e23f3329abf6a24d01c30359958ee7d0e0948",
       "deployed_at": "2026-10-21T18:46:51Z",
-      "fwss_version": "1.4.0",
+      "fwss_version": "1.5.0",
       "pdp_version": "3.5.0"
     },
     "FILECOIN_PAY_ADDRESS": "0x09a0fDc2723fAd1A7b8e3e00eE5DF73841df55a0",
