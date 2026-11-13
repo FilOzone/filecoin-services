@@ -4,9 +4,9 @@ import type { LocalAccount } from 'viem/accounts';
 import { batchCalldataOps, markSendStarted, transaction, type BatchRow, type BatchStatus } from './db.ts';
 import { assertTarget } from './storage.ts';
 
-const cleanupAbi = parseAbi(['function cleanupLegacyPieceMetadata(bytes ops)']);
+export const cleanupAbi = parseAbi(['function cleanupLegacyPieceMetadata(bytes ops)']);
 
-// Filecoin's mempool accepts at most this many messages ahead of the sender's on-chain nonce.
+// The tool's limit on unconfirmed messages, not the node's: Lotus accepted 12 nonces ahead on the devnet.
 export const MAX_INFLIGHT = 4;
 
 export type SendOptions = {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { decodeOps, encodeOp, opSlots, type Op } from '../src/ops.ts';
-import { dataSlot, hex32, keysSlot, queueSlot, stringHead, valueSlots } from '../src/slots.ts';
+import { dataSlot, decodeString, hex32, keysSlot, queueSlot, stringDataSlots, stringHead, valueSlots } from '../src/slots.ts';
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
 const hex = (b: Uint8Array) => '0x' + Buffer.from(b).toString('hex');
@@ -58,4 +58,19 @@ test('encodes string heads like Solidity storage', () => {
   assert.equal(hex32(stringHead(utf8('a'.repeat(31)))), '0x' + '61'.repeat(31) + '3e');
   assert.equal(stringHead(utf8('a'.repeat(32))), 65n);
   assert.equal(stringHead(utf8('ż'.repeat(20))), 81n, '40 UTF-8 bytes, 20 characters');
+});
+
+test('decodes stored strings back to the bytes stringHead encoded', () => {
+  // A long string's data slots: its bytes left-aligned in consecutive words, the last one zero-padded.
+  const words = (b: Uint8Array) =>
+    Array.from({ length: stringDataSlots(b.length) }, (_, i) => BigInt('0x' + Buffer.from(b.subarray(32 * i, 32 * i + 32)).toString('hex').padEnd(64, '0')));
+  const values = ['', 'v', 'v'.repeat(31), 'v'.repeat(32), 'v'.repeat(33), 'v'.repeat(128), 'ż'.repeat(15) + 'x', '😀'.repeat(8), 'zażółć gęślą jaźń 鍵'];
+  for (const value of values.map(utf8)) {
+    assert.deepEqual(hex(decodeString(stringHead(value), words(value))), hex(value), `${value.length} bytes`);
+  }
+
+  assert.throws(() => decodeString(stringHead(utf8('a'.repeat(40))), []), /needs 2 data slots/);
+  assert.throws(() => decodeString(31n, [0n]), /holds only 15 bytes/);
+  assert.throws(() => decodeString(0x40n, []), /malformed short string head/, 'a short head of 32 bytes');
+  assert.throws(() => decodeString(stringHead(utf8('ab')) | (1n << 8n), []), /malformed short string head/, 'a byte past the length');
 });

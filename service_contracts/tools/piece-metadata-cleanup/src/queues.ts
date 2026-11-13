@@ -1,6 +1,7 @@
 import type { DatabaseSync } from 'node:sqlite';
-import { parseAbi, type Address, type PublicClient } from 'viem';
+import { encodeFunctionData, parseAbi, type Address, type PublicClient } from 'viem';
 import { replaceQueues } from './db.ts';
+import { cleanupAbi, revertReason } from './send.ts';
 import { queueSlot } from './slots.ts';
 import type { StorageReader } from './storage.ts';
 
@@ -10,6 +11,22 @@ const pdpVerifierAbi = parseAbi(['function getNextDataSetId() view returns (uint
 export async function nextDataSetId(client: PublicClient, pdpVerifier: Address): Promise<number> {
   const next = await client.readContract({ address: pdpVerifier, abi: pdpVerifierAbi, functionName: 'getNextDataSetId' });
   return Number(next);
+}
+
+// The deployed FWSS pushes to and pops the legacy queues until the upgrade that installs the cleanup facet, so a
+// length read before it can grow unseen by the plan. The dispatcher reverts on a selector it does not route.
+export async function assertCleanupInstalled(reader: { client: PublicClient; ready(): Promise<void> }, fwss: Address): Promise<void> {
+  // Without code at the address every call succeeds.
+  await reader.ready();
+
+  const data = encodeFunctionData({ abi: cleanupAbi, functionName: 'cleanupLegacyPieceMetadata', args: ['0x'] });
+  try {
+    await reader.client.call({ to: fwss, data });
+  } catch (err) {
+    throw new Error(
+      `cleanupLegacyPieceMetadata with empty ops failed on ${fwss} (${revertReason(err)}): the cleanup facet is not installed; run queues after the upgrade that installs it`,
+    );
+  }
 }
 
 export async function readQueueLengths(

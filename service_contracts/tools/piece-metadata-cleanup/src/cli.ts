@@ -5,11 +5,12 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { calldataBytes, DEFAULT_LIMITS } from './batches.ts';
 import { checkPieces, mismatchedPieces } from './check.ts';
 import { openDb } from './db.ts';
+import { discoverPieces } from './discover.ts';
 import { fetchPieces } from './fetch.ts';
 import { DEFAULT_DEPLOYMENTS, loadNetwork } from './network.ts';
 import { hex32 } from './slots.ts';
 import { buildPlan, excludedPieces } from './plan.ts';
-import { nextDataSetId, refreshQueues } from './queues.ts';
+import { assertCleanupInstalled, nextDataSetId, refreshQueues } from './queues.ts';
 import { MAX_INFLIGHT, sendBatches, sendTotals } from './send.ts';
 import { publicClient, rpcStorageReader } from './storage.ts';
 import { verifyPlan } from './verify.ts';
@@ -20,12 +21,15 @@ const KEY_ENV = 'CLEANUP_PRIVATE_KEY';
 const USAGE = `usage: node src/cli.ts <command> --network mainnet|calibnet [options]
 
 commands:
-  fetch    copy legacy pieces with metadata from the indexer (DATABASE_URL or PG* variables)
-  queues   read every legacy removal queue length from chain
+  fetch    copy legacy pieces with metadata, and each data set's largest legacy piece id, from the indexer
+           (DATABASE_URL or PG* variables)
+  discover read pieces without a row from chain storage and store the ones that have metadata, only before
+           anything is sent: [--tail N]
+  queues   read every legacy removal queue length from chain, only after the upgrade that installs the facet
   check    compare pieces with chain storage, only before anything is sent: --sample N | --all [--recheck]
   plan     build sorted ops and batches from the pieces that check found matching
   send     send the batches that are not done, resuming an earlier run (key in ${KEY_ENV})
-  verify   read the slots and queue lengths the plan zeroes, expect zero: --sample N | --all [--requeue]
+  verify   read the slots and queue lengths the plan zeroes, expect zero: --sample N | --all | --done [--requeue]
 
 options:
   --db <file>                    state file (default cleanup-<network>.sqlite)
@@ -36,10 +40,11 @@ options:
   --requests-per-second <n>      cap on batch requests per second, 0 for none (default 0)
   --max-calldata-bytes <n>       plan: calldata limit per batch (default ${DEFAULT_LIMITS.maxCalldataBytes})
   --max-ops <n>                  plan: ops per batch, each queue pop counts as one (default ${DEFAULT_LIMITS.maxOps})
+  --tail <n>                     discover: piece ids read past each data set's largest legacy id (default 64)
   --report <file>                check: write mismatch pieces as TSV; plan: write invalid and mismatch pieces;
-                                 verify: write residue
+                                 discover: write discovered pieces; verify: write residue
+  --done                         verify: read only the batches recorded as done and the queues they emptied
   --allow-unchecked              plan: also plan pieces that check never read
-                                 and drops the spend records
   --requeue                      verify: put batches that still have residue back to planned, for the next send
   --dry-run                      send: estimate gas only, send nothing (needs --from or ${KEY_ENV})
   --from <address>               send: sender for --dry-run without a key
@@ -72,6 +77,8 @@ async function main(): Promise<void> {
       'requests-per-second': { type: 'string' },
       sample: { type: 'string' },
       all: { type: 'boolean' },
+      done: { type: 'boolean' },
+      tail: { type: 'string' },
       recheck: { type: 'boolean' },
       'max-calldata-bytes': { type: 'string' },
       'max-ops': { type: 'string' },
@@ -113,13 +120,34 @@ async function main(): Promise<void> {
 
   switch (command) {
     case 'fetch': {
-      const { rows, invalid } = await fetchPieces(db, { legacyBeforeBlock: network.legacyBeforeBlock, log });
+      const { rows, invalid, ranges } = await fetchPieces(db, { legacyBeforeBlock: network.legacyBeforeBlock, log });
       log(`fetch done: ${rows} pieces, ${invalid} outside the facet's bounds`);
+      log(`fetch: largest legacy piece id of ${ranges} data sets`);
+      break;
+    }
+    case 'discover': {
+      const r = reader();
+      await r.ready();
+      const next = await nextDataSetId(r.client, network.pdpVerifier);
+      const tail = positiveInt(values.tail, 'tail', 64);
+      log(`discover: data set ids 0..${next - 1} (PDPVerifier.getNextDataSetId), tail ${tail}`);
+      const d = await discoverPieces(db, r, { dataSetIds: next, tail, log });
+      const stored = d.pieces.filter((p) => p.status === 'unchecked').length;
+      log(`discover: ${d.candidates} candidates, ${d.hits} hits, ${stored} stored unchecked, ${d.hits - stored} stored invalid (${d.unrepresentable} unrepresentable)`);
+      for (const p of d.pieces.slice(0, 50)) {
+        log(`discovered ${p.dataSetId}/${p.pieceId} ${p.status} keys ${JSON.stringify(p.keys)}${p.detail ? `: ${p.detail}` : ''}`);
+      }
+      if (d.pieces.length > 50) log(`... ${d.pieces.length - 50} more discovered pieces`);
+      if (values.report) {
+        const lines = d.pieces.map((p) => [p.dataSetId, p.pieceId, p.status, JSON.stringify(p.keys), p.detail ?? ''].join('\t'));
+        writeFileSync(values.report, ['data_set_id\tpiece_id\tstatus\tkeys\tdetail', ...lines].join('\n') + '\n');
+        log(`wrote ${d.pieces.length} discovered pieces to ${values.report}`);
+      }
       break;
     }
     case 'queues': {
       const r = reader();
-      await r.ready();
+      await assertCleanupInstalled(r, network.fwss);
       const block = await r.client.getBlockNumber();
       const next = await nextDataSetId(r.client, network.pdpVerifier);
       const queues = await refreshQueues(db, r, next, `data set ids 0..${next - 1} read near block ${block}`);
@@ -218,7 +246,7 @@ async function main(): Promise<void> {
     }
     case 'verify': {
       const sample = values.sample === undefined ? undefined : positiveInt(values.sample, 'sample', 0);
-      const r = await verifyPlan(db, reader(), { sample, all: values.all, requeue: values.requeue, log });
+      const r = await verifyPlan(db, reader(), { sample, all: values.all, done: values.done, requeue: values.requeue, log });
       log(`verify: ${r.queues} queues, ${r.ops} metadata ops, ${r.slots} slots read, ${r.residueCount} not zero`);
       if (values.requeue) log(`verify: put ${r.requeued} batches back to planned; run send to send them again`);
       for (const x of r.residue.slice(0, 20)) {

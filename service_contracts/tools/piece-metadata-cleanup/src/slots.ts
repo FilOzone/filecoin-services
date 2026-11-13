@@ -73,6 +73,27 @@ export function stringHead(value: Uint8Array): bigint {
   return toBigInt(head);
 }
 
+// Byte length of a stored string from its head slot, and whether its bytes sit in data slots.
+export function storedStringLength(head: bigint): { length: number; long: boolean } {
+  if ((head & 1n) === 1n) return { length: Number((head - 1n) / 2n), long: true };
+  return { length: Number(head & 0xffn) / 2, long: false };
+}
+
+// The inverse of `stringHead`: a stored string's bytes from its head and, for a long string, its
+// `stringDataSlots(length)` data slots. Throws on a head Solidity never writes.
+export function decodeString(head: bigint, data: readonly bigint[]): Uint8Array {
+  const { length, long } = storedStringLength(head);
+  if (!long) {
+    const bytes = word(head);
+    if (length >= WORD || bytes.subarray(length, WORD - 1).some((b) => b !== 0)) throw new Error(`malformed short string head ${hex32(head)}`);
+    return bytes.slice(0, length);
+  }
+
+  if (length < WORD) throw new Error(`long string head ${hex32(head)} holds only ${length} bytes`);
+  if (data.length !== stringDataSlots(length)) throw new Error(`string of ${length} bytes needs ${stringDataSlots(length)} data slots`);
+  return Buffer.concat(data.map(word)).subarray(0, length);
+}
+
 export function hex32(slot: bigint): `0x${string}` {
   return `0x${slot.toString(16).padStart(64, '0')}`;
 }
