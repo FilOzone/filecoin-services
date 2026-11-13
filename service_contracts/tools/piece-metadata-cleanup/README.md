@@ -19,9 +19,14 @@ The indexer can also miss a piece entirely, so `discover` reads chain storage fo
 
 ## Environment variables
 
+Set them in the shell, or copy `.env.example` to `.env` in this directory and fill it in.
+The tool loads `.env` when it exists, git ignores it, and a variable set in the shell wins over the file.
+
 - `DATABASE_URL`, or the standard `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`, `PGDATABASE`: the indexer, for `fetch` only.
+- `RPC_URL`: the JSON-RPC endpoint, when `--rpc-url` is not given.
 - `CLEANUP_PRIVATE_KEY`: the signing key, read by `send` only.
   The tool never logs or stores it.
+  Prefer to set it in the shell for the `send` command only; in `.env` it stays on disk.
   `send --dry-run --from <address>` runs without it.
 
 ## Commands

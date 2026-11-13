@@ -31,9 +31,11 @@ commands:
   send     send the batches that are not done, resuming an earlier run (key in ${KEY_ENV})
   verify   read the slots and queue lengths the plan zeroes, expect zero: --sample N | --all | --done [--requeue]
 
+settings can also come from a .env file in the tool's directory (see .env.example); the shell wins over it
+
 options:
   --db <file>                    state file (default cleanup-<network>.sqlite)
-  --rpc-url <url>                JSON-RPC endpoint (default: Glif for the network)
+  --rpc-url <url>                JSON-RPC endpoint (default: RPC_URL, then Glif for the network)
   --deployments <file>           deployments.json with the FWSS proxy (default: the repo's)
   --read-batch-size <n>          storage reads per JSON-RPC batch request (default 50)
   --read-concurrency <n>         batch requests in flight (default 16)
@@ -64,7 +66,17 @@ function positiveInt(value: string | undefined, name: string, fallback: number):
   return n;
 }
 
+// Optional settings file next to package.json; a variable already set in the shell wins over it.
+function loadEnvFile(): void {
+  try {
+    process.loadEnvFile(new URL('../.env', import.meta.url));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+  }
+}
+
 async function main(): Promise<void> {
+  loadEnvFile();
   const { values, positionals } = parseArgs({
     allowPositionals: true,
     options: {
@@ -106,7 +118,7 @@ async function main(): Promise<void> {
   const network = loadNetwork(values.network, values.deployments ?? DEFAULT_DEPLOYMENTS);
   const db = openDb(values.db ?? `cleanup-${network.name}.sqlite`, network);
   const log = (line: string) => console.log(line);
-  const rpcUrl = values['rpc-url'] ?? network.defaultRpcUrl;
+  const rpcUrl = values['rpc-url'] ?? (process.env.RPC_URL || network.defaultRpcUrl);
   const reader = () =>
     rpcStorageReader({
       rpcUrl,
