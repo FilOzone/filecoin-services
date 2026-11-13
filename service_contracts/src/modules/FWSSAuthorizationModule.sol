@@ -224,8 +224,8 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         info.pendingOneTimePayments = newPending;
 
         // piecesAdded may flush the fee before PDPVerifier drops these pieces, so pending alone cannot signal the
-        // smaller leaf count to nextProvingPeriod.
-        info.pieceRemovalsPending = true;
+        // smaller leaf count to nextProvingPeriod. An empty batch removes nothing.
+        if (pieceIds.length != 0) info.pieceRemovalsPending = true;
     }
 
     function terminateService(uint256 dataSetId, bytes calldata extraData) external {

@@ -390,6 +390,29 @@ contract FWSSProvingModuleTest is FilecoinWarmStorageServiceFixture {
         );
     }
 
+    /// @dev PDPVerifier 3.5.0 rejects an empty batch. One that forwards it must not cost a rate update.
+    function testNextProvingPeriod_EmptyRemovalBatchLeavesRateAlone() public {
+        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Empty removal");
+        _addPiece(dataSetId, 0, "piece-a");
+        _addPiece(dataSetId, 1, "piece-b");
+        uint256 pieceLeaves = Cids.leafCount(0, 35);
+
+        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
+        uint256 deadline = block.number + provingPeriod;
+        _nextProvingPeriod(dataSetId, deadline, 2 * pieceLeaves);
+
+        makeSignaturePass(client);
+        mockPDPVerifier.piecesScheduledRemove(
+            dataSetId, new uint256[](0), address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
+        );
+        _addPiece(dataSetId, 2, "piece-c");
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0, "piecesAdded flushed fees");
+
+        vm.roll(deadline + 1);
+        vm.expectCall(address(payments), abi.encodeWithSelector(FilecoinPayV1.modifyRailPayment.selector), 0);
+        _nextProvingPeriod(dataSetId, deadline + provingPeriod, 3 * pieceLeaves);
+    }
+
     /// @dev Schedules removal of piece 1 of two, then adds a third piece. piecesAdded flushes the removal fee while
     ///      PDPVerifier still counts the removed piece; the mock then drops it, as PDPVerifier does before calling
     ///      nextProvingPeriod. Returns the leaf count after the removal.
