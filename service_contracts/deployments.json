@@ -121,7 +121,7 @@
         "pinned": true
       },
       "PDP_VERIFIER_IMPLEMENTATION": {
-        "initcode_hash": "0x43f5be1a5e546cfd7200624a02c53fdf46caa8150f16b0663a2e8c67d68e3dfe",
+        "initcode_hash": "0x2ae11470a908b1d8a1a90573d98918e83668b8d350c1d3e2f6bfd6599cfae697",
         "artifact_contract": "lib/pdp/src/PDPVerifier.sol:PDPVerifier",
         "libraries": {},
         "constructor_args": [
