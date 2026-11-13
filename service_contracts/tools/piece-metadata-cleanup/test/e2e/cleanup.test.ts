@@ -22,10 +22,21 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { filecoin, foundry } from 'viem/chains';
 import { checkPieces } from '../../src/check.ts';
-import { batchCalldataOps, listBatches, openDb, pieceUpserter, replaceQueues, setPieceStatus, statusCounts, type BatchRow } from '../../src/db.ts';
+import {
+  batchCalldataOps,
+  listBatches,
+  openDb,
+  pieceUpserter,
+  replaceLegacyRanges,
+  replaceQueues,
+  setPieceStatus,
+  statusCounts,
+  type BatchRow,
+} from '../../src/db.ts';
+import { discoverPieces } from '../../src/discover.ts';
 import { decodeOps, POP_QUEUE } from '../../src/ops.ts';
-import { buildPlan } from '../../src/plan.ts';
-import { refreshQueues } from '../../src/queues.ts';
+import { buildPlan, excludedPieces } from '../../src/plan.ts';
+import { assertCleanupInstalled, refreshQueues } from '../../src/queues.ts';
 import { sendBatches, type SendOptions } from '../../src/send.ts';
 import { publicClient, rpcStorageReader } from '../../src/storage.ts';
 import { verifyPlan } from '../../src/verify.ts';
@@ -62,6 +73,17 @@ const PIECES: Seed[] = [
   [NO_RAIL_DATA_SET, 8, { name: repeat('n', 70) }, { name: repeat('n', 40) }],
   [NO_RAIL_DATA_SET, 9, { name: 'file.bin' }, { nam: 'file.bin' }],
 ];
+// On chain only, as when the indexer missed them; `discover` must find them. In data set order, as it reports them.
+const UNINDEXED: [number, number, Record<string, string>][] = [
+  [RAIL_DATA_SET, 7, { s: 'short', [LONG_KEY]: repeat('L', 100) }], // in a gap of the indexed ids
+  [3, 1, { orphan: 'yes' }], // a data set the indexer does not know: the tail only
+  [NO_RAIL_DATA_SET, 12, { tail: 'x' }], // past the largest indexed id, within the tail
+];
+const RANGES = [
+  { dataSetId: RAIL_DATA_SET, maxPieceId: 10 },
+  { dataSetId: NO_RAIL_DATA_SET, maxPieceId: 9 },
+];
+const TAIL = 4;
 const QUEUES: [number, number][] = [
   [RAIL_DATA_SET, 20],
   [NO_RAIL_DATA_SET, 3],
@@ -156,7 +178,7 @@ async function setup(pieces: Seed[], queues: [number, number][]) {
     receiptTimeoutMs: 20_000,
   };
   const read = async <T>(functionName: string, args: unknown[]) => (await client.readContract({ address: harness, abi, functionName, args })) as T;
-  return { harness, db, reader, sender, opts, read };
+  return { harness, db, reader, sender, opts, read, write };
 }
 
 const statuses = (db: DatabaseSync) => listBatches(db).map((b) => b.status);
@@ -210,20 +232,34 @@ after(() => {
   anvil?.kill();
 });
 
-test('check, queues, plan, send with resume, verify leave only the non-legacy state', async () => {
-  const { harness, db, reader, sender, opts, read } = await setup(PIECES, QUEUES);
+test('discover, check, queues, plan, send with resume, verify leave only the non-legacy state', async () => {
+  const { harness, db, reader, sender, opts, read, write } = await setup(PIECES, QUEUES);
+  for (const [dataSetId, pieceId, metadata] of UNINDEXED) {
+    await write('seedPieceMetadata', [BigInt(dataSetId), BigInt(pieceId), Object.keys(metadata), Object.values(metadata)]);
+  }
   const before = await storageDump(harness);
   assert.ok(before.size > 80, `seeded storage visible in the dump (${before.size} slots)`);
   assert.ok([...before.values()].includes(BigInt('0x' + Buffer.from(LONG_KEY).toString('hex'))), 'the 32-byte key has its data slot');
 
+  replaceLegacyRanges(db, RANGES);
+  const discovered = await discoverPieces(db, reader, { dataSetIds: 10, tail: TAIL, pageSize: 7 });
+  assert.deepEqual(
+    discovered.pieces.map((p) => [p.dataSetId, p.pieceId, p.keys, p.status]),
+    UNINDEXED.map(([dataSetId, pieceId, metadata]) => [dataSetId, pieceId, Object.keys(metadata), 'unchecked']),
+  );
+  // Data sets 0..9 with a tail of 4: ids 0..14 of data set 1 without its 6 rows, 0..13 of data set 7 without its 4
+  // rows, and 0..3 of the eight others.
+  assert.deepEqual([discovered.candidates, discovered.hits, discovered.unrepresentable], [9 + 10 + 8 * TAIL, 3, 0]);
+
   await checkPieces(db, reader, { all: true, pageSize: 4 });
   const status = (dataSetId: number, pieceId: number) =>
     (db.prepare('SELECT status FROM pieces WHERE data_set_id = ? AND piece_id = ?').get(dataSetId, pieceId) as { status: string }).status;
-  assert.deepEqual(statusCounts(db), { match: 8, clean: 1, mismatch: 2 });
+  assert.deepEqual(statusCounts(db), { match: 8 + UNINDEXED.length, clean: 1, mismatch: 2 });
   assert.equal(status(NO_RAIL_DATA_SET, 6), 'clean');
   assert.equal(status(NO_RAIL_DATA_SET, 8), 'mismatch', 'wrong value length');
   assert.equal(status(NO_RAIL_DATA_SET, 9), 'mismatch', 'wrong key');
 
+  await assertCleanupInstalled(reader, harness);
   const queues = await refreshQueues(db, reader, 10, 'anvil');
   assert.deepEqual(queues, QUEUES.map(([dataSetId, length]) => ({ dataSetId, length })));
 
@@ -237,11 +273,11 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
 
   // Before sending, verify reads every planned slot and queue and finds each one set, except the head of the wrong
   // key, which never existed, the three slots (element, head, length) of the piece that was clean already, and the
-  // KeyData slot at the index of the short key next to the 32-byte one.
+  // KeyData slots at the index of the short key next to a 32-byte one, in two pieces.
   const unsent = await verifyPlan(db, reader, { all: true, pageSize: 5 });
   assert.equal(unsent.queues, QUEUES.length);
   assert.equal(unsent.slots, plan.metadataSlots + QUEUES.length);
-  assert.equal(unsent.residueCount, unsent.slots - 1 - 3 - 1);
+  assert.equal(unsent.residueCount, unsent.slots - 1 - 3 - 2);
   const sampled = await verifyPlan(db, reader, { sample: 1_000_000 });
   assert.deepEqual([sampled.slots, sampled.residueCount], [unsent.slots, unsent.residueCount], 'a sample covering every op reads the same');
 
@@ -250,7 +286,8 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   assert.equal(dry.failure, undefined);
   assert.equal(await nonceOf(sender.address), 0, 'a dry run sends nothing');
 
-  // A pilot of 3 batches under a price ceiling that is above the base fee but below base fee plus priority fee.
+  // A pilot of the queue batches and one metadata batch, under a price ceiling that is above the base fee but below
+  // base fee plus priority fee.
   const setBaseFee = async (fee: bigint) => {
     await rpc('anvil_setNextBlockBaseFeePerGas', [`0x${fee.toString(16)}`]);
     await rpc('evm_mine');
@@ -259,7 +296,8 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   assert.ok(priority > 0n, 'the node suggests a priority fee');
   const ceiling = 100n * GWEI + priority - 1n;
   await setBaseFee(100n * GWEI);
-  const pilot = sendBatches(db, client, { ...opts, maxBatches: 3, maxGasPrice: ceiling });
+  const pilotBatches = plan.queueBatches + 1;
+  const pilot = sendBatches(db, client, { ...opts, maxBatches: pilotBatches, maxGasPrice: ceiling });
   await sleep(500);
   assert.equal(await nonceOf(sender.address, 'pending'), 0, 'nothing sent while base fee plus priority fee is above the ceiling');
 
@@ -267,9 +305,9 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   await setBaseFee(60n * GWEI);
   const first = await pilot;
   assert.equal(first.failure, undefined);
-  assert.equal(first.done, 3);
-  assert.deepEqual(statuses(db).slice(0, 4), ['done', 'done', 'done', 'planned']);
-  assert.equal(await nonceOf(sender.address), 3);
+  assert.equal(first.done, pilotBatches);
+  assert.deepEqual(statuses(db).slice(0, pilotBatches + 1), [...Array(pilotBatches).fill('done'), 'planned']);
+  assert.equal(await nonceOf(sender.address), pilotBatches);
   const pilotTxs = db.prepare('SELECT hash FROM txs ORDER BY nonce').all() as { hash: Hex }[];
   const feeCaps: bigint[] = [];
   for (const { hash } of pilotTxs) {
@@ -280,12 +318,19 @@ test('check, queues, plan, send with resume, verify leave only the non-legacy st
   assert.equal(feeCaps[0], ceiling, 'the ceiling is the fee cap when the usual cap would be above it');
   assert.ok(feeCaps.every((cap) => cap <= ceiling), `fee caps ${feeCaps} within ${ceiling}`);
 
+  // The pilot's slots and the queues it emptied read zero, while the rest of the plan does not.
+  const pilotChecked = await verifyPlan(db, reader, { done: true });
+  assert.equal(pilotChecked.residueCount, 0, JSON.stringify(pilotChecked.residue, (_, v) => (typeof v === 'bigint' ? v.toString(16) : v)));
+  assert.equal(pilotChecked.queues, QUEUES.length);
+  assert.equal(pilotChecked.ops, listBatches(db)[pilotBatches - 1]!.op_count);
+  assert.ok((await verifyPlan(db, reader, { all: true })).residueCount > 0);
+
   // Interrupted run: blocks stop, so two messages go out and their receipts never come.
   await rpc('evm_setAutomine', [false]);
   const stalled = await sendBatches(db, client, { ...opts, maxInflight: 2, receiptTimeoutMs: 1000 });
   assert.match(stalled.failure ?? '', /no receipt/);
-  assert.deepEqual(statuses(db).slice(3, 6), ['sent', 'sent', 'planned'], 'at most 2 in flight, recorded as sent');
-  assert.equal(await nonceOf(sender.address, 'pending'), 5);
+  assert.deepEqual(statuses(db).slice(pilotBatches, pilotBatches + 3), ['sent', 'sent', 'planned'], 'at most 2 in flight, recorded as sent');
+  assert.equal(await nonceOf(sender.address, 'pending'), pilotBatches + 2);
 
   // Mine whatever is pending, after giving the sender time to fill its in-flight window, and record the largest pool.
   let mining = true;
@@ -370,6 +415,7 @@ test('after a partial send, check refuses and verify --requeue then send finishe
 
   await assert.rejects(checkPieces(db, reader, { all: true, recheck: true }), /sending has started.*verify --requeue, then send/);
   await assert.rejects(checkPieces(db, reader, { sample: 5 }), /sending has started/);
+  await assert.rejects(discoverPieces(db, reader, { dataSetIds: 10, tail: TAIL }), /sending has started/);
   assert.deepEqual(statusCounts(db), { match: MATCHING.length }, 'no check result changed');
 
   // One more batch whose message is out and unmined when verify runs.
@@ -488,6 +534,13 @@ test('reads and sends refuse a node of another chain and an address without code
   // Without the guard every slot of the empty address reads zero, so the piece would come out clean.
   await assert.rejects(checkPieces(db, readerOf(foundry, empty), { all: true }), /no contract code at 0x0{38}aa/i);
   await assert.rejects(refreshQueues(db, readerOf(foundry, empty), 10, 'anvil'), /no contract code/);
+
+  // queues refuses a proxy that does not route the cleanup selector: here code that reverts on every call.
+  const reverting = '0x00000000000000000000000000000000000000bb';
+  await rpc('anvil_setCode', [reverting, '0x60006000fd']);
+  await assert.rejects(assertCleanupInstalled(readerOf(foundry, reverting), reverting), /facet is not installed; run queues after the upgrade/);
+  await assert.rejects(assertCleanupInstalled(readerOf(foundry, empty), empty), /no contract code/);
+  await assertCleanupInstalled(reader, opts.to);
   await assert.rejects(checkPieces(db, readerOf(filecoin, opts.to), { all: true }), /RPC serves chain 31337, expected 314/);
   assert.deepEqual(statusCounts(db), { unchecked: 1 });
 
@@ -499,6 +552,36 @@ test('reads and sends refuse a node of another chain and an address without code
   await assert.rejects(sendBatches(db, client, { ...opts, chainId: filecoin.id }), /RPC serves chain 31337, expected 314/);
   await assert.rejects(sendBatches(db, client, { ...opts, maxGasPrice: undefined }), /price ceiling/);
   assert.ok(statuses(db).every((s) => s === 'planned'));
+});
+
+test('discover stores a hit that metadata cannot hold as invalid, with the reason', async () => {
+  const { harness, db, reader, write } = await setup([], []);
+  const seed = (pieceId: number, keys: string[], values: string[]) => write('seedPieceMetadata', [0n, BigInt(pieceId), keys, values]);
+  await seed(0, ['a', 'b', 'c', 'd', 'e', 'f'], ['1', '2', '3', '4', '5', '6']);
+  await seed(1, ['k'], [repeat('v', 129)]);
+  await seed(2, ['k', 'k'], ['1', '2']);
+  await seed(4, [repeat('k', 33)], ['v']);
+  await seed(5, [''], ['v']);
+
+  // A key that is not UTF-8: the same calldata as string[], built as bytes[].
+  const selector = toFunctionSelector('seedPieceMetadata(uint256,uint256,string[],string[])');
+  const args = encodeAbiParameters([{ type: 'uint256' }, { type: 'uint256' }, { type: 'bytes[]' }, { type: 'bytes[]' }], [0n, 3n, ['0xff'], ['0x76']]);
+  const hash = await wallet.sendTransaction({ to: harness, data: `${selector}${args.slice(2)}`, account: wallet.account!, chain: foundry });
+  assert.equal((await client.waitForTransactionReceipt({ hash })).status, 'success');
+
+  replaceLegacyRanges(db, [{ dataSetId: 0, maxPieceId: 5 }]);
+  const found = await discoverPieces(db, reader, { dataSetIds: 1, tail: 0 });
+  const expected = [
+    [0, 'discover: keys length 6, at most 5'],
+    [1, 'discover: value of "k" is 129 bytes, at most 128'],
+    [2, 'discover: key "k" appears twice'],
+    [3, 'discover: key 0 is not valid UTF-8: 0xff'],
+    [4, 'discover: key 0 is 33 bytes, at most 32'],
+    [5, 'key "" is 0 bytes, allowed 1..32'], // representable, outside the facet's bounds, as fetch would store it
+  ];
+  assert.deepEqual(found.pieces.map((p) => [p.pieceId, p.status, p.detail]), expected.map(([id, detail]) => [id, 'invalid', detail]));
+  assert.equal(found.unrepresentable, 5);
+  assert.deepEqual(excludedPieces(db).map((p) => [p.piece_id, p.detail]), expected, 'plan --report lists every one');
 });
 
 test('a batch that reverts stops the run with its id and revert data', async () => {

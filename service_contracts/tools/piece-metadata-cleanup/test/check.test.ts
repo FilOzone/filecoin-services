@@ -102,6 +102,7 @@ test('check and verify take exactly one of sample and all', async () => {
   await assert.rejects(checkPieces(db, chain, {}), /exactly one/);
   await assert.rejects(verifyPlan(db, chain, { all: true, sample: 5 }), /exactly one/);
   await assert.rejects(verifyPlan(db, chain, {}), /exactly one/);
+  await assert.rejects(verifyPlan(db, chain, { all: true, done: true }), /exactly one/);
   assert.equal(chain.reads, 0);
 });
 

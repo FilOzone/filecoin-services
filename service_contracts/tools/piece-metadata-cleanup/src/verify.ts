@@ -9,6 +9,8 @@ export type Residue = { dataSetId: number; pieceId: number | null; kind: string;
 export type VerifyOptions = {
   sample?: number;
   all?: boolean;
+  // Every slot of the batches recorded as done, and the queues all of whose batches are done: checks a pilot.
+  done?: boolean;
   // Put every batch that still has residue back to `planned`, so the next `send` sends it again.
   requeue?: boolean;
   pageSize?: number;
@@ -22,10 +24,13 @@ export type VerifyResult = { queues: number; ops: number; slots: number; residue
 type OpRow = { sort_key: Uint8Array; op: Uint8Array };
 
 // Reads every slot the stored plan zeroes, or a random sample of its metadata ops, plus the length of every planned
-// queue, and reports each one that is not zero. It reads only what the plan knows: a slot the plan never had, from a
-// wrong key or value length, is invisible here, which is why `check` must pass before `plan`.
+// queue, and reports each one that is not zero. `done` reads only what the batches recorded as done zero. It reads
+// only what the plan knows: a slot the plan never had, from a wrong key or value length, is invisible here, which is
+// why `check` must pass before `plan`.
 export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: VerifyOptions): Promise<VerifyResult> {
-  if ((opts.sample !== undefined) === Boolean(opts.all)) throw new Error('verify needs exactly one of --sample N and --all');
+  if ([opts.sample !== undefined, opts.all, opts.done].filter(Boolean).length !== 1) {
+    throw new Error('verify needs exactly one of --sample N, --all and --done');
+  }
   // Without a plan there is nothing to read, and "0 residue" would look like a pass.
   if ((db.prepare('SELECT count(*) AS n FROM batches').get() as { n: number }).n === 0) {
     throw new Error('this state file has no plan; run plan first');
@@ -39,11 +44,12 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
     if (result.residue.length < maxListed) result.residue.push(r);
   };
 
+  const batches = listBatches(db);
+  // Like "0 residue" without a plan, "0 residue" before any batch is done would look like a pass.
+  if (opts.done && !batches.some((b) => b.status === 'done')) throw new Error('no batch is recorded as done yet');
+
   // Batches are consecutive sort-key ranges in id order, so the batch of an op is the last one starting at or before it.
-  const batches = opts.requeue ? listBatches(db) : [];
-  const requeue = new Set<number>();
-  const markBatch = (sortKey: Uint8Array) => {
-    if (!opts.requeue) return;
+  const batchOf = (sortKey: Uint8Array) => {
     let low = 0;
     let high = batches.length - 1;
     while (low < high) {
@@ -55,7 +61,11 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
     if (!batch || Buffer.compare(batch.first_key, sortKey) > 0 || Buffer.compare(sortKey, batch.last_key) > 0) {
       throw new Error(`op ${Buffer.from(sortKey).toString('hex')} is in no batch`);
     }
-    requeue.add(batch.id);
+    return batch;
+  };
+  const requeue = new Set<number>();
+  const markBatch = (sortKey: Uint8Array) => {
+    if (opts.requeue) requeue.add(batchOf(sortKey).id);
   };
 
   const phaseStart = (phase: number) => Buffer.from([phase]);
@@ -71,7 +81,9 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
       popKeys.set(decoded.dataSetId, keys);
     }
   }
-  const ids = [...popKeys.keys()].sort((a, b) => a - b);
+  const ids = [...popKeys.keys()]
+    .filter((id) => !opts.done || popKeys.get(id)!.every((k) => batchOf(k).status === 'done'))
+    .sort((a, b) => a - b);
   const lengths = await reader.read(ids.map(queueSlot));
   ids.forEach((dataSetId, i) => {
     if (lengths[i] === 0n) return;
@@ -107,6 +119,13 @@ export async function verifyPlan(db: DatabaseSync, reader: StorageReader, opts: 
   if (opts.sample !== undefined) {
     const rows = db.prepare('SELECT sort_key, op FROM ops WHERE sort_key >= ? ORDER BY random() LIMIT ?').all(metadataStart, opts.sample) as OpRow[];
     for (let i = 0; i < rows.length; i += pageSize) await checkOps(rows.slice(i, i + pageSize));
+  } else if (opts.done) {
+    const range = db.prepare('SELECT sort_key, op FROM ops WHERE sort_key BETWEEN ? AND ? ORDER BY sort_key');
+    for (const b of batches) {
+      if (b.phase === PHASE_QUEUE || b.status !== 'done') continue;
+      await checkOps(range.all(b.first_key, b.last_key) as OpRow[]);
+      log(`verified ${result.ops} ops, ${result.slots} slots of done batches, residue ${result.residueCount}`);
+    }
   } else {
     const page = db.prepare('SELECT sort_key, op FROM ops WHERE sort_key > ? ORDER BY sort_key LIMIT ?');
     // The one-byte phase prefix sorts before every 33-byte key of that phase.

@@ -64,7 +64,9 @@ async function postBatch(url: string, address: Address, slots: readonly bigint[]
 export function rpcStorageReader(opts: RpcReaderOptions): StorageReader & { client: PublicClient; ready(): Promise<void> } {
   const client = publicClient(opts.rpcUrl, opts.chain);
   const interval = opts.requestsPerSecond > 0 ? 1000 / opts.requestsPerSecond : 0;
-  const retries = opts.retries ?? 8;
+  // 45 retries wait about 20 minutes in all, so a long `verify --all`, which does not resume, outlasts an RPC outage.
+  // A failed read never counts as zero, so retrying is safe.
+  const retries = opts.retries ?? 45;
   const log = opts.log ?? (() => {});
   let nextStart = 0;
 

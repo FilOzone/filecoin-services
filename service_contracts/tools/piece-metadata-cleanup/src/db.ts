@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS pieces (
   PRIMARY KEY (data_set_id, piece_id)
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS queues (data_set_id INTEGER PRIMARY KEY, length INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS legacy_ranges (data_set_id INTEGER PRIMARY KEY, max_piece_id INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS ops (sort_key BLOB PRIMARY KEY, op BLOB NOT NULL) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS batches (
   id INTEGER PRIMARY KEY,
@@ -64,7 +65,9 @@ CREATE INDEX IF NOT EXISTS txs_batch ON txs (batch_id, status);
 // Opens or creates the state file, and refuses one made for another network or FWSS proxy.
 export function openDb(path: string, network: { name: string; fwss: string }): DatabaseSync {
   const db = new DatabaseSync(path);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA cache_size = -262144;');
+  // FULL: `send` records a message's hash before the broadcast, and in WAL mode NORMAL can lose that commit on a
+  // power loss.
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA cache_size = -262144;');
   db.exec(SCHEMA);
 
   const identity = `${network.name} ${network.fwss}`;
@@ -151,6 +154,20 @@ export function readQueues(db: DatabaseSync): { dataSetId: number; length: numbe
     length: number;
   }[];
   return rows.map((r) => ({ dataSetId: r.data_set_id, length: r.length }));
+}
+
+// The largest legacy piece id per data set, as the indexer saw them, with or without metadata.
+export function replaceLegacyRanges(db: DatabaseSync, ranges: { dataSetId: number; maxPieceId: number }[]): void {
+  transaction(db, () => {
+    db.exec('DELETE FROM legacy_ranges');
+    const insert = db.prepare('INSERT INTO legacy_ranges (data_set_id, max_piece_id) VALUES (?, ?)');
+    for (const r of ranges) insert.run(r.dataSetId, r.maxPieceId);
+  });
+}
+
+export function readLegacyRanges(db: DatabaseSync): Map<number, number> {
+  const rows = db.prepare('SELECT data_set_id, max_piece_id FROM legacy_ranges').all() as { data_set_id: number; max_piece_id: number }[];
+  return new Map(rows.map((r) => [r.data_set_id, r.max_piece_id]));
 }
 
 export function opInserter(db: DatabaseSync) {
