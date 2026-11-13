@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+# service_contracts/.gitignore ignores lockfiles; this tool needs its transitive dependencies pinned.
+!package-lock.json

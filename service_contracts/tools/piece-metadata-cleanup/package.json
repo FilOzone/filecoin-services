@@ -1,0 +1,23 @@
+{
+  "name": "fwss-piece-metadata-cleanup",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.12"
+  },
+  "scripts": {
+    "cli": "node --disable-warning=ExperimentalWarning src/cli.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test 'test/*.test.ts'",
+    "test:e2e": "node --disable-warning=ExperimentalWarning --test 'test/e2e/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "8.23.1",
+    "viem": "2.57.11"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/pg": "8.23.1",
+    "typescript": "6.0.3"
+  }
+}

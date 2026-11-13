@@ -66,6 +66,7 @@ The `check-gen` CI job ([`.github/workflows/check.yml`](../../.github/workflows/
 | `session-key-registry-deploy.sh` | Deploy SessionKeyRegistry |
 | `provider-id-set-deploy.sh` | Deploy ProviderIdSet |
 | `check_deployments_checksums.sh` | Validate EIP-55 checksum casing for every address in `deployments.json`. Run by the `check-deployments` CI job. |
+| [`piece-metadata-cleanup/`](piece-metadata-cleanup/README.md) | Node tool that plans, sends and verifies the one-off zeroing of legacy piece metadata through the temporary cleanup facet |
 
 ### GitHub Workflows
 
