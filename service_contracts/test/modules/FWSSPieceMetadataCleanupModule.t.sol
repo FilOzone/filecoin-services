@@ -28,10 +28,10 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         cleanup = FWSSPieceMetadataCleanupModule(proxy);
     }
 
-    // Op encoder, the reference for off-chain tooling. Data set and piece IDs must fit in 40 bits.
+    // Op encoder, the reference for off-chain tooling. Data set and piece IDs must fit in 24 bits.
 
     function _valueHeadOp(uint256 dataSetId, uint256 pieceId, bytes memory key) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(0), uint40(dataSetId), uint40(pieceId), uint8(key.length), key);
+        return abi.encodePacked(uint8(0), uint24(dataSetId), uint24(pieceId), uint8(key.length), key);
     }
 
     function _valueDataOp(uint256 dataSetId, uint256 pieceId, uint256 count, bytes memory key)
@@ -39,23 +39,23 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         pure
         returns (bytes memory)
     {
-        return abi.encodePacked(uint8(1), uint40(dataSetId), uint40(pieceId), uint8(count), uint8(key.length), key);
+        return abi.encodePacked(uint8(1), uint24(dataSetId), uint24(pieceId), uint8(count), uint8(key.length), key);
     }
 
     function _keysLengthOp(uint256 dataSetId, uint256 pieceId) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(2), uint40(dataSetId), uint40(pieceId));
+        return abi.encodePacked(uint8(2), uint24(dataSetId), uint24(pieceId));
     }
 
     function _keyHeadOp(uint256 dataSetId, uint256 pieceId, uint256 index) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(3), uint40(dataSetId), uint40(pieceId), uint8(index));
+        return abi.encodePacked(uint8(3), uint24(dataSetId), uint24(pieceId), uint8(index));
     }
 
     function _popQueueOp(uint256 dataSetId, uint256 count) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(4), uint40(dataSetId), uint16(count));
+        return abi.encodePacked(uint8(4), uint24(dataSetId), uint16(count));
     }
 
     function _keyDataOp(uint256 dataSetId, uint256 pieceId, uint256 index) internal pure returns (bytes memory) {
-        return abi.encodePacked(uint8(5), uint40(dataSetId), uint40(pieceId), uint8(index));
+        return abi.encodePacked(uint8(5), uint24(dataSetId), uint24(pieceId), uint8(index));
     }
 
     /// @dev Ops that clear one piece: per key its value head, the data slots of a value of 32 bytes or more, and
@@ -200,7 +200,7 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
 
     function testFuzz_WritesStayInsideLegacyMappings(uint256 seed) public {
         // A live data set, and two that never existed; the ranges keep the three apart.
-        uint256[3] memory dataSetIds = [_createDataSet(), (1 << 32) + uint32(seed >> 200), type(uint40).max];
+        uint256[3] memory dataSetIds = [_createDataSet(), (1 << 20) + uint16(seed >> 200), type(uint24).max];
         uint256[3] memory queueLengths;
         bytes32[3] memory flagsBefore;
         for (uint256 d = 0; d < 3; d++) {
@@ -222,8 +222,8 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
 
         for (uint256 i = 0; i < opCount; i++) {
             uint256 r = uint256(keccak256(abi.encode(seed, i)));
-            uint256 dataSetId = r % 4 == 3 ? uint256(uint40(r >> 8)) : dataSetIds[r % 3];
-            uint256 pieceId = (r >> 48) % 3 == 0 ? type(uint40).max : uint40(r >> 56);
+            uint256 dataSetId = r % 4 == 3 ? uint256(uint24(r >> 8)) : dataSetIds[r % 3];
+            uint256 pieceId = (r >> 48) % 3 == 0 ? type(uint24).max : uint24(r >> 56);
             uint256 kind = (r >> 96) % 6;
             uint256 small = (r >> 104) % 5;
 
@@ -288,6 +288,34 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         }
     }
 
+    function testCleanup_AddressesTheLargestIds() public {
+        uint256 id = type(uint24).max;
+        string[] memory keys = new string[](2);
+        string[] memory values = new string[](2);
+        (keys[0], values[0]) = ("filename", _repeat("v", 64));
+        (keys[1], values[1]) = (_repeat("k", 32), "short");
+
+        vm.record();
+        _seedLegacyPieceMetadata(id, id, keys, values);
+        (, bytes32[] memory seeded) = vm.accesses(proxy);
+        assertGe(seeded.length, 8, "2 value heads, 2 value data slots, 2 key heads, 1 key data slot and the key count");
+        uint256[] memory pieceIds = new uint256[](2);
+        (pieceIds[0], pieceIds[1]) = (id - 1, id);
+        _seedLegacyPieceMetadataRemovals(id, pieceIds);
+
+        cleanup.cleanupLegacyPieceMetadata(
+            bytes.concat(_concat(_pieceOps(id, id, keys, values)), _popQueueOp(id, pieceIds.length))
+        );
+
+        for (uint256 i = 0; i < seeded.length; i++) {
+            assertEq(vm.load(proxy, seeded[i]), bytes32(0), "every slot the seeding wrote should be zero");
+        }
+        assertEq(vm.load(proxy, _queueSlot(id)), bytes32(0), "queue length is zero");
+        for (uint256 i = 0; i < pieceIds.length; i++) {
+            assertEq(vm.load(proxy, _element(_queueSlot(id), i)), bytes32(0), "queue entry is zeroed");
+        }
+    }
+
     function testCleanup_RejectsMalformedOps() public {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("k", "v");
         _seedLegacyPieceMetadata(1, 2, keys, values);
@@ -316,6 +344,11 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
             }
         }
 
+        // A cut operation is truncated even when the part that is there is out of range.
+        _expectRejected(
+            bytes.concat(valid, abi.encodePacked(uint8(1), uint24(1), uint24(2), uint8(5), uint8(3))),
+            abi.encodeWithSelector(truncated, at)
+        );
         _expectRejected(
             bytes.concat(valid, hex"06"),
             abi.encodeWithSelector(FWSSPieceMetadataCleanupModule.UnknownCleanupOp.selector, at, 6)
@@ -363,13 +396,24 @@ contract FWSSPieceMetadataCleanupModuleTest is FilecoinWarmStorageServiceFixture
         _seedLegacyPieceMetadataRemovals(dataSetId, pieceIds);
         mockPDPVerifier.setDataSetLeafCount(dataSetId, pieceLeaves);
 
+        vm.record();
         cleanup.cleanupLegacyPieceMetadata(_popQueueOp(dataSetId, 2));
+        (, bytes32[] memory written) = vm.accesses(proxy);
+        uint256 lengthWrites = 0;
+        for (uint256 i = 0; i < written.length; i++) {
+            if (written[i] == _queueSlot(dataSetId)) lengthWrites++;
+        }
+        assertEq(lengthWrites, 1, "length written once for the two entries");
+
         uint256[] memory left = _legacyPieceMetadataRemovals(dataSetId);
         assertEq(left.length, 1, "partial pop");
         assertEq(left[0], 1, "pops from the end");
+        assertEq(vm.load(proxy, _element(_queueSlot(dataSetId), 1)), bytes32(0), "popped entry is zeroed");
+        assertEq(vm.load(proxy, _element(_queueSlot(dataSetId), 2)), bytes32(0), "popped entry is zeroed");
 
         cleanup.cleanupLegacyPieceMetadata(_popQueueOp(dataSetId, type(uint16).max));
         assertEq(_legacyPieceMetadataRemovals(dataSetId).length, 0, "queue emptied");
+        assertEq(vm.load(proxy, _element(_queueSlot(dataSetId), 0)), bytes32(0), "last entry is zeroed");
         assertTrue(_pieceRemovalsPending(dataSetId), "flag takes over the queue's refresh signal");
         assertEq(_pdpRate(dataSetId), _rateForLeaves(2 * pieceLeaves), "rate waits for the proving period");
 
