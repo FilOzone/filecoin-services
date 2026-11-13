@@ -289,7 +289,7 @@ make test           # builds the ERC-8167 dispatcher artifacts the tests need (m
 - [ ] Fill Cross-Repo Impact with required PRs, issues, releases, or `None`
 - [ ] Fill Rollback Plan from the [function table](#how-the-upgrade-functions-differ)
 - [ ] Run foc-devnet post-upgrade state validation, or record the technical owner's approved exception
-- [ ] Rehearse the upgrade on a local fork of each network with real data sets: announce, execute, and run the post-upgrade checks against the frozen candidate. For the storage-terms introduction, cover data sets with a pending fee, piece additions, piece removals, and termination with an underfunded payer, and confirm the wrapper (not the raw migration) is the rehearsed target. Record the fork block and results.
+- [ ] Technical owner decides whether this release needs a fork rehearsal and records the decision. If it does, rehearse the upgrade on a local fork of each network with real data sets: announce, execute, and run the post-upgrade checks against the frozen candidate. For the storage-terms introduction, cover data sets with a pending fee, piece additions, piece removals, and termination with an underfunded payer, and confirm the wrapper (not the raw migration) is the rehearsed target. Record the fork block and results.
 - [ ] Freeze the deploy commit and record it in Release Tracking
 - [ ] Create and push the stack tag from the frozen deploy commit before any live upgrade transaction:
 
