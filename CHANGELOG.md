@@ -5,28 +5,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
+
+This contract-stack release adds owner-registered storage terms to FilecoinWarmStorageService (FWSS), so each data set selects an immutable currency and price at creation, and takes legacy piece metadata cleanup out of the proving path. It is the first upgrade delivered as a josuke migration on the ERC-8167 dispatcher. The FWSS proxy addresses do not change.
+
+| Component | Version | Upgrade classification |
+|---|---|---|
+| Stack (`filecoin-services`) | `v1.6.0` | `TBD` |
+| `FilecoinWarmStorageService` | `1.6.0` | Josuke migration (via `FWSSStorageTermsMigration`) |
+| `PDPVerifier` | `3.5.0` | Unchanged |
+
+### Deployment / Rollout Status
+
+Rollout status, network-by-network addresses, announcement and execution epochs, transaction links, and validation evidence are tracked on the [v1.6.0 GitHub Release](https://github.com/FilOzone/filecoin-services/releases/tag/v1.6.0). The FWSS proxy addresses remain unchanged.
+
 ### Added
 
-- Added owner-registered, immutable storage terms selecting currency, decimals, price, and salt. The independent legacy definition uses record zero, while every ordinary definition—including the exact legacy tuple—uses its normal hash; ordinary terms can be disabled for new datasets without affecting existing ones ([#627](https://github.com/FilOzone/filecoin-services/issues/627)).
-- Added terms-aware EIP-712 dataset creation using the existing creation scope, and V2 dataset getters exposing the selected terms while preserving deprecated getter ABIs. V2 listing uses `getClientDataSetsV2(client, offset, limit)`.
-- Added `FWSSPieceMetadataCleanupModule`, a temporary facet whose permissionless `cleanupLegacyPieceMetadata(bytes)` zeroes the piece metadata values, key lists and removal-queue entries that earlier versions left in storage ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
+- Added owner-registered, immutable storage terms selecting currency, decimals, price, and salt. The independent legacy definition uses record zero, while every ordinary definition—including the exact legacy tuple—uses its normal hash; ordinary terms can be disabled for new datasets without affecting existing ones ([#627](https://github.com/FilOzone/filecoin-services/issues/627), [#653](https://github.com/FilOzone/filecoin-services/pull/653)).
+- Added terms-aware EIP-712 dataset creation using the existing creation scope, and V2 dataset getters exposing the selected terms while preserving deprecated getter ABIs. V2 listing uses `getClientDataSetsV2(client, offset, limit)` ([#653](https://github.com/FilOzone/filecoin-services/pull/653)).
+- Added `FWSSPieceMetadataCleanupModule`, a temporary facet whose permissionless `cleanupLegacyPieceMetadata(bytes)` zeroes the piece metadata values, key lists and removal-queue entries that earlier versions left in storage ([#609](https://github.com/FilOzone/filecoin-services/issues/609), [#658](https://github.com/FilOzone/filecoin-services/pull/658)).
   It takes packed operations, including a separate data-slot operation for 32-byte keys, so off-chain tooling can clear the slots in storage-key order.
   Popping entries from a live data set's legacy queue sets `pieceRemovalsPending`, so the rate update the queue signalled still happens.
   A later release removes the facet once the legacy state is gone, which also drops `cleanupLegacyPieceMetadata` and its errors from the published FWSS ABI.
+- `MultiMethodAuthorizer`, an example P256 and passkey authorizer for the FWSS `isAuthorized()` hook. It is an example contract and is not deployed as part of FWSS ([#587](https://github.com/FilOzone/filecoin-services/pull/587)).
 
 ### Changed
 
-- Storage and dataset charges combine monthly before per-epoch rounding for every terms ID; fees and reserves use the selected currency's precision, and FilBeam remains USDFC-only.
-- The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata.
-- `piecesScheduledRemove` no longer queues piece IDs for metadata cleanup; it sets `DataSetInfo.pieceRemovalsPending`, which the next `nextProvingPeriod` consumes to update the storage rate ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
+- Storage and dataset charges combine monthly before per-epoch rounding for every terms ID; fees and reserves use the selected currency's precision, and FilBeam remains USDFC-only ([#653](https://github.com/FilOzone/filecoin-services/pull/653)).
+- The storage-terms upgrade targets an already-modular FWSS deployment. Announce and execute `FWSSStorageTermsMigration` wrapping the Josuke route migration to initialize legacy terms atomically; do not execute the raw route migration directly. Fresh deployments supply the legacy currency through initialization calldata ([#653](https://github.com/FilOzone/filecoin-services/pull/653)).
+- `piecesScheduledRemove` no longer queues piece IDs for metadata cleanup; it sets `DataSetInfo.pieceRemovalsPending`, which the next `nextProvingPeriod` consumes to update the storage rate ([#609](https://github.com/FilOzone/filecoin-services/issues/609), [#658](https://github.com/FilOzone/filecoin-services/pull/658)).
   The field packs into unused bytes of `DataSetInfo` relative slot 10, so no slot moves.
   Piece metadata and removal-queue entries written by earlier versions stay in storage.
   A data set with a non-empty legacy queue gets the rate update at every `nextProvingPeriod` until `cleanupLegacyPieceMetadata` pops the queue, so pop the queues of live data sets first.
 
 ### Fixed
 
-- Payer-signed termination now ends the payment window and releases reserves even when the termination fee rounds to zero and no earlier fees remain pending.
-- `nextProvingPeriod` and `dataSetDeleted` no longer delete legacy piece metadata in a loop over the removal queue, so a long queue can no longer make them run out of gas ([#609](https://github.com/FilOzone/filecoin-services/issues/609)).
+- Payer-signed termination now ends the payment window and releases reserves even when the termination fee rounds to zero and no earlier fees remain pending ([#653](https://github.com/FilOzone/filecoin-services/pull/653)).
+- Termination that flushes pending fees keeps the rail's existing payment rate, so the new rounding no longer blocks termination for a payer in arrears with `LockupNotSettledRateChangeNotAllowed` ([#655](https://github.com/FilOzone/filecoin-services/pull/655)).
+- `nextProvingPeriod` and `dataSetDeleted` no longer delete legacy piece metadata in a loop over the removal queue, so a long queue can no longer make them run out of gas ([#609](https://github.com/FilOzone/filecoin-services/issues/609), [#658](https://github.com/FilOzone/filecoin-services/pull/658)).
 
 
 ## [1.5.0] - FWSS ERC-8167 Dispatcher Transition
