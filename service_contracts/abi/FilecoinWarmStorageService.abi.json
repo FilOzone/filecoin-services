@@ -1804,6 +1804,78 @@
   },
   {
     "type": "function",
+    "name": "cleanupLegacyPieceMetadata",
+    "inputs": [
+      {
+        "name": "ops",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "error",
+    "name": "KeyIndexOutOfRange",
+    "inputs": [
+      {
+        "name": "opOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "TruncatedCleanupOp",
+    "inputs": [
+      {
+        "name": "opOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownCleanupOp",
+    "inputs": [
+      {
+        "name": "opOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "kind",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ValueDataSlotsOutOfRange",
+    "inputs": [
+      {
+        "name": "opOffset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "count",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "function",
     "name": "addApprovedProvider",
     "inputs": [
       {

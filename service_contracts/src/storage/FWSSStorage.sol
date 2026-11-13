@@ -16,6 +16,7 @@ abstract contract FWSSStorage {
         uint256 providerId; // Provider ID from the ServiceProviderRegistry
         uint96 pendingOneTimePayments; // fees accumulated since last flush via updateStorageRates
         uint96 lifecycleReserveBalance; // local mirror of rail's lockupFixed; decremented on flush
+        bool pieceRemovalsPending; // removals scheduled since the last nextProvingPeriod, which refreshes the rate
         bytes32 storageTermsId; // Relative slot 11; zero selects the immutable legacy terms.
     }
 
@@ -91,7 +92,8 @@ abstract contract FWSSStorage {
     uint256 internal deprecatedStoragePricePerTibPerMonth;
     uint256 internal deprecatedMinimumStorageRatePerMonth;
 
-    // Piece IDs awaiting metadata cleanup; cleared each nextProvingPeriod call
+    // Legacy piece IDs awaiting metadata cleanup; no longer written or cleared by hot paths.
+    // A non-empty queue still makes nextProvingPeriod refresh the rate until the cleanup removes it.
     mapping(uint256 dataSetId => uint256[] pieceIds) internal scheduledPieceMetadataRemovals;
 
     // Optional per-data-set authorizer (address(0) = default payer/session-key behavior).
