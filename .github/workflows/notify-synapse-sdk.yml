@@ -124,7 +124,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 10.33.0
+          # Use the pnpm version synapse-sdk declares in `packageManager`; a pinned version drifts from it
+          package_json_file: ${{ env.SYNAPSE_SDK_PATH }}/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
