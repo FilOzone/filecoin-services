@@ -8,6 +8,10 @@ Preserve the 24 root slots (0–23), field order, types, struct members and pack
 Retired fields must remain in place. Constants and constructor immutables stay in
 FWSS; OpenZeppelin state remains in its existing bases and namespaces.
 
+The legacy piece metadata mappings `dataSetPieceMetadata`, `dataSetPieceMetadataKeys` and `scheduledPieceMetadataRemovals` keep their declarations, but FWSS no longer writes them.
+The only read left outside the cleanup is the length of `scheduledPieceMetadataRemovals`, which `nextProvingPeriod` checks to refresh the rate.
+`FWSSPieceMetadataCleanupModule` lets anyone zero their contents.
+
 Future modules must inherit the shared declarations. Independently appending fields
 in different modules can make them write to the same proxy slots. Their actual
 compiled layouts and any new storage must be reviewed when modules are introduced.

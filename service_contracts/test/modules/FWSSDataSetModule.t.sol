@@ -16,7 +16,6 @@ import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {LibSignatureVerification} from "../../src/lib/LibSignatureVerification.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {CDNPaymentRailsToppedUp} from "../../src/lib/LibRails.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20} from "../mocks/SharedMocks.sol";
@@ -51,17 +50,6 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
     {
         (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", label);
         return createDataSetForClient(provider, clientAddress, keys, values);
-    }
-
-    function _scheduledPieceMetadataRemovalsLength(uint256 dataSetId) internal view returns (uint256) {
-        bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
-        return uint256(vm.load(address(pdpServiceWithPayments), slot));
-    }
-
-    function _scheduledPieceMetadataRemovalAt(uint256 dataSetId, uint256 index) internal view returns (uint256) {
-        bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
-        bytes32 elementSlot = bytes32(uint256(keccak256(abi.encode(slot))) + index);
-        return uint256(vm.load(address(pdpServiceWithPayments), elementSlot));
     }
 
     function testCreateDataSetCreatesRail() public {
@@ -3002,11 +2990,10 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
     }
 
     /**
-     * @notice Test: Dataset deletion clears pending scheduled piece metadata removals
-     * @dev Reproduces the case where removals are scheduled but the dataset is deleted before
-     *      the next proving-period callback can process them.
+     * @notice Test: Dataset deletion leaves legacy piece metadata and its removal queue to the cleanup
+     * @dev The legacy queue can be too long to clear in one transaction, so deletion must not walk it.
      */
-    function testDataSetDeleted_ClearsScheduledPieceMetadataRemovals() public {
+    function testDataSetDeleted_LeavesLegacyPieceMetadataRemovalsUntouched() public {
         uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
 
         Cids.Cid[] memory pieceData = new Cids.Cid[](2);
@@ -3029,24 +3016,14 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
             pieceMetadataKeys,
             pieceMetadataValues
         );
-        _seedLegacyPieceMetadata(dataSetId, 0, pieceMetadataKeys, pieceMetadataValues);
-        _seedLegacyPieceMetadata(dataSetId, 1, pieceMetadataKeys, pieceMetadataValues);
 
+        // Both pieces were scheduled for removal by the pre-flag implementation, which queued them with metadata.
         uint256[] memory pieceIds = new uint256[](2);
         pieceIds[0] = 0;
         pieceIds[1] = 1;
-
-        makeSignaturePass(client);
-        mockPDPVerifier.piecesScheduledRemove(
-            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
-        );
-
-        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 2, "Removals should be queued before deletion");
-        assertEq(
-            _scheduledPieceMetadataRemovalAt(dataSetId, 1), 1, "Queued removal element should exist before deletion"
-        );
-
-        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 1, "Legacy piece metadata should exist");
+        _seedLegacyPieceMetadata(dataSetId, 0, pieceMetadataKeys, pieceMetadataValues);
+        _seedLegacyPieceMetadata(dataSetId, 1, pieceMetadataKeys, pieceMetadataValues);
+        _seedLegacyPieceMetadataRemovals(dataSetId, pieceIds);
 
         vm.prank(client);
         pdpServiceWithPayments.terminateService(dataSetId);
@@ -3060,13 +3037,12 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         vm.prank(sp1);
         mockPDPVerifier.deleteDataSet(PDPListener(address(pdpServiceWithPayments)), dataSetId, bytes(""));
 
-        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 0, "Queued removals should be cleared on deletion");
-        assertEq(
-            _scheduledPieceMetadataRemovalAt(dataSetId, 1), 0, "Queued removal element should be cleared on deletion"
-        );
-
-        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 0, "Legacy metadata keys should be cleaned up");
-        assertEq(_legacyPieceMetadataValue(dataSetId, 0, "filename"), "");
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId, 0, "Dataset should be deleted");
+        assertEq(_legacyPieceMetadataRemovals(dataSetId), pieceIds, "Legacy queue should stay for the cleanup");
+        for (uint256 pieceId = 0; pieceId < pieceIds.length; pieceId++) {
+            assertEq(_legacyPieceMetadataKeysLength(dataSetId, pieceId), 1, "Legacy metadata keys should stay");
+            assertEq(_legacyPieceMetadataValue(dataSetId, pieceId, "filename"), "test.bin");
+        }
     }
 
     function setupDataSetWithPieceMetadata(

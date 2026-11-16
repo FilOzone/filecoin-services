@@ -16,7 +16,6 @@ import {IFilecoinServiceMetadata} from "../src/IFilecoinServiceMetadata.sol";
 import {IDataSetAuthorizer} from "../src/interfaces/IDataSetAuthorizer.sol";
 import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
-import {SCHEDULED_PIECE_METADATA_REMOVALS_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/LibRails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
@@ -301,17 +300,6 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
         assertEq(serviceHomepage, "https://github.com/FilOzone/filecoin-services", "Service homepage should match");
         assertLe(bytes(serviceDescription).length, 256, "Service description should not exceed 256 bytes");
         assertLe(bytes(serviceHomepage).length, 256, "Service homepage should not exceed 256 bytes");
-    }
-
-    function _scheduledPieceMetadataRemovalsLength(uint256 dataSetId) internal view returns (uint256) {
-        bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
-        return uint256(vm.load(address(pdpServiceWithPayments), slot));
-    }
-
-    function _scheduledPieceMetadataRemovalAt(uint256 dataSetId, uint256 index) internal view returns (uint256) {
-        bytes32 slot = keccak256(abi.encode(dataSetId, SCHEDULED_PIECE_METADATA_REMOVALS_SLOT));
-        bytes32 elementSlot = bytes32(uint256(keccak256(abi.encode(slot))) + index);
-        return uint256(vm.load(address(pdpServiceWithPayments), elementSlot));
     }
 
     function testCreateDataSetCreatesRail() public {
@@ -6256,130 +6244,6 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
         pdpServiceWithPayments.validatePayment(info.pdpRailId, 1000e6, 200, 200, 0);
     }
 
-    /**
-     * @notice Test: Piece metadata removal is deferred until nextProvingPeriod
-     * @dev Verifies that:
-     *      1. Metadata persists after piecesScheduledRemove
-     *      2. Metadata is cleaned up after nextProvingPeriod
-     */
-    function testPieceMetadataRemovalDeferredToNextProvingPeriod() public {
-        // Seed metadata as if it had been written by the pre-upgrade implementation.
-        uint256 pieceId = 0;
-        string[] memory keys = new string[](2);
-        string[] memory values = new string[](2);
-        keys[0] = "filename";
-        values[0] = "test.txt";
-        keys[1] = "size";
-        values[1] = "1024";
-
-        PieceMetadataSetup memory setup =
-            setupDataSetWithPieceMetadata(pieceId, keys, values, FAKE_SIGNATURE, address(mockPDPVerifier));
-        _seedLegacyPieceMetadata(setup.dataSetId, setup.pieceId, keys, values);
-
-        assertEq(_legacyPieceMetadataKeysLength(setup.dataSetId, setup.pieceId), 2);
-        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[0]), values[0]);
-        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[1]), values[1]);
-
-        // Get proving period config
-        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
-
-        // Start proving period
-        uint256 firstDeadline = block.number + provingPeriod;
-        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, firstDeadline, 100, "");
-
-        // Schedule piece removal
-        uint256[] memory pieceIds = new uint256[](1);
-        pieceIds[0] = pieceId;
-        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
-        makeSignaturePass(client);
-        mockPDPVerifier.piecesScheduledRemove(
-            setup.dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData
-        );
-
-        assertEq(
-            _legacyPieceMetadataKeysLength(setup.dataSetId, setup.pieceId),
-            2,
-            "Legacy metadata should persist after piecesScheduledRemove"
-        );
-
-        // Move to next proving period
-        vm.roll(block.number + provingPeriod + 1);
-
-        // Call nextProvingPeriod to trigger cleanup
-        uint256 nextDeadline = firstDeadline + provingPeriod;
-        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, setup.dataSetId, nextDeadline, 100, "");
-
-        assertEq(
-            _legacyPieceMetadataKeysLength(setup.dataSetId, setup.pieceId),
-            0,
-            "Legacy metadata keys should be removed after nextProvingPeriod"
-        );
-        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[0]), "");
-        assertEq(_legacyPieceMetadataValue(setup.dataSetId, setup.pieceId, keys[1]), "");
-    }
-
-    /**
-     * @notice Test: Multiple pieces scheduled for removal are all cleaned up
-     */
-    function testMultiplePieceMetadataRemovalAtNextProvingPeriod() public {
-        // Create dataset
-        (string[] memory metadataKeys, string[] memory metadataValues) = _getSingleMetadataKV("label", "Test Dataset");
-        uint256 dataSetId = createDataSetForClient(sp1, client, metadataKeys, metadataValues);
-
-        // Add three pieces, then seed metadata as if it came from the pre-upgrade implementation.
-        uint256 numPieces = 3;
-        Cids.Cid[] memory pieceData = new Cids.Cid[](numPieces);
-        string[][] memory allKeys = new string[][](numPieces);
-        string[][] memory allValues = new string[][](numPieces);
-
-        for (uint256 i = 0; i < numPieces; i++) {
-            pieceData[i] = Cids.CommPv2FromDigest(0, 4, keccak256(abi.encodePacked("file", i)));
-            allKeys[i] = new string[](1);
-            allValues[i] = new string[](1);
-            allKeys[i][0] = "index";
-            allValues[i][0] = vm.toString(i);
-        }
-
-        uint256 nonce = 5000;
-        bytes memory encodedData = abi.encode(nonce, allKeys, allValues, FAKE_SIGNATURE);
-        vm.prank(address(mockPDPVerifier));
-        pdpServiceWithPayments.piecesAdded(dataSetId, 0, pieceData, encodedData);
-        mockPDPVerifier.setDataSetLeafCount(dataSetId, numPieces);
-        for (uint256 i = 0; i < numPieces; i++) {
-            _seedLegacyPieceMetadata(dataSetId, i, allKeys[i], allValues[i]);
-        }
-
-        // Get proving period config
-        (uint64 provingPeriod,,,) = pdpServiceWithPayments.getPDPConfig();
-
-        // Start proving period
-        uint256 firstDeadline = block.number + provingPeriod;
-        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, firstDeadline, 100, "");
-
-        // Schedule removal of all pieces
-        uint256[] memory pieceIds = new uint256[](numPieces);
-        for (uint256 i = 0; i < numPieces; i++) {
-            pieceIds[i] = i;
-        }
-        bytes memory scheduleRemoveData = abi.encode(FAKE_SIGNATURE);
-        makeSignaturePass(client);
-        mockPDPVerifier.piecesScheduledRemove(dataSetId, pieceIds, address(pdpServiceWithPayments), scheduleRemoveData);
-
-        for (uint256 i = 0; i < numPieces; i++) {
-            assertEq(_legacyPieceMetadataKeysLength(dataSetId, i), 1, "Legacy metadata should persist");
-        }
-
-        // Move to next proving period and trigger cleanup
-        vm.roll(block.number + provingPeriod + 1);
-        uint256 nextDeadline = firstDeadline + provingPeriod;
-        mockPDPVerifier.nextProvingPeriod(pdpServiceWithPayments, dataSetId, nextDeadline, 0, "");
-
-        for (uint256 i = 0; i < numPieces; i++) {
-            assertEq(_legacyPieceMetadataKeysLength(dataSetId, i), 0, "Legacy metadata keys should be removed");
-            assertEq(_legacyPieceMetadataValue(dataSetId, i, "index"), "");
-        }
-    }
-
     // ===== Settlement with Passed Deadlines Tests =====
 
     /**
@@ -6576,74 +6440,6 @@ contract ValidatePaymentTest is FilecoinWarmStorageServiceTest {
             address(0),
             "Authorizer should be cleared on deletion"
         );
-    }
-
-    /**
-     * @notice Test: Dataset deletion clears pending scheduled piece metadata removals
-     * @dev Reproduces the case where removals are scheduled but the dataset is deleted before
-     *      the next proving-period callback can process them.
-     */
-    function testDataSetDeleted_ClearsScheduledPieceMetadataRemovals() public {
-        uint256 dataSetId = createDataSetForServiceProviderTest(sp1, client, "Test");
-
-        Cids.Cid[] memory pieceData = new Cids.Cid[](2);
-        pieceData[0] = Cids.CommPv2FromDigest(0, 4, keccak256("piece-0"));
-        pieceData[1] = Cids.CommPv2FromDigest(0, 4, keccak256("piece-1"));
-
-        string[] memory pieceMetadataKeys = new string[](1);
-        string[] memory pieceMetadataValues = new string[](1);
-        pieceMetadataKeys[0] = "filename";
-        pieceMetadataValues[0] = "test.bin";
-
-        makeSignaturePass(client);
-        mockPDPVerifier.addPieces(
-            pdpServiceWithPayments,
-            dataSetId,
-            0,
-            pieceData,
-            7777,
-            FAKE_SIGNATURE,
-            pieceMetadataKeys,
-            pieceMetadataValues
-        );
-        _seedLegacyPieceMetadata(dataSetId, 0, pieceMetadataKeys, pieceMetadataValues);
-        _seedLegacyPieceMetadata(dataSetId, 1, pieceMetadataKeys, pieceMetadataValues);
-
-        uint256[] memory pieceIds = new uint256[](2);
-        pieceIds[0] = 0;
-        pieceIds[1] = 1;
-
-        makeSignaturePass(client);
-        mockPDPVerifier.piecesScheduledRemove(
-            dataSetId, pieceIds, address(pdpServiceWithPayments), abi.encode(FAKE_SIGNATURE)
-        );
-
-        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 2, "Removals should be queued before deletion");
-        assertEq(
-            _scheduledPieceMetadataRemovalAt(dataSetId, 1), 1, "Queued removal element should exist before deletion"
-        );
-
-        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 1, "Legacy piece metadata should exist");
-
-        vm.prank(client);
-        pdpServiceWithPayments.terminateService(dataSetId);
-
-        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
-        vm.roll(info.pdpEndEpoch + 1);
-
-        FilecoinPayV1.RailView memory railBefore = payments.getRail(info.pdpRailId);
-        payments.settleRail(info.pdpRailId, railBefore.endEpoch);
-
-        vm.prank(sp1);
-        mockPDPVerifier.deleteDataSet(pdpServiceWithPayments, dataSetId, bytes(""));
-
-        assertEq(_scheduledPieceMetadataRemovalsLength(dataSetId), 0, "Queued removals should be cleared on deletion");
-        assertEq(
-            _scheduledPieceMetadataRemovalAt(dataSetId, 1), 0, "Queued removal element should be cleared on deletion"
-        );
-
-        assertEq(_legacyPieceMetadataKeysLength(dataSetId, 0), 0, "Legacy metadata keys should be cleaned up");
-        assertEq(_legacyPieceMetadataValue(dataSetId, 0, "filename"), "");
     }
 
     /**

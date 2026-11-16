@@ -120,6 +120,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error InvalidSignatureLength(uint256 expectedLength, uint256 actualLength);
     error InvalidTokenDecimals(uint8 tokenDecimals);
     error InvalidTopUpAmount(uint256 dataSetId);
+    error KeyIndexOutOfRange(uint256 opOffset, uint256 index);
     error MaxProvingPeriodZero();
     error MetadataArrayCountMismatch(uint256 metadataArrayCount, uint256 pieceCount);
     error MetadataKeyAndValueLengthMismatch(uint256 keysLength, uint256 valuesLength);
@@ -152,15 +153,19 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error StorageProviderChangesNotSupported();
     error StorageTermsNotEnabled(bytes32 storageTermsId);
     error TooManyMetadataKeys(uint256 maxAllowed, uint256 keysLength);
+    error TruncatedCleanupOp(uint256 opOffset);
     error Unauthorized(address payer, bytes32 operation, bytes32 digest, bytes signature);
+    error UnknownCleanupOp(uint256 opOffset, uint256 kind);
     error UnknownStorageTerms(bytes32 id);
     error UnsupportedExtraDataVariant(uint256 keysOffset);
     error UnsupportedSignatureV(uint8 v);
+    error ValueDataSlotsOutOfRange(uint256 opOffset, uint256 count);
     error ZeroAddress(Errors.AddressField field);
 
     function VERSION() external view returns (string memory);
     function addApprovedProvider(uint256 providerId) external;
     function announceMigration(address migration, uint96 delayEpochs) external;
+    function cleanupLegacyPieceMetadata(bytes calldata ops) external;
     function clientDataSets(address payer) external view returns (uint256[] memory dataSetIds);
     function clientDataSets(address payer, uint256 offset, uint256 limit)
         external

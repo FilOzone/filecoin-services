@@ -8,6 +8,7 @@ import {Errors} from "../../src/Errors.sol";
 import {Extsload} from "../../src/Extsload.sol";
 import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmStorageService.sol";
 import {FilecoinWarmStorageServiceStateLibrary} from "../../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
+import {DATA_SET_INFO_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FWSSViewModule} from "../../src/modules/FWSSViewModule.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
 import {DataSetInfoView, DataSetInfoViewV2} from "../../src/lib/FWSSViewTypes.sol";
@@ -83,6 +84,8 @@ contract FWSSViewModuleTest is Test {
                     providerId: 60 + id,
                     pendingOneTimePayments: uint96(70 + id),
                     lifecycleReserveBalance: uint96(80 + id),
+                    // Sets the bit above lifecycleReserveBalance so decoders must mask it out.
+                    pieceRemovalsPending: id == 2,
                     storageTermsId: id == 1 ? bytes32(0) : bytes32(id)
                 })
             );
@@ -154,6 +157,9 @@ contract FWSSViewModuleTest is Test {
     function testDataSetV2MapsStorageTermsAndLegacyFields() public view {
         DataSetInfoViewV2 memory legacyTerms = viewModule.getDataSetV2(1);
         DataSetInfoViewV2 memory selectedTerms = viewModule.getDataSetV2(2);
+
+        bytes32 feesSlot = bytes32(uint256(keccak256(abi.encode(uint256(2), DATA_SET_INFO_SLOT))) + 10);
+        assertEq(uint256(vm.load(address(viewModule), feesSlot)) >> 192, 1, "pieceRemovalsPending packs at bit 192");
 
         assertEq(legacyTerms.storageTermsId, bytes32(0));
         assertEq(selectedTerms.storageTermsId, bytes32(uint256(2)));

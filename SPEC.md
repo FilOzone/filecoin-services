@@ -125,6 +125,7 @@ Rate recalculation timing differs for additions and deletions due to proving sem
 - **Adding pieces**: The rate and corresponding lockup requirement update immediately when `piecesAdded()` is called, even before proving activation. This fail-fast behavior protects providers by rejecting additions the client cannot fund before the provider commits resources. Streaming storage payment becomes eligible only after the first `nextProvingPeriod()` activates proving; pre-activation epochs settle with zero payment. One-time lifecycle fees remain payable before activation.
 
 - **Removing pieces**: Deletions are scheduled and take effect at the next proving boundary (`nextProvingPeriod()`). The client continues paying the existing rate until the removal is finalized. This deferral is required because proofs may challenge any portion of the current data set during the proving period—the provider must continue storing and proving all existing data until the period ends.
+  `piecesScheduledRemove()` marks the data set, so the next `nextProvingPeriod()` recalculates the rate from PDPVerifier's leaf count even when a `piecesAdded()` in between already charged the removal fee.
 
 **Why the asymmetry?**
 
@@ -463,7 +464,7 @@ sequenceDiagram
     SP->>PDPVerifier: schedulePieceDeletions(setId, pieceIds, extraData)
     PDPVerifier->>FWSS: piecesScheduledRemove callback (extraData)
     Note over FWSS: verify client EIP-712 signature
-    Note over FWSS: queue removal (deferred to next proving period)
+    Note over FWSS: mark removals pending (rate update deferred to next proving period)
   end
 
   rect rgba(248, 248, 248, 0.2)
@@ -487,7 +488,7 @@ sequenceDiagram
     Note over Client: 6. Next Proving Period
     SP->>PDPVerifier: nextProvingPeriod(setId)
     PDPVerifier->>FWSS: nextProvingPeriod callback
-    Note over FWSS: process scheduled deletions
+    Note over FWSS: if removals are pending or fees are due
     Note over FWSS: recalculate rate from new total size
     FWSS->>FilecoinPayV1: modifyRailPayment(railId, newRate)
     FilecoinPayV1-->>FWSS: rate updated

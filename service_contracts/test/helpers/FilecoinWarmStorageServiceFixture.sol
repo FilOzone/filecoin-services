@@ -6,6 +6,7 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
+import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
@@ -14,13 +15,24 @@ import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmSto
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
 import {MockERC20, MockPDPVerifier} from "../mocks/SharedMocks.sol";
 import {PDPOffering} from "../PDPOffering.sol";
+import {_combinedMonthlyStorageRate} from "./StoragePricingHelpers.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
 import {FWSSDeployer} from "../../script/lib/FWSSDeployer.sol";
 
-/// @dev Test-only facet for piece metadata that FWSS no longer writes but still cleans up.
+/// @dev Test-only facet for piece metadata and removal queue entries that FWSS no longer writes or cleans up.
 contract LegacyPieceMetadataFacet is FWSSStorage {
+    function seedLegacyPieceMetadataRemovals(uint256 dataSetId, uint256[] calldata pieceIds) external {
+        for (uint256 i = 0; i < pieceIds.length; i++) {
+            scheduledPieceMetadataRemovals[dataSetId].push(pieceIds[i]);
+        }
+    }
+
+    function legacyPieceMetadataRemovals(uint256 dataSetId) external view returns (uint256[] memory) {
+        return scheduledPieceMetadataRemovals[dataSetId];
+    }
+
     function seedLegacyPieceMetadata(
         uint256 dataSetId,
         uint256 pieceId,
@@ -253,6 +265,16 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
             LegacyPieceMetadataFacet.legacyPieceMetadataValue.selector,
             address(legacyPieceMetadata)
         );
+        _route(
+            address(pdpServiceWithPayments),
+            LegacyPieceMetadataFacet.seedLegacyPieceMetadataRemovals.selector,
+            address(legacyPieceMetadata)
+        );
+        _route(
+            address(pdpServiceWithPayments),
+            LegacyPieceMetadataFacet.legacyPieceMetadataRemovals.selector,
+            address(legacyPieceMetadata)
+        );
 
         // Match the approved providers in the legacy FWSS test setup.
         pdpServiceWithPayments.addApprovedProvider(1);
@@ -268,6 +290,14 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
             .seedLegacyPieceMetadata(dataSetId, pieceId, keys, values);
     }
 
+    function _seedLegacyPieceMetadataRemovals(uint256 dataSetId, uint256[] memory pieceIds) internal {
+        LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).seedLegacyPieceMetadataRemovals(dataSetId, pieceIds);
+    }
+
+    function _legacyPieceMetadataRemovals(uint256 dataSetId) internal view returns (uint256[] memory) {
+        return LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).legacyPieceMetadataRemovals(dataSetId);
+    }
+
     function _legacyPieceMetadataKeysLength(uint256 dataSetId, uint256 pieceId) internal view returns (uint256) {
         return
             LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).legacyPieceMetadataKeysLength(dataSetId, pieceId);
@@ -280,6 +310,36 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
     {
         return
             LegacyPieceMetadataFacet(address(pdpServiceWithPayments)).legacyPieceMetadataValue(dataSetId, pieceId, key);
+    }
+
+    function _addPiece(uint256 dataSetId, uint256 firstAdded, bytes memory seed) internal {
+        Cids.Cid[] memory pieceData = new Cids.Cid[](1);
+        pieceData[0] = Cids.CommPv2FromDigest(0, 35, keccak256(seed));
+        makeSignaturePass(client);
+        mockPDPVerifier.addPieces(
+            PDPListener(address(pdpServiceWithPayments)),
+            dataSetId,
+            firstAdded,
+            pieceData,
+            nextClientDataSetId++,
+            FAKE_SIGNATURE,
+            new string[](0),
+            new string[](0)
+        );
+    }
+
+    function _nextProvingPeriod(uint256 dataSetId, uint256 challengeEpoch, uint256 leafCount) internal {
+        mockPDPVerifier.nextProvingPeriod(
+            PDPListener(address(pdpServiceWithPayments)), dataSetId, challengeEpoch, leafCount, ""
+        );
+    }
+
+    function _pdpRate(uint256 dataSetId) internal view returns (uint256) {
+        return payments.getRail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).paymentRate;
+    }
+
+    function _rateForLeaves(uint256 leafCount) internal pure returns (uint256) {
+        return _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount));
     }
 
     /// @dev Routes a selector without a migration, such as to a test-only facet.

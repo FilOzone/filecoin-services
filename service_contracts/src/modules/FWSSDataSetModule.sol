@@ -9,7 +9,7 @@ import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/crypt
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {ServiceProviderRegistry} from "../ServiceProviderRegistry.sol";
 import {Errors} from "../Errors.sol";
-import {FWSSPieceMetadataRemovals} from "../abstract/FWSSPieceMetadataRemovals.sol";
+import {FWSSStorage} from "../storage/FWSSStorage.sol";
 import {
     COMMISSION_MAX_BPS,
     PDP_INACTIVITY_WINDOW,
@@ -40,7 +40,7 @@ import {StoragePricing} from "../lib/StoragePricing.sol";
 
 /// @title FWSSDataSetModule
 /// @notice Manages data set creation and deletion.
-contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSSPDPVerifier {
+contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
     using LibRails for FilecoinPayV1;
 
     error UnsupportedExtraDataVariant(uint256 keysOffset);
@@ -349,8 +349,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSPieceMetadataRemovals, FWSS
             delete dataSetMetadata[dataSetId][metadataKeys[i]];
         }
         delete dataSetMetadataKeys[dataSetId];
-
-        _processScheduledPieceMetadataRemovals(dataSetId);
 
         // Complete cleanup
         delete dataSetAuthorizer[dataSetId];
