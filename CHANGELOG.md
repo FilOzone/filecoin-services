@@ -11,7 +11,7 @@ This contract-stack release adds owner-registered storage terms to FilecoinWarmS
 
 | Component | Version | Upgrade classification |
 |---|---|---|
-| Stack (`filecoin-services`) | `v1.6.0` | `TBD` |
+| Stack (`filecoin-services`) | `v1.6.0` | Routine |
 | `FilecoinWarmStorageService` | `1.6.0` | Josuke migration (via `FWSSStorageTermsMigration`) |
 | `PDPVerifier` | `3.5.0` | Unchanged |
 
