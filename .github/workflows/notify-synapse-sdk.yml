@@ -124,7 +124,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
-          version: 10.33.0
+          # Use the pnpm version synapse-sdk declares in `packageManager`; a pinned version drifts from it
+          package_json_file: ${{ env.SYNAPSE_SDK_PATH }}/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -230,7 +231,8 @@ jobs:
             echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           } > "$body_file"
 
-          pr_url="$(gh pr view "$BRANCH_NAME" --repo "$SYNAPSE_SDK_REPOSITORY" --json url --jq .url 2>/dev/null || true)"
+          # Reuse only an open PR: a rerun for the same tag must not edit an already merged one
+          pr_url="$(gh pr list --repo "$SYNAPSE_SDK_REPOSITORY" --head "$BRANCH_NAME" --state open --json url --jq '.[0].url // empty')"
 
           if [ -n "$pr_url" ]; then
             gh pr edit "$pr_url" --title "$title" --body-file "$body_file"
