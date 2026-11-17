@@ -22,3 +22,6 @@
 [submodule "service_contracts/lib/erc8167"]
 	path = service_contracts/lib/erc8167
 	url = https://github.com/wjmelements/erc8167
+[submodule "service_contracts/lib/filecoin-pay-v2"]
+	path = service_contracts/lib/filecoin-pay-v2
+	url = https://github.com/FilOzone/filecoin-pay-v2

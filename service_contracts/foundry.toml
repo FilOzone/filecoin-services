@@ -32,6 +32,10 @@ remappings = [
     'forge-std/=lib/forge-std/src/',
     '@erc8167/=lib/erc8167/src/',
     '@fws-payments/=lib/fws-payments/src/',
+    '@filecoin-pay-v2/=lib/filecoin-pay-v2/src/',
+    # Build filecoin-pay-v2 against its own pins; the auto-detected fvm-solidity/ is fws-payments' copy
+    'lib/filecoin-pay-v2/:forge-std/=lib/filecoin-pay-v2/lib/forge-std/src/',
+    'lib/filecoin-pay-v2/:fvm-solidity/=lib/filecoin-pay-v2/lib/fvm-solidity/src/',
     '@pdp/=lib/pdp/src/',
     '@session-key-registry/=lib/session-key-registry/src/',
     '@fvm-solidity/=lib/pdp/lib/fvm-solidity/src/',
