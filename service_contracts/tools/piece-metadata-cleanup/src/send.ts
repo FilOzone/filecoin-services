@@ -18,9 +18,12 @@ export type SendOptions = {
   dryRun?: boolean;
   gasMultiplier?: number;
   maxInflight?: number;
-  // attoFIL per gas unit, required to send: no message leaves while the base fee plus the node's suggested priority
-  // fee is above it, and no message is signed with a higher fee cap, so a message pays at most this times its gas limit.
-  maxGasPrice?: bigint;
+  // attoFIL per gas unit, both required to send and signed into every message as they are. A message pays at most the
+  // fee cap times its gas limit and stops landing while the base fee is above the cap. The premium is fixed rather than
+  // the node's suggestion, so the cleanup does not outbid other messages. No message leaves while the base fee plus the
+  // premium is above the fee cap.
+  feeCap?: bigint;
+  gasPremium?: bigint;
   maxBatches?: number;
   receiptTimeoutMs?: number;
   pollMs?: number;
@@ -93,7 +96,12 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
   const pollMs = opts.pollMs ?? 5000;
   const receiptTimeoutMs = opts.receiptTimeoutMs ?? 600_000;
   if (!opts.dryRun && !opts.account) throw new Error('sending needs a signing key');
-  if (!opts.dryRun && opts.maxGasPrice === undefined) throw new Error('sending needs a price ceiling (--max-gas-price)');
+  if (!opts.dryRun && (opts.feeCap === undefined || opts.gasPremium === undefined)) {
+    throw new Error('sending needs a fee cap and a gas premium (--fee-cap, --gas-premium)');
+  }
+  if (opts.feeCap !== undefined && opts.gasPremium !== undefined && opts.gasPremium > opts.feeCap) {
+    throw new Error(`gas premium ${opts.gasPremium} is above fee cap ${opts.feeCap}`);
+  }
   if (opts.account && opts.account.address.toLowerCase() !== opts.from.toLowerCase()) {
     throw new Error(`signing key is for ${opts.account.address}, not ${opts.from}`);
   }
@@ -131,7 +139,8 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
   }
 
   const account = opts.account!;
-  const maxGasPrice = opts.maxGasPrice!;
+  const feeCap = opts.feeCap!;
+  const gasPremium = opts.gasPremium!;
   await resolveSent(db, client, opts.from, record, { pollMs, timeoutMs: receiptTimeoutMs, log });
 
   // resolveSent left nothing of ours pending, so the confirmed nonce is the next one; nothing else may use this key.
@@ -166,12 +175,12 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
     while (!summary.failure && inflight.size >= maxInflight) await settle();
     if (summary.failure) break;
 
-    let price = await gasPrice(client);
-    if (price.baseFee + price.priority > maxGasPrice) {
-      log(`base fee ${price.baseFee} plus priority fee ${price.priority} above ${maxGasPrice}, waiting`);
-      while (!summary.failure && price.baseFee + price.priority > maxGasPrice) {
+    let fee = await baseFee(client);
+    if (fee + gasPremium > feeCap) {
+      log(`base fee ${fee} plus gas premium ${gasPremium} above fee cap ${feeCap}, waiting`);
+      while (!summary.failure && fee + gasPremium > feeCap) {
         await settle();
-        price = await gasPrice(client);
+        fee = await baseFee(client);
       }
       if (summary.failure) break;
     }
@@ -186,9 +195,6 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
     }
 
     const gas = gasLimit(estimate, multiplier);
-    const min = (a: bigint, b: bigint) => (a < b ? a : b);
-    const maxFeePerGas = min(price.baseFee * 2n + price.priority, maxGasPrice);
-    const maxPriorityFeePerGas = min(price.priority, maxFeePerGas);
     const signed = await account.signTransaction({
       type: 'eip1559',
       chainId: opts.chainId,
@@ -197,14 +203,14 @@ export async function sendBatches(db: DatabaseSync, client: PublicClient, opts: 
       data,
       value: 0n,
       gas,
-      maxFeePerGas,
-      maxPriorityFeePerGas,
+      maxFeePerGas: feeCap,
+      maxPriorityFeePerGas: gasPremium,
     });
     const hash = keccak256(signed);
 
     // Recorded before the broadcast, so a crash in between leaves a `sent` record that the next run resolves.
     transaction(db, () => {
-      insertTx.run(hash, batch.id, opts.from, nonce, gas.toString(), maxFeePerGas.toString(), Date.now());
+      insertTx.run(hash, batch.id, opts.from, nonce, gas.toString(), feeCap.toString(), Date.now());
       markSent.run(batch.id);
       markSendStarted(db);
     });
@@ -229,12 +235,11 @@ function countNotDone(db: DatabaseSync): number {
   return (db.prepare("SELECT count(*) AS n FROM batches WHERE status <> 'done'").get() as { n: number }).n;
 }
 
-// The latest block's base fee and the priority fee the node suggests, in attoFIL per gas.
-async function gasPrice(client: PublicClient): Promise<{ baseFee: bigint; priority: bigint }> {
+// The latest block's base fee in attoFIL per gas.
+async function baseFee(client: PublicClient): Promise<bigint> {
   const block = await client.getBlock({ blockTag: 'latest' });
   if (block.baseFeePerGas === null) throw new Error('latest block has no base fee');
-  const priority = BigInt((await client.request({ method: 'eth_maxPriorityFeePerGas' })) as Hex);
-  return { baseFee: block.baseFeePerGas, priority };
+  return block.baseFeePerGas;
 }
 
 // Stores a receipt on its tx and batch; returns whether the batch succeeded.

@@ -52,8 +52,9 @@ options:
   --from <address>               send: sender for --dry-run without a key
   --gas-multiplier <x>           send: gas limit = estimate * x, at least 1 (default 1)
   --max-inflight <n>             send: unconfirmed messages at a time, 1..${MAX_INFLIGHT} (default ${MAX_INFLIGHT})
-  --max-gas-price <attoFIL>      send: ceiling per gas unit, required; waits while base fee plus priority fee is
-                                 above it and never signs a higher fee cap
+  --fee-cap <attoFIL>            send: fee cap per gas unit of every message, required; waits while base fee plus
+                                 gas premium is above it
+  --gas-premium <attoFIL>        send: gas premium per gas unit of every message, required, at most the fee cap
   --max-batches <n>              send: stop after n batches
   --receipt-timeout <s>          send: give up on a receipt after s seconds (default 600)
   --poll-interval <s>            send: receipt and gas price polling interval (default 5)
@@ -101,7 +102,8 @@ async function main(): Promise<void> {
       from: { type: 'string' },
       'gas-multiplier': { type: 'string' },
       'max-inflight': { type: 'string' },
-      'max-gas-price': { type: 'string' },
+      'fee-cap': { type: 'string' },
+      'gas-premium': { type: 'string' },
       'max-batches': { type: 'string' },
       'receipt-timeout': { type: 'string' },
       'poll-interval': { type: 'string' },
@@ -221,10 +223,14 @@ async function main(): Promise<void> {
       if (!(multiplier >= 1)) throw new Error('--gas-multiplier must be at least 1');
       const maxInflight = positiveInt(values['max-inflight'], 'max-inflight', MAX_INFLIGHT);
       if (maxInflight < 1 || maxInflight > MAX_INFLIGHT) throw new Error(`--max-inflight must be 1..${MAX_INFLIGHT}`);
-      const maxGasPriceArg = values['max-gas-price'];
-      if (maxGasPriceArg !== undefined && !/^\d+$/.test(maxGasPriceArg)) throw new Error('--max-gas-price must be an integer in attoFIL per gas');
-      if (!values['dry-run'] && maxGasPriceArg === undefined) throw new Error('send needs --max-gas-price <attoFIL per gas>');
-      const maxGasPrice = maxGasPriceArg === undefined ? undefined : BigInt(maxGasPriceArg);
+      const attoFilPerGas = (name: 'fee-cap' | 'gas-premium'): bigint | undefined => {
+        const arg = values[name];
+        if (arg !== undefined && !/^\d+$/.test(arg)) throw new Error(`--${name} must be an integer in attoFIL per gas`);
+        if (!values['dry-run'] && arg === undefined) throw new Error(`send needs --${name} <attoFIL per gas>`);
+        return arg === undefined ? undefined : BigInt(arg);
+      };
+      const feeCap = attoFilPerGas('fee-cap');
+      const gasPremium = attoFilPerGas('gas-premium');
       const maxBatches = values['max-batches'] === undefined ? undefined : positiveInt(values['max-batches'], 'max-batches', 0);
 
       log(`send: ${values['dry-run'] ? 'dry run' : 'sending'} from ${from} to ${network.fwss} on ${network.name}`);
@@ -236,7 +242,8 @@ async function main(): Promise<void> {
         dryRun: values['dry-run'],
         gasMultiplier: multiplier,
         maxInflight,
-        maxGasPrice,
+        feeCap,
+        gasPremium,
         maxBatches,
         receiptTimeoutMs: positiveInt(values['receipt-timeout'], 'receipt-timeout', 600) * 1000,
         pollMs: positiveInt(values['poll-interval'], 'poll-interval', 5) * 1000,

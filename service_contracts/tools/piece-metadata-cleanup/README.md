@@ -45,7 +45,7 @@ A node of another network answers every storage read with zero, which would read
 | `check --sample N \| --all` | Reads each piece's keys length slot, key element slots and value head slots and compares them with the indexer row | A `match` piece has exactly the stored key count, keys and value lengths, so its plan clears all of it; a `clean` piece had none of those slots set when it was read | The value data slots and the data slot of a 32-byte key, which it does not read; the plan takes their count from the value length and the key length |
 | `queues` | Refuses unless the proxy routes `cleanupLegacyPieceMetadata`; then reads the legacy queue length of every data set id below PDPVerifier's next id | Which queues are non-empty at that moment | That the queues stay as read; they do once the facet is installed, because the upgrade stops FWSS using them |
 | `plan` | Builds ops for `match` and `clean` pieces and every stored queue, sorts them by slot, cuts batches | Bounds: a piece the facet cannot clear is listed as `invalid` and never planned | Anything about storage |
-| `send` | Sends the batches that are not done, in order, under a price ceiling | Each batch succeeded on chain when its receipt was read | That anything was cleared: the facet zeroes whatever slots it is given |
+| `send` | Sends the batches that are not done, in order, with a fixed fee cap and gas premium | Each batch succeeded on chain when its receipt was read | That anything was cleared: the facet zeroes whatever slots it is given |
 | `verify --sample N \| --all \| --done` | Reads every slot the plan zeroes and every planned queue length, or with `--done` those of the batches recorded as done; exits 1 if one is not zero | The planned slots are zero | Slots the plan never had; `check` covers those |
 
 `check` compares the key elements as a set with repeats, because the chain keeps keys in insertion order and the indexer does not record it.
@@ -117,17 +117,17 @@ After the upgrade, because the queue lengths only stop changing then (`queues` r
 2. `plan`.
    It prints how many queue batches come first.
 3. `send --dry-run --max-batches 10`.
-4. Pilot: `send --max-gas-price <attoFIL> --max-batches <queue batches + 10>`, so that it runs metadata batches too.
+4. Pilot: `send --fee-cap <attoFIL> --gas-premium <attoFIL> --max-batches <queue batches + 10>`, so that it runs metadata batches too.
 5. `verify --done` must exit 0 before the full run.
    It proves that the pilot's batches zeroed every slot they planned and emptied the queues, on the real proxy.
-6. `send --max-gas-price <attoFIL>`.
+6. `send --fee-cap <attoFIL> --gas-premium <attoFIL>`.
 7. `verify --all`, after the last batch is final.
    Filecoin finality is 900 epochs, 7.5 hours.
    `verify --sample N` gives a quicker look in between.
 
 ## Second pass
 
-The only second pass is `verify --all --requeue`, then `send --max-gas-price <attoFIL>`.
+The only second pass is `verify --all --requeue`, then `send --fee-cap <attoFIL> --gas-premium <attoFIL>`.
 After each such `send`, wait for finality again, then run `verify --all`.
 Repeat until `verify --all` exits 0.
 
@@ -149,12 +149,15 @@ Lotus's estimate is already about 1.25 times the gas a batch uses, so the defaul
 At most `--max-inflight` messages (at most 4) are unconfirmed at a time, with nonces the tool assigns.
 On the devnet four batches of the default size landed in one block and used about 3B gas, under the block gas target of 5B, above which the base fee rises.
 
-`--max-gas-price <attoFIL per gas>` is the price ceiling, and `send` requires it unless `--dry-run` is set.
-No message leaves while the latest base fee plus the priority fee the node suggests (`eth_maxPriorityFeePerGas`) is above the ceiling; `send` waits and asks again.
-Each message is signed with a fee cap of twice the base fee plus the priority fee, or the ceiling if that is lower, and with a priority fee no higher than the fee cap.
-So a message pays at most the ceiling times its gas limit, and the run at most the ceiling times the sum of the gas limits.
-The ceiling limits the price, not the number of messages: fund the key with the budget of the run only, so that the balance is the limit on the total.
-On the public Glif mainnet RPC on 10.11.2026 (block 6533386) the base fee was 100 attoFIL and the suggested priority fee 199,796 attoFIL per gas, so the priority fee is what the ceiling must cover.
+`--fee-cap <attoFIL per gas>` and `--gas-premium <attoFIL per gas>` set the fee cap and the gas premium of every message, and `send` requires both unless `--dry-run` is set.
+The tool does not take the premium the node suggests (`eth_maxPriorityFeePerGas`), and the premium may not be above the fee cap.
+The cleanup should not raise the base fee or move ahead of other messages in a block.
+A low gas premium keeps it behind messages that pay more.
+A fee cap close to the current base fee stops the messages from landing once the base fee rises above it, so they cannot keep pushing it up.
+No message leaves while the latest base fee plus the gas premium is above the fee cap; `send` waits and asks again.
+A message pays at most the fee cap times its gas limit, and the run at most the fee cap times the sum of the gas limits.
+The fee cap limits the price, not the number of messages: fund the key with the budget of the run only, so that the balance is the limit on the total.
+On the public Glif mainnet RPC on 10.11.2026 (block 6533386) the base fee was 100 attoFIL and the suggested priority fee 199,796 attoFIL per gas.
 
 The tool records each message's hash in the state file before it broadcasts it.
 A rerun first looks up the receipt of every message recorded as sent, and waits until no message from the sender is pending.
@@ -245,7 +248,7 @@ The calibnet rehearsal covers the last three before mainnet.
 - `npm run typecheck`.
 - `npm run test:e2e`: needs `anvil` on PATH and `forge build` output in `service_contracts/out`.
   It deploys `test/helpers/FWSSPieceMetadataCleanupHarness.sol` to a local anvil and seeds legacy metadata through Solidity.
-  One run goes through `discover` (three pieces the tool's table lacks), `check`, `queues`, `plan`, a pilot checked with `verify --done`, `send` (with a price ceiling hold and an interrupted run) and `verify`.
+  One run goes through `discover` (three pieces the tool's table lacks), `check`, `queues`, `plan`, a pilot checked with `verify --done`, `send` (with a fee cap hold and an interrupted run) and `verify`.
   Another stores hits that metadata cannot hold as `invalid`.
   Another sends part of a plan, records two batches as done that never ran, and finishes with `verify --requeue` and `send`.
   A third loses messages before broadcast and lets one land late.

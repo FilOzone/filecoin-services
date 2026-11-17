@@ -173,7 +173,8 @@ async function setup(pieces: Seed[], queues: [number, number][]) {
     from: sender.address,
     chainId: foundry.id,
     account: sender,
-    maxGasPrice: 1000n * GWEI,
+    feeCap: 1000n * GWEI,
+    gasPremium: GWEI,
     pollMs: 50,
     receiptTimeoutMs: 20_000,
   };
@@ -281,27 +282,26 @@ test('discover, check, queues, plan, send with resume, verify leave only the non
   const sampled = await verifyPlan(db, reader, { sample: 1_000_000 });
   assert.deepEqual([sampled.slots, sampled.residueCount], [unsent.slots, unsent.residueCount], 'a sample covering every op reads the same');
 
-  const dry = await sendBatches(db, client, { ...opts, account: undefined, maxGasPrice: undefined, dryRun: true });
+  const dry = await sendBatches(db, client, { ...opts, account: undefined, feeCap: undefined, gasPremium: undefined, dryRun: true });
   assert.equal(dry.estimated, batches.length);
   assert.equal(dry.failure, undefined);
   assert.equal(await nonceOf(sender.address), 0, 'a dry run sends nothing');
 
-  // A pilot of the queue batches and one metadata batch, under a price ceiling that is above the base fee but below
-  // base fee plus priority fee.
+  // A pilot of the queue batches and one metadata batch, under a fee cap that is above the base fee but below base
+  // fee plus gas premium.
   const setBaseFee = async (fee: bigint) => {
     await rpc('anvil_setNextBlockBaseFeePerGas', [`0x${fee.toString(16)}`]);
     await rpc('evm_mine');
   };
-  const priority = BigInt(await rpc<Hex>('eth_maxPriorityFeePerGas'));
-  assert.ok(priority > 0n, 'the node suggests a priority fee');
-  const ceiling = 100n * GWEI + priority - 1n;
+  const gasPremium = 3n * GWEI;
+  const feeCap = 100n * GWEI + gasPremium - 1n;
   await setBaseFee(100n * GWEI);
   const pilotBatches = plan.queueBatches + 1;
-  const pilot = sendBatches(db, client, { ...opts, maxBatches: pilotBatches, maxGasPrice: ceiling });
+  const pilot = sendBatches(db, client, { ...opts, maxBatches: pilotBatches, feeCap, gasPremium });
   await sleep(500);
-  assert.equal(await nonceOf(sender.address, 'pending'), 0, 'nothing sent while base fee plus priority fee is above the ceiling');
+  assert.equal(await nonceOf(sender.address, 'pending'), 0, 'nothing sent while base fee plus gas premium is above the fee cap');
 
-  // At 60 gwei the price is under the ceiling, and twice the base fee plus the priority fee is still above it.
+  // At 60 gwei base fee plus gas premium is under the fee cap.
   await setBaseFee(60n * GWEI);
   const first = await pilot;
   assert.equal(first.failure, undefined);
@@ -309,14 +309,10 @@ test('discover, check, queues, plan, send with resume, verify leave only the non
   assert.deepEqual(statuses(db).slice(0, pilotBatches + 1), [...Array(pilotBatches).fill('done'), 'planned']);
   assert.equal(await nonceOf(sender.address), pilotBatches);
   const pilotTxs = db.prepare('SELECT hash FROM txs ORDER BY nonce').all() as { hash: Hex }[];
-  const feeCaps: bigint[] = [];
   for (const { hash } of pilotTxs) {
     const tx = await rpc<{ maxFeePerGas: Hex; maxPriorityFeePerGas: Hex }>('eth_getTransactionByHash', [hash]);
-    feeCaps.push(BigInt(tx.maxFeePerGas));
-    assert.ok(BigInt(tx.maxPriorityFeePerGas) <= BigInt(tx.maxFeePerGas));
+    assert.deepEqual([BigInt(tx.maxFeePerGas), BigInt(tx.maxPriorityFeePerGas)], [feeCap, gasPremium], 'signed with the given fees');
   }
-  assert.equal(feeCaps[0], ceiling, 'the ceiling is the fee cap when the usual cap would be above it');
-  assert.ok(feeCaps.every((cap) => cap <= ceiling), `fee caps ${feeCaps} within ${ceiling}`);
 
   // The pilot's slots and the queues it emptied read zero, while the rest of the plan does not.
   const pilotChecked = await verifyPlan(db, reader, { done: true });
@@ -467,19 +463,14 @@ test('a message lost before broadcast is sent again under the same hash, and one
   assert.equal((await sendBatches(db, client, { ...opts, maxBatches: 1 })).done, 1);
 
   // Batch 2 is signed and recorded, and its broadcast is lost. The next run finds no trace of it, calls it dropped
-  // and sends the batch again; the base fee moved, so this second message has another hash and the same nonce.
-  const setBaseFee = async (fee: bigint) => {
-    await rpc('anvil_setNextBlockBaseFeePerGas', [`0x${fee.toString(16)}`]);
-    await rpc('evm_mine');
-  };
-  await setBaseFee(10n * GWEI);
+  // and sends the batch again; that run has a higher gas premium, so this second message has another hash and the
+  // same nonce.
   const late = losingNextBroadcast();
   const lostLate = await sendBatches(db, late.client, opts);
   assert.match(lostLate.failure ?? '', /^batch 2: send of 0x[0-9a-f]{64} failed/);
   assert.deepEqual(statuses(db).slice(0, 3), ['done', 'sent', 'planned']);
-  await setBaseFee(5n * GWEI);
   await rpc('evm_setAutomine', [false]);
-  const resent = await sendBatches(db, client, { ...opts, maxBatches: 1, receiptTimeoutMs: 500 });
+  const resent = await sendBatches(db, client, { ...opts, gasPremium: opts.gasPremium! + 1n, maxBatches: 1, receiptTimeoutMs: 500 });
   assert.match(resent.failure ?? '', /^batch 2: no receipt/);
   const first = keccak256(late.raw());
   assert.deepEqual(txsOf(db, 2).map((t) => [t.hash === first, t.status]), [[true, 'dropped'], [false, 'sent']]);
@@ -550,7 +541,8 @@ test('reads and sends refuse a node of another chain and an address without code
   await assert.rejects(verifyPlan(db, readerOf(foundry, empty), { all: true }), /no contract code/);
   await assert.rejects(sendBatches(db, client, { ...opts, to: empty }), /no contract code/);
   await assert.rejects(sendBatches(db, client, { ...opts, chainId: filecoin.id }), /RPC serves chain 31337, expected 314/);
-  await assert.rejects(sendBatches(db, client, { ...opts, maxGasPrice: undefined }), /price ceiling/);
+  await assert.rejects(sendBatches(db, client, { ...opts, feeCap: undefined }), /fee cap and a gas premium/);
+  await assert.rejects(sendBatches(db, client, { ...opts, gasPremium: opts.feeCap! + 1n }), /gas premium \d+ is above fee cap/);
   assert.ok(statuses(db).every((s) => s === 'planned'));
 });
 
