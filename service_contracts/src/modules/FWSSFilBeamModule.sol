@@ -6,17 +6,21 @@ import {Errors} from "../Errors.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibRails} from "../lib/LibRails.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
+import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 
 /// @title FWSSFilBeamModule
 /// @notice Manages FWSS CDN payment rails and the FilBeam controller.
-contract FWSSFilBeamModule is FWSSStorage {
+contract FWSSFilBeamModule is FWSSStorage, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
 
     FilecoinPayV1 internal immutable paymentContract;
 
     /// @notice Configures the immutable dependencies used by this module.
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
-    constructor(address _paymentsContractAddress) {
+    /// @param _filecoinPayV2Address The FilecoinPayV2 contract that FWSS rails move to.
+    constructor(address _paymentsContractAddress, address _filecoinPayV2Address)
+        FWSSFilecoinPayV2(_filecoinPayV2Address)
+    {
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentContract = FilecoinPayV1(_paymentsContractAddress);
     }

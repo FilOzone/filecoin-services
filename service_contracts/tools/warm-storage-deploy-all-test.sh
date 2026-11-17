@@ -61,7 +61,7 @@ echo "== Deploy"
 deploy_all "$SCRATCH/deployments.json" false | tee "$SCRATCH/deploy.log"
 
 for label in \
-    "PDPVerifier Implementation" "PDPVerifier Proxy" "FilecoinPayV1 Contract" \
+    "PDPVerifier Implementation" "PDPVerifier Proxy" "FilecoinPayV1 Contract" "FilecoinPayV2 Contract" \
     "ServiceProviderRegistry Implementation" "ServiceProviderRegistry Proxy" "SessionKeyRegistry" \
     "FilecoinWarmStorageService Implementation" "FilecoinWarmStorageService Proxy" \
     "FilecoinWarmStorageService StateView" "Endorsements"; do

@@ -16,6 +16,7 @@ string constant FWSS_DISPATCHER_ARTIFACT = "lib/erc8167/out/Proxy.evm/Proxy.json
 abstract contract FWSSDeployer is JosukeFacetSet {
     struct FWSSDeployment {
         address payments;
+        address filecoinPayV2;
         address pdpVerifier;
         address usdfc;
         address filBeamBeneficiary;
@@ -37,6 +38,7 @@ abstract contract FWSSDeployer is JosukeFacetSet {
         returns (IFilecoinWarmStorageService)
     {
         _setConstructorArg("_paymentsContractAddress", deployment.payments);
+        _setConstructorArg("_filecoinPayV2Address", deployment.filecoinPayV2);
         _setConstructorArg("_pdpVerifierAddress", deployment.pdpVerifier);
         _setConstructorArg("_usdfc", deployment.usdfc);
         _setConstructorArg("_filBeamBeneficiaryAddress", deployment.filBeamBeneficiary);

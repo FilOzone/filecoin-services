@@ -7,6 +7,7 @@ import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
+import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
@@ -15,13 +16,17 @@ import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title FWSSProvingModule
 /// @notice Records PDP proofs, advances or configures proving periods, and arbitrates PDP rail payments from them.
-contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerifier {
+contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     FilecoinPayV1 internal immutable paymentContract;
 
     /// @notice Configures the immutable dependencies used by this module.
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
     /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
-    constructor(address _paymentsContractAddress, address _pdpVerifierAddress) FWSSPDPVerifier(_pdpVerifierAddress) {
+    /// @param _filecoinPayV2Address The FilecoinPayV2 contract that FWSS rails move to.
+    constructor(address _paymentsContractAddress, address _pdpVerifierAddress, address _filecoinPayV2Address)
+        FWSSPDPVerifier(_pdpVerifierAddress)
+        FWSSFilecoinPayV2(_filecoinPayV2Address)
+    {
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentContract = FilecoinPayV1(_paymentsContractAddress);
     }

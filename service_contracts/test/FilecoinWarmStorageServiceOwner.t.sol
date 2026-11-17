@@ -15,6 +15,7 @@ import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
@@ -35,6 +36,7 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest, FWSSDeployer {
     ServiceProviderRegistry public providerRegistry;
     MockPDPVerifier public pdpVerifier;
     FilecoinPayV1 public payments;
+    FilecoinPayV2 public filecoinPayV2;
     MockERC20 public usdfcToken;
     SessionKeyRegistry public sessionKeyRegistry;
 
@@ -92,11 +94,13 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest, FWSSDeployer {
 
         // Deploy payments contract (no longer upgradeable)
         payments = new FilecoinPayV1();
+        filecoinPayV2 = new FilecoinPayV2();
 
         // Deploy service contract
         serviceContract = _deployFWSS(
             FWSSDeployment({
                 payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
                 pdpVerifier: address(pdpVerifier),
                 usdfc: address(usdfcToken),
                 filBeamBeneficiary: filBeamBeneficiary,
