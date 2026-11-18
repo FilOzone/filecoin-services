@@ -3,18 +3,12 @@ pragma solidity 0.8.37;
 
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {StoragePricing} from "./StoragePricing.sol";
 import {
     CDN_LOCKUP_PERIOD,
-    DATASET_FEE_PER_MONTH,
-    DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
-    DEFAULT_CDN_LOCKUP_AMOUNT,
     DEFAULT_LOCKUP_PERIOD,
-    EPOCHS_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
-    REPLENISH_THRESHOLD,
-    SERVICE_COMMISSION_BPS
+    REPLENISH_THRESHOLD
 } from "./PriceListUSDFC.sol";
 
 event CDNPaymentRailsToppedUp(
@@ -36,132 +30,6 @@ event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate
 /// @title LibRails
 /// @notice Payment rail operations inlined into the FWSS modules.
 library LibRails {
-    /// @notice Validates the payer is set up to add pieces, not just create the dataset.
-    /// @dev    The lifecycle reserve is locked at creation; the per-dataset fee headroom is only
-    ///         consumed once pieces are added. Empty datasets leave it as approved headroom.
-    ///         Required up front intentionally: creation assumes pieces will follow.
-    /// @param payments The FilecoinPayV1 contract instance
-    /// @param token The currency used for deposits and operator approvals
-    /// @param payer The address of the payer
-    /// @param includeCDN Whether to include fixed CDN/cache-miss lockups in the requirement checks
-    /// @param tokenDecimals The selected currency's precision
-    /// @param lifecycleReserve The scaled lifecycle reserve seeded into the PDP rail
-    function validatePayerOperatorApprovalAndFunds(
-        FilecoinPayV1 payments,
-        IERC20 token,
-        address payer,
-        bool includeCDN,
-        uint8 tokenDecimals,
-        uint256 lifecycleReserve
-    ) internal view {
-        // Required capacity: lifecycle reserve plus per-dataset fee lockup at the default period.
-        // Multiply-first avoids per-epoch truncation and is conservative versus the actual rail lockup.
-        uint256 datasetFeePerMonth = StoragePricing.scaleAmount(DATASET_FEE_PER_MONTH, tokenDecimals);
-        uint256 requiredLockup = (datasetFeePerMonth * DEFAULT_LOCKUP_PERIOD) / EPOCHS_PER_MONTH + lifecycleReserve;
-
-        // If CDN is enabled, include the fixed cache-miss and CDN lockup amounts
-        if (includeCDN) {
-            requiredLockup += StoragePricing.scaleAmount(
-                DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals
-            );
-        }
-
-        // Check that payer has sufficient available funds
-        (,, uint256 availableFunds,) = payments.getAccountInfoIfSettled(token, payer);
-        require(availableFunds >= requiredLockup, Errors.InsufficientLockupFunds(payer, requiredLockup, availableFunds));
-
-        // Check operator approval settings
-        (
-            bool isApproved,
-            uint256 rateAllowance,
-            uint256 lockupAllowance,
-            uint256 rateUsage,
-            uint256 lockupUsage,
-            uint256 maxLockupPeriod
-        ) = payments.operatorApprovals(token, payer, address(this));
-
-        // Verify operator is approved
-        require(isApproved, Errors.OperatorNotApproved(payer, address(this)));
-
-        // Rate-allowance headroom for the per-dataset fee rate: the floor of any non-empty
-        // dataset's rate (size-proportional component sits on top). Empty datasets never consume
-        // it; required up front for the dataset to be eligible to receive pieces.
-        uint256 datasetFeePerEpoch = datasetFeePerMonth / EPOCHS_PER_MONTH;
-        require(
-            rateAllowance >= rateUsage + datasetFeePerEpoch,
-            Errors.InsufficientRateAllowance(payer, address(this), rateAllowance, rateUsage, datasetFeePerEpoch)
-        );
-
-        // Verify lockup allowance is sufficient
-        require(
-            lockupAllowance >= lockupUsage + requiredLockup,
-            Errors.InsufficientLockupAllowance(payer, address(this), lockupAllowance, lockupUsage, requiredLockup)
-        );
-
-        // Verify max lockup period is sufficient
-        require(
-            maxLockupPeriod >= DEFAULT_LOCKUP_PERIOD,
-            Errors.InsufficientMaxLockupPeriod(payer, address(this), maxLockupPeriod, DEFAULT_LOCKUP_PERIOD)
-        );
-    }
-
-    function createRails(
-        FilecoinPayV1 payments,
-        uint256 dataSetId,
-        IERC20 token,
-        address payer,
-        address payee,
-        address filBeamBeneficiaryAddress,
-        uint8 tokenDecimals
-    ) internal returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
-        bool hasCDN = filBeamBeneficiaryAddress != address(0);
-        uint256 lifecycleReserve = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals);
-        // Validate payer has sufficient funds and operator approvals to cover the required lockup
-        // If CDN is enabled, validation must account for the additional fixed lockup amounts
-        validatePayerOperatorApprovalAndFunds(payments, token, payer, hasCDN, tokenDecimals, lifecycleReserve);
-
-        pdpRailId = payments.createRail(
-            token, // token address
-            payer, // from (payer)
-            payee, // payee address from registry
-            address(this), // this contract acts as the validator
-            SERVICE_COMMISSION_BPS, // fixed service commission
-            address(this)
-        );
-
-        // Set lockup period and seed the lifecycle reserve
-        payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, lifecycleReserve);
-
-        cacheMissRailId = 0;
-        cdnRailId = 0;
-
-        if (hasCDN) {
-            uint256 cacheMissLockup = StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals);
-            uint256 cdnLockup = StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals);
-            cacheMissRailId = payments.createRail(
-                token, // token address
-                payer, // from (payer)
-                payee, // payee address from registry
-                address(0), // no validator
-                0, // no service commission
-                address(this) // controller
-            );
-            payments.modifyRailLockup(cacheMissRailId, CDN_LOCKUP_PERIOD, cacheMissLockup);
-
-            cdnRailId = payments.createRail(
-                token, // token address
-                payer, // from (payer)
-                filBeamBeneficiaryAddress, // to FilBeam beneficiary
-                address(0), // no validator
-                0, // no service commission
-                address(this) // controller
-            );
-            payments.modifyRailLockup(cdnRailId, CDN_LOCKUP_PERIOD, cdnLockup);
-
-            emit CDNPaymentRailsToppedUp(dataSetId, cdnLockup, cdnLockup, cacheMissLockup, cacheMissLockup);
-        }
-    }
-
     function terminateCDNRails(FilecoinPayV1 payments, uint256 dataSetId, uint256 cacheMissRailId, uint256 cdnRailId)
         internal
     {

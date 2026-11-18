@@ -6,7 +6,7 @@ import {console} from "forge-std/Test.sol";
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
 import {FWSSDataSetModule} from "../src/modules/FWSSDataSetModule.sol";
 import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
-import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
+import {LegacyV1DataSetCreation} from "./helpers/LegacyV1DataSetCreation.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
@@ -20,7 +20,7 @@ import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest, FWSSDeployer {
+contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest, LegacyV1DataSetCreation {
     using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
@@ -97,20 +97,20 @@ contract FilecoinWarmStorageServiceOwnerTest is MockFVMTest, FWSSDeployer {
         filecoinPayV2 = new FilecoinPayV2();
 
         // Deploy service contract
-        serviceContract = _deployFWSS(
-            FWSSDeployment({
-                payments: address(payments),
-                filecoinPayV2: address(filecoinPayV2),
-                pdpVerifier: address(pdpVerifier),
-                usdfc: address(usdfcToken),
-                filBeamBeneficiary: filBeamBeneficiary,
-                serviceProviderRegistry: address(providerRegistry),
-                sessionKeyRegistry: address(sessionKeyRegistry),
-                maxProvingPeriod: 2880,
-                challengeWindowSize: 1440,
-                filBeamController: filBeamController
-            })
-        );
+        FWSSDeployment memory deployment = FWSSDeployment({
+            payments: address(payments),
+            filecoinPayV2: address(filecoinPayV2),
+            pdpVerifier: address(pdpVerifier),
+            usdfc: address(usdfcToken),
+            filBeamBeneficiary: filBeamBeneficiary,
+            serviceProviderRegistry: address(providerRegistry),
+            sessionKeyRegistry: address(sessionKeyRegistry),
+            maxProvingPeriod: 2880,
+            challengeWindowSize: 1440,
+            filBeamController: filBeamController
+        });
+        serviceContract = _deployFWSS(deployment);
+        _routeV1DataSetCreation(address(serviceContract), deployment);
 
         // Approve providers 1, 2, and 3 but not unauthorizedProvider
         uint256 providerId1 = providerRegistry.getProviderIdByAddress(provider1);

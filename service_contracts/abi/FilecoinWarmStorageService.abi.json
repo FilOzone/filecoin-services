@@ -1202,6 +1202,17 @@
   },
   {
     "type": "error",
+    "name": "DataSetIdTooLarge",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "DataSetNotAbandoned",
     "inputs": [
       {
@@ -1216,37 +1227,6 @@
       },
       {
         "name": "currentBlock",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientLockupAllowance",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "lockupAllowance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "lockupUsage",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "lockupRequired",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1275,63 +1255,6 @@
   },
   {
     "type": "error",
-    "name": "InsufficientMaxLockupPeriod",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "maxLockupPeriod",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "requiredLockupPeriod",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "InsufficientRateAllowance",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "rateAllowance",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "rateUsage",
-        "type": "uint256",
-        "internalType": "uint256"
-      },
-      {
-        "name": "rateRequired",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
-  },
-  {
-    "type": "error",
     "name": "InvalidInitialization",
     "inputs": []
   },
@@ -1339,22 +1262,6 @@
     "type": "error",
     "name": "NotInitializing",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "OperatorNotApproved",
-    "inputs": [
-      {
-        "name": "payer",
-        "type": "address",
-        "internalType": "address"
-      },
-      {
-        "name": "operator",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
   },
   {
     "type": "error",

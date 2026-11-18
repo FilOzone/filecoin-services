@@ -16,4 +16,11 @@ abstract contract FWSSFilecoinPayV2 {
         require(_filecoinPayV2Address != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV2));
         filecoinPayV2 = FilecoinPayV2(_filecoinPayV2Address);
     }
+
+    /// @notice Tells FilecoinPayV1 rail ids, which count up from one, from FilecoinPayV2 rail ids, which are hashes.
+    /// @param railId A rail id stored in DataSetInfo
+    /// @return True when the rail lives on FilecoinPayV1
+    function _isV1Rail(uint256 railId) internal pure returns (bool) {
+        return railId < 1 << 64;
+    }
 }

@@ -5,6 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Changed
+
+- `dataSetCreated` opens a new data set's rails on FilecoinPayV2 instead of FilecoinPayV1, in one script with FWSS as the operator.
+  The payer deposits the selected currency into FilecoinPayV2 and authorizes FWSS with `CREATE_RAIL`.
+  FWSS checks the same funding threshold against that balance, then locks the lifecycle reserve and the CDN lockups on the new rails.
+  The stored rail IDs are FilecoinPayV2 rail hashes; data sets created earlier keep their FilecoinPayV1 rails.
+  The other data set callbacks still act on FilecoinPayV1 rails, so data sets created by this version do not yet work end to end.
+- The FWSS ABI adds `DataSetIdTooLarge` and drops `OperatorNotApproved`, `InsufficientRateAllowance`, `InsufficientLockupAllowance` and `InsufficientMaxLockupPeriod`, which only the FilecoinPayV1 creation check raised.
+
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 
 This contract-stack release adds owner-registered storage terms to FilecoinWarmStorageService (FWSS), so each data set selects an immutable currency and price at creation, and takes legacy piece metadata cleanup out of the proving path. It is the first upgrade delivered as a josuke migration on the ERC-8167 dispatcher. The FWSS proxy addresses do not change.
