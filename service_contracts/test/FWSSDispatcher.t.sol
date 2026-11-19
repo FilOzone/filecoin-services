@@ -105,6 +105,7 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
     address internal facetBeneficiary = address(0xF120);
     address internal facetProviderRegistry = address(0xF121);
     address internal facetSessionKeyRegistry = address(0xF122);
+    address internal facetFilecoinPayV2Address = address(0xF123);
     FWSSMigrateModule internal migrateModule;
     uint256 private legacyProxies;
 
@@ -126,6 +127,7 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
         _setConstructorArg("_filBeamBeneficiaryAddress", facetBeneficiary);
         _setConstructorArg("_serviceProviderRegistry", facetProviderRegistry);
         _setConstructorArg("_sessionKeyRegistry", facetSessionKeyRegistry);
+        _setConstructorArg("_filecoinPayV2Address", facetFilecoinPayV2Address);
     }
 
     function testConfigConstructorArgsRejectZeroAddress() public {
@@ -134,6 +136,15 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
         patterns[0] = "src/modules/FWSSConfigModule.sol:FWSSConfigModule";
         Facet[] memory facets = _resolvePatterns(patterns);
         vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV1));
+        _deployFacetRoutes(facets);
+    }
+
+    function testFilBeamConstructorArgsRejectZeroFilecoinPayV2() public {
+        _setConstructorArg("_filecoinPayV2Address", address(0));
+        string[] memory patterns = new string[](1);
+        patterns[0] = "src/modules/FWSSFilBeamModule.sol:FWSSFilBeamModule";
+        Facet[] memory facets = _resolvePatterns(patterns);
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV2));
         _deployFacetRoutes(facets);
     }
 

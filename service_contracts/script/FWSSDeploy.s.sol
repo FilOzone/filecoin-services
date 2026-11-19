@@ -22,6 +22,7 @@ contract FWSSDeploy is FWSSDispatcherTransitionScript, FWSSDeployer {
         uint256 chain = block.chainid;
         FWSSDeployment memory deployment = FWSSDeployment({
             payments: _requireEnvOrRecorded("FILECOIN_PAY_ADDRESS"),
+            filecoinPayV2: _requireEnvOrRecorded("FILECOIN_PAY_V2_ADDRESS"),
             pdpVerifier: _requireEnvOrRecorded("PDP_VERIFIER_PROXY_ADDRESS"),
             usdfc: _requireEnvOrRecorded("USDFC_TOKEN_ADDRESS"),
             filBeamBeneficiary: _requireEnvOrRecorded("FILBEAM_BENEFICIARY_ADDRESS"),

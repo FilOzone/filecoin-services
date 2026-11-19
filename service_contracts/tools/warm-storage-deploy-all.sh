@@ -1,7 +1,7 @@
 #! /bin/bash
-# warm-storage-deploy-all.sh deploys a fresh Warm Storage stack: SessionKeyRegistry, FilecoinPayV1, PDPVerifier,
-# ServiceProviderRegistry, FWSS on the ERC-8167 dispatcher, and the endorsements ProviderIdSet. Mainly for local devnets;
-# existing deployments change through josuke migrations, not this script.
+# warm-storage-deploy-all.sh deploys a fresh Warm Storage stack: SessionKeyRegistry, FilecoinPayV1, FilecoinPayV2,
+# PDPVerifier, ServiceProviderRegistry, FWSS on the ERC-8167 dispatcher, and the endorsements ProviderIdSet. Mainly for
+# local devnets; existing deployments change through josuke migrations, not this script.
 # Each contract whose <NAME>_ADDRESS is set, in the environment or deployments.json, is used as-is instead of deployed.
 # Auto-detects network based on RPC chain ID and sets appropriate configuration
 # Assumption: ETH_KEYSTORE, PASSWORD, ETH_RPC_URL env vars are set to an appropriate eth keystore path and password
@@ -279,6 +279,7 @@ deploy_fwss_if_needed() {
         local output
         if ! output=$(SKIP_UPDATE_DEPLOYMENTS="${SKIP_UPDATE_DEPLOYMENTS:-}" \
             FILECOIN_PAY_ADDRESS="$FILECOIN_PAY_ADDRESS" \
+            FILECOIN_PAY_V2_ADDRESS="$FILECOIN_PAY_V2_ADDRESS" \
             PDP_VERIFIER_PROXY_ADDRESS="$PDP_VERIFIER_PROXY_ADDRESS" \
             USDFC_TOKEN_ADDRESS="$USDFC_TOKEN_ADDRESS" \
             FILBEAM_BENEFICIARY_ADDRESS="$FILBEAM_BENEFICIARY_ADDRESS" \
@@ -377,6 +378,12 @@ deploy_contract_if_needed \
     "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
     "FilecoinPayV1"
 
+# Step 1b: Deploy or use existing FilecoinPayV2 contract
+deploy_contract_if_needed \
+    "FILECOIN_PAY_V2_ADDRESS" \
+    "lib/filecoin-pay-v2/src/FilecoinPayV2.sol:FilecoinPayV2" \
+    "FilecoinPayV2"
+
 # Step 2: Deploy or use existing PDPVerifier implementation, at initializer version 1 for its fresh proxy
 deploy_contract_if_needed \
     "PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
@@ -433,6 +440,7 @@ fi
 echo "PDPVerifier Implementation: $PDP_VERIFIER_IMPLEMENTATION_ADDRESS"
 echo "PDPVerifier Proxy: $PDP_VERIFIER_PROXY_ADDRESS"
 echo "FilecoinPayV1 Contract: $FILECOIN_PAY_ADDRESS"
+echo "FilecoinPayV2 Contract: $FILECOIN_PAY_V2_ADDRESS"
 echo "ServiceProviderRegistry Implementation: $SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS"
 echo "ServiceProviderRegistry Proxy: $SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
 echo "SessionKeyRegistry: $SESSION_KEY_REGISTRY_ADDRESS"
@@ -463,6 +471,7 @@ if [ "$DRY_RUN" = "false" ] && [ "${AUTO_VERIFY:-true}" = "true" ]; then
         "$PDP_VERIFIER_PROXY_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
         "$ENDORSEMENT_SET_ADDRESS,src/ProviderIdSet.sol:ProviderIdSet" \
         "$FILECOIN_PAY_ADDRESS,lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
+        "$FILECOIN_PAY_V2_ADDRESS,lib/filecoin-pay-v2/src/FilecoinPayV2.sol:FilecoinPayV2" \
         "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS,src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
         "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy" \
         "$FWSS_PROXY_ADDRESS,lib/pdp/src/ERC1967Proxy.sol:MyERC1967Proxy"

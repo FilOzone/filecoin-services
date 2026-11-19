@@ -712,6 +712,8 @@ contract FWSSDispatcherTransitionScriptsTest is Test, JosukeFacetSet {
         _setConstructorArg("_filBeamBeneficiaryAddress", service.filBeamBeneficiaryAddress());
         _setConstructorArg("_serviceProviderRegistry", address(service.serviceProviderRegistry()));
         _setConstructorArg("_sessionKeyRegistry", address(service.sessionKeyRegistry()));
+        // The v1.4.0 monolith predates FilecoinPayV2
+        _setConstructorArg("_filecoinPayV2Address", address(0xF123));
 
         SetDelegateOperation[] memory routes = _deployFacetRoutes(_resolveFacets(MAINNET_INDEX));
         SetDelegateOperationLibrary.validate(routes);

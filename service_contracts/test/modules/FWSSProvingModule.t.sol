@@ -34,12 +34,17 @@ contract FWSSProvingModuleTest is FilecoinWarmStorageServiceFixture {
 
     function testConstructorRejectsZeroPaymentsAddress() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV1));
-        new FWSSProvingModule(address(0), address(mockPDPVerifier));
+        new FWSSProvingModule(address(0), address(mockPDPVerifier), address(filecoinPayV2));
     }
 
     function testConstructorRejectsZeroPDPVerifierAddress() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.PDPVerifier));
-        new FWSSProvingModule(address(payments), address(0));
+        new FWSSProvingModule(address(payments), address(0), address(filecoinPayV2));
+    }
+
+    function testConstructorRejectsZeroFilecoinPayV2Address() public {
+        vm.expectRevert(abi.encodeWithSelector(Errors.ZeroAddress.selector, Errors.AddressField.FilecoinPayV2));
+        new FWSSProvingModule(address(payments), address(mockPDPVerifier), address(0));
     }
 
     function testOnlyConfiguredPDPVerifierCanSubmitProof() public {

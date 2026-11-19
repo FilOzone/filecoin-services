@@ -19,6 +19,7 @@ import {
     PROVEN_THIS_PERIOD_SLOT
 } from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {Errors as PaymentsErrors} from "@fws-payments/Errors.sol";
 import {DEFAULT_LOCKUP_PERIOD, EPOCHS_PER_DAY, LIFECYCLE_RESERVE_TARGET} from "../src/lib/PriceListUSDFC.sol";
 import {Errors} from "../src/Errors.sol";
@@ -35,6 +36,7 @@ contract AbandonmentTest is MockFVMTest, FWSSDeployer {
     PDPVerifier pdpVerifier;
     IFilecoinWarmStorageService fwss;
     FilecoinPayV1 payments;
+    FilecoinPayV2 filecoinPayV2;
     MockERC20 usdfc;
     ServiceProviderRegistry serviceProviderRegistry;
     SessionKeyRegistry sessionKeyRegistry;
@@ -62,6 +64,7 @@ contract AbandonmentTest is MockFVMTest, FWSSDeployer {
 
         usdfc = new MockERC20();
         payments = new FilecoinPayV1();
+        filecoinPayV2 = new FilecoinPayV2();
         sessionKeyRegistry = new SessionKeyRegistry();
 
         // Deploy real PDPVerifier as a proxy
@@ -98,6 +101,7 @@ contract AbandonmentTest is MockFVMTest, FWSSDeployer {
         fwss = _deployFWSS(
             FWSSDeployment({
                 payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
                 pdpVerifier: address(pdpVerifier),
                 usdfc: address(usdfc),
                 filBeamBeneficiary: filBeamBeneficiary,
