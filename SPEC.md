@@ -157,6 +157,8 @@ Clients pay for storage by depositing the currency selected by their dataset's t
 By default a dataset's rails open on FilecoinPayV1, where the client grants FWSS operator approval for that currency.
 A client opts a new dataset into FilecoinPayV2 with the `withPayV2` metadata key, whatever its value; the key is signed with the rest of the metadata.
 On FilecoinPayV2 the client authorizes FWSS with `CREATE_RAIL`, and FWSS opens the rails and locks their reserves in one `executeScript` call.
+That grant has no rate or lockup allowance like the FilecoinPayV1 operator approval, so only FWSS's own logic bounds what it locks and charges on those rails.
+The rest of this specification after creation still describes FilecoinPayV1 rails; FilecoinPayV2 data sets do not yet support piece additions, settlement, termination or the CDN flows.
 Funds flow to providers over time based on the storage rate.
 
 **Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.
