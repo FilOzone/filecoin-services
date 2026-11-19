@@ -26,6 +26,7 @@ import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 import {FWSSEIP712} from "../lib/FWSSEIP712.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
+import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
@@ -33,7 +34,7 @@ import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 /// @title FWSSAuthorizationModule
 /// @notice Manages payer-authorized data set operations: adding and removing pieces, terminating service, topping up
 /// the lifecycle reserve, and attaching the data set authorizer.
-contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
+contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
 
     FilecoinPayV1 internal immutable paymentContract;
@@ -43,9 +44,13 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
     /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
     /// @param _sessionKeyRegistry The registry used to verify payer signatures.
-    constructor(address _paymentsContractAddress, address _pdpVerifierAddress, SessionKeyRegistry _sessionKeyRegistry)
-        FWSSPDPVerifier(_pdpVerifierAddress)
-    {
+    /// @param _filecoinPayV2Address The FilecoinPayV2 contract that FWSS rails move to.
+    constructor(
+        address _paymentsContractAddress,
+        address _pdpVerifierAddress,
+        SessionKeyRegistry _sessionKeyRegistry,
+        address _filecoinPayV2Address
+    ) FWSSPDPVerifier(_pdpVerifierAddress) FWSSFilecoinPayV2(_filecoinPayV2Address) {
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentContract = FilecoinPayV1(_paymentsContractAddress);
         require(

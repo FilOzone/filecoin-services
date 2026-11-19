@@ -28,7 +28,9 @@ library Errors {
         /// FilBeam beneficiary address
         FilBeamBeneficiary,
         /// View contract address
-        View
+        View,
+        /// FilecoinPayV2 contract address
+        FilecoinPayV2
     }
 
     /// @notice Enumerates the types of commission rates used in the protocol

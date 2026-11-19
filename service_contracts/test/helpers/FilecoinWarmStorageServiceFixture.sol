@@ -10,6 +10,7 @@ import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {ProxyStorage} from "@erc8167/lib/ProxyStorage.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IFilecoinWarmStorageService} from "../../src/interfaces/IFilecoinWarmStorageService.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
@@ -73,6 +74,7 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
     IFilecoinWarmStorageService public pdpServiceWithPayments;
     MockPDPVerifier public mockPDPVerifier;
     FilecoinPayV1 public payments;
+    FilecoinPayV2 public filecoinPayV2;
     MockERC20 public mockUSDFC;
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
@@ -227,6 +229,7 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
 
         // Deploy FilecoinPayV1 contract (no longer upgradeable)
         payments = new FilecoinPayV1();
+        filecoinPayV2 = new FilecoinPayV2();
 
         // Transfer tokens to client for payment
         mockUSDFC.safeTransfer(client, 10000 * 10 ** mockUSDFC.decimals());
@@ -239,6 +242,7 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
         pdpServiceWithPayments = _deployFWSS(
             FWSSDeployment({
                 payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
                 pdpVerifier: address(mockPDPVerifier),
                 usdfc: address(mockUSDFC),
                 filBeamBeneficiary: filBeamBeneficiary,

@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
@@ -26,6 +27,7 @@ contract ProviderValidationTest is MockFVMTest, FWSSDeployer {
     SessionKeyRegistry public sessionKeyRegistry;
     MockPDPVerifier public pdpVerifier;
     FilecoinPayV1 public payments;
+    FilecoinPayV2 public filecoinPayV2;
     MockERC20 public usdfc;
 
     address public owner;
@@ -67,11 +69,13 @@ contract ProviderValidationTest is MockFVMTest, FWSSDeployer {
 
         // Deploy FilecoinPayV1 (no longer upgradeable)
         payments = new FilecoinPayV1();
+        filecoinPayV2 = new FilecoinPayV2();
 
         // Deploy IFilecoinWarmStorageService
         warmStorage = _deployFWSS(
             FWSSDeployment({
                 payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
                 pdpVerifier: address(pdpVerifier),
                 usdfc: address(usdfc),
                 filBeamBeneficiary: filBeamBeneficiary,

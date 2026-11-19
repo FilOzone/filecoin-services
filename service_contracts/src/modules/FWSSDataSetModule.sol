@@ -32,6 +32,7 @@ import {
 import {LibRails} from "../lib/LibRails.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
+import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 import {StorageTermsRecord} from "../lib/StorageTerms.sol";
@@ -40,7 +41,7 @@ import {StoragePricing} from "../lib/StoragePricing.sol";
 
 /// @title FWSSDataSetModule
 /// @notice Manages data set creation and deletion.
-contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
+contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
 
     error UnsupportedExtraDataVariant(uint256 keysOffset);
@@ -67,14 +68,16 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
     /// @param _filBeamBeneficiaryAddress The beneficiary of FilBeam payment rails.
     /// @param _serviceProviderRegistry The registry of approved service providers.
     /// @param _sessionKeyRegistry The registry used to verify payer signatures.
+    /// @param _filecoinPayV2Address The FilecoinPayV2 contract that FWSS rails move to.
     constructor(
         address _paymentsContractAddress,
         address _pdpVerifierAddress,
         IERC20Metadata _usdfc,
         address _filBeamBeneficiaryAddress,
         ServiceProviderRegistry _serviceProviderRegistry,
-        SessionKeyRegistry _sessionKeyRegistry
-    ) FWSSPDPVerifier(_pdpVerifierAddress) {
+        SessionKeyRegistry _sessionKeyRegistry,
+        address _filecoinPayV2Address
+    ) FWSSPDPVerifier(_pdpVerifierAddress) FWSSFilecoinPayV2(_filecoinPayV2Address) {
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentContract = FilecoinPayV1(_paymentsContractAddress);
 

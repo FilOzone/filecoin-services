@@ -18,6 +18,7 @@ import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol"
 import {FilecoinWarmStorageServiceStateLibrary} from "../src/lib/FilecoinWarmStorageServiceStateLibrary.sol";
 import {CDNServiceTerminated, CDNPaymentRailsToppedUp} from "../src/lib/LibRails.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {Errors} from "../src/Errors.sol";
@@ -256,6 +257,7 @@ contract FilecoinWarmStorageServiceTest is FilecoinWarmStorageServiceFixture {
                 _deployFWSS(
                     FWSSDeployment({
                         payments: address(payments),
+                        filecoinPayV2: address(filecoinPayV2),
                         pdpVerifier: address(mockPDPVerifier),
                         usdfc: address(mockUSDFC),
                         filBeamBeneficiary: filBeamBeneficiary,
@@ -5192,6 +5194,7 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test, FWSSDeployer {
     IFilecoinWarmStorageService public warmStorageService;
     MockPDPVerifier public mockPDPVerifier;
     FilecoinPayV1 public payments;
+    FilecoinPayV2 public filecoinPayV2;
     MockERC20 public mockUSDFC;
     ServiceProviderRegistry public serviceProviderRegistry;
 
@@ -5218,10 +5221,12 @@ contract FilecoinWarmStorageServiceUpgradeTest is Test, FWSSDeployer {
 
         // Deploy FilecoinPayV1 contract (no longer upgradeable)
         payments = new FilecoinPayV1();
+        filecoinPayV2 = new FilecoinPayV2();
 
         warmStorageService = _deployFWSS(
             FWSSDeployment({
                 payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
                 pdpVerifier: address(mockPDPVerifier),
                 usdfc: address(mockUSDFC),
                 filBeamBeneficiary: filBeamBeneficiary,

@@ -22,6 +22,7 @@ ignored_error_codes = [
     9170, # Solidity 0.8.37 warning from fws-payments
     6335, # Solidity 0.8.37 warning from OpenZeppelin/forge-std
     8506, # Solidity 0.8.37 warning from forge-std
+    2519, # Solidity 0.8.37 warning from filecoin-pay-v2
     4591, # Warning limit reached
 ]
 
