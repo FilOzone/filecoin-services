@@ -11,14 +11,14 @@ import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
-import {LegacyV1DataSetCreation} from "./helpers/LegacyV1DataSetCreation.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {PDPOffering} from "./PDPOffering.sol";
 import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {MockERC20, MockPDPVerifier} from "./mocks/SharedMocks.sol";
 import {Errors} from "../src/Errors.sol";
 
-contract ProviderValidationTest is MockFVMTest, LegacyV1DataSetCreation {
+contract ProviderValidationTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
     using SafeERC20 for MockERC20;
 
@@ -72,20 +72,20 @@ contract ProviderValidationTest is MockFVMTest, LegacyV1DataSetCreation {
         filecoinPayV2 = new FilecoinPayV2();
 
         // Deploy IFilecoinWarmStorageService
-        FWSSDeployment memory deployment = FWSSDeployment({
-            payments: address(payments),
-            filecoinPayV2: address(filecoinPayV2),
-            pdpVerifier: address(pdpVerifier),
-            usdfc: address(usdfc),
-            filBeamBeneficiary: filBeamBeneficiary,
-            serviceProviderRegistry: address(serviceProviderRegistry),
-            sessionKeyRegistry: address(sessionKeyRegistry),
-            maxProvingPeriod: 2880,
-            challengeWindowSize: 60,
-            filBeamController: filBeamController
-        });
-        warmStorage = _deployFWSS(deployment);
-        _routeV1DataSetCreation(address(warmStorage), deployment);
+        warmStorage = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(usdfc),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
+        );
 
         // Transfer tokens to client
         usdfc.safeTransfer(client, 10000 * 10 ** 18);

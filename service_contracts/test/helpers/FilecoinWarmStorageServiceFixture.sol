@@ -20,8 +20,8 @@ import {_combinedMonthlyStorageRate} from "./StoragePricingHelpers.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
+import {FWSSDeployer} from "../../script/lib/FWSSDeployer.sol";
 import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
-import {LegacyV1DataSetCreation} from "./LegacyV1DataSetCreation.sol";
 
 /// @dev Test-only facet for piece metadata and removal queue entries that FWSS no longer writes or cleans up.
 contract LegacyPieceMetadataFacet is FWSSStorage {
@@ -60,7 +60,7 @@ contract LegacyPieceMetadataFacet is FWSSStorage {
     }
 }
 
-abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, LegacyV1DataSetCreation {
+abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer {
     using SafeERC20 for MockERC20;
     using PDPOffering for PDPOffering.Schema;
     // Testing Constants
@@ -79,8 +79,6 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, LegacyV1Data
     MockERC20 public mockUSDFC;
     ServiceProviderRegistry public serviceProviderRegistry;
     SessionKeyRegistry public sessionKeyRegistry = new SessionKeyRegistry();
-    // Serves dataSetCreated once _useV2DataSetCreation routes it back from the legacy module
-    address internal dataSetModule;
 
     // Test accounts
     address public deployer;
@@ -242,21 +240,20 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, LegacyV1Data
         defaultCacheMissLockup = (3 * 10 ** mockUSDFC.decimals()) / 10; // 0.3 USDFC
         defaultTotalCDNLockup = defaultCacheMissLockup + defaultCDNLockup;
 
-        FWSSDeployment memory deployment = FWSSDeployment({
-            payments: address(payments),
-            filecoinPayV2: address(filecoinPayV2),
-            pdpVerifier: address(mockPDPVerifier),
-            usdfc: address(mockUSDFC),
-            filBeamBeneficiary: filBeamBeneficiary,
-            serviceProviderRegistry: address(serviceProviderRegistry),
-            sessionKeyRegistry: address(sessionKeyRegistry),
-            maxProvingPeriod: 2880,
-            challengeWindowSize: 60,
-            filBeamController: filBeamController
-        });
-        pdpServiceWithPayments = _deployFWSS(deployment);
-        // Most tests exercise the flows after creation, which still run on FilecoinPayV1 rails
-        dataSetModule = _routeV1DataSetCreation(address(pdpServiceWithPayments), deployment);
+        pdpServiceWithPayments = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
+                pdpVerifier: address(mockPDPVerifier),
+                usdfc: address(mockUSDFC),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
+        );
         LegacyPieceMetadataFacet legacyPieceMetadata = new LegacyPieceMetadataFacet();
         _route(
             address(pdpServiceWithPayments),
@@ -348,11 +345,6 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, LegacyV1Data
 
     function _rateForLeaves(uint256 leafCount) internal pure returns (uint256) {
         return _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount));
-    }
-
-    /// @dev Creates data sets on FilecoinPayV2 rails, as the deployed FWSS does.
-    function _useV2DataSetCreation() internal {
-        _route(address(pdpServiceWithPayments), FWSSDataSetModule.dataSetCreated.selector, dataSetModule);
     }
 
     /// @dev Deposits USDFC into FilecoinPayV2 for `payer` and lets FWSS open rails from it.

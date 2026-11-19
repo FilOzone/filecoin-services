@@ -23,7 +23,9 @@ import {Errors} from "../../src/Errors.sol";
 import {
     CACHE_MISS_EGRESS_PRICE_PER_TIB,
     CDN_EGRESS_PRICE_PER_TIB,
+    DATASET_FEE_PER_EPOCH,
     DATASET_FEE_PER_MONTH,
+    DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
     STORAGE_PRICE_PER_TIB_PER_MONTH
@@ -429,6 +431,136 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
         );
     }
 
+    // Minimum Funds Validation Tests
+    function testInsufficientFunds_BelowMinimum() public {
+        // Setup: Client with insufficient funds (below 0.62 USDFC minimum = 0.12 dataset fee + 0.50 lifecycle reserve)
+        address insufficientClient = makeAddr("insufficientClient");
+        uint256 insufficientAmount = 12e16; // 0.12 USDFC (below 0.62 minimum)
+
+        // Transfer tokens from test contract to the test client
+        mockUSDFC.safeTransfer(insufficientClient, insufficientAmount);
+
+        vm.startPrank(insufficientClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), insufficientAmount);
+        payments.deposit(mockUSDFC, insufficientClient, insufficientAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: insufficientClient,
+            clientDataSetId: 999,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        uint256 required = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
+
+        // Expect revert with InsufficientLockupFunds error
+        makeSignaturePass(insufficientClient);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InsufficientLockupFunds.selector, insufficientClient, required, insufficientAmount
+            )
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+    }
+
+    function testInsufficientFunds_ExactMinimum() public {
+        // Setup: Client with exactly the minimum funds (0.62 USDFC = 0.12 dataset fee + 0.50 lifecycle reserve)
+        address exactClient = makeAddr("exactClient");
+        uint256 exactAmount = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET; // Exactly 0.62 USDFC
+
+        // Transfer tokens from test contract to the test client
+        mockUSDFC.safeTransfer(exactClient, exactAmount);
+
+        vm.startPrank(exactClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), exactAmount);
+        payments.deposit(mockUSDFC, exactClient, exactAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Exact Minimum Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: exactClient,
+            clientDataSetId: 1000,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Should succeed with exact minimum
+        makeSignaturePass(exactClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId =
+            mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+
+        // Verify dataset was created
+        assertEq(dataSetId, 1, "Dataset should be created with exact minimum funds");
+    }
+
+    function testInsufficientFunds_JustAboveMinimum() public {
+        // Setup: Client with slightly more than minimum (0.621 USDFC)
+        address aboveMinClient = makeAddr("aboveMinClient");
+        uint256 aboveMinAmount = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET + 1e15; // 0.621 USDFC
+
+        // Transfer tokens from test contract to the test client
+        mockUSDFC.safeTransfer(aboveMinClient, aboveMinAmount);
+
+        vm.startPrank(aboveMinClient);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        mockUSDFC.approve(address(payments), aboveMinAmount);
+        payments.deposit(mockUSDFC, aboveMinClient, aboveMinAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Above Minimum Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: aboveMinClient,
+            clientDataSetId: 1001,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Should succeed with funds above minimum
+        makeSignaturePass(aboveMinClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId =
+            mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+
+        // Verify dataset was created
+        assertEq(dataSetId, 1, "Dataset should be created with above-minimum funds");
+    }
+
     function testInsufficientFunds_AddPiecesFailsImmediately() public {
         // Test that adding pieces fails immediately when client has insufficient funds
         // for the new lockup amount. This validates that updatePaymentRates is called
@@ -590,6 +722,275 @@ contract FWSSDataSetModuleTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(actualRate, expectedRate, "rail rate should use combined monthly raw-size pricing");
         assertLt(actualRate, buggyRate, "raw-size rate must be lower than the Fr32-size rate");
+    }
+
+    // Operator Approval Validation Tests
+    function testOperatorApproval_NotApproved() public {
+        // Setup: Client with sufficient funds but no operator approval
+        address testClient = makeAddr("testClient");
+        uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
+
+        // Transfer tokens and deposit
+        mockUSDFC.safeTransfer(testClient, depositAmount);
+
+        vm.startPrank(testClient);
+        // Don't set operator approval (or explicitly set to false)
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), false, 0, 0, 0);
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, testClient, depositAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Not Approved Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 2000,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Expect revert with OperatorNotApproved error
+        makeSignaturePass(testClient);
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.OperatorNotApproved.selector, testClient, address(pdpServiceWithPayments))
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+    }
+
+    function testOperatorApproval_InsufficientRateAllowance() public {
+        // Setup: Client with sufficient funds but insufficient rate allowance
+        address testClient = makeAddr("testClient2");
+        uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
+
+        uint256 minimumRatePerEpoch = DATASET_FEE_PER_EPOCH;
+        uint256 insufficientRateAllowance = minimumRatePerEpoch - 1; // Just below minimum
+
+        // Transfer tokens and set up approvals
+        mockUSDFC.safeTransfer(testClient, depositAmount);
+
+        vm.startPrank(testClient);
+        // Set operator approval with insufficient rate allowance
+        payments.setOperatorApproval(
+            mockUSDFC,
+            address(pdpServiceWithPayments),
+            true, // approved
+            insufficientRateAllowance, // rate allowance too low
+            1000e18, // lockup allowance sufficient
+            365 days // max lockup period sufficient
+        );
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, testClient, depositAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Rate Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 2001,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Expect revert with InsufficientRateAllowance error
+        makeSignaturePass(testClient);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InsufficientRateAllowance.selector,
+                testClient,
+                address(pdpServiceWithPayments),
+                insufficientRateAllowance,
+                0, // rateUsage is 0 initially
+                minimumRatePerEpoch
+            )
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+    }
+
+    function testOperatorApproval_InsufficientLockupAllowance() public {
+        // Setup: Client with sufficient funds but insufficient lockup allowance
+        address testClient = makeAddr("testClient3");
+        uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
+
+        uint256 lockupRequired = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET;
+        uint256 insufficientLockupAllowance = lockupRequired - 1; // Just below required
+
+        // Transfer tokens and set up approvals
+        mockUSDFC.safeTransfer(testClient, depositAmount);
+
+        vm.startPrank(testClient);
+        // Set operator approval with insufficient lockup allowance
+        payments.setOperatorApproval(
+            mockUSDFC,
+            address(pdpServiceWithPayments),
+            true, // approved
+            1000e18, // rate allowance sufficient
+            insufficientLockupAllowance, // lockup allowance too low
+            365 days // max lockup period sufficient
+        );
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, testClient, depositAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Lockup Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 2002,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Expect revert with InsufficientLockupAllowance error
+        makeSignaturePass(testClient);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InsufficientLockupAllowance.selector,
+                testClient,
+                address(pdpServiceWithPayments),
+                insufficientLockupAllowance,
+                0, // lockupUsage is 0 initially
+                lockupRequired
+            )
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+    }
+
+    function testOperatorApproval_InsufficientMaxLockupPeriod() public {
+        // Setup: Client with sufficient funds but insufficient max lockup period
+        address testClient = makeAddr("testClient4");
+        uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
+
+        uint256 defaultLockupPeriod = DEFAULT_LOCKUP_PERIOD;
+        uint256 insufficientMaxLockupPeriod = defaultLockupPeriod - 1; // Just below required
+
+        // Transfer tokens and set up approvals
+        mockUSDFC.safeTransfer(testClient, depositAmount);
+
+        vm.startPrank(testClient);
+        // Set operator approval with insufficient max lockup period
+        payments.setOperatorApproval(
+            mockUSDFC,
+            address(pdpServiceWithPayments),
+            true, // approved
+            1000e18, // rate allowance sufficient
+            1000e18, // lockup allowance sufficient
+            insufficientMaxLockupPeriod // max lockup period too low
+        );
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, testClient, depositAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "Insufficient Period Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 2003,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Expect revert with InsufficientMaxLockupPeriod error
+        makeSignaturePass(testClient);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InsufficientMaxLockupPeriod.selector,
+                testClient,
+                address(pdpServiceWithPayments),
+                insufficientMaxLockupPeriod,
+                defaultLockupPeriod
+            )
+        );
+        vm.prank(serviceProvider);
+        mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+    }
+
+    function testOperatorApproval_AllSufficient() public {
+        // Setup: Client with all approvals sufficient
+        address testClient = makeAddr("testClient5");
+        uint256 depositAmount = 10e18; // 10 USDFC (plenty of funds)
+
+        // Transfer tokens and set up sufficient approvals
+        mockUSDFC.safeTransfer(testClient, depositAmount);
+
+        vm.startPrank(testClient);
+        // Set operator approval with all sufficient values
+        payments.setOperatorApproval(
+            mockUSDFC,
+            address(pdpServiceWithPayments),
+            true, // approved
+            1000e18, // rate allowance more than sufficient
+            1000e18, // lockup allowance more than sufficient
+            365 days // max lockup period more than sufficient
+        );
+        mockUSDFC.approve(address(payments), depositAmount);
+        payments.deposit(mockUSDFC, testClient, depositAmount);
+        vm.stopPrank();
+
+        // Prepare dataset creation data
+        (string[] memory dsKeys, string[] memory dsValues) = _getSingleMetadataKV("label", "All Sufficient Test");
+        FWSSDataSetModule.DataSetCreateData memory createData = FWSSDataSetModule.DataSetCreateData({
+            payer: testClient,
+            clientDataSetId: 2004,
+            metadataKeys: dsKeys,
+            metadataValues: dsValues,
+            signature: FAKE_SIGNATURE
+        });
+
+        bytes memory encodedCreateData = abi.encode(
+            createData.payer,
+            createData.clientDataSetId,
+            createData.metadataKeys,
+            createData.metadataValues,
+            createData.signature
+        );
+
+        // Should succeed with all approvals sufficient
+        makeSignaturePass(testClient);
+        vm.prank(serviceProvider);
+        uint256 dataSetId =
+            mockPDPVerifier.createDataSet(PDPListener(address(pdpServiceWithPayments)), encodedCreateData);
+
+        // Verify dataset was created
+        assertEq(dataSetId, 1, "Dataset should be created with sufficient approvals");
     }
 
     /**

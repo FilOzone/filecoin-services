@@ -77,7 +77,7 @@ The terminate fee applies only in the **consent case**: when the SP calls `termi
 #### Lifecycle Reserve
 
 The lifecycle reserve is seeded at **0.50 units of the selected currency**, scaled to its decimals, when the dataset is created.
-New datasets hold it as a lock on their FilecoinPayV2 PDP rail; datasets created on FilecoinPayV1 hold it as `lockupFixed` on their PDP rail.
+Datasets on FilecoinPayV1 hold it as `lockupFixed` on their PDP rail; datasets on FilecoinPayV2 hold it as a lock on their PDP rail.
 Dollar amounts in the fee table describe the intended stablecoin economics, not an exchange-rate conversion.
 
 ```
@@ -154,7 +154,9 @@ This design ensures the provider receives payment at or above the rate establish
 ### Funding and Top-Up
 
 Clients pay for storage by depositing the currency selected by their dataset's terms into FilecoinPay.
-New datasets use FilecoinPayV2, where the client authorizes FWSS with `CREATE_RAIL`; datasets created on FilecoinPayV1 keep the FWSS operator approval there.
+By default a dataset's rails open on FilecoinPayV1, where the client grants FWSS operator approval for that currency.
+A client opts a new dataset into FilecoinPayV2 with the `withPayV2` metadata key, whatever its value; the key is signed with the rest of the metadata.
+On FilecoinPayV2 the client authorizes FWSS with `CREATE_RAIL`, and FWSS opens the rails and locks their reserves in one `executeScript` call.
 Funds flow to providers over time based on the storage rate.
 
 **Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.
@@ -164,7 +166,7 @@ lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
 An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve.
-Creation also requires the payer's FilecoinPayV2 balance to cover the scaled monthly dataset fee, anticipating later piece additions.
+Creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions; on FilecoinPayV2 the payer's balance must cover it.
 For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
 
 **Pre-flight check precision:** Creation checks use the scaled monthly dataset fee directly, rather than reconstructing it from a truncated per-epoch rate. This is conservative, particularly for lower-decimal currencies.
@@ -362,8 +364,8 @@ flowchart TB
   USDFC["USDFC Token (immutable ERC20)"]
 
   PDPV -->|PDPListener callbacks| FWSS
-  FWSS -->|modifyRailPayment| FPV
-  FWSS -->|executeScript: create rails| FPV2
+  FWSS -->|createRail, modifyRailPayment| FPV
+  FWSS -->|executeScript: create rails with withPayV2| FPV2
   FPV -->|IValidator: validatePayment, railTerminated| FWSS
   FWSS -->|getProviderIdByAddress, getProviderPayee| SPR
   FWSS -->|authorizationExpiry| SKR
@@ -452,8 +454,13 @@ sequenceDiagram
     Note over FWSS: verify client EIP-712 signature
     FWSS->>ServiceProviderRegistry: getProviderPayee(providerId)
     ServiceProviderRegistry-->>FWSS: payee address
-    FWSS->>FilecoinPayV2: executeScript(CREATE_RAIL, createRail + lock per rail)
-    FilecoinPayV2-->>FWSS: rails created
+    alt withPayV2 metadata key
+      FWSS->>FilecoinPayV2: executeScript(CREATE_RAIL, createRail + lock per rail)
+      FilecoinPayV2-->>FWSS: rails created
+    else default
+      FWSS->>FilecoinPayV1: createRail(client, payee, ...)
+      FilecoinPayV1-->>FWSS: rail created
+    end
   end
 
   rect rgba(248, 248, 248, 0.2)

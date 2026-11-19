@@ -61,6 +61,8 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     // Metadata key constants
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
     bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
+    uint256 private constant METADATA_KEY_WITH_PAY_V2_SIZE = 9;
+    bytes32 private constant METADATA_KEY_WITH_PAY_V2_HASH = keccak256("withPayV2");
 
     // Each rail role gets its own nonce, so rails stay distinct when the payee is the FilBeam beneficiary.
     uint64 private constant CDN_RAIL_NONCE_FLAG = 1 << 62;
@@ -240,11 +242,22 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
         }
 
         // Determine once whether CDN is enabled in metadata and reuse the result
-        bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
+        bool hasCDN = hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN_SIZE, METADATA_KEY_WITH_CDN_HASH);
         require(!hasCDN || terms.token == address(usdfcTokenAddress), CDNUnsupportedCurrency(terms.token));
 
-        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) =
-            _createRails(dataSetId, terms.token, terms.tokenDecimals, createData.payer, payee, hasCDN);
+        // Clients opt into FilecoinPayV2 per data set; without the key, creation stays on FilecoinPayV1.
+        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = hasMetadataKey(
+            createData.metadataKeys, METADATA_KEY_WITH_PAY_V2_SIZE, METADATA_KEY_WITH_PAY_V2_HASH
+        )
+            ? _createPayV2Rails(dataSetId, terms.token, terms.tokenDecimals, createData.payer, payee, hasCDN)
+            : paymentContract.createRails(
+                dataSetId,
+                IERC20(terms.token),
+                createData.payer,
+                payee,
+                hasCDN ? filBeamBeneficiaryAddress : address(0),
+                terms.tokenDecimals
+            );
 
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
@@ -271,7 +284,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     }
 
     /// @notice Opens the data set's rails on FilecoinPayV2 in one script, with this contract as their operator.
-    /// @dev Virtual so tests can still create the FilecoinPayV1 data sets that stay live until their rails drain.
     /// @param dataSetId The data set the rail nonces derive from
     /// @param token The currency selected by the data set's storage terms; address(0) is native FIL
     /// @param tokenDecimals The selected currency's precision
@@ -281,14 +293,14 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     /// @return pdpRailId The PDP rail, which settles through FWSS
     /// @return cacheMissRailId The cache-miss rail, or zero without CDN
     /// @return cdnRailId The CDN rail, or zero without CDN
-    function _createRails(
+    function _createPayV2Rails(
         uint256 dataSetId,
         address token,
         uint8 tokenDecimals,
         address payer,
         address payee,
         bool hasCDN
-    ) internal virtual returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
+    ) private returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
         require(dataSetId < CDN_RAIL_NONCE_FLAG, DataSetIdTooLarge(dataSetId));
         uint64 cacheMissNonce = uint64(dataSetId);
         uint64 pdpNonce = FLAG_CALLBACK | cacheMissNonce;
@@ -493,17 +505,20 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     }
 
     /**
-     * @notice Returns true if key `withCDN` exists in `metadataKeys`.
+     * @notice Returns true if a key exists in `metadataKeys`, whatever its value.
      * @param metadataKeys The array of metadata keys
+     * @param keySize The key's length in bytes
+     * @param keyHash The keccak256 of the key
      * @return True if key exists; false otherwise.
      */
-    function hasCDNMetadataKey(string[] memory metadataKeys) internal pure returns (bool) {
+    function hasMetadataKey(string[] memory metadataKeys, uint256 keySize, bytes32 keyHash)
+        internal
+        pure
+        returns (bool)
+    {
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (
-                currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
-                    && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
-            ) {
+            if (currentKeyBytes.length == keySize && keccak256(currentKeyBytes) == keyHash) {
                 return true;
             }
         }

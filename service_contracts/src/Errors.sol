@@ -326,6 +326,40 @@ library Errors {
     /// @param available The available funds in the payer's account
     error InsufficientLockupFunds(address payer, uint256 required, uint256 available);
 
+    /// @notice Operator is not approved for the payer
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    error OperatorNotApproved(address payer, address operator);
+
+    /// @notice Operator has insufficient rate allowance to cover the per-dataset fee rate
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param rateAllowance The total rate allowance approved
+    /// @param rateUsage The current rate usage
+    /// @param rateRequired The rate required per epoch
+    error InsufficientRateAllowance(
+        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 rateRequired
+    );
+
+    /// @notice Operator has insufficient lockup allowance to cover the required lockup
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param lockupAllowance The total lockup allowance approved
+    /// @param lockupUsage The current lockup usage
+    /// @param lockupRequired The required lockup
+    error InsufficientLockupAllowance(
+        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 lockupRequired
+    );
+
+    /// @notice Operator's max lockup period is insufficient for the default lockup period
+    /// @param payer The payer address
+    /// @param operator The operator address (warm storage service)
+    /// @param maxLockupPeriod The maximum lockup period approved
+    /// @param requiredLockupPeriod The required lockup period
+    error InsufficientMaxLockupPeriod(
+        address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
+    );
+
     error ProviderIdMismatchAtIndex(uint256 index, uint256 providerId);
 
     error StorageProviderChangesNotSupported();

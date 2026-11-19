@@ -68,21 +68,27 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         returns (bytes memory)
     {
         string[] memory keys = new string[](cdn ? 1 : 0);
-        string[] memory values = new string[](cdn ? 1 : 0);
-        bytes32 metadataHash = keccak256("");
-        if (cdn) {
-            keys[0] = "withCDN";
-            values[0] = "true";
-            metadataHash = keccak256(
-                abi.encodePacked(
-                    keccak256(
-                        abi.encode(
-                            keccak256("MetadataEntry(string key,string value)"), keccak256("withCDN"), keccak256("true")
-                        )
-                    )
+        if (cdn) keys[0] = "withCDN";
+        return _payload(id, nonce, signerKey, explicitTerms, keys);
+    }
+
+    /// @dev Signs metadata where every key has the value "true".
+    function _payload(bytes32 id, uint256 nonce, uint256 signerKey, bool explicitTerms, string[] memory keys)
+        private
+        view
+        returns (bytes memory)
+    {
+        string[] memory values = new string[](keys.length);
+        bytes32[] memory entryHashes = new bytes32[](keys.length);
+        for (uint256 i = 0; i < keys.length; i++) {
+            values[i] = "true";
+            entryHashes[i] = keccak256(
+                abi.encode(
+                    keccak256("MetadataEntry(string key,string value)"), keccak256(bytes(keys[i])), keccak256("true")
                 )
             );
         }
+        bytes32 metadataHash = keccak256(abi.encodePacked(entryHashes));
         bytes32 structHash;
         if (explicitTerms) {
             structHash = keccak256(
@@ -129,6 +135,30 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         assertEq(info.lifecycleReserveBalance, 500_000);
         assertEq(info.pendingOneTimePayments, 25_000);
         assertEq(pdpServiceWithPayments.getDataSetV2(id).storageTermsId, termsId);
+    }
+
+    function testSignedPayV2KeyOpensV2RailsBesideV1DataSet() public {
+        uint256 v1Id = _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
+
+        _fundV2Payer(payer, 10e18);
+        string[] memory keys = new string[](1);
+        keys[0] = "withPayV2";
+        uint256 v2Id = _create(_payload(bytes32(0), 2, PAYER_KEY, true, keys));
+
+        DataSetInfoView memory v1 = pdpServiceWithPayments.getDataSet(v1Id);
+        DataSetInfoView memory v2 = pdpServiceWithPayments.getDataSet(v2Id);
+        assertLt(v1.pdpRailId, 1 << 64, "v1 counter id");
+        assertGe(v2.pdpRailId, 1 << 64, "v2 hash id");
+        assertEq(pdpServiceWithPayments.railToDataSet(v1.pdpRailId), v1Id);
+        assertEq(pdpServiceWithPayments.railToDataSet(v2.pdpRailId), v2Id);
+        (bool exists, string memory value) = pdpServiceWithPayments.getDataSetMetadata(v2Id, "withPayV2");
+        assertTrue(exists);
+        assertEq(value, "true");
+
+        // The flows after creation still run on the v1 data set
+        vm.prank(payer);
+        pdpServiceWithPayments.terminateService(v1Id);
+        assertGt(payments.getRail(v1.pdpRailId).endEpoch, 0, "v1 rail terminated");
     }
 
     function testDisabledSixDecimalTermsContinueChargingAddPiecesAndReplenish() public {

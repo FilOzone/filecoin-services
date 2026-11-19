@@ -99,7 +99,16 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error ExtraDataTooLarge(uint256 actualSize, uint256 maxAllowedSize);
     error FailedCall();
     error FilBeamServiceNotConfigured(uint256 dataSetId);
+    error InsufficientLockupAllowance(
+        address payer, address operator, uint256 lockupAllowance, uint256 lockupUsage, uint256 lockupRequired
+    );
     error InsufficientLockupFunds(address payer, uint256 required, uint256 available);
+    error InsufficientMaxLockupPeriod(
+        address payer, address operator, uint256 maxLockupPeriod, uint256 requiredLockupPeriod
+    );
+    error InsufficientRateAllowance(
+        address payer, address operator, uint256 rateAllowance, uint256 rateUsage, uint256 rateRequired
+    );
     error InvalidChallengeCount(uint256 dataSetId, uint256 minExpected, uint256 actual);
     error InvalidChallengeEpoch(uint256 dataSetId, uint256 minAllowed, uint256 maxAllowed, uint256 actual);
     error InvalidChallengeWindowSize(uint256 maxProvingPeriod, uint256 challengeWindowSize);
@@ -127,6 +136,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error OnlyDataSetPayer(uint256 dataSetId, address actual);
     error OnlyFilBeamControllerAllowed(address expected, address actual);
     error OnlyPDPVerifierAllowed(address expected, address actual);
+    error OperatorNotApproved(address payer, address operator);
     error OwnableInvalidOwner(address owner);
     error OwnableUnauthorizedAccount(address account);
     error PaymentRailsNotFinalized(uint256 dataSetId, uint256 pdpEndEpoch);

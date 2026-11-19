@@ -12,7 +12,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
 import {PDP_INACTIVITY_WINDOW} from "../src/lib/FWSSConstants.sol";
-import {LegacyV1DataSetCreation} from "./helpers/LegacyV1DataSetCreation.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {ExampleSponsoredDataSet, ExampleSponsoredDataSetFactory} from "../src/ExampleSponsoredDataSet.sol";
 import {LibSignatureVerification} from "../src/lib/LibSignatureVerification.sol";
 import {LibRLP} from "solady/utils/LibRLP.sol";
@@ -24,7 +24,7 @@ import {PDPOffering} from "./PDPOffering.sol";
 import {PROVING_ACTIVATION_EPOCH_SLOT, PROVEN_THIS_PERIOD_SLOT} from "../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {DATA_SET_LAST_PROVEN_EPOCH_SLOT} from "../lib/pdp/src/PDPVerifierLayout.sol";
 
-contract ExampleSponsoredDataSetTest is MockFVMTest, LegacyV1DataSetCreation {
+contract ExampleSponsoredDataSetTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
 
     uint256 constant CLEANUP_DEPOSIT = 0.1 ether;
@@ -83,21 +83,20 @@ contract ExampleSponsoredDataSetTest is MockFVMTest, LegacyV1DataSetCreation {
         pdpVerifier =
             PDPVerifier(address(new MyERC1967Proxy(address(pdpImpl), abi.encodeCall(PDPVerifier.initialize, ()))));
 
-        FWSSDeployment memory deployment = FWSSDeployment({
-            payments: address(payments),
-            filecoinPayV2: address(filecoinPayV2),
-            pdpVerifier: address(pdpVerifier),
-            usdfc: address(token),
-            filBeamBeneficiary: address(0xfb),
-            serviceProviderRegistry: address(serviceProviderRegistry),
-            sessionKeyRegistry: address(sessionKeyRegistry),
-            maxProvingPeriod: 2880,
-            challengeWindowSize: 60,
-            filBeamController: address(0xfc)
-        });
-        fwss = _deployFWSS(deployment);
-        // The sponsor contract still funds through FilecoinPayV1, so it can only create v1 data sets
-        _routeV1DataSetCreation(address(fwss), deployment);
+        fwss = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(token),
+                filBeamBeneficiary: address(0xfb),
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: address(0xfc)
+            })
+        );
 
         PDPOffering.Schema memory schema = PDPOffering.Schema({
             serviceURL: "https://sp.test",

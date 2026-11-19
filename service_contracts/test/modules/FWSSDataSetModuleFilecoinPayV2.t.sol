@@ -48,23 +48,37 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
 
     function setUp() public override {
         super.setUp();
-        _useV2DataSetCreation();
         payer = makeAddr("v2Payer");
         vm.deal(payer, 100 ether);
     }
 
-    function _payload(uint256 clientDataSetId, bool cdn) private view returns (bytes memory) {
-        string[] memory keys = new string[](cdn ? 1 : 0);
-        string[] memory values = new string[](cdn ? 1 : 0);
-        if (cdn) {
-            keys[0] = "withCDN";
-            values[0] = "true";
+    function _metadata(bool payV2, bool cdn) private pure returns (string[] memory keys, string[] memory values) {
+        uint256 count = (payV2 ? 1 : 0) + (cdn ? 1 : 0);
+        keys = new string[](count);
+        values = new string[](count);
+        uint256 i;
+        if (payV2) {
+            keys[i] = "withPayV2";
+            values[i++] = "true";
         }
+        if (cdn) {
+            keys[i] = "withCDN";
+            values[i] = "true";
+        }
+    }
+
+    function _payload(uint256 clientDataSetId, bool cdn) private view returns (bytes memory) {
+        return _payload(clientDataSetId, true, cdn);
+    }
+
+    function _payload(uint256 clientDataSetId, bool payV2, bool cdn) private view returns (bytes memory) {
+        (string[] memory keys, string[] memory values) = _metadata(payV2, cdn);
         return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
     }
 
     function _termsPayload(uint256 clientDataSetId, bytes32 storageTermsId) private view returns (bytes memory) {
-        return abi.encode(payer, clientDataSetId, new string[](0), new string[](0), FAKE_SIGNATURE, storageTermsId);
+        (string[] memory keys, string[] memory values) = _metadata(true, false);
+        return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE, storageTermsId);
     }
 
     function _create(address provider, bytes memory payload) private returns (uint256) {
@@ -110,10 +124,16 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = mockPDPVerifier.nextDataSetId();
         uint256 pdpRailId = _railId(serviceProvider, address(mockUSDFC), FLAG_CALLBACK | uint64(dataSetId));
+        (string[] memory keys, string[] memory values) = _metadata(true, false);
 
+        // FWSS asks for CREATE_RAIL only, never a wider scope
+        vm.expectCall(
+            address(filecoinPayV2),
+            abi.encodePacked(bytes4(keccak256("executeScript(uint256,bytes)")), abi.encode(CREATE_RAIL))
+        );
         vm.expectEmit(address(pdpServiceWithPayments));
         emit FWSSDataSetModule.DataSetCreated(
-            dataSetId, 1, pdpRailId, 0, 0, payer, serviceProvider, serviceProvider, new string[](0), new string[](0)
+            dataSetId, 1, pdpRailId, 0, 0, payer, serviceProvider, serviceProvider, keys, values
         );
         vm.expectEmit(address(pdpServiceWithPayments));
         emit FWSSDataSetModule.DataSetStorageTermsSelected(dataSetId, bytes32(0));
@@ -153,7 +173,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         uint256 pdpRailId = _railId(serviceProvider, usdfc, FLAG_CALLBACK | uint64(dataSetId));
         uint256 cacheMissRailId = _railId(serviceProvider, usdfc, uint64(dataSetId));
         uint256 cdnRailId = _railId(filBeamBeneficiary, usdfc, CDN_RAIL_NONCE_FLAG | uint64(dataSetId));
-        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("withCDN", "true");
+        (string[] memory keys, string[] memory values) = _metadata(true, true);
 
         vm.expectEmit(address(pdpServiceWithPayments));
         emit CDNPaymentRailsToppedUp(
@@ -190,6 +210,36 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
             _usdfcBalance(),
             10e18 - LIFECYCLE_RESERVE_TARGET - DEFAULT_CACHE_MISS_LOCKUP_AMOUNT - DEFAULT_CDN_LOCKUP_AMOUNT
         );
+    }
+
+    function _fundV1Payer(uint256 amount) private {
+        require(mockUSDFC.transfer(payer, amount));
+        vm.startPrank(payer);
+        mockUSDFC.approve(address(payments), amount);
+        payments.deposit(mockUSDFC, payer, amount);
+        payments.setOperatorApproval(mockUSDFC, address(pdpServiceWithPayments), true, 1000e18, 1000e18, 365 days);
+        vm.stopPrank();
+    }
+
+    function testCreatesOnFilecoinPayV1WithoutPayV2Key() public {
+        _fundV2Payer(payer, 10e18);
+        _fundV1Payer(10e18);
+
+        uint256 dataSetId = _create(serviceProvider, _payload(0, false, true));
+
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        assertLt(info.pdpRailId, 1 << 64, "v1 PDP rail");
+        assertLt(info.cacheMissRailId, 1 << 64, "v1 cache-miss rail");
+        assertLt(info.cdnRailId, 1 << 64, "v1 CDN rail");
+        assertEq(payments.getRail(info.pdpRailId).lockupFixed, LIFECYCLE_RESERVE_TARGET);
+        assertEq(_usdfcBalance(), 10e18, "FilecoinPayV2 untouched");
+    }
+
+    function testPayV2KeyIgnoresFilecoinPayV1Funds() public {
+        _fundV1Payer(10e18);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, payer, MIN_FUNDS, 0));
+        _create(serviceProvider, _payload(0, false));
     }
 
     function testCreatesWithExactMinimumFunds() public {

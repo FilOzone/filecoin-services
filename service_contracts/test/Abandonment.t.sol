@@ -11,7 +11,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IFilecoinWarmStorageService} from "../src/interfaces/IFilecoinWarmStorageService.sol";
 import {PDP_INACTIVITY_WINDOW} from "../src/lib/FWSSConstants.sol";
 import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
-import {LegacyV1DataSetCreation} from "./helpers/LegacyV1DataSetCreation.sol";
+import {FWSSDeployer} from "../script/lib/FWSSDeployer.sol";
 import {
     PROVEN_PERIODS_SLOT,
     PROVING_ACTIVATION_EPOCH_SLOT,
@@ -30,7 +30,7 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {_combinedMonthlyStorageRate} from "./helpers/StoragePricingHelpers.sol";
 
-contract AbandonmentTest is MockFVMTest, LegacyV1DataSetCreation {
+contract AbandonmentTest is MockFVMTest, FWSSDeployer {
     using PDPOffering for PDPOffering.Schema;
 
     PDPVerifier pdpVerifier;
@@ -98,20 +98,20 @@ contract AbandonmentTest is MockFVMTest, LegacyV1DataSetCreation {
         );
 
         // Deploy FWSS pointing to the real PDPVerifier
-        FWSSDeployment memory deployment = FWSSDeployment({
-            payments: address(payments),
-            filecoinPayV2: address(filecoinPayV2),
-            pdpVerifier: address(pdpVerifier),
-            usdfc: address(usdfc),
-            filBeamBeneficiary: filBeamBeneficiary,
-            serviceProviderRegistry: address(serviceProviderRegistry),
-            sessionKeyRegistry: address(sessionKeyRegistry),
-            maxProvingPeriod: 2880,
-            challengeWindowSize: 60,
-            filBeamController: filBeamController
-        });
-        fwss = _deployFWSS(deployment);
-        _routeV1DataSetCreation(address(fwss), deployment);
+        fwss = _deployFWSS(
+            FWSSDeployment({
+                payments: address(payments),
+                filecoinPayV2: address(filecoinPayV2),
+                pdpVerifier: address(pdpVerifier),
+                usdfc: address(usdfc),
+                filBeamBeneficiary: filBeamBeneficiary,
+                serviceProviderRegistry: address(serviceProviderRegistry),
+                sessionKeyRegistry: address(sessionKeyRegistry),
+                maxProvingPeriod: 2880,
+                challengeWindowSize: 60,
+                filBeamController: filBeamController
+            })
+        );
 
         fwss.addApprovedProvider(1); // SP registered as provider ID 1
 
