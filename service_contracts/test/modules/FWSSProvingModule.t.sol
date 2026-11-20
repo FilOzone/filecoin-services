@@ -63,7 +63,7 @@ contract FWSSProvingModuleTest is FilecoinWarmStorageServiceFixture {
 
     function testProvingDoesNotExportConfigSelectors() public view {
         bytes4[] memory selectors = AbiCheats.getSelectors(vm, "out/FWSSProvingModule.sol/FWSSProvingModule.json");
-        assertEq(selectors.length, 6);
+        assertEq(selectors.length, 7);
         for (uint256 i; i < selectors.length; ++i) {
             assertTrue(selectors[i] != IFWSSConfig.paymentsContractAddress.selector);
             assertTrue(selectors[i] != IFWSSConfig.pdpVerifierAddress.selector);
