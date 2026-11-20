@@ -406,12 +406,12 @@ contract FWSSDispatcherTest is Test, JosukeFacetSet {
         FWSSStorageTermsModule(proxy)
             .registerStorageTerms(
                 StorageTerms({
-                    token: address(facetToken),
-                    tokenDecimals: 18,
-                    salt: bytes32(0),
-                    pricePerTiBPerMonth: 2.5 ether,
-                    payVersion: 0
-                })
+                token: address(facetToken),
+                tokenDecimals: 18,
+                salt: bytes32(0),
+                pricePerTiBPerMonth: 2.5 ether,
+                payVersion: 0
+            })
             );
         (, enabled) = FWSSStorageTermsModule(proxy).getStorageTerms(bytes32(0));
         assertFalse(enabled);

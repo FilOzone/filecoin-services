@@ -56,12 +56,12 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         return FWSSStorageTermsModule(address(pdpServiceWithPayments))
             .registerStorageTerms(
                 StorageTerms({
-                    token: token,
-                    tokenDecimals: tokenDecimals,
-                    salt: bytes32(0),
-                    pricePerTiBPerMonth: price,
-                    payVersion: PAY_VERSION_FILECOIN_PAY_V2
-                })
+                token: token,
+                tokenDecimals: tokenDecimals,
+                salt: bytes32(0),
+                pricePerTiBPerMonth: price,
+                payVersion: PAY_VERSION_FILECOIN_PAY_V2
+            })
             );
     }
 

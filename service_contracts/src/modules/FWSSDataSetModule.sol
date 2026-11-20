@@ -315,10 +315,8 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
         ScriptBuilder script =
             newScript().setToken(token).createRail(payer, payee, pdpNonce).lock(uint128(lifecycleReserve));
         if (hasCDN) {
-            script = script.createRail(payer, payee, cacheMissNonce)
-                .lock(uint128(cacheMissLockup))
-                .createRail(payer, filBeamBeneficiaryAddress, cdnNonce)
-                .lock(uint128(cdnLockup));
+            script = script.createRail(payer, payee, cacheMissNonce).lock(uint128(cacheMissLockup))
+                .createRail(payer, filBeamBeneficiaryAddress, cdnNonce).lock(uint128(cdnLockup));
         }
         filecoinPayV2.executeScript(CREATE_RAIL, script.build());
 
