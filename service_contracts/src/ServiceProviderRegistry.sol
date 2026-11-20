@@ -36,6 +36,60 @@ contract ServiceProviderRegistry is
     EIP712Upgradeable,
     ServiceProviderRegistryStorage
 {
+    /// @notice Only the registered provider may modify its registration
+    error OnlyServiceProvider(uint256 providerId, address expected, address actual);
+
+    /// @notice The provider ID is outside the registered range
+    error InvalidProviderId(uint256 providerId);
+
+    /// @notice No provider address is stored for this ID
+    error ProviderNotFound(uint256 providerId);
+
+    /// @notice The provider registration is inactive
+    error ProviderNotActive(uint256 providerId);
+
+    /// @notice The product type is not supported
+    error UnsupportedProductType(ServiceProviderRegistryStorage.ProductType productType);
+
+    /// @notice The caller already has a provider registration
+    error ProviderAlreadyRegistered(address provider);
+
+    /// @notice The payment does not equal the registration fee
+    error IncorrectRegistrationFee(uint256 expected, uint256 actual);
+
+    /// @notice The provider name exceeds the byte limit
+    error ProviderNameTooLong(uint256 maxAllowed, uint256 actual);
+
+    /// @notice The provider description exceeds the byte limit
+    error ProviderDescriptionTooLong(uint256 maxAllowed, uint256 actual);
+
+    /// @notice Burning the registration fee failed
+    error RegistrationFeeBurnFailed();
+
+    /// @notice The provider already has an active product of this type
+    error ProductAlreadyExists(uint256 providerId, ServiceProviderRegistryStorage.ProductType productType);
+
+    /// @notice The provider has no active product of this type
+    error ProductNotFound(uint256 providerId, ServiceProviderRegistryStorage.ProductType productType);
+
+    /// @notice Capability key and value arrays have different lengths
+    error CapabilityKeyAndValueLengthMismatch(uint256 keysLength, uint256 valuesLength);
+
+    /// @notice The number of capabilities exceeds the limit
+    error TooManyCapabilities(uint256 maxAllowed, uint256 actual);
+
+    /// @notice A capability key is empty
+    error EmptyCapabilityKey(uint256 index);
+
+    /// @notice A capability key exceeds the byte limit
+    error CapabilityKeyTooLong(uint256 index, uint256 maxAllowed, uint256 actual);
+
+    /// @notice A capability value is empty
+    error EmptyCapabilityValue(uint256 index);
+
+    /// @notice A capability value exceeds the byte limit
+    error CapabilityValueTooLong(uint256 index, uint256 maxAllowed, uint256 actual);
+
     /// @notice Provider information for API returns
     struct ServiceProviderInfoView {
         uint256 providerId; // Provider ID
@@ -125,7 +179,10 @@ contract ServiceProviderRegistry is
     }
 
     function _onlyServiceProvider(uint256 providerId) internal view {
-        require(providers[providerId].serviceProvider == msg.sender, "Only service provider can call this function");
+        require(
+            providers[providerId].serviceProvider == msg.sender,
+            OnlyServiceProvider(providerId, providers[providerId].serviceProvider, msg.sender)
+        );
     }
 
     /// @notice Ensures the provider exists
@@ -135,8 +192,8 @@ contract ServiceProviderRegistry is
     }
 
     function _providerExists(uint256 providerId) internal view {
-        require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
-        require(providers[providerId].serviceProvider != address(0), "Provider not found");
+        require(providerId > 0 && providerId <= numProviders, InvalidProviderId(providerId));
+        require(providers[providerId].serviceProvider != address(0), ProviderNotFound(providerId));
     }
 
     /// @notice Ensures the provider is active
@@ -146,7 +203,7 @@ contract ServiceProviderRegistry is
     }
 
     function _providerActive(uint256 providerId) internal view {
-        require(providers[providerId].isActive, "Provider is not active");
+        require(providers[providerId].isActive, ProviderNotActive(providerId));
     }
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -182,22 +239,25 @@ contract ServiceProviderRegistry is
         bytes[] calldata capabilityValues
     ) external payable returns (uint256 providerId) {
         // Only support PDP for now
-        require(productType == ProductType.PDP, "Only PDP product type currently supported");
+        require(productType == ProductType.PDP, UnsupportedProductType(productType));
 
         // Validate payee address
-        require(payee != address(0), "Payee cannot be zero address");
+        require(payee != address(0), Errors.ZeroAddress(Errors.AddressField.Payee));
 
         // Check if address is already registered
-        require(addressToProviderId[msg.sender] == 0, "Address already registered");
+        require(addressToProviderId[msg.sender] == 0, ProviderAlreadyRegistered(msg.sender));
 
         // Check payment amount is exactly the registration fee
-        require(msg.value == REGISTRATION_FEE, "Incorrect fee amount");
+        require(msg.value == REGISTRATION_FEE, IncorrectRegistrationFee(REGISTRATION_FEE, msg.value));
 
         // Validate name (optional, so empty is allowed)
-        require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
+        require(bytes(name).length <= MAX_NAME_LENGTH, ProviderNameTooLong(MAX_NAME_LENGTH, bytes(name).length));
 
         // Validate description
-        require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
+        require(
+            bytes(description).length <= MAX_DESCRIPTION_LENGTH,
+            ProviderDescriptionTooLong(MAX_DESCRIPTION_LENGTH, bytes(description).length)
+        );
 
         // Assign provider ID
         providerId = ++numProviders;
@@ -222,7 +282,7 @@ contract ServiceProviderRegistry is
         emit ProductAdded(providerId, productType, msg.sender, capabilityKeys, capabilityValues);
 
         // Burn the registration fee
-        require(FVMPay.burn(REGISTRATION_FEE), "Burn failed");
+        require(FVMPay.burn(REGISTRATION_FEE), RegistrationFeeBurnFailed());
     }
 
     /// @notice Add a new product to an existing provider
@@ -233,10 +293,10 @@ contract ServiceProviderRegistry is
         external
     {
         // Only support PDP for now
-        require(productType == ProductType.PDP, "Only PDP product type currently supported");
+        require(productType == ProductType.PDP, UnsupportedProductType(productType));
 
         uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
+        require(providerId != 0, Errors.ProviderNotRegistered(msg.sender));
 
         _addProduct(providerId, productType, capabilityKeys, capabilityValues);
     }
@@ -249,7 +309,7 @@ contract ServiceProviderRegistry is
         bytes[] calldata capabilityValues
     ) private providerExists(providerId) providerActive(providerId) onlyServiceProvider(providerId) {
         // Check product doesn't already exist
-        require(!providerProducts[providerId][productType].isActive, "Product already exists for this provider");
+        require(!providerProducts[providerId][productType].isActive, ProductAlreadyExists(providerId, productType));
 
         // Validate and store product
         _validateAndStoreProduct(providerId, productType, capabilityKeys, capabilityValues);
@@ -294,10 +354,10 @@ contract ServiceProviderRegistry is
         external
     {
         // Only support PDP for now
-        require(productType == ProductType.PDP, "Only PDP product type currently supported");
+        require(productType == ProductType.PDP, UnsupportedProductType(productType));
 
         uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
+        require(providerId != 0, Errors.ProviderNotRegistered(msg.sender));
 
         _updateProduct(providerId, productType, capabilityKeys, capabilityValues);
     }
@@ -313,7 +373,7 @@ contract ServiceProviderRegistry is
         ServiceProduct storage product = providerProducts[providerId][productType];
 
         // Check product exists
-        require(product.isActive, "Product does not exist for this provider");
+        require(product.isActive, ProductNotFound(providerId, productType));
 
         // Validate product data
         _validateProductKeys(productType, capabilityKeys);
@@ -345,10 +405,10 @@ contract ServiceProviderRegistry is
     /// @param productType The type of product to remove
     function removeProduct(ProductType productType) external {
         // Only support PDP for now
-        require(productType == ProductType.PDP, "Only PDP product type currently supported");
+        require(productType == ProductType.PDP, UnsupportedProductType(productType));
 
         uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
+        require(providerId != 0, Errors.ProviderNotRegistered(msg.sender));
 
         _removeProduct(providerId, productType);
     }
@@ -361,7 +421,7 @@ contract ServiceProviderRegistry is
         onlyServiceProvider(providerId)
     {
         // Check product exists
-        require(providerProducts[providerId][productType].isActive, "Product does not exist for this provider");
+        require(providerProducts[providerId][productType].isActive, ProductNotFound(providerId, productType));
 
         // Clear capabilities from mapping
         ServiceProduct storage product = providerProducts[providerId][productType];
@@ -387,16 +447,19 @@ contract ServiceProviderRegistry is
     /// @param description New provider description (max 256 chars)
     function updateProviderInfo(string calldata name, string calldata description) external {
         uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
-        require(providerId > 0 && providerId <= numProviders, "Provider does not exist");
-        require(providers[providerId].serviceProvider != address(0), "Provider not found");
-        require(providers[providerId].isActive, "Provider is not active");
+        require(providerId != 0, Errors.ProviderNotRegistered(msg.sender));
+        require(providerId > 0 && providerId <= numProviders, InvalidProviderId(providerId));
+        require(providers[providerId].serviceProvider != address(0), ProviderNotFound(providerId));
+        require(providers[providerId].isActive, ProviderNotActive(providerId));
 
         // Validate name (optional, so empty is allowed)
-        require(bytes(name).length <= MAX_NAME_LENGTH, "Name too long");
+        require(bytes(name).length <= MAX_NAME_LENGTH, ProviderNameTooLong(MAX_NAME_LENGTH, bytes(name).length));
 
         // Validate description
-        require(bytes(description).length <= MAX_DESCRIPTION_LENGTH, "Description too long");
+        require(
+            bytes(description).length <= MAX_DESCRIPTION_LENGTH,
+            ProviderDescriptionTooLong(MAX_DESCRIPTION_LENGTH, bytes(description).length)
+        );
 
         // Update name and description
         providers[providerId].name = name;
@@ -409,7 +472,7 @@ contract ServiceProviderRegistry is
     /// @notice Remove provider registration (soft delete)
     function removeProvider() external {
         uint256 providerId = addressToProviderId[msg.sender];
-        require(providerId != 0, "Provider not registered");
+        require(providerId != 0, Errors.ProviderNotRegistered(msg.sender));
 
         _removeProvider(providerId);
     }
@@ -741,7 +804,7 @@ contract ServiceProviderRegistry is
         if (productType == ProductType.PDP) {
             requiredKeys = REQUIRED_PDP_KEYS;
         } else {
-            revert("Unsupported product type");
+            revert UnsupportedProductType(productType);
         }
         uint256 foundKeys = BloomSet16.EMPTY;
         for (uint256 i = 0; i < capabilityKeys.length; i++) {
@@ -758,14 +821,20 @@ contract ServiceProviderRegistry is
     /// @param keys Array of capability keys
     /// @param values Array of capability values
     function _validateCapabilities(string[] memory keys, bytes[] calldata values) private pure {
-        require(keys.length == values.length, "Keys and values arrays must have same length");
-        require(keys.length <= MAX_CAPABILITIES, "Too many capabilities");
+        require(keys.length == values.length, CapabilityKeyAndValueLengthMismatch(keys.length, values.length));
+        require(keys.length <= MAX_CAPABILITIES, TooManyCapabilities(MAX_CAPABILITIES, keys.length));
 
         for (uint256 i = 0; i < keys.length; i++) {
-            require(bytes(keys[i]).length > 0, "Capability key cannot be empty");
-            require(bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH, "Capability key too long");
-            require(values[i].length > 0, "Capability value cannot be empty");
-            require(values[i].length <= MAX_CAPABILITY_VALUE_LENGTH, "Capability value too long");
+            require(bytes(keys[i]).length > 0, EmptyCapabilityKey(i));
+            require(
+                bytes(keys[i]).length <= MAX_CAPABILITY_KEY_LENGTH,
+                CapabilityKeyTooLong(i, MAX_CAPABILITY_KEY_LENGTH, bytes(keys[i]).length)
+            );
+            require(values[i].length > 0, EmptyCapabilityValue(i));
+            require(
+                values[i].length <= MAX_CAPABILITY_VALUE_LENGTH,
+                CapabilityValueTooLong(i, MAX_CAPABILITY_VALUE_LENGTH, values[i].length)
+            );
         }
     }
 

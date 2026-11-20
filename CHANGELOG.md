@@ -37,6 +37,7 @@ Rollout status, network-by-network addresses, announcement and execution epochs,
   The field packs into unused bytes of `DataSetInfo` relative slot 10, so no slot moves.
   Piece metadata and removal-queue entries written by earlier versions stay in storage.
   A data set with a non-empty legacy queue gets the rate update at every `nextProvingPeriod` until `cleanupLegacyPieceMetadata` pops the queue, so pop the queues of live data sets first.
+- **BREAKING**: ServiceProviderRegistry validation and piece-metadata array-length checks now revert with custom errors instead of reason strings. Integrations matching revert reasons must decode the corresponding custom errors from the published ABIs.
 
 ### Fixed
 

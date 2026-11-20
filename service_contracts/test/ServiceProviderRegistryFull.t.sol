@@ -8,6 +8,7 @@ import {ServiceProviderRegistry} from "../src/ServiceProviderRegistry.sol";
 import {ServiceProviderRegistryStorage} from "../src/ServiceProviderRegistryStorage.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Errors} from "../src/Errors.sol";
 
 contract ServiceProviderRegistryFullTest is MockFVMTest {
     using PDPOffering for PDPOffering.Schema;
@@ -229,7 +230,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try to register again
         vm.prank(provider1);
-        vm.expectRevert("Address already registered");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.ProviderAlreadyRegistered.selector, provider1));
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -326,7 +327,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try to register with less than 5 FIL
         vm.prank(provider1);
-        vm.expectRevert("Incorrect fee amount");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.IncorrectRegistrationFee.selector, REGISTRATION_FEE, 1 ether)
+        );
         registry.registerProvider{value: 1 ether}(
             provider1, // payee
             "",
@@ -338,7 +341,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try with 0 fee
         vm.prank(provider1);
-        vm.expectRevert("Incorrect fee amount");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.IncorrectRegistrationFee.selector, REGISTRATION_FEE, 0)
+        );
         registry.registerProvider{value: 0}(
             provider1, // payee
             "",
@@ -354,7 +359,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try to register with 2 FIL (less than 5 FIL) - should fail
         vm.prank(provider1);
-        vm.expectRevert("Incorrect fee amount");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.IncorrectRegistrationFee.selector, REGISTRATION_FEE, 2 ether)
+        );
         registry.registerProvider{value: 2 ether}(
             provider1, // payee
             "",
@@ -376,7 +383,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         // Test service URL too long
         values[0] = new bytes(129);
         vm.prank(provider1);
-        vm.expectRevert("Capability value too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.CapabilityValueTooLong.selector, 0, 128, values[0].length)
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -392,7 +401,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             values[7][i] = "a";
         }
         vm.prank(provider1);
-        vm.expectRevert("Capability value too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.CapabilityValueTooLong.selector, 0, 128, values[0].length)
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -467,7 +478,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try to update as non-owner
         vm.prank(provider2);
-        vm.expectRevert("Provider not registered");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, provider2));
         registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, keys, values);
     }
 
@@ -490,7 +501,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try to update
         vm.prank(provider1);
-        vm.expectRevert("Provider not registered");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, provider1));
         registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, keys, values);
     }
 
@@ -563,7 +574,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         registry.removeProvider();
 
         vm.prank(provider1);
-        vm.expectRevert("Provider not registered");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, provider1));
         registry.removeProvider();
     }
 
@@ -581,7 +592,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         );
 
         vm.prank(provider2);
-        vm.expectRevert("Provider not registered");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, provider2));
         registry.removeProvider();
     }
 
@@ -828,7 +839,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         (string[] memory updatedKeys, bytes[] memory updatedValues) = updatedPDPData.toCapabilities();
         // Try to add PDP again
         vm.prank(provider1);
-        vm.expectRevert("Product already exists for this provider");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ServiceProviderRegistry.ProductAlreadyExists.selector, 1, ServiceProviderRegistryStorage.ProductType.PDP
+            )
+        );
         registry.addProduct(ServiceProviderRegistryStorage.ProductType.PDP, updatedKeys, updatedValues);
     }
 
@@ -957,13 +972,13 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
     }
 
     function testGetNonExistentProvider() public {
-        vm.expectRevert("Provider does not exist");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.InvalidProviderId.selector, 1));
         registry.getProvider(1);
 
-        vm.expectRevert("Provider does not exist");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.InvalidProviderId.selector, 1));
         registry.getProviderWithProduct(1, ServiceProviderRegistryStorage.ProductType.PDP);
 
-        vm.expectRevert("Provider does not exist");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.InvalidProviderId.selector, 1));
         registry.isProviderActive(1);
     }
 
@@ -1048,7 +1063,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
 
         // Try to update as non-owner
         vm.prank(provider2);
-        vm.expectRevert("Provider not registered");
+        vm.expectRevert(abi.encodeWithSelector(Errors.ProviderNotRegistered.selector, provider2));
         registry.updateProviderInfo("", "Unauthorized update");
     }
 
@@ -1071,7 +1086,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "This is a very long description that exceeds the maximum allowed length of 256 characters. It just keeps going and going and going and going and going and going and going and going and going and going and going and going and going and going and going and characters limit!";
 
         vm.prank(provider1);
-        vm.expectRevert("Description too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ServiceProviderRegistry.ProviderDescriptionTooLong.selector, 256, bytes(longDescription).length
+            )
+        );
         registry.updateProviderInfo("", longDescription);
     }
 
@@ -1085,7 +1104,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
-        vm.expectRevert("Name too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.ProviderNameTooLong.selector, 128, longName.length)
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             string(longName),
@@ -1116,7 +1137,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         }
 
         vm.prank(provider1);
-        vm.expectRevert("Name too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.ProviderNameTooLong.selector, 128, longName.length)
+        );
         registry.updateProviderInfo(string(longName), "Updated description");
     }
 
@@ -1248,7 +1271,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[0] = "value";
 
         vm.prank(provider1);
-        vm.expectRevert("Capability key too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ServiceProviderRegistry.CapabilityKeyTooLong.selector, 0, 32, bytes(capKeys[0]).length
+            )
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1267,7 +1294,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
             "This value is way too long and exceeds the maximum allowed length. It is specifically designed to be longer than 128 characters to test the validation of capability values"; // > MAX_CAPABILITY_VALUE_LENGTH (128) chars
 
         vm.prank(provider1);
-        vm.expectRevert("Capability value too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.CapabilityValueTooLong.selector, 0, 128, capValues[0].length)
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1287,7 +1316,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[0] = "value1";
 
         vm.prank(provider1);
-        vm.expectRevert("Keys and values arrays must have same length");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ServiceProviderRegistry.CapabilityKeyAndValueLengthMismatch.selector, capKeys.length, capValues.length
+            )
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1306,7 +1339,11 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         (string[] memory keys, bytes[] memory values) = defaultPDPData.toCapabilities();
 
         vm.prank(provider1);
-        vm.expectRevert("Description too long");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ServiceProviderRegistry.ProviderDescriptionTooLong.selector, 256, bytes(longDescription).length
+            )
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1324,7 +1361,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[0] = "value";
 
         vm.prank(provider1);
-        vm.expectRevert("Capability key cannot be empty");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.EmptyCapabilityKey.selector, 0));
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1342,7 +1379,7 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         capValues[0] = "";
 
         vm.prank(provider1);
-        vm.expectRevert("Capability value cannot be empty");
+        vm.expectRevert(abi.encodeWithSelector(ServiceProviderRegistry.EmptyCapabilityValue.selector, 0));
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1362,7 +1399,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         }
 
         vm.prank(provider1);
-        vm.expectRevert("Too many capabilities");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.TooManyCapabilities.selector, 24, capKeys.length)
+        );
         registry.registerProvider{value: REGISTRATION_FEE}(
             provider1, // payee
             "",
@@ -1553,7 +1592,9 @@ contract ServiceProviderRegistryFullTest is MockFVMTest {
         assertEq(updatedKeys.length, registry.MAX_CAPABILITIES() + 1);
 
         vm.prank(provider1);
-        vm.expectRevert("Too many capabilities");
+        vm.expectRevert(
+            abi.encodeWithSelector(ServiceProviderRegistry.TooManyCapabilities.selector, 24, updatedKeys.length)
+        );
         registry.updateProduct(ServiceProviderRegistryStorage.ProductType.PDP, updatedKeys, updatedValues);
     }
 

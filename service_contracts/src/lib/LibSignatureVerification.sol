@@ -152,7 +152,10 @@ library LibSignatureVerification {
         pure
         returns (bytes32)
     {
-        require(allKeys.length == allValues.length, "Keys/values array length mismatch");
+        require(
+            allKeys.length == allValues.length,
+            Errors.MetadataKeyAndValueLengthMismatch(allKeys.length, allValues.length)
+        );
 
         bytes32[] memory pieceHashes = new bytes32[](allKeys.length);
         for (uint256 i = 0; i < allKeys.length; i++) {
