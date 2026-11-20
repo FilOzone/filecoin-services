@@ -8,14 +8,12 @@ import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
 import {CREATE_RAIL, DEPOSIT} from "@filecoin-pay-v2/lib/Permissions.sol";
 import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream, StreamState} from "@filecoin-pay-v2/lib/RailId.sol";
-import {Errors} from "../../src/Errors.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
 import {FWSSFilecoinPayV2} from "../../src/lib/FWSSFilecoinPayV2.sol";
 import {CDNPaymentRailsToppedUp} from "../../src/lib/LibRails.sol";
 import {
     CREATE_DATA_SET_FEE,
-    DATASET_FEE_PER_MONTH,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
     LIFECYCLE_RESERVE_TARGET,
@@ -41,7 +39,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
     using RailIdLibrary for Stream;
 
     uint64 private constant CDN_RAIL_NONCE_FLAG = 1 << 62;
-    uint256 private constant MIN_FUNDS = DATASET_FEE_PER_MONTH + LIFECYCLE_RESERVE_TARGET; // 0.62 USDFC
+    uint256 private constant MIN_FUNDS = LIFECYCLE_RESERVE_TARGET; // creation locks only the lifecycle reserve
     uint256 private constant MIN_FUNDS_CDN = MIN_FUNDS + DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
 
     address private payer;
@@ -252,8 +250,10 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
 
     function testV2TermsIgnoreFilecoinPayV1Funds() public {
         _fundV1Payer(10e18);
+        vm.prank(payer);
+        filecoinPayV2.authorize(address(pdpServiceWithPayments), CREATE_RAIL);
 
-        vm.expectRevert(abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, payer, MIN_FUNDS, 0));
+        vm.expectRevert(FilecoinPayV2.InsufficientBalance.selector);
         _create(serviceProvider, _payload(0, false));
     }
 
@@ -270,15 +270,11 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
 
     function testRevertsBelowMinimumFunds() public {
         _fundV2Payer(payer, MIN_FUNDS - 1);
-        vm.expectRevert(
-            abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, payer, MIN_FUNDS, MIN_FUNDS - 1)
-        );
+        vm.expectRevert(FilecoinPayV2.InsufficientBalance.selector);
         _create(serviceProvider, _payload(0, false));
 
         _fundV2Payer(payer, MIN_FUNDS_CDN - MIN_FUNDS);
-        vm.expectRevert(
-            abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, payer, MIN_FUNDS_CDN, MIN_FUNDS_CDN - 1)
-        );
+        vm.expectRevert(FilecoinPayV2.InsufficientBalance.selector);
         _create(serviceProvider, _payload(0, true));
     }
 
@@ -338,13 +334,9 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         uint256 dataSetId = mockPDPVerifier.nextDataSetId();
         uint256 pdpRailId = _railId(serviceProvider, address(mockUSDFC), FLAG_CALLBACK | uint64(dataSetId));
 
-        // Pass the funding pre-check so the script runs until the CDN lock finds the balance short
-        bytes memory balanceCall =
-            abi.encodeCall(FilecoinPayV2.balanceOf, (payer, uint256(uint160(address(mockUSDFC)))));
-        vm.mockCall(address(filecoinPayV2), balanceCall, abi.encode(MIN_FUNDS_CDN));
+        // The PDP and cache-miss locks fit, the CDN lock finds the balance short
         vm.expectRevert(FilecoinPayV2.InsufficientBalance.selector);
         _create(serviceProvider, _payload(3, true));
-        vm.clearMockedCalls();
 
         assertEq(pdpServiceWithPayments.clientNonces(payer, 3), 0);
         assertEq(pdpServiceWithPayments.clientDataSets(payer).length, 0);

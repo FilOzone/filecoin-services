@@ -25,7 +25,6 @@ import {
     DATASET_FEE_PER_MONTH,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
     DEFAULT_CDN_LOCKUP_AMOUNT,
-    DEFAULT_LOCKUP_PERIOD,
     EPOCHS_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
     SERVICE_COMMISSION_BPS,
@@ -303,22 +302,14 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
         uint64 pdpNonce = FLAG_CALLBACK | cacheMissNonce;
         uint64 cdnNonce = CDN_RAIL_NONCE_FLAG | cacheMissNonce;
 
-        // The lifecycle reserve is a lock on the PDP rail. The dataset fee headroom is checked but not locked:
-        // creation assumes pieces will follow.
+        // The lifecycle reserve is a lock on the PDP rail. A payer balance short of the locks reverts in executeScript.
         uint256 lifecycleReserve = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals);
-        uint256 requiredFunds =
-            (StoragePricing.scaleAmount(DATASET_FEE_PER_MONTH, tokenDecimals) * DEFAULT_LOCKUP_PERIOD)
-                / EPOCHS_PER_MONTH + lifecycleReserve;
         uint256 cacheMissLockup;
         uint256 cdnLockup;
         if (hasCDN) {
             cacheMissLockup = StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals);
             cdnLockup = StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals);
-            requiredFunds += cacheMissLockup + cdnLockup;
         }
-
-        uint256 availableFunds = filecoinPayV2.balanceOf(payer, uint256(uint160(token)));
-        require(availableFunds >= requiredFunds, Errors.InsufficientLockupFunds(payer, requiredFunds, availableFunds));
 
         // ScriptBuilder grows at the free-memory pointer, so nothing may allocate between newScript() and build().
         ScriptBuilder script =

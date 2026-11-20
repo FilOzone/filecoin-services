@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Storage terms gain a `payVersion` field: `0` is FilecoinPayV1, `1` is FilecoinPayV2.
   A data set created with FilecoinPayV2 terms opens its rails on FilecoinPayV2 in one script, with FWSS as the operator.
   The payer deposits the selected currency into FilecoinPayV2 and authorizes FWSS with `CREATE_RAIL`.
-  FWSS checks the same funding threshold against that balance, then locks the lifecycle reserve and the CDN lockups on the new rails.
+  FWSS locks the lifecycle reserve and the CDN lockups on the new rails, and FilecoinPayV2 reverts the script when the balance is short.
   The stored rail IDs are FilecoinPayV2 rail hashes.
   Record zero and terms registered before the field existed read `0`, so their data sets stay on FilecoinPayV1 as before.
   The other data set callbacks still act on FilecoinPayV1 rails, so FilecoinPayV2 data sets do not yet work end to end.

@@ -188,7 +188,8 @@ lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
 An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve.
-Creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions; on FilecoinPayV2 the payer's balance must cover it.
+On FilecoinPayV1, creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions.
+On FilecoinPayV2 the balance only has to cover the locks; FilecoinPayV2 reverts the script when it does not.
 For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
 
 **Pre-flight check precision:** Creation checks use the scaled monthly dataset fee directly, rather than reconstructing it from a truncated per-epoch rate. This is conservative, particularly for lower-decimal currencies.
