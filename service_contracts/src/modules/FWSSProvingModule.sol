@@ -4,10 +4,14 @@ pragma solidity 0.8.37;
 import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {IRailV2} from "@filecoin-pay-v2/interfaces/IRail.sol";
+import {RailId} from "@filecoin-pay-v2/lib/RailId.sol";
+import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
+import {HeldPayment, LibHeldPayments} from "../lib/LibHeldPayments.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
@@ -16,7 +20,7 @@ import {FWSSStorage} from "../storage/FWSSStorage.sol";
 
 /// @title FWSSProvingModule
 /// @notice Records PDP proofs, advances or configures proving periods, and arbitrates PDP rail payments from them.
-contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerifier, FWSSFilecoinPayV2 {
+contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     FilecoinPayV1 internal immutable paymentContract;
 
     /// @notice Configures the immutable dependencies used by this module.
@@ -34,6 +38,18 @@ contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerif
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
 
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
+
+    /// @notice How a FilecoinPayV2 PDP rail settlement over (fromEpoch, toEpoch] was arbitrated
+    /// @param held The rail's whole held payment after this settlement
+    event PDPPaymentSettled(
+        uint256 indexed dataSetId,
+        uint256 indexed railId,
+        uint256 fromEpoch,
+        uint256 toEpoch,
+        uint256 payout,
+        uint256 refund,
+        uint256 held
+    );
 
     uint256 private constant NO_CHALLENGE_SCHEDULED = 0;
 
@@ -296,6 +312,74 @@ contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerif
         return ValidationResult({modifiedAmount: modifiedAmount, settleUpto: settleUpTo, note: ""});
     }
 
+    /**
+     * @notice Arbitrates payment based on faults in the settled epoch range of a FilecoinPayV2 rail
+     * @dev Implements the IRailV2 callback. Payment for a still open proving period is held until a later callback.
+     *
+     * @param railId ID of the FilecoinPayV2 rail
+     * @param prevSettledEpoch Starting epoch (exclusive)
+     * @param settledUpTo Ending epoch (inclusive)
+     * @param prevBalance The rail's available balance before addsBalance
+     * @param addsBalance The payment that accrued over (prevSettledEpoch, settledUpTo]
+     * @return script The FilecoinPayV2 script releasing the arbitrated payment
+     */
+    function settleRail(
+        RailId railId,
+        uint256 prevSettledEpoch,
+        uint256 settledUpTo,
+        uint256 prevBalance,
+        uint256 addsBalance
+    ) external override returns (bytes memory script) {
+        require(msg.sender == address(filecoinPayV2), Errors.CallerNotPayments(address(filecoinPayV2), msg.sender));
+
+        uint256 pdpRailId = RailId.unwrap(railId);
+        HeldPayment memory held = LibHeldPayments.get(pdpRailId);
+        uint256 heldAmount = held.toEpoch == prevSettledEpoch ? Math.min(held.amount, prevBalance) : 0;
+
+        uint256 dataSetId = railToDataSet[pdpRailId];
+        uint256 activationEpoch = provingActivationEpoch[dataSetId];
+        if (dataSetId == 0 || activationEpoch == 0 || settledUpTo <= activationEpoch) {
+            if (held.toEpoch != 0) LibHeldPayments.clear(pdpRailId);
+            emit PDPPaymentSettled(dataSetId, pdpRailId, prevSettledEpoch, settledUpTo, 0, heldAmount + addsBalance, 0);
+            return _settlementScript(heldAmount + addsBalance, 0);
+        }
+
+        uint256 payout;
+        uint256 refund;
+        uint256 stillHeld;
+        uint256 heldFrom;
+        if (heldAmount != 0) {
+            (payout, refund, stillHeld, heldFrom) =
+                _splitByProofs(dataSetId, activationEpoch, held.fromEpoch, prevSettledEpoch, heldAmount);
+        }
+        if (addsBalance != 0) {
+            (uint256 addsPayout, uint256 addsRefund, uint256 addsHeld, uint256 addsHeldFrom) =
+                _splitByProofs(dataSetId, activationEpoch, prevSettledEpoch, settledUpTo, addsBalance);
+            payout += addsPayout;
+            refund += addsRefund;
+            if (stillHeld == 0) heldFrom = addsHeldFrom;
+            stillHeld += addsHeld;
+        }
+
+        if (stillHeld != 0) {
+            LibHeldPayments.set(pdpRailId, stillHeld, heldFrom, settledUpTo);
+        } else if (held.toEpoch != 0) {
+            LibHeldPayments.clear(pdpRailId);
+        }
+
+        emit PDPPaymentSettled(dataSetId, pdpRailId, prevSettledEpoch, settledUpTo, payout, refund, stillHeld);
+        return _settlementScript(refund, payout);
+    }
+
+    /// @dev Builds the settlement script last: the builder appends at the free memory pointer, so nothing may allocate
+    /// memory between newScript() and build().
+    function _settlementScript(uint256 refund, uint256 payout) private pure returns (bytes memory) {
+        ScriptBuilder builder = newScript();
+        if (refund != 0) builder = builder.unlock(uint128(refund));
+        if (payout != 0) builder = builder.disburse(uint128(payout));
+        return builder.build();
+    }
+
     function railTerminated(uint256 railId, address terminator, uint256 endEpoch) external override {
         require(msg.sender == address(paymentContract), Errors.CallerNotPayments(address(paymentContract), msg.sender));
 
@@ -314,8 +398,8 @@ contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerif
 
     /// @dev Counts proven epochs and determines how far settlement can advance.
     ///
-    /// Called by validatePayment() to arbitrate how much a provider should be paid for
-    /// a given epoch range. Returns two values:
+    /// Called by validatePayment() and settleRail() to arbitrate how much a provider should be
+    /// paid for a given epoch range. Returns two values:
     ///   - provenEpochCount: number of epochs with valid proofs (determines payment)
     ///   - settleUpTo: the epoch up to which settlement can advance (may exceed proven range)
     ///
@@ -366,6 +450,27 @@ contract FWSSProvingModule is IValidator, FWSSStorage, FWSSOwnable, FWSSPDPVerif
         }
 
         return (provenEpochCount, settleUpTo);
+    }
+
+    /// @dev Splits a payment over (fromEpoch, toEpoch] into proven, held (still open period) and refunded epochs.
+    /// @param dataSetId The data set whose proofs arbitrate the payment
+    /// @param activationEpoch The data set's proving activation epoch
+    /// @param fromEpoch Starting epoch (exclusive)
+    /// @param toEpoch Ending epoch (inclusive)
+    /// @param amount The payment for (fromEpoch, toEpoch], accrued at a single rate
+    function _splitByProofs(
+        uint256 dataSetId,
+        uint256 activationEpoch,
+        uint256 fromEpoch,
+        uint256 toEpoch,
+        uint256 amount
+    ) internal view returns (uint256 payout, uint256 refund, uint256 held, uint256 heldFrom) {
+        uint256 provenEpochCount;
+        (provenEpochCount, heldFrom) = _findProvenEpochs(dataSetId, fromEpoch, toEpoch, activationEpoch);
+        uint256 totalEpochs = toEpoch - fromEpoch;
+        payout = (amount * provenEpochCount) / totalEpochs;
+        held = (amount * (toEpoch - heldFrom)) / totalEpochs;
+        refund = amount - payout - held;
     }
 
     function _isPeriodProven(uint256 dataSetId, uint256 periodId) private view returns (bool) {
