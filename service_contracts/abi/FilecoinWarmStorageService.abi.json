@@ -1202,6 +1202,17 @@
   },
   {
     "type": "error",
+    "name": "DataSetIdTooLarge",
+    "inputs": [
+      {
+        "name": "dataSetId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "DataSetNotAbandoned",
     "inputs": [
       {
@@ -2445,6 +2456,11 @@
             "name": "pricePerTiBPerMonth",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "payVersion",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       },
@@ -2484,6 +2500,11 @@
             "name": "pricePerTiBPerMonth",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "payVersion",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       }
@@ -2525,6 +2546,11 @@
             "name": "pricePerTiBPerMonth",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "payVersion",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       }
@@ -2586,6 +2612,11 @@
             "name": "pricePerTiBPerMonth",
             "type": "uint96",
             "internalType": "uint96"
+          },
+          {
+            "name": "payVersion",
+            "type": "uint8",
+            "internalType": "uint8"
           }
         ]
       }
@@ -2621,6 +2652,17 @@
         "name": "minimumPricePerTiBPerMonth",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnsupportedPayVersion",
+    "inputs": [
+      {
+        "name": "payVersion",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ]
   },

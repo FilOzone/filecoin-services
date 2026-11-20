@@ -87,6 +87,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error CannotDisableLegacyStorageTerms();
     error ChallengeWindowTooEarly(uint256 dataSetId, uint256 windowStart, uint256 nowBlock);
     error ClientDataSetAlreadyRegistered(uint256 clientDataSetId);
+    error DataSetIdTooLarge(uint256 dataSetId);
     error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
     error DataSetNotFoundForRail(uint256 railId);
     error DataSetNotRegistered(uint256 dataSetId);
@@ -158,6 +159,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error UnknownCleanupOp(uint256 opOffset, uint256 kind);
     error UnknownStorageTerms(bytes32 id);
     error UnsupportedExtraDataVariant(uint256 keysOffset);
+    error UnsupportedPayVersion(uint8 payVersion);
     error UnsupportedSignatureV(uint8 v);
     error ValueDataSlotsOutOfRange(uint256 opOffset, uint256 count);
     error ZeroAddress(Errors.AddressField field);

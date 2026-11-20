@@ -5,6 +5,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 
+### Added
+
+- Storage terms gain a `payVersion` field: `0` is FilecoinPayV1, `1` is FilecoinPayV2.
+  A data set created with FilecoinPayV2 terms opens its rails on FilecoinPayV2 in one script, with FWSS as the operator.
+  The payer deposits the selected currency into FilecoinPayV2 and authorizes FWSS with `CREATE_RAIL`.
+  FWSS locks the lifecycle reserve and the CDN lockups on the new rails, and FilecoinPayV2 reverts the script when the balance is short.
+  The stored rail IDs are FilecoinPayV2 rail hashes.
+  Record zero and terms registered before the field existed read `0`, so their data sets stay on FilecoinPayV1 as before.
+  The other data set callbacks still act on FilecoinPayV1 rails, so FilecoinPayV2 data sets do not yet work end to end.
+- The FWSS ABI adds `DataSetIdTooLarge` and `UnsupportedPayVersion`.
+
+### Changed
+
+- **Breaking ABI:** `StorageTerms` appends `uint8 payVersion`, which changes the selectors of `registerStorageTerms` and `getStorageTermsId`, the return data of `getStorageTerms`, and the `StorageTermsRegistered` event.
+  IDs of terms with `payVersion` zero are unchanged; nonzero versions hash under `filecoin.FWSS.StorageTerms.v2` with the version appended.
+
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 
 This contract-stack release adds owner-registered storage terms to FilecoinWarmStorageService (FWSS), so each data set selects an immutable currency and price at creation, and takes legacy piece metadata cleanup out of the proving path. It is the first upgrade delivered as a josuke migration on the ERC-8167 dispatcher. The FWSS proxy addresses do not change.

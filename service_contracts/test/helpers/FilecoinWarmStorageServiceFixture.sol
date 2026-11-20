@@ -21,6 +21,7 @@ import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryS
 import {ServiceProviderRegistry} from "../../src/ServiceProviderRegistry.sol";
 import {FWSSStorage} from "../../src/storage/FWSSStorage.sol";
 import {FWSSDeployer} from "../../script/lib/FWSSDeployer.sol";
+import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
 
 /// @dev Test-only facet for piece metadata and removal queue entries that FWSS no longer writes or cleans up.
 contract LegacyPieceMetadataFacet is FWSSStorage {
@@ -344,6 +345,16 @@ abstract contract FilecoinWarmStorageServiceFixture is MockFVMTest, FWSSDeployer
 
     function _rateForLeaves(uint256 leafCount) internal pure returns (uint256) {
         return _combinedMonthlyStorageRate(Cids.leafCountToRawSize(leafCount));
+    }
+
+    /// @dev Deposits USDFC into FilecoinPayV2 for `payer` and lets FWSS open rails from it.
+    function _fundV2Payer(address payer, uint256 amount) internal {
+        mockUSDFC.safeTransfer(payer, amount);
+        vm.startPrank(payer);
+        mockUSDFC.approve(address(filecoinPayV2), amount);
+        filecoinPayV2.deposit(address(mockUSDFC), amount);
+        filecoinPayV2.authorize(address(pdpServiceWithPayments), CREATE_RAIL);
+        vm.stopPrank();
     }
 
     /// @dev Routes a selector without a migration, such as to a test-only facet.

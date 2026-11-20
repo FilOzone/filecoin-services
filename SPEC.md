@@ -18,12 +18,17 @@ struct StorageTerms {
     uint8 tokenDecimals;
     bytes32 salt;
     uint96 pricePerTiBPerMonth;
+    uint8 payVersion;
 }
 ```
 
+`payVersion` selects the payment contract for datasets created with the terms: `0` is FilecoinPayV1 and `1` is FilecoinPayV2.
+Registration rejects other values.
+Record zero and every record registered before the field existed read `0`.
+
 The owner calls `registerStorageTerms(terms)` to register or re-enable an ordinary definition, and `disableStorageTerms(id)` to stop new datasets selecting it. Definitions never change; disabling does not affect existing datasets, their payments, or lifecycle operations. Registration verifies token decimals and supports 0–18 decimals; the native currency uses address zero and 18 decimals. The minimum price is `ceil(2.5e18 / 10**(18 - tokenDecimals))`, so reducing the floor requires a contract change.
 
-Record zero is an independent, immutable legacy definition `(USDFC, 18, bytes32(0), uint96(2.5e18))`, initialized during fresh deployment or the atomic storage-terms upgrade migration. It is not an alias or pointer to an ordinary record. Every ordinary definition, including the exact same legacy tuple, is identified by:
+Record zero is an independent, immutable legacy definition `(USDFC, 18, bytes32(0), uint96(2.5e18), 0)`, initialized during fresh deployment or the atomic storage-terms upgrade migration. It is not an alias or pointer to an ordinary record. Every ordinary definition, including the exact same legacy tuple, is identified by:
 
 ```solidity
 keccak256(abi.encode(
@@ -32,6 +37,20 @@ keccak256(abi.encode(
     terms.tokenDecimals,
     terms.salt,
     terms.pricePerTiBPerMonth
+))
+```
+
+That is the ID of terms with `payVersion` zero, so IDs registered before the field existed do not change.
+Terms with a nonzero `payVersion` hash it under their own type:
+
+```solidity
+keccak256(abi.encode(
+    keccak256("filecoin.FWSS.StorageTerms.v2"),
+    terms.token,
+    terms.tokenDecimals,
+    terms.salt,
+    terms.pricePerTiBPerMonth,
+    terms.payVersion
 ))
 ```
 
@@ -76,7 +95,9 @@ The terminate fee applies only in the **consent case**: when the SP calls `termi
 
 #### Lifecycle Reserve
 
-The lifecycle reserve is seeded at **0.50 units of the selected currency**, scaled to its decimals, when the dataset is created and stored as `lockupFixed` on the PDP rail. Dollar amounts in the fee table describe the intended stablecoin economics, not an exchange-rate conversion.
+The lifecycle reserve is seeded at **0.50 units of the selected currency**, scaled to its decimals, when the dataset is created.
+Datasets on FilecoinPayV1 hold it as `lockupFixed` on their PDP rail; datasets on FilecoinPayV2 hold it as a lock on their PDP rail.
+Dollar amounts in the fee table describe the intended stablecoin economics, not an exchange-rate conversion.
 
 ```
 LIFECYCLE_RESERVE_TARGET = 0.50 tokens
@@ -151,7 +172,14 @@ This design ensures the provider receives payment at or above the rate establish
 
 ### Funding and Top-Up
 
-Clients pay for storage by depositing the currency selected by their dataset's terms into FilecoinPay and granting FWSS operator approval for that currency. Funds flow to providers over time based on the storage rate.
+Clients pay for storage by depositing the currency selected by their dataset's terms into FilecoinPay.
+The selected terms' `payVersion` decides where the rails open.
+With FilecoinPayV1 terms, including record zero, they open on FilecoinPayV1, where the client grants FWSS operator approval for that currency.
+A client opts a new dataset into FilecoinPayV2 by signing the ID of terms registered with `payVersion` 1.
+On FilecoinPayV2 the client authorizes FWSS with `CREATE_RAIL`, and FWSS opens the rails and locks their reserves in one `executeScript` call.
+That grant has no rate or lockup allowance like the FilecoinPayV1 operator approval, so only FWSS's own logic bounds what it locks and charges on those rails.
+The rest of this specification after creation still describes FilecoinPayV1 rails; FilecoinPayV2 data sets do not yet support piece additions, settlement, termination or the CDN flows.
+Funds flow to providers over time based on the storage rate.
 
 **Lockup**: To protect providers from non-payment, FWSS requires clients to maintain a 30-day reserve of funds. This "lockup" guarantees the provider will be paid for at least 30 days even if the client stops adding funds. The lockup is not a pre-payment—funds still flow to the provider gradually—but it cannot be withdrawn while the storage agreement is active.
 
@@ -159,7 +187,10 @@ Clients pay for storage by depositing the currency selected by their dataset's t
 lockupRequired = finalRate × EPOCHS_PER_MONTH
 ```
 
-An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve. Creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions. For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
+An empty dataset has zero streaming lockup and retains its fixed lifecycle reserve.
+On FilecoinPayV1, creation also requires approval and available-funds headroom for the scaled monthly dataset fee, anticipating later piece additions.
+On FilecoinPayV2 the balance only has to cover the locks; FilecoinPayV2 reverts the script when it does not.
+For datasets with data, streaming lockup covers the truncated per-epoch rate for the lockup period.
 
 **Pre-flight check precision:** Creation checks use the scaled monthly dataset fee directly, rather than reconstructing it from a truncated per-epoch rate. This is conservative, particularly for lower-decimal currencies.
 
@@ -349,6 +380,7 @@ flowchart TB
   PDPV["PDPVerifier (UUPS proxy)"]
   FWSS["FilecoinWarmStorageService (UUPS proxy)"]
   FPV["FilecoinPayV1 (immutable)"]
+  FPV2["FilecoinPayV2 (immutable)"]
   SPR["ServiceProviderRegistry (UUPS proxy)"]
   SKR["SessionKeyRegistry (immutable)"]
   SV["StateView (immutable)"]
@@ -356,6 +388,7 @@ flowchart TB
 
   PDPV -->|PDPListener callbacks| FWSS
   FWSS -->|createRail, modifyRailPayment| FPV
+  FWSS -->|executeScript: create rails for FilecoinPayV2 terms| FPV2
   FPV -->|IValidator: validatePayment, railTerminated| FWSS
   FWSS -->|getProviderIdByAddress, getProviderPayee| SPR
   FWSS -->|authorizationExpiry| SKR
@@ -434,6 +467,7 @@ sequenceDiagram
   participant FWSS
   participant ServiceProviderRegistry
   participant FilecoinPayV1
+  participant FilecoinPayV2
 
   rect rgba(248, 248, 248, 0.2)
     Note over Client: 1. Dataset Creation
@@ -443,8 +477,13 @@ sequenceDiagram
     Note over FWSS: verify client EIP-712 signature
     FWSS->>ServiceProviderRegistry: getProviderPayee(providerId)
     ServiceProviderRegistry-->>FWSS: payee address
-    FWSS->>FilecoinPayV1: createRail(client, payee, ...)
-    FilecoinPayV1-->>FWSS: rail created
+    alt FilecoinPayV2 storage terms
+      FWSS->>FilecoinPayV2: executeScript(CREATE_RAIL, createRail + lock per rail)
+      FilecoinPayV2-->>FWSS: rails created
+    else FilecoinPayV1 storage terms
+      FWSS->>FilecoinPayV1: createRail(client, payee, ...)
+      FilecoinPayV1-->>FWSS: rail created
+    end
   end
 
   rect rgba(248, 248, 248, 0.2)

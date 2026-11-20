@@ -28,10 +28,11 @@ Each mapping entry occupies three slots:
 
 | Relative slot | Contents (byte offsets from least-significant byte) |
 |---|---|
-| 0 | `address token` 0–19; `uint8 tokenDecimals` 20; `uint8 version` 21; `bool enabled` 22; unused 23–31 |
+| 0 | `address token` 0–19; `uint8 tokenDecimals` 20; `uint8 version` 21; `bool enabled` 22; `uint8 payVersion` 23; unused 24–31 |
 | 1 | `bytes32 salt` |
 | 2 | `uint96 pricePerTiBPerMonth` 0–11; unused 12–31 |
 
+`payVersion` uses a byte that was unused before, so existing records read zero, which is FilecoinPayV1.
 Unused bytes are not declared as reserved fields. Future fields may occupy them
 only if existing offsets and widths remain unchanged. Version zero means
 unregistered; current registered definitions have version one.
