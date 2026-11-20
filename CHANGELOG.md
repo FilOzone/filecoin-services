@@ -7,14 +7,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 
-- A data set can opt into FilecoinPayV2 with the `withPayV2` metadata key, which the payer signs with the rest of the metadata.
-  FWSS then opens its rails on FilecoinPayV2 in one script, with FWSS as the operator.
+- Storage terms gain a `payVersion` field: `0` is FilecoinPayV1, `1` is FilecoinPayV2.
+  A data set created with FilecoinPayV2 terms opens its rails on FilecoinPayV2 in one script, with FWSS as the operator.
   The payer deposits the selected currency into FilecoinPayV2 and authorizes FWSS with `CREATE_RAIL`.
   FWSS checks the same funding threshold against that balance, then locks the lifecycle reserve and the CDN lockups on the new rails.
   The stored rail IDs are FilecoinPayV2 rail hashes.
-  Without the key, creation stays on FilecoinPayV1 as before.
+  Record zero and terms registered before the field existed read `0`, so their data sets stay on FilecoinPayV1 as before.
   The other data set callbacks still act on FilecoinPayV1 rails, so FilecoinPayV2 data sets do not yet work end to end.
-- The FWSS ABI adds `DataSetIdTooLarge`.
+- The FWSS ABI adds `DataSetIdTooLarge` and `UnsupportedPayVersion`.
+
+### Changed
+
+- **Breaking ABI:** `StorageTerms` appends `uint8 payVersion`, which changes the selectors of `registerStorageTerms` and `getStorageTermsId`, the return data of `getStorageTerms`, and the `StorageTermsRegistered` event.
+  IDs of terms with `payVersion` zero are unchanged; nonzero versions hash under `filecoin.FWSS.StorageTerms.v2` with the version appended.
 
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 

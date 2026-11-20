@@ -21,7 +21,7 @@ import {
     LIFECYCLE_RESERVE_TARGET,
     STORAGE_PRICE_PER_TIB_PER_MONTH
 } from "../../src/lib/PriceListUSDFC.sol";
-import {StorageTerms} from "../../src/lib/StorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../../src/lib/StorageTerms.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
 import {FWSSStorageTermsModule} from "../../src/modules/FWSSStorageTermsModule.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
@@ -45,40 +45,55 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
     uint256 private constant MIN_FUNDS_CDN = MIN_FUNDS + DEFAULT_CACHE_MISS_LOCKUP_AMOUNT + DEFAULT_CDN_LOCKUP_AMOUNT;
 
     address private payer;
+    bytes32 private v2Terms;
 
     function setUp() public override {
         super.setUp();
         payer = makeAddr("v2Payer");
         vm.deal(payer, 100 ether);
+        v2Terms = _registerV2Terms(address(mockUSDFC), 18, uint96(STORAGE_PRICE_PER_TIB_PER_MONTH));
     }
 
-    function _metadata(bool payV2, bool cdn) private pure returns (string[] memory keys, string[] memory values) {
-        uint256 count = (payV2 ? 1 : 0) + (cdn ? 1 : 0);
-        keys = new string[](count);
-        values = new string[](count);
-        uint256 i;
-        if (payV2) {
-            keys[i] = "withPayV2";
-            values[i++] = "true";
-        }
+    function _registerV2Terms(address token, uint8 tokenDecimals, uint96 price) private returns (bytes32) {
+        return FWSSStorageTermsModule(address(pdpServiceWithPayments))
+            .registerStorageTerms(
+                StorageTerms({
+                    token: token,
+                    tokenDecimals: tokenDecimals,
+                    salt: bytes32(0),
+                    pricePerTiBPerMonth: price,
+                    payVersion: PAY_VERSION_FILECOIN_PAY_V2
+                })
+            );
+    }
+
+    function _metadata(bool cdn) private pure returns (string[] memory keys, string[] memory values) {
+        keys = new string[](cdn ? 1 : 0);
+        values = new string[](cdn ? 1 : 0);
         if (cdn) {
-            keys[i] = "withCDN";
-            values[i] = "true";
+            keys[0] = "withCDN";
+            values[0] = "true";
         }
     }
 
+    /// @dev Selects the FilecoinPayV2 USDFC terms registered in setUp.
     function _payload(uint256 clientDataSetId, bool cdn) private view returns (bytes memory) {
-        return _payload(clientDataSetId, true, cdn);
+        return _termsPayload(clientDataSetId, v2Terms, cdn);
     }
 
-    function _payload(uint256 clientDataSetId, bool payV2, bool cdn) private view returns (bytes memory) {
-        (string[] memory keys, string[] memory values) = _metadata(payV2, cdn);
-        return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
-    }
-
-    function _termsPayload(uint256 clientDataSetId, bytes32 storageTermsId) private view returns (bytes memory) {
-        (string[] memory keys, string[] memory values) = _metadata(true, false);
+    function _termsPayload(uint256 clientDataSetId, bytes32 storageTermsId, bool cdn)
+        private
+        view
+        returns (bytes memory)
+    {
+        (string[] memory keys, string[] memory values) = _metadata(cdn);
         return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE, storageTermsId);
+    }
+
+    /// @dev The five-field payload, which selects legacy record zero.
+    function _legacyPayload(uint256 clientDataSetId, bool cdn) private view returns (bytes memory) {
+        (string[] memory keys, string[] memory values) = _metadata(cdn);
+        return abi.encode(payer, clientDataSetId, keys, values, FAKE_SIGNATURE);
     }
 
     function _create(address provider, bytes memory payload) private returns (uint256) {
@@ -124,7 +139,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = mockPDPVerifier.nextDataSetId();
         uint256 pdpRailId = _railId(serviceProvider, address(mockUSDFC), FLAG_CALLBACK | uint64(dataSetId));
-        (string[] memory keys, string[] memory values) = _metadata(true, false);
+        (string[] memory keys, string[] memory values) = _metadata(false);
 
         // FWSS asks for CREATE_RAIL only, never a wider scope
         vm.expectCall(
@@ -136,7 +151,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
             dataSetId, 1, pdpRailId, 0, 0, payer, serviceProvider, serviceProvider, keys, values
         );
         vm.expectEmit(address(pdpServiceWithPayments));
-        emit FWSSDataSetModule.DataSetStorageTermsSelected(dataSetId, bytes32(0));
+        emit FWSSDataSetModule.DataSetStorageTermsSelected(dataSetId, v2Terms);
         vm.recordLogs();
         assertEq(_create(serviceProvider, _payload(7, false)), dataSetId);
 
@@ -173,7 +188,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         uint256 pdpRailId = _railId(serviceProvider, usdfc, FLAG_CALLBACK | uint64(dataSetId));
         uint256 cacheMissRailId = _railId(serviceProvider, usdfc, uint64(dataSetId));
         uint256 cdnRailId = _railId(filBeamBeneficiary, usdfc, CDN_RAIL_NONCE_FLAG | uint64(dataSetId));
-        (string[] memory keys, string[] memory values) = _metadata(true, true);
+        (string[] memory keys, string[] memory values) = _metadata(true);
 
         vm.expectEmit(address(pdpServiceWithPayments));
         emit CDNPaymentRailsToppedUp(
@@ -188,7 +203,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
             dataSetId, 1, pdpRailId, cacheMissRailId, cdnRailId, payer, serviceProvider, serviceProvider, keys, values
         );
         vm.expectEmit(address(pdpServiceWithPayments));
-        emit FWSSDataSetModule.DataSetStorageTermsSelected(dataSetId, bytes32(0));
+        emit FWSSDataSetModule.DataSetStorageTermsSelected(dataSetId, v2Terms);
         vm.recordLogs();
         _create(serviceProvider, _payload(0, true));
 
@@ -221,11 +236,11 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         vm.stopPrank();
     }
 
-    function testCreatesOnFilecoinPayV1WithoutPayV2Key() public {
+    function testLegacyTermsStayOnFilecoinPayV1() public {
         _fundV2Payer(payer, 10e18);
         _fundV1Payer(10e18);
 
-        uint256 dataSetId = _create(serviceProvider, _payload(0, false, true));
+        uint256 dataSetId = _create(serviceProvider, _legacyPayload(0, true));
 
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
         assertLt(info.pdpRailId, 1 << 64, "v1 PDP rail");
@@ -235,7 +250,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         assertEq(_usdfcBalance(), 10e18, "FilecoinPayV2 untouched");
     }
 
-    function testPayV2KeyIgnoresFilecoinPayV1Funds() public {
+    function testV2TermsIgnoreFilecoinPayV1Funds() public {
         _fundV1Payer(10e18);
 
         vm.expectRevert(abi.encodeWithSelector(Errors.InsufficientLockupFunds.selector, payer, MIN_FUNDS, 0));
@@ -344,21 +359,13 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
     }
 
     function testCreatesOnNativeFilTerms() public {
-        bytes32 termsId = FWSSStorageTermsModule(address(pdpServiceWithPayments))
-            .registerStorageTerms(
-                StorageTerms({
-                token: address(0),
-                tokenDecimals: 18,
-                salt: bytes32(0),
-                pricePerTiBPerMonth: uint96(STORAGE_PRICE_PER_TIB_PER_MONTH)
-            })
-            );
+        bytes32 termsId = _registerV2Terms(address(0), 18, uint96(STORAGE_PRICE_PER_TIB_PER_MONTH));
         vm.startPrank(payer);
         filecoinPayV2.deposit{value: 1 ether}();
         filecoinPayV2.authorize(address(pdpServiceWithPayments), CREATE_RAIL);
         vm.stopPrank();
 
-        uint256 dataSetId = _create(serviceProvider, _termsPayload(0, termsId));
+        uint256 dataSetId = _create(serviceProvider, _termsPayload(0, termsId, false));
 
         uint256 pdpRailId = _railId(serviceProvider, address(0), FLAG_CALLBACK | uint64(dataSetId));
         assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId, pdpRailId);
@@ -369,12 +376,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
 
     function testCreatesOnSixDecimalTermsWithScaledLock() public {
         CreationSixDecimalToken token = new CreationSixDecimalToken();
-        bytes32 termsId = FWSSStorageTermsModule(address(pdpServiceWithPayments))
-            .registerStorageTerms(
-                StorageTerms({
-                token: address(token), tokenDecimals: 6, salt: bytes32(0), pricePerTiBPerMonth: 2_500_000
-            })
-            );
+        bytes32 termsId = _registerV2Terms(address(token), 6, 2_500_000);
         require(token.transfer(payer, 620_000));
         vm.startPrank(payer);
         token.approve(address(filecoinPayV2), 620_000);
@@ -382,7 +384,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         filecoinPayV2.authorize(address(pdpServiceWithPayments), CREATE_RAIL);
         vm.stopPrank();
 
-        uint256 dataSetId = _create(serviceProvider, _termsPayload(0, termsId));
+        uint256 dataSetId = _create(serviceProvider, _termsPayload(0, termsId, false));
 
         uint256 pdpRailId = _railId(serviceProvider, address(token), FLAG_CALLBACK | uint64(dataSetId));
         DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);

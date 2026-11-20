@@ -9,7 +9,7 @@ import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {FilecoinWarmStorageServiceFixture} from "./helpers/FilecoinWarmStorageServiceFixture.sol";
 import {FWSSDataSetModule} from "../src/modules/FWSSDataSetModule.sol";
 import {FWSSStorageTermsModule} from "../src/modules/FWSSStorageTermsModule.sol";
-import {StorageTerms} from "../src/lib/StorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../src/lib/StorageTerms.sol";
 import {DataSetInfoView} from "../src/lib/FWSSViewTypes.sol";
 import {Errors} from "../src/Errors.sol";
 
@@ -47,7 +47,9 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         termsModule = FWSSStorageTermsModule(address(pdpServiceWithPayments));
         token = new CreationSixDecimalToken();
         termsId = termsModule.registerStorageTerms(
-            StorageTerms({token: address(token), tokenDecimals: 6, salt: bytes32(0), pricePerTiBPerMonth: 2_500_000})
+            StorageTerms({
+                token: address(token), tokenDecimals: 6, salt: bytes32(0), pricePerTiBPerMonth: 2_500_000, payVersion: 0
+            })
         );
         _fund(IERC20(address(token)), 100e6);
         _fund(IERC20(address(mockUSDFC)), 100e18);
@@ -68,27 +70,21 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         returns (bytes memory)
     {
         string[] memory keys = new string[](cdn ? 1 : 0);
-        if (cdn) keys[0] = "withCDN";
-        return _payload(id, nonce, signerKey, explicitTerms, keys);
-    }
-
-    /// @dev Signs metadata where every key has the value "true".
-    function _payload(bytes32 id, uint256 nonce, uint256 signerKey, bool explicitTerms, string[] memory keys)
-        private
-        view
-        returns (bytes memory)
-    {
-        string[] memory values = new string[](keys.length);
-        bytes32[] memory entryHashes = new bytes32[](keys.length);
-        for (uint256 i = 0; i < keys.length; i++) {
-            values[i] = "true";
-            entryHashes[i] = keccak256(
-                abi.encode(
-                    keccak256("MetadataEntry(string key,string value)"), keccak256(bytes(keys[i])), keccak256("true")
+        string[] memory values = new string[](cdn ? 1 : 0);
+        bytes32 metadataHash = keccak256("");
+        if (cdn) {
+            keys[0] = "withCDN";
+            values[0] = "true";
+            metadataHash = keccak256(
+                abi.encodePacked(
+                    keccak256(
+                        abi.encode(
+                            keccak256("MetadataEntry(string key,string value)"), keccak256("withCDN"), keccak256("true")
+                        )
+                    )
                 )
             );
         }
-        bytes32 metadataHash = keccak256(abi.encodePacked(entryHashes));
         bytes32 structHash;
         if (explicitTerms) {
             structHash = keccak256(
@@ -137,23 +133,31 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         assertEq(pdpServiceWithPayments.getDataSetV2(id).storageTermsId, termsId);
     }
 
-    function testSignedPayV2KeyOpensV2RailsBesideV1DataSet() public {
-        uint256 v1Id = _create(_payload(bytes32(0), 1, PAYER_KEY, false, false));
+    function testSignedV2TermsOpenV2RailsBesideV1DataSet() public {
+        uint256 v1Id = _create(_payload(bytes32(0), 1, PAYER_KEY, false, true));
 
+        bytes32 v2Terms = termsModule.registerStorageTerms(
+            StorageTerms({
+                token: address(mockUSDFC),
+                tokenDecimals: 18,
+                salt: bytes32(0),
+                pricePerTiBPerMonth: 2.5 ether,
+                payVersion: PAY_VERSION_FILECOIN_PAY_V2
+            })
+        );
         _fundV2Payer(payer, 10e18);
-        string[] memory keys = new string[](1);
-        keys[0] = "withPayV2";
-        uint256 v2Id = _create(_payload(bytes32(0), 2, PAYER_KEY, true, keys));
+        uint256 v2Id = _create(_payload(v2Terms, 2, PAYER_KEY, true, true));
 
         DataSetInfoView memory v1 = pdpServiceWithPayments.getDataSet(v1Id);
         DataSetInfoView memory v2 = pdpServiceWithPayments.getDataSet(v2Id);
-        assertLt(v1.pdpRailId, 1 << 64, "v1 counter id");
-        assertGe(v2.pdpRailId, 1 << 64, "v2 hash id");
+        assertLt(v1.pdpRailId, 1 << 64, "v1 PDP counter id");
+        assertLt(v1.cdnRailId, 1 << 64, "v1 CDN counter id");
+        assertGe(v2.pdpRailId, 1 << 64, "v2 PDP hash id");
+        assertGe(v2.cacheMissRailId, 1 << 64, "v2 cache-miss hash id");
+        assertGe(v2.cdnRailId, 1 << 64, "v2 CDN hash id");
         assertEq(pdpServiceWithPayments.railToDataSet(v1.pdpRailId), v1Id);
         assertEq(pdpServiceWithPayments.railToDataSet(v2.pdpRailId), v2Id);
-        (bool exists, string memory value) = pdpServiceWithPayments.getDataSetMetadata(v2Id, "withPayV2");
-        assertTrue(exists);
-        assertEq(value, "true");
+        assertEq(pdpServiceWithPayments.getDataSetV2(v2Id).storageTermsId, v2Terms);
 
         // The flows after creation still run on the v1 data set
         vm.prank(payer);
@@ -218,7 +222,13 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         CreationTwoDecimalToken lowPrecisionToken = new CreationTwoDecimalToken();
         IERC20 currency = IERC20(address(lowPrecisionToken));
         bytes32 lowPrecisionTerms = termsModule.registerStorageTerms(
-            StorageTerms({token: address(currency), tokenDecimals: 2, salt: bytes32(0), pricePerTiBPerMonth: 1_000e2})
+            StorageTerms({
+                token: address(currency),
+                tokenDecimals: 2,
+                salt: bytes32(0),
+                pricePerTiBPerMonth: 1_000e2,
+                payVersion: 0
+            })
         );
         _fund(currency, 10_000e2);
         uint256 id = _create(_payload(lowPrecisionTerms, 1, PAYER_KEY, true, false));
@@ -293,7 +303,11 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
     function testDisablingExactLegacyDefinitionLeavesBothZeroPayloadVariantsEnabled() public {
         bytes32 hashedLegacyId = termsModule.registerStorageTerms(
             StorageTerms({
-                token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5 ether
+                token: address(mockUSDFC),
+                tokenDecimals: 18,
+                salt: bytes32(0),
+                pricePerTiBPerMonth: 2.5 ether,
+                payVersion: 0
             })
         );
         assertNotEq(hashedLegacyId, bytes32(0));
@@ -350,7 +364,11 @@ contract StorageTermsCreationTest is FilecoinWarmStorageServiceFixture {
         _create(_payload(termsId, 1, PAYER_KEY, true, true));
         bytes32 usdfcTerms = termsModule.registerStorageTerms(
             StorageTerms({
-                token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(uint256(1)), pricePerTiBPerMonth: 3e18
+                token: address(mockUSDFC),
+                tokenDecimals: 18,
+                salt: bytes32(uint256(1)),
+                pricePerTiBPerMonth: 3e18,
+                payVersion: 0
             })
         );
         uint256 id = _create(_payload(usdfcTerms, 1, PAYER_KEY, true, true));

@@ -41,7 +41,7 @@ import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
-import {StorageTermsRecord} from "../lib/StorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTermsRecord} from "../lib/StorageTerms.sol";
 import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 
@@ -61,8 +61,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     // Metadata key constants
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
     bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
-    uint256 private constant METADATA_KEY_WITH_PAY_V2_SIZE = 9;
-    bytes32 private constant METADATA_KEY_WITH_PAY_V2_HASH = keccak256("withPayV2");
 
     // Each rail role gets its own nonce, so rails stay distinct when the payee is the FilBeam beneficiary.
     uint64 private constant CDN_RAIL_NONCE_FLAG = 1 << 62;
@@ -242,13 +240,12 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
         }
 
         // Determine once whether CDN is enabled in metadata and reuse the result
-        bool hasCDN = hasMetadataKey(createData.metadataKeys, METADATA_KEY_WITH_CDN_SIZE, METADATA_KEY_WITH_CDN_HASH);
+        bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
         require(!hasCDN || terms.token == address(usdfcTokenAddress), CDNUnsupportedCurrency(terms.token));
 
-        // Clients opt into FilecoinPayV2 per data set; without the key, creation stays on FilecoinPayV1.
-        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = hasMetadataKey(
-            createData.metadataKeys, METADATA_KEY_WITH_PAY_V2_SIZE, METADATA_KEY_WITH_PAY_V2_HASH
-        )
+        // The signed storage terms choose the payment contract; records that predate payVersion read FilecoinPayV1.
+        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = terms.payVersion
+            == PAY_VERSION_FILECOIN_PAY_V2
             ? _createPayV2Rails(dataSetId, terms.token, terms.tokenDecimals, createData.payer, payee, hasCDN)
             : paymentContract.createRails(
                 dataSetId,
@@ -327,8 +324,10 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
         ScriptBuilder script =
             newScript().setToken(token).createRail(payer, payee, pdpNonce).lock(uint128(lifecycleReserve));
         if (hasCDN) {
-            script = script.createRail(payer, payee, cacheMissNonce).lock(uint128(cacheMissLockup))
-                .createRail(payer, filBeamBeneficiaryAddress, cdnNonce).lock(uint128(cdnLockup));
+            script = script.createRail(payer, payee, cacheMissNonce)
+                .lock(uint128(cacheMissLockup))
+                .createRail(payer, filBeamBeneficiaryAddress, cdnNonce)
+                .lock(uint128(cdnLockup));
         }
         filecoinPayV2.executeScript(CREATE_RAIL, script.build());
 
@@ -505,20 +504,17 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     }
 
     /**
-     * @notice Returns true if a key exists in `metadataKeys`, whatever its value.
+     * @notice Returns true if key `withCDN` exists in `metadataKeys`.
      * @param metadataKeys The array of metadata keys
-     * @param keySize The key's length in bytes
-     * @param keyHash The keccak256 of the key
      * @return True if key exists; false otherwise.
      */
-    function hasMetadataKey(string[] memory metadataKeys, uint256 keySize, bytes32 keyHash)
-        internal
-        pure
-        returns (bool)
-    {
+    function hasCDNMetadataKey(string[] memory metadataKeys) internal pure returns (bool) {
         for (uint256 i = 0; i < metadataKeys.length; i++) {
             bytes memory currentKeyBytes = bytes(metadataKeys[i]);
-            if (currentKeyBytes.length == keySize && keccak256(currentKeyBytes) == keyHash) {
+            if (
+                currentKeyBytes.length == METADATA_KEY_WITH_CDN_SIZE
+                    && keccak256(currentKeyBytes) == METADATA_KEY_WITH_CDN_HASH
+            ) {
                 return true;
             }
         }

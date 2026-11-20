@@ -159,6 +159,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error UnknownCleanupOp(uint256 opOffset, uint256 kind);
     error UnknownStorageTerms(bytes32 id);
     error UnsupportedExtraDataVariant(uint256 keysOffset);
+    error UnsupportedPayVersion(uint8 payVersion);
     error UnsupportedSignatureV(uint8 v);
     error ValueDataSlotsOutOfRange(uint256 opOffset, uint256 count);
     error ZeroAddress(Errors.AddressField field);
