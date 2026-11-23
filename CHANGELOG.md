@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - **Breaking ABI:** `StorageTerms` appends `uint8 payVersion`, which changes the selectors of `registerStorageTerms` and `getStorageTermsId`, the return data of `getStorageTerms`, and the `StorageTermsRegistered` event.
   Terms IDs now hash under `filecoin.FWSS.StorageTerms.v2` with `payVersion` appended, so `getStorageTermsId` no longer returns the 1.6.0 ID of a definition.
   Records registered under 1.6.0 keep their IDs; record zero is unaffected.
+- Scheduling piece removals on a FilecoinPayV2 data set refills the lifecycle reserve with a lock on its PDP rail, under the same threshold as FilecoinPayV1.
+  The lock adds only the shortfall, so payment the rail already holds stays.
+  A payer balance short of the refill reverts with FilecoinPayV2 `InsufficientBalance`.
 
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 
