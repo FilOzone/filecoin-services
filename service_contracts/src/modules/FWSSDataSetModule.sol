@@ -32,7 +32,7 @@ import {
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
 import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
-import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
+import {RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {CDNPaymentRailsToppedUp, LibRails} from "../lib/LibRails.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
@@ -299,7 +299,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
     ) private returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
         require(dataSetId < CDN_RAIL_NONCE_FLAG, DataSetIdTooLarge(dataSetId));
         uint64 cacheMissNonce = uint64(dataSetId);
-        uint64 pdpNonce = FLAG_CALLBACK | cacheMissNonce;
+        uint64 pdpNonce = _pdpRailNonce(dataSetId);
         uint64 cdnNonce = CDN_RAIL_NONCE_FLAG | cacheMissNonce;
 
         // The lifecycle reserve is a lock on the PDP rail. A payer balance short of the locks reverts in executeScript.

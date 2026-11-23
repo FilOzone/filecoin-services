@@ -283,11 +283,24 @@ library LibRails {
         uint96 pending,
         uint8 tokenDecimals
     ) internal returns (uint96) {
+        uint96 newLockup = replenishedReserve(pdpEndEpoch, reserveBalance, pending, tokenDecimals);
+        if (newLockup != reserveBalance) {
+            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newLockup);
+        }
+        return newLockup;
+    }
+
+    // The lifecycle reserve after paying pending, refilled to LIFECYCLE_RESERVE_TARGET + pending when it would drop
+    // below REPLENISH_THRESHOLD. Returns reserveBalance unchanged when no refill is due, and always for terminated rails.
+    function replenishedReserve(uint256 pdpEndEpoch, uint96 reserveBalance, uint96 pending, uint8 tokenDecimals)
+        internal
+        pure
+        returns (uint96)
+    {
         uint256 replenishThreshold = StoragePricing.scaleAmount(REPLENISH_THRESHOLD, tokenDecimals);
         if (pdpEndEpoch == 0 && reserveBalance < uint256(pending) + replenishThreshold) {
             uint256 newLockup = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals) + pending;
             require(newLockup <= type(uint96).max);
-            payments.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newLockup);
             return uint96(newLockup);
         }
         return reserveBalance;

@@ -2,6 +2,7 @@
 pragma solidity 0.8.37;
 
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
+import {FLAG_CALLBACK} from "@filecoin-pay-v2/lib/RailId.sol";
 import {Errors} from "../Errors.sol";
 
 /// @title FWSSFilecoinPayV2
@@ -22,5 +23,12 @@ abstract contract FWSSFilecoinPayV2 {
     /// @return True when the rail lives on FilecoinPayV1
     function _isV1Rail(uint256 railId) internal pure returns (bool) {
         return railId < 1 << 64;
+    }
+
+    /// @notice The nonce of a data set's PDP rail, which settles through the FWSS callback
+    /// @param dataSetId The data set the rail pays for
+    /// @return The rail nonce with FLAG_CALLBACK set
+    function _pdpRailNonce(uint256 dataSetId) internal pure returns (uint64) {
+        return FLAG_CALLBACK | uint64(dataSetId);
     }
 }
