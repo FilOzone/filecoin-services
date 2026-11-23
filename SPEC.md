@@ -32,19 +32,6 @@ Record zero is an independent, immutable legacy definition `(USDFC, 18, bytes32(
 
 ```solidity
 keccak256(abi.encode(
-    keccak256("filecoin.FWSS.StorageTerms.v1"),
-    terms.token,
-    terms.tokenDecimals,
-    terms.salt,
-    terms.pricePerTiBPerMonth
-))
-```
-
-That is the ID of terms with `payVersion` zero, so IDs registered before the field existed do not change.
-Terms with a nonzero `payVersion` hash it under their own type:
-
-```solidity
-keccak256(abi.encode(
     keccak256("filecoin.FWSS.StorageTerms.v2"),
     terms.token,
     terms.tokenDecimals,

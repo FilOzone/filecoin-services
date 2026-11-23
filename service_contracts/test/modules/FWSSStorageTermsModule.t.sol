@@ -95,11 +95,12 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
             id,
             keccak256(
                 abi.encode(
-                    keccak256("filecoin.FWSS.StorageTerms.v1"),
+                    keccak256("filecoin.FWSS.StorageTerms.v2"),
                     legacy.token,
                     legacy.tokenDecimals,
                     legacy.salt,
-                    legacy.pricePerTiBPerMonth
+                    legacy.pricePerTiBPerMonth,
+                    legacy.payVersion
                 )
             )
         );
@@ -119,54 +120,19 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
         address token,
         uint8 tokenDecimals,
         bytes32 salt,
-        uint96 pricePerTiBPerMonth
+        uint96 pricePerTiBPerMonth,
+        uint8 payVersion
     ) public view {
         StorageTerms memory terms = StorageTerms({
             token: token,
             tokenDecimals: tokenDecimals,
             salt: salt,
             pricePerTiBPerMonth: pricePerTiBPerMonth,
-            payVersion: 0
-        });
-        bytes32 expected = keccak256(
-            abi.encode(keccak256("filecoin.FWSS.StorageTerms.v1"), token, tokenDecimals, salt, pricePerTiBPerMonth)
-        );
-        assertEq(_module().getStorageTermsId(terms), expected);
-    }
-
-    function testFilecoinPayV1TermsIdKeepsItsReleasedValue() public view {
-        // Computed off-chain with the 1.6.0 formula; payVersion zero must not move existing ids
-        StorageTerms memory terms = StorageTerms({
-            token: address(0xFC),
-            tokenDecimals: 18,
-            salt: bytes32(0),
-            pricePerTiBPerMonth: 2.5 ether,
-            payVersion: PAY_VERSION_FILECOIN_PAY_V1
-        });
-        assertEq(_module().getStorageTermsId(terms), 0xb443f8b8a6e0df472f91d087eea5f70f2c4501b3ff2f6c90b3741e937415d333);
-    }
-
-    function testFuzzPayV2StorageTermsIdMatchesAbiEncoding(
-        address token,
-        uint8 tokenDecimals,
-        bytes32 salt,
-        uint96 pricePerTiBPerMonth
-    ) public view {
-        StorageTerms memory terms = StorageTerms({
-            token: token,
-            tokenDecimals: tokenDecimals,
-            salt: salt,
-            pricePerTiBPerMonth: pricePerTiBPerMonth,
-            payVersion: PAY_VERSION_FILECOIN_PAY_V2
+            payVersion: payVersion
         });
         bytes32 expected = keccak256(
             abi.encode(
-                keccak256("filecoin.FWSS.StorageTerms.v2"),
-                token,
-                tokenDecimals,
-                salt,
-                pricePerTiBPerMonth,
-                PAY_VERSION_FILECOIN_PAY_V2
+                keccak256("filecoin.FWSS.StorageTerms.v2"), token, tokenDecimals, salt, pricePerTiBPerMonth, payVersion
             )
         );
         assertEq(_module().getStorageTermsId(terms), expected);

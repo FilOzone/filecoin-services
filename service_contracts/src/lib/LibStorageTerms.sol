@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 pragma solidity 0.8.37;
 
-import {PAY_VERSION_FILECOIN_PAY_V1, StorageTerms, StorageTermsRecord} from "./StorageTerms.sol";
+import {StorageTerms, StorageTermsRecord} from "./StorageTerms.sol";
 import {STORAGE_PRICE_PER_TIB_PER_MONTH, TOKEN_DECIMALS} from "./PriceListUSDFC.sol";
 
 library LibStorageTerms {
     // ERC-7201 namespace: filecoin.FWSS.StorageTerms
     // keccak256(abi.encode(uint256(keccak256("filecoin.FWSS.StorageTerms")) - 1)) & ~bytes32(uint256(0xff))
     bytes32 internal constant STORAGE_LOCATION = 0xffe2107a587f9a58b0aaa87110a43c1dc6de9e3d39b63f9be37b80538b60ff00;
-    bytes32 internal constant STORAGE_TERMS_TYPEHASH = keccak256("filecoin.FWSS.StorageTerms.v1");
-    bytes32 internal constant STORAGE_TERMS_WITH_PAY_VERSION_TYPEHASH = keccak256("filecoin.FWSS.StorageTerms.v2");
+    // v2 also hashes payVersion, so it does not recompute ids of terms registered under 1.6.0 (v1).
+    bytes32 internal constant STORAGE_TERMS_TYPEHASH = keccak256("filecoin.FWSS.StorageTerms.v2");
 
     /// @custom:storage-location erc7201:filecoin.FWSS.StorageTerms
     struct Storage {
@@ -31,9 +31,7 @@ library LibStorageTerms {
     }
 
     function getStorageTermsId(StorageTerms calldata terms) internal pure returns (bytes32 id) {
-        // FilecoinPayV1 terms keep the five-word hash they had before payVersion existed, so their ids do not move.
-        bool withPayVersion = terms.payVersion != PAY_VERSION_FILECOIN_PAY_V1;
-        bytes32 typeHash = withPayVersion ? STORAGE_TERMS_WITH_PAY_VERSION_TYPEHASH : STORAGE_TERMS_TYPEHASH;
+        bytes32 typeHash = STORAGE_TERMS_TYPEHASH;
         // Hash the ABI words without allocating an encoded bytes array.
         assembly ("memory-safe") {
             let ptr := mload(0x40)
@@ -43,7 +41,7 @@ library LibStorageTerms {
             mstore(add(ptr, 0x60), calldataload(add(terms, 0x40)))
             mstore(add(ptr, 0x80), and(calldataload(add(terms, 0x60)), 0xffffffffffffffffffffffff))
             mstore(add(ptr, 0xa0), and(calldataload(add(terms, 0x80)), 0xff))
-            id := keccak256(ptr, add(0xa0, mul(withPayVersion, 0x20)))
+            id := keccak256(ptr, 0xc0)
         }
     }
 

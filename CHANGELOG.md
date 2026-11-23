@@ -19,7 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 
 - **Breaking ABI:** `StorageTerms` appends `uint8 payVersion`, which changes the selectors of `registerStorageTerms` and `getStorageTermsId`, the return data of `getStorageTerms`, and the `StorageTermsRegistered` event.
-  IDs of terms with `payVersion` zero are unchanged; nonzero versions hash under `filecoin.FWSS.StorageTerms.v2` with the version appended.
+  Terms IDs now hash under `filecoin.FWSS.StorageTerms.v2` with `payVersion` appended, so `getStorageTermsId` no longer returns the 1.6.0 ID of a definition.
+  Records registered under 1.6.0 keep their IDs; record zero is unaffected.
 
 ## [1.6.0] - FWSS Storage Terms and Piece Metadata Cleanup
 
