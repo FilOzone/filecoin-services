@@ -64,6 +64,15 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     event ProviderApproved(uint256 indexed providerId);
     event ProviderUnapproved(uint256 indexed providerId);
     event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
+    event DataSetPayeeRetargeted(
+        uint256 indexed dataSetId,
+        address indexed oldPayee,
+        address indexed newPayee,
+        uint256 oldPdpRailId,
+        uint256 newPdpRailId,
+        uint256 oldCacheMissRailId,
+        uint256 newCacheMissRailId
+    );
     event ServiceTerminated(
         address indexed approver,
         uint256 indexed dataSetId,
@@ -84,6 +93,8 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error CallerNotPayerOrPayee(uint256 dataSetId, address expectedPayer, address expectedPayee, address caller);
     error CallerNotPayments(address expected, address actual);
     error CallerNotServiceProvider(uint256 dataSetId, address expectedServiceProvider, address caller);
+    error CallerNotProviderWorker(uint256 dataSetId, address expectedWorker, address caller);
+    error DataSetPayeeAlreadyCurrent(uint256 dataSetId, address payee);
     error CannotDisableLegacyStorageTerms();
     error ChallengeWindowTooEarly(uint256 dataSetId, uint256 windowStart, uint256 nowBlock);
     error ClientDataSetAlreadyRegistered(uint256 clientDataSetId);
@@ -239,6 +250,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     function registerStorageTerms(StorageTerms calldata terms) external returns (bytes32 storageTermsId);
     function removeApprovedProvider(uint256 providerId, uint256 index) external;
     function renounceOwnership() external;
+    function retargetDataSetPayee(uint256 dataSetId) external;
     function selectors() external view returns (bytes4[] memory);
     function serviceCommissionBps() external pure returns (uint256);
     function serviceProviderRegistry() external view returns (ServiceProviderRegistry);

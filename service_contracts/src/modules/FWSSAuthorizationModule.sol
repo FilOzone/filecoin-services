@@ -6,6 +6,7 @@ import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
 import {Errors} from "../Errors.sol";
+import {ServiceProviderRegistry} from "../ServiceProviderRegistry.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 import {
     MAX_KEY_LENGTH,
@@ -38,16 +39,26 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
 
     FilecoinPayV1 internal immutable paymentContract;
     SessionKeyRegistry public immutable sessionKeyRegistry;
+    ServiceProviderRegistry public immutable serviceProviderRegistry;
 
     /// @notice Configures the immutable dependencies used by payer-authorized operations.
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
     /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
+    /// @param _serviceProviderRegistry The registry used to resolve the current worker.
     /// @param _sessionKeyRegistry The registry used to verify payer signatures.
-    constructor(address _paymentsContractAddress, address _pdpVerifierAddress, SessionKeyRegistry _sessionKeyRegistry)
-        FWSSPDPVerifier(_pdpVerifierAddress)
-    {
+    constructor(
+        address _paymentsContractAddress,
+        address _pdpVerifierAddress,
+        ServiceProviderRegistry _serviceProviderRegistry,
+        SessionKeyRegistry _sessionKeyRegistry
+    ) FWSSPDPVerifier(_pdpVerifierAddress) {
         require(_paymentsContractAddress != address(0), Errors.ZeroAddress(Errors.AddressField.FilecoinPayV1));
         paymentContract = FilecoinPayV1(_paymentsContractAddress);
+        require(
+            _serviceProviderRegistry != ServiceProviderRegistry(address(0)),
+            Errors.ZeroAddress(Errors.AddressField.ServiceProviderRegistry)
+        );
+        serviceProviderRegistry = _serviceProviderRegistry;
         require(
             _sessionKeyRegistry != SessionKeyRegistry(address(0)),
             Errors.ZeroAddress(Errors.AddressField.SessionKeyRegistry)
@@ -242,13 +253,15 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
+        address worker = serviceProviderRegistry.currentWorker(info.serviceProvider);
+        if (worker == address(0)) {
+            worker = info.serviceProvider;
+        }
+
         address approver;
         bool immediateTermination = false;
         if (extraData.length > 0) {
-            require(
-                msg.sender == info.serviceProvider,
-                Errors.CallerNotServiceProvider(dataSetId, info.serviceProvider, msg.sender)
-            );
+            require(msg.sender == worker, Errors.CallerNotServiceProvider(dataSetId, worker, msg.sender));
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
                 Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
@@ -261,8 +274,8 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             );
         } else {
             require(
-                msg.sender == info.payer || msg.sender == info.serviceProvider,
-                Errors.CallerNotPayerOrPayee(dataSetId, info.payer, info.serviceProvider, msg.sender)
+                msg.sender == info.payer || msg.sender == worker,
+                Errors.CallerNotPayerOrPayee(dataSetId, info.payer, worker, msg.sender)
             );
             approver = msg.sender;
         }

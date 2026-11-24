@@ -396,6 +396,43 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
     }
 
     /**
+     * @notice Replace the data set's PDP and cache-miss rails so future settlement pays the registry payee.
+     * @dev Callable by the current registry worker. Recipient is always `getProviderPayee(providerId)`;
+     *      the payee already chose that address via `changePayee`. Does not terminate rails. Leaves the
+     *      CDN rail unchanged. Reverts when the payer cannot cover lockup through the current epoch.
+     * @param dataSetId The data set whose rails to retarget
+     */
+    function retargetDataSetPayee(uint256 dataSetId) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+
+        ServiceProviderRegistry.ServiceProviderInfoView memory provider =
+            serviceProviderRegistry.getProvider(info.providerId);
+        address worker = provider.info.serviceProvider;
+        require(msg.sender == worker, Errors.CallerNotProviderWorker(dataSetId, worker, msg.sender));
+
+        address newPayee = provider.info.payee;
+        require(newPayee != info.payee, Errors.DataSetPayeeAlreadyCurrent(dataSetId, info.payee));
+
+        uint256 oldPdpRailId = info.pdpRailId;
+        uint256 oldCacheMissRailId = info.cacheMissRailId;
+
+        (uint256 newPdpRailId, uint256 newCacheMissRailId) = paymentContract.retargetRails(
+            dataSetId, oldPdpRailId, oldCacheMissRailId, newPayee, info.lifecycleReserveBalance
+        );
+
+        delete railToDataSet[oldPdpRailId];
+        railToDataSet[newPdpRailId] = dataSetId;
+        info.pdpRailId = newPdpRailId;
+        info.payee = newPayee;
+
+        if (oldCacheMissRailId != 0) {
+            info.cacheMissRailId = newCacheMissRailId;
+        }
+    }
+
+    /**
      * @notice Decode extra data for data set creation
      * @param extraData The encoded extra data from PDPVerifier
      * @return decoded The decoded DataSetCreateData struct

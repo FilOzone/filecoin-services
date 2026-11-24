@@ -43,7 +43,18 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Version of the contract implementation
-    string public constant VERSION = "1.2.0";
+    string public constant VERSION = "1.3.0";
+
+    /// @notice EIP-712 typehash for changing the payee
+    bytes32 public constant CHANGE_PAYEE_TYPEHASH =
+        keccak256("ChangePayee(uint256 providerId,address newPayee,uint256 nonce)");
+
+    /// @notice EIP-712 typehash for changing the worker (serviceProvider)
+    bytes32 public constant CHANGE_SERVICE_PROVIDER_TYPEHASH =
+        keccak256("ChangeServiceProvider(uint256 providerId,address newServiceProvider,uint256 nonce)");
+
+    /// @notice EIP-712 typehash for removing a provider
+    bytes32 public constant REMOVE_PROVIDER_TYPEHASH = keccak256("RemoveProvider(uint256 providerId,uint256 nonce)");
 
     /// @notice Maximum length for service URL
     uint256 private constant MAX_SERVICE_URL_LENGTH = 256;
@@ -101,6 +112,14 @@ contract ServiceProviderRegistry is
 
     /// @notice Emitted when a provider is removed
     event ProviderRemoved(uint256 indexed providerId);
+
+    /// @notice Emitted when the payee (beneficiary) of a provider is changed
+    event PayeeChanged(uint256 indexed providerId, address indexed oldPayee, address indexed newPayee);
+
+    /// @notice Emitted when the worker (serviceProvider) of a provider is changed
+    event ServiceProviderChanged(
+        uint256 indexed providerId, address indexed oldServiceProvider, address indexed newServiceProvider
+    );
 
     /// @notice Emitted when the contract is upgraded
     event ContractUpgraded(string version, address implementation);
@@ -166,7 +185,7 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Register as a new service provider with a specific product type
-    /// @param payee Address that will receive payments (cannot be changed after registration)
+    /// @param payee Address that will receive payments (may later differ from the worker)
     /// @param name Provider name (optional, max 128 chars)
     /// @param description Provider description (max 256 chars)
     /// @param productType The type of product to register
@@ -187,8 +206,14 @@ contract ServiceProviderRegistry is
         // Validate payee address
         require(payee != address(0), "Payee cannot be zero address");
 
-        // Check if address is already registered
+        // Check if address is already registered as a live worker. Former workers of an inactive
+        // provider may register again (wallet reuse after soft-delete); clear the stale mapping.
         require(addressToProviderId[msg.sender] == 0, "Address already registered");
+        uint256 previousProviderId = previousWorkerProviderId[msg.sender];
+        if (previousProviderId != 0) {
+            require(!providers[previousProviderId].isActive, "Address previously used as worker for an active provider");
+            delete previousWorkerProviderId[msg.sender];
+        }
 
         // Check payment amount is exactly the registration fee
         require(msg.value == REGISTRATION_FEE, "Incorrect fee amount");
@@ -406,21 +431,97 @@ contract ServiceProviderRegistry is
         emit ProviderInfoUpdated(providerId);
     }
 
+    /// @notice Change the payee (beneficiary) for a provider
+    /// @dev Payee must call directly (e.g. Glif). The worker cannot change the payee, even with a
+    ///      payee signature — `msg.sender` must be the current payee. Optional EIP-712 `signature`
+    ///      may bind the call to a specific `(newPayee, nonce)` when the payee supplies one.
+    /// @param providerId The provider to update
+    /// @param newPayee The new beneficiary address
+    /// @param signature Empty for a plain payee call, or payee EIP-712 over ChangePayee
+    function changePayee(uint256 providerId, address newPayee, bytes calldata signature)
+        external
+        providerExists(providerId)
+        providerActive(providerId)
+    {
+        require(newPayee != address(0), "Payee cannot be zero address");
+        address oldPayee = providers[providerId].payee;
+        require(newPayee != oldPayee, "Payee unchanged");
+
+        bytes32 structHash = keccak256(abi.encode(CHANGE_PAYEE_TYPEHASH, providerId, newPayee, providerActionNonce[providerId]));
+        _requirePayeeAuthorization(providerId, structHash, signature);
+
+        providers[providerId].payee = newPayee;
+        emit PayeeChanged(providerId, oldPayee, newPayee);
+    }
+
+    /// @notice Change the worker (serviceProvider) for a provider
+    /// @dev Payee must call directly. A former worker may be restored for the same provider (wallet
+    ///      rotation). Addresses that are still the live worker of another provider, or that were
+    ///      previously a worker for a different provider, cannot be selected.
+    /// @param providerId The provider to update
+    /// @param newServiceProvider The new worker address
+    /// @param signature Empty for a plain payee call, or payee EIP-712 over ChangeServiceProvider
+    function changeServiceProvider(uint256 providerId, address newServiceProvider, bytes calldata signature)
+        external
+        providerExists(providerId)
+        providerActive(providerId)
+    {
+        require(newServiceProvider != address(0), "Service provider cannot be zero address");
+        require(addressToProviderId[newServiceProvider] == 0, "Address already registered");
+        uint256 previousProviderId = previousWorkerProviderId[newServiceProvider];
+        require(
+            previousProviderId == 0 || previousProviderId == providerId,
+            "Address previously used as worker for another provider"
+        );
+
+        address oldServiceProvider = providers[providerId].serviceProvider;
+        require(newServiceProvider != oldServiceProvider, "Service provider unchanged");
+
+        bytes32 structHash = keccak256(
+            abi.encode(CHANGE_SERVICE_PROVIDER_TYPEHASH, providerId, newServiceProvider, providerActionNonce[providerId])
+        );
+        _requirePayeeAuthorization(providerId, structHash, signature);
+
+        delete addressToProviderId[oldServiceProvider];
+        previousWorkerProviderId[oldServiceProvider] = providerId;
+        delete previousWorkerProviderId[newServiceProvider];
+        providers[providerId].serviceProvider = newServiceProvider;
+        addressToProviderId[newServiceProvider] = providerId;
+
+        emit ServiceProviderChanged(providerId, oldServiceProvider, newServiceProvider);
+    }
+
     /// @notice Remove provider registration (soft delete)
+    /// @dev Payee must call directly. A stolen worker cannot remove the registration after the
+    ///      payee has moved.
+    /// @param providerId The provider to remove
+    /// @param signature Empty for a plain payee call, or payee EIP-712 over RemoveProvider
+    function removeProvider(uint256 providerId, bytes calldata signature)
+        external
+        providerExists(providerId)
+        providerActive(providerId)
+    {
+        bytes32 structHash =
+            keccak256(abi.encode(REMOVE_PROVIDER_TYPEHASH, providerId, providerActionNonce[providerId]));
+        _requirePayeeAuthorization(providerId, structHash, signature);
+        _removeProvider(providerId);
+    }
+
+    /// @notice Remove the caller's provider registration (soft delete)
+    /// @dev Kept for compatibility when the caller is still both worker and payee.
     function removeProvider() external {
         uint256 providerId = addressToProviderId[msg.sender];
         require(providerId != 0, "Provider not registered");
-
+        require(providers[providerId].payee == msg.sender, "Only payee can remove provider");
+        unchecked {
+            providerActionNonce[providerId]++;
+        }
         _removeProvider(providerId);
     }
 
     /// @notice Internal function to remove provider
-    function _removeProvider(uint256 providerId)
-        private
-        providerExists(providerId)
-        providerActive(providerId)
-        onlyServiceProvider(providerId)
-    {
+    /// @dev Caller must already have established payee authorization and that the provider is active.
+    function _removeProvider(uint256 providerId) private {
         // Soft delete - mark as inactive
         providers[providerId].isActive = false;
 
@@ -448,6 +549,71 @@ contract ServiceProviderRegistry is
 
         // Emit event
         emit ProviderRemoved(providerId);
+    }
+
+    /// @notice Resolve the current worker for an address that is or was a worker
+    /// @param workerOrFormerWorker Current or previous worker address
+    /// @return The live serviceProvider for that provider, or address(0) if unknown
+    function currentWorker(address workerOrFormerWorker) external view returns (address) {
+        uint256 providerId = addressToProviderId[workerOrFormerWorker];
+        if (providerId == 0) {
+            providerId = previousWorkerProviderId[workerOrFormerWorker];
+        }
+        if (providerId == 0) {
+            return address(0);
+        }
+        return providers[providerId].serviceProvider;
+    }
+
+    /// @notice Resolve provider ID from a current or former worker address
+    /// @param workerOrFormerWorker Current or previous worker address
+    /// @return providerId The provider ID, or 0 if unknown
+    function getProviderIdByWorkerAddress(address workerOrFormerWorker) external view returns (uint256 providerId) {
+        providerId = addressToProviderId[workerOrFormerWorker];
+        if (providerId == 0) {
+            providerId = previousWorkerProviderId[workerOrFormerWorker];
+        }
+    }
+
+    /// @notice Require that the current payee is `msg.sender`, optionally binding EIP-712 `signature`
+    /// @dev Workers cannot submit these actions (including with a stolen payee signature). Every
+    ///      successful authorization bumps `providerActionNonce` so any previously signed typed-data
+    ///      for this provider is invalidated — including after a plain Glif call with empty signature.
+    function _requirePayeeAuthorization(uint256 providerId, bytes32 structHash, bytes calldata signature) private {
+        address payee = providers[providerId].payee;
+        require(msg.sender == payee, "Only payee can call this function");
+
+        if (signature.length != 0) {
+            bytes32 digest = _hashTypedDataV4(structHash);
+            address recovered = _recoverSigner(digest, signature);
+            require(recovered == payee, "Invalid payee signature");
+        }
+
+        unchecked {
+            providerActionNonce[providerId]++;
+        }
+    }
+
+    /// @notice Recover the signer of an EIP-712 digest
+    function _recoverSigner(bytes32 digest, bytes memory signature) private pure returns (address) {
+        require(signature.length == 65, "Invalid signature length");
+
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly ("memory-safe") {
+            r := mload(add(signature, 32))
+            s := mload(add(signature, 64))
+            v := byte(0, mload(add(signature, 96)))
+        }
+        if (v < 27) {
+            v += 27;
+        }
+        require(v == 27 || v == 28, "Unsupported signature v");
+
+        address recovered = ecrecover(digest, v, r, s);
+        require(recovered != address(0), "Invalid signature");
+        return recovered;
     }
 
     /// @notice Get complete provider information

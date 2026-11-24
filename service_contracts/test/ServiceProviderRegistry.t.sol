@@ -38,7 +38,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     function testInitialState() public view {
         // Check version
-        assertEq(registry.VERSION(), "1.2.0", "Version should be 1.2.0");
+        assertEq(registry.VERSION(), "1.3.0", "Version should be 1.3.0");
 
         // Check owner
         assertEq(registry.owner(), owner, "Service provider should be deployer");
@@ -624,6 +624,210 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(providerInfos[0].info.serviceProvider, address(0), "Inactive provider should have zero address");
         assertEq(providerInfos[0].providerId, 0, "Inactive provider should have zero ID");
         assertFalse(providerInfos[0].info.isActive, "Inactive provider should be inactive");
+    }
+
+    function testChangePayeeByDirectCall() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        address newPayee = address(0xBEEF);
+        vm.prank(user1);
+        registry.changePayee(providerId, newPayee, "");
+
+        assertEq(registry.getProviderPayee(providerId), newPayee, "Payee should update");
+        assertEq(registry.providerActionNonce(providerId), 1, "Direct call must consume nonce");
+    }
+
+    function testWorkerCannotSubmitPayeeSignature() public {
+        uint256 payeeKey = 0xA11CE;
+        address payee = vm.addr(payeeKey);
+        address worker = user1;
+        address newPayee = address(0xBEEF);
+
+        vm.deal(worker, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(worker);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            payee, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        bytes32 structHash = keccak256(
+            abi.encode(registry.CHANGE_PAYEE_TYPEHASH(), providerId, newPayee, registry.providerActionNonce(providerId))
+        );
+        bytes32 digest = _registryDigest(structHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payeeKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(worker);
+        vm.expectRevert("Only payee can call this function");
+        registry.changePayee(providerId, newPayee, signature);
+    }
+
+    function testDirectPayeeCallInvalidatesPriorSignature() public {
+        uint256 payeeKey = 0xA11CE;
+        address payee = vm.addr(payeeKey);
+        address worker = user1;
+        address signedPayee = address(0xBEEF);
+        address directPayee = address(0xCAFE);
+
+        vm.deal(worker, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(worker);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            payee, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        uint256 nonceBefore = registry.providerActionNonce(providerId);
+        bytes32 structHash =
+            keccak256(abi.encode(registry.CHANGE_PAYEE_TYPEHASH(), providerId, signedPayee, nonceBefore));
+        bytes32 digest = _registryDigest(structHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payeeKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(payee);
+        registry.changePayee(providerId, directPayee, "");
+        assertEq(registry.providerActionNonce(providerId), nonceBefore + 1, "Nonce advanced by direct call");
+
+        vm.prank(payee);
+        vm.expectRevert("Invalid payee signature");
+        registry.changePayee(providerId, signedPayee, signature);
+        assertEq(registry.getProviderPayee(providerId), directPayee, "Payee remains the direct-call target");
+    }
+
+    function testChangeServiceProviderRequiresPayee() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        // Move payee away from the worker
+        address payee = address(0xBEEF);
+        vm.prank(user1);
+        registry.changePayee(providerId, payee, "");
+
+        address newWorker = address(0xCAFE);
+        vm.prank(user1);
+        vm.expectRevert("Only payee can call this function");
+        registry.changeServiceProvider(providerId, newWorker, "");
+
+        vm.prank(payee);
+        registry.changeServiceProvider(providerId, newWorker, "");
+
+        ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(providerId);
+        assertEq(info.info.serviceProvider, newWorker, "Worker should update");
+        assertEq(registry.addressToProviderId(newWorker), providerId, "New worker should map to provider");
+        assertEq(registry.addressToProviderId(user1), 0, "Old worker mapping cleared");
+        assertEq(registry.previousWorkerProviderId(user1), providerId, "Old worker recorded");
+        assertEq(registry.currentWorker(user1), newWorker, "currentWorker resolves former worker");
+        assertEq(registry.currentWorker(newWorker), newWorker, "currentWorker resolves live worker");
+    }
+
+    function testChangePayeeWithSelfSignature() public {
+        uint256 payeeKey = 0xA11CE;
+        address payee = vm.addr(payeeKey);
+        address worker = user1;
+        address newPayee = address(0xBEEF);
+
+        vm.deal(worker, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(worker);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            payee, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        bytes32 structHash = keccak256(
+            abi.encode(registry.CHANGE_PAYEE_TYPEHASH(), providerId, newPayee, registry.providerActionNonce(providerId))
+        );
+        bytes32 digest = _registryDigest(structHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payeeKey, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(payee);
+        registry.changePayee(providerId, newPayee, signature);
+
+        assertEq(registry.getProviderPayee(providerId), newPayee, "Payee should update via self-signature");
+        assertEq(registry.providerActionNonce(providerId), 1, "Nonce should advance");
+    }
+
+    function testFormerWorkerCanRotateBack() public {
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        vm.prank(user1);
+        registry.changeServiceProvider(providerId, user2, "");
+        assertEq(registry.previousWorkerProviderId(user1), providerId, "Old worker recorded");
+
+        vm.prank(user1);
+        registry.changeServiceProvider(providerId, user1, "");
+        assertEq(registry.getProvider(providerId).info.serviceProvider, user1, "Worker rotated back");
+        assertEq(registry.previousWorkerProviderId(user1), 0, "Live worker clears previous mapping");
+        assertEq(registry.previousWorkerProviderId(user2), providerId, "Interim worker recorded");
+        assertEq(registry.currentWorker(user2), user1, "Former interim worker resolves to live worker");
+    }
+
+    function testFormerWorkerCannotReregisterWhileProviderActive() public {
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        vm.prank(user1);
+        registry.changeServiceProvider(providerId, user2, "");
+
+        vm.prank(user1);
+        vm.expectRevert("Address previously used as worker for an active provider");
+        registry.registerProvider{value: 5 ether}(
+            user1, "Again", "Again", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+    }
+
+    function testWorkerCannotRemoveAfterPayeeMoves() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        address payee = address(0xBEEF);
+        vm.prank(user1);
+        registry.changePayee(providerId, payee, "");
+
+        vm.prank(user1);
+        vm.expectRevert("Only payee can remove provider");
+        registry.removeProvider();
+
+        vm.prank(payee);
+        registry.removeProvider(providerId, "");
+        assertFalse(registry.getProvider(providerId).info.isActive, "Provider should be inactive");
+    }
+
+    function _registryDigest(bytes32 structHash) internal view returns (bytes32) {
+        (, string memory name, string memory version,, address verifyingContract,,) = registry.eip712Domain();
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                block.chainid,
+                verifyingContract
+            )
+        );
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }
 
     // Helper function to create a valid PDP offering for tests
