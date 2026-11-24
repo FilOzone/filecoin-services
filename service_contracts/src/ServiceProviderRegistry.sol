@@ -45,15 +45,7 @@ contract ServiceProviderRegistry is
     /// @notice Version of the contract implementation
     string public constant VERSION = "1.3.0";
 
-    /// @notice EIP-712 typehash for changing the payee
-    bytes32 public constant CHANGE_PAYEE_TYPEHASH =
-        keccak256("ChangePayee(uint256 providerId,address newPayee,uint256 nonce)");
-
-    /// @notice EIP-712 typehash for changing the worker (serviceProvider)
-    bytes32 public constant CHANGE_SERVICE_PROVIDER_TYPEHASH =
-        keccak256("ChangeServiceProvider(uint256 providerId,address newServiceProvider,uint256 nonce)");
-
-    /// @notice EIP-712 typehash for removing a provider
+    /// @notice EIP-712 typehash for removing a provider (payee-authorized voluntary exit)
     bytes32 public constant REMOVE_PROVIDER_TYPEHASH = keccak256("RemoveProvider(uint256 providerId,uint256 nonce)");
 
     /// @notice Maximum length for service URL
@@ -431,14 +423,13 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Change the payee (beneficiary) for a provider
-    /// @dev Payee must call directly (e.g. Glif). The worker cannot change the payee, even with a
-    ///      payee signature — `msg.sender` must be the current payee. Optional EIP-712 `signature`
-    ///      may bind the call to a specific `(newPayee, nonce)` when the payee supplies one.
+    /// @dev Registry owner only (e.g. FilOzone Safe). Rare recovery path with human vetting —
+    ///      neither the worker nor the current payee can rotate the beneficiary on-chain.
     /// @param providerId The provider to update
     /// @param newPayee The new beneficiary address
-    /// @param signature Empty for a plain payee call, or payee EIP-712 over ChangePayee
-    function changePayee(uint256 providerId, address newPayee, bytes calldata signature)
+    function changePayee(uint256 providerId, address newPayee)
         external
+        onlyOwner
         providerExists(providerId)
         providerActive(providerId)
     {
@@ -446,23 +437,18 @@ contract ServiceProviderRegistry is
         address oldPayee = providers[providerId].payee;
         require(newPayee != oldPayee, "Payee unchanged");
 
-        bytes32 structHash = keccak256(abi.encode(CHANGE_PAYEE_TYPEHASH, providerId, newPayee, providerActionNonce[providerId]));
-        _requirePayeeAuthorization(providerId, structHash, signature);
-
         providers[providerId].payee = newPayee;
         emit PayeeChanged(providerId, oldPayee, newPayee);
     }
 
     /// @notice Change the worker (serviceProvider) for a provider
-    /// @dev Payee must call directly. The old worker's `addressToProviderId` entry is kept so
+    /// @dev Registry owner only. The old worker's `addressToProviderId` entry is kept so
     ///      `currentWorker(old)` still resolves for data sets that snapshotted that address.
-    ///      A former worker of this provider may be restored. Addresses mapped to a different
-    ///      active provider cannot be selected.
     /// @param providerId The provider to update
     /// @param newServiceProvider The new worker address
-    /// @param signature Empty for a plain payee call, or payee EIP-712 over ChangeServiceProvider
-    function changeServiceProvider(uint256 providerId, address newServiceProvider, bytes calldata signature)
+    function changeServiceProvider(uint256 providerId, address newServiceProvider)
         external
+        onlyOwner
         providerExists(providerId)
         providerActive(providerId)
     {
@@ -474,11 +460,6 @@ contract ServiceProviderRegistry is
 
         address oldServiceProvider = providers[providerId].serviceProvider;
         require(newServiceProvider != oldServiceProvider, "Service provider unchanged");
-
-        bytes32 structHash = keccak256(
-            abi.encode(CHANGE_SERVICE_PROVIDER_TYPEHASH, providerId, newServiceProvider, providerActionNonce[providerId])
-        );
-        _requirePayeeAuthorization(providerId, structHash, signature);
 
         // Keep addressToProviderId[oldServiceProvider] so PDPVerifier can resolve via currentWorker.
         providers[providerId].serviceProvider = newServiceProvider;

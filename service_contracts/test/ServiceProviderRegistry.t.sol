@@ -626,7 +626,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertFalse(providerInfos[0].info.isActive, "Inactive provider should be inactive");
     }
 
-    function testChangePayeeByDirectCall() public {
+    function testOwnerCanChangePayee() public {
         vm.deal(user1, 10 ether);
         (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
@@ -635,70 +635,12 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         );
 
         address newPayee = address(0xBEEF);
-        vm.prank(user1);
-        registry.changePayee(providerId, newPayee, "");
+        registry.changePayee(providerId, newPayee);
 
         assertEq(registry.getProviderPayee(providerId), newPayee, "Payee should update");
-        assertEq(registry.providerActionNonce(providerId), 1, "Direct call must consume nonce");
     }
 
-    function testWorkerCannotSubmitPayeeSignature() public {
-        uint256 payeeKey = 0xA11CE;
-        address payee = vm.addr(payeeKey);
-        address worker = user1;
-        address newPayee = address(0xBEEF);
-
-        vm.deal(worker, 10 ether);
-        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
-        vm.prank(worker);
-        uint256 providerId = registry.registerProvider{value: 5 ether}(
-            payee, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
-        );
-
-        bytes32 structHash = keccak256(
-            abi.encode(registry.CHANGE_PAYEE_TYPEHASH(), providerId, newPayee, registry.providerActionNonce(providerId))
-        );
-        bytes32 digest = _registryDigest(structHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payeeKey, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
-
-        vm.prank(worker);
-        vm.expectRevert("Only payee can call this function");
-        registry.changePayee(providerId, newPayee, signature);
-    }
-
-    function testDirectPayeeCallInvalidatesPriorSignature() public {
-        uint256 payeeKey = 0xA11CE;
-        address payee = vm.addr(payeeKey);
-        address worker = user1;
-        address signedPayee = address(0xBEEF);
-        address directPayee = address(0xCAFE);
-
-        vm.deal(worker, 10 ether);
-        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
-        vm.prank(worker);
-        uint256 providerId = registry.registerProvider{value: 5 ether}(
-            payee, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
-        );
-
-        uint256 nonceBefore = registry.providerActionNonce(providerId);
-        bytes32 structHash =
-            keccak256(abi.encode(registry.CHANGE_PAYEE_TYPEHASH(), providerId, signedPayee, nonceBefore));
-        bytes32 digest = _registryDigest(structHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payeeKey, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
-
-        vm.prank(payee);
-        registry.changePayee(providerId, directPayee, "");
-        assertEq(registry.providerActionNonce(providerId), nonceBefore + 1, "Nonce advanced by direct call");
-
-        vm.prank(payee);
-        vm.expectRevert("Invalid payee signature");
-        registry.changePayee(providerId, signedPayee, signature);
-        assertEq(registry.getProviderPayee(providerId), directPayee, "Payee remains the direct-call target");
-    }
-
-    function testChangeServiceProviderRequiresPayee() public {
+    function testNonOwnerCannotChangePayeeOrWorker() public {
         vm.deal(user1, 10 ether);
         (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
@@ -706,18 +648,28 @@ contract ServiceProviderRegistryTest is MockFVMTest {
             user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
-        // Move payee away from the worker
-        address payee = address(0xBEEF);
         vm.prank(user1);
-        registry.changePayee(providerId, payee, "");
+        vm.expectRevert();
+        registry.changePayee(providerId, address(0xBEEF));
+
+        vm.prank(user1);
+        vm.expectRevert();
+        registry.changeServiceProvider(providerId, address(0xCAFE));
+    }
+
+    function testOwnerCanChangeServiceProvider() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        address payee = address(0xBEEF);
+        registry.changePayee(providerId, payee);
 
         address newWorker = address(0xCAFE);
-        vm.prank(user1);
-        vm.expectRevert("Only payee can call this function");
-        registry.changeServiceProvider(providerId, newWorker, "");
-
-        vm.prank(payee);
-        registry.changeServiceProvider(providerId, newWorker, "");
+        registry.changeServiceProvider(providerId, newWorker);
 
         ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(providerId);
         assertEq(info.info.serviceProvider, newWorker, "Worker should update");
@@ -725,33 +677,6 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(registry.addressToProviderId(user1), providerId, "Former worker mapping kept for resolution");
         assertEq(registry.currentWorker(user1), newWorker, "currentWorker resolves former worker");
         assertEq(registry.currentWorker(newWorker), newWorker, "currentWorker resolves live worker");
-    }
-
-    function testChangePayeeWithSelfSignature() public {
-        uint256 payeeKey = 0xA11CE;
-        address payee = vm.addr(payeeKey);
-        address worker = user1;
-        address newPayee = address(0xBEEF);
-
-        vm.deal(worker, 10 ether);
-        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
-        vm.prank(worker);
-        uint256 providerId = registry.registerProvider{value: 5 ether}(
-            payee, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
-        );
-
-        bytes32 structHash = keccak256(
-            abi.encode(registry.CHANGE_PAYEE_TYPEHASH(), providerId, newPayee, registry.providerActionNonce(providerId))
-        );
-        bytes32 digest = _registryDigest(structHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(payeeKey, digest);
-        bytes memory signature = abi.encodePacked(r, s, v);
-
-        vm.prank(payee);
-        registry.changePayee(providerId, newPayee, signature);
-
-        assertEq(registry.getProviderPayee(providerId), newPayee, "Payee should update via self-signature");
-        assertEq(registry.providerActionNonce(providerId), 1, "Nonce should advance");
     }
 
     function testFormerWorkerCanRotateBack() public {
@@ -763,12 +688,10 @@ contract ServiceProviderRegistryTest is MockFVMTest {
             user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
-        vm.prank(user1);
-        registry.changeServiceProvider(providerId, user2, "");
+        registry.changeServiceProvider(providerId, user2);
         assertEq(registry.addressToProviderId(user1), providerId, "Old worker mapping kept");
 
-        vm.prank(user1);
-        registry.changeServiceProvider(providerId, user1, "");
+        registry.changeServiceProvider(providerId, user1);
         assertEq(registry.getProvider(providerId).info.serviceProvider, user1, "Worker rotated back");
         assertEq(registry.addressToProviderId(user1), providerId, "Restored worker still mapped");
         assertEq(registry.addressToProviderId(user2), providerId, "Interim worker mapping kept");
@@ -784,8 +707,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
             user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
-        vm.prank(user1);
-        registry.changeServiceProvider(providerId, user2, "");
+        registry.changeServiceProvider(providerId, user2);
 
         vm.prank(user1);
         vm.expectRevert("Address already registered");
@@ -803,8 +725,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         );
 
         address payee = address(0xBEEF);
-        vm.prank(user1);
-        registry.changePayee(providerId, payee, "");
+        registry.changePayee(providerId, payee);
 
         vm.prank(user1);
         vm.expectRevert("Only payee can remove provider");
