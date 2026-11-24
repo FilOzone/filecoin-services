@@ -206,13 +206,12 @@ contract ServiceProviderRegistry is
         // Validate payee address
         require(payee != address(0), "Payee cannot be zero address");
 
-        // Check if address is already registered as a live worker. Former workers of an inactive
-        // provider may register again (wallet reuse after soft-delete); clear the stale mapping.
-        require(addressToProviderId[msg.sender] == 0, "Address already registered");
-        uint256 previousProviderId = previousWorkerProviderId[msg.sender];
-        if (previousProviderId != 0) {
-            require(!providers[previousProviderId].isActive, "Address previously used as worker for an active provider");
-            delete previousWorkerProviderId[msg.sender];
+        // Reject addresses still mapped to an active provider (live or former worker). Soft-deleted
+        // providers leave stale mappings; clear those so the address can register again.
+        uint256 existingProviderId = addressToProviderId[msg.sender];
+        if (existingProviderId != 0) {
+            require(!providers[existingProviderId].isActive, "Address already registered");
+            delete addressToProviderId[msg.sender];
         }
 
         // Check payment amount is exactly the registration fee
@@ -455,9 +454,10 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Change the worker (serviceProvider) for a provider
-    /// @dev Payee must call directly. A former worker may be restored for the same provider (wallet
-    ///      rotation). Addresses that are still the live worker of another provider, or that were
-    ///      previously a worker for a different provider, cannot be selected.
+    /// @dev Payee must call directly. The old worker's `addressToProviderId` entry is kept so
+    ///      `currentWorker(old)` still resolves for data sets that snapshotted that address.
+    ///      A former worker of this provider may be restored. Addresses mapped to a different
+    ///      active provider cannot be selected.
     /// @param providerId The provider to update
     /// @param newServiceProvider The new worker address
     /// @param signature Empty for a plain payee call, or payee EIP-712 over ChangeServiceProvider
@@ -467,12 +467,10 @@ contract ServiceProviderRegistry is
         providerActive(providerId)
     {
         require(newServiceProvider != address(0), "Service provider cannot be zero address");
-        require(addressToProviderId[newServiceProvider] == 0, "Address already registered");
-        uint256 previousProviderId = previousWorkerProviderId[newServiceProvider];
-        require(
-            previousProviderId == 0 || previousProviderId == providerId,
-            "Address previously used as worker for another provider"
-        );
+        uint256 existingProviderId = addressToProviderId[newServiceProvider];
+        if (existingProviderId != 0 && existingProviderId != providerId) {
+            require(!providers[existingProviderId].isActive, "Address already registered");
+        }
 
         address oldServiceProvider = providers[providerId].serviceProvider;
         require(newServiceProvider != oldServiceProvider, "Service provider unchanged");
@@ -482,9 +480,7 @@ contract ServiceProviderRegistry is
         );
         _requirePayeeAuthorization(providerId, structHash, signature);
 
-        delete addressToProviderId[oldServiceProvider];
-        previousWorkerProviderId[oldServiceProvider] = providerId;
-        delete previousWorkerProviderId[newServiceProvider];
+        // Keep addressToProviderId[oldServiceProvider] so PDPVerifier can resolve via currentWorker.
         providers[providerId].serviceProvider = newServiceProvider;
         addressToProviderId[newServiceProvider] = providerId;
 
@@ -552,14 +548,13 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Resolve the current worker for an address that is or was a worker
+    /// @dev Former workers remain in `addressToProviderId`, so data-set snapshotted addresses still
+    ///      resolve to the live `serviceProvider`.
     /// @param workerOrFormerWorker Current or previous worker address
-    /// @return The live serviceProvider for that provider, or address(0) if unknown
+    /// @return The live serviceProvider for that provider, or address(0) if unknown/inactive
     function currentWorker(address workerOrFormerWorker) external view returns (address) {
         uint256 providerId = addressToProviderId[workerOrFormerWorker];
-        if (providerId == 0) {
-            providerId = previousWorkerProviderId[workerOrFormerWorker];
-        }
-        if (providerId == 0) {
+        if (providerId == 0 || !providers[providerId].isActive) {
             return address(0);
         }
         return providers[providerId].serviceProvider;
@@ -570,9 +565,6 @@ contract ServiceProviderRegistry is
     /// @return providerId The provider ID, or 0 if unknown
     function getProviderIdByWorkerAddress(address workerOrFormerWorker) external view returns (uint256 providerId) {
         providerId = addressToProviderId[workerOrFormerWorker];
-        if (providerId == 0) {
-            providerId = previousWorkerProviderId[workerOrFormerWorker];
-        }
     }
 
     /// @notice Require that the current payee is `msg.sender`, optionally binding EIP-712 `signature`

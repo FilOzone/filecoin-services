@@ -72,11 +72,8 @@ contract ServiceProviderRegistryStorage {
     /// @notice Count of active providers
     uint256 public activeProviderCount;
 
-    /// @notice Maps a former worker address to the provider it used to operate
-    /// @dev Appended for upgrade safety. Used so PDPVerifier can resolve the current worker
-    ///      from a data set that still stores the original worker address.
-    mapping(address previousWorker => uint256 providerId) public previousWorkerProviderId;
-
     /// @notice Per-provider EIP-712 nonce for payee-authorized actions
+    /// @dev Appended for upgrade safety. Former workers keep their `addressToProviderId` entries
+    ///      so `currentWorker` can resolve from data-set-snapshotted addresses without a second map.
     mapping(uint256 providerId => uint256 nonce) public providerActionNonce;
 }

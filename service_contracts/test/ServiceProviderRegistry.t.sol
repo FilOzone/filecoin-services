@@ -722,8 +722,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(providerId);
         assertEq(info.info.serviceProvider, newWorker, "Worker should update");
         assertEq(registry.addressToProviderId(newWorker), providerId, "New worker should map to provider");
-        assertEq(registry.addressToProviderId(user1), 0, "Old worker mapping cleared");
-        assertEq(registry.previousWorkerProviderId(user1), providerId, "Old worker recorded");
+        assertEq(registry.addressToProviderId(user1), providerId, "Former worker mapping kept for resolution");
         assertEq(registry.currentWorker(user1), newWorker, "currentWorker resolves former worker");
         assertEq(registry.currentWorker(newWorker), newWorker, "currentWorker resolves live worker");
     }
@@ -766,13 +765,13 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
         vm.prank(user1);
         registry.changeServiceProvider(providerId, user2, "");
-        assertEq(registry.previousWorkerProviderId(user1), providerId, "Old worker recorded");
+        assertEq(registry.addressToProviderId(user1), providerId, "Old worker mapping kept");
 
         vm.prank(user1);
         registry.changeServiceProvider(providerId, user1, "");
         assertEq(registry.getProvider(providerId).info.serviceProvider, user1, "Worker rotated back");
-        assertEq(registry.previousWorkerProviderId(user1), 0, "Live worker clears previous mapping");
-        assertEq(registry.previousWorkerProviderId(user2), providerId, "Interim worker recorded");
+        assertEq(registry.addressToProviderId(user1), providerId, "Restored worker still mapped");
+        assertEq(registry.addressToProviderId(user2), providerId, "Interim worker mapping kept");
         assertEq(registry.currentWorker(user2), user1, "Former interim worker resolves to live worker");
     }
 
@@ -789,7 +788,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         registry.changeServiceProvider(providerId, user2, "");
 
         vm.prank(user1);
-        vm.expectRevert("Address previously used as worker for an active provider");
+        vm.expectRevert("Address already registered");
         registry.registerProvider{value: 5 ether}(
             user1, "Again", "Again", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
