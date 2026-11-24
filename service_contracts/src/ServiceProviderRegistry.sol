@@ -442,16 +442,19 @@ contract ServiceProviderRegistry is
     }
 
     /// @notice Change the worker (serviceProvider) for a provider
-    /// @dev Registry owner only. The old worker's `addressToProviderId` entry is kept so
-    ///      `currentWorker(old)` still resolves for data sets that snapshotted that address.
+    /// @dev Common wallet-rotation path: current payee calls directly (e.g. Glif/MetaMask).
+    ///      Registry owner may also call for recovery. The worker cannot rotate itself.
+    ///      Former workers stay in `addressToProviderId` so `currentWorker(old)` still resolves.
     /// @param providerId The provider to update
     /// @param newServiceProvider The new worker address
     function changeServiceProvider(uint256 providerId, address newServiceProvider)
         external
-        onlyOwner
         providerExists(providerId)
         providerActive(providerId)
     {
+        address payee = providers[providerId].payee;
+        require(msg.sender == payee || msg.sender == owner(), "Only payee or owner can change worker");
+
         require(newServiceProvider != address(0), "Service provider cannot be zero address");
         uint256 existingProviderId = addressToProviderId[newServiceProvider];
         if (existingProviderId != 0 && existingProviderId != providerId) {

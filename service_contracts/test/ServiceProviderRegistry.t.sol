@@ -640,7 +640,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(registry.getProviderPayee(providerId), newPayee, "Payee should update");
     }
 
-    function testNonOwnerCannotChangePayeeOrWorker() public {
+    function testNonOwnerCannotChangePayee() public {
         vm.deal(user1, 10 ether);
         (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
@@ -651,13 +651,9 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         vm.prank(user1);
         vm.expectRevert();
         registry.changePayee(providerId, address(0xBEEF));
-
-        vm.prank(user1);
-        vm.expectRevert();
-        registry.changeServiceProvider(providerId, address(0xCAFE));
     }
 
-    function testOwnerCanChangeServiceProvider() public {
+    function testPayeeCanChangeServiceProvider() public {
         vm.deal(user1, 10 ether);
         (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
         vm.prank(user1);
@@ -669,6 +665,11 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         registry.changePayee(providerId, payee);
 
         address newWorker = address(0xCAFE);
+        vm.prank(user1);
+        vm.expectRevert("Only payee or owner can change worker");
+        registry.changeServiceProvider(providerId, newWorker);
+
+        vm.prank(payee);
         registry.changeServiceProvider(providerId, newWorker);
 
         ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(providerId);
@@ -677,6 +678,18 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(registry.addressToProviderId(user1), providerId, "Former worker mapping kept for resolution");
         assertEq(registry.currentWorker(user1), newWorker, "currentWorker resolves former worker");
         assertEq(registry.currentWorker(newWorker), newWorker, "currentWorker resolves live worker");
+    }
+
+    function testOwnerCanChangeServiceProviderForRecovery() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        registry.changeServiceProvider(providerId, address(0xCAFE));
+        assertEq(registry.getProvider(providerId).info.serviceProvider, address(0xCAFE));
     }
 
     function testFormerWorkerCanRotateBack() public {
@@ -688,9 +701,12 @@ contract ServiceProviderRegistryTest is MockFVMTest {
             user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
+        // user1 is still payee until owner moves it
+        vm.prank(user1);
         registry.changeServiceProvider(providerId, user2);
         assertEq(registry.addressToProviderId(user1), providerId, "Old worker mapping kept");
 
+        vm.prank(user1);
         registry.changeServiceProvider(providerId, user1);
         assertEq(registry.getProvider(providerId).info.serviceProvider, user1, "Worker rotated back");
         assertEq(registry.addressToProviderId(user1), providerId, "Restored worker still mapped");
@@ -707,6 +723,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
             user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
         );
 
+        vm.prank(user1);
         registry.changeServiceProvider(providerId, user2);
 
         vm.prank(user1);
