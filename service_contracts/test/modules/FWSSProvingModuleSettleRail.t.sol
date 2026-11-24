@@ -10,8 +10,7 @@ import {DISBURSE, UNLOCK, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {Errors} from "../../src/Errors.sol";
 import {CHALLENGES_PER_PROOF} from "../../src/lib/FWSSConstants.sol";
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
-import {RAIL_TO_DATA_SET_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
-import {LibHeldPayments} from "../../src/lib/LibHeldPayments.sol";
+import {DATA_SET_INFO_SLOT, RAIL_TO_DATA_SET_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
 import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
 
@@ -22,7 +21,6 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
     uint64 internal constant NONCE = FLAG_CALLBACK | 1;
     uint88 internal constant RATE = 1000;
-    uint128 internal constant RESERVE = 1e6;
     uint256 internal constant DEPOSIT = 1e18;
 
     FWSSProvingModule internal provingModule;
@@ -33,6 +31,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
     uint256 internal activationEpoch;
     uint64 internal maxProvingPeriod;
     uint256 internal challengeWindow;
+    uint128 internal lifecycleReserve;
 
     function setUp() public override {
         super.setUp();
@@ -42,9 +41,25 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         payee = pdpServiceWithPayments.getDataSet(dataSetId).payee;
         token = uint256(uint160(address(mockUSDFC)));
         (maxProvingPeriod, challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
+        _dropPendingOneTimePayments();
+        // the rails lock the reserve FWSS recorded for the data set, as dataSetCreated does on FilecoinPayV2
+        lifecycleReserve = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
+        assertGt(lifecycleReserve, 0, "the data set has a lifecycle reserve");
     }
 
     // Rail setup, as dataSetCreated will do once it moves to FilecoinPayV2
+
+    /// @dev The data set is created on FilecoinPayV1, whose first proving period pays the creation fee out of the
+    /// reserve. The hand-made FilecoinPayV2 rail does not follow that flush, so the reserve FWSS records would drift
+    /// from the one locked on the rail and the difference would read as held payment. Dropping the pending fee keeps
+    /// the two in step, as a FilecoinPayV2 flush will by disbursing from the rail.
+    function _dropPendingOneTimePayments() internal {
+        // relative slot 10 packs pendingOneTimePayments (low 96 bits), lifecycleReserveBalance and pieceRemovalsPending
+        bytes32 slot = bytes32(uint256(keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT))) + 10);
+        uint256 word = uint256(vm.load(address(pdpServiceWithPayments), slot));
+        vm.store(address(pdpServiceWithPayments), slot, bytes32(word & ~uint256(type(uint96).max)));
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0);
+    }
 
     function _createRail(uint256 deposit, bool linked) internal {
         vm.startPrank(client);
@@ -55,8 +70,8 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         vm.prank(address(pdpServiceWithPayments));
         filecoinPayV2.executeScript(
-            newScript().setToken(address(mockUSDFC)).createRail(client, payee, NONCE).lock(RESERVE).setRate(RATE)
-                .build()
+            newScript().setToken(address(mockUSDFC)).createRail(client, payee, NONCE).lock(lifecycleReserve)
+                .setRate(RATE).build()
         );
         railId = address(pdpServiceWithPayments).deriveRail(client, payee, token, NONCE).getRailId();
         if (linked) {
@@ -83,18 +98,9 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         return IExtsload(address(filecoinPayV2)).getRail(railId).available;
     }
 
-    function _held() internal view returns (uint256 amount, uint256 fromEpoch, uint256 toEpoch) {
-        uint256 word = _heldWord(railId);
-        return (uint128(word), uint64(word >> 128), uint64(word >> 192));
-    }
-
-    function _heldWord(RailId rail) internal view returns (uint256) {
-        return uint256(
-            vm.load(
-                address(pdpServiceWithPayments),
-                keccak256(abi.encode(RailId.unwrap(rail), LibHeldPayments.STORAGE_LOCATION))
-            )
-        );
+    /// @dev The payment held on the rail: whatever its available balance has beyond the lifecycle reserve
+    function _held() internal view returns (uint256) {
+        return _available() - lifecycleReserve;
     }
 
     function _payerBalance() internal view returns (uint256) {
@@ -125,12 +131,8 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         _nextProvingPeriod(dataSetId, _deadline(period) - challengeWindow / 2, 100);
     }
 
-    function _assertHeld(uint256 amount, uint256 fromEpoch, uint256 toEpoch) internal view {
-        (uint256 heldAmount, uint256 heldFrom, uint256 heldTo) = _held();
-        assertEq(heldAmount, amount, "held amount");
-        assertEq(heldFrom, fromEpoch, "held from");
-        assertEq(heldTo, toEpoch, "held to");
-        assertEq(_available(), RESERVE + amount, "available holds the reserve and the held payment");
+    function _assertHeld(uint256 amount) internal view {
+        assertEq(_available(), lifecycleReserve + amount, "available holds the reserve and the held payment");
     }
 
     function _expectSettled(
@@ -161,7 +163,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), 2 * maxProvingPeriod * RATE, "pays every proven epoch");
         assertEq(_payerBalance(), payerBefore, "refunds nothing");
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_SomeEpochsProven() public {
@@ -179,7 +181,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period");
         assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE, "refunds the faulted period");
-        _assertHeld(RATE, _deadline(1), _deadline(1) + 1);
+        _assertHeld(RATE);
     }
 
     function testSettleRailCallback_OpenPeriodHeldThenPaid() public {
@@ -192,14 +194,14 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         _settle();
         assertEq(_payeeBalance(), 0, "the open period pays nothing yet");
         assertEq(_payerBalance(), payerBefore, "the open period refunds nothing yet");
-        _assertHeld((midPeriod - activationEpoch) * RATE, activationEpoch, midPeriod);
+        _assertHeld((midPeriod - activationEpoch) * RATE);
 
         _prove(0);
         vm.roll(_deadline(0));
         _settle();
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the proof releases the held payment and the rest");
         assertEq(_payerBalance(), payerBefore - (_deadline(0) - midPeriod) * RATE, "only the accrual drained the payer");
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_ReleasedHeldPaymentIsNotPaidTwice() public {
@@ -221,24 +223,24 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         vm.roll(_deadline(0) + 1);
         _settle();
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the released period is not paid twice");
-        _assertHeld(RATE, _deadline(0), _deadline(0) + 1);
+        _assertHeld(RATE);
     }
 
     function testSettleRailCallback_ProvenHeldPaymentWaitsForNewAccrual() public {
         _startProving();
         uint256 fundedEpochs = maxProvingPeriod / 2;
-        _createRail(RESERVE + fundedEpochs * RATE, true);
+        _createRail(lifecycleReserve + fundedEpochs * RATE, true);
         vm.roll(activationEpoch + fundedEpochs + 10);
         uint256 fundedTo = _settle();
         assertEq(fundedTo, activationEpoch + fundedEpochs);
-        _assertHeld(fundedEpochs * RATE, activationEpoch, fundedTo);
+        _assertHeld(fundedEpochs * RATE);
 
         // the proof resolves the held period, but an insolvent payer accrues nothing new, so no callback runs
         _prove(0);
         vm.roll(_deadline(0) + 1);
         assertEq(_settle(), fundedTo, "settlement cannot advance past the funded epoch");
         assertEq(_payeeBalance(), 0, "the proven held payment waits for the next callback");
-        _assertHeld(fundedEpochs * RATE, activationEpoch, fundedTo);
+        _assertHeld(fundedEpochs * RATE);
 
         // a top-up lets settlement advance, and the callback releases the held payment with the new accrual
         vm.startPrank(client);
@@ -247,7 +249,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         vm.stopPrank();
         _settle();
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the held and the newly accrued proven epochs once");
-        _assertHeld(RATE, _deadline(0), _deadline(0) + 1);
+        _assertHeld(RATE);
     }
 
     function testSettleRailCallback_OpenPeriodHeldThenRefunded() public {
@@ -256,7 +258,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         uint256 midPeriod = activationEpoch + maxProvingPeriod / 2;
         vm.roll(midPeriod);
         _settle();
-        _assertHeld((midPeriod - activationEpoch) * RATE, activationEpoch, midPeriod);
+        _assertHeld((midPeriod - activationEpoch) * RATE);
 
         vm.roll(_deadline(0) + 1);
         uint256 payerBefore = _payerBalance();
@@ -268,7 +270,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
             payerBefore + maxProvingPeriod * RATE,
             "the fault refunds the held payment and the rest of the period"
         );
-        _assertHeld(RATE, _deadline(0), _deadline(0) + 1);
+        _assertHeld(RATE);
     }
 
     function testSettleRailCallback_OpenPeriodHeldAcrossRepeatedSettles() public {
@@ -283,8 +285,82 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
             dataSetId, railId, activationEpoch + quarter, activationEpoch + 2 * quarter, 0, 0, 2 * quarter * RATE
         );
         _settle();
-        _assertHeld(2 * quarter * RATE, activationEpoch, activationEpoch + 2 * quarter);
+        _assertHeld(2 * quarter * RATE);
         assertEq(_payeeBalance(), 0);
+    }
+
+    function testSettleRailCallback_HeldAtDeadlineResolvesByItsOwnPeriod() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        // settling at the deadline before the proof lands holds the whole period, which is still open
+        vm.roll(_deadline(0));
+        _settle();
+        _assertHeld(maxProvingPeriod * RATE);
+
+        // the proof still lands at the deadline, then period 1 opens; the held payment belongs to period 0
+        vm.prank(address(mockPDPVerifier));
+        provingModule.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+        _openPeriod(1);
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the proof of period 0 releases its held payment");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_HeldAtDeadlinePaidWhenNextPeriodFaults() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        // the payer settles in the deadline block before the proof lands, holding the whole period 0
+        vm.roll(_deadline(0));
+        _settle();
+        _assertHeld(maxProvingPeriod * RATE);
+        vm.prank(address(mockPDPVerifier));
+        provingModule.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // period 1 faults, which must not refund the proven period 0
+        _openPeriod(1);
+        vm.roll(_deadline(1) + 1);
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the proven period 0 is paid");
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE, "only the faulted period 1 is refunded");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_HeldAtDeadlineRefundedWhenFaulted() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        vm.roll(_deadline(0));
+        _settle();
+        _assertHeld(maxProvingPeriod * RATE);
+
+        // period 0 faults; period 1 opens and is proven, which must not pay for period 0
+        _openPeriod(1);
+        _prove(1);
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), (_deadline(1) - challengeWindow / 2 - _deadline(0)) * RATE, "pays period 1 only");
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE, "refunds the faulted period 0");
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_LeavesTheReserveLocked() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        _openPeriod(1);
+        vm.roll(_deadline(1) + 1);
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period 0");
+        _assertHeld(RATE);
+        assertEq(
+            _payeeBalance() + _payerBalance() + _held() + lifecycleReserve,
+            DEPOSIT,
+            "every accrued epoch is paid, refunded or held, never taken from the reserve"
+        );
     }
 
     function testSettleRailCallback_RangeBeforeActivationRefunds() public {
@@ -297,7 +373,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), 0);
         assertEq(_payerBalance(), payerBefore + 100 * RATE, "refunds the epochs before activation");
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_ProvingNeverActivatedRefunds() public {
@@ -309,7 +385,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), 0);
         assertEq(_payerBalance(), payerBefore + 100 * RATE);
-        assertEq(_available(), RESERVE);
+        assertEq(_available(), lifecycleReserve);
     }
 
     function testSettleRailCallback_StraddlingActivationRefundsEpochsBeforeIt() public {
@@ -325,7 +401,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period");
         assertEq(_payerBalance(), payerBefore + 100 * RATE, "refunds the epochs before activation");
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_UnknownRailRefunds() public {
@@ -335,20 +411,21 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         vm.roll(_deadline(0));
 
         uint256 payerBefore = _payerBalance();
-        _expectSettled(0, railId, activationEpoch, _deadline(0), 0, maxProvingPeriod * RATE, 0);
+        // without a data set there is no reserve to keep, so the whole rail balance goes back too
+        _expectSettled(0, railId, activationEpoch, _deadline(0), 0, maxProvingPeriod * RATE + lifecycleReserve, 0);
         _settle();
 
         assertEq(_payeeBalance(), 0, "a rail without a data set pays nothing");
-        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE);
-        assertEq(_available(), RESERVE);
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE + lifecycleReserve);
+        assertEq(_available(), 0);
     }
 
-    function testSettleRailCallback_DeletedDataSetRefundsHeldPayment() public {
+    function testSettleRailCallback_DeletedDataSetRefundsHeldPaymentAndReserve() public {
         _startProving();
         _createRail(DEPOSIT, true);
         vm.roll(activationEpoch + maxProvingPeriod / 2);
         _settle();
-        (uint256 heldAmount,,) = _held();
+        uint256 heldAmount = _held();
         assertGt(heldAmount, 0);
 
         // Terminate the service and delete the data set through its FilecoinPayV1 rail
@@ -364,14 +441,23 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         uint256 payerBefore = _payerBalance();
         uint256 accrued = (vm.getBlockNumber() - (activationEpoch + maxProvingPeriod / 2)) * RATE;
         _expectSettled(
-            dataSetId, railId, activationEpoch + maxProvingPeriod / 2, vm.getBlockNumber(), 0, accrued + heldAmount, 0
+            dataSetId,
+            railId,
+            activationEpoch + maxProvingPeriod / 2,
+            vm.getBlockNumber(),
+            0,
+            accrued + heldAmount + lifecycleReserve,
+            0
         );
         _settle();
 
         assertEq(_payeeBalance(), 0, "a deleted data set pays nothing");
-        assertEq(_payerBalance(), payerBefore + accrued + heldAmount, "refunds the held payment too");
-        assertEq(_available(), RESERVE);
-        _assertHeld(0, 0, 0);
+        assertEq(
+            _payerBalance(),
+            payerBefore + accrued + heldAmount + lifecycleReserve,
+            "refunds the held payment and the reserve the deleted data set no longer needs"
+        );
+        assertEq(_available(), 0);
     }
 
     function testSettleRailCallback_RevertsIfCallerNotFilecoinPayV2() public {
@@ -395,7 +481,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         vm.roll(midPeriod);
         // FWSS changes the rate from its own script, which calls back into FWSS before setting the rate
         _setRate(3 * RATE);
-        _assertHeld((midPeriod - activationEpoch) * RATE, activationEpoch, midPeriod);
+        _assertHeld((midPeriod - activationEpoch) * RATE);
 
         _prove(0);
         vm.roll(_deadline(0));
@@ -406,7 +492,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
             (midPeriod - activationEpoch) * RATE + (_deadline(0) - midPeriod) * 3 * RATE,
             "each part of the period pays at its own rate"
         );
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_ZeroRateStillReleasesHeldPayment() public {
@@ -416,7 +502,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         vm.roll(midPeriod);
         _setRate(0);
         uint256 heldAmount = (midPeriod - activationEpoch) * RATE;
-        _assertHeld(heldAmount, activationEpoch, midPeriod);
+        _assertHeld(heldAmount);
 
         _prove(0);
         vm.roll(_deadline(0));
@@ -425,7 +511,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), heldAmount, "the proof releases the held payment with nothing new accrued");
         assertEq(_payerBalance(), payerBefore);
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_ModifyRateTriggersCallback() public {
@@ -439,7 +525,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
 
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "settling for the rate change pays the proven period");
         assertEq(IExtsload(address(filecoinPayV2)).getRail(railId).incomingRate, 0);
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     function testSettleRailCallback_TerminationRefundsHeldPayment() public {
@@ -457,7 +543,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "termination pays the proven period");
         assertEq(
             _payerBalance(),
-            payerBefore + RESERVE + (midPeriod - _deadline(0)) * RATE,
+            payerBefore + lifecycleReserve + (midPeriod - _deadline(0)) * RATE,
             "termination returns the reserve and the held payment"
         );
         assertEq(_available(), 0);
@@ -472,7 +558,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         vm.roll(quarter);
         _settle();
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period");
-        _assertHeld((quarter - _deadline(0)) * RATE, _deadline(0), quarter);
+        _assertHeld((quarter - _deadline(0)) * RATE);
 
         uint256 midPeriod = _deadline(0) + maxProvingPeriod / 2;
         vm.roll(midPeriod);
@@ -483,7 +569,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         assertEq(_payeeBalance(), maxProvingPeriod * RATE, "termination pays nothing for the open period");
         assertEq(
             _payerBalance(),
-            payerBefore + RESERVE + (midPeriod - _deadline(0)) * RATE,
+            payerBefore + lifecycleReserve + (midPeriod - _deadline(0)) * RATE,
             "termination returns the reserve, the earlier held payment and the new accrual"
         );
         assertEq(_available(), 0);
@@ -492,7 +578,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
     function testSettleRailCallback_InsolventPayerSettlesUpToFundedEpoch() public {
         _startProving();
         uint256 fundedEpochs = maxProvingPeriod / 2;
-        _createRail(RESERVE + fundedEpochs * RATE, true);
+        _createRail(lifecycleReserve + fundedEpochs * RATE, true);
         _prove(0);
         vm.roll(_deadline(0) + 10);
 
@@ -501,7 +587,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         assertEq(settledUpTo, activationEpoch + fundedEpochs, "settles only as far as the payer funded");
         assertLt(settledUpTo, vm.getBlockNumber());
         assertEq(_payeeBalance(), fundedEpochs * RATE, "pays the funded proven epochs");
-        _assertHeld(0, 0, 0);
+        _assertHeld(0);
     }
 
     // Accounting
@@ -541,22 +627,23 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         return hi > lo ? hi - lo : 0;
     }
 
-    /// @dev Calls the callback as FilecoinPayV2 and returns what it released and what the rail holds afterwards.
+    /// @dev Calls the callback as FilecoinPayV2 and returns what it released and what the rail holds afterwards
+    /// beyond the reserve.
     function _callback(RailId rail, uint256 fromEpoch, uint256 toEpoch, uint256 prevBalance, uint256 amount)
         internal
         returns (uint256 unlocked, uint256 disbursed, uint256 held)
     {
         vm.prank(address(filecoinPayV2));
         (unlocked, disbursed) = _decode(provingModule.settleRail(rail, fromEpoch, toEpoch, prevBalance, amount));
-        held = uint128(_heldWord(rail));
+        uint256 reserve = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
+        held = prevBalance + amount - unlocked - disbursed - reserve;
     }
 
     function testFuzz_SettleRailCallback_ReleasesExactlyWhatItAccounts(
         uint256 firstFrom,
         uint256 firstTo,
         uint256 firstAmount,
-        uint256 secondAmount,
-        uint256 reserve
+        uint256 secondAmount
     ) public {
         vm.roll(1000);
         _startProving();
@@ -569,7 +656,7 @@ contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
         firstTo = bound(firstTo, firstFrom + 1, vm.getBlockNumber() - 1);
         firstAmount = bound(firstAmount, 0, type(uint96).max);
         secondAmount = bound(secondAmount, 0, type(uint96).max);
-        reserve = bound(reserve, 0, type(uint96).max);
+        uint256 reserve = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
         RailId rail = RailId.wrap(uint256(keccak256("fuzz rail")));
         vm.store(
             address(pdpServiceWithPayments),
