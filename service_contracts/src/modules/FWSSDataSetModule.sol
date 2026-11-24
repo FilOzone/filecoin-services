@@ -397,9 +397,11 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
 
     /**
      * @notice Replace the data set's PDP and cache-miss rails so future settlement pays the registry payee.
-     * @dev Callable by the current registry worker. Recipient is always `getProviderPayee(providerId)`;
-     *      the payee already chose that address via `changePayee`. Does not terminate rails. Leaves the
-     *      CDN rail unchanged. Reverts when the payer cannot cover lockup through the current epoch.
+     * @dev Second-step op after `changePayee`: not bundled with role rotation. Callable only by the
+     *      current registry worker, so operators can rotate to a new worker first and pay retarget gas
+     *      from that wallet (old worker spends nothing). Recipient is always registry payee. Does not
+     *      terminate rails. Leaves the CDN rail unchanged. Reverts when the payer cannot cover lockup
+     *      through the current epoch.
      * @param dataSetId The data set whose rails to retarget
      */
     function retargetDataSetPayee(uint256 dataSetId) external {
