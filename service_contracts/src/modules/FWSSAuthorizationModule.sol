@@ -39,7 +39,7 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
 
     FilecoinPayV1 internal immutable paymentContract;
     SessionKeyRegistry public immutable sessionKeyRegistry;
-    ServiceProviderRegistry public immutable serviceProviderRegistry;
+    ServiceProviderRegistry private immutable serviceProviderRegistry;
 
     /// @notice Configures the immutable dependencies used by payer-authorized operations.
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.

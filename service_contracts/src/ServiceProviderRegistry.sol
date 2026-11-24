@@ -481,8 +481,9 @@ contract ServiceProviderRegistry is
         providerExists(providerId)
         providerActive(providerId)
     {
-        bytes32 structHash =
-            keccak256(abi.encode(REMOVE_PROVIDER_TYPEHASH, providerId, providerActionNonce[providerId]));
+        bytes32 structHash = keccak256(
+            abi.encode(REMOVE_PROVIDER_TYPEHASH, providerId, providerActionNonce[providerId])
+        );
         _requirePayeeAuthorization(providerId, structHash, signature);
         _removeProvider(providerId);
     }

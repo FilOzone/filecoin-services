@@ -330,12 +330,7 @@ library LibRails {
         payments.modifyRailLockup(oldPdpRailId, lockupPeriod, 0);
 
         newPdpRailId = payments.createRail(
-            oldPdp.token,
-            oldPdp.from,
-            newPayee,
-            oldPdp.validator,
-            oldPdp.commissionRateBps,
-            oldPdp.serviceFeeRecipient
+            oldPdp.token, oldPdp.from, newPayee, oldPdp.validator, oldPdp.commissionRateBps, oldPdp.serviceFeeRecipient
         );
         payments.modifyRailLockup(newPdpRailId, lockupPeriod, lifecycleReserveBalance);
         if (pdpRate > 0) {
