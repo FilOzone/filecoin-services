@@ -38,7 +38,7 @@ contract ServiceProviderRegistryTest is MockFVMTest {
 
     function testInitialState() public view {
         // Check version
-        assertEq(registry.VERSION(), "1.2.0", "Version should be 1.2.0");
+        assertEq(registry.VERSION(), "1.3.0", "Version should be 1.3.0");
 
         // Check owner
         assertEq(registry.owner(), owner, "Service provider should be deployer");
@@ -624,6 +624,157 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(providerInfos[0].info.serviceProvider, address(0), "Inactive provider should have zero address");
         assertEq(providerInfos[0].providerId, 0, "Inactive provider should have zero ID");
         assertFalse(providerInfos[0].info.isActive, "Inactive provider should be inactive");
+    }
+
+    function testOwnerCanChangePayee() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        address newPayee = address(0xBEEF);
+        registry.changePayee(providerId, newPayee);
+
+        assertEq(registry.getProviderPayee(providerId), newPayee, "Payee should update");
+    }
+
+    function testNonOwnerCannotChangePayee() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        vm.prank(user1);
+        vm.expectRevert();
+        registry.changePayee(providerId, address(0xBEEF));
+    }
+
+    function testPayeeCanChangeServiceProvider() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        address payee = address(0xBEEF);
+        registry.changePayee(providerId, payee);
+
+        address newWorker = address(0xCAFE);
+        vm.prank(user1);
+        vm.expectRevert("Only payee or owner can change worker");
+        registry.changeServiceProvider(providerId, newWorker);
+
+        vm.prank(payee);
+        registry.changeServiceProvider(providerId, newWorker);
+
+        ServiceProviderRegistry.ServiceProviderInfoView memory info = registry.getProvider(providerId);
+        assertEq(info.info.serviceProvider, newWorker, "Worker should update");
+        assertEq(registry.addressToProviderId(newWorker), providerId, "New worker should map to provider");
+        assertEq(registry.addressToProviderId(user1), providerId, "Former worker mapping kept for resolution");
+        assertTrue(
+            registry.isAuthorizedWorker(user1, newWorker), "Former worker registration authorizes the live worker"
+        );
+        assertFalse(registry.isAuthorizedWorker(user1, user1), "Former worker is no longer authorized");
+        assertTrue(registry.isAuthorizedWorker(newWorker, newWorker), "Live worker authorizes itself");
+        assertTrue(
+            registry.isAuthorizedWorker(address(0xDEAD), address(0xDEAD)), "Unknown registration authorizes itself"
+        );
+        assertFalse(
+            registry.isAuthorizedWorker(address(0xDEAD), newWorker), "Unknown registration rejects other addresses"
+        );
+    }
+
+    function testOwnerCanChangeServiceProviderForRecovery() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        registry.changeServiceProvider(providerId, address(0xCAFE));
+        assertEq(registry.getProvider(providerId).info.serviceProvider, address(0xCAFE));
+    }
+
+    function testFormerWorkerCanRotateBack() public {
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        // user1 is still payee until owner moves it
+        vm.prank(user1);
+        registry.changeServiceProvider(providerId, user2);
+        assertEq(registry.addressToProviderId(user1), providerId, "Old worker mapping kept");
+
+        vm.prank(user1);
+        registry.changeServiceProvider(providerId, user1);
+        assertEq(registry.getProvider(providerId).info.serviceProvider, user1, "Worker rotated back");
+        assertEq(registry.addressToProviderId(user1), providerId, "Restored worker still mapped");
+        assertEq(registry.addressToProviderId(user2), providerId, "Interim worker mapping kept");
+        assertTrue(registry.isAuthorizedWorker(user2, user1), "Former interim worker authorizes the restored worker");
+        assertFalse(registry.isAuthorizedWorker(user2, user2), "Interim worker is no longer authorized");
+    }
+
+    function testFormerWorkerCannotReregisterWhileProviderActive() public {
+        vm.deal(user1, 10 ether);
+        vm.deal(user2, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        vm.prank(user1);
+        registry.changeServiceProvider(providerId, user2);
+
+        vm.prank(user1);
+        vm.expectRevert("Address already registered");
+        registry.registerProvider{value: 5 ether}(
+            user1, "Again", "Again", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+    }
+
+    function testWorkerCannotRemoveAfterPayeeMoves() public {
+        vm.deal(user1, 10 ether);
+        (string[] memory keys, bytes[] memory values) = _createValidPDPOffering().toCapabilities();
+        vm.prank(user1);
+        uint256 providerId = registry.registerProvider{value: 5 ether}(
+            user1, "Test Provider", "Test Description", ServiceProviderRegistryStorage.ProductType.PDP, keys, values
+        );
+
+        address payee = address(0xBEEF);
+        registry.changePayee(providerId, payee);
+
+        vm.prank(user1);
+        vm.expectRevert("Only payee can remove provider");
+        registry.removeProvider();
+
+        vm.prank(payee);
+        registry.removeProvider(providerId, "");
+        assertFalse(registry.getProvider(providerId).info.isActive, "Provider should be inactive");
+    }
+
+    function _registryDigest(bytes32 structHash) internal view returns (bytes32) {
+        (, string memory name, string memory version,, address verifyingContract,,) = registry.eip712Domain();
+        bytes32 domainSeparator = keccak256(
+            abi.encode(
+                keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+                keccak256(bytes(name)),
+                keccak256(bytes(version)),
+                block.chainid,
+                verifyingContract
+            )
+        );
+        return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
     }
 
     // Helper function to create a valid PDP offering for tests

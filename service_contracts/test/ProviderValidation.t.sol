@@ -213,6 +213,42 @@ contract ProviderValidationTest is MockFVMTest, FWSSDeployer {
         assertEq(dataSetId, 1, "Dataset should be created");
     }
 
+    function testFormerWorkerCannotCreateDataSet() public {
+        PDPOffering.Schema memory pdpData = PDPOffering.Schema({
+            serviceURL: "https://provider1.com",
+            minPieceSizeInBytes: 1024,
+            maxPieceSizeInBytes: 1024 * 1024,
+            ipniPiece: true,
+            ipniIpfs: false,
+            storagePricePerTibPerDay: 1 ether,
+            minProvingPeriodInEpochs: 2880,
+            location: "US-West",
+            paymentTokenAddress: IERC20(address(0))
+        });
+        (string[] memory keys, bytes[] memory values) = pdpData.toCapabilities();
+        vm.prank(provider1);
+        serviceProviderRegistry.registerProvider{value: 5 ether}(
+            provider1,
+            "Provider 1",
+            "Provider 1 Description",
+            ServiceProviderRegistryStorage.ProductType.PDP,
+            keys,
+            values
+        );
+
+        vm.prank(provider1);
+        serviceProviderRegistry.changeServiceProvider(1, provider2);
+
+        string[] memory metadataKeys = new string[](0);
+        string[] memory metadataValues = new string[](0);
+        bytes memory extraData = abi.encode(client, 0, metadataKeys, metadataValues, FAKE_SIGNATURE);
+        vm.mockCall(address(0x01), bytes(hex""), abi.encode(client));
+
+        vm.prank(provider1);
+        vm.expectRevert(abi.encodeWithSelector(Errors.CallerNotProviderWorker.selector, 1, provider2, provider1));
+        pdpVerifier.createDataSet(PDPListener(address(warmStorage)), extraData);
+    }
+
     function testAddAndRemoveApprovedProvider() public {
         // Test adding provider
         warmStorage.addApprovedProvider(1);

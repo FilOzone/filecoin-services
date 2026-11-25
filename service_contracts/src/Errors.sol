@@ -367,4 +367,15 @@ library Errors {
     /// @param requiredEpoch The first epoch at which abandonment is allowed
     /// @param currentBlock The current block number
     error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
+
+    /// @notice The data set payee already matches the registry payee
+    /// @param dataSetId The data set ID
+    /// @param payee The current payee
+    error DataSetPayeeAlreadyCurrent(uint256 dataSetId, address payee);
+
+    /// @notice Only the registry worker may call this function
+    /// @param dataSetId The data set ID
+    /// @param expectedWorker The current registry worker
+    /// @param caller The caller address
+    error CallerNotProviderWorker(uint256 dataSetId, address expectedWorker, address caller);
 }

@@ -16,8 +16,8 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Main provider information
     struct ServiceProviderInfo {
-        address serviceProvider; // Address that controls the provider registration
-        address payee; // Address that receives payments (cannot be changed after registration)
+        address serviceProvider; // Worker address that operates the provider
+        address payee; // Beneficiary address that receives payments and authorizes role changes
         string name; // Optional provider name (max 128 chars)
         string description; //Service description, ToC, contract info, website..
         bool isActive;
@@ -71,4 +71,9 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Count of active providers
     uint256 public activeProviderCount;
+
+    /// @notice Per-provider EIP-712 nonce for payee-authorized actions
+    /// @dev Appended for upgrade safety. Former workers keep their `addressToProviderId` entries
+    ///      so `isAuthorizedWorker` can resolve from data-set-snapshotted addresses without a second map.
+    mapping(uint256 providerId => uint256 nonce) public providerActionNonce;
 }

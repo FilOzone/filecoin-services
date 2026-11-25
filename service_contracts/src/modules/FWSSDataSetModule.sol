@@ -168,11 +168,19 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(serviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
+        // Former workers stay mapped so existing data sets can authorize them. Create, including
+        // create-and-add, must be the current worker or rotation would leave the old key valid.
         uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
-
         require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
+        ServiceProviderRegistry.ServiceProviderInfoView memory provider =
+            serviceProviderRegistry.getProvider(providerId);
+        require(provider.info.isActive, Errors.ProviderNotRegistered(serviceProvider));
+        require(
+            serviceProvider == provider.info.serviceProvider,
+            Errors.CallerNotProviderWorker(dataSetId, provider.info.serviceProvider, serviceProvider)
+        );
 
-        address payee = serviceProviderRegistry.getProviderPayee(providerId);
+        address payee = provider.info.payee;
 
         require(
             clientNonces[createData.payer][createData.clientDataSetId] == 0,
@@ -393,6 +401,45 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
         onlyPDPVerifier
     {
         revert Errors.StorageProviderChangesNotSupported();
+    }
+
+    /**
+     * @notice Replace the data set's PDP and cache-miss rails so future settlement pays the registry payee.
+     * @dev Second-step op after `changePayee`: not bundled with role rotation. Callable only by the
+     *      current registry worker, so operators can rotate to a new worker first and pay retarget gas
+     *      from that wallet (old worker spends nothing). Recipient is always registry payee. Does not
+     *      terminate rails. Leaves the CDN rail unchanged. Reverts when the payer cannot cover lockup
+     *      through the current epoch.
+     * @param dataSetId The data set whose rails to retarget
+     */
+    function retargetDataSetPayee(uint256 dataSetId) external {
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
+        require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+
+        ServiceProviderRegistry.ServiceProviderInfoView memory provider =
+            serviceProviderRegistry.getProvider(info.providerId);
+        address worker = provider.info.serviceProvider;
+        require(msg.sender == worker, Errors.CallerNotProviderWorker(dataSetId, worker, msg.sender));
+
+        address newPayee = provider.info.payee;
+        require(newPayee != info.payee, Errors.DataSetPayeeAlreadyCurrent(dataSetId, info.payee));
+
+        uint256 oldPdpRailId = info.pdpRailId;
+        uint256 oldCacheMissRailId = info.cacheMissRailId;
+
+        (uint256 newPdpRailId, uint256 newCacheMissRailId) = paymentContract.retargetRails(
+            dataSetId, oldPdpRailId, oldCacheMissRailId, newPayee, info.lifecycleReserveBalance
+        );
+
+        delete railToDataSet[oldPdpRailId];
+        railToDataSet[newPdpRailId] = dataSetId;
+        info.pdpRailId = newPdpRailId;
+        info.payee = newPayee;
+
+        if (oldCacheMissRailId != 0) {
+            info.cacheMissRailId = newCacheMissRailId;
+        }
     }
 
     /**

@@ -47,6 +47,15 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
         string[] metadataKeys,
         string[] metadataValues
     );
+    event DataSetPayeeRetargeted(
+        uint256 indexed dataSetId,
+        address indexed oldPayee,
+        address indexed newPayee,
+        uint256 oldPdpRailId,
+        uint256 newPdpRailId,
+        uint256 oldCacheMissRailId,
+        uint256 newCacheMissRailId
+    );
     event DataSetServiceProviderChanged(
         uint256 indexed dataSetId, address indexed oldServiceProvider, address indexed newServiceProvider
     );
@@ -83,6 +92,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error CallerNotPayer(uint256 dataSetId, address expectedPayer, address caller);
     error CallerNotPayerOrPayee(uint256 dataSetId, address expectedPayer, address expectedPayee, address caller);
     error CallerNotPayments(address expected, address actual);
+    error CallerNotProviderWorker(uint256 dataSetId, address expectedWorker, address caller);
     error CallerNotServiceProvider(uint256 dataSetId, address expectedServiceProvider, address caller);
     error CannotDisableLegacyStorageTerms();
     error ChallengeWindowTooEarly(uint256 dataSetId, uint256 windowStart, uint256 nowBlock);
@@ -90,6 +100,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     error DataSetNotAbandoned(uint256 dataSetId, uint256 requiredEpoch, uint256 currentBlock);
     error DataSetNotFoundForRail(uint256 railId);
     error DataSetNotRegistered(uint256 dataSetId);
+    error DataSetPayeeAlreadyCurrent(uint256 dataSetId, address payee);
     error DataSetPaymentAlreadyTerminated(uint256 dataSetId);
     error DataSetPaymentBeyondEndEpoch(uint256 dataSetId, uint256 pdpEndEpoch, uint256 currentBlock);
     error DispatcherChanged(address implementation);
@@ -239,6 +250,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     function registerStorageTerms(StorageTerms calldata terms) external returns (bytes32 storageTermsId);
     function removeApprovedProvider(uint256 providerId, uint256 index) external;
     function renounceOwnership() external;
+    function retargetDataSetPayee(uint256 dataSetId) external;
     function selectors() external view returns (bytes4[] memory);
     function serviceCommissionBps() external pure returns (uint256);
     function serviceProviderRegistry() external view returns (ServiceProviderRegistry);

@@ -33,6 +33,16 @@ event DataSetAbandoned(uint256 indexed dataSetId, uint256 pdpRailId, uint256 cac
 
 event RailRateUpdated(uint256 indexed dataSetId, uint256 railId, uint256 newRate);
 
+event DataSetPayeeRetargeted(
+    uint256 indexed dataSetId,
+    address indexed oldPayee,
+    address indexed newPayee,
+    uint256 oldPdpRailId,
+    uint256 newPdpRailId,
+    uint256 oldCacheMissRailId,
+    uint256 newCacheMissRailId
+);
+
 /// @title LibRails
 /// @notice Payment rail operations inlined into the FWSS modules.
 library LibRails {
@@ -291,6 +301,72 @@ library LibRails {
             return uint96(newLockup);
         }
         return reserveBalance;
+    }
+
+    /// @notice Zero the old PDP and cache-miss rails and open replacements paying `newPayee`.
+    /// @dev Does not terminate rails. Leaves CDN rails unchanged. Caller must already have
+    ///      established that the data set is live (`pdpEndEpoch == 0`) and that `newPayee` differs
+    ///      from the snapshotted payee. Reverts if the payer cannot settle lockup through the
+    ///      current epoch (Pay's rate-change rule).
+    /// @return newPdpRailId Replacement PDP rail paying `newPayee`
+    /// @return newCacheMissRailId Replacement cache-miss rail, or 0 when the data set has none
+    function retargetRails(
+        FilecoinPayV1 payments,
+        uint256 dataSetId,
+        uint256 oldPdpRailId,
+        uint256 oldCacheMissRailId,
+        address newPayee,
+        uint96 lifecycleReserveBalance
+    ) internal returns (uint256 newPdpRailId, uint256 newCacheMissRailId) {
+        FilecoinPayV1.RailView memory oldPdp = payments.getRail(oldPdpRailId);
+        require(oldPdp.endEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
+
+        address oldPayee = oldPdp.to;
+        newPdpRailId = _retargetRail(payments, oldPdpRailId, oldPdp, newPayee, lifecycleReserveBalance);
+
+        newCacheMissRailId = 0;
+        if (oldCacheMissRailId != 0) {
+            FilecoinPayV1.RailView memory oldCacheMiss = payments.getRail(oldCacheMissRailId);
+            require(oldCacheMiss.endEpoch == 0, Errors.CacheMissPaymentAlreadyTerminated(dataSetId));
+            newCacheMissRailId =
+                _retargetRail(payments, oldCacheMissRailId, oldCacheMiss, newPayee, oldCacheMiss.lockupFixed);
+        }
+
+        emit DataSetPayeeRetargeted(
+            dataSetId, oldPayee, newPayee, oldPdpRailId, newPdpRailId, oldCacheMissRailId, newCacheMissRailId
+        );
+    }
+
+    /// @notice Open a replacement for one live rail that pays `newPayee`.
+    /// @dev Does not terminate the old rail. Zeroes its fixed lockup and any payment rate, then
+    ///      opens a replacement with the same period, validator, and commission. `lockupFixed` is
+    ///      the fixed lockup seeded onto the replacement. A zero rate stays unset, which is how
+    ///      cache-miss rails settle (one-time payments only).
+    function _retargetRail(
+        FilecoinPayV1 payments,
+        uint256 oldRailId,
+        FilecoinPayV1.RailView memory oldRail,
+        address newPayee,
+        uint256 lockupFixed
+    ) internal returns (uint256 newRailId) {
+        uint256 rate = oldRail.paymentRate;
+        if (rate > 0) {
+            payments.modifyRailPayment(oldRailId, 0, 0);
+        }
+        payments.modifyRailLockup(oldRailId, oldRail.lockupPeriod, 0);
+
+        newRailId = payments.createRail(
+            oldRail.token,
+            oldRail.from,
+            newPayee,
+            oldRail.validator,
+            oldRail.commissionRateBps,
+            oldRail.serviceFeeRecipient
+        );
+        payments.modifyRailLockup(newRailId, oldRail.lockupPeriod, lockupFixed);
+        if (rate > 0) {
+            payments.modifyRailPayment(newRailId, rate, 0);
+        }
     }
 
     function updateStorageRates(
