@@ -7,6 +7,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/U
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {EIP712Upgradeable} from "@openzeppelin/contracts-upgradeable/utils/cryptography/EIP712Upgradeable.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
+import {IServiceProviderWorkerRegistry} from "@pdp/interfaces/IServiceProviderWorkerRegistry.sol";
 import {BloomSet16} from "./lib/BloomSet.sol";
 import {Errors} from "./Errors.sol";
 import {ServiceProviderRegistryStorage} from "./ServiceProviderRegistryStorage.sol";
@@ -34,7 +35,8 @@ contract ServiceProviderRegistry is
     UUPSUpgradeable,
     OwnableUpgradeable,
     EIP712Upgradeable,
-    ServiceProviderRegistryStorage
+    ServiceProviderRegistryStorage,
+    IServiceProviderWorkerRegistry
 {
     /// @notice Provider information for API returns
     struct ServiceProviderInfoView {
@@ -444,7 +446,7 @@ contract ServiceProviderRegistry is
     /// @notice Change the worker (serviceProvider) for a provider
     /// @dev Common wallet-rotation path: current payee calls directly (e.g. Glif/MetaMask).
     ///      Registry owner may also call for recovery. The worker cannot rotate itself.
-    ///      Former workers stay in `addressToProviderId` so `currentWorker(old)` still resolves.
+    ///      Former workers stay in `addressToProviderId` so `isAuthorizedWorker` can resolve them.
     /// @param providerId The provider to update
     /// @param newServiceProvider The new worker address
     function changeServiceProvider(uint256 providerId, address newServiceProvider)
@@ -464,7 +466,7 @@ contract ServiceProviderRegistry is
         address oldServiceProvider = providers[providerId].serviceProvider;
         require(newServiceProvider != oldServiceProvider, "Service provider unchanged");
 
-        // Keep addressToProviderId[oldServiceProvider] so PDPVerifier can resolve via currentWorker.
+        // Keep addressToProviderId[oldServiceProvider] so isAuthorizedWorker can resolve a snapshotted worker.
         providers[providerId].serviceProvider = newServiceProvider;
         addressToProviderId[newServiceProvider] = providerId;
 
@@ -532,17 +534,19 @@ contract ServiceProviderRegistry is
         emit ProviderRemoved(providerId);
     }
 
-    /// @notice Resolve the current worker for an address that is or was a worker
-    /// @dev Former workers remain in `addressToProviderId`, so data-set snapshotted addresses still
-    ///      resolve to the live `serviceProvider`.
-    /// @param workerOrFormerWorker Current or previous worker address
-    /// @return The live serviceProvider for that provider, or address(0) if unknown/inactive
-    function currentWorker(address workerOrFormerWorker) external view returns (address) {
-        uint256 providerId = addressToProviderId[workerOrFormerWorker];
+    /// @notice Whether `attemptedAddress` may act for the provider recorded as `registrationAddress`.
+    /// @dev A registration may later approve more than one worker. Today the approved worker is
+    ///      `providers[providerId].serviceProvider`. `registrationAddress` may be a former worker.
+    ///      An unknown or inactive registration is authorized only for itself.
+    /// @param registrationAddress Provider address recorded on the data set.
+    /// @param attemptedAddress Address attempting the storage-provider operation.
+    /// @return True when `attemptedAddress` is an approved worker for that registration.
+    function isAuthorizedWorker(address registrationAddress, address attemptedAddress) external view returns (bool) {
+        uint256 providerId = addressToProviderId[registrationAddress];
         if (providerId == 0 || !providers[providerId].isActive) {
-            return address(0);
+            return attemptedAddress == registrationAddress;
         }
-        return providers[providerId].serviceProvider;
+        return attemptedAddress == providers[providerId].serviceProvider;
     }
 
     /// @notice Resolve provider ID from a current or former worker address

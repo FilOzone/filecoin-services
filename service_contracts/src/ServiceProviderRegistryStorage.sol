@@ -74,6 +74,6 @@ contract ServiceProviderRegistryStorage {
 
     /// @notice Per-provider EIP-712 nonce for payee-authorized actions
     /// @dev Appended for upgrade safety. Former workers keep their `addressToProviderId` entries
-    ///      so `currentWorker` can resolve from data-set-snapshotted addresses without a second map.
+    ///      so `isAuthorizedWorker` can resolve from data-set-snapshotted addresses without a second map.
     mapping(uint256 providerId => uint256 nonce) public providerActionNonce;
 }

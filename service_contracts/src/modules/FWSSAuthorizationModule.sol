@@ -44,7 +44,7 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
     /// @notice Configures the immutable dependencies used by payer-authorized operations.
     /// @param _paymentsContractAddress The FilecoinPay contract holding the FWSS rails.
     /// @param _pdpVerifierAddress The PDP verifier authorized to invoke FWSS callbacks.
-    /// @param _serviceProviderRegistry The registry used to resolve the current worker.
+    /// @param _serviceProviderRegistry The registry used to authorize workers for a recorded provider.
     /// @param _sessionKeyRegistry The registry used to verify payer signatures.
     constructor(
         address _paymentsContractAddress,
@@ -253,15 +253,13 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
         require(info.pdpRailId != 0, Errors.InvalidDataSetId(dataSetId));
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
-        address worker = serviceProviderRegistry.currentWorker(info.serviceProvider);
-        if (worker == address(0)) {
-            worker = info.serviceProvider;
-        }
+        address registration = info.serviceProvider;
+        bool callerIsWorker = serviceProviderRegistry.isAuthorizedWorker(registration, msg.sender);
 
         address approver;
         bool immediateTermination = false;
         if (extraData.length > 0) {
-            require(msg.sender == worker, Errors.CallerNotServiceProvider(dataSetId, worker, msg.sender));
+            require(callerIsWorker, Errors.CallerNotServiceProvider(dataSetId, registration, msg.sender));
             require(
                 extraData.length <= MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE,
                 Errors.ExtraDataTooLarge(extraData.length, MAX_TERMINATE_SERVICE_EXTRA_DATA_SIZE)
@@ -274,8 +272,8 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier {
             );
         } else {
             require(
-                msg.sender == info.payer || msg.sender == worker,
-                Errors.CallerNotPayerOrPayee(dataSetId, info.payer, worker, msg.sender)
+                msg.sender == info.payer || callerIsWorker,
+                Errors.CallerNotPayerOrPayee(dataSetId, info.payer, registration, msg.sender)
             );
             approver = msg.sender;
         }

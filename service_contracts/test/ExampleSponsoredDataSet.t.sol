@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {Cids} from "@pdp/Cids.sol";
+import {IServiceProviderWorkerRegistry} from "@pdp/interfaces/IServiceProviderWorkerRegistry.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
@@ -76,7 +77,7 @@ contract ExampleSponsoredDataSetTest is MockFVMTest, FWSSDeployer {
             address(new MyERC1967Proxy(address(registryImpl), abi.encodeCall(ServiceProviderRegistry.initialize, ())))
         );
 
-        PDPVerifier pdpImpl = new PDPVerifier(1, 0);
+        PDPVerifier pdpImpl = new PDPVerifier(1, 0, IServiceProviderWorkerRegistry(address(serviceProviderRegistry)));
         pdpVerifier =
             PDPVerifier(address(new MyERC1967Proxy(address(pdpImpl), abi.encodeCall(PDPVerifier.initialize, ()))));
 

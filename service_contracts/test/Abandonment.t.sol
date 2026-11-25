@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import {MockFVMTest} from "@fvm-solidity/mocks/MockFVMTest.sol";
 import {MyERC1967Proxy} from "@pdp/ERC1967Proxy.sol";
+import {IServiceProviderWorkerRegistry} from "@pdp/interfaces/IServiceProviderWorkerRegistry.sol";
 import {PDPVerifier} from "@pdp/PDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
@@ -64,17 +65,17 @@ contract AbandonmentTest is MockFVMTest, FWSSDeployer {
         payments = new FilecoinPayV1();
         sessionKeyRegistry = new SessionKeyRegistry();
 
-        // Deploy real PDPVerifier as a proxy
-        PDPVerifier pdpVerifierImpl = new PDPVerifier(1, 0);
-        MyERC1967Proxy pdpProxy =
-            new MyERC1967Proxy(address(pdpVerifierImpl), abi.encodeCall(PDPVerifier.initialize, ()));
-        pdpVerifier = PDPVerifier(address(pdpProxy));
-
-        // Deploy ServiceProviderRegistry
+        // Deploy ServiceProviderRegistry before PDPVerifier; the verifier pins it in the constructor.
         ServiceProviderRegistry registryImpl = new ServiceProviderRegistry(1);
         MyERC1967Proxy regProxy =
             new MyERC1967Proxy(address(registryImpl), abi.encodeCall(ServiceProviderRegistry.initialize, ()));
         serviceProviderRegistry = ServiceProviderRegistry(address(regProxy));
+
+        PDPVerifier pdpVerifierImpl =
+            new PDPVerifier(1, 0, IServiceProviderWorkerRegistry(address(serviceProviderRegistry)));
+        MyERC1967Proxy pdpProxy =
+            new MyERC1967Proxy(address(pdpVerifierImpl), abi.encodeCall(PDPVerifier.initialize, ()));
+        pdpVerifier = PDPVerifier(address(pdpProxy));
 
         // Register SP
         PDPOffering.Schema memory offering = PDPOffering.Schema({

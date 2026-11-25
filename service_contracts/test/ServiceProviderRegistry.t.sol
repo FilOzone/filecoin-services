@@ -676,8 +676,17 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(info.info.serviceProvider, newWorker, "Worker should update");
         assertEq(registry.addressToProviderId(newWorker), providerId, "New worker should map to provider");
         assertEq(registry.addressToProviderId(user1), providerId, "Former worker mapping kept for resolution");
-        assertEq(registry.currentWorker(user1), newWorker, "currentWorker resolves former worker");
-        assertEq(registry.currentWorker(newWorker), newWorker, "currentWorker resolves live worker");
+        assertTrue(
+            registry.isAuthorizedWorker(user1, newWorker), "Former worker registration authorizes the live worker"
+        );
+        assertFalse(registry.isAuthorizedWorker(user1, user1), "Former worker is no longer authorized");
+        assertTrue(registry.isAuthorizedWorker(newWorker, newWorker), "Live worker authorizes itself");
+        assertTrue(
+            registry.isAuthorizedWorker(address(0xDEAD), address(0xDEAD)), "Unknown registration authorizes itself"
+        );
+        assertFalse(
+            registry.isAuthorizedWorker(address(0xDEAD), newWorker), "Unknown registration rejects other addresses"
+        );
     }
 
     function testOwnerCanChangeServiceProviderForRecovery() public {
@@ -711,7 +720,8 @@ contract ServiceProviderRegistryTest is MockFVMTest {
         assertEq(registry.getProvider(providerId).info.serviceProvider, user1, "Worker rotated back");
         assertEq(registry.addressToProviderId(user1), providerId, "Restored worker still mapped");
         assertEq(registry.addressToProviderId(user2), providerId, "Interim worker mapping kept");
-        assertEq(registry.currentWorker(user2), user1, "Former interim worker resolves to live worker");
+        assertTrue(registry.isAuthorizedWorker(user2, user1), "Former interim worker authorizes the restored worker");
+        assertFalse(registry.isAuthorizedWorker(user2, user2), "Interim worker is no longer authorized");
     }
 
     function testFormerWorkerCannotReregisterWhileProviderActive() public {

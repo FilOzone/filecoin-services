@@ -11,6 +11,11 @@
         "name": "_challengeFinality",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "_serviceProviderRegistry",
+        "type": "address",
+        "internalType": "contract IServiceProviderWorkerRegistry"
       }
     ],
     "stateMutability": "nonpayable"
@@ -56,7 +61,7 @@
   },
   {
     "type": "function",
-    "name": "MAX_ENQUEUED_REMOVALS",
+    "name": "MAX_PIECE_SIZE_LOG2",
     "inputs": [],
     "outputs": [
       {
@@ -69,13 +74,13 @@
   },
   {
     "type": "function",
-    "name": "MAX_PIECE_SIZE_LOG2",
+    "name": "SERVICE_PROVIDER_REGISTRY",
     "inputs": [],
     "outputs": [
       {
         "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
+        "type": "address",
+        "internalType": "contract IServiceProviderWorkerRegistry"
       }
     ],
     "stateMutability": "view"
@@ -1717,6 +1722,11 @@
   {
     "type": "error",
     "name": "UvarintOverflow",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ZeroServiceProviderRegistry",
     "inputs": []
   }
 ]

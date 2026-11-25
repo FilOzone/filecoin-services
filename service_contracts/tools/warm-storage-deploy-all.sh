@@ -377,36 +377,38 @@ deploy_contract_if_needed \
     "lib/fws-payments/src/FilecoinPayV1.sol:FilecoinPayV1" \
     "FilecoinPayV1"
 
-# Step 2: Deploy or use existing PDPVerifier implementation, at initializer version 1 for its fresh proxy
-deploy_contract_if_needed \
-    "PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
-    "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
-    "PDPVerifier implementation" \
-    "1" \
-    "$CHALLENGE_FINALITY"
-
-# Step 3: Deploy or use existing PDPVerifier proxy
-INIT_DATA=$(cast calldata "initialize()")
-deploy_proxy_if_needed \
-    "PDP_VERIFIER_PROXY_ADDRESS" \
-    "$PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
-    "$INIT_DATA" \
-    "PDPVerifier proxy"
-
-# Step 4: Deploy or use existing ServiceProviderRegistry implementation, at initializer version 1 for its fresh proxy
+# Step 2: Deploy or use existing ServiceProviderRegistry implementation, at initializer version 1 for its fresh proxy.
+# PDPVerifier's constructor pins this proxy, so the registry has to exist first.
 deploy_contract_if_needed \
     "SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" \
     "src/ServiceProviderRegistry.sol:ServiceProviderRegistry" \
     "ServiceProviderRegistry implementation" \
     "1"
 
-# Step 5: Deploy or use existing ServiceProviderRegistry proxy
+# Step 3: Deploy or use existing ServiceProviderRegistry proxy
 REGISTRY_INIT_DATA=$(cast calldata "initialize()")
 deploy_proxy_if_needed \
     "SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS" \
     "$SERVICE_PROVIDER_REGISTRY_IMPLEMENTATION_ADDRESS" \
     "$REGISTRY_INIT_DATA" \
     "ServiceProviderRegistry proxy"
+
+# Step 4: Deploy or use existing PDPVerifier implementation, at initializer version 1 for its fresh proxy
+deploy_contract_if_needed \
+    "PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
+    "lib/pdp/src/PDPVerifier.sol:PDPVerifier" \
+    "PDPVerifier implementation" \
+    "1" \
+    "$CHALLENGE_FINALITY" \
+    "$SERVICE_PROVIDER_REGISTRY_PROXY_ADDRESS"
+
+# Step 5: Deploy or use existing PDPVerifier proxy
+INIT_DATA=$(cast calldata "initialize()")
+deploy_proxy_if_needed \
+    "PDP_VERIFIER_PROXY_ADDRESS" \
+    "$PDP_VERIFIER_IMPLEMENTATION_ADDRESS" \
+    "$INIT_DATA" \
+    "PDPVerifier proxy"
 
 # Step 6: Deploy or use existing FilecoinWarmStorageService, initialized with max proving period, challenge window
 # size, and FilBeam controller address

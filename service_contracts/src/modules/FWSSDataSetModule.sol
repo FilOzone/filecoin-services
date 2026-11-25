@@ -168,11 +168,19 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier {
         require(createData.payer != address(0), Errors.ZeroAddress(Errors.AddressField.Payer));
         require(serviceProvider != address(0), Errors.ZeroAddress(Errors.AddressField.ServiceProvider));
 
+        // Former workers stay mapped so existing data sets can authorize them. Create, including
+        // create-and-add, must be the current worker or rotation would leave the old key valid.
         uint256 providerId = serviceProviderRegistry.getProviderIdByAddress(serviceProvider);
-
         require(providerId != 0, Errors.ProviderNotRegistered(serviceProvider));
+        ServiceProviderRegistry.ServiceProviderInfoView memory provider =
+            serviceProviderRegistry.getProvider(providerId);
+        require(provider.info.isActive, Errors.ProviderNotRegistered(serviceProvider));
+        require(
+            serviceProvider == provider.info.serviceProvider,
+            Errors.CallerNotProviderWorker(dataSetId, provider.info.serviceProvider, serviceProvider)
+        );
 
-        address payee = serviceProviderRegistry.getProviderPayee(providerId);
+        address payee = provider.info.payee;
 
         require(
             clientNonces[createData.payer][createData.clientDataSetId] == 0,
