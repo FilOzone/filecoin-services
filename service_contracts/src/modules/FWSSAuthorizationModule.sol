@@ -5,6 +5,7 @@ import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {Errors} from "../Errors.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 import {
@@ -22,6 +23,7 @@ import {
     TERMINATE_FEE
 } from "../lib/PriceListUSDFC.sol";
 import {LibRails} from "../lib/LibRails.sol";
+import {LibRailsV2} from "../lib/LibRailsV2.sol";
 import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 import {FWSSEIP712} from "../lib/FWSSEIP712.sol";
@@ -36,6 +38,7 @@ import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 /// the lifecycle reserve, and attaching the data set authorizer.
 contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
+    using LibRailsV2 for FilecoinPayV2;
 
     FilecoinPayV1 internal immutable paymentContract;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -235,7 +238,7 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
             if (replenished != reserveBalance) {
                 // The PDP rail's available balance also holds settled payment, so add the shortfall, never set it.
                 address token = LibStorageTerms.getRecord(info.storageTermsId).token;
-                _lockOnPdpRail(dataSetId, token, payer, info.payee, replenished - reserveBalance);
+                filecoinPayV2.lockOnPdpRail(dataSetId, token, payer, info.payee, replenished - reserveBalance);
                 info.lifecycleReserveBalance = replenished;
             }
         }

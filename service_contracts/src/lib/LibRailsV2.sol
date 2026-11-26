@@ -2,7 +2,7 @@
 pragma solidity 0.8.37;
 
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
-import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
+import {CREATE_RAIL, NONE} from "@filecoin-pay-v2/lib/Permissions.sol";
 import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {CDNPaymentRailsToppedUp} from "./LibRails.sol";
@@ -46,7 +46,7 @@ library LibRailsV2 {
         require(dataSetId < CDN_RAIL_NONCE_FLAG, DataSetIdTooLarge(dataSetId));
         bool hasCDN = filBeamBeneficiaryAddress != address(0);
         uint64 cacheMissNonce = uint64(dataSetId);
-        uint64 pdpNonce = FLAG_CALLBACK | cacheMissNonce;
+        uint64 pdpNonce = pdpRailNonce(dataSetId);
         uint64 cdnNonce = CDN_RAIL_NONCE_FLAG | cacheMissNonce;
 
         // The lifecycle reserve is a lock on the PDP rail. A payer balance short of the locks reverts in executeScript.
@@ -73,6 +73,36 @@ library LibRailsV2 {
             cdnRailId = railId(payer, filBeamBeneficiaryAddress, token, cdnNonce);
             emit CDNPaymentRailsToppedUp(dataSetId, cdnLockup, cdnLockup, cacheMissLockup, cacheMissLockup);
         }
+    }
+
+    /// @notice The nonce of a data set's PDP rail, which settles through the FWSS callback
+    /// @param dataSetId The data set the rail pays for
+    /// @return The rail nonce with FLAG_CALLBACK set
+    function pdpRailNonce(uint256 dataSetId) internal pure returns (uint64) {
+        return FLAG_CALLBACK | uint64(dataSetId);
+    }
+
+    /// @notice Moves part of the payer's FilecoinPayV2 balance into a data set's PDP rail
+    /// @dev Lock and setRail need no grant from the payer, so the script runs with no permissions.
+    /// @param payments The FilecoinPayV2 contract instance
+    /// @param dataSetId The data set the PDP rail pays for
+    /// @param token The rail's currency; address(0) is native FIL
+    /// @param payer The rail's payer
+    /// @param payee The rail's recipient
+    /// @param amount The amount to add to the rail's available balance
+    function lockOnPdpRail(
+        FilecoinPayV2 payments,
+        uint256 dataSetId,
+        address token,
+        address payer,
+        address payee,
+        uint256 amount
+    ) internal {
+        uint64 nonce = pdpRailNonce(dataSetId);
+        // ScriptBuilder grows at the free-memory pointer, so nothing may allocate between newScript() and build().
+        payments.executeScript(
+            NONE, newScript().setToken(token).setRail(payer, payee, nonce).lock(uint128(amount)).build()
+        );
     }
 
     /// @notice Derives the id of a rail this contract operates
