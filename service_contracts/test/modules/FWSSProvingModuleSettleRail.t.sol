@@ -1,0 +1,681 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.37;
+
+import {PDPListener} from "@pdp/PDPVerifier.sol";
+import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
+import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
+import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
+import {DISBURSE, UNLOCK, newScript} from "@filecoin-pay-v2/lib/Script.sol";
+import {Errors} from "../../src/Errors.sol";
+import {CHALLENGES_PER_PROOF} from "../../src/lib/FWSSConstants.sol";
+import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
+import {DATA_SET_INFO_SLOT, RAIL_TO_DATA_SET_SLOT} from "../../src/lib/FilecoinWarmStorageServiceLayout.sol";
+import {FWSSProvingModule} from "../../src/modules/FWSSProvingModule.sol";
+import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
+
+contract FWSSProvingModuleSettleRailTest is FilecoinWarmStorageServiceFixture {
+    using RailIdLibrary for address;
+    using RailIdLibrary for IExtsload;
+    using RailIdLibrary for Stream;
+
+    uint64 internal constant NONCE = FLAG_CALLBACK | 1;
+    uint88 internal constant RATE = 1000;
+    uint256 internal constant DEPOSIT = 1e18;
+
+    FWSSProvingModule internal provingModule;
+    uint256 internal dataSetId;
+    address internal payee;
+    uint256 internal token;
+    RailId internal railId;
+    uint256 internal activationEpoch;
+    uint64 internal maxProvingPeriod;
+    uint256 internal challengeWindow;
+    uint128 internal lifecycleReserve;
+
+    function setUp() public override {
+        super.setUp();
+        provingModule = FWSSProvingModule(address(pdpServiceWithPayments));
+        (string[] memory keys, string[] memory values) = _getSingleMetadataKV("label", "V2 rail");
+        dataSetId = createDataSetForClient(sp1, client, keys, values);
+        payee = pdpServiceWithPayments.getDataSet(dataSetId).payee;
+        token = uint256(uint160(address(mockUSDFC)));
+        (maxProvingPeriod, challengeWindow,,) = pdpServiceWithPayments.getPDPConfig();
+        _dropPendingOneTimePayments();
+        // the rails lock the reserve FWSS recorded for the data set, as dataSetCreated does on FilecoinPayV2
+        lifecycleReserve = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
+        assertGt(lifecycleReserve, 0, "the data set has a lifecycle reserve");
+    }
+
+    // Rail setup, as dataSetCreated will do once it moves to FilecoinPayV2
+
+    /// @dev The data set is created on FilecoinPayV1, whose first proving period pays the creation fee out of the
+    /// reserve. The hand-made FilecoinPayV2 rail does not follow that flush, so the reserve FWSS records would drift
+    /// from the one locked on the rail and the difference would read as held payment. Dropping the pending fee keeps
+    /// the two in step, as a FilecoinPayV2 flush will by disbursing from the rail.
+    function _dropPendingOneTimePayments() internal {
+        // relative slot 10 packs pendingOneTimePayments (low 96 bits), lifecycleReserveBalance and pieceRemovalsPending
+        bytes32 slot = bytes32(uint256(keccak256(abi.encode(dataSetId, DATA_SET_INFO_SLOT))) + 10);
+        uint256 word = uint256(vm.load(address(pdpServiceWithPayments), slot));
+        vm.store(address(pdpServiceWithPayments), slot, bytes32(word & ~uint256(type(uint96).max)));
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).pendingOneTimePayments, 0);
+    }
+
+    function _createRail(uint256 deposit, bool linked) internal {
+        vm.startPrank(client);
+        mockUSDFC.approve(address(filecoinPayV2), deposit);
+        filecoinPayV2.deposit(address(mockUSDFC), deposit);
+        filecoinPayV2.authorize(address(pdpServiceWithPayments), CREATE_RAIL);
+        vm.stopPrank();
+
+        vm.prank(address(pdpServiceWithPayments));
+        filecoinPayV2.executeScript(
+            newScript().setToken(address(mockUSDFC)).createRail(client, payee, NONCE).lock(lifecycleReserve)
+                .setRate(RATE).build()
+        );
+        railId = address(pdpServiceWithPayments).deriveRail(client, payee, token, NONCE).getRailId();
+        if (linked) {
+            vm.store(
+                address(pdpServiceWithPayments),
+                keccak256(abi.encode(RailId.unwrap(railId), RAIL_TO_DATA_SET_SLOT)),
+                bytes32(dataSetId)
+            );
+        }
+    }
+
+    function _settle() internal returns (uint256 settledUpTo) {
+        return filecoinPayV2.settleRail(address(pdpServiceWithPayments), client, payee, NONCE, token);
+    }
+
+    function _setRate(uint88 rate) internal {
+        vm.prank(address(pdpServiceWithPayments));
+        filecoinPayV2.executeScript(
+            newScript().setToken(address(mockUSDFC)).setRail(client, payee, NONCE).setRate(rate).build()
+        );
+    }
+
+    function _available() internal view returns (uint256) {
+        return IExtsload(address(filecoinPayV2)).getRail(railId).available;
+    }
+
+    /// @dev The payment held on the rail: whatever its available balance has beyond the lifecycle reserve
+    function _held() internal view returns (uint256) {
+        return _available() - lifecycleReserve;
+    }
+
+    function _payerBalance() internal view returns (uint256) {
+        return filecoinPayV2.balanceOf(client, token);
+    }
+
+    function _payeeBalance() internal view returns (uint256) {
+        return filecoinPayV2.balanceOf(payee, token);
+    }
+
+    function _startProving() internal {
+        activationEpoch = vm.getBlockNumber();
+        _nextProvingPeriod(dataSetId, _deadline(0) - challengeWindow / 2, 100);
+    }
+
+    function _deadline(uint256 period) internal view returns (uint256) {
+        return activationEpoch + (period + 1) * maxProvingPeriod;
+    }
+
+    function _prove(uint256 period) internal {
+        vm.roll(_deadline(period) - challengeWindow / 2);
+        vm.prank(address(mockPDPVerifier));
+        provingModule.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+    }
+
+    function _openPeriod(uint256 period) internal {
+        vm.roll(_deadline(period - 1) + 1);
+        _nextProvingPeriod(dataSetId, _deadline(period) - challengeWindow / 2, 100);
+    }
+
+    function _assertHeld(uint256 amount) internal view {
+        assertEq(_available(), lifecycleReserve + amount, "available holds the reserve and the held payment");
+    }
+
+    function _expectSettled(
+        uint256 id,
+        RailId rail,
+        uint256 fromEpoch,
+        uint256 toEpoch,
+        uint256 payout,
+        uint256 refund,
+        uint256 held
+    ) internal {
+        vm.expectEmit(true, true, false, true, address(pdpServiceWithPayments));
+        emit FWSSProvingModule.PDPPaymentSettled(id, RailId.unwrap(rail), fromEpoch, toEpoch, payout, refund, held);
+    }
+
+    // Arbitration
+
+    function testSettleRailCallback_AllEpochsProven() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        _openPeriod(1);
+        _prove(1);
+        vm.roll(_deadline(1));
+
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), 2 * maxProvingPeriod * RATE, "pays every proven epoch");
+        assertEq(_payerBalance(), payerBefore, "refunds nothing");
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_SomeEpochsProven() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        _openPeriod(1);
+        vm.roll(_deadline(1) + 1);
+
+        uint256 payerBefore = _payerBalance();
+        _expectSettled(
+            dataSetId, railId, activationEpoch, _deadline(1) + 1, maxProvingPeriod * RATE, maxProvingPeriod * RATE, RATE
+        );
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period");
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE, "refunds the faulted period");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_OpenPeriodHeldThenPaid() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        uint256 midPeriod = activationEpoch + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+
+        uint256 payerBefore = _payerBalance();
+        _settle();
+        assertEq(_payeeBalance(), 0, "the open period pays nothing yet");
+        assertEq(_payerBalance(), payerBefore, "the open period refunds nothing yet");
+        _assertHeld((midPeriod - activationEpoch) * RATE);
+
+        _prove(0);
+        vm.roll(_deadline(0));
+        _settle();
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the proof releases the held payment and the rest");
+        assertEq(_payerBalance(), payerBefore - (_deadline(0) - midPeriod) * RATE, "only the accrual drained the payer");
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_ReleasedHeldPaymentIsNotPaidTwice() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        uint256 midPeriod = activationEpoch + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+        _settle();
+        _prove(0);
+        vm.roll(_deadline(0));
+        _settle();
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE);
+
+        // same block: FilecoinPayV2 has nothing new to accrue and skips the callback
+        _settle();
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "a repeated settle pays nothing");
+
+        // next block: the new epoch belongs to the still open period 1 and is held, period 0 is not paid again
+        vm.roll(_deadline(0) + 1);
+        _settle();
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the released period is not paid twice");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_ProvenHeldPaymentWaitsForNewAccrual() public {
+        _startProving();
+        uint256 fundedEpochs = maxProvingPeriod / 2;
+        _createRail(lifecycleReserve + fundedEpochs * RATE, true);
+        vm.roll(activationEpoch + fundedEpochs + 10);
+        uint256 fundedTo = _settle();
+        assertEq(fundedTo, activationEpoch + fundedEpochs);
+        _assertHeld(fundedEpochs * RATE);
+
+        // the proof resolves the held period, but an insolvent payer accrues nothing new, so no callback runs
+        _prove(0);
+        vm.roll(_deadline(0) + 1);
+        assertEq(_settle(), fundedTo, "settlement cannot advance past the funded epoch");
+        assertEq(_payeeBalance(), 0, "the proven held payment waits for the next callback");
+        _assertHeld(fundedEpochs * RATE);
+
+        // a top-up lets settlement advance, and the callback releases the held payment with the new accrual
+        vm.startPrank(client);
+        mockUSDFC.approve(address(filecoinPayV2), DEPOSIT);
+        filecoinPayV2.deposit(address(mockUSDFC), DEPOSIT);
+        vm.stopPrank();
+        _settle();
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the held and the newly accrued proven epochs once");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_OpenPeriodHeldThenRefunded() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        uint256 midPeriod = activationEpoch + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+        _settle();
+        _assertHeld((midPeriod - activationEpoch) * RATE);
+
+        vm.roll(_deadline(0) + 1);
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), 0, "the fault pays nothing");
+        assertEq(
+            _payerBalance(),
+            payerBefore + maxProvingPeriod * RATE,
+            "the fault refunds the held payment and the rest of the period"
+        );
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_OpenPeriodHeldAcrossRepeatedSettles() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        uint256 quarter = maxProvingPeriod / 4;
+        vm.roll(activationEpoch + quarter);
+        _settle();
+        vm.roll(activationEpoch + 2 * quarter);
+        // the event reports the rail's whole held payment, not just this settlement's share
+        _expectSettled(
+            dataSetId, railId, activationEpoch + quarter, activationEpoch + 2 * quarter, 0, 0, 2 * quarter * RATE
+        );
+        _settle();
+        _assertHeld(2 * quarter * RATE);
+        assertEq(_payeeBalance(), 0);
+    }
+
+    function testSettleRailCallback_HeldAtDeadlineResolvesByItsOwnPeriod() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        // settling at the deadline before the proof lands holds the whole period, which is still open
+        vm.roll(_deadline(0));
+        _settle();
+        _assertHeld(maxProvingPeriod * RATE);
+
+        // the proof still lands at the deadline, then period 1 opens; the held payment belongs to period 0
+        vm.prank(address(mockPDPVerifier));
+        provingModule.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+        _openPeriod(1);
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the proof of period 0 releases its held payment");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_HeldAtDeadlinePaidWhenNextPeriodFaults() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        // the payer settles in the deadline block before the proof lands, holding the whole period 0
+        vm.roll(_deadline(0));
+        _settle();
+        _assertHeld(maxProvingPeriod * RATE);
+        vm.prank(address(mockPDPVerifier));
+        provingModule.possessionProven(dataSetId, 100, 12345, CHALLENGES_PER_PROOF);
+
+        // period 1 faults, which must not refund the proven period 0
+        _openPeriod(1);
+        vm.roll(_deadline(1) + 1);
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "the proven period 0 is paid");
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE, "only the faulted period 1 is refunded");
+        _assertHeld(RATE);
+    }
+
+    function testSettleRailCallback_HeldAtDeadlineRefundedWhenFaulted() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        vm.roll(_deadline(0));
+        _settle();
+        _assertHeld(maxProvingPeriod * RATE);
+
+        // period 0 faults; period 1 opens and is proven, which must not pay for period 0
+        _openPeriod(1);
+        _prove(1);
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), (_deadline(1) - challengeWindow / 2 - _deadline(0)) * RATE, "pays period 1 only");
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE, "refunds the faulted period 0");
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_LeavesTheReserveLocked() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        _openPeriod(1);
+        vm.roll(_deadline(1) + 1);
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period 0");
+        _assertHeld(RATE);
+        assertEq(
+            _payeeBalance() + _payerBalance() + _held() + lifecycleReserve,
+            DEPOSIT,
+            "every accrued epoch is paid, refunded or held, never taken from the reserve"
+        );
+    }
+
+    function testSettleRailCallback_RangeBeforeActivationRefunds() public {
+        _createRail(DEPOSIT, true);
+        vm.roll(vm.getBlockNumber() + 100);
+
+        uint256 payerBefore = _payerBalance();
+        _startProving();
+        _settle();
+
+        assertEq(_payeeBalance(), 0);
+        assertEq(_payerBalance(), payerBefore + 100 * RATE, "refunds the epochs before activation");
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_ProvingNeverActivatedRefunds() public {
+        _createRail(DEPOSIT, true);
+        vm.roll(vm.getBlockNumber() + 100);
+
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), 0);
+        assertEq(_payerBalance(), payerBefore + 100 * RATE);
+        assertEq(_available(), lifecycleReserve);
+    }
+
+    function testSettleRailCallback_StraddlingActivationRefundsEpochsBeforeIt() public {
+        uint256 createdAt = vm.getBlockNumber();
+        _createRail(DEPOSIT, true);
+        vm.roll(createdAt + 100);
+        _startProving();
+        _prove(0);
+        vm.roll(_deadline(0));
+
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period");
+        assertEq(_payerBalance(), payerBefore + 100 * RATE, "refunds the epochs before activation");
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_UnknownRailRefunds() public {
+        _startProving();
+        _createRail(DEPOSIT, false);
+        _prove(0);
+        vm.roll(_deadline(0));
+
+        uint256 payerBefore = _payerBalance();
+        // without a data set there is no reserve to keep, so the whole rail balance goes back too
+        _expectSettled(0, railId, activationEpoch, _deadline(0), 0, maxProvingPeriod * RATE + lifecycleReserve, 0);
+        _settle();
+
+        assertEq(_payeeBalance(), 0, "a rail without a data set pays nothing");
+        assertEq(_payerBalance(), payerBefore + maxProvingPeriod * RATE + lifecycleReserve);
+        assertEq(_available(), 0);
+    }
+
+    function testSettleRailCallback_DeletedDataSetRefundsHeldPaymentAndReserve() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        vm.roll(activationEpoch + maxProvingPeriod / 2);
+        _settle();
+        uint256 heldAmount = _held();
+        assertGt(heldAmount, 0);
+
+        // Terminate the service and delete the data set through its FilecoinPayV1 rail
+        vm.prank(client);
+        pdpServiceWithPayments.terminateService(dataSetId);
+        DataSetInfoView memory info = pdpServiceWithPayments.getDataSet(dataSetId);
+        vm.roll(info.pdpEndEpoch + maxProvingPeriod + 1);
+        FilecoinPayV1.RailView memory v1Rail = payments.getRail(info.pdpRailId);
+        payments.settleRail(info.pdpRailId, v1Rail.endEpoch);
+        vm.prank(sp1);
+        mockPDPVerifier.deleteDataSet(PDPListener(address(pdpServiceWithPayments)), dataSetId, bytes(""));
+
+        uint256 payerBefore = _payerBalance();
+        uint256 accrued = (vm.getBlockNumber() - (activationEpoch + maxProvingPeriod / 2)) * RATE;
+        _expectSettled(
+            dataSetId,
+            railId,
+            activationEpoch + maxProvingPeriod / 2,
+            vm.getBlockNumber(),
+            0,
+            accrued + heldAmount + lifecycleReserve,
+            0
+        );
+        _settle();
+
+        assertEq(_payeeBalance(), 0, "a deleted data set pays nothing");
+        assertEq(
+            _payerBalance(),
+            payerBefore + accrued + heldAmount + lifecycleReserve,
+            "refunds the held payment and the reserve the deleted data set no longer needs"
+        );
+        assertEq(_available(), 0);
+    }
+
+    function testSettleRailCallback_RevertsIfCallerNotFilecoinPayV2() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(Errors.CallerNotPayments.selector, address(filecoinPayV2), address(payments))
+        );
+        vm.prank(address(payments));
+        provingModule.settleRail(RailId.wrap(1), 0, 1, 0, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.CallerNotPayments.selector, address(filecoinPayV2), client));
+        vm.prank(client);
+        provingModule.settleRail(RailId.wrap(1), 0, 1, 0, 0);
+    }
+
+    // FilecoinPayV2 triggers
+
+    function testSettleRailCallback_RateChangeSettlesHeldPaymentExactly() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        uint256 midPeriod = activationEpoch + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+        // FWSS changes the rate from its own script, which calls back into FWSS before setting the rate
+        _setRate(3 * RATE);
+        _assertHeld((midPeriod - activationEpoch) * RATE);
+
+        _prove(0);
+        vm.roll(_deadline(0));
+        _settle();
+
+        assertEq(
+            _payeeBalance(),
+            (midPeriod - activationEpoch) * RATE + (_deadline(0) - midPeriod) * 3 * RATE,
+            "each part of the period pays at its own rate"
+        );
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_ZeroRateStillReleasesHeldPayment() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        uint256 midPeriod = activationEpoch + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+        _setRate(0);
+        uint256 heldAmount = (midPeriod - activationEpoch) * RATE;
+        _assertHeld(heldAmount);
+
+        _prove(0);
+        vm.roll(_deadline(0));
+        uint256 payerBefore = _payerBalance();
+        _settle();
+
+        assertEq(_payeeBalance(), heldAmount, "the proof releases the held payment with nothing new accrued");
+        assertEq(_payerBalance(), payerBefore);
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_ModifyRateTriggersCallback() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        vm.roll(_deadline(0));
+
+        vm.prank(address(pdpServiceWithPayments));
+        filecoinPayV2.modifyRate(client, payee, NONCE, token, 0);
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "settling for the rate change pays the proven period");
+        assertEq(IExtsload(address(filecoinPayV2)).getRail(railId).incomingRate, 0);
+        _assertHeld(0);
+    }
+
+    function testSettleRailCallback_TerminationRefundsHeldPayment() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        _openPeriod(1);
+        uint256 midPeriod = _deadline(0) + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+
+        uint256 payerBefore = _payerBalance();
+        vm.prank(client);
+        filecoinPayV2.terminateRail(address(pdpServiceWithPayments), client, payee, NONCE, token);
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "termination pays the proven period");
+        assertEq(
+            _payerBalance(),
+            payerBefore + lifecycleReserve + (midPeriod - _deadline(0)) * RATE,
+            "termination returns the reserve and the held payment"
+        );
+        assertEq(_available(), 0);
+    }
+
+    function testSettleRailCallback_TerminationRefundsPreviouslyHeldPayment() public {
+        _startProving();
+        _createRail(DEPOSIT, true);
+        _prove(0);
+        _openPeriod(1);
+        uint256 quarter = _deadline(0) + maxProvingPeriod / 4;
+        vm.roll(quarter);
+        _settle();
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "pays the proven period");
+        _assertHeld((quarter - _deadline(0)) * RATE);
+
+        uint256 midPeriod = _deadline(0) + maxProvingPeriod / 2;
+        vm.roll(midPeriod);
+        uint256 payerBefore = _payerBalance();
+        vm.prank(client);
+        filecoinPayV2.terminateRail(address(pdpServiceWithPayments), client, payee, NONCE, token);
+
+        assertEq(_payeeBalance(), maxProvingPeriod * RATE, "termination pays nothing for the open period");
+        assertEq(
+            _payerBalance(),
+            payerBefore + lifecycleReserve + (midPeriod - _deadline(0)) * RATE,
+            "termination returns the reserve, the earlier held payment and the new accrual"
+        );
+        assertEq(_available(), 0);
+    }
+
+    function testSettleRailCallback_InsolventPayerSettlesUpToFundedEpoch() public {
+        _startProving();
+        uint256 fundedEpochs = maxProvingPeriod / 2;
+        _createRail(lifecycleReserve + fundedEpochs * RATE, true);
+        _prove(0);
+        vm.roll(_deadline(0) + 10);
+
+        uint256 settledUpTo = _settle();
+
+        assertEq(settledUpTo, activationEpoch + fundedEpochs, "settles only as far as the payer funded");
+        assertLt(settledUpTo, vm.getBlockNumber());
+        assertEq(_payeeBalance(), fundedEpochs * RATE, "pays the funded proven epochs");
+        _assertHeld(0);
+    }
+
+    // Accounting
+
+    /// @dev Decodes the UNLOCK and DISBURSE ops of a settleRail script.
+    function _decode(bytes memory script) internal pure returns (uint256 unlocked, uint256 disbursed) {
+        uint256 i;
+        while (i < script.length) {
+            uint8 op = uint8(script[i]);
+            uint256 amount;
+            for (uint256 j = 1; j <= 16; ++j) {
+                amount = (amount << 8) | uint8(script[i + j]);
+            }
+            if (op == UNLOCK) unlocked += amount;
+            else if (op == DISBURSE) disbursed += amount;
+            else revert("unexpected op");
+            i += 17;
+        }
+    }
+
+    /// @dev Expected split of `amount` over (fromEpoch, toEpoch] when period 0 is proven, period 1 faulted and
+    /// period 2 open, counting epochs per region independently of the module's period walk.
+    function _expectedSplit(uint256 fromEpoch, uint256 toEpoch, uint256 amount)
+        internal
+        view
+        returns (uint256 payout, uint256 held)
+    {
+        uint256 total = toEpoch - fromEpoch;
+        payout = (amount * _overlap(fromEpoch, toEpoch, activationEpoch, _deadline(0))) / total;
+        held = (amount * _overlap(fromEpoch, toEpoch, _deadline(1), type(uint64).max)) / total;
+    }
+
+    /// @dev Number of epochs in both (aFrom, aTo] and (bFrom, bTo].
+    function _overlap(uint256 aFrom, uint256 aTo, uint256 bFrom, uint256 bTo) internal pure returns (uint256) {
+        uint256 lo = aFrom > bFrom ? aFrom : bFrom;
+        uint256 hi = aTo < bTo ? aTo : bTo;
+        return hi > lo ? hi - lo : 0;
+    }
+
+    /// @dev Calls the callback as FilecoinPayV2 and returns what it released and what the rail holds afterwards
+    /// beyond the reserve.
+    function _callback(RailId rail, uint256 fromEpoch, uint256 toEpoch, uint256 prevBalance, uint256 amount)
+        internal
+        returns (uint256 unlocked, uint256 disbursed, uint256 held)
+    {
+        vm.prank(address(filecoinPayV2));
+        (unlocked, disbursed) = _decode(provingModule.settleRail(rail, fromEpoch, toEpoch, prevBalance, amount));
+        uint256 reserve = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
+        held = prevBalance + amount - unlocked - disbursed - reserve;
+    }
+
+    function testFuzz_SettleRailCallback_ReleasesExactlyWhatItAccounts(
+        uint256 firstFrom,
+        uint256 firstTo,
+        uint256 firstAmount,
+        uint256 secondAmount
+    ) public {
+        vm.roll(1000);
+        _startProving();
+        _prove(0);
+        _openPeriod(1);
+        _openPeriod(2);
+        vm.roll(_deadline(1) + maxProvingPeriod / 3);
+
+        firstFrom = bound(firstFrom, activationEpoch - 10, vm.getBlockNumber() - 2);
+        firstTo = bound(firstTo, firstFrom + 1, vm.getBlockNumber() - 1);
+        firstAmount = bound(firstAmount, 0, type(uint96).max);
+        secondAmount = bound(secondAmount, 0, type(uint96).max);
+        uint256 reserve = pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance;
+        RailId rail = RailId.wrap(uint256(keccak256("fuzz rail")));
+        vm.store(
+            address(pdpServiceWithPayments),
+            keccak256(abi.encode(RailId.unwrap(rail), RAIL_TO_DATA_SET_SLOT)),
+            bytes32(dataSetId)
+        );
+
+        (uint256 unlocked, uint256 disbursed, uint256 held) = _callback(rail, firstFrom, firstTo, reserve, firstAmount);
+        (uint256 payout, uint256 open) = _expectedSplit(firstFrom, firstTo, firstAmount);
+        assertEq(disbursed, payout, "first settle pays the proven epochs");
+        assertEq(held, open, "first settle holds the open epochs");
+        assertEq(unlocked, firstAmount - payout - open, "first settle refunds the rest");
+
+        // the period the first settle held is still open, so its payment stays held
+        uint256 heldBefore = held;
+        (unlocked, disbursed, held) = _callback(rail, firstTo, vm.getBlockNumber(), reserve + heldBefore, secondAmount);
+        (payout, open) = _expectedSplit(firstTo, vm.getBlockNumber(), secondAmount);
+        assertEq(disbursed, payout, "second settle pays the proven epochs");
+        assertEq(held, heldBefore + open, "second settle keeps the open epochs held");
+        assertEq(unlocked, secondAmount - payout - open, "second settle refunds the rest");
+    }
+}
