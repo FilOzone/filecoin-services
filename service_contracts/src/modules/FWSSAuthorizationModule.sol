@@ -5,6 +5,7 @@ import {IPDPVerifier} from "@pdp/interfaces/IPDPVerifier.sol";
 import {Cids} from "@pdp/Cids.sol";
 import {SessionKeyRegistry} from "@session-key-registry/SessionKeyRegistry.sol";
 import {FilecoinPayV1} from "@fws-payments/FilecoinPayV1.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {Errors} from "../Errors.sol";
 import {FWSSStorage} from "../storage/FWSSStorage.sol";
 import {
@@ -22,6 +23,7 @@ import {
     TERMINATE_FEE
 } from "../lib/PriceListUSDFC.sol";
 import {LibRails} from "../lib/LibRails.sol";
+import {LibRailsV2} from "../lib/LibRailsV2.sol";
 import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 import {FWSSEIP712} from "../lib/FWSSEIP712.sol";
@@ -36,6 +38,7 @@ import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
 /// the lifecycle reserve, and attaching the data set authorizer.
 contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
+    using LibRailsV2 for FilecoinPayV2;
 
     FilecoinPayV1 internal immutable paymentContract;
     SessionKeyRegistry public immutable sessionKeyRegistry;
@@ -220,13 +223,25 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
         // Verify the signature
         verifySchedulePieceRemovalsSignature(dataSetId, payer, info.clientDataSetId, pieceIds, signature);
 
-        uint96 newPending = _addPendingFee(
-            info.pendingOneTimePayments, StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, _tokenDecimals(info))
-        );
-        info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
-            info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, _tokenDecimals(info)
-        );
-        info.pendingOneTimePayments = newPending;
+        if (_isV1Rail(info.pdpRailId)) {
+            uint96 newPending = _addPendingFee(
+                info.pendingOneTimePayments,
+                StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, _tokenDecimals(info))
+            );
+            info.lifecycleReserveBalance = paymentContract.replenishReserveIfNeeded(
+                info.pdpRailId, info.pdpEndEpoch, info.lifecycleReserveBalance, newPending, _tokenDecimals(info)
+            );
+            info.pendingOneTimePayments = newPending;
+        } else {
+            // FilecoinPayV2 lets FWSS take the fee from the payer's balance now, so it never waits in the reserve.
+            filecoinPayV2.chargeOnPdpRail(
+                dataSetId,
+                LibStorageTerms.getRecord(info.storageTermsId).token,
+                payer,
+                info.payee,
+                StoragePricing.scaleAmount(SCHEDULE_PIECE_REMOVALS_FEE, _tokenDecimals(info))
+            );
+        }
 
         // piecesAdded may flush the fee before PDPVerifier drops these pieces, so pending alone cannot signal the
         // smaller leaf count to nextProvingPeriod. An empty batch removes nothing.

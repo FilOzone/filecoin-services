@@ -27,6 +27,7 @@ import {
     LIFECYCLE_RESERVE_TARGET,
     SERVICE_COMMISSION_BPS,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
+    TERMINATE_FEE,
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
@@ -257,8 +258,7 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
 
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;
-        info.lifecycleReserveBalance = uint96(StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, terms.tokenDecimals));
-        info.pendingOneTimePayments = uint96(StoragePricing.scaleAmount(CREATE_DATA_SET_FEE, terms.tokenDecimals));
+        _recordCreationFees(info, terms.payVersion == PAY_VERSION_FILECOIN_PAY_V2, terms.tokenDecimals);
         if (hasCDN) {
             info.cacheMissRailId = cacheMissRailId;
             info.cdnRailId = cdnRailId;
@@ -277,6 +277,20 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
             createData.metadataValues
         );
         emit DataSetStorageTermsSelected(dataSetId, storageTermsId);
+    }
+
+    /// @notice Records a new data set's lifecycle reserve and the creation fee it still owes
+    /// @param info The new data set
+    /// @param onFilecoinPayV2 Whether the data set's rails live on FilecoinPayV2
+    /// @param tokenDecimals The selected currency's precision
+    function _recordCreationFees(DataSetInfo storage info, bool onFilecoinPayV2, uint8 tokenDecimals) private {
+        if (onFilecoinPayV2) {
+            // createRails already paid the creation fee; the reserve stays at the locked termination fee.
+            info.lifecycleReserveBalance = uint96(StoragePricing.scaleAmount(TERMINATE_FEE, tokenDecimals));
+            return;
+        }
+        info.lifecycleReserveBalance = uint96(StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals));
+        info.pendingOneTimePayments = uint96(StoragePricing.scaleAmount(CREATE_DATA_SET_FEE, tokenDecimals));
     }
 
     /**
