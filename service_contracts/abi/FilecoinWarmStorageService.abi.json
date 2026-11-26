@@ -642,6 +642,17 @@
   },
   {
     "type": "error",
+    "name": "RateTooLarge",
+    "inputs": [
+      {
+        "name": "rate",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "TooManyMetadataKeys",
     "inputs": [
       {

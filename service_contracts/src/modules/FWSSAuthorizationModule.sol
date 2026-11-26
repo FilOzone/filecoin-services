@@ -134,25 +134,34 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
             dataSetId, payer, info.clientDataSetId, pieceData, nonce, metadataKeys, metadataValues, signature
         );
 
-        uint96 pending = _addPendingFee(
-            info.pendingOneTimePayments,
-            StoragePricing.scaleAmount(
-                ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE, _tokenDecimals(info)
-            )
+        uint256 fee = StoragePricing.scaleAmount(
+            ADD_PIECES_BASE_FEE + pieceData.length * ADD_PIECES_PER_PIECE_FEE, _tokenDecimals(info)
         );
-        uint96 reserveBalance = info.lifecycleReserveBalance;
+        uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
+        uint256 newRate = StoragePricing.calculateStorageRate(currentLeafCount, info.storageTermsId);
 
         // Validate lockup for the new data set size (fail-fast if client has insufficient funds)
-        uint256 currentLeafCount = IPDPVerifier(pdpVerifierAddress).getDataSetLeafCount(dataSetId);
-        LibStoragePayments.updatePaymentRates(
-            dataSetId,
-            info,
-            StoragePricing.calculateStorageRate(currentLeafCount, info.storageTermsId),
-            pending,
-            reserveBalance,
-            false,
-            paymentContract
-        );
+        if (_isV1Rail(info.pdpRailId)) {
+            LibStoragePayments.updatePaymentRates(
+                dataSetId,
+                info,
+                newRate,
+                _addPendingFee(info.pendingOneTimePayments, fee),
+                info.lifecycleReserveBalance,
+                false,
+                paymentContract
+            );
+        } else {
+            filecoinPayV2.setPdpRate(
+                dataSetId,
+                info.pdpRailId,
+                LibStorageTerms.getRecord(info.storageTermsId).token,
+                payer,
+                info.payee,
+                newRate,
+                fee
+            );
+        }
 
         if (metadataOmitted) {
             string[] memory emptyMetadata = new string[](0);

@@ -166,6 +166,7 @@ interface IFilecoinWarmStorageService is
     error ProvingPeriodNotInitialized(uint256 dataSetId);
     error ProvingPeriodPassed(uint256 dataSetId, uint256 deadline, uint256 nowBlock);
     error RailNotFullySettled(uint256 railId, uint256 settledUpTo, uint256 endEpoch);
+    error RateTooLarge(uint256 rate);
     error ServiceContractMustTerminateRail();
     error StorageProviderChangesNotSupported();
     error StorageTermsNotEnabled(bytes32 storageTermsId);

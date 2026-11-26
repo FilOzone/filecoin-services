@@ -4,14 +4,16 @@ pragma solidity 0.8.37;
 import {CHALLENGES_PER_PROOF, NO_PROVING_DEADLINE} from "../lib/FWSSConstants.sol";
 import {Errors} from "../Errors.sol";
 import {FilecoinPayV1, IValidator} from "@fws-payments/FilecoinPayV1.sol";
+import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
 import {IRailV2} from "@filecoin-pay-v2/interfaces/IRail.sol";
-import {RailId} from "@filecoin-pay-v2/lib/RailId.sol";
+import {RailId, RailIdLibrary} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibProving} from "../lib/LibProving.sol";
+import {LibRailsV2} from "../lib/LibRailsV2.sol";
 import {LibServiceLifecycleGuards} from "../lib/LibServiceLifecycleGuards.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
@@ -319,7 +321,8 @@ contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWS
      * @param railId ID of the FilecoinPayV2 rail
      * @param prevSettledEpoch Starting epoch (exclusive)
      * @param settledUpTo Ending epoch (inclusive)
-     * @param prevBalance The rail's available balance before addsBalance: the lifecycle reserve and the held payment
+     * @param prevBalance The rail's available balance before addsBalance: the lifecycle reserve, the rate lockup and
+     * the held payment
      * @param addsBalance The payment that accrued over (prevSettledEpoch, settledUpTo]
      * @return script The FilecoinPayV2 script releasing the arbitrated payment
      */
@@ -334,8 +337,15 @@ contract FWSSProvingModule is IValidator, IRailV2, FWSSStorage, FWSSOwnable, FWS
 
         uint256 pdpRailId = RailId.unwrap(railId);
         uint256 dataSetId = railToDataSet[pdpRailId];
-        uint256 reserve = dataSetInfo[dataSetId].lifecycleReserveBalance;
-        uint256 heldAmount = prevBalance > reserve ? prevBalance - reserve : 0;
+        DataSetInfo storage info = dataSetInfo[dataSetId];
+        uint256 locked;
+        // Rails without a live data set keep nothing. FilecoinPayV2 settles before it changes a rate, so the rail
+        // still carries the rate its lockup backs.
+        if (info.pdpRailId != 0) {
+            locked = info.lifecycleReserveBalance
+                + LibRailsV2.rateLockup(RailIdLibrary.getRail(IExtsload(address(filecoinPayV2)), railId).incomingRate);
+        }
+        uint256 heldAmount = prevBalance > locked ? prevBalance - locked : 0;
 
         uint256 activationEpoch = provingActivationEpoch[dataSetId];
         if (dataSetId == 0 || activationEpoch == 0 || settledUpTo <= activationEpoch) {
