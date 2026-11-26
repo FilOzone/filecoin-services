@@ -12,6 +12,7 @@ import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryS
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
 import {FWSSFilecoinPayV2} from "../../src/lib/FWSSFilecoinPayV2.sol";
 import {CDNPaymentRailsToppedUp} from "../../src/lib/LibRails.sol";
+import {LibRailsV2} from "../../src/lib/LibRailsV2.sol";
 import {
     CREATE_DATA_SET_FEE,
     DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
@@ -392,7 +393,7 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         makeSignaturePass(payer);
 
         vm.prank(address(mockPDPVerifier));
-        vm.expectRevert(abi.encodeWithSelector(FWSSDataSetModule.DataSetIdTooLarge.selector, uint256(1 << 62)));
+        vm.expectRevert(abi.encodeWithSelector(LibRailsV2.DataSetIdTooLarge.selector, uint256(1 << 62)));
         fwss.dataSetCreated(1 << 62, serviceProvider, _payload(0, true));
 
         uint256 largestId = (1 << 62) - 1;

@@ -32,7 +32,6 @@ Each mapping entry occupies three slots:
 | 1 | `bytes32 salt` |
 | 2 | `uint96 pricePerTiBPerMonth` 0–11; unused 12–31 |
 
-`payVersion` uses a byte that was unused before, so existing records read zero, which is FilecoinPayV1.
 Unused bytes are not declared as reserved fields. Future fields may occupy them
 only if existing offsets and widths remain unchanged. Version zero means
 unregistered; current registered definitions have version one.
