@@ -28,7 +28,7 @@ Each mapping entry occupies three slots:
 
 | Relative slot | Contents (byte offsets from least-significant byte) |
 |---|---|
-| 0 | `address token` 0–19; `uint8 tokenDecimals` 20; `uint8 version` 21; `bool enabled` 22; unused 23–31 |
+| 0 | `address token` 0–19; `uint8 tokenDecimals` 20; `uint8 version` 21; `bool enabled` 22; `uint8 payVersion` 23; unused 24–31 |
 | 1 | `bytes32 salt` |
 | 2 | `uint96 pricePerTiBPerMonth` 0–11; unused 12–31 |
 

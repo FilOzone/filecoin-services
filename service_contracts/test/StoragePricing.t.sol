@@ -16,11 +16,12 @@ contract StoragePricingTest is Test {
 
         bytes32 termsId = keccak256(
             abi.encode(
-                keccak256("filecoin.FWSS.StorageTerms.v1"),
+                keccak256("filecoin.FWSS.StorageTerms.v2"),
                 token,
                 uint8(18),
                 bytes32(0),
-                STORAGE_PRICE_PER_TIB_PER_MONTH
+                STORAGE_PRICE_PER_TIB_PER_MONTH,
+                uint8(0)
             )
         );
         bytes32 recordSlot = keccak256(abi.encode(termsId, STORAGE_TERMS_LOCATION));

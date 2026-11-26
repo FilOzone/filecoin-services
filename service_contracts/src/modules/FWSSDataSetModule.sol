@@ -29,13 +29,15 @@ import {
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {LibRails} from "../lib/LibRails.sol";
+import {LibRailsV2} from "../lib/LibRailsV2.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
 import {LibProving} from "../lib/LibProving.sol";
 import {LibSignatureVerification} from "../lib/LibSignatureVerification.sol";
-import {StorageTermsRecord} from "../lib/StorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTermsRecord} from "../lib/StorageTerms.sol";
 import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 
@@ -43,6 +45,7 @@ import {StoragePricing} from "../lib/StoragePricing.sol";
 /// @notice Manages data set creation and deletion.
 contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
+    using LibRailsV2 for FilecoinPayV2;
 
     error UnsupportedExtraDataVariant(uint256 keysOffset);
     error StorageTermsNotEnabled(bytes32 storageTermsId);
@@ -228,22 +231,29 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
             dataSetMetadata[dataSetId][key] = value;
         }
 
-        // The payer funds and approves the currency selected by the signed terms.
-
-        // Create the payment rails using the FilecoinPayV1 contract
-
         // Determine once whether CDN is enabled in metadata and reuse the result
         bool hasCDN = hasCDNMetadataKey(createData.metadataKeys);
         require(!hasCDN || terms.token == address(usdfcTokenAddress), CDNUnsupportedCurrency(terms.token));
 
-        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = paymentContract.createRails(
-            dataSetId,
-            IERC20(terms.token),
-            createData.payer,
-            payee,
-            hasCDN ? filBeamBeneficiaryAddress : address(0),
-            terms.tokenDecimals
-        );
+        // The signed storage terms choose the payment contract; records that predate payVersion read FilecoinPayV1.
+        (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = terms.payVersion
+            == PAY_VERSION_FILECOIN_PAY_V2
+            ? filecoinPayV2.createRails(
+                dataSetId,
+                terms.token,
+                createData.payer,
+                payee,
+                hasCDN ? filBeamBeneficiaryAddress : address(0),
+                terms.tokenDecimals
+            )
+            : paymentContract.createRails(
+                dataSetId,
+                IERC20(terms.token),
+                createData.payer,
+                payee,
+                hasCDN ? filBeamBeneficiaryAddress : address(0),
+                terms.tokenDecimals
+            );
 
         railToDataSet[pdpRailId] = dataSetId;
         info.pdpRailId = pdpRailId;

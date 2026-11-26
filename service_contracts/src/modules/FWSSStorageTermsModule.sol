@@ -5,7 +5,7 @@ import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IER
 import {FWSSOwnable} from "../lib/FWSSOwnable.sol";
 import {STORAGE_PRICE_PER_TIB_PER_MONTH, TOKEN_DECIMALS} from "../lib/PriceListUSDFC.sol";
 import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
-import {StorageTerms} from "../lib/StorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../lib/StorageTerms.sol";
 
 /// @notice Owns the immutable storage-terms catalogue used by newly created data sets.
 contract FWSSStorageTermsModule is FWSSOwnable {
@@ -14,6 +14,7 @@ contract FWSSStorageTermsModule is FWSSOwnable {
 
     error InvalidTokenDecimals(uint8 tokenDecimals);
     error PriceBelowMinimum(uint96 pricePerTiBPerMonth, uint256 minimumPricePerTiBPerMonth);
+    error UnsupportedPayVersion(uint8 payVersion);
 
     function registerStorageTerms(StorageTerms calldata terms) external onlyOwner returns (bytes32 storageTermsId) {
         _validate(terms);
@@ -35,6 +36,7 @@ contract FWSSStorageTermsModule is FWSSOwnable {
     }
 
     function _validate(StorageTerms calldata terms) private view {
+        if (terms.payVersion > PAY_VERSION_FILECOIN_PAY_V2) revert UnsupportedPayVersion(terms.payVersion);
         uint8 tokenDecimals = terms.token == address(0) ? uint8(TOKEN_DECIMALS) : IERC20Metadata(terms.token).decimals();
         if (tokenDecimals != terms.tokenDecimals || tokenDecimals > TOKEN_DECIMALS) {
             revert InvalidTokenDecimals(terms.tokenDecimals);

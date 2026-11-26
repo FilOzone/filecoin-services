@@ -770,12 +770,12 @@ For the storage-terms introduction, additionally confirm:
 
 ```bash
 cast call --rpc-url "$ETH_RPC_URL" "$FWSS_PROXY_ADDRESS" \
-  'getStorageTerms(bytes32)((address,uint8,bytes32,uint96),bool)' \
+  'getStorageTerms(bytes32)((address,uint8,bytes32,uint96,uint8),bool)' \
   0x0000000000000000000000000000000000000000000000000000000000000000
 ```
 
 The result must be the deployment's USDFC token, decimals `18`, zero salt,
-price `2500000000000000000`, and enabled `true`. Confirm existing datasets
+price `2500000000000000000`, payVersion `0`, and enabled `true`. Confirm existing datasets
 report zero through `getDataSetV2`, legacy getter arrays still decode correctly,
 and a six-decimal registered currency completes creation, piece addition, and
 termination with scaled fees.

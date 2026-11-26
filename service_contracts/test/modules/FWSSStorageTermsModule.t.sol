@@ -5,7 +5,7 @@ import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageS
 import {FWSSStorageTermsModule} from "../../src/modules/FWSSStorageTermsModule.sol";
 import {FWSSOwnable} from "../../src/lib/FWSSOwnable.sol";
 import {LibStorageTerms} from "../../src/lib/LibStorageTerms.sol";
-import {StorageTerms} from "../../src/lib/StorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V1, PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../../src/lib/StorageTerms.sol";
 
 contract StorageTermsDecimalsToken {
     uint8 private immutable tokenDecimals;
@@ -22,7 +22,11 @@ contract StorageTermsDecimalsToken {
 contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
     function _terms() private view returns (StorageTerms memory) {
         return StorageTerms({
-            token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32("terms"), pricePerTiBPerMonth: 2.5 ether
+            token: address(mockUSDFC),
+            tokenDecimals: 18,
+            salt: bytes32("terms"),
+            pricePerTiBPerMonth: 2.5 ether,
+            payVersion: 0
         });
     }
 
@@ -36,6 +40,7 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
         assertEq(terms.tokenDecimals, 18);
         assertEq(terms.salt, bytes32(0));
         assertEq(terms.pricePerTiBPerMonth, 2.5 ether);
+        assertEq(terms.payVersion, PAY_VERSION_FILECOIN_PAY_V1);
         assertTrue(enabled);
     }
 
@@ -79,18 +84,23 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
 
     function testLegacyDefinitionRegistersIndependentHashedRecord() public {
         StorageTerms memory legacy = StorageTerms({
-            token: address(mockUSDFC), tokenDecimals: 18, salt: bytes32(0), pricePerTiBPerMonth: 2.5 ether
+            token: address(mockUSDFC),
+            tokenDecimals: 18,
+            salt: bytes32(0),
+            pricePerTiBPerMonth: 2.5 ether,
+            payVersion: 0
         });
         bytes32 id = _module().registerStorageTerms(legacy);
         assertEq(
             id,
             keccak256(
                 abi.encode(
-                    keccak256("filecoin.FWSS.StorageTerms.v1"),
+                    keccak256("filecoin.FWSS.StorageTerms.v2"),
                     legacy.token,
                     legacy.tokenDecimals,
                     legacy.salt,
-                    legacy.pricePerTiBPerMonth
+                    legacy.pricePerTiBPerMonth,
+                    legacy.payVersion
                 )
             )
         );
@@ -110,15 +120,54 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
         address token,
         uint8 tokenDecimals,
         bytes32 salt,
-        uint96 pricePerTiBPerMonth
+        uint96 pricePerTiBPerMonth,
+        uint8 payVersion
     ) public view {
         StorageTerms memory terms = StorageTerms({
-            token: token, tokenDecimals: tokenDecimals, salt: salt, pricePerTiBPerMonth: pricePerTiBPerMonth
+            token: token,
+            tokenDecimals: tokenDecimals,
+            salt: salt,
+            pricePerTiBPerMonth: pricePerTiBPerMonth,
+            payVersion: payVersion
         });
         bytes32 expected = keccak256(
-            abi.encode(keccak256("filecoin.FWSS.StorageTerms.v1"), token, tokenDecimals, salt, pricePerTiBPerMonth)
+            abi.encode(
+                keccak256("filecoin.FWSS.StorageTerms.v2"), token, tokenDecimals, salt, pricePerTiBPerMonth, payVersion
+            )
         );
         assertEq(_module().getStorageTermsId(terms), expected);
+    }
+
+    function testPayV2TermsGetTheirOwnRecordBesideTheirV1Twin() public {
+        StorageTerms memory v1Terms = _terms();
+        StorageTerms memory v2Terms = _terms();
+        v2Terms.payVersion = PAY_VERSION_FILECOIN_PAY_V2;
+
+        bytes32 v1Id = _module().registerStorageTerms(v1Terms);
+        bytes32 v2Id = _module().registerStorageTerms(v2Terms);
+        assertNotEq(v1Id, v2Id);
+
+        (StorageTerms memory storedV1,) = _module().getStorageTerms(v1Id);
+        (StorageTerms memory storedV2, bool v2Enabled) = _module().getStorageTerms(v2Id);
+        assertEq(storedV1.payVersion, PAY_VERSION_FILECOIN_PAY_V1);
+        assertEq(storedV2.payVersion, PAY_VERSION_FILECOIN_PAY_V2);
+        assertEq(storedV2.pricePerTiBPerMonth, v1Terms.pricePerTiBPerMonth);
+        assertTrue(v2Enabled);
+
+        _module().disableStorageTerms(v1Id);
+        (, v2Enabled) = _module().getStorageTerms(v2Id);
+        assertTrue(v2Enabled);
+    }
+
+    function testRejectsUnsupportedPayVersion() public {
+        StorageTerms memory terms = _terms();
+        terms.payVersion = PAY_VERSION_FILECOIN_PAY_V2 + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                FWSSStorageTermsModule.UnsupportedPayVersion.selector, PAY_VERSION_FILECOIN_PAY_V2 + 1
+            )
+        );
+        _module().registerStorageTerms(terms);
     }
 
     function testOnlyOwnerMayRegisterOrDisable() public {
@@ -153,7 +202,8 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
             token: address(new StorageTermsDecimalsToken(19)),
             tokenDecimals: 19,
             salt: bytes32("nineteen"),
-            pricePerTiBPerMonth: 1
+            pricePerTiBPerMonth: 1,
+            payVersion: 0
         });
         vm.expectRevert(abi.encodeWithSelector(FWSSStorageTermsModule.InvalidTokenDecimals.selector, uint8(19)));
         _module().registerStorageTerms(terms);
@@ -161,8 +211,9 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
 
     function testRoundsMinimumPriceUpForZeroDecimalTokens() public {
         address token = address(new StorageTermsDecimalsToken(0));
-        StorageTerms memory low =
-            StorageTerms({token: token, tokenDecimals: 0, salt: bytes32("zero-low"), pricePerTiBPerMonth: 2});
+        StorageTerms memory low = StorageTerms({
+            token: token, tokenDecimals: 0, salt: bytes32("zero-low"), pricePerTiBPerMonth: 2, payVersion: 0
+        });
         vm.expectRevert(
             abi.encodeWithSelector(FWSSStorageTermsModule.PriceBelowMinimum.selector, uint96(2), uint256(3))
         );
@@ -176,7 +227,7 @@ contract FWSSStorageTermsModuleTest is FilecoinWarmStorageServiceFixture {
 
     function testRegistersNativeTermsAtEighteenDecimals() public {
         StorageTerms memory nativeTerms = StorageTerms({
-            token: address(0), tokenDecimals: 18, salt: bytes32("native"), pricePerTiBPerMonth: 2.5 ether
+            token: address(0), tokenDecimals: 18, salt: bytes32("native"), pricePerTiBPerMonth: 2.5 ether, payVersion: 0
         });
         bytes32 id = _module().registerStorageTerms(nativeTerms);
         (StorageTerms memory stored, bool enabled) = _module().getStorageTerms(id);
