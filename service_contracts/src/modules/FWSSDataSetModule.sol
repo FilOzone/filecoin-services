@@ -23,18 +23,15 @@ import {
     CDN_EGRESS_PRICE_PER_TIB,
     CREATE_DATA_SET_FEE,
     DATASET_FEE_PER_MONTH,
-    DEFAULT_CACHE_MISS_LOCKUP_AMOUNT,
-    DEFAULT_CDN_LOCKUP_AMOUNT,
     EPOCHS_PER_MONTH,
     LIFECYCLE_RESERVE_TARGET,
     SERVICE_COMMISSION_BPS,
     STORAGE_PRICE_PER_TIB_PER_MONTH,
     TOKEN_DECIMALS
 } from "../lib/PriceListUSDFC.sol";
-import {CREATE_RAIL} from "@filecoin-pay-v2/lib/Permissions.sol";
-import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream} from "@filecoin-pay-v2/lib/RailId.sol";
-import {ScriptBuilder, newScript} from "@filecoin-pay-v2/lib/Script.sol";
-import {CDNPaymentRailsToppedUp, LibRails} from "../lib/LibRails.sol";
+import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
+import {LibRails} from "../lib/LibRails.sol";
+import {LibRailsV2} from "../lib/LibRailsV2.sol";
 import {LibStoragePayments} from "../lib/LibStoragePayments.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
 import {FWSSFilecoinPayV2} from "../lib/FWSSFilecoinPayV2.sol";
@@ -48,21 +45,17 @@ import {StoragePricing} from "../lib/StoragePricing.sol";
 /// @notice Manages data set creation and deletion.
 contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, FWSSFilecoinPayV2 {
     using LibRails for FilecoinPayV1;
-    using RailIdLibrary for Stream;
+    using LibRailsV2 for FilecoinPayV2;
 
     error UnsupportedExtraDataVariant(uint256 keysOffset);
     error StorageTermsNotEnabled(bytes32 storageTermsId);
     error CDNUnsupportedCurrency(address token);
-    error DataSetIdTooLarge(uint256 dataSetId);
 
     event DataSetStorageTermsSelected(uint256 indexed dataSetId, bytes32 indexed storageTermsId);
 
     // Metadata key constants
     uint256 private constant METADATA_KEY_WITH_CDN_SIZE = 7;
     bytes32 private constant METADATA_KEY_WITH_CDN_HASH = keccak256("withCDN");
-
-    // Each rail role gets its own nonce, so rails stay distinct when the payee is the FilBeam beneficiary.
-    uint64 private constant CDN_RAIL_NONCE_FLAG = 1 << 62;
 
     FilecoinPayV1 internal immutable paymentContract;
     IERC20Metadata internal immutable usdfcTokenAddress;
@@ -245,7 +238,14 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
         // The signed storage terms choose the payment contract; records that predate payVersion read FilecoinPayV1.
         (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) = terms.payVersion
             == PAY_VERSION_FILECOIN_PAY_V2
-            ? _createPayV2Rails(dataSetId, terms.token, terms.tokenDecimals, createData.payer, payee, hasCDN)
+            ? filecoinPayV2.createRails(
+                dataSetId,
+                terms.token,
+                createData.payer,
+                payee,
+                hasCDN ? filBeamBeneficiaryAddress : address(0),
+                terms.tokenDecimals
+            )
             : paymentContract.createRails(
                 dataSetId,
                 IERC20(terms.token),
@@ -277,61 +277,6 @@ contract FWSSDataSetModule is EIP712Upgradeable, FWSSStorage, FWSSPDPVerifier, F
             createData.metadataValues
         );
         emit DataSetStorageTermsSelected(dataSetId, storageTermsId);
-    }
-
-    /// @notice Opens the data set's rails on FilecoinPayV2 in one script, with this contract as their operator.
-    /// @param dataSetId The data set the rail nonces derive from
-    /// @param token The currency selected by the data set's storage terms; address(0) is native FIL
-    /// @param tokenDecimals The selected currency's precision
-    /// @param payer The payer whose FilecoinPayV2 balance funds the rails
-    /// @param payee The service provider's payee
-    /// @param hasCDN Whether to also open the cache-miss and CDN rails
-    /// @return pdpRailId The PDP rail, which settles through FWSS
-    /// @return cacheMissRailId The cache-miss rail, or zero without CDN
-    /// @return cdnRailId The CDN rail, or zero without CDN
-    function _createPayV2Rails(
-        uint256 dataSetId,
-        address token,
-        uint8 tokenDecimals,
-        address payer,
-        address payee,
-        bool hasCDN
-    ) private returns (uint256 pdpRailId, uint256 cacheMissRailId, uint256 cdnRailId) {
-        require(dataSetId < CDN_RAIL_NONCE_FLAG, DataSetIdTooLarge(dataSetId));
-        uint64 cacheMissNonce = uint64(dataSetId);
-        uint64 pdpNonce = FLAG_CALLBACK | cacheMissNonce;
-        uint64 cdnNonce = CDN_RAIL_NONCE_FLAG | cacheMissNonce;
-
-        // The lifecycle reserve is a lock on the PDP rail. A payer balance short of the locks reverts in executeScript.
-        uint256 lifecycleReserve = StoragePricing.scaleAmount(LIFECYCLE_RESERVE_TARGET, tokenDecimals);
-        uint256 cacheMissLockup;
-        uint256 cdnLockup;
-        if (hasCDN) {
-            cacheMissLockup = StoragePricing.scaleAmount(DEFAULT_CACHE_MISS_LOCKUP_AMOUNT, tokenDecimals);
-            cdnLockup = StoragePricing.scaleAmount(DEFAULT_CDN_LOCKUP_AMOUNT, tokenDecimals);
-        }
-
-        // ScriptBuilder grows at the free-memory pointer, so nothing may allocate between newScript() and build().
-        ScriptBuilder script =
-            newScript().setToken(token).createRail(payer, payee, pdpNonce).lock(uint128(lifecycleReserve));
-        if (hasCDN) {
-            script = script.createRail(payer, payee, cacheMissNonce).lock(uint128(cacheMissLockup))
-                .createRail(payer, filBeamBeneficiaryAddress, cdnNonce).lock(uint128(cdnLockup));
-        }
-        filecoinPayV2.executeScript(CREATE_RAIL, script.build());
-
-        pdpRailId = _railId(payer, payee, token, pdpNonce);
-        if (hasCDN) {
-            cacheMissRailId = _railId(payer, payee, token, cacheMissNonce);
-            cdnRailId = _railId(payer, filBeamBeneficiaryAddress, token, cdnNonce);
-            emit CDNPaymentRailsToppedUp(dataSetId, cdnLockup, cdnLockup, cacheMissLockup, cacheMissLockup);
-        }
-    }
-
-    function _railId(address payer, address recipient, address token, uint64 nonce) private view returns (uint256) {
-        return RailId.unwrap(
-            RailIdLibrary.deriveRail(address(this), payer, recipient, uint256(uint160(token)), nonce).getRailId()
-        );
     }
 
     /**
