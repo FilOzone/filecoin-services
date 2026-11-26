@@ -1142,6 +1142,8 @@ contract FWSSAuthorizationModuleTest is FilecoinWarmStorageServiceFixture {
         uint256 amount = (uint256(1) << 97) | topUp;
         uint96 expectedBalance = info.lifecycleReserveBalance + uint96(topUp);
 
+        vm.expectEmit(address(pdpServiceWithPayments));
+        emit IFilecoinWarmStorageService.LifecycleReserveToppedUp(dataSetId, topUp, expectedBalance);
         vm.prank(client);
         pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, amount);
 

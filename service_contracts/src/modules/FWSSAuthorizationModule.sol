@@ -23,6 +23,7 @@ import {
 } from "../lib/PriceListUSDFC.sol";
 import {LibRails} from "../lib/LibRails.sol";
 import {LibStorageTerms} from "../lib/LibStorageTerms.sol";
+import {PAY_VERSION_FILECOIN_PAY_V2, StorageTermsRecord} from "../lib/StorageTerms.sol";
 import {StoragePricing} from "../lib/StoragePricing.sol";
 import {FWSSEIP712} from "../lib/FWSSEIP712.sol";
 import {FWSSPDPVerifier} from "../lib/FWSSPDPVerifier.sol";
@@ -65,6 +66,12 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
     );
 
     event DataSetAuthorizerSet(uint256 indexed dataSetId, address indexed authorizer);
+
+    /// @notice Emitted when the payer tops up the lifecycle reserve, on FilecoinPayV1 and FilecoinPayV2 alike.
+    /// @dev FilecoinPayV2 logs nothing for a lock, so this is the only log of a FilecoinPayV2 top-up.
+    /// @param amountAdded The increase applied: the low 96 bits of the requested amount
+    /// @param totalLifecycleReserve lifecycleReserveBalance after the top-up
+    event LifecycleReserveToppedUp(uint256 indexed dataSetId, uint256 amountAdded, uint256 totalLifecycleReserve);
 
     /// @notice Emitted when a service is terminated.
     /// @param approver The address that authorized termination: the payer, one of the payer's
@@ -296,6 +303,8 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
      * @notice Pre-funds the lifecycle reserve beyond the automatic target
      * @dev Useful before scheduling many piece removals or before terminating.
      *      Cannot be called after termination; FilecoinPay forbids raising lockupFixed on a terminated rail.
+     *      On FilecoinPayV1 it raises the PDP rail's lockupFixed; on FilecoinPayV2 it locks `amount` more of the
+     *      payer's FilecoinPayV2 balance on the PDP rail. Neither deposits new funds.
      * @param dataSetId The ID of the data set
      * @param amount Additional amount to add to the lifecycle reserve
      */
@@ -306,10 +315,16 @@ contract FWSSAuthorizationModule is FWSSStorage, FWSSEIP712, FWSSPDPVerifier, FW
         require(msg.sender == payer, Errors.CallerNotPayer(dataSetId, payer, msg.sender));
         require(info.pdpEndEpoch == 0, Errors.DataSetPaymentAlreadyTerminated(dataSetId));
 
-        uint256 pdpRailId = info.pdpRailId;
-        uint96 newBalance = info.lifecycleReserveBalance + uint96(amount);
-        paymentContract.modifyRailLockup(pdpRailId, DEFAULT_LOCKUP_PERIOD, newBalance);
+        StorageTermsRecord storage terms = LibStorageTerms.getRecord(info.storageTermsId);
+        uint96 increase = uint96(amount);
+        uint96 newBalance = info.lifecycleReserveBalance + increase;
+        if (terms.payVersion == PAY_VERSION_FILECOIN_PAY_V2) {
+            _lockOnPdpRail(dataSetId, terms.token, payer, info.payee, increase);
+        } else {
+            paymentContract.modifyRailLockup(info.pdpRailId, DEFAULT_LOCKUP_PERIOD, newBalance);
+        }
         info.lifecycleReserveBalance = newBalance;
+        emit LifecycleReserveToppedUp(dataSetId, increase, newBalance);
     }
 
     function requirePaymentNotTerminated(uint256 dataSetId) internal view {
