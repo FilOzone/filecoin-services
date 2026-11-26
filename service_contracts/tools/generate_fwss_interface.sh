@@ -11,6 +11,7 @@ set -euo pipefail
 BASES=(
     "IFilecoinServiceMetadata|../IFilecoinServiceMetadata.sol"
     "IPDPProvingSchedule|@pdp/IPDPProvingSchedule.sol"
+    "IRailV2|@filecoin-pay-v2/interfaces/IRail.sol"
     "IValidator|@fws-payments/FilecoinPayV1.sol"
     "PDPListener|@pdp/PDPVerifier.sol"
 )
