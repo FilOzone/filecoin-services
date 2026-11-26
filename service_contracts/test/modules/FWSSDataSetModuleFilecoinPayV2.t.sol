@@ -6,7 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {PDPListener} from "@pdp/PDPVerifier.sol";
 import {FilecoinPayV2} from "@filecoin-pay-v2/FilecoinPayV2.sol";
 import {IExtsload} from "@filecoin-pay-v2/interfaces/IExtsload.sol";
-import {CREATE_RAIL, DEPOSIT} from "@filecoin-pay-v2/lib/Permissions.sol";
+import {CREATE_RAIL, DEPOSIT, NONE} from "@filecoin-pay-v2/lib/Permissions.sol";
 import {FLAG_CALLBACK, RailId, RailIdLibrary, Stream, StreamState} from "@filecoin-pay-v2/lib/RailId.sol";
 import {ServiceProviderRegistryStorage} from "../../src/ServiceProviderRegistryStorage.sol";
 import {DataSetInfoView} from "../../src/lib/FWSSViewTypes.sol";
@@ -21,6 +21,7 @@ import {
     STORAGE_PRICE_PER_TIB_PER_MONTH
 } from "../../src/lib/PriceListUSDFC.sol";
 import {PAY_VERSION_FILECOIN_PAY_V2, StorageTerms} from "../../src/lib/StorageTerms.sol";
+import {FWSSAuthorizationModule} from "../../src/modules/FWSSAuthorizationModule.sol";
 import {FWSSDataSetModule} from "../../src/modules/FWSSDataSetModule.sol";
 import {FWSSStorageTermsModule} from "../../src/modules/FWSSStorageTermsModule.sol";
 import {FilecoinWarmStorageServiceFixture} from "../helpers/FilecoinWarmStorageServiceFixture.sol";
@@ -414,5 +415,78 @@ contract FWSSDataSetModuleFilecoinPayV2Test is FilecoinWarmStorageServiceFixture
         _fundV2Payer(payer, 10e18);
         uint256 dataSetId = _create(serviceProvider, _payload(0, false));
         assertFalse(harness.isV1Rail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId));
+    }
+
+    function testTopUpLocksMoreOnFilecoinPayV2PdpRail() public {
+        _fundV2Payer(payer, 10e18);
+        uint256 dataSetId = _create(serviceProvider, _payload(0, false));
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
+        uint256 balanceBefore = _usdfcBalance();
+
+        // LOCK takes no permission, so FWSS runs the script with an empty scope
+        vm.expectCall(
+            address(filecoinPayV2),
+            abi.encodePacked(bytes4(keccak256("executeScript(uint256,bytes)")), abi.encode(NONE))
+        );
+        vm.expectEmit(address(pdpServiceWithPayments));
+        emit FWSSAuthorizationModule.LifecycleReserveToppedUp(dataSetId, 1e18, LIFECYCLE_RESERVE_TARGET + 1e18);
+        vm.prank(payer);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, 1e18);
+
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET + 1e18);
+        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET + 1e18, "lock mirrors reserve");
+        assertEq(_usdfcBalance(), balanceBefore - 1e18, "locked from the payer's balance");
+    }
+
+    function testTopUpRevertsOnShortFilecoinPayV2Balance() public {
+        _fundV2Payer(payer, MIN_FUNDS);
+        uint256 dataSetId = _create(serviceProvider, _payload(0, false));
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
+        _fundV2Payer(payer, 1e18 - 1);
+
+        vm.prank(payer);
+        vm.expectRevert(FilecoinPayV2.InsufficientBalance.selector);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, 1e18);
+
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET);
+        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET);
+
+        vm.prank(payer);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, 1e18 - 1);
+        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET + 1e18 - 1);
+        assertEq(_usdfcBalance(), 0);
+    }
+
+    function testTopUpOnFilecoinPayV2LocksTheTruncatedAmount() public {
+        _fundV2Payer(payer, 10e18);
+        uint256 dataSetId = _create(serviceProvider, _payload(0, false));
+
+        // lock takes a uint128, the reserve a uint96: bits above 96 must not reach the lock
+        vm.expectEmit(address(pdpServiceWithPayments));
+        emit FWSSAuthorizationModule.LifecycleReserveToppedUp(dataSetId, 1e18, LIFECYCLE_RESERVE_TARGET + 1e18);
+        vm.prank(payer);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, (uint256(1) << 97) | 1e18);
+
+        assertEq(pdpServiceWithPayments.getDataSet(dataSetId).lifecycleReserveBalance, LIFECYCLE_RESERVE_TARGET + 1e18);
+        assertEq(
+            _rail(pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId).available, LIFECYCLE_RESERVE_TARGET + 1e18
+        );
+    }
+
+    function testTopUpOnNativeFilFilecoinPayV2Rail() public {
+        bytes32 termsId = _registerV2Terms(address(0), 18, uint96(STORAGE_PRICE_PER_TIB_PER_MONTH));
+        vm.startPrank(payer);
+        filecoinPayV2.deposit{value: 1 ether}();
+        filecoinPayV2.authorize(address(pdpServiceWithPayments), CREATE_RAIL);
+        vm.stopPrank();
+        uint256 dataSetId = _create(serviceProvider, _termsPayload(0, termsId, false));
+
+        vm.prank(payer);
+        pdpServiceWithPayments.topUpLifecycleReserve(dataSetId, 0.1 ether);
+
+        uint256 pdpRailId = pdpServiceWithPayments.getDataSet(dataSetId).pdpRailId;
+        assertEq(_rail(pdpRailId).available, LIFECYCLE_RESERVE_TARGET + 0.1 ether);
+        assertEq(filecoinPayV2.balanceOf(payer, 0), 1 ether - LIFECYCLE_RESERVE_TARGET - 0.1 ether);
+        assertEq(_usdfcBalance(), 0);
     }
 }

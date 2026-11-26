@@ -56,6 +56,7 @@ interface IFilecoinWarmStorageService is IFilecoinServiceMetadata, IPDPProvingSc
     event FaultRecord(uint256 indexed dataSetId, uint256 periodsFaulted, uint256 deadline);
     event FilBeamControllerChanged(address oldController, address newController);
     event Initialized(uint64 version);
+    event LifecycleReserveToppedUp(uint256 indexed dataSetId, uint256 amountAdded, uint256 totalLifecycleReserve);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event PDPPaymentTerminated(uint256 indexed dataSetId, uint256 endEpoch, uint256 pdpRailId);
     event PieceAdded(
